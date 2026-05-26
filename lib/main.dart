@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'efficiency_dashboard.dart';
 
 void main() {
   runApp(const TodoFlutterApp());
@@ -35,41 +38,105 @@ class TodoHomePage extends StatefulWidget {
 }
 
 class _TodoHomePageState extends State<TodoHomePage> {
-  static const _cacheKey = 'zh_cloud_todo_flutter_state_v1';
+  static const _cacheKey = 'zh_cloud_todo_flutter_state_v2';
+  static const _quadrantNames = <String>['紧急且重要', '重要不紧急', '紧急不重要', '不紧急不重要'];
+  static const _pomodoroDurationSeconds = 25 * 60;
 
   bool _isLoading = true;
   bool _isSignedIn = false;
-  String _activeTab = '任务';
+  String _activeTab = '日历';
   String _calendarView = '周';
   late List<_TodoListItem> _lists;
   late List<_TodoTaskItem> _tasks;
   late List<_CalendarEventItem> _calendarEvents;
   late List<_SyncQueueItem> _syncQueue;
+  late List<EfficiencyQuadrantItem> _quadrantItems;
+  late List<EfficiencyHabitItem> _habits;
+  late List<EfficiencyCountdownItem> _countdowns;
+  int _pomodoroSecondsRemaining = _pomodoroDurationSeconds;
+  int _pomodoroCompletedRounds = 0;
+  bool _pomodoroRunning = false;
+  Timer? _pomodoroTimer;
 
   @override
   void initState() {
     super.initState();
+    _seedState();
+    _bootstrap();
+  }
+
+  @override
+  void dispose() {
+    _pomodoroTimer?.cancel();
+    super.dispose();
+  }
+
+  void _seedState() {
     _lists = [
-      const _TodoListItem('工作', 12, 3),
-      const _TodoListItem('个人', 8, 1),
-      const _TodoListItem('共享清单', 5, 2),
+      _TodoListItem('工作', 12, 3),
+      _TodoListItem('个人', 8, 1),
+      _TodoListItem('共享清单', 5, 2),
     ];
     _tasks = [
-      const _TodoTaskItem('补齐 Flutter 主壳路由', '工作', '进行中'),
-      const _TodoTaskItem('接入任务列表和快速添加', '工作', '待办'),
-      const _TodoTaskItem('同步队列与本地缓存回显', '共享清单', '待办'),
+      _TodoTaskItem('补齐 Flutter 主壳路由', '工作', '进行中'),
+      _TodoTaskItem('接入任务列表和快速添加', '工作', '待办'),
+      _TodoTaskItem('同步队列与本地缓存回显', '共享清单', '待办'),
     ];
     _calendarEvents = [
-      const _CalendarEventItem('09:30', '任务评审', '工作', '今天'),
-      const _CalendarEventItem('14:00', '同步回放检查', '共享清单', '今天'),
-      const _CalendarEventItem('18:30', '明日计划', '个人', '明天'),
-      const _CalendarEventItem('全天', '月度目标回顾', '工作', '本周'),
+      _CalendarEventItem('09:30', '任务评审', '工作', '今天'),
+      _CalendarEventItem('14:00', '同步回放检查', '共享清单', '今天'),
+      _CalendarEventItem('18:30', '明日计划', '个人', '明天'),
+      _CalendarEventItem('全天', '月度目标回顾', '工作', '本周'),
     ];
     _syncQueue = [
-      const _SyncQueueItem('create task', '待重试'),
-      const _SyncQueueItem('update list', '已排队'),
+      _SyncQueueItem('create task', '待重试'),
+      _SyncQueueItem('update list', '已排队'),
     ];
-    _bootstrap();
+    _quadrantItems = [
+      EfficiencyQuadrantItem(title: '今晚完成日报', quadrant: '紧急且重要', done: false),
+      EfficiencyQuadrantItem(title: '整理下周目标', quadrant: '重要不紧急', done: false),
+      EfficiencyQuadrantItem(title: '回复同步提醒', quadrant: '紧急不重要', done: true),
+      EfficiencyQuadrantItem(title: '清理重复标签', quadrant: '不紧急不重要', done: false),
+    ];
+    final today = DateTime.now();
+    _habits = [
+      EfficiencyHabitItem(
+        title: '番茄后记录 1 条复盘',
+        target: '每天一次',
+        doneToday: false,
+        streak: 4,
+      ),
+      EfficiencyHabitItem(
+        title: '上午先处理高优任务',
+        target: '工作日',
+        doneToday: true,
+        streak: 11,
+      ),
+      EfficiencyHabitItem(
+        title: '晚间整理待办',
+        target: '每天一次',
+        doneToday: false,
+        streak: 2,
+      ),
+    ];
+    _countdowns = [
+      EfficiencyCountdownItem(
+        title: 'M3-B3 演示里程碑',
+        targetDateIso: DateTime(
+          today.year,
+          today.month,
+          today.day,
+        ).add(const Duration(days: 14)).toIso8601String(),
+      ),
+      EfficiencyCountdownItem(
+        title: '周末纪念日',
+        targetDateIso: DateTime(
+          today.year,
+          today.month,
+          today.day,
+        ).add(const Duration(days: 6)).toIso8601String(),
+      ),
+    ];
   }
 
   Future<void> _bootstrap() async {
@@ -78,13 +145,31 @@ class _TodoHomePageState extends State<TodoHomePage> {
     if (raw != null) {
       final data = jsonDecode(raw) as Map<String, dynamic>;
       _isSignedIn = data['signedIn'] as bool? ?? false;
-      _activeTab = data['activeTab'] as String? ?? '任务';
+      _activeTab = data['activeTab'] as String? ?? '日历';
       _calendarView = data['calendarView'] as String? ?? '周';
+      _lists = _decodeLists(data['lists'] as List<dynamic>?);
+      _tasks = _decodeTasks(data['tasks'] as List<dynamic>?);
+      _calendarEvents = _decodeCalendarEvents(
+        data['calendarEvents'] as List<dynamic>?,
+      );
+      _syncQueue = _decodeSyncQueue(data['syncQueue'] as List<dynamic>?);
+      _quadrantItems = _decodeQuadrantItems(
+        data['quadrantItems'] as List<dynamic>?,
+      );
+      _habits = _decodeHabits(data['habits'] as List<dynamic>?);
+      _countdowns = _decodeCountdowns(data['countdowns'] as List<dynamic>?);
+      _pomodoroSecondsRemaining =
+          data['pomodoroSecondsRemaining'] as int? ?? _pomodoroDurationSeconds;
+      _pomodoroCompletedRounds = data['pomodoroCompletedRounds'] as int? ?? 0;
+      _pomodoroRunning = data['pomodoroRunning'] as bool? ?? false;
     }
     if (mounted) {
       setState(() {
         _isLoading = false;
       });
+    }
+    if (_pomodoroRunning) {
+      _resumePomodoroTimer();
     }
   }
 
@@ -96,18 +181,122 @@ class _TodoHomePageState extends State<TodoHomePage> {
         'signedIn': _isSignedIn,
         'activeTab': _activeTab,
         'calendarView': _calendarView,
+        'lists': _lists.map((item) => item.toJson()).toList(),
+        'tasks': _tasks.map((item) => item.toJson()).toList(),
+        'calendarEvents': _calendarEvents.map((item) => item.toJson()).toList(),
+        'syncQueue': _syncQueue.map((item) => item.toJson()).toList(),
+        'quadrantItems': _quadrantItems.map((item) => item.toJson()).toList(),
+        'habits': _habits.map((item) => item.toJson()).toList(),
+        'countdowns': _countdowns.map((item) => item.toJson()).toList(),
+        'pomodoroSecondsRemaining': _pomodoroSecondsRemaining,
+        'pomodoroCompletedRounds': _pomodoroCompletedRounds,
+        'pomodoroRunning': _pomodoroRunning,
       }),
     );
+  }
+
+  List<_TodoListItem> _decodeLists(List<dynamic>? raw) {
+    final items = raw
+        ?.whereType<Map>()
+        .map(
+          (json) => _TodoListItem(
+            json['name'] as String? ?? '',
+            json['taskCount'] as int? ?? 0,
+            json['completedCount'] as int? ?? 0,
+          ),
+        )
+        .toList();
+    return items?.isNotEmpty == true ? items! : _lists;
+  }
+
+  List<_TodoTaskItem> _decodeTasks(List<dynamic>? raw) {
+    final items = raw
+        ?.whereType<Map>()
+        .map(
+          (json) => _TodoTaskItem(
+            json['title'] as String? ?? '',
+            json['listName'] as String? ?? '',
+            json['status'] as String? ?? '',
+          ),
+        )
+        .toList();
+    return items?.isNotEmpty == true ? items! : _tasks;
+  }
+
+  List<_CalendarEventItem> _decodeCalendarEvents(List<dynamic>? raw) {
+    final items = raw
+        ?.whereType<Map>()
+        .map(
+          (json) => _CalendarEventItem(
+            json['time'] as String? ?? '',
+            json['title'] as String? ?? '',
+            json['listName'] as String? ?? '',
+            json['bucket'] as String? ?? '',
+          ),
+        )
+        .toList();
+    return items?.isNotEmpty == true ? items! : _calendarEvents;
+  }
+
+  List<_SyncQueueItem> _decodeSyncQueue(List<dynamic>? raw) {
+    final items = raw
+        ?.whereType<Map>()
+        .map(
+          (json) => _SyncQueueItem(
+            json['action'] as String? ?? '',
+            json['state'] as String? ?? '',
+          ),
+        )
+        .toList();
+    return items?.isNotEmpty == true ? items! : _syncQueue;
+  }
+
+  List<EfficiencyQuadrantItem> _decodeQuadrantItems(List<dynamic>? raw) {
+    final items = raw
+        ?.whereType<Map>()
+        .map(
+          (json) =>
+              EfficiencyQuadrantItem.fromJson(json.cast<String, dynamic>()),
+        )
+        .toList();
+    return items?.isNotEmpty == true ? items! : _quadrantItems;
+  }
+
+  List<EfficiencyHabitItem> _decodeHabits(List<dynamic>? raw) {
+    final items = raw
+        ?.whereType<Map>()
+        .map(
+          (json) => EfficiencyHabitItem.fromJson(json.cast<String, dynamic>()),
+        )
+        .toList();
+    return items?.isNotEmpty == true ? items! : _habits;
+  }
+
+  List<EfficiencyCountdownItem> _decodeCountdowns(List<dynamic>? raw) {
+    final items = raw
+        ?.whereType<Map>()
+        .map(
+          (json) =>
+              EfficiencyCountdownItem.fromJson(json.cast<String, dynamic>()),
+        )
+        .toList();
+    return items?.isNotEmpty == true ? items! : _countdowns;
+  }
+
+  void _goToTab(String tab) {
+    setState(() {
+      _activeTab = tab;
+    });
+    _persistState();
   }
 
   Future<void> _toggleSignIn() async {
     setState(() {
       _isSignedIn = !_isSignedIn;
-      if (_isSignedIn) {
-        _syncQueue.insert(0, const _SyncQueueItem('login', '已同步'));
-      } else {
-        _syncQueue.insert(0, const _SyncQueueItem('logout', '已同步'));
-      }
+      _syncQueue.insert(
+        0,
+        _SyncQueueItem(_isSignedIn ? 'login' : 'logout', '已同步'),
+      );
     });
     await _persistState();
   }
@@ -143,6 +332,114 @@ class _TodoHomePageState extends State<TodoHomePage> {
     await _persistState();
   }
 
+  Future<void> _handleQuadrantAction(int index) async {
+    setState(() {
+      final quadrantName = _quadrantNames[index];
+      final pendingIndex = _quadrantItems.indexWhere(
+        (item) => item.quadrant == quadrantName && !item.done,
+      );
+      if (pendingIndex >= 0) {
+        _quadrantItems[pendingIndex] = _quadrantItems[pendingIndex].copyWith(
+          done: true,
+        );
+      } else {
+        _quadrantItems = [
+          EfficiencyQuadrantItem(
+            title: '$quadrantName 新示例',
+            quadrant: quadrantName,
+            done: false,
+          ),
+          ..._quadrantItems,
+        ];
+      }
+      _syncQueue.insert(
+        0,
+        _SyncQueueItem('quadrant ${_quadrantNames[index]}', '已写入本地'),
+      );
+    });
+    await _persistState();
+  }
+
+  Future<void> _toggleHabit(int index) async {
+    setState(() {
+      final habit = _habits[index];
+      final updated = habit.doneToday
+          ? habit.copyWith(doneToday: false)
+          : habit.copyWith(doneToday: true, streak: habit.streak + 1);
+      _habits[index] = updated;
+      _syncQueue.insert(
+        0,
+        _SyncQueueItem(
+          'habit ${updated.title}',
+          updated.doneToday ? '已打卡' : '已撤销',
+        ),
+      );
+    });
+    await _persistState();
+  }
+
+  Future<void> _shiftCountdown(int index, int daysDelta) async {
+    setState(() {
+      final shifted = _countdowns[index].targetDate.add(
+        Duration(days: daysDelta),
+      );
+      _countdowns[index] = _countdowns[index].copyWith(
+        targetDateIso: shifted.toIso8601String(),
+      );
+      _syncQueue.insert(
+        0,
+        _SyncQueueItem('countdown ${_countdowns[index].title}', '已调整'),
+      );
+    });
+    await _persistState();
+  }
+
+  void _resumePomodoroTimer() {
+    _pomodoroTimer?.cancel();
+    _pomodoroTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || !_pomodoroRunning) {
+        _pomodoroTimer?.cancel();
+        return;
+      }
+      setState(() {
+        if (_pomodoroSecondsRemaining <= 1) {
+          _pomodoroSecondsRemaining = _pomodoroDurationSeconds;
+          _pomodoroCompletedRounds += 1;
+          _pomodoroRunning = false;
+          _pomodoroTimer?.cancel();
+        } else {
+          _pomodoroSecondsRemaining -= 1;
+        }
+      });
+      _persistState();
+    });
+  }
+
+  Future<void> _togglePomodoro() async {
+    if (_pomodoroRunning) {
+      _pomodoroTimer?.cancel();
+      setState(() {
+        _pomodoroRunning = false;
+      });
+      await _persistState();
+      return;
+    }
+    setState(() {
+      _pomodoroRunning = true;
+    });
+    _resumePomodoroTimer();
+    await _persistState();
+  }
+
+  Future<void> _resetPomodoro() async {
+    _pomodoroTimer?.cancel();
+    setState(() {
+      _pomodoroSecondsRemaining = _pomodoroDurationSeconds;
+      _pomodoroRunning = false;
+    });
+    await _persistState();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -153,6 +450,11 @@ class _TodoHomePageState extends State<TodoHomePage> {
       appBar: AppBar(
         title: const Text('zh-cloud todo'),
         actions: [
+          IconButton(
+            tooltip: '效率',
+            onPressed: () => _goToTab('效率'),
+            icon: const Icon(Icons.insights_outlined),
+          ),
           IconButton(
             tooltip: '同步',
             onPressed: () {
@@ -185,6 +487,29 @@ class _TodoHomePageState extends State<TodoHomePage> {
                 });
                 _persistState();
               },
+              onOpenEfficiency: () => _goToTab('效率'),
+            )
+          : _activeTab == '效率'
+          ? EfficiencyTabView(
+              isSignedIn: _isSignedIn,
+              taskCount: _tasks.length,
+              completedTaskCount: _tasks
+                  .where((item) => item.status == '已完成')
+                  .length,
+              calendarEventCount: _calendarEvents.length,
+              syncQueueCount: _syncQueue.length,
+              quadrantItems: _quadrantItems,
+              pomodoroSecondsRemaining: _pomodoroSecondsRemaining,
+              pomodoroCompletedRounds: _pomodoroCompletedRounds,
+              pomodoroRunning: _pomodoroRunning,
+              habits: _habits,
+              countdowns: _countdowns,
+              onQuadrantAction: _handleQuadrantAction,
+              onPomodoroStart: _togglePomodoro,
+              onPomodoroPause: _togglePomodoro,
+              onPomodoroReset: _resetPomodoro,
+              onHabitToggle: _toggleHabit,
+              onCountdownShift: _shiftCountdown,
             )
           : _DashboardTabView(
               isSignedIn: _isSignedIn,
@@ -205,6 +530,7 @@ class _TodoHomePageState extends State<TodoHomePage> {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.checklist), label: '任务'),
           NavigationDestination(icon: Icon(Icons.event), label: '日历'),
+          NavigationDestination(icon: Icon(Icons.flash_on), label: '效率'),
           NavigationDestination(icon: Icon(Icons.view_list), label: '清单'),
           NavigationDestination(icon: Icon(Icons.sync), label: '同步'),
         ],
@@ -216,10 +542,12 @@ class _TodoHomePageState extends State<TodoHomePage> {
     switch (value) {
       case '日历':
         return 1;
-      case '清单':
+      case '效率':
         return 2;
-      case '同步':
+      case '清单':
         return 3;
+      case '同步':
+        return 4;
       default:
         return 0;
     }
@@ -230,8 +558,10 @@ class _TodoHomePageState extends State<TodoHomePage> {
       case 1:
         return '日历';
       case 2:
-        return '清单';
+        return '效率';
       case 3:
+        return '清单';
+      case 4:
         return '同步';
       default:
         return '任务';
@@ -312,6 +642,7 @@ class _CalendarTabView extends StatelessWidget {
     required this.tasks,
     required this.events,
     required this.onCalendarViewChanged,
+    required this.onOpenEfficiency,
   });
 
   final bool isSignedIn;
@@ -319,13 +650,28 @@ class _CalendarTabView extends StatelessWidget {
   final List<_TodoTaskItem> tasks;
   final List<_CalendarEventItem> events;
   final ValueChanged<String> onCalendarViewChanged;
+  final VoidCallback onOpenEfficiency;
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text('日历 / 日程入口', style: Theme.of(context).textTheme.headlineSmall),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                '日历 / 日程入口',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+            ),
+            TextButton.icon(
+              onPressed: onOpenEfficiency,
+              icon: const Icon(Icons.flash_on),
+              label: const Text('打开效率工具'),
+            ),
+          ],
+        ),
         const SizedBox(height: 8),
         Text(isSignedIn ? '已登录，可复用本地任务生成安排' : '未登录，先展示本地任务映射'),
         const SizedBox(height: 12),
@@ -777,6 +1123,12 @@ class _TodoListItem {
   final String name;
   final int taskCount;
   final int completedCount;
+
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    'taskCount': taskCount,
+    'completedCount': completedCount,
+  };
 }
 
 class _TodoTaskItem {
@@ -785,6 +1137,12 @@ class _TodoTaskItem {
   final String title;
   final String listName;
   final String status;
+
+  Map<String, dynamic> toJson() => {
+    'title': title,
+    'listName': listName,
+    'status': status,
+  };
 }
 
 class _CalendarEventItem {
@@ -794,6 +1152,13 @@ class _CalendarEventItem {
   final String title;
   final String listName;
   final String bucket;
+
+  Map<String, dynamic> toJson() => {
+    'time': time,
+    'title': title,
+    'listName': listName,
+    'bucket': bucket,
+  };
 }
 
 class _SyncQueueItem {
@@ -801,4 +1166,6 @@ class _SyncQueueItem {
 
   final String action;
   final String state;
+
+  Map<String, dynamic> toJson() => {'action': action, 'state': state};
 }
