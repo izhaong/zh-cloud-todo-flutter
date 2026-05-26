@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'efficiency_dashboard.dart';
+import 'system_entry_dashboard.dart';
 
 void main() {
   runApp(const TodoFlutterApp());
@@ -53,6 +54,9 @@ class _TodoHomePageState extends State<TodoHomePage> {
   late List<EfficiencyQuadrantItem> _quadrantItems;
   late List<EfficiencyHabitItem> _habits;
   late List<EfficiencyCountdownItem> _countdowns;
+  late List<SystemEntryNote> _systemNotes;
+  late List<SystemEntryImportItem> _systemImports;
+  String _systemShareStatus = '等待系统分享内容';
   int _pomodoroSecondsRemaining = _pomodoroDurationSeconds;
   int _pomodoroCompletedRounds = 0;
   bool _pomodoroRunning = false;
@@ -137,6 +141,14 @@ class _TodoHomePageState extends State<TodoHomePage> {
         ).add(const Duration(days: 6)).toIso8601String(),
       ),
     ];
+    _systemNotes = [
+      const SystemEntryNote(title: '今日便签', content: '检查桌面入口和导入队列。'),
+      const SystemEntryNote(title: '同步提醒', content: 'B4 收口前同步 Web 与 Flutter。'),
+    ];
+    _systemImports = [
+      const SystemEntryImportItem(source: 'CSV 任务文件', status: '待确认'),
+      const SystemEntryImportItem(source: '日历订阅 URL', status: '可预览'),
+    ];
   }
 
   Future<void> _bootstrap() async {
@@ -158,6 +170,14 @@ class _TodoHomePageState extends State<TodoHomePage> {
       );
       _habits = _decodeHabits(data['habits'] as List<dynamic>?);
       _countdowns = _decodeCountdowns(data['countdowns'] as List<dynamic>?);
+      _systemNotes = _decodeSystemNotes(
+        data['systemNotes'] as List<dynamic>?,
+      );
+      _systemImports = _decodeSystemImports(
+        data['systemImports'] as List<dynamic>?,
+      );
+      _systemShareStatus =
+          data['systemShareStatus'] as String? ?? _systemShareStatus;
       _pomodoroSecondsRemaining =
           data['pomodoroSecondsRemaining'] as int? ?? _pomodoroDurationSeconds;
       _pomodoroCompletedRounds = data['pomodoroCompletedRounds'] as int? ?? 0;
@@ -188,6 +208,9 @@ class _TodoHomePageState extends State<TodoHomePage> {
         'quadrantItems': _quadrantItems.map((item) => item.toJson()).toList(),
         'habits': _habits.map((item) => item.toJson()).toList(),
         'countdowns': _countdowns.map((item) => item.toJson()).toList(),
+        'systemNotes': _systemNotes.map((item) => item.toJson()).toList(),
+        'systemImports': _systemImports.map((item) => item.toJson()).toList(),
+        'systemShareStatus': _systemShareStatus,
         'pomodoroSecondsRemaining': _pomodoroSecondsRemaining,
         'pomodoroCompletedRounds': _pomodoroCompletedRounds,
         'pomodoroRunning': _pomodoroRunning,
@@ -281,6 +304,25 @@ class _TodoHomePageState extends State<TodoHomePage> {
         )
         .toList();
     return items?.isNotEmpty == true ? items! : _countdowns;
+  }
+
+  List<SystemEntryNote> _decodeSystemNotes(List<dynamic>? raw) {
+    final items = raw
+        ?.whereType<Map>()
+        .map((json) => SystemEntryNote.fromJson(json.cast<String, dynamic>()))
+        .toList();
+    return items?.isNotEmpty == true ? items! : _systemNotes;
+  }
+
+  List<SystemEntryImportItem> _decodeSystemImports(List<dynamic>? raw) {
+    final items = raw
+        ?.whereType<Map>()
+        .map(
+          (json) =>
+              SystemEntryImportItem.fromJson(json.cast<String, dynamic>()),
+        )
+        .toList();
+    return items?.isNotEmpty == true ? items! : _systemImports;
   }
 
   void _goToTab(String tab) {
@@ -440,6 +482,45 @@ class _TodoHomePageState extends State<TodoHomePage> {
     await _persistState();
   }
 
+  Future<void> _addSystemNote() async {
+    setState(() {
+      _systemNotes = [
+        SystemEntryNote(
+          title: '桌面便签 ${_systemNotes.length + 1}',
+          content: '来自系统入口的本地便签。',
+        ),
+        ..._systemNotes,
+      ];
+      _syncQueue.insert(0, const _SyncQueueItem('desktop note', '已写入本地'));
+    });
+    await _persistState();
+  }
+
+  Future<void> _simulateSystemShare() async {
+    final now = DateTime.now();
+    final hour = now.hour.toString().padLeft(2, '0');
+    final minute = now.minute.toString().padLeft(2, '0');
+    setState(() {
+      _systemShareStatus = '已接收系统分享：$hour:$minute';
+      _syncQueue.insert(0, const _SyncQueueItem('system share', '已接收'));
+    });
+    await _persistState();
+  }
+
+  Future<void> _addImportRecord() async {
+    setState(() {
+      _systemImports = [
+        SystemEntryImportItem(
+          source: '导入入口 ${_systemImports.length + 1}',
+          status: '已加入队列',
+        ),
+        ..._systemImports,
+      ];
+      _syncQueue.insert(0, const _SyncQueueItem('import entry', '已排队'));
+    });
+    await _persistState();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -450,6 +531,11 @@ class _TodoHomePageState extends State<TodoHomePage> {
       appBar: AppBar(
         title: const Text('zh-cloud todo'),
         actions: [
+          IconButton(
+            tooltip: '系统入口',
+            onPressed: () => _goToTab('系统'),
+            icon: const Icon(Icons.widgets_outlined),
+          ),
           IconButton(
             tooltip: '效率',
             onPressed: () => _goToTab('效率'),
@@ -511,6 +597,17 @@ class _TodoHomePageState extends State<TodoHomePage> {
               onHabitToggle: _toggleHabit,
               onCountdownShift: _shiftCountdown,
             )
+          : _activeTab == '系统'
+          ? SystemEntryTabView(
+              taskCount: _tasks.length,
+              syncQueueCount: _syncQueue.length,
+              notes: _systemNotes,
+              imports: _systemImports,
+              shareStatus: _systemShareStatus,
+              onAddNote: _addSystemNote,
+              onSimulateShare: _simulateSystemShare,
+              onAddImport: _addImportRecord,
+            )
           : _DashboardTabView(
               isSignedIn: _isSignedIn,
               lists: _lists,
@@ -531,6 +628,7 @@ class _TodoHomePageState extends State<TodoHomePage> {
           NavigationDestination(icon: Icon(Icons.checklist), label: '任务'),
           NavigationDestination(icon: Icon(Icons.event), label: '日历'),
           NavigationDestination(icon: Icon(Icons.flash_on), label: '效率'),
+          NavigationDestination(icon: Icon(Icons.widgets), label: '系统'),
           NavigationDestination(icon: Icon(Icons.view_list), label: '清单'),
           NavigationDestination(icon: Icon(Icons.sync), label: '同步'),
         ],
@@ -544,10 +642,12 @@ class _TodoHomePageState extends State<TodoHomePage> {
         return 1;
       case '效率':
         return 2;
-      case '清单':
+      case '系统':
         return 3;
-      case '同步':
+      case '清单':
         return 4;
+      case '同步':
+        return 5;
       default:
         return 0;
     }
@@ -560,8 +660,10 @@ class _TodoHomePageState extends State<TodoHomePage> {
       case 2:
         return '效率';
       case 3:
-        return '清单';
+        return '系统';
       case 4:
+        return '清单';
+      case 5:
         return '同步';
       default:
         return '任务';
