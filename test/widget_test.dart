@@ -1,30 +1,51 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:zh_cloud_todo_flutter/main.dart';
 
 void main() {
-  testWidgets('renders core dashboard', (tester) async {
+  testWidgets('renders calendar base and efficiency entry', (tester) async {
     SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(const TodoFlutterApp());
     await tester.pumpAndSettle();
 
     expect(find.text('zh-cloud todo'), findsOneWidget);
-    expect(find.text('移动端核心闭环'), findsOneWidget);
-    expect(find.text('日历'), findsWidgets);
-    expect(find.text('任务'), findsWidgets);
-    expect(find.text('同步队列'), findsOneWidget);
+    expect(find.text('日历 / 日程入口'), findsOneWidget);
+    expect(find.text('打开效率工具'), findsOneWidget);
+    expect(find.text('当前视图：周'), findsOneWidget);
+  });
+
+  testWidgets('opens efficiency tools and updates local state', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(const TodoFlutterApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('效率').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('效率工具'), findsOneWidget);
+    expect(find.text('四象限'), findsWidgets);
+    expect(find.text('番茄'), findsWidgets);
+    expect(find.text('习惯'), findsOneWidget);
+    expect(find.text('倒数纪念日'), findsOneWidget);
+    expect(find.text('基础统计'), findsOneWidget);
+
+    await tester.tap(find.text('开始专注').last);
+    await tester.pump();
+    expect(find.text('暂停专注'), findsOneWidget);
+    await tester.tap(find.text('暂停专注').last);
+    await tester.pump();
+    expect(find.text('开始专注'), findsOneWidget);
+
+    await tester.tap(find.text('打卡首习惯').last);
+    await tester.pumpAndSettle();
+    expect(find.text('撤销首习惯'), findsOneWidget);
   });
 
   testWidgets('switches calendar views', (tester) async {
     SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(const TodoFlutterApp());
     await tester.pumpAndSettle();
-
-    await tester.tap(find.text('日历').last);
-    await tester.pumpAndSettle();
-    expect(find.text('日历 / 日程入口'), findsOneWidget);
-    expect(find.text('当前视图：周'), findsOneWidget);
 
     await tester.tap(find.text('月').last);
     await tester.pumpAndSettle();
