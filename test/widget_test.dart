@@ -42,6 +42,40 @@ void main() {
     expect(find.text('撤销首习惯'), findsOneWidget);
   });
 
+  testWidgets('opens system entries and updates local state', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(const TodoFlutterApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('系统').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('桌面与系统入口'), findsOneWidget);
+    expect(find.text('小组件'), findsWidgets);
+    expect(find.text('桌面便签'), findsWidgets);
+    expect(find.text('快捷入口'), findsWidgets);
+    expect(find.text('系统分享'), findsWidgets);
+    expect(find.text('导入入口'), findsWidgets);
+
+    await tester.tap(find.text('新增桌面便签').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('添加导入记录').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('模拟系统分享').last);
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(find.textContaining('已接收系统分享'), 260);
+    expect(find.textContaining('已接收系统分享'), findsOneWidget);
+
+    await tester.scrollUntilVisible(find.text('桌面便签 3'), 260);
+    expect(find.text('桌面便签 3'), findsOneWidget);
+
+    await tester.scrollUntilVisible(find.text('导入入口 3'), 260);
+    expect(find.text('导入入口 3'), findsOneWidget);
+  });
+
   testWidgets('switches calendar views', (tester) async {
     SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(const TodoFlutterApp());
