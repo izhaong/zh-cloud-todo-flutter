@@ -7,7 +7,7 @@ Todo 应用 **Flutter 多端客户端**（iOS / Android / macOS / Windows / Linu
 | 项 | 说明 |
 | --- | --- |
 | 目录 | 已建立（monorepo 父目录 `zh-cloud/` 下） |
-| 脚手架 | **待** `flutter create`（见架构文档 §3.1） |
+| 脚手架 | 已初始化 Flutter 多端工程 |
 | Subagent | 移动端开发委派 **`flutter-dev`**（`.cursor/agents/flutter-dev.md`） |
 | Web 端 | `zh-cloud-client/apps/todo` — 委派 **`frontend-dev`** |
 
@@ -23,12 +23,32 @@ Todo 应用 **Flutter 多端客户端**（iOS / Android / macOS / Windows / Linu
 - 业务：`/app-api/todo/**`
 - 同步：`/app-api/todo/sync/{pull,push}`
 
-## 初始化（Phase 2+ 首任务）
+## 账号入口
+
+客户端启动后，未登录状态会先进入 Todo 账号页：
+
+- 密码登录：`POST /app-api/todo-member/auth/login`
+- 短信验证码登录：`POST /app-api/todo-member/auth/send-sms-code`（`scene=1`）后调用 `POST /app-api/todo-member/auth/sms-login`
+- 注册：复用短信验证码登录，新手机号由 todo-member 后端按“短信登录即注册”创建账号
+- 忘记密码：`POST /app-api/todo-member/auth/send-sms-code`（当前后端 `MEMBER_RESET_PASSWORD` 为 `scene=4`）后调用 `PUT /app-api/todo-member/user/reset-password`
+
+登录成功后会持久化 todo-member `accessToken` / `refreshToken` 到本地偏好缓存，后续 `/app-api/todo/**` 请求应使用该 token 和 `tenant-id`。
+
+## 运行
+
+默认 API 基址是 `http://127.0.0.1:48080`，默认租户是 `1`。联调其它环境时使用 Dart define：
+
+```bash
+flutter run \
+  --dart-define=TODO_API_BASE_URL=http://127.0.0.1:48080 \
+  --dart-define=TODO_TENANT_ID=1
+```
+
+## 初始化
 
 在**本目录**执行（与 beecount 风格对齐）：
 
 ```bash
-flutter create . --org com.zh04 --platforms ios,android,macos,windows,linux
 flutter pub get
 ```
 

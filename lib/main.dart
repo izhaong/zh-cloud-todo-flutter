@@ -6,13 +6,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'efficiency_dashboard.dart';
 import 'system_entry_dashboard.dart';
+import 'todo_member_auth_client.dart';
 
 void main() {
   runApp(const TodoFlutterApp());
 }
 
 class TodoFlutterApp extends StatelessWidget {
-  const TodoFlutterApp({super.key});
+  const TodoFlutterApp({super.key, this.authClient});
+
+  final TodoMemberAuthGateway? authClient;
 
   @override
   Widget build(BuildContext context) {
@@ -26,13 +29,15 @@ class TodoFlutterApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const TodoHomePage(),
+      home: TodoHomePage(authClient: authClient),
     );
   }
 }
 
 class TodoHomePage extends StatefulWidget {
-  const TodoHomePage({super.key});
+  const TodoHomePage({super.key, this.authClient});
+
+  final TodoMemberAuthGateway? authClient;
 
   @override
   State<TodoHomePage> createState() => _TodoHomePageState();
@@ -45,6 +50,8 @@ class _TodoHomePageState extends State<TodoHomePage> {
 
   bool _isLoading = true;
   bool _isSignedIn = false;
+  TodoAuthSession? _authSession;
+  late final TodoMemberAuthGateway _authClient;
   String _activeTab = '日历';
   String _calendarView = '周';
   late List<_TodoListItem> _lists;
@@ -65,6 +72,7 @@ class _TodoHomePageState extends State<TodoHomePage> {
   @override
   void initState() {
     super.initState();
+    _authClient = widget.authClient ?? TodoMemberAuthClient();
     _seedState();
     _bootstrap();
   }
@@ -72,6 +80,9 @@ class _TodoHomePageState extends State<TodoHomePage> {
   @override
   void dispose() {
     _pomodoroTimer?.cancel();
+    if (widget.authClient == null) {
+      _authClient.close();
+    }
     super.dispose();
   }
 
@@ -156,7 +167,13 @@ class _TodoHomePageState extends State<TodoHomePage> {
     final raw = prefs.getString(_cacheKey);
     if (raw != null) {
       final data = jsonDecode(raw) as Map<String, dynamic>;
-      _isSignedIn = data['signedIn'] as bool? ?? false;
+      final authSession = data['authSession'];
+      if (authSession is Map) {
+        _authSession = TodoAuthSession.fromJson(
+          authSession.cast<String, dynamic>(),
+        );
+      }
+      _isSignedIn = _authSession?.isValid == true;
       _activeTab = data['activeTab'] as String? ?? '日历';
       _calendarView = data['calendarView'] as String? ?? '周';
       _lists = _decodeLists(data['lists'] as List<dynamic>?);
@@ -170,9 +187,7 @@ class _TodoHomePageState extends State<TodoHomePage> {
       );
       _habits = _decodeHabits(data['habits'] as List<dynamic>?);
       _countdowns = _decodeCountdowns(data['countdowns'] as List<dynamic>?);
-      _systemNotes = _decodeSystemNotes(
-        data['systemNotes'] as List<dynamic>?,
-      );
+      _systemNotes = _decodeSystemNotes(data['systemNotes'] as List<dynamic>?);
       _systemImports = _decodeSystemImports(
         data['systemImports'] as List<dynamic>?,
       );
@@ -199,6 +214,7 @@ class _TodoHomePageState extends State<TodoHomePage> {
       _cacheKey,
       jsonEncode({
         'signedIn': _isSignedIn,
+        'authSession': _authSession?.toJson(),
         'activeTab': _activeTab,
         'calendarView': _calendarView,
         'lists': _lists.map((item) => item.toJson()).toList(),
@@ -332,13 +348,32 @@ class _TodoHomePageState extends State<TodoHomePage> {
     _persistState();
   }
 
-  Future<void> _toggleSignIn() async {
+  Future<void> _handleAuthenticated(
+    TodoAuthSession session,
+    String action,
+  ) async {
     setState(() {
-      _isSignedIn = !_isSignedIn;
-      _syncQueue.insert(
-        0,
-        _SyncQueueItem(_isSignedIn ? 'login' : 'logout', '已同步'),
-      );
+      _authSession = session;
+      _isSignedIn = true;
+      _activeTab = '日历';
+      _syncQueue.insert(0, _SyncQueueItem(action, '已同步'));
+    });
+    await _persistState();
+  }
+
+  Future<void> _logout() async {
+    final accessToken = _authSession?.accessToken;
+    if (accessToken != null && accessToken.isNotEmpty) {
+      try {
+        await _authClient.logout(accessToken);
+      } on Object {
+        // 本地退出不能被网络失败阻塞。
+      }
+    }
+    setState(() {
+      _authSession = null;
+      _isSignedIn = false;
+      _syncQueue.insert(0, const _SyncQueueItem('logout', '已同步'));
     });
     await _persistState();
   }
@@ -527,6 +562,16 @@ class _TodoHomePageState extends State<TodoHomePage> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    if (!_isSignedIn) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('zh-cloud todo')),
+        body: _TodoAuthPage(
+          authClient: _authClient,
+          onAuthenticated: _handleAuthenticated,
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('zh-cloud todo'),
@@ -555,9 +600,9 @@ class _TodoHomePageState extends State<TodoHomePage> {
             icon: const Icon(Icons.sync),
           ),
           IconButton(
-            tooltip: _isSignedIn ? '退出登录' : '登录',
-            onPressed: _toggleSignIn,
-            icon: Icon(_isSignedIn ? Icons.logout : Icons.login),
+            tooltip: '退出登录',
+            onPressed: _logout,
+            icon: const Icon(Icons.logout),
           ),
         ],
       ),
@@ -668,6 +713,418 @@ class _TodoHomePageState extends State<TodoHomePage> {
       default:
         return '任务';
     }
+  }
+}
+
+enum _AuthMode { password, sms, register, forgotPassword }
+
+class _TodoAuthPage extends StatefulWidget {
+  const _TodoAuthPage({
+    required this.authClient,
+    required this.onAuthenticated,
+  });
+
+  final TodoMemberAuthGateway authClient;
+  final Future<void> Function(TodoAuthSession session, String action)
+  onAuthenticated;
+
+  @override
+  State<_TodoAuthPage> createState() => _TodoAuthPageState();
+}
+
+class _TodoAuthPageState extends State<_TodoAuthPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _mobileController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _codeController = TextEditingController();
+  _AuthMode _mode = _AuthMode.password;
+  bool _submitting = false;
+  bool _sendingCode = false;
+  String? _message;
+  bool _messageIsError = false;
+
+  @override
+  void dispose() {
+    _mobileController.dispose();
+    _passwordController.dispose();
+    _codeController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isPasswordMode = _mode == _AuthMode.password;
+    final isForgotMode = _mode == _AuthMode.forgotPassword;
+    final title = switch (_mode) {
+      _AuthMode.password => '密码登录',
+      _AuthMode.sms => '短信验证码登录',
+      _AuthMode.register => '注册 Todo 账号',
+      _AuthMode.forgotPassword => '找回密码',
+    };
+    final subtitle = switch (_mode) {
+      _AuthMode.password => '使用 todo-member 手机号和密码进入任务空间',
+      _AuthMode.sms => '验证码登录会复用 todo-member token',
+      _AuthMode.register => '手机号验证码登录即注册，不创建独立用户池',
+      _AuthMode.forgotPassword => '验证码校验后重置密码，再返回登录页',
+    };
+
+    return SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: ListView(
+            key: const ValueKey('todo-auth-list'),
+            padding: const EdgeInsets.all(20),
+            shrinkWrap: true,
+            children: [
+              Icon(Icons.task_alt, size: 48, color: theme.colorScheme.primary),
+              const SizedBox(height: 16),
+              Text('Todo 账号入口', style: theme.textTheme.headlineMedium),
+              const SizedBox(height: 8),
+              Text(subtitle),
+              const SizedBox(height: 20),
+              SegmentedButton<_AuthMode>(
+                segments: const [
+                  ButtonSegment(
+                    value: _AuthMode.password,
+                    icon: Icon(Icons.lock_outline),
+                    label: Text('密码'),
+                  ),
+                  ButtonSegment(
+                    value: _AuthMode.sms,
+                    icon: Icon(Icons.sms_outlined),
+                    label: Text('验证码'),
+                  ),
+                ],
+                selected: {
+                  isPasswordMode || isForgotMode
+                      ? _AuthMode.password
+                      : _AuthMode.sms,
+                },
+                onSelectionChanged: (selection) {
+                  final next = selection.first;
+                  _switchMode(next);
+                },
+              ),
+              const SizedBox(height: 16),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(title, style: theme.textTheme.titleLarge),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _mobileController,
+                          keyboardType: TextInputType.phone,
+                          decoration: const InputDecoration(
+                            labelText: '手机号',
+                            prefixIcon: Icon(Icons.phone_iphone),
+                            border: OutlineInputBorder(),
+                          ),
+                          validator: _validateMobile,
+                        ),
+                        const SizedBox(height: 12),
+                        if (isPasswordMode || isForgotMode) ...[
+                          TextFormField(
+                            controller: _passwordController,
+                            obscureText: true,
+                            decoration: InputDecoration(
+                              labelText: isForgotMode ? '新密码' : '密码',
+                              prefixIcon: const Icon(Icons.password),
+                              border: const OutlineInputBorder(),
+                            ),
+                            validator: _validatePassword,
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        if (!isPasswordMode) ...[
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _codeController,
+                                  keyboardType: TextInputType.number,
+                                  decoration: const InputDecoration(
+                                    labelText: '短信验证码',
+                                    prefixIcon: Icon(Icons.verified_outlined),
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  validator: _validateCode,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              SizedBox(
+                                height: 56,
+                                child: OutlinedButton.icon(
+                                  onPressed: _isBusy ? null : _sendCode,
+                                  icon: _sendingCode
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Icon(Icons.send_to_mobile),
+                                  label: const Text('发送'),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        if (_message != null) ...[
+                          _AuthMessage(
+                            text: _message!,
+                            isError: _messageIsError,
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        FilledButton.icon(
+                          key: const ValueKey('todo-auth-submit'),
+                          onPressed: _isBusy ? null : _submit,
+                          icon: _submitting
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Icon(
+                                  isForgotMode
+                                      ? Icons.restart_alt
+                                      : Icons.login,
+                                ),
+                          label: Text(_submitLabel),
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          spacing: 8,
+                          children: [
+                            TextButton(
+                              onPressed: () => _switchMode(_AuthMode.register),
+                              child: const Text('注册'),
+                            ),
+                            TextButton(
+                              onPressed: () =>
+                                  _switchMode(_AuthMode.forgotPassword),
+                              child: const Text('忘记密码'),
+                            ),
+                            if (_mode != _AuthMode.password)
+                              TextButton(
+                                onPressed: () =>
+                                    _switchMode(_AuthMode.password),
+                                child: const Text('返回密码登录'),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  bool get _isBusy => _submitting || _sendingCode;
+
+  String get _submitLabel {
+    return switch (_mode) {
+      _AuthMode.password => '登录',
+      _AuthMode.sms => '验证码登录',
+      _AuthMode.register => '注册并登录',
+      _AuthMode.forgotPassword => '重置密码',
+    };
+  }
+
+  void _switchMode(_AuthMode mode) {
+    setState(() {
+      _mode = mode;
+      _message = null;
+      _messageIsError = false;
+      if (mode != _AuthMode.forgotPassword) {
+        _passwordController.clear();
+      }
+      _codeController.clear();
+    });
+  }
+
+  Future<void> _sendCode() async {
+    final mobileError = _validateMobile(_mobileController.text);
+    if (mobileError != null) {
+      setState(() {
+        _message = mobileError;
+        _messageIsError = true;
+      });
+      return;
+    }
+    setState(() {
+      _sendingCode = true;
+      _message = null;
+    });
+    try {
+      await widget.authClient.sendSmsCode(
+        mobile: _mobileController.text.trim(),
+        scene: _mode == _AuthMode.forgotPassword ? 4 : 1,
+      );
+      setState(() {
+        _message = _mode == _AuthMode.forgotPassword
+            ? '重置密码验证码已发送'
+            : '登录验证码已发送';
+        _messageIsError = false;
+      });
+    } on TodoMemberAuthException catch (error) {
+      setState(() {
+        _message = error.message;
+        _messageIsError = true;
+      });
+    } on Object catch (error) {
+      setState(() {
+        _message = '验证码发送失败：$error';
+        _messageIsError = true;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _sendingCode = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    setState(() {
+      _submitting = true;
+      _message = null;
+    });
+    try {
+      if (_mode == _AuthMode.password) {
+        final session = await widget.authClient.passwordLogin(
+          mobile: _mobileController.text.trim(),
+          password: _passwordController.text,
+        );
+        await widget.onAuthenticated(session, 'password login');
+        return;
+      }
+      if (_mode == _AuthMode.forgotPassword) {
+        await widget.authClient.resetPassword(
+          mobile: _mobileController.text.trim(),
+          code: _codeController.text.trim(),
+          password: _passwordController.text,
+        );
+        setState(() {
+          _mode = _AuthMode.password;
+          _passwordController.clear();
+          _codeController.clear();
+          _message = '密码已重置，请使用新密码登录';
+          _messageIsError = false;
+        });
+        return;
+      }
+      final session = await widget.authClient.smsLogin(
+        mobile: _mobileController.text.trim(),
+        code: _codeController.text.trim(),
+      );
+      await widget.onAuthenticated(
+        session,
+        _mode == _AuthMode.register ? 'sms register' : 'sms login',
+      );
+    } on TodoMemberAuthException catch (error) {
+      setState(() {
+        _message = error.message;
+        _messageIsError = true;
+      });
+    } on Object catch (error) {
+      setState(() {
+        _message = '账号请求失败：$error';
+        _messageIsError = true;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _submitting = false;
+        });
+      }
+    }
+  }
+
+  String? _validateMobile(String? value) {
+    final mobile = value?.trim() ?? '';
+    if (mobile.isEmpty) {
+      return '请输入手机号';
+    }
+    if (!RegExp(r'^1\d{10}$').hasMatch(mobile)) {
+      return '请输入 11 位手机号';
+    }
+    return null;
+  }
+
+  String? _validatePassword(String? value) {
+    final password = value ?? '';
+    if (password.isEmpty) {
+      return _mode == _AuthMode.forgotPassword ? '请输入新密码' : '请输入密码';
+    }
+    if (password.length < 4 || password.length > 16) {
+      return '密码长度为 4-16 位';
+    }
+    return null;
+  }
+
+  String? _validateCode(String? value) {
+    final code = value?.trim() ?? '';
+    if (code.isEmpty) {
+      return '请输入短信验证码';
+    }
+    if (!RegExp(r'^\d{4,6}$').hasMatch(code)) {
+      return '验证码为 4-6 位数字';
+    }
+    return null;
+  }
+}
+
+class _AuthMessage extends StatelessWidget {
+  const _AuthMessage({required this.text, required this.isError});
+
+  final String text;
+  final bool isError;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: isError
+            ? colorScheme.errorContainer
+            : colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Text(
+          text,
+          style: TextStyle(
+            color: isError
+                ? colorScheme.onErrorContainer
+                : colorScheme.onPrimaryContainer,
+          ),
+        ),
+      ),
+    );
   }
 }
 
