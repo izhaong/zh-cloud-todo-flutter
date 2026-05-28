@@ -1,12 +1,14 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:zh_cloud_todo_flutter/main.dart';
+import 'package:zh_cloud_todo_flutter/todo_member_auth_client.dart';
 
 void main() {
   testWidgets('renders calendar base and efficiency entry', (tester) async {
-    SharedPreferences.setMockInitialValues({});
-    await tester.pumpWidget(const TodoFlutterApp());
+    SharedPreferences.setMockInitialValues(_signedInState());
+    await tester.pumpWidget(TodoFlutterApp(authClient: _FakeAuthClient()));
     await tester.pumpAndSettle();
 
     expect(find.text('zh-cloud todo'), findsOneWidget);
@@ -16,8 +18,8 @@ void main() {
   });
 
   testWidgets('opens efficiency tools and updates local state', (tester) async {
-    SharedPreferences.setMockInitialValues({});
-    await tester.pumpWidget(const TodoFlutterApp());
+    SharedPreferences.setMockInitialValues(_signedInState());
+    await tester.pumpWidget(TodoFlutterApp(authClient: _FakeAuthClient()));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('效率').last);
@@ -43,8 +45,8 @@ void main() {
   });
 
   testWidgets('opens system entries and updates local state', (tester) async {
-    SharedPreferences.setMockInitialValues({});
-    await tester.pumpWidget(const TodoFlutterApp());
+    SharedPreferences.setMockInitialValues(_signedInState());
+    await tester.pumpWidget(TodoFlutterApp(authClient: _FakeAuthClient()));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('系统').last);
@@ -77,8 +79,8 @@ void main() {
   });
 
   testWidgets('switches calendar views', (tester) async {
-    SharedPreferences.setMockInitialValues({});
-    await tester.pumpWidget(const TodoFlutterApp());
+    SharedPreferences.setMockInitialValues(_signedInState());
+    await tester.pumpWidget(TodoFlutterApp(authClient: _FakeAuthClient()));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('月').last);
@@ -89,4 +91,180 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('当前视图：日程'), findsOneWidget);
   });
+
+  testWidgets('password login enters todo home and persists token', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final authClient = _FakeAuthClient();
+    await tester.pumpWidget(TodoFlutterApp(authClient: authClient));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Todo 账号入口'), findsOneWidget);
+    await tester.enterText(
+      find.widgetWithText(TextFormField, '手机号'),
+      '18800000000',
+    );
+    await tester.enterText(find.widgetWithText(TextFormField, '密码'), '123456');
+    await tester.tap(find.text('登录'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('日历 / 日程入口'), findsOneWidget);
+    expect(authClient.passwordLoginCount, 1);
+    final prefs = await SharedPreferences.getInstance();
+    expect(
+      prefs.getString('zh_cloud_todo_flutter_state_v2'),
+      contains('access-token'),
+    );
+  });
+
+  testWidgets('register uses sms code flow', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final authClient = _FakeAuthClient();
+    await tester.pumpWidget(TodoFlutterApp(authClient: authClient));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('注册'));
+    await tester.pumpAndSettle();
+    expect(find.text('注册 Todo 账号'), findsOneWidget);
+
+    await tester.enterText(
+      find.widgetWithText(TextFormField, '手机号'),
+      '18800000000',
+    );
+    await tester.tap(find.text('发送'));
+    await tester.pumpAndSettle();
+    expect(find.text('登录验证码已发送'), findsOneWidget);
+    await tester.enterText(find.widgetWithText(TextFormField, '短信验证码'), '9999');
+    await tester.tap(find.text('注册并登录'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('日历 / 日程入口'), findsOneWidget);
+    expect(authClient.sentScenes, [1]);
+    expect(authClient.smsLoginCount, 1);
+  });
+
+  testWidgets('sms login enters todo home', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final authClient = _FakeAuthClient();
+    await tester.pumpWidget(TodoFlutterApp(authClient: authClient));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('验证码'));
+    await tester.pumpAndSettle();
+    expect(find.text('短信验证码登录'), findsOneWidget);
+
+    await tester.enterText(
+      find.widgetWithText(TextFormField, '手机号'),
+      '18800000000',
+    );
+    await tester.tap(find.text('发送'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextFormField, '短信验证码'), '9999');
+    await tester.tap(find.text('验证码登录'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('日历 / 日程入口'), findsOneWidget);
+    expect(authClient.sentScenes, [1]);
+    expect(authClient.smsLoginCount, 1);
+  });
+
+  testWidgets('forgot password resets and returns to password login', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final authClient = _FakeAuthClient();
+    await tester.pumpWidget(TodoFlutterApp(authClient: authClient));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('忘记密码'));
+    await tester.pumpAndSettle();
+    expect(find.text('找回密码'), findsOneWidget);
+    await tester.enterText(
+      find.widgetWithText(TextFormField, '手机号'),
+      '18800000000',
+    );
+    await tester.enterText(find.widgetWithText(TextFormField, '新密码'), '654321');
+    await tester.tap(find.text('发送'));
+    await tester.pumpAndSettle();
+    expect(find.text('重置密码验证码已发送'), findsOneWidget);
+    await tester.enterText(find.widgetWithText(TextFormField, '短信验证码'), '9999');
+    final resetButton = find.byWidgetPredicate(
+      (widget) =>
+          widget is FilledButton &&
+          widget.key == const ValueKey('todo-auth-submit'),
+    );
+    await tester.drag(
+      find.byKey(const ValueKey('todo-auth-list')),
+      const Offset(0, -180),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(resetButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('密码登录'), findsOneWidget);
+    expect(find.text('密码已重置，请使用新密码登录'), findsOneWidget);
+    expect(authClient.sentScenes, [4]);
+    expect(authClient.resetPasswordCount, 1);
+  });
+}
+
+Map<String, Object> _signedInState() => {
+  'zh_cloud_todo_flutter_state_v2':
+      '{"authSession":{"userId":1,"accessToken":"access-token","refreshToken":"refresh-token","mobile":"18800000000"},"activeTab":"日历","calendarView":"周"}',
+};
+
+class _FakeAuthClient implements TodoMemberAuthGateway {
+  int passwordLoginCount = 0;
+  int smsLoginCount = 0;
+  int resetPasswordCount = 0;
+  int logoutCount = 0;
+  final sentScenes = <int>[];
+
+  @override
+  Future<TodoAuthSession> passwordLogin({
+    required String mobile,
+    required String password,
+  }) async {
+    passwordLoginCount += 1;
+    return _session(mobile);
+  }
+
+  @override
+  Future<void> sendSmsCode({required String mobile, required int scene}) async {
+    sentScenes.add(scene);
+  }
+
+  @override
+  Future<TodoAuthSession> smsLogin({
+    required String mobile,
+    required String code,
+  }) async {
+    smsLoginCount += 1;
+    return _session(mobile);
+  }
+
+  @override
+  Future<void> resetPassword({
+    required String mobile,
+    required String code,
+    required String password,
+  }) async {
+    resetPasswordCount += 1;
+  }
+
+  @override
+  Future<void> logout(String accessToken) async {
+    logoutCount += 1;
+  }
+
+  @override
+  void close() {}
+
+  TodoAuthSession _session(String mobile) => TodoAuthSession(
+    userId: 1,
+    accessToken: 'access-token',
+    refreshToken: 'refresh-token',
+    mobile: mobile,
+  );
 }
