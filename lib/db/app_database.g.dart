@@ -494,6 +494,17 @@ class $TodoTasksTable extends TodoTasks
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _parentTaskIdMeta = const VerificationMeta(
+    'parentTaskId',
+  );
+  @override
+  late final GeneratedColumn<int> parentTaskId = GeneratedColumn<int>(
+    'parent_task_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _titleMeta = const VerificationMeta('title');
   @override
   late final GeneratedColumn<String> title = GeneratedColumn<String>(
@@ -597,6 +608,7 @@ class $TodoTasksTable extends TodoTasks
     id,
     serverId,
     listId,
+    parentTaskId,
     title,
     description,
     completed,
@@ -635,6 +647,15 @@ class $TodoTasksTable extends TodoTasks
       );
     } else if (isInserting) {
       context.missing(_listIdMeta);
+    }
+    if (data.containsKey('parent_task_id')) {
+      context.handle(
+        _parentTaskIdMeta,
+        parentTaskId.isAcceptableOrUnknown(
+          data['parent_task_id']!,
+          _parentTaskIdMeta,
+        ),
+      );
     }
     if (data.containsKey('title')) {
       context.handle(
@@ -720,6 +741,10 @@ class $TodoTasksTable extends TodoTasks
         DriftSqlType.int,
         data['${effectivePrefix}list_id'],
       )!,
+      parentTaskId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}parent_task_id'],
+      ),
       title: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}title'],
@@ -769,6 +794,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
   final int id;
   final int? serverId;
   final int listId;
+  final int? parentTaskId;
   final String title;
   final String? description;
   final bool completed;
@@ -782,6 +808,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     required this.id,
     this.serverId,
     required this.listId,
+    this.parentTaskId,
     required this.title,
     this.description,
     required this.completed,
@@ -800,6 +827,9 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       map['server_id'] = Variable<int>(serverId);
     }
     map['list_id'] = Variable<int>(listId);
+    if (!nullToAbsent || parentTaskId != null) {
+      map['parent_task_id'] = Variable<int>(parentTaskId);
+    }
     map['title'] = Variable<String>(title);
     if (!nullToAbsent || description != null) {
       map['description'] = Variable<String>(description);
@@ -827,6 +857,9 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           ? const Value.absent()
           : Value(serverId),
       listId: Value(listId),
+      parentTaskId: parentTaskId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parentTaskId),
       title: Value(title),
       description: description == null && nullToAbsent
           ? const Value.absent()
@@ -856,6 +889,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       id: serializer.fromJson<int>(json['id']),
       serverId: serializer.fromJson<int?>(json['serverId']),
       listId: serializer.fromJson<int>(json['listId']),
+      parentTaskId: serializer.fromJson<int?>(json['parentTaskId']),
       title: serializer.fromJson<String>(json['title']),
       description: serializer.fromJson<String?>(json['description']),
       completed: serializer.fromJson<bool>(json['completed']),
@@ -874,6 +908,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       'id': serializer.toJson<int>(id),
       'serverId': serializer.toJson<int?>(serverId),
       'listId': serializer.toJson<int>(listId),
+      'parentTaskId': serializer.toJson<int?>(parentTaskId),
       'title': serializer.toJson<String>(title),
       'description': serializer.toJson<String?>(description),
       'completed': serializer.toJson<bool>(completed),
@@ -890,6 +925,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     int? id,
     Value<int?> serverId = const Value.absent(),
     int? listId,
+    Value<int?> parentTaskId = const Value.absent(),
     String? title,
     Value<String?> description = const Value.absent(),
     bool? completed,
@@ -903,6 +939,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     id: id ?? this.id,
     serverId: serverId.present ? serverId.value : this.serverId,
     listId: listId ?? this.listId,
+    parentTaskId: parentTaskId.present ? parentTaskId.value : this.parentTaskId,
     title: title ?? this.title,
     description: description.present ? description.value : this.description,
     completed: completed ?? this.completed,
@@ -918,6 +955,9 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       id: data.id.present ? data.id.value : this.id,
       serverId: data.serverId.present ? data.serverId.value : this.serverId,
       listId: data.listId.present ? data.listId.value : this.listId,
+      parentTaskId: data.parentTaskId.present
+          ? data.parentTaskId.value
+          : this.parentTaskId,
       title: data.title.present ? data.title.value : this.title,
       description: data.description.present
           ? data.description.value
@@ -938,6 +978,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           ..write('id: $id, ')
           ..write('serverId: $serverId, ')
           ..write('listId: $listId, ')
+          ..write('parentTaskId: $parentTaskId, ')
           ..write('title: $title, ')
           ..write('description: $description, ')
           ..write('completed: $completed, ')
@@ -956,6 +997,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     id,
     serverId,
     listId,
+    parentTaskId,
     title,
     description,
     completed,
@@ -973,6 +1015,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           other.id == this.id &&
           other.serverId == this.serverId &&
           other.listId == this.listId &&
+          other.parentTaskId == this.parentTaskId &&
           other.title == this.title &&
           other.description == this.description &&
           other.completed == this.completed &&
@@ -988,6 +1031,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
   final Value<int> id;
   final Value<int?> serverId;
   final Value<int> listId;
+  final Value<int?> parentTaskId;
   final Value<String> title;
   final Value<String?> description;
   final Value<bool> completed;
@@ -1001,6 +1045,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
     this.listId = const Value.absent(),
+    this.parentTaskId = const Value.absent(),
     this.title = const Value.absent(),
     this.description = const Value.absent(),
     this.completed = const Value.absent(),
@@ -1015,6 +1060,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
     required int listId,
+    this.parentTaskId = const Value.absent(),
     required String title,
     this.description = const Value.absent(),
     this.completed = const Value.absent(),
@@ -1032,6 +1078,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     Expression<int>? id,
     Expression<int>? serverId,
     Expression<int>? listId,
+    Expression<int>? parentTaskId,
     Expression<String>? title,
     Expression<String>? description,
     Expression<bool>? completed,
@@ -1046,6 +1093,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
       if (id != null) 'id': id,
       if (serverId != null) 'server_id': serverId,
       if (listId != null) 'list_id': listId,
+      if (parentTaskId != null) 'parent_task_id': parentTaskId,
       if (title != null) 'title': title,
       if (description != null) 'description': description,
       if (completed != null) 'completed': completed,
@@ -1062,6 +1110,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     Value<int>? id,
     Value<int?>? serverId,
     Value<int>? listId,
+    Value<int?>? parentTaskId,
     Value<String>? title,
     Value<String?>? description,
     Value<bool>? completed,
@@ -1076,6 +1125,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
       id: id ?? this.id,
       serverId: serverId ?? this.serverId,
       listId: listId ?? this.listId,
+      parentTaskId: parentTaskId ?? this.parentTaskId,
       title: title ?? this.title,
       description: description ?? this.description,
       completed: completed ?? this.completed,
@@ -1099,6 +1149,9 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     }
     if (listId.present) {
       map['list_id'] = Variable<int>(listId.value);
+    }
+    if (parentTaskId.present) {
+      map['parent_task_id'] = Variable<int>(parentTaskId.value);
     }
     if (title.present) {
       map['title'] = Variable<String>(title.value);
@@ -1136,6 +1189,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
           ..write('id: $id, ')
           ..write('serverId: $serverId, ')
           ..write('listId: $listId, ')
+          ..write('parentTaskId: $parentTaskId, ')
           ..write('title: $title, ')
           ..write('description: $description, ')
           ..write('completed: $completed, ')
@@ -3281,6 +3335,7 @@ typedef $$TodoTasksTableCreateCompanionBuilder =
       Value<int> id,
       Value<int?> serverId,
       required int listId,
+      Value<int?> parentTaskId,
       required String title,
       Value<String?> description,
       Value<bool> completed,
@@ -3296,6 +3351,7 @@ typedef $$TodoTasksTableUpdateCompanionBuilder =
       Value<int> id,
       Value<int?> serverId,
       Value<int> listId,
+      Value<int?> parentTaskId,
       Value<String> title,
       Value<String?> description,
       Value<bool> completed,
@@ -3328,6 +3384,11 @@ class $$TodoTasksTableFilterComposer
 
   ColumnFilters<int> get listId => $composableBuilder(
     column: $table.listId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get parentTaskId => $composableBuilder(
+    column: $table.parentTaskId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3401,6 +3462,11 @@ class $$TodoTasksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get parentTaskId => $composableBuilder(
+    column: $table.parentTaskId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get title => $composableBuilder(
     column: $table.title,
     builder: (column) => ColumnOrderings(column),
@@ -3465,6 +3531,11 @@ class $$TodoTasksTableAnnotationComposer
   GeneratedColumn<int> get listId =>
       $composableBuilder(column: $table.listId, builder: (column) => column);
 
+  GeneratedColumn<int> get parentTaskId => $composableBuilder(
+    column: $table.parentTaskId,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get title =>
       $composableBuilder(column: $table.title, builder: (column) => column);
 
@@ -3526,6 +3597,7 @@ class $$TodoTasksTableTableManager
                 Value<int> id = const Value.absent(),
                 Value<int?> serverId = const Value.absent(),
                 Value<int> listId = const Value.absent(),
+                Value<int?> parentTaskId = const Value.absent(),
                 Value<String> title = const Value.absent(),
                 Value<String?> description = const Value.absent(),
                 Value<bool> completed = const Value.absent(),
@@ -3539,6 +3611,7 @@ class $$TodoTasksTableTableManager
                 id: id,
                 serverId: serverId,
                 listId: listId,
+                parentTaskId: parentTaskId,
                 title: title,
                 description: description,
                 completed: completed,
@@ -3554,6 +3627,7 @@ class $$TodoTasksTableTableManager
                 Value<int> id = const Value.absent(),
                 Value<int?> serverId = const Value.absent(),
                 required int listId,
+                Value<int?> parentTaskId = const Value.absent(),
                 required String title,
                 Value<String?> description = const Value.absent(),
                 Value<bool> completed = const Value.absent(),
@@ -3567,6 +3641,7 @@ class $$TodoTasksTableTableManager
                 id: id,
                 serverId: serverId,
                 listId: listId,
+                parentTaskId: parentTaskId,
                 title: title,
                 description: description,
                 completed: completed,

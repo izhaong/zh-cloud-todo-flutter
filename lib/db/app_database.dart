@@ -25,6 +25,7 @@ class TodoTasks extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get serverId => integer().nullable()();
   IntColumn get listId => integer()();
+  IntColumn get parentTaskId => integer().nullable()();
   TextColumn get title => text()();
   TextColumn get description => text().nullable()();
   BoolColumn get completed => boolean().withDefault(const Constant(false))();
@@ -97,10 +98,64 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(QueryExecutor e) : super(e);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onCreate: (m) async {
+      await m.createAll();
+    },
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        await m.addColumn(todoTasks, todoTasks.parentTaskId);
+      }
+    },
+  );
 
   static QueryExecutor _open() {
     // 默认平台 native (drift_flutter 提供)；Web/iOS 见 build_runner 输出
     return driftDatabase(name: 'zh_cloud_todo');
+  }
+
+  // --- DAO helpers (M11-B2) ----------------------------------------------
+
+  /// 切换任务完成状态（乐观更新本地 + 调用方负责 sync_queue 写入）。
+  Future<TodoTask> toggleTaskComplete(int taskId) async {
+    final row = await (select(todoTasks)..where((t) => t.id.equals(taskId)))
+        .getSingle();
+    final next = row.copyWith(
+      completed: !row.completed,
+      updatedAt: DateTime.now(),
+    );
+    await (update(todoTasks)..where((t) => t.id.equals(taskId)))
+        .write(next);
+    return next;
+  }
+
+  /// 将一个任务改为另一个任务的子任务（parentTaskId = newParentId）。
+  Future<void> reparentTask(int taskId, int? newParentId) async {
+    await (update(todoTasks)..where((t) => t.id.equals(taskId)))
+        .write(TodoTasksCompanion(
+      parentTaskId: Value(newParentId),
+      updatedAt: Value(DateTime.now()),
+    ));
+  }
+
+  /// 统计清单下未完成任务数（删除清单前用于拦截弹窗）。
+  Future<int> countOpenTasksByList(int listId) async {
+    final row = await customSelect(
+      'SELECT COUNT(*) AS c FROM todo_tasks WHERE list_id = ? AND completed = 0',
+      variables: [Variable.withInt(listId)],
+      readsFrom: {todoTasks},
+    ).getSingle();
+    return row.read<int>('c');
+  }
+
+  /// 子任务查询（直接 children）。
+  Future<List<TodoTask>> childrenOf(int parentTaskId) {
+    return (select(todoTasks)
+          ..where((t) => t.parentTaskId.equals(parentTaskId))
+          ..orderBy([(t) => OrderingTerm(expression: t.createdAt)]))
+        .get();
   }
 }

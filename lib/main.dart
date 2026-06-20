@@ -7,6 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'efficiency_dashboard.dart';
 import 'system_entry_dashboard.dart';
 import 'todo_member_auth_client.dart';
+import 'features/list/list_page.dart';
+import 'features/task/tasks_by_list_page.dart';
 
 void main() {
   runApp(const TodoFlutterApp());
@@ -653,6 +655,10 @@ class _TodoHomePageState extends State<TodoHomePage> {
               onSimulateShare: _simulateSystemShare,
               onAddImport: _addImportRecord,
             )
+          : _activeTab == '清单'
+          ? const ListPage()
+          : _activeTab == '任务'
+          ? const TasksByListPage()
           : _DashboardTabView(
               isSignedIn: _isSignedIn,
               lists: _lists,
