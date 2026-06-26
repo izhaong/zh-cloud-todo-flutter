@@ -1,0 +1,5 @@
+.organize-plans.log
+.git-commit-conflict-check.log
+.tts-state/
+tts.local.env
+tts.enabled

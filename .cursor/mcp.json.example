@@ -1,0 +1,130 @@
+{
+  "mcpServers": {
+    "apifox-mcp-server": {
+      "command": "npx",
+      "args": ["-y", "apifox-mcp-server@latest", "--site-id=5499428"]
+    },
+    "openapi-all(local)": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "apifox-mcp-server@latest",
+        "--oas=https://cloud-service.zh04.com/v3/api-docs/all"
+      ]
+    },
+    "cloudflare-docs": {
+      "type": "http",
+      "url": "https://docs.mcp.cloudflare.com/mcp"
+    },
+    "cloudflare-bindings": {
+      "type": "http",
+      "url": "https://bindings.mcp.cloudflare.com/mcp"
+    },
+    "cloudflare-builds": {
+      "type": "http",
+      "url": "https://builds.mcp.cloudflare.com/mcp"
+    },
+    "cloudflare-observability": {
+      "type": "http",
+      "url": "https://observability.mcp.cloudflare.com/mcp"
+    },
+    "cloudflare-api": {
+      "type": "http",
+      "url": "https://mcp.cloudflare.com/mcp"
+    },
+    "Chrome DevTools MCP": {
+      "command": "npx",
+      "args": ["-y", "chrome-devtools-mcp@latest"]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"]
+    },
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"]
+    },
+    "gitea": {
+      "type": "http",
+      "url": "https://mcp-gitea.zh04.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${env:GITEA_MCP_TOKEN}",
+        "Accept": "application/json, text/event-stream",
+        "Content-Type": "application/json"
+      }
+    },
+    "drawio": {
+      "command": "npx",
+      "args": ["-y", "@next-ai-drawio/mcp-server@latest"],
+      "env": {
+        "PORT": "6002",
+        "DRAWIO_BASE_URL": "https://drawio.zh04.com:43002"
+      }
+    },
+    "file-manager": {
+      "type": "http",
+      "url": "https://muddy-pond-eyays.run.mcp-use.com/mcp",
+      "headers": {
+        "Accept": "application/json, text/event-stream",
+        "Content-Type": "application/json"
+      }
+    },
+    "mysql-mcp": {
+      "command": "uvx",
+      "args": ["--from", "mysql-mcp-server", "mysql_mcp_server"],
+      "env": {
+        "MYSQL_HOST": "server.zh04.com",
+        "MYSQL_PORT": "3306",
+        "MYSQL_USER": "root",
+        "MYSQL_PASSWORD": "mysql8password",
+        "MYSQL_DATABASE": "ruoyi-vue-pro"
+      }
+    },
+    "dart": {
+      "type": "stdio",
+      "command": "dart mcp-server --experimental-mcp-server --force-roots-fallback",
+      "env": {},
+      "args": []
+    },
+    "mcp-obsidian": {
+      "command": "uvx",
+      "args": ["mcp-obsidian"],
+      "env": {
+        "OBSIDIAN_API_KEY": "f8e9412138c1ca397ac047c978b8655e4355476439202e6617bf4580709a76d1",
+        "OBSIDIAN_HOST": "127.0.0.1",
+        "OBSIDIAN_PORT": "27124"
+      }
+    },
+    "jenkins": {
+      "type": "http",
+      "url": "https://jenkins.zh04.com/mcp-server/stateless",
+      "headers": {
+        "Authorization": "Basic <BASE64_USER:API_TOKEN>",
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+      }
+    },
+    "aistor-minio": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "MINIO_ENDPOINT",
+        "-e",
+        "MINIO_ACCESS_KEY",
+        "-e",
+        "MINIO_SECRET_KEY",
+        "-e",
+        "MINIO_USE_SSL=true",
+        "quay.io/minio/aistor/mcp-server-aistor:latest"
+      ],
+      "env": {
+        "MINIO_ENDPOINT": "minio.zh04.com:443",
+        "MINIO_ACCESS_KEY": "ScrIzBHGNlL730oPjAAL",
+        "MINIO_SECRET_KEY": "lbhHuN9KMGrsCoQOp7xnF8sD5Is65Vq7IAthTYnI"
+      }
+    }
+  }
+}
