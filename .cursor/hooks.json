@@ -1,0 +1,146 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": ".cursor/hooks/session-branch-check.py",
+        "timeout": 10
+      },
+      {
+        "command": ".cursor/hooks/speak-lifecycle.py sessionStart",
+        "timeout": 3
+      }
+    ],
+    "sessionEnd": [
+      {
+        "command": ".cursor/hooks/speak-lifecycle.py sessionEnd",
+        "timeout": 3
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": ".cursor/hooks/speak-lifecycle.py preToolUse",
+        "timeout": 3
+      },
+      {
+        "command": ".cursor/hooks/block-edit-protected-branch.py",
+        "matcher": "Write|StrReplace|Delete|EditNotebook|ApplyPatch",
+        "timeout": 10
+      },
+      {
+        "command": ".cursor/hooks/block-edit-protected-branch.py",
+        "matcher": "Shell",
+        "timeout": 10
+      }
+    ],
+    "postToolUse": [
+      {
+        "command": ".cursor/hooks/speak-lifecycle.py postToolUse",
+        "timeout": 3
+      },
+      {
+        "command": ".cursor/hooks/git-commit-conflict-check.py",
+        "matcher": "Shell",
+        "timeout": 60
+      }
+    ],
+    "postToolUseFailure": [
+      {
+        "command": ".cursor/hooks/speak-lifecycle.py postToolUseFailure",
+        "timeout": 3
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": ".cursor/hooks/speak-lifecycle.py beforeShellExecution",
+        "timeout": 3
+      },
+      {
+        "command": ".cursor/hooks/block-dangerous-git.py",
+        "timeout": 15
+      },
+      {
+        "command": ".cursor/hooks/block-secrets-in-shell.py",
+        "matcher": "curl|wget",
+        "timeout": 10
+      },
+      {
+        "command": ".cursor/hooks/git-commit-conflict-check.py",
+        "matcher": "git commit",
+        "timeout": 60
+      }
+    ],
+    "afterShellExecution": [
+      {
+        "command": ".cursor/hooks/speak-lifecycle.py afterShellExecution",
+        "timeout": 3
+      }
+    ],
+    "beforeMCPExecution": [
+      {
+        "command": ".cursor/hooks/speak-lifecycle.py beforeMCPExecution",
+        "timeout": 3
+      }
+    ],
+    "afterMCPExecution": [
+      {
+        "command": ".cursor/hooks/speak-lifecycle.py afterMCPExecution",
+        "timeout": 3
+      }
+    ],
+    "beforeReadFile": [
+      {
+        "command": ".cursor/hooks/speak-lifecycle.py beforeReadFile",
+        "timeout": 3
+      }
+    ],
+    "afterFileEdit": [
+      {
+        "command": ".cursor/hooks/speak-lifecycle.py afterFileEdit",
+        "timeout": 3
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "command": ".cursor/hooks/speak-lifecycle.py beforeSubmitPrompt",
+        "timeout": 3
+      }
+    ],
+    "subagentStart": [
+      {
+        "command": ".cursor/hooks/speak-lifecycle.py subagentStart",
+        "timeout": 3
+      }
+    ],
+    "subagentStop": [
+      {
+        "command": ".cursor/hooks/speak-lifecycle.py subagentStop",
+        "timeout": 3
+      }
+    ],
+    "preCompact": [
+      {
+        "command": ".cursor/hooks/speak-lifecycle.py preCompact",
+        "timeout": 3
+      }
+    ],
+    "stop": [
+      {
+        "command": ".cursor/hooks/speak-lifecycle.py stop",
+        "timeout": 3
+      }
+    ],
+    "afterAgentResponse": [
+      {
+        "command": ".cursor/hooks/speak-lifecycle.py afterAgentResponse",
+        "timeout": 3
+      }
+    ],
+    "afterAgentThought": [
+      {
+        "command": ".cursor/hooks/speak-lifecycle.py afterAgentThought",
+        "timeout": 3
+      }
+    ]
+  }
+}

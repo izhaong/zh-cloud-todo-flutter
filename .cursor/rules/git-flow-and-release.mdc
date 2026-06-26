@@ -1,0 +1,137 @@
+---
+description: zh-cloud 四仓统一 Git Flow 分支模型与发布流程（develop 集成、tag 上 prod）
+alwaysApply: false
+---
+
+# Git Flow 与发布
+
+## 核心规则
+
+- `main`：生产环境分支，只保存已发布或可立即发布的稳定代码；禁止直接修改、直接推送或本地合并后强行推送。
+- `develop`：开发 / 测试环境集成分支，日常迭代、联调和测试环境部署使用；禁止直接推送。
+- **Issue 驱动**：所有新功能、缺陷修复、工程任务先创建或选用一个 Gitea Issue，再开始开发。
+- **一 Issue 一分支**：每个 Issue 使用独立开发分支，避免不同工作项互相干扰；分支名必须带 Issue 编号。
+- `main` 与 `develop` 只能通过 PR 合并；禁止在本地 `git merge develop/main` 后直接推送主干。
+- Agent 不默认 `commit` / `push` / 创建 PR / 合并 PR；这些动作必须由用户明确授权。
+
+## 分支模型
+
+| 分支                    | 用途                   | Jenkins / 部署                      |
+| ----------------------- | ---------------------- | ----------------------------------- |
+| `develop`               | 集成 / test            | 合并后触发 `<repo>-test`            |
+| `main`                  | 生产基线               | 生产发布以 tag 或受控 prod Job 触发 |
+| `feat/<issue>-<slug>`   | 新功能                 | PR 到 `develop`                     |
+| `fix/<issue>-<slug>`    | 测试环境或开发阶段缺陷 | PR 到 `develop`                     |
+| `docs/<issue>-<slug>`   | 文档、规则、需求沉淀   | PR 到 `develop`                     |
+| `chore/<issue>-<slug>`  | 工程维护、依赖、脚本   | PR 到 `develop`                     |
+| `hotfix/<issue>-<slug>` | 线上紧急修复           | PR 到 `main`，随后回灌 `develop`    |
+| `release/x.y.z`         | 发版冻结与收口         | PR 到 `main`，按需回灌 `develop`    |
+| `codex/<issue>-<slug>`  | Agent 代办分支         | 按实际类型 PR 到对应目标分支        |
+
+分支名示例：
+
+- `feat/123-member-login`
+- `fix/124-page-query`
+- `hotfix/125-payment-crash`
+- `feat/126-count-sync-contract`
+
+## 分支保护
+
+在 Gitea 中保护 `main` 与 `develop`：
+
+- 禁止直接推送。
+- 禁止强推。
+- 必须通过 PR 合并。
+- CI 通过后才能合并。
+- 至少 1 人审核后才能合并。
+- 删除主干分支默认禁止。
+
+## 日常功能开发
+
+1. 在 Gitea 创建或选用一个 Issue，写清目标、验收标准和影响范围。
+2. 同步 `develop` 最新代码。
+3. 从 `develop` 创建分支：`feat/<issue>-<slug>`、`fix/<issue>-<slug>`、`docs/<issue>-<slug>` 或 `chore/<issue>-<slug>`。
+4. 本地开发、测试、提交；提交信息用中文，格式见 `conventional-commits.mdc`。
+5. 推送分支，创建 PR，目标分支为 `develop`。
+6. PR 描述写 `Fixes #<issue>`；如有 Epic 或父任务，补 `Refs #<epic>`。
+7. CI 和代码审核通过后合并。
+8. 合并到 `develop` 后部署测试环境并验收。
+
+## PR 收尾后的本地分支清理
+
+Agent 在完成 PR 创建 / 推送 / 用户要求的同步操作后，默认执行本地收尾，避免继续停留在已合并、远端已删除的功能分支：
+
+1. **先确认工作区干净**：父仓与涉及的子仓均无未提交改动；若存在本地改动、stash、冲突或未推送提交，先报告并征得确认，不擅自丢弃。
+2. **切回集成线**：父仓与相关独立子仓默认切回 **`develop`**（hotfix / release 场景按目标基线切回 `main` 或对应 release 分支）。
+3. **同步远端状态**：执行 `git fetch --prune origin` 清理已被 Gitea code review 合并后删除的远端分支引用，再执行 `git pull --ff-only` 快进本地基线。
+4. **子模块对齐**：父仓若记录了子模块指针，按父仓需要执行 `git submodule update --init --recursive <paths>`，确保父仓工作区干净；若需要继续在子仓 `develop` 开发，须先说明父仓会显示子模块指针差异。
+5. **本地功能分支**：默认不删除本地功能分支；只有用户明确要求时才执行本地分支删除。
+
+## 测试环境 Bug 修复
+
+测试环境缺陷与日常功能同流：
+
+- 从 `develop` 拉 `fix/<issue>-<slug>`。
+- 修复后 PR 到 `develop`。
+- 合并后自动部署测试环境。
+- 验证通过后关闭对应 Issue。
+
+## 发布到生产环境
+
+1. 测试环境验收通过后，创建 PR：`develop` → `main`，或从 `release/x.y.z` PR 到 `main`。
+2. 在发布 PR 中基于从上一个 tag 到本次发布候选提交的 commit message 生成内部 `CHANGELOG.md`，并随 PR 一起提交；禁止合并 `main` 后再直接补改 `CHANGELOG.md`。
+3. 从内部 `CHANGELOG.md` 摘要出对外变更日志：默认只保留用户可感知的 `feat`、`fix`，必要时包含 `perf`；排除纯内部 `chore`、`ci`、`build`、`test`、纯 `docs` 与无用户影响的 `refactor`。
+4. 团队最终审核发布内容、数据库增量、配置、回滚方案、内部 `CHANGELOG.md` 与对外变更日志。
+5. CI 通过后合并到 `main`。
+6. 在 `main` 合并提交上打版本标签 `vX.Y.Z`，推送 tag；生产发布由 tag push 触发。
+7. 生产验证通过后，在 Gitea Release、发布公告或应用更新说明中归档对外变更日志；如验证失败，按回滚流程处理，不移动既有 tag。
+
+示例：
+
+```bash
+git checkout main
+git pull
+git tag -a v1.0.0 -m "release: v1.0.0"
+git push origin v1.0.0
+```
+
+变更日志细则见 `changesets-and-changelog.mdc`。
+
+## 线上紧急修复
+
+1. 在 Gitea 创建 hotfix Issue，标明线上影响、回滚方式和验证方式。
+2. 从 `main` 拉 `hotfix/<issue>-<slug>`。
+3. 快速修复并提交。
+4. 创建 PR，目标分支为 `main`。
+5. 在 hotfix PR 中基于 hotfix commit 更新内部 `CHANGELOG.md`，并在对外变更日志中摘要用户可感知的修复内容。
+6. CI / 审核通过后合并到 `main`。
+7. 在 `main` 合并提交上打 hotfix tag，推送 tag 触发生产。
+8. 关键步骤：把修复同步回 `develop`。
+
+回灌方式：
+
+- 优先创建 PR：`main` → `develop`。
+- 如果 `develop` 已大幅前进，使用 `cherry-pick` hotfix commit 到新分支，再 PR 到 `develop`。
+
+## 多仓协作
+
+涉及多个仓库时，各仓独立走 Issue、分支、PR：
+
+- `zh-cloud-service`
+- `zh-cloud-count`
+- `zh-cloud-admin-vben`
+- `zh-cloud-admin-uniapp`
+- 其它独立前端或移动端子仓
+
+约定：
+
+- 父仓 Issue 记录整体工作项；子仓如有代码改动，也要创建或选用对应子仓 Issue，并与父仓 Issue 互链。
+- 子仓代码必须在子仓独立提交、推送、PR。
+- 父仓只更新子模块 commit 指针，不把子仓代码混进父仓提交。
+- 多仓发布优先顺序：后端 API / SQL → 前端子仓 → 父仓子模块指针 → 联调验收 → `develop` 发布到 `main`。
+
+## 必读
+
+- Issue 同步：[issue-iteration-sync.mdc](issue-iteration-sync.mdc)
+- 分支保护手动清单：[docs/engineering/21-cicd-gitea-branch-protection-runbook.md](../../docs/engineering/21-cicd-gitea-branch-protection-runbook.md)
+- BeeCount 发布：[jenkins-minio-gitea-release.mdc](jenkins-minio-gitea-release.mdc) 与 `202605232130_platform_release_minio-gitea.plan.md`

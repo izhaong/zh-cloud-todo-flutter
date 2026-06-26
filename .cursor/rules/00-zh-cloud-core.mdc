@@ -1,0 +1,167 @@
+---
+description: zh-cloud 聚合工作区常驻核心：多独立仓库 Git/Issue/PR、Plan 落盘、文档与 CHANGELOG、Todo 诚实勾选、敏感信息（后端工程细节见 zh-cloud-service）
+alwaysApply: true
+---
+
+# zh-cloud 核心规则（`.cursor/rules/00-zh-cloud-core.mdc`）
+
+本文件为 **`alwaysApply`** 的**唯一合并入口**（跨 count 工作区内各 Git 根）。原 **`issue-branch-commit-pr-workflow`**、**`engineering-branch-plan-docs`**、**`00-fullstack-workflow`**、**`plan-persistence`**、**`todo-completion-verification`**、**`project-context`**、**`security-secrets`** 的正文均汇总于此。**修改通用约定时只编辑本文件**（路径在父目录 **`zh-cloud/.cursor/rules/`**），勿在其它 `.mdc` 重复粘贴同段文字。
+
+**加载方式**：请打开 **`zh-cloud-count.code-workspace`**（工作区须包含 **`zh-cloud` 父目录** 这一根，见该文件 `folders` 中 **`path": "."`**）。仅单独打开某一子仓库时，若该仓内对本文有**符号链接**（如 `zh-cloud-service/.cursor/rules/00-zh-cloud-core.mdc`），仍可读到同一正文。
+
+---
+
+## Issue → 分支 → 小步提交 → PR（关联 Issue）
+
+### 口令「同步代码」
+
+用户说 **「同步代码」** 时，Agent **须按 `issue-iteration-sync.mdc` 全文**执行（核对 Plan、本地 Issue 追踪文、**多仓各自分支**、`Fixes`/`Refs`、互链与追踪表更新），**不能**仅理解为裸 `git push`/`pull` 或在 **`develop`/`main`** 上直接堆提交。细则见该文件 **「口令『同步代码』」** 节，其中含：**无 Issue 驱动**时仍须 **新建分支 → 提交 → 推送 → PR**；**PR 成功创建后**可 **`checkout develop`** 并用 **`git branch -D`** 删除**本地**功能分支；**PR 合并进 `develop` 后**须 **`fetch` → `checkout develop` → `pull --ff-only`** 与远端对齐（工作区内**每个有改动的 Git 根**各走一遍），**不得**无分支隔离地推送主干。
+
+### 每会话必做：开工核对分支
+
+在**开始改代码前**，对**本会话会动到的每一个 Git 根**执行核对（例如 **`zh-cloud-service`**、**`zh-cloud-admin-vben`**、**`zh-cloud-admin-uniapp`**、**`zh-cloud-count`** 等并列仓库各为一份 Git 根；若仍使用后端仓内的 **`yudao-ui/*` 子模块**布局，则子模块目录各自也是一份仓库）：
+
+1. **当前分支**：在该仓库根目录执行 `git branch --show-current`（或看 `git status` 首行）。
+2. **若上一任务的 PR 已合并**：本地应已回到 **`develop`**，并已 **`git fetch`** + **`git pull --ff-only origin develop`**（其它仓库对其 `origin/develop` 同理）。  
+   **若仍停在 `feat/*`、`fix/*`、`hotfix/*`、`docs/*` 等**：要么明确「仍在该 Issue 分支上继续」，要么先收尾——**`git fetch origin`** → **`git checkout develop`** → **`git pull --ff-only origin develop`**，再为**新**工作项建分支。
+3. **禁止**：在不知道当前分支、或把旧功能分支当成 `develop` 的情况下继续提交。
+
+### 必须遵守（闭环）
+
+1. **先 Issue，再建分支**：在 Gitea **新建或选用已有 Issue**，再从 **`develop`**（线上 hotfix 从 **`main`**）拉 **独立分支**；分支名须带 Issue 编号（如 **`feat/42-count-login`**、**`fix/43-page-query`**）。不得在 **`develop`** / **`main`** 上直接堆功能或缺陷修复提交。
+2. **最小可交付单位完成即提交**：每完成一个可独立描述、可回滚的最小步骤，**主动 `git commit`**（中文 **`<type>(<scope>): <描述>`**）；除非用户要求「收口再提交」，否则不攒大包。
+3. **分支目标达成即推送并开 PR**：**推送**并 **创建或更新 PR** 指向 **`develop`**；**PR 描述须可追溯到工作项**：本仓工作项优先 **`Fixes #n`**；Epic/跨仓用 **`Refs #n`** 或 URL。**无 Issue 时**须符合 **`issue-iteration-sync.mdc`**「口令『同步代码』」中的 **独立分支 + PR**（正文说明无前置 Issue 或后续补链）。**禁止**在 **`develop`/`main`** 上绕过 PR 堆功能/缺陷提交；**禁止**不经分支隔离的裸推主干。
+4. **合并后收尾**：PR 在 Gitea **已合并进 `develop`** 后，在该仓库根 **`git fetch origin`** → **`git checkout develop`** → **`git pull --ff-only origin develop`**，与远端集成线对齐；若本地仍残留**已合并**的功能分支则 **`git branch -d <分支名>`**（若已在「推送并成功创建 PR 之后」用 **`-D`** 删除本地分支，本步可省略删分支）。凡改动过的**其它相关仓库**在各自目录内**同样执行**（与各仓 **`AGENTS.md`**「分支收尾」一致）。**PR 成功创建后即可删本地分支**的约定见 **`issue-iteration-sync.mdc`**「口令『同步代码』」。
+
+### 多独立仓库（并列布局 vs 子模块）
+
+**推荐（count 聚合）**：在 **`zh-cloud-count.code-workspace`** 中，`zh-cloud-service`、`zh-cloud-admin-vben`、`zh-cloud-admin-uniapp`、`zh-cloud-count` 等为**同级目录**，各为独立 Gitea 仓库；跨仓改动须**各自** **Issue → 分支 → 小步提交 → PR**，并用 **`Refs`** / URL **互链**对应 Issue 或 PR。禁止只在一边合并完、另一边长期在本地直接改 `develop` 堆功能。
+
+**兼容（后端仓内子模块）**：若前端仍作为 **`zh-cloud-service/yudao-ui/...`** 子模块存在：子模块仓库与父仓 **bump 指针 / 文档**仍须**各自** Issue + PR；细则见 **`issue-iteration-sync.mdc`**。
+
+### 例外（Issue/分支）
+
+单文件 typo、明显一行 bugfix、纯格式化：可沿用已有 Issue/PR 一句说明；团队另有要求从其规定。
+
+---
+
+## Git 主线分支（命名与文档）
+
+- **默认开发、合并与文档对照**：集成线 **`develop`**；发布稳定线 **`main`**（Gitea default branch 建议 `develop`）。
+- 说明文档、示例命令、PR 基线、与上游对比时**勿默认 `master`**；若需其它分支须显式写出分支名。
+- **`main` / `develop` 保护**：禁止直推主干；合并只走 PR；发版与 backport 细则见 **`git-flow-and-release.mdc`**。
+
+---
+
+## Plan（计划）优先
+
+- **规格驱动单一源（必读）**：本工作区统一向 **spec-kit** 收敛——单仓功能的 plan/tasks 以 `specs/<NNN>/{spec,plan,tasks}.md` 为唯一事实源；**Cursor Plan / Claude plan 模式只做前期设计，成形后用 `/speckit.plan` 落盘到 `specs/`**，Cursor Todo 仅为 `tasks.md` 临时视图。详见全局规则 **`spec-kit-single-source`**（与 `spec-kit-sdd-gate`、`gitflow-spec-kit-gate` 同族）。
+- **非平凡改动**（新功能、跨模块重构、对外行为或配置语义变化、新目录/新模块）：先用 **Cursor Plan（计划模式）** 固化步骤、影响面与回滚/验证方式，再写实现。
+- **权威路径（count / 跨仓）**：打开 **`zh-cloud-count.code-workspace`** 时，**端到端或跨仓库**采用的 Plan，落在 **`zh-cloud/.cursor/plans/*.plan.md`**（与 **`zh-cloud-count.code-workspace` 同级的父目录**下的 `.cursor/plans`），并应随你们对 **`zh-cloud` 父目录的版本管理策略**入库（父目录若无 Git，须另行约定备份方式，见 **`zh-cloud/.cursor/README.md`**）。
+- **单仓-only**：若某次改动**仅涉及一个仓库**且团队约定只在仓内跟踪 Plan，可在该仓库根下 **`<repo>/.cursor/plans/`** 维护，但仍禁止仅以 **`~/.cursor/plans/`** 为唯一副本。
+- **索引与归档**：现行 / 归档命名、**`README.md` 表格**仍以 **`zh-cloud/.cursor/plans/README.md`** 为准（勿在同一主题下并列多份「最新」互不引用）。持久化细则见下一节。
+- Plan / Todo 的**完成勾选**须诚实：未实际通过约定验证则**不得**标 **`completed`**，见下文「待办与计划完成状态」。
+
+---
+
+## Plan 必须保存在工作区项目中
+
+- **范围**：凡开发、重构或排障过程中通过 **Cursor Plan** 产出并**实际采用**的计划，**一律须以文件形式落在工作区可跟踪路径**，不得仅存在于会话或 Plan 面板。
+- **与 Cursor 全局目录的区别（必读）**：**`~/.cursor/plans/`** 不得作为唯一副本；须在**同一会话内**写入 **`zh-cloud/.cursor/plans/<主题>.plan.md`**（跨仓）或对应**单仓** **`<主题>.plan.md`**。
+- **目录结构与归档**：现行正文在对应 **`plans/`** 根目录，**`archive/`** 存放 superseded/done；细节与同目录 **`README.md`**、下文诚实勾选一致。
+
+---
+
+## 文档同步（Agent 生成/修改代码时强制）
+
+凡由 Cursor/Agent **新增或改动代码**，须在同一 PR/提交序列内同步文档（无则新建）；**各仓库**各自维护：
+
+| 变更类型                                         | 须同步的位置                                                                                              |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| 接口、配置、部署或开发者流程变化                 | **该仓库** `docs/` 或规格文档；后端约定变更须更新 **`zh-cloud-service/docs/engineering/00-CHANGELOG.md`** |
+| `.cursor/rules`、`AGENTS.md`、`.cursor/SKILL.md` | 约定有变则更新对应文件，并记入**相应仓库**变更日志（后端同上 `00-CHANGELOG.md`）                          |
+| 芋道 `dev-docs/` 正文、维护脚本                  | **`docs/shared/dev-docs/`**；`docs/scripts/dev-docs/`（`sidebar_catalog.json` + 抓取）                    |
+| 后端 SQL / 本地启动等                            | 仅在 **`zh-cloud-service`** 内按既有脚本与手册执行                                                        |
+
+## 变更记录（后端权威）
+
+- **`zh-cloud-service`** 项目级变更日志：**`zh-cloud-service/docs/engineering/00-CHANGELOG.md`**。
+- 其它前端 / 客户端仓库以其根目录 **`CHANGELOG.md`** / **changesets** 策略为准（见 **`changesets-and-changelog.mdc`**）。
+
+## 例外（可不写 Plan / 可极简 CHANGELOG）
+
+- 单文件 typo、明显一行 bugfix、纯格式化：可跳过 Plan；CHANGELOG 按各仓策略极简或不写。
+
+---
+
+## 仓库结构、多 Agent 与 Git 提交
+
+- **count 推荐工作区**：**`zh-cloud/zh-cloud-count.code-workspace`**；其中应包含 **`path": "."`** 指向 **`zh-cloud`** 父目录，以便加载本文件与 **`zh-cloud/.cursor`** 下 skills / MCP / plans。
+- **后端 Maven 工程**（模块、`sql/`、本地启动命令）：只在动 **`zh-cloud-service`** 时必读 **`zh-cloud-service/.cursor/rules/service-engineering-context.mdc`**。芋道离线手册见 **`docs/shared/dev-docs/`**。
+- 执行 `git` / 构建命令时，**cwd 为当前正在修改的仓库根目录**（除非文档另有说明）。
+- **多 Agent 并行**：按仓库分前后端；契约优先 OpenAPI/DTO/Mock。
+- **Git 提交规范（代提交时）**：**commit message 描述须为中文**，格式 `<type>(<scope>): <中文描述>`；`type` 英文小写。多仓库场景下在**各仓库根目录**分别 `git commit`。
+
+### 分支与发布（CI/CD 索引）
+
+- **Git Flow / 发版流程**：[git-flow-and-release.mdc](git-flow-and-release.mdc)
+- **提交 scope 细则**：[conventional-commits.mdc](conventional-commits.mdc)
+- **changelog（changesets / git-cliff）**：[changesets-and-changelog.mdc](changesets-and-changelog.mdc)
+- **Jenkins + Gitea test/prod**：[jenkins-gitea-test-prod.mdc](jenkins-gitea-test-prod.mdc)
+- **CI 密钥不入库**：[ci-secrets-hygiene.mdc](ci-secrets-hygiene.mdc)
+- **CI/CD 总览（后端文档）**：`zh-cloud-service/docs/engineering/22-cicd-jenkins-gitea-manual-runbook.md`
+- **Gitea 分支保护**：`zh-cloud-service/docs/engineering/21-cicd-gitea-branch-protection-runbook.md`
+
+---
+
+## 待办与计划完成状态（诚实勾选）
+
+- **适用范围**：Cursor **Todo**、相关 **`*.plan.md` frontmatter 中的 `todos[].status`**，以及对话里声称「已完成」的验收项。
+- **与 Issue 的关系**：凡属 **`issue-iteration-sync.mdc`** 中 **「须覆盖」** 的交付工作，**每一条** Todo / Plan `todo` **还须**有对应 **Gitea 工作项 Issue**；后端里程碑追踪见 **`zh-cloud-service/docs/engineering/`** 约定。
+- **Todo 内容必须清晰可验收**；**禁止**未实际执行验证（构建、服务、冒烟、CI/MCP 等）却标 **`completed`**。
+- **验收完成**以用户或 CI **可复现通过**为准。
+
+---
+
+## 绝不泄露与提交敏感信息
+
+- 不要在聊天/日志/代码块中输出真实的：密码、AccessKey/Secret、Token、Cookie、私钥、证书、数据库连接串中的凭据。
+- 配置示例用占位符：`password: ********`、`host: 127.0.0.1`、`token: <REDACTED>`。
+- **发现仓库内已有敏感信息时**：不要扩散复制；建议改为 `application-local`/`.env.local` 或环境变量注入。
+
+---
+
+## CI 与密钥（扩展）
+
+生产/流水线密钥约束见 **`ci-secrets-hygiene.mdc`**（与本文件「敏感信息」节互补）。
+
+---
+
+## Gitea PR 生命周期（Gitea MCP / API）
+
+### 完整流程（含本规则库的 Agent 默认行为）
+
+1. **创建 PR** → 使用 Gitea API `POST /repos/{owner}/{repo}/pulls`，head=功能分支，base=develop
+2. **CodeReview** → 通过 Gitea UI 或 API 评论（无 `review` MCP 工具时在 UI 做）
+3. **检查合并条件** → `GET /repos/{owner}/{repo}/pulls/{number}` 返回 `mergeable`
+4. **合并** → `POST /repos/{owner}/{repo}/pulls/{number}/merge`，需要 `{"Do":"merge"}`
+5. **收尾** → 本仓库根 `git fetch` → `git checkout develop` → `git pull --ff-only origin develop` → `git branch -d <分支>`（若已合并则用 `-d`；若分支仍需保留则用 `-D` 仅删除本地）
+6. **多仓** → 其它相关仓库**各自**执行同样收尾流程
+
+### API 参考（Gitea REST v1）
+
+| 操作    | Method + Endpoint                                 | 示例                                                                                    |
+| ------- | ------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| 列 PR   | `GET /repos/{owner}/{repo}/pulls?state=open`      | curl -s "https://gitea.zh04.com/api/v1/repos/izhaong/zh-cloud-service/pulls?state=open" |
+| 创建 PR | `POST /repos/{owner}/{repo}/pulls`                | body: `{title, body, head, base}`                                                       |
+| 读 PR   | `GET /repos/{owner}/{repo}/pulls/{number}`        | 返回 `mergeable`、`state`、`head.sha`                                                   |
+| 合并 PR | `POST /repos/{owner}/{repo}/pulls/{number}/merge` | body: `{"Do":"merge"}`                                                                  |
+| 删除 PR | `DELETE /repos/{owner}/{repo}/pulls/{number}`     | 直接删除，不再合并时用                                                                  |
+
+### 注意事项
+
+- **合并前提**：head 分支必须 **ahead** 或 **even** 于 base（不能 behind）。若分支落后，先 `rebase` 或 `reset --hard origin/<base>` 再强制推送。
+- **合并后分支**：Gitea 默认可配置「合并后删除 head 分支」，也可手动删除。
+- **无法合并时**：若 PR 报 "behind" 或 "conflict"，需要本地 rebase 后 force-push 更新 PR。
+- **无 MCP 时**：使用 `curl` 直接调用 Gitea REST API（需认证 header `Authorization: Bearer <token>`）。
+- **MCP 工具优先**：若 `user-gitea` MCP 已加载且功能正常，优先使用 MCP 工具；API curl 作为兜底或无 MCP 时的替代方案。

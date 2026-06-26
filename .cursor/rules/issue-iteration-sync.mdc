@@ -1,0 +1,91 @@
+---
+description: 功能迭代须与 Gitea Issue 有序同步；所有（范围内）Cursor Todo 与 Plan todos 须对应工作项 Issue；多仓各建 Issue；本地里程碑追踪减少 MCP 拉取
+alwaysApply: false
+---
+
+# 功能迭代与 Issue 有序同步
+
+**Git 每会话开工、分支命名、合并后回到 `develop`** 以 **`00-zh-cloud-core.mdc`** 为唯一权威。本文件补充 Issue 粒度、Todo/Plan 与里程碑、多仓 Issue 映射。
+
+与 **`00-zh-cloud-core.mdc`**（Plan/文档/CHANGELOG）、**`docs/count/00-plans/202605232116_count_core_fullstack-guide.plan.md`**等一致：**非平凡功能迭代**须走规范节奏，避免「只改代码、线上无痕迹、多仓不同步」。
+
+## 口令「同步代码」
+
+当用户仅说 **「同步代码」**（或同义：把本地改动、远程分支与 Gitea 工单对齐）且**未**另行约定口径时，Agent **须按本文件全文**执行，并与 **`00-zh-cloud-core.mdc`** 一并遵守，包括但不限于：
+
+> **执行**：[`COMMANDS.md`](../COMMANDS.md) · **`/gitea-ops`**（默认 sync + ship 连续）
+
+- **先**打开/核对：相关 **Plan**、本地 Issue 追踪与里程碑表（count：**`docs/count/07-releases/15-count-issue-tracking.md`** 与 **`<里程碑标题>_due-YYYY-MM-DD.md`**；其它产品按 **`docs/<产品>/07-releases/`** 或仍留在 **`zh-cloud-service/docs/engineering/`** 的 runbook 类文档）；仅当本地缺编号或需改状态时再调 **Gitea MCP**。
+- **Git（有 Issue）**：在**已绑定工作项**的独立分支上 **`fetch` / `pull --ff-only` / `push`**，并配合 **小步 `commit`（中文 message）→ PR → `develop`**；PR 描述含 **`Fixes #n` / `Refs`** 与多仓互链。
+- **Git（无 Issue 驱动）**：若当前工作**没有**对应 Gitea Issue（或用户明示无工单同步），**仍禁止在 `develop` / `main` 上直接提交**。须先从 **`develop`**（若远端可用则先 **`fetch`** + **`pull --ff-only origin develop`**）**新建本地分支**，命名可用 **`feat/<简述>`**、**`chore/<简述>`**、**`docs/<简述>`** 等（**可不包含 Issue 编号**），再 **小步 `commit`（中文 message）→ `push` → 创建 PR 指向 `develop`**。PR 正文写清变更摘要，并注明「无前置 Issue」或后续补建 Issue / 补 **`Refs`**；**禁止**只做裸 `git push` 而不建分支、不开 PR。
+- **工作区全部仓库（Git 根）适用**：**无例外**—凡本工作区能列出的 **每一个独立 Git 根**（并列的 **`zh-cloud-service`**、**`zh-cloud-admin-vben`**、**`zh-cloud-admin-uniapp`**、**`zh-cloud-count`**，以及若使用 **`yudao-ui/*` 子模块**则**子目录各自仓根**）均执行同一套节奏：**与远端对齐**在各自根目录 **`git fetch` + `git pull --ff-only origin develop`**；**有本地改动要入库**时，在**该根目录**内 **新建分支 → 小步 `commit`（中文）→ `push` → 开 PR 指 `develop`**（有 Issue 带 **`Fixes`/`Refs`**，无 Issue 见上条），**一仓一分支一 PR**；跨仓 PR 尽量 **互链** URL。
+- **推送并成功创建 PR 之后（本地可立即删分支）**：团队约定：**PR 已在 Gitea 成功打开**（远端已有对应分支与 PR）即可删除**本地**功能分支。在**该 Git 根**内 **`git fetch origin`** → **`git checkout develop`** → **`git pull --ff-only origin develop`** → **`git branch -D <本地功能分支名>`**（**`-D`**：此时该分支通常尚未并入当前 `develop` HEAD，**`-d` 会失败**；**远端 PR 分支仍存在**，评审与合并在 Gitea 完成）。若**预期合并前仍要向同一 PR 多次追加提交**，可**暂留**本地分支直至不再需要。
+- **PR 已合并进 `develop` 之后**：再次 **`git fetch origin`** → **`git checkout develop`** → **`git pull --ff-only origin develop`**，与远端集成线对齐；若上一步已删本地功能分支则**无需**再删分支。若当时未删、且本地仍残留**已合并**的同名分支，可 **`git branch -d <分支名>`**。**本会话动过的每一个仓库**各核实一遍。
+- **多仓（有 Issue 时）**：各 Git 根各自 **Issue + PR**；须 bump 子模块或 **`docs/engineering`** 时按上文「多仓协同」「有序节奏」处理。
+- **收工**：合并或阶段完成后**更新本地追踪表**（状态、最后同步日期）；有 Issue 时与 Gitea Issue 状态一致。
+
+## 适用范围
+
+- **须覆盖**：新能力、跨端/跨子模块、对外契约或行为变化、需评审排期的迭代。
+- **默认覆盖**：所有新功能、缺陷修复、工程任务都应先创建或选用一个 Gitea Issue，再进入分支开发；单文件 typo、明显一行 bugfix、纯格式化可在已有 PR / Issue 中简化说明。
+
+## Issue 驱动与分支绑定
+
+（**先 Issue、一分支一 PR、Fixes/Refs、子模块双端** 的命令级约定见 **`00-zh-cloud-core.mdc`**；下文只补「工作项与追踪」侧要求。）
+
+- **先 Issue，后分支**：开始开发前先有 Gitea Issue。Issue 描述至少写清目标、验收标准、影响范围；复杂任务补 Plan 链接。
+- **一 Issue 一分支**：每个 Issue 使用一个独立开发分支，避免不同工作项互相干扰。除非用户明确要求批量收口，否则不要把多个 Issue 混在同一分支里。
+- **分支名带 Issue 编号**：推荐 `feat/<issue>-<slug>`、`fix/<issue>-<slug>`、`docs/<issue>-<slug>`、`chore/<issue>-<slug>`、`hotfix/<issue>-<slug>`；Agent 分支可用 `codex/<issue>-<slug>`。
+- **PR 必须关联 Issue 和上下文**：创建或更新 PR 时，PR 描述必须写入对应工作项 Issue：使用 `Fixes #<issue>` 关闭当前仓库的当前工作项；若只是跨仓/父子关系或挂父 Epic，用 `Refs #<issue>` / `Refs #<epic>`。多仓场景中，父仓 Issue 与子仓 Issue 必须互链；若发现已提交 PR 未关联 Issue，须在继续合并前补更新 PR 描述。PR 描述还应尽量列出所有可追溯关联：父 Epic、父仓/子仓 Issue、关联 PR、Plan 文件、关键文档、分支名和关键提交；**默认须有明确 Issue 工单**。**例外**：用户按上文 **「口令『同步代码』」** 走 **无 Issue** 流程时，PR 可不写 **`Fixes #n`**，但须在正文说明原因或后续补 Issue。
+- **多仓协同（并列或子模块）**：各前端/客户端目录若为 **独立 Gitea 仓库**，须各自 Issue + PR；需要 **`zh-cloud-service` 更新 submodule 指针、`docs/engineering` 或后端契约** 时，**后端仓须另行 Issue + 分支 + PR**（PR 中用 **`Refs`** 链其它仓 Issue/PR），与子仓各自的 **`Fixes`** 关单分离。并列目录布局下无 submodule 指针时，仍以 **PR 互链** 对齐交付节奏。细则见 **`00-zh-cloud-core.mdc`**「多独立仓库」节。
+- **Issue 不是分支的替代品**：Issue 负责追踪目标、讨论、验收和关闭；分支负责隔离代码；PR 负责审查和合并。
+
+## Cursor Todo 与 Plan `todos`（全部走 Issue）
+
+**强制**：凡落在**上文「须覆盖」**范围内的工作，**每一条**出现在以下任一处的待办，**均须有对应 Gitea「工作项」Issue**（新建或选用已有、遵守下文 **一工作项一 Issue**），并在本地里程碑追踪文（count：**`docs/count/07-releases/15-count-issue-tracking.md`** 与 **`NN-<里程碑>_due-YYYY-MM-DD.md`**）或 Epic 子链中**写明 Issue 编号**；**禁止**只在 Cursor **Todo**（`TodoWrite`）、**`*.plan.md` frontmatter `todos[]`** 或对话清单里勾选推进，而 **Gitea 侧无可检索的 Issue 轨迹**。
+
+- **映射**：默认 **1 条 Todo / 1 条 Plan `todo` ↔ 1 个 Issue 编号**；若合并追踪须在表内注明，且 PR 仍能用 **`Fixes #n`** 正确关单。
+- **与诚实勾选**：将 Todo 或 `todos[].status` 标为 **`completed`** 仍须先满足 **`00-zh-cloud-core.mdc`**「待办与计划完成状态」（验证不可造假）；**禁止**用「已勾选 Todo」代替真实验收或代替在 Issue 上同步结项说明。
+
+**可简化项**：与「适用范围 → 可简化」同类者**可不**单建 Issue，但鼓励在既有 PR / 关联 Issue 上留一句说明。
+
+## Issue 粒度（与常见平台实践对齐）
+
+与 GitHub / GitLab / Gitea 社区常见用法一致：
+
+- **一条 Issue = 一个最小可追踪工作项**：通常对应 Plan 里 **一条** `todo`，或更小（例如单独修契约、单独补 SQL 也可各建 Issue）。便于标题检索、**`Fixes #n` 关单**、评审与统计。
+- **禁止**把多个无关工作项的长期实现细节，持续堆在**同一条** Issue 的评论区（会形成「万楼帖」、难以归档与回溯）。
+- **Epic / 父 Issue（可选）**：用于**里程碑或产品切片总览**（如「count MVP」）。Epic 正文或置顶评论只维护 **子工作项 Issue 链接清单**、窗口与风险；**实现过程、测试结论、提交说明**写在**对应工作项 Issue** 或 PR，不要重复贴满 Epic。
+- **PR 关联**：**`Fixes #n`** 指向**本工作项** Issue（合并后应被关闭的对象）；需要挂到总览时加 **`Refs #epic`**（或描述里写「父 Epic：#n」）。Gitea 若无原生 sub-issue，用描述/评论互链即可。**禁止**创建无 Issue 关联的功能/修复/工程任务 PR；若补开 PR 后才发现遗漏，必须立即 `update PR body` 补齐。除 Issue 外，能关联的上下文都应集中写在 PR 描述的 **关联信息** 小节，避免评审时反查对话。
+- **里程碑（Milestone）**：继续表示**迭代窗口**；看本窗口进度应筛 **milestone + label**，而不是依赖单条 Epic 的评论串。
+
+## 有序节奏（建议顺序）
+
+1. **Plan**：非平凡改动先有 **`zh-cloud/.cursor/plans/*.plan.md`**（跨仓）或 **目标仓库** `*.plan.md`（仅单仓），与实现同一 PR / 提交序列入库。
+2. **Issue（后端 / 协调仓）**：为**每个**待交付工作项 **新建或选用独立 Issue**（**勿**把多个 todo 混在同一条里，除非刻意拆成子任务且仍各自有编号可关单）。通常 **`zh-cloud-service`** 承载后端与跨仓追踪 **`docs/engineering/`**；填齐标签、里程碑、指派人、`ref`、`deadline`；若有 Epic，在描述中 **`Refs #epic`**。PR 描述用 **`Fixes #工作项`**（关单）与按需 **`Refs #epic`**。
+3. **Issue（各子仓）**：凡改动落在**独立 Git 仓库**（如 **`yudao-ui-admin-vben`**、**`zh-cloud-admin-uniapp`**、**`zh-cloud-count`** 等），须在**该仓库**各建（或选用）**对应 Issue**，与**父仓该工作项 Issue** **互链**（描述写清「父仓工作项 #x」「子仓 #y」）；若团队使用 Epic，可再 **`Refs #epic`**。**同一里程碑/产品标签**便于筛选。
+4. **过程同步**：在**该工作项对应 Issue** 下追加评论（或 checklist）：进展、关键提交/分支、阻塞点；**不要**只在对话里说完而不写 Issue。
+5. **PR 创建 / 更新**：PR 描述必须包含 **关联信息 / 关联工单** 小节或等价内容，明确 **`Fixes #工作项`** 与按需 **`Refs #父Issue/Epic`**。子仓 PR 使用本仓 `Fixes #子仓Issue`，并用完整 URL `Refs https://.../zh-cloud-service/issues/<父仓Issue>` 互链父仓工作项；同时尽量列出关联 PR、Plan、关键文档、分支名和关键提交，做到“能关联的信息都关联上”。
+6. **完成与合并**：代码 **merge 前/同时**：将**工作项 Issue** 更新为终态（关闭等）；子仓 Issue 与父仓**工作项 Issue** **状态对齐**。Epic 可在全部子工作项关闭后再关，或保留为里程碑归档入口。
+7. **完成即关单 + 入库（强制习惯）**：某一 **工作项 Issue** 已按验收标准 **做完**（含约定测试/评审）时：**先在 Gitea 关闭该 Issue**，**随即在同一工作单元内 `git commit`** 将对应代码与文档提交入库（commit message **中文**，见 **`git-commit-conventions.mdc`**）；**是否 `git push`** 由负责人决定，但 **禁止**「Issue 已当任务结束却长期不落库」。
+8. **子模块指针（若适用）**：后端仓合并涉及 **Git 子模块**时，按现有流程更新 **submodule commit** 并记入 PR / Issue；并列克隆布局无子模块则跳过本步。
+
+## 本地追踪文档（减少反复 MCP 读 Issue）
+
+**目的**：Agent/人本机优先读**仓库内文件**，不必每次用 **`user-gitea` MCP** 列表/拉取 Issue 全文。
+
+- **权威位置（推荐）**：在 **`docs/<产品>/07-releases/`** 维护 **与 Cursor Plan 分离** 的追踪文（避免与 **`docs/<app>/00-plans/*.plan.md`** 混放）。**每个 Gitea 里程碑**对应 **一个 `*.md`，文件名 = `<里程碑标题>_due-YYYY-MM-DD.md`**，其中日期 **必须与 Gitea 里程碑 `due_on`（网页 Due date）一致**；并保留 **索引**（count 见 **`docs/count/07-releases/15-count-issue-tracking.md`**）。**不建议**把大段 Issue/里程碑表塞进 Plan 正文。
+- **推荐表格字段**：`仓库` / `远程名或路径` / `Issue 编号` / `链接（可选，便于浏览器打开）` / `当前状态（本地维护）` / `最后同步日期` / `备注（PR、分支）`。
+- **子模块仓库**：可在各自仓库放**极简** **`.cursor/issue-ref.md`**（或 `docs/engineering/` 下一段）只写：「本功能父仓 Issue #n、本子仓 Issue #m、里程碑/标签」，避免双份长文；**详细仍以父仓 Plan/追踪文为准**。
+- **更新义务**：合并或阶段性收工后**顺手改一行**本地表中的状态与日期；与 Gitea 上 Issue 状态**保持一致**。
+- **里程碑镜像（与 Gitea 对时）**：在 **`docs/<产品>/07-releases/<里程碑标题>_due-YYYY-MM-DD.md`** 维护该里程碑的 **Gitea 对齐字段**（含 **`due_on`**）、**下属 Issue 清单** 与 **最后对时**；索引页（count：**`docs/count/07-releases/15-count-issue-tracking.md`**）维护 **里程碑列表、截止时间列** 与 **跨里程碑** 约定。**任意一侧变更须同步另一侧**：在 Gitea 上新建/调整里程碑 **`due_on`** 或给 Issue 换里程碑 → **`git mv`** 或新建对应 **`<标题>_due-<日期>.md`** 并更新索引；仅在本地改截止日期 → 用网页或 **`milestone_write`** 更新 Gitea **`due_on`**（若 MCP/实例不生效则以 **网页为准**）。避免双份真相漂移。
+
+## Agent 行为约束
+
+- 开始跨仓迭代时：先 **`@`** 打开工作区内 **Plan + 本地 Issue 追踪表**；**仅当**本地缺失编号、需核对评论或改状态时再调 **Gitea MCP**。
+- **新建工作项**：实现 **一个** Plan `todo`（或用户指定的最小功能）时，优先 **`issue_write` → `create`** 建**专用 Issue**，再在该 Issue 下跟进；**勿**默认把长篇进展只贴在 Epic 上。
+- **禁止**：在父仓只关 Issue、子仓 Issue 仍开着却无任何交叉说明（除非刻意拆阶段并在追踪表写明）。
+
+## 与 Spec Kit 的关系
+
+若仓库已接入 **Spec Kit**，规格产物仍为准；本规则约束 **Issue 与多仓同步节奏**，不替代 spec/plan/tasks。

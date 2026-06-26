@@ -1,0 +1,14 @@
+---
+description: Conventional Commits + 中文摘要；admin-vben scope 约束
+alwaysApply: false
+---
+
+# Commit message
+
+- 格式：`<type>(<scope>): <中文描述>`
+- `type`：`feat` `fix` `refactor` `perf` `docs` `style` `test` `chore` `ci` `build` `revert`
+- **admin-vben**（独立仓打开时）：遵守该仓 [.cursorrules](../../yudao-ui/zh-cloud-admin-vben/.cursorrules) — scope 为 `@vben/*` 包名或 `project|style|lint|ci|dev|deploy|other`；**CI/Jenkins/Pipeline 一律 `ci`**
+- **其它仓**：`scope` 用模块短名（中文或拼音均可），避免无意义英文套话
+- commit message 是发布内部 `CHANGELOG.md` 的事实来源；对外变更日志从内部 `CHANGELOG.md` 摘要，默认只选 `feat` / `fix` 与必要 `perf`。
+
+与全局约定对齐：用户级 [git-commit-conventions.mdc](file:///Users/zhonghao/.cursor/rules/git-commit-conventions.mdc)（若存在）。
