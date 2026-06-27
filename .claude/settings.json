@@ -152,9 +152,15 @@
             "type": "command",
             "command": ".cursor/hooks/speak-lifecycle.py Stop",
             "timeout": 3
+          },
+          {
+            "type": "command",
+            "command": ".cursor/hooks/organize-plans.py",
+            "timeout": 20
           }
         ]
       }
     ]
-  }
+  },
+  "version": 1
 }

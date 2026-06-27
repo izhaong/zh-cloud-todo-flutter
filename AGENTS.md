@@ -1,5 +1,7 @@
 # Agent 入口（zh-cloud-todo-flutter）
 
+> 本文件内容与 `CLAUDE.md` 保持一致（同一份 Agent 指南，供 Codex / Cursor 读取）。修改约定时两份一起更新。
+
 Todo 应用 **Flutter 多端客户端**（iOS / Android / macOS / Windows / Linux），通过 `/app-api/todo-member` 登录、`/app-api/todo` 与 `/app-api/todo/sync` 与 zh-cloud 后端联调；Web 端在 `zh-cloud-client/apps/todo`，后端在 `zh-cloud-service`。
 
 ## Coding Principles
