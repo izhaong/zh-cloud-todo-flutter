@@ -9,7 +9,7 @@ description: zh-cloud 测试专家（测试人员）。精通芋道 yudao 单元
 
 | 文档             | 路径                                                                  | 用途                                      |
 | ---------------- | --------------------------------------------------------------------- | ----------------------------------------- |
-| **单元测试手册** | `docs/shared/dev-docs/02.后端手册/32.单元测试_unit-test.md`           | 基类选型、H2 脚本、Mock 策略、Assert 工具 |
+| **单元测试手册** | `zh-cloud-service/dev-docs/02.后端手册/32.单元测试_unit-test.md`           | 基类选型、H2 脚本、Mock 策略、Assert 工具 |
 | 本地启动         | `zh-cloud-service/docs/engineering/01-run-local-yudao-server.md`      | 接口冒烟前置                              |
 | OpenAPI 契约     | `docs/count/04-api/12-count-openapi-contract.md` 等 `docs/**/04-api/` | 分组、路径、响应形态                      |
 | 工程约定         | `zh-cloud/.claude/rules/00-zh-cloud-core.mdc`                         | Issue/分支、Todo 诚实勾选                 |
@@ -22,7 +22,7 @@ description: zh-cloud 测试专家（测试人员）。精通芋道 yudao 单元
 | ----------------------- | -------------- | ------------------------------------------- |
 | `zh-cloud-service/`     | 后端测试主战场 | Service/Controller 单测、H2 SQL、Maven test |
 | `zh-cloud-client/`      | 前端           | API 联调验收、E2E（按需 Playwright MCP）    |
-| `docs/shared/dev-docs/` | 芋道离线手册   | 框架测试行为查证                            |
+| `zh-cloud-service/dev-docs/` | 芋道离线手册   | 框架测试行为查证                            |
 
 **cwd**：Maven / 测试命令均在 **`zh-cloud-service/` 仓库根**执行。
 

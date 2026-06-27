@@ -80,7 +80,7 @@ alwaysApply: true
 | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
 | 接口、配置、部署或开发者流程变化                 | **该仓库** `docs/` 或规格文档；后端约定变更须更新 **`zh-cloud-service/docs/engineering/00-CHANGELOG.md`** |
 | `.cursor/rules`、`AGENTS.md`、`.cursor/SKILL.md` | 约定有变则更新对应文件，并记入**相应仓库**变更日志（后端同上 `00-CHANGELOG.md`）                          |
-| 芋道 `dev-docs/` 正文、维护脚本                  | **`docs/shared/dev-docs/`**；`docs/scripts/dev-docs/`（`sidebar_catalog.json` + 抓取）                    |
+| 芋道 `dev-docs/` 正文、维护脚本                  | **`zh-cloud-service/dev-docs/`**；`zh-cloud-service/scripts/dev-docs/`（`sidebar_catalog.json` + 抓取）   |
 | 后端 SQL / 本地启动等                            | 仅在 **`zh-cloud-service`** 内按既有脚本与手册执行                                                        |
 
 ## 变更记录（后端权威）
@@ -97,7 +97,7 @@ alwaysApply: true
 ## 仓库结构、多 Agent 与 Git 提交
 
 - **count 推荐工作区**：**`zh-cloud/zh-cloud-count.code-workspace`**；其中应包含 **`path": "."`** 指向 **`zh-cloud`** 父目录，以便加载本文件与 **`zh-cloud/.cursor`** 下 skills / MCP / plans。
-- **后端 Maven 工程**（模块、`sql/`、本地启动命令）：只在动 **`zh-cloud-service`** 时必读 **`zh-cloud-service/.cursor/rules/service-engineering-context.mdc`**。芋道离线手册见 **`docs/shared/dev-docs/`**。
+- **后端 Maven 工程**（模块、`sql/`、本地启动命令）：只在动 **`zh-cloud-service`** 时必读 **`zh-cloud-service/.cursor/rules/service-engineering-context.mdc`**。芋道离线手册见 **`zh-cloud-service/dev-docs/`**。
 - 执行 `git` / 构建命令时，**cwd 为当前正在修改的仓库根目录**（除非文档另有说明）。
 - **多 Agent 并行**：按仓库分前后端；契约优先 OpenAPI/DTO/Mock。
 - **Git 提交规范（代提交时）**：**commit message 描述须为中文**，格式 `<type>(<scope>): <中文描述>`；`type` 英文小写。多仓库场景下在**各仓库根目录**分别 `git commit`。
