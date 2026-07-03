@@ -259,7 +259,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path $OUT_DIR | Out-Null
           $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
           if (-not (Test-Path $iscc)) { throw "Inno Setup not found at $iscc" }
-          & $iscc "/DAppVersion=$VERSION_NAME" "/O$PWD/$OUT_DIR" 'packaging/windows/todo_flutter.iss'
+          & $iscc "/DAppVersion=$VERSION_NAME" "/Ftodo-flutter-$VERSION_NAME-x86_64" "/O$PWD/$OUT_DIR" 'packaging/windows/todo_flutter.iss'
           $exe = Get-ChildItem "$OUT_DIR/*x86_64.exe" | Select-Object -First 1
           if (-not $exe -or $exe.Length -le 0) { throw 'EXE installer missing' }
 
