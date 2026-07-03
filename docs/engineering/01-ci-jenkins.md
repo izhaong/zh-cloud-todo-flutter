@@ -23,9 +23,9 @@
 
 ## 部署产物
 
-- Flutter **`build/web`** → 宿主机 **`$DEPLOY_TARGET_DIR/client/todo/dist`**
+- Flutter **`build/web`** → 宿主机 **`$DEPLOY_TARGET_DIR/todo-flutter/dist`**
+- compose / nginx / env 模板：本仓 **`deploy/`**（唯一权威，见 `deploy/README.md`）
 - 公网 H5：**client-todo-test.zh04.com**（test）/ **client-todo.zh04.com**（prod）
-- 部署模板与 compose：仓库根 **`deploy/README.md`**
 
 ## 规范索引
 

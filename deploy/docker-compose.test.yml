@@ -1,10 +1,10 @@
-# Flutter Todo Web（test）— 宿主机 /izhaong/zh-cloud-test/client/todo
-#   docker compose -p client-todo-test -f docker-compose.yml --env-file env up -d
+# Flutter Todo Web（test）— 宿主机 $DEPLOY_TARGET_DIR/todo-flutter
+#   docker compose -p todo-flutter-test -f docker-compose.yml --env-file env up -d
 #
 # dist/、nginx/、env 与本文件同级；npm client-todo-test.zh04.com → CLIENT_PORT（默认 38090）
 
 services:
-  client-todo:
+  todo-flutter:
     image: ${NGINX_IMAGE:-nginx:1.27-alpine}
     restart: unless-stopped
     env_file:

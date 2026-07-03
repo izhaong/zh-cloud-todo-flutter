@@ -119,9 +119,9 @@ pipeline {
     )
     string(
       name: 'COMPOSE_DEPLOY_SUBPATH',
-      defaultValue: 'client/todo',
+      defaultValue: 'todo-flutter',
       trim: true,
-      description: '相对 DEPLOY_TARGET_DIR 的部署目录（与旧 React client/todo 路径一致）'
+      description: '相对 DEPLOY_TARGET_DIR 的部署目录（本仓 compose 权威路径，见 deploy/）'
     )
     string(
       name: 'REMOTE_COMPOSE_FILE',
@@ -133,12 +133,12 @@ pipeline {
       name: 'REMOTE_COMPOSE_PROJECT',
       defaultValue: '',
       trim: true,
-      description: 'docker compose -p 项目名；留空则 test=client-todo-test、prod=client-todo'
+      description: 'docker compose -p 项目名；留空则 test=todo-flutter-test、prod=todo-flutter'
     )
     booleanParam(
       name: 'RESTART_COMPOSE',
       defaultValue: true,
-      description: '部署后是否 docker compose up -d client-todo'
+      description: '部署后是否 docker compose up -d todo-flutter'
     )
   }
 
@@ -308,7 +308,7 @@ test -s .jenkins-dist/todo-flutter-web.tar.gz
           def sshCfg = (params.DEPLOY_SSH_CONFIG ?: 'host.docker.internal').trim()
           def staging = (params.DEPLOY_STAGING_DIR ?: '/tmp/zh-cloud-staging-todo-flutter').trim()
           def deployRoot = (env.DEPLOY_TARGET_DIR ?: '').trim()
-          def composeSub = (params.COMPOSE_DEPLOY_SUBPATH ?: 'client/todo').trim()
+          def composeSub = (params.COMPOSE_DEPLOY_SUBPATH ?: 'todo-flutter').trim()
           def composeFile = (params.REMOTE_COMPOSE_FILE ?: 'docker-compose.yml').trim()
           def projectOverride = (params.REMOTE_COMPOSE_PROJECT ?: '').trim()
           def restart = (params.RESTART_COMPOSE == null) ? true : params.RESTART_COMPOSE
@@ -397,11 +397,11 @@ if [ "\$RESTART" = "true" ]; then
   if [ -n "\$PROJECT_OVERRIDE" ]; then
     COMPOSE_PROJECT="\$PROJECT_OVERRIDE"
   elif [ "\$IS_TEST" = "true" ]; then
-    COMPOSE_PROJECT="client-todo-test"
+    COMPOSE_PROJECT="todo-flutter-test"
   else
-    COMPOSE_PROJECT="client-todo"
+    COMPOSE_PROJECT="todo-flutter"
   fi
-  COMPOSE_SVC="client-todo"
+  COMPOSE_SVC="todo-flutter"
   cd "\$TARGET_DIR"
   RECREATE_FLAG=""
   if [ "\$COMPOSE_CHANGED" = "1" ] || [ "\$NGINX_CHANGED" = "1" ] || [ "\$ENV_CHANGED" = "1" ]; then
