@@ -230,7 +230,9 @@ jobs:
       - name: Install Windows packaging tools
         shell: pwsh
         run: |
-          choco install innosetup wixtoolset -y --no-progress
+          choco install innosetup -y --no-progress
+          dotnet tool install --global wix --version 4.0.6
+          wix extension add -g WixToolset.UI.wixext/4.0.6
 
       - name: Build & package Windows desktop (.exe + .msi)
         shell: pwsh
@@ -258,20 +260,16 @@ jobs:
           if (-not (Test-Path $iscc)) { throw "Inno Setup not found at $iscc" }
           & $iscc "/DAppVersion=$VERSION_NAME" 'packaging/windows/todo_flutter.iss'
 
-          $wixRoot = Get-ChildItem (Join-Path ${env:ProgramFiles(x86)} 'WiX Toolset*') -Directory |
-            Sort-Object Name -Descending |
-            Select-Object -First 1
-          if (-not $wixRoot) { throw 'WiX Toolset not found after choco install' }
-          $env:PATH = "$($wixRoot.FullName)\bin;$env:PATH"
-
-          heat dir $releaseDir `
-            -cg AppFiles -gg -sfrag -srd -dr INSTALLFOLDER `
+          wix heat dir $releaseDir `
+            -cg AppFiles -dr INSTALLFOLDER `
+            -sreg -srd -sfrag -scom `
+            -var var.SourceDir `
             -out .gha-dist/wix/AppFiles.wxs
-          candle -dProductVersion=$MSI_VERSION `
-            -out .gha-dist/wix/ `
-            packaging/windows/wix/Product.wxs .gha-dist/wix/AppFiles.wxs
-          light -out "$OUT_DIR/todo-flutter-${VERSION_NAME}-x86_64.msi" `
-            .gha-dist/wix/Product.wixobj .gha-dist/wix/AppFiles.wixobj
+          wix build packaging/windows/wix/Product.wxs .gha-dist/wix/AppFiles.wxs `
+            -d ProductVersion=$MSI_VERSION `
+            -d SourceDir=$releaseDir `
+            -ext WixToolset.UI.wixext `
+            -o "$OUT_DIR/todo-flutter-${VERSION_NAME}-x86_64.msi"
 
           $exe = Get-ChildItem "$OUT_DIR/*x86_64.exe" | Select-Object -First 1
           $msi = Get-ChildItem "$OUT_DIR/*x86_64.msi" | Select-Object -First 1
