@@ -1,0 +1,23 @@
+# Flutter Todo Web（test）— 宿主机 /izhaong/zh-cloud-test/client/todo
+#   docker compose -p client-todo-test -f docker-compose.yml --env-file env up -d
+#
+# dist/、nginx/、env 与本文件同级；npm client-todo-test.zh04.com → CLIENT_PORT（默认 38090）
+
+services:
+  client-todo:
+    image: ${NGINX_IMAGE:-nginx:1.27-alpine}
+    restart: unless-stopped
+    env_file:
+      - env
+    ports:
+      - "${CLIENT_PORT:-38090}:80"
+    volumes:
+      - ./dist:/usr/share/nginx/html:ro
+      - ./nginx/client.nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+    networks:
+      - db-bridge
+
+networks:
+  db-bridge:
+    name: ${CLIENT_DOCKER_NETWORK:-db-bridge}
+    external: true

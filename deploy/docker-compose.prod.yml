@@ -1,0 +1,21 @@
+# Flutter Todo Web（prod）— 宿主机 /izhaong/zh-cloud-prod/client/todo
+#   docker compose -p client-todo -f docker-compose.yml --env-file env up -d
+
+services:
+  client-todo:
+    image: ${NGINX_IMAGE:-nginx:1.27-alpine}
+    restart: unless-stopped
+    env_file:
+      - env
+    ports:
+      - "${CLIENT_PORT:-58090}:80"
+    volumes:
+      - ./dist:/usr/share/nginx/html:ro
+      - ./nginx/client.nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+    networks:
+      - db-bridge-prod
+
+networks:
+  db-bridge-prod:
+    name: ${CLIENT_DOCKER_NETWORK:-db-bridge-prod}
+    external: true
