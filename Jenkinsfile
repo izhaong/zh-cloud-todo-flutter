@@ -73,6 +73,8 @@ pipeline {
     quietPeriod(20)
     buildDiscarder(logRotator(numToKeepStr: '3', artifactNumToKeepStr: '3'))
     timeout(time: 1, unit: 'HOURS')
+    // 与 zh-cloud-service 一致：显式 checkout，避免 Declarative 默认检出与 GWT 竞态
+    skipDefaultCheckout(true)
   }
 
   parameters {
@@ -141,6 +143,14 @@ pipeline {
   }
 
   stages {
+    stage('拉取代码') {
+      steps {
+        deleteDir()
+        checkout scm
+        sh 'test -f pubspec.yaml && test -f .metadata && ls -la pubspec.yaml .metadata web/index.html'
+      }
+    }
+
     stage('解析触发上下文') {
       steps {
         script {
@@ -235,7 +245,7 @@ API_BASE='${apiBase.replace("'", "'\\''")}'
 TENANT='${tenantId.replace("'", "'\\''")}'
 docker pull "\$IMG"
 run_flutter() {
-  docker run --rm -v "\$PWD:/app" -w /app -u \$(id -u):\$(id -g) "\$IMG" "\$@"
+  docker run --rm -v "\${WORKSPACE}:/app:z" -w /app -u \$(id -u):\$(id -g) "\$IMG" "\$@"
 }
 run_flutter flutter --version
 run_flutter flutter pub get
@@ -244,14 +254,14 @@ run_flutter flutter pub get
             sh """
 set -e
 IMG='${flutterImg.replace("'", "'\\''")}'
-docker run --rm -v "\$PWD:/app" -w /app -u \$(id -u):\$(id -g) "\$IMG" flutter analyze
+docker run --rm -v "\${WORKSPACE}:/app:z" -w /app -u \$(id -u):\$(id -g) "\$IMG" flutter analyze
 """
           }
           if (!params.SKIP_TESTS) {
             sh """
 set -e
 IMG='${flutterImg.replace("'", "'\\''")}'
-docker run --rm -v "\$PWD:/app" -w /app -u \$(id -u):\$(id -g) "\$IMG" flutter test
+docker run --rm -v "\${WORKSPACE}:/app:z" -w /app -u \$(id -u):\$(id -g) "\$IMG" flutter test
 """
           }
           sh """
@@ -259,7 +269,7 @@ set -e
 IMG='${flutterImg.replace("'", "'\\''")}'
 API_BASE='${apiBase.replace("'", "'\\''")}'
 TENANT='${tenantId.replace("'", "'\\''")}'
-docker run --rm -v "\$PWD:/app" -w /app -u \$(id -u):\$(id -g) "\$IMG" \\
+docker run --rm -v "\${WORKSPACE}:/app:z" -w /app -u \$(id -u):\$(id -g) "\$IMG" \\
   flutter build web --release \\
   --dart-define=TODO_API_BASE_URL="\$API_BASE" \\
   --dart-define=TODO_TENANT_ID="\$TENANT"
