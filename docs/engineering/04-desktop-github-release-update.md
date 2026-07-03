@@ -13,7 +13,7 @@
    - Windows：`*-x86_64.exe`（优先）或 `*-x86_64.msi`
 4. 用户点「前往下载」用系统浏览器打开 GitHub 资产链接（**不**在应用内静默安装）。
 
-实现：`lib/github_release_update.dart`；UI 入口在主页 AppBar「检查更新」与启动静默检查。
+实现：`lib/github_release_update.dart`；UI 入口在 **设置 → 关于 → 检测更新**（`Ctrl+,` / `⌘+,` 打开设置），登录后启动时仍会静默检查。
 
 ## 与 CI 的对应关系
 

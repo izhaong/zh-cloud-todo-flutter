@@ -38,6 +38,8 @@ Todo 应用 **唯一 C 端客户端**（**Web / H5**、iOS、Android、macOS、W
 
 默认 API 基址是 `http://127.0.0.1:48080`，默认租户是 `1`。联调其它环境时使用 Dart define：
 
+**Cursor / VS Code**：安装 Dart + Flutter 扩展后，在 **Run and Debug** 选择 `.vscode/launch.json` 中的配置（如 `todo-flutter (macOS · local)`），**F5** 启动；调试工具栏支持 Hot Reload / Hot Restart。
+
 ```bash
 # Web / H5（Chrome）
 flutter run -d chrome \
