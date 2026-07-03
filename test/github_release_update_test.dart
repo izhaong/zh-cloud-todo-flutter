@@ -21,23 +21,43 @@ void main() {
   });
 
   group('pickDownloadUrl', () {
-    test('selects platform asset', () {
+    test('selects linux deb installer', () {
       final release = {
         'assets': [
           {
-            'name': 'todo-flutter-prod-v1.0.0+1-macos.zip',
-            'browser_download_url': 'https://example.com/macos.zip',
+            'name': 'todo-flutter-1.0.0-x86_64.deb',
+            'browser_download_url': 'https://example.com/linux.deb',
           },
           {
-            'name': 'todo-flutter-prod-v1.0.0+1-linux-x64.tar.gz',
-            'browser_download_url': 'https://example.com/linux.tar.gz',
+            'name': 'todo-flutter-1.0.0-aarch64.dmg',
+            'browser_download_url': 'https://example.com/macos.dmg',
           },
         ],
       };
 
       expect(
         pickDownloadUrl(release, DesktopReleasePlatform.linux),
-        'https://example.com/linux.tar.gz',
+        'https://example.com/linux.deb',
+      );
+    });
+
+    test('prefers windows exe over msi', () {
+      final release = {
+        'assets': [
+          {
+            'name': 'todo-flutter-1.0.0-x86_64.msi',
+            'browser_download_url': 'https://example.com/app.msi',
+          },
+          {
+            'name': 'todo-flutter-1.0.0-x86_64.exe',
+            'browser_download_url': 'https://example.com/app.exe',
+          },
+        ],
+      };
+
+      expect(
+        pickDownloadUrl(release, DesktopReleasePlatform.windows),
+        'https://example.com/app.exe',
       );
     });
   });
@@ -50,8 +70,8 @@ void main() {
           'body': '修复若干问题',
           'assets': [
             {
-              'name': 'todo-flutter-prod-v1.1.0+2-macos.zip',
-              'browser_download_url': 'https://example.com/update.zip',
+              'name': 'todo-flutter-1.1.0-aarch64.dmg',
+              'browser_download_url': 'https://example.com/update.dmg',
             },
           ],
         }),
@@ -62,7 +82,7 @@ void main() {
       final info = await checker.checkForUpdate();
       expect(info, isNotNull);
       expect(info!.version, '1.1.0');
-      expect(info.downloadUrl, 'https://example.com/update.zip');
+      expect(info.downloadUrl, 'https://example.com/update.dmg');
     });
 
     test('returns null when already up to date', () async {
@@ -71,8 +91,8 @@ void main() {
           'tag_name': 'v1.0.0',
           'assets': [
             {
-              'name': 'todo-flutter-prod-v1.0.0+1-macos.zip',
-              'browser_download_url': 'https://example.com/update.zip',
+              'name': 'todo-flutter-1.0.0-aarch64.dmg',
+              'browser_download_url': 'https://example.com/update.dmg',
             },
           ],
         }),

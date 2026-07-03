@@ -8,7 +8,7 @@
 | Workflow    | 文件          | 触发                                                    | 作用                     |
 | ----------- | ------------- | ------------------------------------------------------- | ------------------------ |
 | **Web**     | `web.yml`     | 推 `develop`（test）/ tag `v*`（prod）/ 手动            | 构建 H5 + SSH 部署宿主机 |
-| **Desktop** | `desktop.yml` | 推 `develop`（test 包）/ tag `v*`（prod Release）/ 手动 | 三端桌面安装包           |
+| **Desktop** | `desktop.yml` | 推 `develop`（test 包）/ tag `v*`（prod Release）/ 手动 | 三端 **EXE/MSI/DMG/DEB** 安装包（对齐 RustDesk Release） |
 | **CI**      | `ci.yml`      | `develop`/`main` 的 PR 与 push                          | analyze + test（不部署） |
 
 Jenkins（Gitea webhook）仅作备用，见 `01-ci-jenkins.md`。
@@ -39,7 +39,7 @@ git push github v1.0.0
 触发：
 
 - `web.yml` → prod SSH 部署（须已配置 Secrets）
-- `desktop.yml` → 三端安装包 + **GitHub Release**
+- `desktop.yml` → 三端 **`.exe` / `.msi` / `.dmg` / `.deb`** + **GitHub Release**（Release 页含 RustDesk 风格下载表格）
 
 **无本地 tag 时**：Actions → **Desktop** → Run workflow → `build_env=prod`、`create_release=true`、`release_version=1.0.0`。
 

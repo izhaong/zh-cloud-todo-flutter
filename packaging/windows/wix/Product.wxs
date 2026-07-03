@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <?ifndef ProductVersion ?>
+    <?define ProductVersion = "1.0.0.0" ?>
+  <?endif ?>
+  <Product
+    Id="*"
+    Name="Todo Flutter"
+    Language="1033"
+    Version="$(var.ProductVersion)"
+    Manufacturer="ZH Cloud"
+    UpgradeCode="B8E4F1A2-3C5D-4E6F-9A0B-1D2E3F4A5B6C">
+    <Package
+      InstallerVersion="500"
+      Compressed="yes"
+      InstallScope="perMachine"
+      Description="Todo Flutter desktop client"
+      Comments="https://client-todo.zh04.com" />
+    <MajorUpgrade DowngradeErrorMessage="已安装较新版本，无法降级安装。" />
+    <MediaTemplate EmbedCab="yes" />
+    <Feature Id="ProductFeature" Title="Todo Flutter" Level="1">
+      <ComponentGroupRef Id="AppFiles" />
+    </Feature>
+  </Product>
+  <Fragment>
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="Todo Flutter" />
+      </Directory>
+    </Directory>
+  </Fragment>
+</Wix>

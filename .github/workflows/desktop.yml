@@ -116,7 +116,7 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Build & package Linux desktop
+      - name: Build & package Linux desktop (.deb)
         env:
           BUILD_ENV: ${{ needs.metadata.outputs.build_env }}
           TODO_API_BASE_URL: ${{ needs.metadata.outputs.todo_api_base_url }}
@@ -126,8 +126,6 @@ jobs:
           OUT_DIR=".gha-dist/desktop"
           VERSION_LINE="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
           VERSION_NAME="${VERSION_LINE%%+*}"
-          BUILD_NUMBER="${VERSION_LINE#*+}"
-          ARTIFACT_SLUG="todo-flutter-${BUILD_ENV}-v${VERSION_NAME}+${BUILD_NUMBER}"
 
           flutter pub get
           flutter build linux --release \
@@ -137,15 +135,36 @@ jobs:
           bundle="build/linux/x64/release/bundle"
           test -d "$bundle"
           mkdir -p "$OUT_DIR"
-          tar -C "$bundle" -czf "${OUT_DIR}/${ARTIFACT_SLUG}-linux-x64.tar.gz" .
-          test -s "${OUT_DIR}/${ARTIFACT_SLUG}-linux-x64.tar.gz"
+
+          pkg_root=".gha-dist/deb-root"
+          rm -rf "$pkg_root"
+          mkdir -p "$pkg_root/DEBIAN"
+          mkdir -p "$pkg_root/opt/todo-flutter"
+          mkdir -p "$pkg_root/usr/share/applications"
+          cp -a "$bundle"/. "$pkg_root/opt/todo-flutter/"
+          cp packaging/linux/todo-flutter.desktop "$pkg_root/usr/share/applications/"
+          printf '%s\n' \
+            "Package: todo-flutter" \
+            "Version: ${VERSION_NAME}" \
+            "Section: utils" \
+            "Priority: optional" \
+            "Architecture: amd64" \
+            "Maintainer: ZH Cloud <noreply@zh04.com>" \
+            "Depends: libgtk-3-0, libblkid1, liblzma5" \
+            "Description: Todo Flutter desktop client" \
+            " ZH Cloud Todo application for desktop." \
+            > "$pkg_root/DEBIAN/control"
+          chmod 755 "$pkg_root/DEBIAN"
+          dpkg-deb --root-owner-group --build "$pkg_root" \
+            "${OUT_DIR}/todo-flutter-${VERSION_NAME}-x86_64.deb"
+          test -s "${OUT_DIR}/todo-flutter-${VERSION_NAME}-x86_64.deb"
           ls -la "$OUT_DIR"
 
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-linux
           if-no-files-found: error
-          path: .gha-dist/desktop/*linux*.tar.gz
+          path: .gha-dist/desktop/*x86_64.deb
 
   desktop-macos:
     name: macOS
@@ -159,7 +178,7 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Build & package macOS desktop
+      - name: Build & package macOS desktop (.dmg)
         env:
           BUILD_ENV: ${{ needs.metadata.outputs.build_env }}
           TODO_API_BASE_URL: ${{ needs.metadata.outputs.todo_api_base_url }}
@@ -169,8 +188,6 @@ jobs:
           OUT_DIR=".gha-dist/desktop"
           VERSION_LINE="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
           VERSION_NAME="${VERSION_LINE%%+*}"
-          BUILD_NUMBER="${VERSION_LINE#*+}"
-          ARTIFACT_SLUG="todo-flutter-${BUILD_ENV}-v${VERSION_NAME}+${BUILD_NUMBER}"
 
           flutter pub get
           flutter build macos --release \
@@ -180,15 +197,23 @@ jobs:
           app="build/macos/Build/Products/Release/zh_cloud_todo_flutter.app"
           test -d "$app"
           mkdir -p "$OUT_DIR"
-          ditto -c -k --sequesterRsrc --keepParent "$app" "${OUT_DIR}/${ARTIFACT_SLUG}-macos.zip"
-          test -s "${OUT_DIR}/${ARTIFACT_SLUG}-macos.zip"
+
+          arch="$(uname -m)"
+          case "$arch" in
+            arm64) arch_slug="aarch64" ;;
+            x86_64) arch_slug="x86_64" ;;
+            *) arch_slug="$arch" ;;
+          esac
+          dmg="${OUT_DIR}/todo-flutter-${VERSION_NAME}-${arch_slug}.dmg"
+          hdiutil create -volname "Todo Flutter" -srcfolder "$app" -ov -format UDZO "$dmg"
+          test -s "$dmg"
           ls -la "$OUT_DIR"
 
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-macos
           if-no-files-found: error
-          path: .gha-dist/desktop/*macos*.zip
+          path: .gha-dist/desktop/*.dmg
 
   desktop-windows:
     name: Windows x64
@@ -202,7 +227,12 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Build & package Windows desktop
+      - name: Install Windows packaging tools
+        shell: pwsh
+        run: |
+          choco install innosetup wixtoolset -y --no-progress
+
+      - name: Build & package Windows desktop (.exe + .msi)
         shell: bash
         env:
           BUILD_ENV: ${{ needs.metadata.outputs.build_env }}
@@ -213,32 +243,42 @@ jobs:
           OUT_DIR=".gha-dist/desktop"
           VERSION_LINE="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
           VERSION_NAME="${VERSION_LINE%%+*}"
-          BUILD_NUMBER="${VERSION_LINE#*+}"
-          ARTIFACT_SLUG="todo-flutter-${BUILD_ENV}-v${VERSION_NAME}+${BUILD_NUMBER}"
+          MSI_VERSION="${VERSION_NAME}.0"
 
           flutter pub get
           flutter build windows --release \
             --dart-define=TODO_API_BASE_URL="${TODO_API_BASE_URL}" \
             --dart-define=TODO_TENANT_ID="${TODO_TENANT_ID}"
 
-          dir="build/windows/x64/runner/Release"
-          test -d "$dir"
-          mkdir -p "$OUT_DIR"
-          zip="${OUT_DIR}/${ARTIFACT_SLUG}-windows-x64.zip"
-          rm -f "$zip"
-          if command -v zip >/dev/null 2>&1; then
-            (cd "$dir" && zip -qr "$zip" .)
-          else
-            powershell -NoProfile -Command "Compress-Archive -Path '${dir//\//\\}\*' -DestinationPath '${zip//\//\\}' -Force"
-          fi
-          test -s "$zip"
+          release_dir="build/windows/x64/runner/Release"
+          test -d "$release_dir"
+          mkdir -p "$OUT_DIR" .gha-dist/wix
+
+          iscc="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
+          test -x "$iscc"
+          "$iscc" "/DAppVersion=${VERSION_NAME}" packaging/windows/todo_flutter.iss
+
+          export PATH="$PATH:/c/Program Files (x86)/WiX Toolset v3.11/bin"
+          heat dir "$release_dir" \
+            -cg AppFiles -gg -sfrag -srd -dr INSTALLFOLDER \
+            -out .gha-dist/wix/AppFiles.wxs
+          candle -dProductVersion="${MSI_VERSION}" \
+            -out .gha-dist/wix/ \
+            packaging/windows/wix/Product.wxs .gha-dist/wix/AppFiles.wxs
+          light -out "${OUT_DIR}/todo-flutter-${VERSION_NAME}-x86_64.msi" \
+            .gha-dist/wix/Product.wixobj .gha-dist/wix/AppFiles.wixobj
+
+          test -s "${OUT_DIR}/todo-flutter-${VERSION_NAME}-x86_64.exe"
+          test -s "${OUT_DIR}/todo-flutter-${VERSION_NAME}-x86_64.msi"
           ls -la "$OUT_DIR"
 
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-windows
           if-no-files-found: error
-          path: .gha-dist/desktop/*windows*.zip
+          path: |
+            .gha-dist/desktop/*x86_64.exe
+            .gha-dist/desktop/*x86_64.msi
 
   release:
     name: GitHub Release
@@ -269,17 +309,29 @@ jobs:
 
       - run: ls -la dist/desktop/
 
+      - name: Write RustDesk-style release notes
+        id: notes
+        run: |
+          set -euo pipefail
+          VERSION="$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)"
+          TAG="${{ needs.metadata.outputs.tag_name }}"
+          BASE="https://github.com/izhaong/zh-cloud-todo-flutter/releases/download/${TAG}"
+          printf '%s\n' \
+            "| Architecture | Windows | Ubuntu | Mac |" \
+            "| --- | --- | --- | --- |" \
+            "| x86-64 (64-bit) | [EXE](${BASE}/todo-flutter-${VERSION}-x86_64.exe) [MSI](${BASE}/todo-flutter-${VERSION}-x86_64.msi) | [Download](${BASE}/todo-flutter-${VERSION}-x86_64.deb) | |" \
+            "| AArch64 (ARM64) | | | [Download](${BASE}/todo-flutter-${VERSION}-aarch64.dmg) |" \
+            "" \
+            "桌面客户端自动更新读取本 Release（优先 EXE / DMG / DEB）。详见 \`docs/engineering/04-desktop-github-release-update.md\`。" \
+            > RELEASE_BODY.md
+
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.metadata.outputs.tag_name }}
           name: Todo Flutter ${{ needs.metadata.outputs.tag_name }}
           prerelease: ${{ needs.metadata.outputs.build_env != 'prod' }}
           generate_release_notes: false
-          body: |
-            Todo Flutter 桌面端（macOS / Linux / Windows）安装包。
-
-            - 与 `pubspec.yaml` 版本对齐的 GitHub Release
-            - 客户端自动更新读取本 Release（见 `docs/engineering/04-desktop-github-release-update.md`）
+          body_path: RELEASE_BODY.md
           files: dist/desktop/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

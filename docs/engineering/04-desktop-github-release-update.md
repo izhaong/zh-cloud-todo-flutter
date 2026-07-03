@@ -7,10 +7,10 @@
 
 1. 启动并登录后，应用请求 GitHub API 读取 Release。
 2. 将 Release **tag**（须为 `vX.Y.Z`）与当前 `pubspec` / `package_info` 版本比较。
-3. 若远端更新，按本机平台匹配安装包后缀并弹窗：
-   - macOS：`*-macos.zip`
-   - Linux：`*-linux-x64.tar.gz`
-   - Windows：`*-windows-x64.zip`
+3. 若远端更新，按本机平台匹配 **RustDesk 风格**安装包并弹窗：
+   - macOS：`*-aarch64.dmg` / `*-x86_64.dmg`
+   - Linux：`*-x86_64.deb`
+   - Windows：`*-x86_64.exe`（优先）或 `*-x86_64.msi`
 4. 用户点「前往下载」用系统浏览器打开 GitHub 资产链接（**不**在应用内静默安装）。
 
 实现：`lib/github_release_update.dart`；UI 入口在主页 AppBar「检查更新」与启动静默检查。

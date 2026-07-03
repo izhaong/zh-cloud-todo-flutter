@@ -127,14 +127,15 @@ DesktopReleasePlatform? desktopPlatformForHost() {
   }
 }
 
-String assetSuffixForPlatform(DesktopReleasePlatform platform) {
+/// RustDesk 风格安装包后缀（按优先级：EXE/DMG/DEB 优先于 MSI）。
+List<String> assetSuffixesForPlatform(DesktopReleasePlatform platform) {
   switch (platform) {
     case DesktopReleasePlatform.macos:
-      return '-macos.zip';
+      return ['-aarch64.dmg', '-x86_64.dmg', '.dmg'];
     case DesktopReleasePlatform.linux:
-      return '-linux-x64.tar.gz';
+      return ['-x86_64.deb', '.deb'];
     case DesktopReleasePlatform.windows:
-      return '-windows-x64.zip';
+      return ['-x86_64.exe', '-x86_64.msi', '.exe', '.msi'];
   }
 }
 
@@ -142,19 +143,21 @@ String? pickDownloadUrl(
   Map<String, dynamic> release,
   DesktopReleasePlatform platform,
 ) {
-  final suffix = assetSuffixForPlatform(platform);
+  final suffixes = assetSuffixesForPlatform(platform);
   final assets = release['assets'];
   if (assets is! List<dynamic>) {
     return null;
   }
-  for (final asset in assets) {
-    if (asset is! Map<String, dynamic>) {
-      continue;
-    }
-    final name = asset['name'] as String? ?? '';
-    final url = asset['browser_download_url'] as String? ?? '';
-    if (name.endsWith(suffix) && url.isNotEmpty) {
-      return url;
+  for (final suffix in suffixes) {
+    for (final asset in assets) {
+      if (asset is! Map<String, dynamic>) {
+        continue;
+      }
+      final name = asset['name'] as String? ?? '';
+      final url = asset['browser_download_url'] as String? ?? '';
+      if (name.endsWith(suffix) && url.isNotEmpty) {
+        return url;
+      }
     }
   }
   final htmlUrl = release['html_url'] as String?;
