@@ -232,58 +232,69 @@ jobs:
         run: |
           choco install innosetup -y --no-progress
           dotnet tool install --global wix --version 4.0.6
-          wix extension add -g WixToolset.UI.wixext/4.0.6
+          "$env:USERPROFILE\.dotnet\tools" >> $env:GITHUB_PATH
 
-      - name: Build & package Windows desktop (.exe + .msi)
+      - name: Build Flutter Windows app
         shell: pwsh
         env:
-          BUILD_ENV: ${{ needs.metadata.outputs.build_env }}
           TODO_API_BASE_URL: ${{ needs.metadata.outputs.todo_api_base_url }}
           TODO_TENANT_ID: ${{ needs.metadata.outputs.todo_tenant_id }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $OUT_DIR = '.gha-dist/desktop'
-          $versionLine = (Select-String -Path pubspec.yaml -Pattern '^version:' | Select-Object -First 1).Line.Split()[1]
-          $VERSION_NAME = $versionLine.Split('+')[0]
-          $MSI_VERSION = "$VERSION_NAME.0"
-
+          flutter config --enable-windows-desktop
           flutter pub get
           flutter build windows --release `
             --dart-define=TODO_API_BASE_URL="$env:TODO_API_BASE_URL" `
             --dart-define=TODO_TENANT_ID="$env:TODO_TENANT_ID"
+          if (-not (Test-Path 'build/windows/x64/runner/Release')) {
+            throw 'Flutter Windows build output missing'
+          }
 
-          $releaseDir = 'build/windows/x64/runner/Release'
-          if (-not (Test-Path $releaseDir)) { throw "Missing $releaseDir" }
-          New-Item -ItemType Directory -Force -Path $OUT_DIR, '.gha-dist/wix' | Out-Null
-
+      - name: Package Windows EXE (Inno Setup)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $OUT_DIR = '.gha-dist/desktop'
+          $VERSION_NAME = ((Select-String -Path pubspec.yaml -Pattern '^version:' | Select-Object -First 1).Line.Split()[1]).Split('+')[0]
+          New-Item -ItemType Directory -Force -Path $OUT_DIR | Out-Null
           $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
           if (-not (Test-Path $iscc)) { throw "Inno Setup not found at $iscc" }
-          & $iscc "/DAppVersion=$VERSION_NAME" 'packaging/windows/todo_flutter.iss'
+          & $iscc "/DAppVersion=$VERSION_NAME" "/O$PWD/$OUT_DIR" 'packaging/windows/todo_flutter.iss'
+          $exe = Get-ChildItem "$OUT_DIR/*x86_64.exe" | Select-Object -First 1
+          if (-not $exe -or $exe.Length -le 0) { throw 'EXE installer missing' }
 
+      - name: Package Windows MSI (WiX v4)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $ErrorActionPreference = 'Stop'
+          wix extension add -g WixToolset.UI.wixext/4.0.6
+          $OUT_DIR = '.gha-dist/desktop'
+          $releaseDir = Resolve-Path 'build/windows/x64/runner/Release'
+          $VERSION_NAME = ((Select-String -Path pubspec.yaml -Pattern '^version:' | Select-Object -First 1).Line.Split()[1]).Split('+')[0]
+          $MSI_VERSION = "$VERSION_NAME.0"
+          New-Item -ItemType Directory -Force -Path '.gha-dist/wix' | Out-Null
           wix heat dir $releaseDir `
             -cg AppFiles -dr INSTALLFOLDER `
             -sreg -srd -sfrag -scom `
             -var var.SourceDir `
             -out .gha-dist/wix/AppFiles.wxs
           wix build packaging/windows/wix/Product.wxs .gha-dist/wix/AppFiles.wxs `
+            -bindpath $releaseDir `
             -d ProductVersion=$MSI_VERSION `
             -d SourceDir=$releaseDir `
             -ext WixToolset.UI.wixext `
             -o "$OUT_DIR/todo-flutter-${VERSION_NAME}-x86_64.msi"
 
-          $exe = Get-ChildItem "$OUT_DIR/*x86_64.exe" | Select-Object -First 1
-          $msi = Get-ChildItem "$OUT_DIR/*x86_64.msi" | Select-Object -First 1
-          if (-not $exe -or $exe.Length -le 0) { throw 'EXE installer missing' }
-          if (-not $msi -or $msi.Length -le 0) { throw 'MSI installer missing' }
-          Get-ChildItem $OUT_DIR
+      - name: List Windows installers
+        shell: pwsh
+        run: Get-ChildItem -Recurse .gha-dist/desktop
 
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-windows
           if-no-files-found: error
-          path: |
-            .gha-dist/desktop/*x86_64.exe
-            .gha-dist/desktop/*x86_64.msi
+          path: .gha-dist/desktop/*
 
   release:
     name: GitHub Release
@@ -292,7 +303,7 @@ jobs:
       - desktop-linux
       - desktop-macos
       - desktop-windows
-    if: needs.metadata.outputs.create_release == 'true'
+    if: needs.metadata.outputs.create_release == 'true' && !cancelled() && needs.desktop-linux.result == 'success' && needs.desktop-macos.result == 'success' && needs.desktop-windows.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -308,6 +319,7 @@ jobs:
           path: dist/desktop
 
       - uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: desktop-windows
           path: dist/desktop
