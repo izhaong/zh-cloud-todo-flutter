@@ -238,44 +238,30 @@ pipeline {
           env.BUILD_API_BASE_URL = apiBase
           echo "[ci] flutter image=${flutterImg} TODO_API_BASE_URL=${apiBase} TODO_TENANT_ID=${tenantId}"
 
-          sh """
-set -e
-IMG='${flutterImg.replace("'", "'\\''")}'
-API_BASE='${apiBase.replace("'", "'\\''")}'
-TENANT='${tenantId.replace("'", "'\\''")}'
-docker pull "\$IMG"
-run_flutter() {
-  docker run --rm -v "\${WORKSPACE}:/app:z" -w /app -u \$(id -u):\$(id -g) "\$IMG" "\$@"
-}
-run_flutter flutter --version
-run_flutter flutter pub get
-"""
-          if (!params.SKIP_ANALYZE) {
+          // Jenkins 跑在容器内且 docker.sock 挂宿主机时，手工 docker run -v $WORKSPACE 会在宿主机创建空目录；
+          // 使用 Docker Pipeline 的 inside() 由插件正确挂载当前节点工作区。
+          def img = docker.image(flutterImg)
+          img.pull()
+          def dockerUser = sh(script: 'echo "$(id -u):$(id -g)"', returnStdout: true).trim()
+          img.inside("-u ${dockerUser}") {
+            sh 'flutter --version'
+            sh 'test -f pubspec.yaml'
+            sh 'flutter pub get'
+            if (!params.SKIP_ANALYZE) {
+              sh 'flutter analyze'
+            }
+            if (!params.SKIP_TESTS) {
+              sh 'flutter test'
+            }
             sh """
 set -e
-IMG='${flutterImg.replace("'", "'\\''")}'
-docker run --rm -v "\${WORKSPACE}:/app:z" -w /app -u \$(id -u):\$(id -g) "\$IMG" flutter analyze
-"""
-          }
-          if (!params.SKIP_TESTS) {
-            sh """
-set -e
-IMG='${flutterImg.replace("'", "'\\''")}'
-docker run --rm -v "\${WORKSPACE}:/app:z" -w /app -u \$(id -u):\$(id -g) "\$IMG" flutter test
-"""
-          }
-          sh """
-set -e
-IMG='${flutterImg.replace("'", "'\\''")}'
-API_BASE='${apiBase.replace("'", "'\\''")}'
-TENANT='${tenantId.replace("'", "'\\''")}'
-docker run --rm -v "\${WORKSPACE}:/app:z" -w /app -u \$(id -u):\$(id -g) "\$IMG" \\
-  flutter build web --release \\
-  --dart-define=TODO_API_BASE_URL="\$API_BASE" \\
-  --dart-define=TODO_TENANT_ID="\$TENANT"
+flutter build web --release \\
+  --dart-define=TODO_API_BASE_URL='${apiBase.replace("'", "'\\''")}' \\
+  --dart-define=TODO_TENANT_ID='${tenantId.replace("'", "'\\''")}'
 test -d build/web
 test -f build/web/index.html
 """
+          }
           def composeSrc = (env.RESOLVED_ENV == 'prod') ? 'deploy/docker-compose.prod.yml' : 'deploy/docker-compose.test.yml'
           def envSrc = (env.RESOLVED_ENV == 'prod') ? 'deploy/env.prod.example' : 'deploy/env.test.example'
           sh """
