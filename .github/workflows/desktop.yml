@@ -1,0 +1,285 @@
+name: Desktop
+
+# 桌面端（macOS / Linux / Windows）：构建、GitHub Release 与客户端自动更新。
+# 发版须推送 semver tag（vX.Y.Z），与 pubspec 版本对齐。
+# 权威仓库：https://github.com/izhaong/zh-cloud-todo-flutter
+
+on:
+  push:
+    branches:
+      - develop
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      build_env:
+        description: "API 环境（test / prod）"
+        required: true
+        default: test
+        type: choice
+        options:
+          - test
+          - prod
+      create_release:
+        description: "是否创建 GitHub Release（手动触发时）"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      release_version:
+        description: "正式发版版本号（prod + 创建 Release 时必填），如 1.0.0 → tag v1.0.0"
+        required: false
+        type: string
+
+concurrency:
+  group: desktop-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  metadata:
+    name: Resolve build env
+    runs-on: ubuntu-latest
+    outputs:
+      build_env: ${{ steps.meta.outputs.build_env }}
+      todo_api_base_url: ${{ steps.meta.outputs.todo_api_base_url }}
+      todo_tenant_id: ${{ steps.meta.outputs.todo_tenant_id }}
+      tag_name: ${{ steps.meta.outputs.tag_name }}
+      create_release: ${{ steps.meta.outputs.create_release }}
+    steps:
+      - name: Compute metadata
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then
+            BUILD_ENV=prod
+            API_BASE='https://client-todo.zh04.com'
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+            CREATE_RELEASE=true
+          elif [[ "${GITHUB_REF:-}" == refs/heads/develop ]]; then
+            BUILD_ENV=test
+            API_BASE='https://client-todo-test.zh04.com'
+            SHORT_SHA="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+            TAG_NAME="desktop-test-${SHORT_SHA}"
+            CREATE_RELEASE=false
+          else
+            BUILD_ENV="${{ github.event.inputs.build_env || 'test' }}"
+            if [[ "$BUILD_ENV" == prod ]]; then
+              API_BASE='https://client-todo.zh04.com'
+            else
+              API_BASE='https://client-todo-test.zh04.com'
+            fi
+            SHORT_SHA="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+            CREATE_RELEASE="${{ github.event.inputs.create_release || 'false' }}"
+            RELEASE_VERSION="${{ github.event.inputs.release_version || '' }}"
+            RELEASE_VERSION="${RELEASE_VERSION#v}"
+            if [[ "$CREATE_RELEASE" == "true" && "$BUILD_ENV" == "prod" ]]; then
+              if [[ -z "$RELEASE_VERSION" ]]; then
+                echo "prod 发版须填写 release_version（如 1.0.0）" >&2
+                exit 1
+              fi
+              if [[ ! "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-.+)?$ ]]; then
+                echo "release_version 须为 semver，如 1.0.0" >&2
+                exit 1
+              fi
+              TAG_NAME="v${RELEASE_VERSION}"
+            else
+              TAG_NAME="desktop-${BUILD_ENV}-${SHORT_SHA}"
+            fi
+          fi
+          echo "build_env=$BUILD_ENV" >> "$GITHUB_OUTPUT"
+          echo "todo_api_base_url=$API_BASE" >> "$GITHUB_OUTPUT"
+          echo "todo_tenant_id=1" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "create_release=$CREATE_RELEASE" >> "$GITHUB_OUTPUT"
+
+  desktop-linux:
+    name: Linux x64
+    needs: metadata
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux desktop dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Build & package Linux desktop
+        env:
+          BUILD_ENV: ${{ needs.metadata.outputs.build_env }}
+          TODO_API_BASE_URL: ${{ needs.metadata.outputs.todo_api_base_url }}
+          TODO_TENANT_ID: ${{ needs.metadata.outputs.todo_tenant_id }}
+        run: |
+          set -euo pipefail
+          OUT_DIR=".gha-dist/desktop"
+          VERSION_LINE="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
+          VERSION_NAME="${VERSION_LINE%%+*}"
+          BUILD_NUMBER="${VERSION_LINE#*+}"
+          ARTIFACT_SLUG="todo-flutter-${BUILD_ENV}-v${VERSION_NAME}+${BUILD_NUMBER}"
+
+          flutter pub get
+          flutter build linux --release \
+            --dart-define=TODO_API_BASE_URL="${TODO_API_BASE_URL}" \
+            --dart-define=TODO_TENANT_ID="${TODO_TENANT_ID}"
+
+          bundle="build/linux/x64/release/bundle"
+          test -d "$bundle"
+          mkdir -p "$OUT_DIR"
+          tar -C "$bundle" -czf "${OUT_DIR}/${ARTIFACT_SLUG}-linux-x64.tar.gz" .
+          test -s "${OUT_DIR}/${ARTIFACT_SLUG}-linux-x64.tar.gz"
+          ls -la "$OUT_DIR"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-linux
+          if-no-files-found: error
+          path: .gha-dist/desktop/*linux*.tar.gz
+
+  desktop-macos:
+    name: macOS
+    needs: metadata
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Build & package macOS desktop
+        env:
+          BUILD_ENV: ${{ needs.metadata.outputs.build_env }}
+          TODO_API_BASE_URL: ${{ needs.metadata.outputs.todo_api_base_url }}
+          TODO_TENANT_ID: ${{ needs.metadata.outputs.todo_tenant_id }}
+        run: |
+          set -euo pipefail
+          OUT_DIR=".gha-dist/desktop"
+          VERSION_LINE="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
+          VERSION_NAME="${VERSION_LINE%%+*}"
+          BUILD_NUMBER="${VERSION_LINE#*+}"
+          ARTIFACT_SLUG="todo-flutter-${BUILD_ENV}-v${VERSION_NAME}+${BUILD_NUMBER}"
+
+          flutter pub get
+          flutter build macos --release \
+            --dart-define=TODO_API_BASE_URL="${TODO_API_BASE_URL}" \
+            --dart-define=TODO_TENANT_ID="${TODO_TENANT_ID}"
+
+          app="build/macos/Build/Products/Release/zh_cloud_todo_flutter.app"
+          test -d "$app"
+          mkdir -p "$OUT_DIR"
+          ditto -c -k --sequesterRsrc --keepParent "$app" "${OUT_DIR}/${ARTIFACT_SLUG}-macos.zip"
+          test -s "${OUT_DIR}/${ARTIFACT_SLUG}-macos.zip"
+          ls -la "$OUT_DIR"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-macos
+          if-no-files-found: error
+          path: .gha-dist/desktop/*macos*.zip
+
+  desktop-windows:
+    name: Windows x64
+    needs: metadata
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Build & package Windows desktop
+        shell: bash
+        env:
+          BUILD_ENV: ${{ needs.metadata.outputs.build_env }}
+          TODO_API_BASE_URL: ${{ needs.metadata.outputs.todo_api_base_url }}
+          TODO_TENANT_ID: ${{ needs.metadata.outputs.todo_tenant_id }}
+        run: |
+          set -euo pipefail
+          OUT_DIR=".gha-dist/desktop"
+          VERSION_LINE="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
+          VERSION_NAME="${VERSION_LINE%%+*}"
+          BUILD_NUMBER="${VERSION_LINE#*+}"
+          ARTIFACT_SLUG="todo-flutter-${BUILD_ENV}-v${VERSION_NAME}+${BUILD_NUMBER}"
+
+          flutter pub get
+          flutter build windows --release \
+            --dart-define=TODO_API_BASE_URL="${TODO_API_BASE_URL}" \
+            --dart-define=TODO_TENANT_ID="${TODO_TENANT_ID}"
+
+          dir="build/windows/x64/runner/Release"
+          test -d "$dir"
+          mkdir -p "$OUT_DIR"
+          zip="${OUT_DIR}/${ARTIFACT_SLUG}-windows-x64.zip"
+          rm -f "$zip"
+          if command -v zip >/dev/null 2>&1; then
+            (cd "$dir" && zip -qr "$zip" .)
+          else
+            powershell -NoProfile -Command "Compress-Archive -Path '${dir//\//\\}\*' -DestinationPath '${zip//\//\\}' -Force"
+          fi
+          test -s "$zip"
+          ls -la "$OUT_DIR"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows
+          if-no-files-found: error
+          path: .gha-dist/desktop/*windows*.zip
+
+  release:
+    name: GitHub Release
+    needs:
+      - metadata
+      - desktop-linux
+      - desktop-macos
+      - desktop-windows
+    if: needs.metadata.outputs.create_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: desktop-linux
+          path: dist/desktop
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: desktop-macos
+          path: dist/desktop
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: desktop-windows
+          path: dist/desktop
+
+      - run: ls -la dist/desktop/
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.metadata.outputs.tag_name }}
+          name: Todo Flutter ${{ needs.metadata.outputs.tag_name }}
+          prerelease: ${{ needs.metadata.outputs.build_env != 'prod' }}
+          generate_release_notes: false
+          body: |
+            Todo Flutter 桌面端（macOS / Linux / Windows）安装包。
+
+            - 与 `pubspec.yaml` 版本对齐的 GitHub Release
+            - 客户端自动更新读取本 Release（见 `docs/engineering/04-desktop-github-release-update.md`）
+          files: dist/desktop/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

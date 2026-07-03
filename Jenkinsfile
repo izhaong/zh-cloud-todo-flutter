@@ -1,4 +1,5 @@
-// zh-cloud-todo-flutter — Flutter Web（H5）构建并部署到宿主机 nginx（Publish Over SSH）
+# Web/H5 构建与部署见 GitHub Actions（.github/workflows/web.yml）。
+# 本 Jenkinsfile 保留作 Gitea webhook 备用；推荐 develop/v* 推送到 GitHub 触发 Actions 更新。
 // Script Path: Jenkinsfile
 // GWT token: zh-cloud-todo-flutter
 // Jenkins test: https://jenkins.zh04.com/view/test/job/zh-cloud-test/job/zh-cloud-todo-flutter/
@@ -224,7 +225,7 @@ pipeline {
       }
     }
 
-    stage('Flutter 构建 Web') {
+    stage('Flutter 依赖与质量') {
       steps {
         script {
           def flutterImg = (params.FLUTTER_DOCKER_IMAGE ?: 'ghcr.io/cirruslabs/flutter:stable').trim()
@@ -236,10 +237,9 @@ pipeline {
           }
           def tenantId = (env.TODO_TENANT_ID ?: params.TODO_TENANT_ID ?: '1').trim()
           env.BUILD_API_BASE_URL = apiBase
+          env.BUILD_TENANT_ID = tenantId
           echo "[ci] flutter image=${flutterImg} TODO_API_BASE_URL=${apiBase} TODO_TENANT_ID=${tenantId}"
 
-          // Jenkins 跑在容器内且 docker.sock 挂宿主机时，手工 docker run -v $WORKSPACE 会在宿主机创建空目录；
-          // 使用 Docker Pipeline 的 inside() 由插件正确挂载当前节点工作区。
           def img = docker.image(flutterImg)
           img.pull()
           def dockerUser = sh(script: 'echo "$(id -u):$(id -g)"', returnStdout: true).trim()
@@ -253,6 +253,20 @@ pipeline {
             if (!params.SKIP_TESTS) {
               sh 'flutter test'
             }
+          }
+        }
+      }
+    }
+
+    stage('Flutter 构建 Web') {
+      steps {
+        script {
+          def flutterImg = (params.FLUTTER_DOCKER_IMAGE ?: 'ghcr.io/cirruslabs/flutter:stable').trim()
+          def apiBase = (env.BUILD_API_BASE_URL ?: '').trim()
+          def tenantId = (env.BUILD_TENANT_ID ?: '1').trim()
+          def img = docker.image(flutterImg)
+          def dockerUser = sh(script: 'echo "$(id -u):$(id -g)"', returnStdout: true).trim()
+          img.inside("-u ${dockerUser}") {
             sh """
 set -e
 flutter build web --release \\
@@ -269,7 +283,7 @@ set -e
 test -f '${composeSrc}'
 test -f '${envSrc}'
 test -f deploy/nginx/client.nginx.conf.template
-rm -rf .jenkins-dist
+rm -rf .jenkins-dist/deploy .jenkins-dist/todo-flutter-web.tar.gz
 mkdir -p .jenkins-dist/deploy/nginx
 tar -C build/web -czf .jenkins-dist/todo-flutter-web.tar.gz .
 cp '${composeSrc}' .jenkins-dist/deploy/docker-compose.yml
@@ -438,7 +452,7 @@ fi
 
   post {
     success {
-      echo '✅ Jenkins 流水线执行成功（todo-flutter Web 构建/部署完成）'
+      echo '✅ Jenkins 流水线执行成功（todo-flutter 构建/部署完成）'
       script {
         feishuBuildNotify('✅', "Jenkins 构建成功（todo-flutter）[${env.RESOLVED_ENV ?: 'n/a'}]")
       }

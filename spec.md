@@ -6,19 +6,19 @@
 
 ## 1. 定位
 
-zh-cloud 平台 Todo 产品的 **Flutter 多端客户端**（iOS / Android / macOS / Windows / Linux）。通过 `/app-api/todo-member` 完成会员登录，通过 `/app-api/todo` 与 `/app-api/todo/sync` 与后端 `zh-cloud-service` 联调。Web 端为独立实现（`zh-cloud-client/apps/todo`），不在本仓范围。当前处于**早期脚手架**阶段。
+zh-cloud 平台 Todo 产品的 **唯一 C 端客户端**（**Web / H5**、iOS、Android、macOS、Windows、Linux，均为 Flutter 构建）。通过 `/app-api/todo-member` 完成会员登录，通过 `/app-api/todo` 与 `/app-api/todo/sync` 与后端 `zh-cloud-service` 联调。`zh-cloud-client/apps/todo`（React）**已废弃、不再维护**。当前处于**早期脚手架**阶段。
 
 ## 2. 技术栈
 
-| 维度 | 当前（`pubspec.yaml`） | 目标（规划，尚未引入） |
-| --- | --- | --- |
-| 运行时 | Flutter，Dart SDK `^3.11.4`，Material 3 | 同左 |
-| 状态管理 | `StatefulWidget` State | Riverpod |
-| 路由 | `MaterialApp` home | `go_router` |
-| 网络 | `http` + Bearer + `tenant-id` | `dio` + 拦截器 |
-| 本地存储 | `shared_preferences` | Drift（SQLite）+ outbox |
-| 模型/代码生成 | 手写 | `freezed` + `build_runner` |
-| 测试 | `flutter_test` + `flutter_lints` | 同左 |
+| 维度          | 当前（`pubspec.yaml`）                  | 目标（规划，尚未引入）     |
+| ------------- | --------------------------------------- | -------------------------- |
+| 运行时        | Flutter，Dart SDK `^3.11.4`，Material 3 | 同左                       |
+| 状态管理      | `StatefulWidget` State                  | Riverpod                   |
+| 路由          | `MaterialApp` home                      | `go_router`                |
+| 网络          | `http` + Bearer + `tenant-id`           | `dio` + 拦截器             |
+| 本地存储      | `shared_preferences`                    | Drift（SQLite）+ outbox    |
+| 模型/代码生成 | 手写                                    | `freezed` + `build_runner` |
+| 测试          | `flutter_test` + `flutter_lints`        | 同左                       |
 
 ## 3. 目录结构
 
@@ -30,6 +30,7 @@ lib/
   system_entry_dashboard.dart   # 系统入口面板
 test/
   widget_test.dart              # widget 测试（Fake 网关 + 内存版 SharedPreferences）
+web/                            # Web / H5（index.html、manifest、PWA 图标）
 pubspec.yaml
 ```
 
@@ -59,7 +60,7 @@ pubspec.yaml
 
 ## 6. 构建与发布
 
-- 常用命令：`flutter pub get`、`flutter analyze`、`flutter test`、`flutter run -d macos|chrome|<device>`。
+- 常用命令：`flutter pub get`、`flutter analyze`、`flutter test`、`flutter run -d chrome|macos|windows|linux|<device>`；发布构建含 `flutter build web`（产物 `build/web/`）。
 - 引入 `freezed` / `drift` 后改注解须跑 `dart run build_runner build --delete-conflicting-outputs`（当前未启用）。
 - 分支：`develop` 集成、`main` 发布；合并只走 PR，禁止直推主干；commit 用中文 Conventional Commits。
 

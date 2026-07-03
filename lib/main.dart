@@ -2,9 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'efficiency_dashboard.dart';
+import 'github_release_update.dart';
 import 'system_entry_dashboard.dart';
 import 'todo_member_auth_client.dart';
 
@@ -13,9 +16,10 @@ void main() {
 }
 
 class TodoFlutterApp extends StatelessWidget {
-  const TodoFlutterApp({super.key, this.authClient});
+  const TodoFlutterApp({super.key, this.authClient, this.releaseGateway});
 
   final TodoMemberAuthGateway? authClient;
+  final GithubReleaseGateway? releaseGateway;
 
   @override
   Widget build(BuildContext context) {
@@ -29,15 +33,19 @@ class TodoFlutterApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: TodoHomePage(authClient: authClient),
+      home: TodoHomePage(
+        authClient: authClient,
+        releaseGateway: releaseGateway,
+      ),
     );
   }
 }
 
 class TodoHomePage extends StatefulWidget {
-  const TodoHomePage({super.key, this.authClient});
+  const TodoHomePage({super.key, this.authClient, this.releaseGateway});
 
   final TodoMemberAuthGateway? authClient;
+  final GithubReleaseGateway? releaseGateway;
 
   @override
   State<TodoHomePage> createState() => _TodoHomePageState();
@@ -68,11 +76,20 @@ class _TodoHomePageState extends State<TodoHomePage> {
   int _pomodoroCompletedRounds = 0;
   bool _pomodoroRunning = false;
   Timer? _pomodoroTimer;
+  GithubReleaseGateway? _releaseGateway;
+  bool _ownsReleaseGateway = false;
+  bool _checkingUpdate = false;
 
   @override
   void initState() {
     super.initState();
     _authClient = widget.authClient ?? TodoMemberAuthClient();
+    if (widget.releaseGateway != null) {
+      _releaseGateway = widget.releaseGateway;
+    } else if (shouldCheckGithubReleaseUpdate()) {
+      _releaseGateway = GithubReleaseHttpClient(repo: githubReleaseRepo());
+      _ownsReleaseGateway = true;
+    }
     _seedState();
     _bootstrap();
   }
@@ -80,6 +97,9 @@ class _TodoHomePageState extends State<TodoHomePage> {
   @override
   void dispose() {
     _pomodoroTimer?.cancel();
+    if (_ownsReleaseGateway && _releaseGateway is GithubReleaseHttpClient) {
+      (_releaseGateway! as GithubReleaseHttpClient).close();
+    }
     if (widget.authClient == null) {
       _authClient.close();
     }
@@ -205,6 +225,101 @@ class _TodoHomePageState extends State<TodoHomePage> {
     }
     if (_pomodoroRunning) {
       _resumePomodoroTimer();
+    }
+    if (_isSignedIn && _releaseGateway != null) {
+      unawaited(_maybeCheckAppUpdate(silent: true));
+    }
+  }
+
+  Future<void> _maybeCheckAppUpdate({required bool silent}) async {
+    final gateway = _releaseGateway;
+    if (gateway == null || _checkingUpdate || !mounted) {
+      return;
+    }
+    setState(() {
+      _checkingUpdate = true;
+    });
+    try {
+      final pkg = await PackageInfo.fromPlatform();
+      final checker = GithubReleaseUpdateChecker(
+        gateway: gateway,
+        currentVersion: pkg.version,
+        includePrerelease: githubReleaseIncludePrerelease(),
+      );
+      final info = await checker.checkForUpdate();
+      if (!mounted) {
+        return;
+      }
+      if (info == null) {
+        if (!silent) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('当前已是最新版本')),
+          );
+        }
+        return;
+      }
+      await _showUpdateDialog(info);
+    } catch (_) {
+      if (!silent && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('检查更新失败，请稍后重试')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _checkingUpdate = false;
+        });
+      } else {
+        _checkingUpdate = false;
+      }
+    }
+  }
+
+  Future<void> _showUpdateDialog(AppUpdateInfo info) async {
+    if (!mounted) {
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text('发现新版本 ${info.version}'),
+          content: SingleChildScrollView(
+            child: Text(
+              info.releaseNotes?.trim().isNotEmpty == true
+                  ? info.releaseNotes!.trim()
+                  : '当前版本 ${info.currentVersion}，GitHub Release ${info.tagName} 已提供本机安装包。',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('稍后'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                Navigator.pop(dialogContext);
+                await _openUpdateUrl(info.downloadUrl);
+              },
+              child: const Text('前往下载'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _openUpdateUrl(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) {
+      return;
+    }
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('无法打开下载链接：$url')),
+      );
     }
   }
 
@@ -576,6 +691,20 @@ class _TodoHomePageState extends State<TodoHomePage> {
       appBar: AppBar(
         title: const Text('zh-cloud todo'),
         actions: [
+          if (_releaseGateway != null)
+            IconButton(
+              tooltip: '检查更新',
+              onPressed: _checkingUpdate
+                  ? null
+                  : () => _maybeCheckAppUpdate(silent: false),
+              icon: _checkingUpdate
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.system_update_alt_outlined),
+            ),
           IconButton(
             tooltip: '系统入口',
             onPressed: () => _goToTab('系统'),

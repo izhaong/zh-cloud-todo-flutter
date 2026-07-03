@@ -9,13 +9,13 @@ description: zh-cloud-todo-flutter 仓库专家。负责 Todo Flutter 多端客�
 
 ## 仓库定位
 
-| 项 | 说明 |
-| --- | --- |
-| 产品 | Todo 多端客户端（iOS/Android/macOS/Windows/Linux） |
-| 架构文档 | `docs/todo/03-architecture/11-前端架构.md`（父仓） |
-| Plan | `zh-cloud/.cursor/plans/todo/` |
-| API | `/app-api/todo-member/**`、`/app-api/todo/**`、`/app-api/todo/sync/{pull,push}` |
-| 默认 API | `http://127.0.0.1:48080`，租户 `1`（`--dart-define` 可覆盖） |
+| 项       | 说明                                                                            |
+| -------- | ------------------------------------------------------------------------------- |
+| 产品     | Todo 多端客户端（iOS/Android/macOS/Windows/Linux）                              |
+| 架构文档 | `docs/todo/03-architecture/11-前端架构.md`（父仓）                              |
+| Plan     | `zh-cloud/.cursor/plans/todo/`                                                  |
+| API      | `/app-api/todo-member/**`、`/app-api/todo/**`、`/app-api/todo/sync/{pull,push}` |
+| 默认 API | `http://127.0.0.1:48080`，租户 `1`（`--dart-define` 可覆盖）                    |
 
 ## 技术栈
 
@@ -58,7 +58,7 @@ flutter run -d macos   # 或 chrome / 真机
 
 ## 边界
 
-- **不做**：`zh-cloud-client/apps/todo` Web
+- **不做**：`zh-cloud-client`（React Todo 已废弃）
 - **不做**：后端 Java（标注 `service-dev`）
 - 用户未要求不 push
 

@@ -2,7 +2,7 @@
 
 > 本文件内容与 `AGENTS.md` 保持一致（同一份 Agent 指南，供 Claude Code 直接读取）。修改约定时两份一起更新。
 
-Todo 应用 **Flutter 多端客户端**（iOS / Android / macOS / Windows / Linux），通过 `/app-api/todo-member` 登录、`/app-api/todo` 与 `/app-api/todo/sync` 与 zh-cloud 后端联调；Web 端在 `zh-cloud-client/apps/todo`，后端在 `zh-cloud-service`。
+Todo 应用 **唯一 C 端客户端**（**Web / H5**、iOS、Android、macOS、Windows、Linux，均为 Flutter），通过 `/app-api/todo-member` 登录、`/app-api/todo` 与 `/app-api/todo/sync` 与 zh-cloud 后端联调。`zh-cloud-client/apps/todo`（React）**已废弃、不再维护**；后端在 `zh-cloud-service`。
 
 ## Coding Principles
 
@@ -27,7 +27,7 @@ Todo 应用 **Flutter 多端客户端**（iOS / Android / macOS / Windows / Linu
 flutter pub get                 # 拉取依赖
 flutter analyze                 # 静态分析（flutter_lints）
 flutter test                    # 运行 test/ 下的 widget / 单元测试
-flutter run -d macos            # 本地运行；也可 -d chrome 或真机
+flutter run -d chrome           # Web / H5；也可 -d macos、windows、linux 或真机
 ```
 
 联调指定后端环境（默认 `http://127.0.0.1:48080`、租户 `1`）：
@@ -39,6 +39,7 @@ flutter run \
 ```
 
 - 引入 `freezed` / `drift` 等代码生成依赖后，改注解/模型须跑 `dart run build_runner build --delete-conflicting-outputs`（当前脚手架尚未启用）。
+- **CI**：根目录 `Jenkinsfile`（GWT `zh-cloud-todo-flutter`）；Jenkins Job 与 MCP 索引见 **`docs/engineering/01-ci-jenkins.md`**。
 
 ## Architecture
 

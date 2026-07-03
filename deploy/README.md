@@ -1,19 +1,19 @@
 # todo-flutter 部署（Web / H5）
 
-本目录为 **zh-cloud-todo-flutter 唯一 compose 权威源**（`docker-compose.{test,prod}.yml`、`env.*.example`、`nginx/`）。Jenkins 构建后同步到宿主机，**不再**使用 `zh-cloud-client/deploy/apps/todo`。
+本目录为 **zh-cloud-todo-flutter 唯一 compose 权威源**（`docker-compose.{test,prod}.yml`、`env.*.example`、`nginx/`）。**GitHub Actions** 构建后 SSH 同步到宿主机；Jenkins 为备用。
 
 ## 宿主机目录
 
-| 环境 | `DEPLOY_TARGET_DIR` 下子路径 | compose 项目名       | 域名（npm）               | 端口  |
-| ---- | ---------------------------- | -------------------- | ------------------------- | ----- |
-| test | `todo-flutter`               | `todo-flutter-test`  | client-todo-test.zh04.com | 38090 |
-| prod | `todo-flutter`               | `todo-flutter`       | client-todo.zh04.com      | 58090 |
+| 环境 | `DEPLOY_TARGET_DIR` 下子路径 | compose 项目名      | 域名（npm）               | 端口  |
+| ---- | ---------------------------- | ------------------- | ------------------------- | ----- |
+| test | `todo-flutter`               | `todo-flutter-test` | client-todo-test.zh04.com | 38090 |
+| prod | `todo-flutter`               | `todo-flutter`      | client-todo.zh04.com      | 58090 |
 
 目录结构：
 
 ```text
 todo-flutter/
-  dist/              # Flutter build/web（Jenkins rsync 更新）
+  dist/              # Flutter build/web（GitHub Actions / Jenkins rsync 更新）
   nginx/client.nginx.conf.template
   docker-compose.yml
   env                # 从 env.*.example 初始化，勿提交密钥
@@ -31,18 +31,19 @@ cd /path/to/todo-flutter
 docker compose -p todo-flutter-test -f docker-compose.yml --env-file env up -d --force-recreate todo-flutter
 ```
 
-## Jenkins
+## Jenkins（备用）
 
-| 环境 | 控制台 | MCP `jobFullName` |
-| --- | --- | --- |
-| **test** | https://jenkins.zh04.com/view/test/job/zh-cloud-test/job/zh-cloud-todo-flutter/ | `zh-cloud-test/zh-cloud-todo-flutter` |
-| **prod** | https://jenkins.zh04.com/view/prod/job/zh-cloud-prod/job/zh-cloud-todo-flutter/ | `zh-cloud-prod/zh-cloud-todo-flutter` |
+Gitea webhook 仍可触发 Jenkins；**推荐**合并后 `git push github develop` 走 GitHub Actions 更新。
 
-- 仓库根 **`Jenkinsfile`**，GWT token：**`zh-cloud-todo-flutter`**
-- Webhook：`https://jenkins.zh04.com/generic-webhook-trigger/invoke?token=zh-cloud-todo-flutter`
-- Flutter 在 CI 内通过 **`ghcr.io/cirruslabs/flutter:stable`** 容器执行（Docker Pipeline `inside()`）
-- 完整索引：**`docs/engineering/01-ci-jenkins.md`**
-- 细则见 `zh-cloud-service/script/jenkins/JENKINSFILE-CONVENTIONS.md`
+## GitHub Actions（推荐）
+
+| Workflow | 触发 | 作用 |
+| -------- | ---- | ---- |
+| `web.yml` | 推 `develop` / tag `v*` | H5 构建 + SSH 部署 |
+| `desktop.yml` | 推 `develop` / tag `v*` | 桌面安装包 |
+| `ci.yml` | PR / push | analyze + test |
+
+配置与 Secrets：`docs/engineering/03-github-actions.md`
 
 ## 从旧路径迁移（`client/todo`）
 
