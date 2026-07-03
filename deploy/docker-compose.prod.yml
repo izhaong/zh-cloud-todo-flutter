@@ -1,8 +1,8 @@
-# Flutter Todo Web（prod）— 宿主机 /izhaong/zh-cloud-prod/client/todo
-#   docker compose -p client-todo -f docker-compose.yml --env-file env up -d
+# Flutter Todo Web（prod）— 宿主机 $DEPLOY_TARGET_DIR/todo-flutter
+#   docker compose -p todo-flutter -f docker-compose.yml --env-file env up -d
 
 services:
-  client-todo:
+  todo-flutter:
     image: ${NGINX_IMAGE:-nginx:1.27-alpine}
     restart: unless-stopped
     env_file:

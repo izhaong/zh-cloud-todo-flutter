@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package
+    Name="Todo Flutter"
+    Manufacturer="ZH Cloud"
+    Version="$(var.ProductVersion)"
+    UpgradeCode="B8E4F1A2-3C5D-4E6F-9A0B-1D2E3F4A5B6C"
+    Scope="perMachine">
+    <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+    <Feature Id="MainFeature" Title="Todo Flutter">
+      <ComponentGroupRef Id="AppFiles" />
+    </Feature>
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Todo Flutter" />
+    </StandardDirectory>
+  </Package>
+</Wix>

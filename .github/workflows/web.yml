@@ -1,0 +1,245 @@
+name: Web
+
+# Flutter Web（H5）构建、打包与 SSH 部署：步骤均在本文件内，无独立 shell 脚本。
+# 推送 develop → test；推送 tag v* → prod。
+
+on:
+  push:
+    branches:
+      - develop
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      build_env:
+        description: "部署环境"
+        required: true
+        default: test
+        type: choice
+        options:
+          - test
+          - prod
+      deploy:
+        description: "是否 SSH 部署到宿主机"
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+concurrency:
+  group: web-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  metadata:
+    name: Resolve env
+    runs-on: ubuntu-latest
+    outputs:
+      build_env: ${{ steps.meta.outputs.build_env }}
+      todo_api_base_url: ${{ steps.meta.outputs.todo_api_base_url }}
+      todo_tenant_id: ${{ steps.meta.outputs.todo_tenant_id }}
+      deploy: ${{ steps.meta.outputs.deploy }}
+      gh_environment: ${{ steps.meta.outputs.gh_environment }}
+    steps:
+      - id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEPLOY="${{ github.event.inputs.deploy || 'true' }}"
+          if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then
+            BUILD_ENV=prod
+            API_BASE='https://client-todo.zh04.com'
+            GH_ENV=production
+          elif [[ "${GITHUB_REF:-}" == refs/heads/develop ]]; then
+            BUILD_ENV=test
+            API_BASE='https://client-todo-test.zh04.com'
+            GH_ENV=test
+          else
+            BUILD_ENV="${{ github.event.inputs.build_env || 'test' }}"
+            if [[ "$BUILD_ENV" == prod ]]; then
+              API_BASE='https://client-todo.zh04.com'
+              GH_ENV=production
+            else
+              API_BASE='https://client-todo-test.zh04.com'
+              GH_ENV=test
+            fi
+          fi
+          echo "build_env=$BUILD_ENV" >> "$GITHUB_OUTPUT"
+          echo "todo_api_base_url=$API_BASE" >> "$GITHUB_OUTPUT"
+          echo "todo_tenant_id=1" >> "$GITHUB_OUTPUT"
+          echo "deploy=$DEPLOY" >> "$GITHUB_OUTPUT"
+          echo "gh_environment=$GH_ENV" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Flutter build web
+    needs: metadata
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - run: flutter analyze
+
+      - run: flutter test
+
+      - name: Flutter build web
+        env:
+          TODO_API_BASE_URL: ${{ needs.metadata.outputs.todo_api_base_url }}
+          TODO_TENANT_ID: ${{ needs.metadata.outputs.todo_tenant_id }}
+        run: |
+          flutter build web --release \
+            --dart-define=TODO_API_BASE_URL="${TODO_API_BASE_URL}" \
+            --dart-define=TODO_TENANT_ID="${TODO_TENANT_ID}"
+
+      - name: Package deploy bundle
+        env:
+          BUILD_ENV: ${{ needs.metadata.outputs.build_env }}
+        run: |
+          set -euo pipefail
+          OUT_DIR=".gha-dist"
+          compose_src="deploy/docker-compose.${BUILD_ENV}.yml"
+          env_src="deploy/env.${BUILD_ENV}.example"
+
+          test -d build/web
+          test -f build/web/index.html
+          test -f "$compose_src"
+          test -f "$env_src"
+          test -f deploy/nginx/client.nginx.conf.template
+
+          rm -rf "$OUT_DIR"
+          mkdir -p "$OUT_DIR/deploy/nginx"
+          tar -C build/web -czf "$OUT_DIR/todo-flutter-web.tar.gz" .
+          cp "$compose_src" "$OUT_DIR/deploy/docker-compose.yml"
+          cp "$env_src" "$OUT_DIR/deploy/env.example"
+          cp deploy/nginx/client.nginx.conf.template "$OUT_DIR/deploy/nginx/client.nginx.conf.template"
+          test -s "$OUT_DIR/todo-flutter-web.tar.gz"
+          ls -la "$OUT_DIR" "$OUT_DIR/deploy"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-deploy-bundle
+          if-no-files-found: error
+          path: .gha-dist/**
+
+  deploy:
+    name: SSH deploy
+    needs: [metadata, build]
+    if: needs.metadata.outputs.deploy == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ needs.metadata.outputs.gh_environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-deploy-bundle
+          path: .gha-dist
+
+      - name: Upload bundle to staging
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_SSH_HOST }}
+          username: ${{ secrets.DEPLOY_SSH_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ vars.DEPLOY_SSH_PORT || '22' }}
+          source: ".gha-dist/todo-flutter-web.tar.gz,.gha-dist/deploy/docker-compose.yml,.gha-dist/deploy/env.example,.gha-dist/deploy/nginx/client.nginx.conf.template"
+          target: ${{ vars.DEPLOY_STAGING_DIR || '/tmp/zh-cloud-staging-todo-flutter' }}
+          strip_components: 1
+
+      - name: Apply on host and restart compose
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          STAGING_DIR: ${{ vars.DEPLOY_STAGING_DIR || '/tmp/zh-cloud-staging-todo-flutter' }}
+          DEPLOY_ROOT: ${{ vars.DEPLOY_TARGET_DIR }}
+          IS_TEST: ${{ needs.metadata.outputs.build_env == 'test' && 'true' || 'false' }}
+        with:
+          host: ${{ secrets.DEPLOY_SSH_HOST }}
+          username: ${{ secrets.DEPLOY_SSH_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ vars.DEPLOY_SSH_PORT || '22' }}
+          envs: STAGING_DIR,DEPLOY_ROOT,IS_TEST
+          script: |
+            set -euo pipefail
+            COMPOSE_SUB="todo-flutter"
+            COMPOSE_F="docker-compose.yml"
+            PKG="todo-flutter-web.tar.gz"
+            export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"
+
+            TARGET_DIR="${DEPLOY_ROOT}/${COMPOSE_SUB}"
+            mkdir -p "${TARGET_DIR}/dist" "${TARGET_DIR}/nginx"
+
+            SRC_COMPOSE="${STAGING_DIR}/deploy/docker-compose.yml"
+            DST_COMPOSE="${TARGET_DIR}/${COMPOSE_F}"
+            test -f "$SRC_COMPOSE"
+            COMPOSE_CHANGED=0
+            if [[ ! -f "$DST_COMPOSE" ]] || ! cmp -s "$SRC_COMPOSE" "$DST_COMPOSE"; then
+              [[ -f "$DST_COMPOSE" ]] && cp -a "$DST_COMPOSE" "${DST_COMPOSE}.bak-$(date +%Y%m%d%H%M%S)"
+              cp -a "$SRC_COMPOSE" "$DST_COMPOSE"
+              COMPOSE_CHANGED=1
+              echo "[deploy] compose 已更新"
+            fi
+
+            SRC_NGINX="${STAGING_DIR}/deploy/nginx/client.nginx.conf.template"
+            DST_NGINX="${TARGET_DIR}/nginx/client.nginx.conf.template"
+            test -f "$SRC_NGINX"
+            NGINX_CHANGED=0
+            if [[ ! -f "$DST_NGINX" ]] || ! cmp -s "$SRC_NGINX" "$DST_NGINX"; then
+              [[ -f "$DST_NGINX" ]] && cp -a "$DST_NGINX" "${DST_NGINX}.bak-$(date +%Y%m%d%H%M%S)"
+              cp -a "$SRC_NGINX" "$DST_NGINX"
+              NGINX_CHANGED=1
+              echo "[deploy] nginx 模板已更新"
+            fi
+
+            SRC_ENV="${STAGING_DIR}/deploy/env.example"
+            DST_ENV="${TARGET_DIR}/env"
+            test -f "$SRC_ENV"
+            ENV_CHANGED=0
+            if [[ ! -f "$DST_ENV" ]]; then
+              cp -a "$SRC_ENV" "$DST_ENV"
+              chmod 600 "$DST_ENV"
+              ENV_CHANGED=1
+              echo "[deploy] env 已按示例初始化"
+            elif ! cmp -s "$SRC_ENV" "$DST_ENV"; then
+              cp -a "$DST_ENV" "${DST_ENV}.bak-$(date +%Y%m%d%H%M%S)"
+              cp -a "$SRC_ENV" "$DST_ENV"
+              chmod 600 "$DST_ENV"
+              ENV_CHANGED=1
+              echo "[deploy] env 已按仓库示例更新（宿主机原 env 已备份）"
+            fi
+
+            PKG_PATH="${STAGING_DIR}/${PKG}"
+            DEST_DIR="${TARGET_DIR}/dist"
+            NEXT_DIR="${TARGET_DIR}/.todo-flutter-dist-next-$$"
+            test -f "$PKG_PATH"
+            rm -rf "$NEXT_DIR"
+            mkdir -p "$NEXT_DIR"
+            tar -xzf "$PKG_PATH" -C "$NEXT_DIR"
+            mkdir -p "$DEST_DIR"
+            rsync -a --delete "${NEXT_DIR}/" "${DEST_DIR}/"
+            rm -rf "$NEXT_DIR"
+            rm -f "$PKG_PATH"
+            rm -rf "$STAGING_DIR"
+
+            if [[ "$IS_TEST" == "true" ]]; then
+              COMPOSE_PROJECT="todo-flutter-test"
+            else
+              COMPOSE_PROJECT="todo-flutter"
+            fi
+            COMPOSE_SVC="todo-flutter"
+            cd "$TARGET_DIR"
+            RECREATE_FLAG=""
+            if [[ "$COMPOSE_CHANGED" == "1" || "$NGINX_CHANGED" == "1" || "$ENV_CHANGED" == "1" ]]; then
+              RECREATE_FLAG="--force-recreate"
+              echo "[deploy] compose/nginx/env 有变更，使用 --force-recreate"
+            fi
+            docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_F" --env-file env up -d $RECREATE_FLAG "$COMPOSE_SVC"
+            docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_F" ps
+            echo "[deploy] Web 更新完成: ${TARGET_DIR}/dist"

@@ -2,10 +2,16 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'efficiency_dashboard.dart';
+import 'github_release_update.dart';
+import 'settings_page.dart';
 import 'system_entry_dashboard.dart';
+import 'todo_auth_page.dart';
 import 'todo_member_auth_client.dart';
 
 void main() {
@@ -13,9 +19,10 @@ void main() {
 }
 
 class TodoFlutterApp extends StatelessWidget {
-  const TodoFlutterApp({super.key, this.authClient});
+  const TodoFlutterApp({super.key, this.authClient, this.releaseGateway});
 
   final TodoMemberAuthGateway? authClient;
+  final GithubReleaseGateway? releaseGateway;
 
   @override
   Widget build(BuildContext context) {
@@ -29,15 +36,19 @@ class TodoFlutterApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: TodoHomePage(authClient: authClient),
+      home: TodoHomePage(
+        authClient: authClient,
+        releaseGateway: releaseGateway,
+      ),
     );
   }
 }
 
 class TodoHomePage extends StatefulWidget {
-  const TodoHomePage({super.key, this.authClient});
+  const TodoHomePage({super.key, this.authClient, this.releaseGateway});
 
   final TodoMemberAuthGateway? authClient;
+  final GithubReleaseGateway? releaseGateway;
 
   @override
   State<TodoHomePage> createState() => _TodoHomePageState();
@@ -68,11 +79,20 @@ class _TodoHomePageState extends State<TodoHomePage> {
   int _pomodoroCompletedRounds = 0;
   bool _pomodoroRunning = false;
   Timer? _pomodoroTimer;
+  GithubReleaseGateway? _releaseGateway;
+  bool _ownsReleaseGateway = false;
+  bool _checkingUpdate = false;
 
   @override
   void initState() {
     super.initState();
     _authClient = widget.authClient ?? TodoMemberAuthClient();
+    if (widget.releaseGateway != null) {
+      _releaseGateway = widget.releaseGateway;
+    } else if (shouldCheckGithubReleaseUpdate()) {
+      _releaseGateway = GithubReleaseHttpClient(repo: githubReleaseRepo());
+      _ownsReleaseGateway = true;
+    }
     _seedState();
     _bootstrap();
   }
@@ -80,6 +100,9 @@ class _TodoHomePageState extends State<TodoHomePage> {
   @override
   void dispose() {
     _pomodoroTimer?.cancel();
+    if (_ownsReleaseGateway && _releaseGateway is GithubReleaseHttpClient) {
+      (_releaseGateway! as GithubReleaseHttpClient).close();
+    }
     if (widget.authClient == null) {
       _authClient.close();
     }
@@ -198,6 +221,18 @@ class _TodoHomePageState extends State<TodoHomePage> {
       _pomodoroCompletedRounds = data['pomodoroCompletedRounds'] as int? ?? 0;
       _pomodoroRunning = data['pomodoroRunning'] as bool? ?? false;
     }
+    if (_isSignedIn && _authSession != null) {
+      final stillValid = await _authClient.validateSession(
+        _authSession!.accessToken,
+      );
+      if (!stillValid) {
+        _authSession = null;
+        _isSignedIn = false;
+      }
+    } else {
+      _authSession = null;
+      _isSignedIn = false;
+    }
     if (mounted) {
       setState(() {
         _isLoading = false;
@@ -205,6 +240,101 @@ class _TodoHomePageState extends State<TodoHomePage> {
     }
     if (_pomodoroRunning) {
       _resumePomodoroTimer();
+    }
+    if (_isSignedIn && _releaseGateway != null) {
+      unawaited(_maybeCheckAppUpdate(silent: true));
+    }
+  }
+
+  Future<void> _maybeCheckAppUpdate({required bool silent}) async {
+    final gateway = _releaseGateway;
+    if (gateway == null || _checkingUpdate || !mounted) {
+      return;
+    }
+    setState(() {
+      _checkingUpdate = true;
+    });
+    try {
+      final pkg = await PackageInfo.fromPlatform();
+      final checker = GithubReleaseUpdateChecker(
+        gateway: gateway,
+        currentVersion: pkg.version,
+        includePrerelease: githubReleaseIncludePrerelease(),
+      );
+      final info = await checker.checkForUpdate();
+      if (!mounted) {
+        return;
+      }
+      if (info == null) {
+        if (!silent) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('当前已是最新版本')));
+        }
+        return;
+      }
+      await _showUpdateDialog(info);
+    } catch (_) {
+      if (!silent && mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('检查更新失败，请稍后重试')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _checkingUpdate = false;
+        });
+      } else {
+        _checkingUpdate = false;
+      }
+    }
+  }
+
+  Future<void> _showUpdateDialog(AppUpdateInfo info) async {
+    if (!mounted) {
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text('发现新版本 ${info.version}'),
+          content: SingleChildScrollView(
+            child: Text(
+              info.releaseNotes?.trim().isNotEmpty == true
+                  ? info.releaseNotes!.trim()
+                  : '当前版本 ${info.currentVersion}，GitHub Release ${info.tagName} 已提供本机安装包。',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('稍后'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                Navigator.pop(dialogContext);
+                await _openUpdateUrl(info.downloadUrl);
+              },
+              child: const Text('前往下载'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _openUpdateUrl(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) {
+      return;
+    }
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('无法打开下载链接：$url')));
     }
   }
 
@@ -556,6 +686,87 @@ class _TodoHomePageState extends State<TodoHomePage> {
     await _persistState();
   }
 
+  Future<void> _openSettings() async {
+    if (!mounted) {
+      return;
+    }
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (context) => TodoSettingsPage(
+          canCheckUpdate: _releaseGateway != null,
+          checkingUpdate: _checkingUpdate,
+          onCheckUpdate: _releaseGateway == null
+              ? null
+              : () => _maybeCheckAppUpdate(silent: false),
+          signedInMobile: _isSignedIn ? _authSession?.mobile : null,
+        ),
+      ),
+    );
+  }
+
+  Widget _wrapWithSettingsShortcuts({required Widget child}) {
+    return Shortcuts(
+      shortcuts: const {
+        SingleActivator(LogicalKeyboardKey.comma, control: true):
+            OpenTodoSettingsIntent(),
+        SingleActivator(LogicalKeyboardKey.comma, meta: true):
+            OpenTodoSettingsIntent(),
+      },
+      child: Actions(
+        actions: {
+          OpenTodoSettingsIntent: CallbackAction<OpenTodoSettingsIntent>(
+            onInvoke: (_) {
+              unawaited(_openSettings());
+              return null;
+            },
+          ),
+        },
+        child: Focus(autofocus: true, child: child),
+      ),
+    );
+  }
+
+  PreferredSizeWidget _buildAppBar({required List<Widget> actions}) {
+    return AppBar(
+      title: const Text('zh-cloud todo'),
+      actions: [
+        PopupMenuButton<String>(
+          tooltip: '菜单',
+          onSelected: (value) {
+            switch (value) {
+              case 'settings':
+                unawaited(_openSettings());
+              case 'logout':
+                unawaited(_logout());
+            }
+          },
+          itemBuilder: (context) => [
+            const PopupMenuItem(
+              value: 'settings',
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.settings_outlined),
+                title: Text('设置'),
+                dense: true,
+              ),
+            ),
+            if (_isSignedIn)
+              const PopupMenuItem(
+                value: 'logout',
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.logout),
+                  title: Text('退出登录'),
+                  dense: true,
+                ),
+              ),
+          ],
+        ),
+        ...actions,
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -563,120 +774,127 @@ class _TodoHomePageState extends State<TodoHomePage> {
     }
 
     if (!_isSignedIn) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('zh-cloud todo')),
-        body: _TodoAuthPage(
-          authClient: _authClient,
-          onAuthenticated: _handleAuthenticated,
+      return _wrapWithSettingsShortcuts(
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('zh-cloud todo'),
+            actions: [
+              IconButton(
+                tooltip: '设置',
+                onPressed: _openSettings,
+                icon: const Icon(Icons.settings_outlined),
+              ),
+            ],
+          ),
+          body: TodoAuthPage(
+            authClient: _authClient,
+            onAuthenticated: _handleAuthenticated,
+          ),
         ),
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('zh-cloud todo'),
-        actions: [
-          IconButton(
-            tooltip: '系统入口',
-            onPressed: () => _goToTab('系统'),
-            icon: const Icon(Icons.widgets_outlined),
-          ),
-          IconButton(
-            tooltip: '效率',
-            onPressed: () => _goToTab('效率'),
-            icon: const Icon(Icons.insights_outlined),
-          ),
-          IconButton(
-            tooltip: '同步',
-            onPressed: () {
-              setState(() {
-                _syncQueue.insert(
-                  0,
-                  const _SyncQueueItem('manual sync', '已触发'),
-                );
-              });
-              _persistState();
-            },
-            icon: const Icon(Icons.sync),
-          ),
-          IconButton(
-            tooltip: '退出登录',
-            onPressed: _logout,
-            icon: const Icon(Icons.logout),
-          ),
-        ],
-      ),
-      body: _activeTab == '日历'
-          ? _CalendarTabView(
-              isSignedIn: _isSignedIn,
-              calendarView: _calendarView,
-              tasks: _tasks,
-              events: _calendarEvents,
-              onCalendarViewChanged: (view) {
+    return _wrapWithSettingsShortcuts(
+      child: Scaffold(
+        appBar: _buildAppBar(
+          actions: [
+            IconButton(
+              tooltip: '系统入口',
+              onPressed: () => _goToTab('系统'),
+              icon: const Icon(Icons.widgets_outlined),
+            ),
+            IconButton(
+              tooltip: '效率',
+              onPressed: () => _goToTab('效率'),
+              icon: const Icon(Icons.insights_outlined),
+            ),
+            IconButton(
+              tooltip: '同步',
+              onPressed: () {
                 setState(() {
-                  _calendarView = view;
+                  _syncQueue.insert(
+                    0,
+                    const _SyncQueueItem('manual sync', '已触发'),
+                  );
                 });
                 _persistState();
               },
-              onOpenEfficiency: () => _goToTab('效率'),
-            )
-          : _activeTab == '效率'
-          ? EfficiencyTabView(
-              isSignedIn: _isSignedIn,
-              taskCount: _tasks.length,
-              completedTaskCount: _tasks
-                  .where((item) => item.status == '已完成')
-                  .length,
-              calendarEventCount: _calendarEvents.length,
-              syncQueueCount: _syncQueue.length,
-              quadrantItems: _quadrantItems,
-              pomodoroSecondsRemaining: _pomodoroSecondsRemaining,
-              pomodoroCompletedRounds: _pomodoroCompletedRounds,
-              pomodoroRunning: _pomodoroRunning,
-              habits: _habits,
-              countdowns: _countdowns,
-              onQuadrantAction: _handleQuadrantAction,
-              onPomodoroStart: _togglePomodoro,
-              onPomodoroPause: _togglePomodoro,
-              onPomodoroReset: _resetPomodoro,
-              onHabitToggle: _toggleHabit,
-              onCountdownShift: _shiftCountdown,
-            )
-          : _activeTab == '系统'
-          ? SystemEntryTabView(
-              taskCount: _tasks.length,
-              syncQueueCount: _syncQueue.length,
-              notes: _systemNotes,
-              imports: _systemImports,
-              shareStatus: _systemShareStatus,
-              onAddNote: _addSystemNote,
-              onSimulateShare: _simulateSystemShare,
-              onAddImport: _addImportRecord,
-            )
-          : _DashboardTabView(
-              isSignedIn: _isSignedIn,
-              lists: _lists,
-              tasks: _tasks,
-              syncQueue: _syncQueue,
-              onAddTask: _addTask,
-              onMarkFirstTaskDone: _markFirstTaskDone,
+              icon: const Icon(Icons.sync),
             ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _navIndex(_activeTab),
-        onDestinationSelected: (index) {
-          setState(() {
-            _activeTab = _tabName(index);
-          });
-          _persistState();
-        },
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.checklist), label: '任务'),
-          NavigationDestination(icon: Icon(Icons.event), label: '日历'),
-          NavigationDestination(icon: Icon(Icons.flash_on), label: '效率'),
-          NavigationDestination(icon: Icon(Icons.widgets), label: '系统'),
-          NavigationDestination(icon: Icon(Icons.view_list), label: '清单'),
-          NavigationDestination(icon: Icon(Icons.sync), label: '同步'),
-        ],
+          ],
+        ),
+        body: _activeTab == '日历'
+            ? _CalendarTabView(
+                isSignedIn: _isSignedIn,
+                calendarView: _calendarView,
+                tasks: _tasks,
+                events: _calendarEvents,
+                onCalendarViewChanged: (view) {
+                  setState(() {
+                    _calendarView = view;
+                  });
+                  _persistState();
+                },
+                onOpenEfficiency: () => _goToTab('效率'),
+              )
+            : _activeTab == '效率'
+            ? EfficiencyTabView(
+                isSignedIn: _isSignedIn,
+                taskCount: _tasks.length,
+                completedTaskCount: _tasks
+                    .where((item) => item.status == '已完成')
+                    .length,
+                calendarEventCount: _calendarEvents.length,
+                syncQueueCount: _syncQueue.length,
+                quadrantItems: _quadrantItems,
+                pomodoroSecondsRemaining: _pomodoroSecondsRemaining,
+                pomodoroCompletedRounds: _pomodoroCompletedRounds,
+                pomodoroRunning: _pomodoroRunning,
+                habits: _habits,
+                countdowns: _countdowns,
+                onQuadrantAction: _handleQuadrantAction,
+                onPomodoroStart: _togglePomodoro,
+                onPomodoroPause: _togglePomodoro,
+                onPomodoroReset: _resetPomodoro,
+                onHabitToggle: _toggleHabit,
+                onCountdownShift: _shiftCountdown,
+              )
+            : _activeTab == '系统'
+            ? SystemEntryTabView(
+                taskCount: _tasks.length,
+                syncQueueCount: _syncQueue.length,
+                notes: _systemNotes,
+                imports: _systemImports,
+                shareStatus: _systemShareStatus,
+                onAddNote: _addSystemNote,
+                onSimulateShare: _simulateSystemShare,
+                onAddImport: _addImportRecord,
+              )
+            : _DashboardTabView(
+                isSignedIn: _isSignedIn,
+                lists: _lists,
+                tasks: _tasks,
+                syncQueue: _syncQueue,
+                onAddTask: _addTask,
+                onMarkFirstTaskDone: _markFirstTaskDone,
+              ),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _navIndex(_activeTab),
+          onDestinationSelected: (index) {
+            setState(() {
+              _activeTab = _tabName(index);
+            });
+            _persistState();
+          },
+          destinations: const [
+            NavigationDestination(icon: Icon(Icons.checklist), label: '任务'),
+            NavigationDestination(icon: Icon(Icons.event), label: '日历'),
+            NavigationDestination(icon: Icon(Icons.flash_on), label: '效率'),
+            NavigationDestination(icon: Icon(Icons.widgets), label: '系统'),
+            NavigationDestination(icon: Icon(Icons.view_list), label: '清单'),
+            NavigationDestination(icon: Icon(Icons.sync), label: '同步'),
+          ],
+        ),
       ),
     );
   }
@@ -713,418 +931,6 @@ class _TodoHomePageState extends State<TodoHomePage> {
       default:
         return '任务';
     }
-  }
-}
-
-enum _AuthMode { password, sms, register, forgotPassword }
-
-class _TodoAuthPage extends StatefulWidget {
-  const _TodoAuthPage({
-    required this.authClient,
-    required this.onAuthenticated,
-  });
-
-  final TodoMemberAuthGateway authClient;
-  final Future<void> Function(TodoAuthSession session, String action)
-  onAuthenticated;
-
-  @override
-  State<_TodoAuthPage> createState() => _TodoAuthPageState();
-}
-
-class _TodoAuthPageState extends State<_TodoAuthPage> {
-  final _formKey = GlobalKey<FormState>();
-  final _mobileController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _codeController = TextEditingController();
-  _AuthMode _mode = _AuthMode.password;
-  bool _submitting = false;
-  bool _sendingCode = false;
-  String? _message;
-  bool _messageIsError = false;
-
-  @override
-  void dispose() {
-    _mobileController.dispose();
-    _passwordController.dispose();
-    _codeController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isPasswordMode = _mode == _AuthMode.password;
-    final isForgotMode = _mode == _AuthMode.forgotPassword;
-    final title = switch (_mode) {
-      _AuthMode.password => '密码登录',
-      _AuthMode.sms => '短信验证码登录',
-      _AuthMode.register => '注册 Todo 账号',
-      _AuthMode.forgotPassword => '找回密码',
-    };
-    final subtitle = switch (_mode) {
-      _AuthMode.password => '使用 todo-member 手机号和密码进入任务空间',
-      _AuthMode.sms => '验证码登录会复用 todo-member token',
-      _AuthMode.register => '手机号验证码登录即注册，不创建独立用户池',
-      _AuthMode.forgotPassword => '验证码校验后重置密码，再返回登录页',
-    };
-
-    return SafeArea(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: ListView(
-            key: const ValueKey('todo-auth-list'),
-            padding: const EdgeInsets.all(20),
-            shrinkWrap: true,
-            children: [
-              Icon(Icons.task_alt, size: 48, color: theme.colorScheme.primary),
-              const SizedBox(height: 16),
-              Text('Todo 账号入口', style: theme.textTheme.headlineMedium),
-              const SizedBox(height: 8),
-              Text(subtitle),
-              const SizedBox(height: 20),
-              SegmentedButton<_AuthMode>(
-                segments: const [
-                  ButtonSegment(
-                    value: _AuthMode.password,
-                    icon: Icon(Icons.lock_outline),
-                    label: Text('密码'),
-                  ),
-                  ButtonSegment(
-                    value: _AuthMode.sms,
-                    icon: Icon(Icons.sms_outlined),
-                    label: Text('验证码'),
-                  ),
-                ],
-                selected: {
-                  isPasswordMode || isForgotMode
-                      ? _AuthMode.password
-                      : _AuthMode.sms,
-                },
-                onSelectionChanged: (selection) {
-                  final next = selection.first;
-                  _switchMode(next);
-                },
-              ),
-              const SizedBox(height: 16),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(title, style: theme.textTheme.titleLarge),
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _mobileController,
-                          keyboardType: TextInputType.phone,
-                          decoration: const InputDecoration(
-                            labelText: '手机号',
-                            prefixIcon: Icon(Icons.phone_iphone),
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: _validateMobile,
-                        ),
-                        const SizedBox(height: 12),
-                        if (isPasswordMode || isForgotMode) ...[
-                          TextFormField(
-                            controller: _passwordController,
-                            obscureText: true,
-                            decoration: InputDecoration(
-                              labelText: isForgotMode ? '新密码' : '密码',
-                              prefixIcon: const Icon(Icons.password),
-                              border: const OutlineInputBorder(),
-                            ),
-                            validator: _validatePassword,
-                          ),
-                          const SizedBox(height: 12),
-                        ],
-                        if (!isPasswordMode) ...[
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: TextFormField(
-                                  controller: _codeController,
-                                  keyboardType: TextInputType.number,
-                                  decoration: const InputDecoration(
-                                    labelText: '短信验证码',
-                                    prefixIcon: Icon(Icons.verified_outlined),
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  validator: _validateCode,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              SizedBox(
-                                height: 56,
-                                child: OutlinedButton.icon(
-                                  onPressed: _isBusy ? null : _sendCode,
-                                  icon: _sendingCode
-                                      ? const SizedBox(
-                                          width: 16,
-                                          height: 16,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : const Icon(Icons.send_to_mobile),
-                                  label: const Text('发送'),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                        ],
-                        if (_message != null) ...[
-                          _AuthMessage(
-                            text: _message!,
-                            isError: _messageIsError,
-                          ),
-                          const SizedBox(height: 12),
-                        ],
-                        FilledButton.icon(
-                          key: const ValueKey('todo-auth-submit'),
-                          onPressed: _isBusy ? null : _submit,
-                          icon: _submitting
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : Icon(
-                                  isForgotMode
-                                      ? Icons.restart_alt
-                                      : Icons.login,
-                                ),
-                          label: Text(_submitLabel),
-                        ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          alignment: WrapAlignment.center,
-                          spacing: 8,
-                          children: [
-                            TextButton(
-                              onPressed: () => _switchMode(_AuthMode.register),
-                              child: const Text('注册'),
-                            ),
-                            TextButton(
-                              onPressed: () =>
-                                  _switchMode(_AuthMode.forgotPassword),
-                              child: const Text('忘记密码'),
-                            ),
-                            if (_mode != _AuthMode.password)
-                              TextButton(
-                                onPressed: () =>
-                                    _switchMode(_AuthMode.password),
-                                child: const Text('返回密码登录'),
-                              ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  bool get _isBusy => _submitting || _sendingCode;
-
-  String get _submitLabel {
-    return switch (_mode) {
-      _AuthMode.password => '登录',
-      _AuthMode.sms => '验证码登录',
-      _AuthMode.register => '注册并登录',
-      _AuthMode.forgotPassword => '重置密码',
-    };
-  }
-
-  void _switchMode(_AuthMode mode) {
-    setState(() {
-      _mode = mode;
-      _message = null;
-      _messageIsError = false;
-      if (mode != _AuthMode.forgotPassword) {
-        _passwordController.clear();
-      }
-      _codeController.clear();
-    });
-  }
-
-  Future<void> _sendCode() async {
-    final mobileError = _validateMobile(_mobileController.text);
-    if (mobileError != null) {
-      setState(() {
-        _message = mobileError;
-        _messageIsError = true;
-      });
-      return;
-    }
-    setState(() {
-      _sendingCode = true;
-      _message = null;
-    });
-    try {
-      await widget.authClient.sendSmsCode(
-        mobile: _mobileController.text.trim(),
-        scene: _mode == _AuthMode.forgotPassword ? 4 : 1,
-      );
-      setState(() {
-        _message = _mode == _AuthMode.forgotPassword
-            ? '重置密码验证码已发送'
-            : '登录验证码已发送';
-        _messageIsError = false;
-      });
-    } on TodoMemberAuthException catch (error) {
-      setState(() {
-        _message = error.message;
-        _messageIsError = true;
-      });
-    } on Object catch (error) {
-      setState(() {
-        _message = '验证码发送失败：$error';
-        _messageIsError = true;
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _sendingCode = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-    setState(() {
-      _submitting = true;
-      _message = null;
-    });
-    try {
-      if (_mode == _AuthMode.password) {
-        final session = await widget.authClient.passwordLogin(
-          mobile: _mobileController.text.trim(),
-          password: _passwordController.text,
-        );
-        await widget.onAuthenticated(session, 'password login');
-        return;
-      }
-      if (_mode == _AuthMode.forgotPassword) {
-        await widget.authClient.resetPassword(
-          mobile: _mobileController.text.trim(),
-          code: _codeController.text.trim(),
-          password: _passwordController.text,
-        );
-        setState(() {
-          _mode = _AuthMode.password;
-          _passwordController.clear();
-          _codeController.clear();
-          _message = '密码已重置，请使用新密码登录';
-          _messageIsError = false;
-        });
-        return;
-      }
-      final session = await widget.authClient.smsLogin(
-        mobile: _mobileController.text.trim(),
-        code: _codeController.text.trim(),
-      );
-      await widget.onAuthenticated(
-        session,
-        _mode == _AuthMode.register ? 'sms register' : 'sms login',
-      );
-    } on TodoMemberAuthException catch (error) {
-      setState(() {
-        _message = error.message;
-        _messageIsError = true;
-      });
-    } on Object catch (error) {
-      setState(() {
-        _message = '账号请求失败：$error';
-        _messageIsError = true;
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _submitting = false;
-        });
-      }
-    }
-  }
-
-  String? _validateMobile(String? value) {
-    final mobile = value?.trim() ?? '';
-    if (mobile.isEmpty) {
-      return '请输入手机号';
-    }
-    if (!RegExp(r'^1\d{10}$').hasMatch(mobile)) {
-      return '请输入 11 位手机号';
-    }
-    return null;
-  }
-
-  String? _validatePassword(String? value) {
-    final password = value ?? '';
-    if (password.isEmpty) {
-      return _mode == _AuthMode.forgotPassword ? '请输入新密码' : '请输入密码';
-    }
-    if (password.length < 4 || password.length > 16) {
-      return '密码长度为 4-16 位';
-    }
-    return null;
-  }
-
-  String? _validateCode(String? value) {
-    final code = value?.trim() ?? '';
-    if (code.isEmpty) {
-      return '请输入短信验证码';
-    }
-    if (!RegExp(r'^\d{4,6}$').hasMatch(code)) {
-      return '验证码为 4-6 位数字';
-    }
-    return null;
-  }
-}
-
-class _AuthMessage extends StatelessWidget {
-  const _AuthMessage({required this.text, required this.isError});
-
-  final String text;
-  final bool isError;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: isError
-            ? colorScheme.errorContainer
-            : colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Text(
-          text,
-          style: TextStyle(
-            color: isError
-                ? colorScheme.onErrorContainer
-                : colorScheme.onPrimaryContainer,
-          ),
-        ),
-      ),
-    );
   }
 }
 

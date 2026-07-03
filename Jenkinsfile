@@ -1,4 +1,5 @@
-// zh-cloud-todo-flutter — Flutter Web（H5）构建并部署到宿主机 nginx（Publish Over SSH）
+# Web/H5 构建与部署见 GitHub Actions（.github/workflows/web.yml）。
+# 本 Jenkinsfile 保留作 Gitea webhook 备用；推荐 develop/v* 推送到 GitHub 触发 Actions 更新。
 // Script Path: Jenkinsfile
 // GWT token: zh-cloud-todo-flutter
 // Jenkins test: https://jenkins.zh04.com/view/test/job/zh-cloud-test/job/zh-cloud-todo-flutter/
@@ -119,9 +120,9 @@ pipeline {
     )
     string(
       name: 'COMPOSE_DEPLOY_SUBPATH',
-      defaultValue: 'client/todo',
+      defaultValue: 'todo-flutter',
       trim: true,
-      description: '相对 DEPLOY_TARGET_DIR 的部署目录（与旧 React client/todo 路径一致）'
+      description: '相对 DEPLOY_TARGET_DIR 的部署目录（本仓 compose 权威路径，见 deploy/）'
     )
     string(
       name: 'REMOTE_COMPOSE_FILE',
@@ -133,12 +134,12 @@ pipeline {
       name: 'REMOTE_COMPOSE_PROJECT',
       defaultValue: '',
       trim: true,
-      description: 'docker compose -p 项目名；留空则 test=client-todo-test、prod=client-todo'
+      description: 'docker compose -p 项目名；留空则 test=todo-flutter-test、prod=todo-flutter'
     )
     booleanParam(
       name: 'RESTART_COMPOSE',
       defaultValue: true,
-      description: '部署后是否 docker compose up -d client-todo'
+      description: '部署后是否 docker compose up -d todo-flutter'
     )
   }
 
@@ -224,7 +225,7 @@ pipeline {
       }
     }
 
-    stage('Flutter 构建 Web') {
+    stage('Flutter 依赖与质量') {
       steps {
         script {
           def flutterImg = (params.FLUTTER_DOCKER_IMAGE ?: 'ghcr.io/cirruslabs/flutter:stable').trim()
@@ -236,10 +237,9 @@ pipeline {
           }
           def tenantId = (env.TODO_TENANT_ID ?: params.TODO_TENANT_ID ?: '1').trim()
           env.BUILD_API_BASE_URL = apiBase
+          env.BUILD_TENANT_ID = tenantId
           echo "[ci] flutter image=${flutterImg} TODO_API_BASE_URL=${apiBase} TODO_TENANT_ID=${tenantId}"
 
-          // Jenkins 跑在容器内且 docker.sock 挂宿主机时，手工 docker run -v $WORKSPACE 会在宿主机创建空目录；
-          // 使用 Docker Pipeline 的 inside() 由插件正确挂载当前节点工作区。
           def img = docker.image(flutterImg)
           img.pull()
           def dockerUser = sh(script: 'echo "$(id -u):$(id -g)"', returnStdout: true).trim()
@@ -253,6 +253,20 @@ pipeline {
             if (!params.SKIP_TESTS) {
               sh 'flutter test'
             }
+          }
+        }
+      }
+    }
+
+    stage('Flutter 构建 Web') {
+      steps {
+        script {
+          def flutterImg = (params.FLUTTER_DOCKER_IMAGE ?: 'ghcr.io/cirruslabs/flutter:stable').trim()
+          def apiBase = (env.BUILD_API_BASE_URL ?: '').trim()
+          def tenantId = (env.BUILD_TENANT_ID ?: '1').trim()
+          def img = docker.image(flutterImg)
+          def dockerUser = sh(script: 'echo "$(id -u):$(id -g)"', returnStdout: true).trim()
+          img.inside("-u ${dockerUser}") {
             sh """
 set -e
 flutter build web --release \\
@@ -269,7 +283,7 @@ set -e
 test -f '${composeSrc}'
 test -f '${envSrc}'
 test -f deploy/nginx/client.nginx.conf.template
-rm -rf .jenkins-dist
+rm -rf .jenkins-dist/deploy .jenkins-dist/todo-flutter-web.tar.gz
 mkdir -p .jenkins-dist/deploy/nginx
 tar -C build/web -czf .jenkins-dist/todo-flutter-web.tar.gz .
 cp '${composeSrc}' .jenkins-dist/deploy/docker-compose.yml
@@ -308,7 +322,7 @@ test -s .jenkins-dist/todo-flutter-web.tar.gz
           def sshCfg = (params.DEPLOY_SSH_CONFIG ?: 'host.docker.internal').trim()
           def staging = (params.DEPLOY_STAGING_DIR ?: '/tmp/zh-cloud-staging-todo-flutter').trim()
           def deployRoot = (env.DEPLOY_TARGET_DIR ?: '').trim()
-          def composeSub = (params.COMPOSE_DEPLOY_SUBPATH ?: 'client/todo').trim()
+          def composeSub = (params.COMPOSE_DEPLOY_SUBPATH ?: 'todo-flutter').trim()
           def composeFile = (params.REMOTE_COMPOSE_FILE ?: 'docker-compose.yml').trim()
           def projectOverride = (params.REMOTE_COMPOSE_PROJECT ?: '').trim()
           def restart = (params.RESTART_COMPOSE == null) ? true : params.RESTART_COMPOSE
@@ -397,11 +411,11 @@ if [ "\$RESTART" = "true" ]; then
   if [ -n "\$PROJECT_OVERRIDE" ]; then
     COMPOSE_PROJECT="\$PROJECT_OVERRIDE"
   elif [ "\$IS_TEST" = "true" ]; then
-    COMPOSE_PROJECT="client-todo-test"
+    COMPOSE_PROJECT="todo-flutter-test"
   else
-    COMPOSE_PROJECT="client-todo"
+    COMPOSE_PROJECT="todo-flutter"
   fi
-  COMPOSE_SVC="client-todo"
+  COMPOSE_SVC="todo-flutter"
   cd "\$TARGET_DIR"
   RECREATE_FLAG=""
   if [ "\$COMPOSE_CHANGED" = "1" ] || [ "\$NGINX_CHANGED" = "1" ] || [ "\$ENV_CHANGED" = "1" ]; then
@@ -438,7 +452,7 @@ fi
 
   post {
     success {
-      echo '✅ Jenkins 流水线执行成功（todo-flutter Web 构建/部署完成）'
+      echo '✅ Jenkins 流水线执行成功（todo-flutter 构建/部署完成）'
       script {
         feishuBuildNotify('✅', "Jenkins 构建成功（todo-flutter）[${env.RESOLVED_ENV ?: 'n/a'}]")
       }

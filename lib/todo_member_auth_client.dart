@@ -23,6 +23,9 @@ abstract class TodoMemberAuthGateway {
 
   Future<void> logout(String accessToken);
 
+  /// 校验 accessToken 是否仍被后端认可；网络失败时返回 false。
+  Future<bool> validateSession(String accessToken);
+
   void close();
 }
 
@@ -106,6 +109,23 @@ class TodoMemberAuthClient implements TodoMemberAuthGateway {
   }
 
   @override
+  Future<bool> validateSession(String accessToken) async {
+    if (accessToken.isEmpty) {
+      return false;
+    }
+    try {
+      await _request(
+        'GET',
+        '/app-api/todo-member/user/get',
+        accessToken: accessToken,
+      );
+      return true;
+    } on TodoMemberAuthException {
+      return false;
+    }
+  }
+
+  @override
   void close() {
     if (_ownsClient) {
       _httpClient.close();
@@ -128,6 +148,7 @@ class TodoMemberAuthClient implements TodoMemberAuthGateway {
     final requestBody = body == null ? null : jsonEncode(body);
     final uri = _resolve(path);
     final response = switch (method) {
+      'GET' => await _httpClient.get(uri, headers: headers),
       'POST' => await _httpClient.post(
         uri,
         headers: headers,
@@ -212,7 +233,8 @@ class TodoAuthSession {
   final String? expiresTime;
   final String mobile;
 
-  bool get isValid => accessToken.isNotEmpty;
+  bool get isValid =>
+      accessToken.isNotEmpty && refreshToken.isNotEmpty && userId > 0;
 
   Map<String, dynamic> toJson() => {
     'userId': userId,

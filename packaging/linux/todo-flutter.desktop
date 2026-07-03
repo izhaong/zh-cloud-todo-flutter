@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Todo Flutter
+Comment=ZH Cloud Todo desktop client
+Exec=/opt/todo-flutter/zh_cloud_todo_flutter
+Icon=todo-flutter
+Terminal=false
+Categories=Office;Utility;
+StartupWMClass=zh_cloud_todo_flutter
