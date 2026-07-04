@@ -7,6 +7,7 @@ import '../filter/filter_bar.dart';
 import 'task_detail_page.dart';
 import 'task_quick_add_sheet.dart';
 import 'view_mode.dart';
+import 'views/calendar_view.dart';
 import 'views/eisenhower_view.dart';
 import 'views/kanban_view.dart';
 import 'views/task_view_mode_tabs.dart';
@@ -138,7 +139,7 @@ class _ModeBody extends ConsumerWidget {
           case TaskViewMode.eisenhower:
             return EisenhowerView(tasks: items);
           case TaskViewMode.calendar:
-            return const _ComingSoon(icon: Icons.calendar_month, label: '日历视图');
+            return CalendarView(tasks: items);
         }
       },
     );
@@ -249,33 +250,6 @@ class _ListBody extends StatelessWidget {
       }
       return true;
     }).toList();
-  }
-}
-
-class _ComingSoon extends StatelessWidget {
-  const _ComingSoon({required this.icon, required this.label});
-  final IconData icon;
-  final String label;
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 56, color: Theme.of(context).disabledColor),
-          const SizedBox(height: 12),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '即将在后续 commit 落地',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
-      ),
-    );
   }
 }
 

@@ -8,6 +8,7 @@ import '../../state/session_state.dart';
 import '../efficiency/efficiency_hub_page.dart';
 import '../list/list_page.dart';
 import '../native/native_entry_page.dart';
+import '../quadrant/quadrant_rules_page.dart';
 import '../settings/settings_route.dart';
 import '../task/tasks_by_list_page.dart';
 
@@ -93,6 +94,13 @@ class _HomeShellState extends ConsumerState<HomeShell>
             tooltip: '立即同步',
             icon: const Icon(Icons.sync),
             onPressed: _triggerSync,
+          ),
+          IconButton(
+            tooltip: '四象限规则',
+            icon: const Icon(Icons.dashboard_outlined),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const QuadrantRulesPage()),
+            ),
           ),
           IconButton(
             tooltip: '设置',
