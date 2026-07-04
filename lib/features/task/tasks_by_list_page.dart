@@ -157,10 +157,15 @@ class _ListBody extends StatelessWidget {
     if (items.isEmpty) {
       return const Center(child: Text('暂无任务'));
     }
+    final sorted = [...items]..sort((a, b) {
+        // 置顶优先，再按 updatedAt 倒序。
+        if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
+        return b.updatedAt.compareTo(a.updatedAt);
+      });
     return ListView.builder(
-      itemCount: items.length,
+      itemCount: sorted.length,
       itemBuilder: (_, i) {
-        final t = items[i];
+        final t = sorted[i];
         return ListTile(
           leading: Consumer(
             builder: (ctx, ref, _) => Checkbox(
@@ -170,17 +175,36 @@ class _ListBody extends StatelessWidget {
               },
             ),
           ),
-          title: Text(
-            t.title,
-            style: TextStyle(
-              decoration: t.completed ? TextDecoration.lineThrough : null,
-            ),
+          title: Row(
+            children: [
+              if (t.isPinned) const Icon(Icons.push_pin, size: 14),
+              if (t.isPinned) const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  t.title,
+                  style: TextStyle(
+                    decoration: t.completed ? TextDecoration.lineThrough : null,
+                  ),
+                ),
+              ),
+            ],
           ),
           subtitle: Text(
             priorityLabel(t.priority) +
                 (t.dueAt == null
                     ? ''
                     : ' · due ${t.dueAt!.toIso8601String().substring(0, 10)}'),
+          ),
+          trailing: Consumer(
+            builder: (ctx, ref, _) => IconButton(
+              tooltip: t.isPinned ? '取消置顶' : '置顶',
+              icon: Icon(
+                t.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                size: 18,
+              ),
+              onPressed: () =>
+                  ref.read(taskRepositoryProvider).togglePin(t.id),
+            ),
           ),
           onTap: () => onTaskTap(t),
         );

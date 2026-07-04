@@ -74,6 +74,15 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
     await ref.read(taskRepositoryProvider).toggleComplete(t.id);
   }
 
+  Future<void> _togglePin(TodoTask t) async {
+    final next = await ref.read(taskRepositoryProvider).togglePin(t.id);
+    if (!mounted) return;
+    setState(() => _task = next);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(next.isPinned ? '已置顶' : '已取消置顶')),
+    );
+  }
+
   Future<void> _delete(TodoTask t) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -125,6 +134,13 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
       appBar: AppBar(
         title: const Text('任务详情'),
         actions: [
+          IconButton(
+            tooltip: t.isPinned ? '取消置顶' : '置顶',
+            onPressed: () => _togglePin(t),
+            icon: Icon(
+              t.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+            ),
+          ),
           IconButton(
             tooltip: t.completed ? '取消勾选' : '勾选完成',
             onPressed: () => _toggleComplete(t),

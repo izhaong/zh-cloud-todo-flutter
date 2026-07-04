@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../state/nlp_date.dart';
 import '../../state/providers.dart';
 import '../tag/tag_color.dart';
 
@@ -18,11 +19,27 @@ class TaskQuickAddSheet extends ConsumerStatefulWidget {
 class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
   final _titleCtrl = TextEditingController();
   int _priority = 0;
+  DateTime? _nlpResolvedDueAt;
+
+  @override
+  void initState() {
+    super.initState();
+    _titleCtrl.addListener(_maybeResolveDate);
+  }
 
   @override
   void dispose() {
-    _titleCtrl.dispose();
+    _titleCtrl
+      ..removeListener(_maybeResolveDate)
+      ..dispose();
     super.dispose();
+  }
+
+  void _maybeResolveDate() {
+    final resolved = NlpDateParser().parse(_titleCtrl.text);
+    if (resolved?.date != _nlpResolvedDueAt) {
+      setState(() => _nlpResolvedDueAt = resolved?.date);
+    }
   }
 
   Future<void> _save() async {
@@ -33,6 +50,7 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
           parentTaskId: widget.parentTaskId,
           title: text,
           priority: _priority,
+          dueAt: _nlpResolvedDueAt,
         );
     if (mounted) Navigator.pop(context);
   }
@@ -78,6 +96,16 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
               onChanged: (v) => setState(() => _priority = v ?? 0),
             ),
             const SizedBox(height: 16),
+            if (_nlpResolvedDueAt != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  '已识别截止时间：${_nlpResolvedDueAt!.toLocal()}',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                ),
+              ),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [

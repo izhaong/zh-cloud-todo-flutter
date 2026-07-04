@@ -47,6 +47,7 @@ class TaskRepository {
     DateTime? dueAt,
     int? parentTaskId,
     int? folderId,
+    bool isPinned = false,
   }) async {
     final now = DateTime.now();
     final id = await _db.into(_db.todoTasks).insert(
@@ -56,6 +57,7 @@ class TaskRepository {
         title: title,
         description: Value(description),
         priority: Value(priority),
+        isPinned: Value(isPinned),
         startAt: Value(startAt),
         endAt: Value(endAt),
         dueAt: Value(dueAt),
@@ -85,6 +87,7 @@ class TaskRepository {
     DateTime? dueAt,
     int? listId,
     int? folderId,
+    bool? isPinned,
   }) async {
     final now = DateTime.now();
     await (_db.update(_db.todoTasks)..where((t) => t.id.equals(taskId)))
@@ -94,6 +97,7 @@ class TaskRepository {
           ? const Value.absent()
           : Value(description),
       priority: priority == null ? const Value.absent() : Value(priority),
+      isPinned: isPinned == null ? const Value.absent() : Value(isPinned),
       startAt: startAt == null ? const Value.absent() : Value(startAt),
       endAt: endAt == null ? const Value.absent() : Value(endAt),
       dueAt: dueAt == null ? const Value.absent() : Value(dueAt),
@@ -111,6 +115,27 @@ class TaskRepository {
       payload: row.toJson(),
     );
     return row;
+  }
+
+  /// 切换置顶状态 + sync_queue。
+  Future<TodoTask> togglePin(int taskId) async {
+    final current = await (_db.select(_db.todoTasks)
+          ..where((t) => t.id.equals(taskId)))
+        .getSingle();
+    final next = current.copyWith(
+      isPinned: !current.isPinned,
+      updatedAt: DateTime.now(),
+    );
+    await (_db.update(_db.todoTasks)..where((t) => t.id.equals(taskId)))
+        .write(next);
+    await _queue.enqueue(
+      entity: SyncEntities.task,
+      op: SyncOps.upsert,
+      localId: taskId,
+      serverId: next.serverId,
+      payload: next.toJson(),
+    );
+    return next;
   }
 
   /// 切换完成状态 + sync_queue。
