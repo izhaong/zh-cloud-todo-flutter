@@ -14,7 +14,7 @@
 ```text
 todo-flutter/
   dist/              # Flutter build/web（GitHub Actions / Jenkins rsync 更新）
-  nginx/client.nginx.conf.template
+  nginx/client.nginx.conf   # 静态配置，test/prod 共用，不走 envsubst
   docker-compose.yml
   env                # 从 env.*.example 初始化，勿提交密钥
 ```

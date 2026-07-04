@@ -21,18 +21,18 @@
 
 ### Desktop 工作流
 
-| Job         | Runner           | 产物（RustDesk 风格）                                    |
-| ----------- | ---------------- | -------------------------------------------------------- |
-| Linux x64   | `ubuntu-latest`  | `todo-flutter-{version}-x86_64.deb`                      |
-| macOS       | `macos-latest`   | `todo-flutter-{version}-aarch64.dmg`（Apple Silicon CI） |
-| Windows x64 | `windows-latest` | `todo-flutter-{version}-x86_64.exe` + `-x86_64.msi`      |
+| Job         | Runner           | 产物（RustDesk 风格）                                      |
+| ----------- | ---------------- | ---------------------------------------------------------- |
+| Linux x64   | `ubuntu-latest`  | `todo-flutter-{version}-x86_64.deb`                        |
+| macOS       | `macos-latest`   | `todo-flutter-{version}-aarch64.dmg`（Apple Silicon CI）   |
+| Windows x64 | `windows-latest` | `todo-flutter-{version}-x86_64.exe` + `-x86_64.msi`        |
 
 **打包配置**
 
-| 平台    | 工具 / 路径                                                                               |
-| ------- | ----------------------------------------------------------------------------------------- |
-| Linux   | `dpkg-deb` + `packaging/linux/todo-flutter.desktop`                                       |
-| macOS   | `hdiutil create` → DMG                                                                    |
+| 平台    | 工具 / 路径                                      |
+| ------- | ------------------------------------------------ |
+| Linux   | `dpkg-deb` + `packaging/linux/todo-flutter.desktop` |
+| macOS   | `hdiutil create` → DMG                           |
 | Windows | Inno Setup `packaging/windows/todo_flutter.iss` + WiX `packaging/windows/wix/Product.wxs` |
 
 **环境（`build_env`）**
@@ -66,10 +66,10 @@ hdiutil create -volname "Todo Flutter" -ov -format UDZO \
 
 产物命名（`{version}` 来自 `pubspec.yaml`，不含 `+build`）：
 
-| 平台        | 文件名示例                               |
-| ----------- | ---------------------------------------- |
-| macOS       | `todo-flutter-1.0.0-aarch64.dmg`         |
-| Linux x64   | `todo-flutter-1.0.0-x86_64.deb`          |
+| 平台        | 文件名示例                         |
+| ----------- | ---------------------------------- |
+| macOS       | `todo-flutter-1.0.0-aarch64.dmg`   |
+| Linux x64   | `todo-flutter-1.0.0-x86_64.deb`     |
 | Windows x64 | `todo-flutter-1.0.0-x86_64.exe` / `.msi` |
 
 ## 各平台原始产物路径（未打包前）

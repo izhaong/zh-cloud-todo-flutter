@@ -112,14 +112,14 @@ jobs:
           test -f build/web/index.html
           test -f "$compose_src"
           test -f "$env_src"
-          test -f deploy/nginx/client.nginx.conf.template
+          test -f deploy/nginx/client.nginx.conf
 
           rm -rf "$OUT_DIR"
           mkdir -p "$OUT_DIR/deploy/nginx"
           tar -C build/web -czf "$OUT_DIR/todo-flutter-web.tar.gz" .
           cp "$compose_src" "$OUT_DIR/deploy/docker-compose.yml"
           cp "$env_src" "$OUT_DIR/deploy/env.example"
-          cp deploy/nginx/client.nginx.conf.template "$OUT_DIR/deploy/nginx/client.nginx.conf.template"
+          cp deploy/nginx/client.nginx.conf "$OUT_DIR/deploy/nginx/client.nginx.conf"
           test -s "$OUT_DIR/todo-flutter-web.tar.gz"
           ls -la "$OUT_DIR" "$OUT_DIR/deploy"
 
@@ -150,7 +150,7 @@ jobs:
           username: ${{ secrets.DEPLOY_SSH_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ vars.DEPLOY_SSH_PORT || '22' }}
-          source: ".gha-dist/todo-flutter-web.tar.gz,.gha-dist/deploy/docker-compose.yml,.gha-dist/deploy/env.example,.gha-dist/deploy/nginx/client.nginx.conf.template"
+          source: ".gha-dist/todo-flutter-web.tar.gz,.gha-dist/deploy/docker-compose.yml,.gha-dist/deploy/env.example,.gha-dist/deploy/nginx/client.nginx.conf"
           target: ${{ vars.DEPLOY_STAGING_DIR || '/tmp/zh-cloud-staging-todo-flutter' }}
           strip_components: 1
 
@@ -187,15 +187,15 @@ jobs:
               echo "[deploy] compose 已更新"
             fi
 
-            SRC_NGINX="${STAGING_DIR}/deploy/nginx/client.nginx.conf.template"
-            DST_NGINX="${TARGET_DIR}/nginx/client.nginx.conf.template"
+            SRC_NGINX="${STAGING_DIR}/deploy/nginx/client.nginx.conf"
+            DST_NGINX="${TARGET_DIR}/nginx/client.nginx.conf"
             test -f "$SRC_NGINX"
             NGINX_CHANGED=0
             if [[ ! -f "$DST_NGINX" ]] || ! cmp -s "$SRC_NGINX" "$DST_NGINX"; then
               [[ -f "$DST_NGINX" ]] && cp -a "$DST_NGINX" "${DST_NGINX}.bak-$(date +%Y%m%d%H%M%S)"
               cp -a "$SRC_NGINX" "$DST_NGINX"
               NGINX_CHANGED=1
-              echo "[deploy] nginx 模板已更新"
+              echo "[deploy] nginx conf 已更新"
             fi
 
             SRC_ENV="${STAGING_DIR}/deploy/env.example"
@@ -235,10 +235,12 @@ jobs:
             fi
             COMPOSE_SVC="todo-flutter"
             cd "$TARGET_DIR"
-            RECREATE_FLAG=""
+            # 任何 dist 重同步都视为内容变化，强制 recreate 避免旧容器复用缓存。
+            RECREATE_FLAG="--force-recreate"
             if [[ "$COMPOSE_CHANGED" == "1" || "$NGINX_CHANGED" == "1" || "$ENV_CHANGED" == "1" ]]; then
-              RECREATE_FLAG="--force-recreate"
               echo "[deploy] compose/nginx/env 有变更，使用 --force-recreate"
+            else
+              echo "[deploy] 配置未变但 dist 已重同步，使用 --force-recreate 确保新产物生效"
             fi
             docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_F" --env-file env up -d $RECREATE_FLAG "$COMPOSE_SVC"
             docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_F" ps
