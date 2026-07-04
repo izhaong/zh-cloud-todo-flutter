@@ -37,7 +37,7 @@
 }
 ```
 
-工具面：主要为 `search()`（查 API 端点）与 `execute()`（执行 API 调用）。示例口令：「列出 zh04.com 的 DNS 记录」「为 client-todo-test.zh04.com 添加 A 记录指向 x.x.x.x」。
+工具面：主要为 `search()`（查 API 端点）与 `execute()`（执行 API 调用）。示例口令：「列出 zh04.com 的 DNS 记录」「为 todo-test.zh04.com 添加 A 记录指向 x.x.x.x」。
 
 官方说明：[Cloudflare's own MCP servers](https://developers.cloudflare.com/agents/model-context-protocol/cloudflare/servers-for-cloudflare/)。
 

@@ -58,21 +58,21 @@ jobs:
           set -euo pipefail
           if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then
             BUILD_ENV=prod
-            API_BASE='https://client-todo.zh04.com'
+            API_BASE='https://todo.zh04.com'
             TAG_NAME="${GITHUB_REF#refs/tags/}"
             CREATE_RELEASE=true
           elif [[ "${GITHUB_REF:-}" == refs/heads/develop ]]; then
             BUILD_ENV=test
-            API_BASE='https://client-todo-test.zh04.com'
+            API_BASE='https://todo-test.zh04.com'
             SHORT_SHA="$(echo "${GITHUB_SHA}" | cut -c1-7)"
             TAG_NAME="desktop-test-${SHORT_SHA}"
             CREATE_RELEASE=false
           else
             BUILD_ENV="${{ github.event.inputs.build_env || 'test' }}"
             if [[ "$BUILD_ENV" == prod ]]; then
-              API_BASE='https://client-todo.zh04.com'
+              API_BASE='https://todo.zh04.com'
             else
-              API_BASE='https://client-todo-test.zh04.com'
+              API_BASE='https://todo-test.zh04.com'
             fi
             SHORT_SHA="$(echo "${GITHUB_SHA}" | cut -c1-7)"
             CREATE_RELEASE="${{ github.event.inputs.create_release || 'false' }}"

@@ -37,12 +37,12 @@
 
 **环境（`build_env`）**
 
-| 触发方式                   | `BUILD_ENV` | 默认 API 基址                       |
-| -------------------------- | ----------- | ----------------------------------- |
-| 推送 `develop`             | `test`      | `https://client-todo-test.zh04.com` |
-| 推送 tag `v*`              | `prod`      | `https://client-todo.zh04.com`      |
-| 手动 Run workflow → `test` | `test`      | `https://client-todo-test.zh04.com` |
-| 手动 Run workflow → `prod` | `prod`      | `https://client-todo.zh04.com`      |
+| 触发方式                   | `BUILD_ENV` | 默认 API 基址                |
+| -------------------------- | ----------- | ---------------------------- |
+| 推送 `develop`             | `test`      | `https://todo-test.zh04.com` |
+| 推送 tag `v*`              | `prod`      | `https://todo.zh04.com`      |
+| 手动 Run workflow → `test` | `test`      | `https://todo-test.zh04.com` |
+| 手动 Run workflow → `prod` | `prod`      | `https://todo.zh04.com`      |
 
 产物目录：`.gha-dist/desktop/`。  
 推送 **`v*` tag** 会创建 **GitHub Release**（含 RustDesk 风格下载表格）并附三端安装包；桌面客户端**自动更新**读取该 Release（`04-desktop-github-release-update.md`）。  
@@ -57,7 +57,7 @@
 ```bash
 flutter pub get
 flutter build macos --release \
-  --dart-define=TODO_API_BASE_URL=https://client-todo-test.zh04.com \
+  --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com \
   --dart-define=TODO_TENANT_ID=1
 hdiutil create -volname "Todo Flutter" -ov -format UDZO \
   -srcfolder build/macos/Build/Products/Release/zh_cloud_todo_flutter.app \

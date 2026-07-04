@@ -40,7 +40,7 @@ git push github v1.0.1
 | `TODO_UPDATE_CHANNEL` | 空（按 API 域名推断）           | `test` / `prod` 强制渠道                |
 | `TODO_API_BASE_URL`   | 本地默认                        | 含 `-test.` 时按 test 渠道含 prerelease |
 
-桌面 CI 构建时无需改以上参数；prod Release 使用 `https://client-todo.zh04.com` 即走 latest Release。
+桌面 CI 构建时无需改以上参数；prod Release 使用 `https://todo.zh04.com` 即走 latest Release。
 
 ## 安全说明
 
