@@ -49,7 +49,7 @@ class TagRepository {
         .getSingle();
     await _queue.enqueue(
       entity: SyncEntities.tag,
-      op: SyncOps.create,
+      op: SyncOps.upsert,
       localId: id,
       payload: row.toJson(),
     );
@@ -69,7 +69,7 @@ class TagRepository {
         .getSingle();
     await _queue.enqueue(
       entity: SyncEntities.tag,
-      op: SyncOps.update,
+      op: SyncOps.upsert,
       localId: tagId,
       serverId: row.serverId,
       payload: row.toJson(),
@@ -126,7 +126,7 @@ class TagRepository {
     }
     await _queue.enqueue(
       entity: SyncEntities.taskTag,
-      op: SyncOps.update,
+      op: SyncOps.upsert,
       localId: taskId,
       payload: {'taskId': taskId, 'tagIds': tagIds},
     );

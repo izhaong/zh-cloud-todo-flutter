@@ -14,7 +14,7 @@
 - 本仓（`zh-cloud-todo-flutter`）承担唯一 C 端全量重建；`zh-cloud-admin-vben` 仅补小缺口；`zh-cloud-admin-uniapp` 暂缓。
 - 后端 `zh-cloud-service` 的 `yudao-module-todo` 已有 42 张表与全域 `/app-api/todo/**`，本 spec 以消费既有 API 为主，仅在实测发现缺口时在 service 仓开小 Issue 补齐。
 
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - 离线优先的任务与清单管理 (Priority: P1)
 
@@ -118,7 +118,7 @@
 - 番茄钟计时中应用被系统杀死：重启后从本地持久化的会话状态恢复或判定会话失效。
 - ICS 订阅源不可达或格式非法：显示订阅失败状态，不影响其余日历渲染。
 
-## Requirements *(mandatory)*
+## Requirements _(mandatory)_
 
 ### Functional Requirements
 
@@ -145,7 +145,7 @@
 - **HabitCheckIn（习惯打卡）/PomodoroSession（番茄记录）/Countdown（倒数纪念日）/Achievement（成就）**：效率域实体，直连 REST，不进入 sync 白名单。
 - **SyncChange/SyncState（同步变更/状态）**：客户端 outbox 与服务端 revision/tombstone 的本地镜像。
 
-## Success Criteria *(mandatory)*
+## Success Criteria _(mandatory)_
 
 ### Measurable Outcomes
 

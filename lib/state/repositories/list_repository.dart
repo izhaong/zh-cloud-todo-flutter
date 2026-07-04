@@ -70,7 +70,7 @@ class ListRepository {
         .getSingle();
     await _queue.enqueue(
       entity: SyncEntities.list,
-      op: SyncOps.create,
+      op: SyncOps.upsert,
       localId: id,
       payload: row.toJson(),
     );
@@ -89,7 +89,7 @@ class ListRepository {
         .getSingle();
     await _queue.enqueue(
       entity: SyncEntities.list,
-      op: SyncOps.update,
+      op: SyncOps.upsert,
       localId: listId,
       serverId: row.serverId,
       payload: row.toJson(),
@@ -144,7 +144,7 @@ class ListRepository {
         .getSingle();
     await _queue.enqueue(
       entity: SyncEntities.list,
-      op: SyncOps.create,
+      op: SyncOps.upsert,
       localId: id,
       payload: {
         ...row.toJson(),

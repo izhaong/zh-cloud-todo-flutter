@@ -5,8 +5,17 @@
 class ApiConfig {
   ApiConfig._();
 
-  /// 默认本地开发地址；CI/生产由 main.dart 启动时按 --dart-define 覆盖。
-  static const String defaultBaseUrl = 'http://localhost:48080';
+  /// 默认本地开发地址；与 [TodoMemberAuthClient] 使用同一组 --dart-define。
+  static const String defaultBaseUrl = String.fromEnvironment(
+    'TODO_API_BASE_URL',
+    defaultValue: 'http://127.0.0.1:48080',
+  );
+
+  /// 默认租户；与 [TodoMemberAuthClient] 使用同一组 --dart-define。
+  static const String defaultTenantId = String.fromEnvironment(
+    'TODO_TENANT_ID',
+    defaultValue: '1',
+  );
 
   /// 会员认证（/app-api/todo-member/**）
   static const String memberPrefix = '/app-api/todo-member';

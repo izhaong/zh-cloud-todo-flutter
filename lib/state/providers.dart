@@ -1,25 +1,34 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
+import '../api/api_config.dart';
+import '../api/sync_api.dart';
 import '../api/todo_client.dart';
-import '../api/member_auth_client.dart';
 import '../db/app_database.dart';
+import '../sync/sync_coordinator.dart';
+import 'session_state.dart';
 import 'sync_change_queue.dart';
 import 'repositories/list_repository.dart';
 import 'repositories/folder_repository.dart';
 import 'repositories/tag_repository.dart';
 import 'repositories/task_repository.dart';
 
-/// M11-B1 全局 provider 容器
+/// 全局 provider 容器
 ///
-/// - dio 客户端：业务 + 认证
-/// - 本地数据库
-/// - 后续 B 系在 lib/state/ 中扩展：authController / listController / taskController / syncEngine
+/// - dio 客户端：业务 API（已注入 Bearer/tenant-id，见 [TodoApiClient]）
+/// - 本地数据库、同步队列、各领域 Repository
 
+/// 业务 API 客户端；随 [sessionProvider] 变化重建，始终携带最新 token。
 final todoApiClientProvider = Provider<TodoApiClient>((ref) {
-  return TodoApiClient();
-});
-
-final memberAuthClientProvider = Provider<MemberAuthClient>((ref) {
-  return MemberAuthClient();
+  ref.watch(sessionProvider);
+  return TodoApiClient(
+    tokenProvider: () => ref.read(sessionProvider)?.accessToken ?? '',
+    tenantId: ApiConfig.defaultTenantId,
+    onUnauthorized: () {
+      // 避免在 build 过程中同步修改 provider：延后到下一帧。
+      Future.microtask(() => ref.read(sessionProvider.notifier).signOut());
+    },
+  );
 });
 
 final appDatabaseProvider = Provider<AppDatabase>((ref) {
@@ -88,4 +97,38 @@ final foldersStreamProvider = StreamProvider<List<TodoFolder>>((ref) {
 /// 标签列表 stream。
 final tagsStreamProvider = StreamProvider<List<TodoTag>>((ref) {
   return ref.watch(tagRepositoryProvider).watchAll();
+});
+
+// --- 同步 --------------------------------------------------------------
+
+/// 设备唯一标识（持久化，跨启动稳定，用于 sync `device_id`）。
+final deviceIdProvider = FutureProvider<String>((ref) async {
+  final prefs = await SharedPreferences.getInstance();
+  const key = 'zh_cloud_todo_flutter_device_id';
+  final existing = prefs.getString(key);
+  if (existing != null && existing.isNotEmpty) return existing;
+  final generated = const Uuid().v4();
+  await prefs.setString(key, generated);
+  return generated;
+});
+
+final syncApiProvider = Provider<SyncApi?>((ref) {
+  final deviceId = ref.watch(deviceIdProvider).valueOrNull;
+  final session = ref.watch(sessionProvider);
+  if (deviceId == null || session == null) return null;
+  return SyncApi(
+    ref.watch(todoApiClientProvider).raw,
+    clientId: 'flutter',
+    deviceId: deviceId,
+  );
+});
+
+final syncCoordinatorProvider = Provider<SyncCoordinator?>((ref) {
+  final syncApi = ref.watch(syncApiProvider);
+  if (syncApi == null) return null;
+  return SyncCoordinator(
+    db: ref.watch(appDatabaseProvider),
+    api: syncApi,
+    todoApi: ref.watch(todoApiClientProvider),
+  );
 });

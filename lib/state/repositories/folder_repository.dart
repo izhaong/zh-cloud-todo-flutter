@@ -33,7 +33,7 @@ class FolderRepository {
         .getSingle();
     await _queue.enqueue(
       entity: SyncEntities.folder,
-      op: SyncOps.create,
+      op: SyncOps.upsert,
       localId: id,
       payload: row.toJson(),
     );
@@ -52,7 +52,7 @@ class FolderRepository {
         .getSingle();
     await _queue.enqueue(
       entity: SyncEntities.folder,
-      op: SyncOps.update,
+      op: SyncOps.upsert,
       localId: folderId,
       serverId: row.serverId,
       payload: row.toJson(),

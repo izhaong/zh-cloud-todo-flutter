@@ -68,7 +68,7 @@ class TaskRepository {
         .getSingle();
     await _queue.enqueue(
       entity: SyncEntities.task,
-      op: SyncOps.create,
+      op: SyncOps.upsert,
       localId: id,
       payload: row.toJson(),
     );
@@ -105,7 +105,7 @@ class TaskRepository {
         .getSingle();
     await _queue.enqueue(
       entity: SyncEntities.task,
-      op: SyncOps.update,
+      op: SyncOps.upsert,
       localId: taskId,
       serverId: row.serverId,
       payload: row.toJson(),
@@ -118,7 +118,7 @@ class TaskRepository {
     final next = await _db.toggleTaskComplete(taskId);
     await _queue.enqueue(
       entity: SyncEntities.task,
-      op: SyncOps.update,
+      op: SyncOps.upsert,
       localId: taskId,
       serverId: next.serverId,
       payload: next.toJson(),
@@ -156,7 +156,7 @@ class TaskRepository {
         .getSingle();
     await _queue.enqueue(
       entity: SyncEntities.task,
-      op: SyncOps.update,
+      op: SyncOps.upsert,
       localId: taskId,
       serverId: row.serverId,
       payload: row.toJson(),

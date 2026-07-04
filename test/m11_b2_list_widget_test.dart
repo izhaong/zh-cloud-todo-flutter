@@ -46,7 +46,7 @@ void main() {
     // sync_queue 应当有 1 条 LIST/CREATE 记录
     final queued = await db.select(db.todoSyncChanges).get();
     expect(queued.length, 1);
-    expect(queued.first.entity, 'LIST');
-    expect(queued.first.op, 'CREATE');
+    expect(queued.first.entity, 'list');
+    expect(queued.first.op, 'upsert');
   });
 }
