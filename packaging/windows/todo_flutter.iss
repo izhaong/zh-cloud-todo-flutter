@@ -5,7 +5,7 @@
 #endif
 #define MyAppExeName "zh_cloud_todo_flutter.exe"
 #define MyAppPublisher "ZH Cloud"
-#define MyAppURL "https://client-todo.zh04.com"
+#define MyAppURL "https://todo.zh04.com"
 #define MyOutputBase "todo-flutter-{#AppVersion}-x86_64"
 
 [Setup]

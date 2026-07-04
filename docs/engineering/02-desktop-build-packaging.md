@@ -21,28 +21,28 @@
 
 ### Desktop 工作流
 
-| Job         | Runner           | 产物（RustDesk 风格）                                      |
-| ----------- | ---------------- | ---------------------------------------------------------- |
-| Linux x64   | `ubuntu-latest`  | `todo-flutter-{version}-x86_64.deb`                        |
-| macOS       | `macos-latest`   | `todo-flutter-{version}-aarch64.dmg`（Apple Silicon CI）   |
-| Windows x64 | `windows-latest` | `todo-flutter-{version}-x86_64.exe` + `-x86_64.msi`        |
+| Job         | Runner           | 产物（RustDesk 风格）                                    |
+| ----------- | ---------------- | -------------------------------------------------------- |
+| Linux x64   | `ubuntu-latest`  | `todo-flutter-{version}-x86_64.deb`                      |
+| macOS       | `macos-latest`   | `todo-flutter-{version}-aarch64.dmg`（Apple Silicon CI） |
+| Windows x64 | `windows-latest` | `todo-flutter-{version}-x86_64.exe` + `-x86_64.msi`      |
 
 **打包配置**
 
-| 平台    | 工具 / 路径                                      |
-| ------- | ------------------------------------------------ |
-| Linux   | `dpkg-deb` + `packaging/linux/todo-flutter.desktop` |
-| macOS   | `hdiutil create` → DMG                           |
+| 平台    | 工具 / 路径                                                                               |
+| ------- | ----------------------------------------------------------------------------------------- |
+| Linux   | `dpkg-deb` + `packaging/linux/todo-flutter.desktop`                                       |
+| macOS   | `hdiutil create` → DMG                                                                    |
 | Windows | Inno Setup `packaging/windows/todo_flutter.iss` + WiX `packaging/windows/wix/Product.wxs` |
 
 **环境（`build_env`）**
 
-| 触发方式                   | `BUILD_ENV` | 默认 API 基址                       |
-| -------------------------- | ----------- | ----------------------------------- |
-| 推送 `develop`             | `test`      | `https://client-todo-test.zh04.com` |
-| 推送 tag `v*`              | `prod`      | `https://client-todo.zh04.com`      |
-| 手动 Run workflow → `test` | `test`      | `https://client-todo-test.zh04.com` |
-| 手动 Run workflow → `prod` | `prod`      | `https://client-todo.zh04.com`      |
+| 触发方式                   | `BUILD_ENV` | 默认 API 基址                |
+| -------------------------- | ----------- | ---------------------------- |
+| 推送 `develop`             | `test`      | `https://todo-test.zh04.com` |
+| 推送 tag `v*`              | `prod`      | `https://todo.zh04.com`      |
+| 手动 Run workflow → `test` | `test`      | `https://todo-test.zh04.com` |
+| 手动 Run workflow → `prod` | `prod`      | `https://todo.zh04.com`      |
 
 产物目录：`.gha-dist/desktop/`。  
 推送 **`v*` tag** 会创建 **GitHub Release**（含 RustDesk 风格下载表格）并附三端安装包；桌面客户端**自动更新**读取该 Release（`04-desktop-github-release-update.md`）。  
@@ -57,7 +57,7 @@
 ```bash
 flutter pub get
 flutter build macos --release \
-  --dart-define=TODO_API_BASE_URL=https://client-todo-test.zh04.com \
+  --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com \
   --dart-define=TODO_TENANT_ID=1
 hdiutil create -volname "Todo Flutter" -ov -format UDZO \
   -srcfolder build/macos/Build/Products/Release/zh_cloud_todo_flutter.app \
@@ -66,10 +66,10 @@ hdiutil create -volname "Todo Flutter" -ov -format UDZO \
 
 产物命名（`{version}` 来自 `pubspec.yaml`，不含 `+build`）：
 
-| 平台        | 文件名示例                         |
-| ----------- | ---------------------------------- |
-| macOS       | `todo-flutter-1.0.0-aarch64.dmg`   |
-| Linux x64   | `todo-flutter-1.0.0-x86_64.deb`     |
+| 平台        | 文件名示例                               |
+| ----------- | ---------------------------------------- |
+| macOS       | `todo-flutter-1.0.0-aarch64.dmg`         |
+| Linux x64   | `todo-flutter-1.0.0-x86_64.deb`          |
 | Windows x64 | `todo-flutter-1.0.0-x86_64.exe` / `.msi` |
 
 ## 各平台原始产物路径（未打包前）

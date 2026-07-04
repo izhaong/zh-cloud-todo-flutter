@@ -50,19 +50,19 @@ jobs:
           DEPLOY="${{ github.event.inputs.deploy || 'true' }}"
           if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then
             BUILD_ENV=prod
-            API_BASE='https://client-todo.zh04.com'
+            API_BASE='https://todo.zh04.com'
             GH_ENV=production
           elif [[ "${GITHUB_REF:-}" == refs/heads/develop ]]; then
             BUILD_ENV=test
-            API_BASE='https://client-todo-test.zh04.com'
+            API_BASE='https://todo-test.zh04.com'
             GH_ENV=test
           else
             BUILD_ENV="${{ github.event.inputs.build_env || 'test' }}"
             if [[ "$BUILD_ENV" == prod ]]; then
-              API_BASE='https://client-todo.zh04.com'
+              API_BASE='https://todo.zh04.com'
               GH_ENV=production
             else
-              API_BASE='https://client-todo-test.zh04.com'
+              API_BASE='https://todo-test.zh04.com'
               GH_ENV=test
             fi
           fi

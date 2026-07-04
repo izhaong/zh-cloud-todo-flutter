@@ -5,11 +5,11 @@
 
 ## 工作流一览
 
-| Workflow    | 文件          | 触发                                                    | 作用                     |
-| ----------- | ------------- | ------------------------------------------------------- | ------------------------ |
-| **Web**     | `web.yml`     | 推 `develop`（test）/ tag `v*`（prod）/ 手动            | 构建 H5 + SSH 部署宿主机 |
+| Workflow    | 文件          | 触发                                                    | 作用                                                     |
+| ----------- | ------------- | ------------------------------------------------------- | -------------------------------------------------------- |
+| **Web**     | `web.yml`     | 推 `develop`（test）/ tag `v*`（prod）/ 手动            | 构建 H5 + SSH 部署宿主机                                 |
 | **Desktop** | `desktop.yml` | 推 `develop`（test 包）/ tag `v*`（prod Release）/ 手动 | 三端 **EXE/MSI/DMG/DEB** 安装包（对齐 RustDesk Release） |
-| **CI**      | `ci.yml`      | `develop`/`main` 的 PR 与 push                          | analyze + test（不部署） |
+| **CI**      | `ci.yml`      | `develop`/`main` 的 PR 与 push                          | analyze + test（不部署）                                 |
 
 Jenkins（Gitea webhook）仅作备用，见 `01-ci-jenkins.md`。
 
@@ -23,7 +23,7 @@ Gitea：feat/* → PR → merge develop
 GitHub：git push github develop
         ↓
 Actions 自动：
-  · web.yml     → client-todo-test.zh04.com 更新
+  · web.yml     → todo-test.zh04.com 更新
   · desktop.yml → 测试环境三端 Artifacts（不建 Release）
 ```
 

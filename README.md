@@ -58,7 +58,7 @@ flutter run -d macos \
 
 ```bash
 flutter build web --release \
-  --dart-define=TODO_API_BASE_URL=https://client-todo-test.zh04.com \
+  --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com \
   --dart-define=TODO_TENANT_ID=1
 ```
 
@@ -74,7 +74,7 @@ flutter build web --release \
 ```bash
 flutter pub get
 flutter build macos --release \
-  --dart-define=TODO_API_BASE_URL=https://client-todo-test.zh04.com \
+  --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com \
   --dart-define=TODO_TENANT_ID=1
 # linux / windows 将 macos 换成对应平台
 ```

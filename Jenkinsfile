@@ -95,13 +95,13 @@ pipeline {
     )
     string(
       name: 'TODO_API_BASE_URL_TEST',
-      defaultValue: 'https://client-todo-test.zh04.com',
+      defaultValue: 'https://todo-test.zh04.com',
       trim: true,
       description: 'test 构建 Web 时注入 TODO_API_BASE_URL（经 nginx 反代 /app-api）'
     )
     string(
       name: 'TODO_API_BASE_URL_PROD',
-      defaultValue: 'https://client-todo.zh04.com',
+      defaultValue: 'https://todo.zh04.com',
       trim: true,
       description: 'prod 构建 Web 时注入 TODO_API_BASE_URL'
     )
@@ -232,8 +232,8 @@ pipeline {
           def apiBase = (env.TODO_API_BASE_URL ?: '').trim()
           if (!apiBase) {
             apiBase = (env.RESOLVED_ENV == 'prod')
-              ? (params.TODO_API_BASE_URL_PROD ?: 'https://client-todo.zh04.com').trim()
-              : (params.TODO_API_BASE_URL_TEST ?: 'https://client-todo-test.zh04.com').trim()
+              ? (params.TODO_API_BASE_URL_PROD ?: 'https://todo.zh04.com').trim()
+              : (params.TODO_API_BASE_URL_TEST ?: 'https://todo-test.zh04.com').trim()
           }
           def tenantId = (env.TODO_TENANT_ID ?: params.TODO_TENANT_ID ?: '1').trim()
           env.BUILD_API_BASE_URL = apiBase

@@ -4,10 +4,10 @@
 
 ## 宿主机目录
 
-| 环境 | `DEPLOY_TARGET_DIR` 下子路径 | compose 项目名      | 域名（npm）               | 端口  |
-| ---- | ---------------------------- | ------------------- | ------------------------- | ----- |
-| test | `todo-flutter`               | `todo-flutter-test` | client-todo-test.zh04.com | 38090 |
-| prod | `todo-flutter`               | `todo-flutter`      | client-todo.zh04.com      | 58090 |
+| 环境 | `DEPLOY_TARGET_DIR` 下子路径 | compose 项目名      | 域名（npm）        | 端口  |
+| ---- | ---------------------------- | ------------------- | ------------------ | ----- |
+| test | `todo-flutter`               | `todo-flutter-test` | todo-test.zh04.com | 38090 |
+| prod | `todo-flutter`               | `todo-flutter`      | todo.zh04.com      | 58090 |
 
 目录结构：
 
@@ -23,7 +23,7 @@ todo-flutter/
 
 ```bash
 flutter build web --release \
-  --dart-define=TODO_API_BASE_URL=https://client-todo-test.zh04.com \
+  --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com \
   --dart-define=TODO_TENANT_ID=1
 
 rsync -a --delete build/web/ /path/to/todo-flutter/dist/
@@ -37,14 +37,14 @@ Gitea webhook 仍可触发 Jenkins；**推荐**合并后 `git push github develo
 
 ## GitHub Actions（推荐）
 
-| Workflow | 触发 | 作用 |
-| -------- | ---- | ---- |
-| `web.yml` | 推 `develop` / tag `v*` | H5 构建 + SSH 部署 |
-| `desktop.yml` | 推 `develop` / tag `v*` | 桌面安装包 |
-| `ci.yml` | PR / push | analyze + test |
+| Workflow      | 触发                    | 作用               |
+| ------------- | ----------------------- | ------------------ |
+| `web.yml`     | 推 `develop` / tag `v*` | H5 构建 + SSH 部署 |
+| `desktop.yml` | 推 `develop` / tag `v*` | 桌面安装包         |
+| `ci.yml`      | PR / push               | analyze + test     |
 
 配置与 Secrets：`docs/engineering/03-github-actions.md`
 
 ## 从旧路径迁移（`client/todo`）
 
-若宿主机仍保留 React 版 `client/todo` 栈，Flutter 首次部署会在 **`todo-flutter/`** 新建目录；npm 域名不变时，需在 npm 将反代端口指向新目录 `env` 中的 `CLIENT_PORT`，并停掉旧 `client-todo-test` / `client-todo` compose 项目以免端口冲突。
+若宿主机仍保留 React 版 `client/todo` 栈，Flutter 首次部署会在 **`todo-flutter/`** 新建目录；npm 域名 **`todo-test.zh04.com` / `todo.zh04.com`** 须将反代端口指向新目录 `env` 中的 `CLIENT_PORT`，并停掉旧 compose 项目以免端口冲突。
