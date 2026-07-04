@@ -13,9 +13,9 @@ Todo 应用 **唯一 C 端客户端**（**Web / H5**、iOS、Android、macOS、W
 
 ## 权威文档
 
-- 前端架构（Flutter 栈、目录、离线同步）：[`docs/todo/03-architecture/11-前端架构.md`](../docs/todo/03-architecture/11-前端架构.md) §3
-- 编排与委派：[`docs/todo/02-requirements/10-角色Subagent与Phase编排.md`](../docs/todo/02-requirements/10-角色Subagent与Phase编排.md)
-- 父 Plan：`.cursor/plans/todo/202605232140_todo_core_app-architecture.plan.md`
+- 产品需求与对照矩阵：`zh-cloud-docs/todo/01_需求阶段/`
+- 系统架构 / DB / API：`zh-cloud-docs/todo/02_技术设计/`
+- 本仓功能规格：`specs/001-todo-dida-core-parity/`
 
 ## API 契约
 
@@ -97,17 +97,13 @@ CI 产物目录：`.gha-dist/desktop/`（zip 或 tar.gz）。
 - Jenkins 备用：`docs/engineering/01-ci-jenkins.md`
 - 部署模板：`deploy/README.md`
 
-## 初始化
+## 架构与规格
 
-在**本目录**执行（与 beecount 风格对齐）：
-
-```bash
-flutter pub get
-```
-
-依赖栈与 `lib/` 目录结构见 `11-前端架构.md` §3.1–3.2。
+- 唯一事实源：`specs/001-todo-dida-core-parity/{spec,plan,tasks}.md`（spec-kit）
+- 目录分层：`lib/core/{api,db,sync,storage}` + `lib/features/*`（Riverpod + go_router + Drift + dio 离线优先架构）
+- 跨仓编排：`zh-cloud/.cursor/plans/滴答清单对齐交付计划_*.plan.md`
 
 ## Git 约定
 
-- 若后续拆为独立 Gitea 仓库：从 `develop` 拉 `feature/todo-*` / `fix/todo-*`，PR 合入 `develop`
-- 当前位于 `zh-cloud` 父仓时：与 Todo 其它仓 PR 互链（`Refs #n`）
+- 从 `develop` 拉 `feat/*` / `fix/*`（分支名带 Issue 编号），PR 合入 `develop`
+- 与 Todo 其它仓 PR 互链（`Refs #n`）

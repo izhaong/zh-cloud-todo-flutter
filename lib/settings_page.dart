@@ -13,12 +13,14 @@ class TodoSettingsPage extends StatelessWidget {
     required this.checkingUpdate,
     required this.onCheckUpdate,
     this.signedInMobile,
+    this.onSignOut,
   });
 
   final bool canCheckUpdate;
   final bool checkingUpdate;
   final VoidCallback? onCheckUpdate;
   final String? signedInMobile;
+  final VoidCallback? onSignOut;
 
   @override
   Widget build(BuildContext context) {
@@ -47,6 +49,12 @@ class TodoSettingsPage extends StatelessWidget {
                   title: const Text('当前账号'),
                   subtitle: Text(signedInMobile!),
                 ),
+                if (onSignOut != null)
+                  ListTile(
+                    leading: const Icon(Icons.logout),
+                    title: const Text('退出登录'),
+                    onTap: onSignOut,
+                  ),
                 const Divider(height: 24),
               ],
               Padding(
