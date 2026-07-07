@@ -5,6 +5,9 @@ import '../../core/db/app_database.dart';
 import '../../core/api/todo_api.dart';
 import '../../state/providers.dart';
 import 'task_quick_add_sheet.dart';
+import '../collaboration/task_comments_page.dart';
+import '../collaboration/task_assign_page.dart';
+import '../collaboration/list_member_page.dart';
 
 /// 收件箱的本地清单 id（synthetic inbox）：listId 为该值的任务视为"未归清单"。
 const String kInboxListId = 'inbox';
@@ -152,6 +155,104 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
     messenger.showSnackBar(
       const SnackBar(content: Text('已移至收件箱')),
     );
+  }
+
+  /// P6 协作任务：底部 Sheet 选择（指派 / 评论 / 协作成员）。
+  Future<void> _openCollaborationHub(TodoTask t) async {
+    if (!mounted) return;
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.person_outline),
+              title: const Text('指派执行人'),
+              onTap: () => Navigator.pop(ctx, 'assign'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.chat_bubble_outline),
+              title: const Text('查看/添加评论'),
+              onTap: () => Navigator.pop(ctx, 'comments'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.group_outlined),
+              title: const Text('协作成员'),
+              subtitle: const Text('邀请 / 移除 / 调整成员角色'),
+              onTap: () => Navigator.pop(ctx, 'members'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+    final taskServerId = t.serverId;
+    if (choice == 'assign') {
+      if (taskServerId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('任务尚未同步，无法指派')),
+        );
+        return;
+      }
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => TaskAssignPage(
+            taskServerId: taskServerId,
+            taskTitle: t.title,
+          ),
+        ),
+      );
+      return;
+    }
+    if (choice == 'comments') {
+      if (taskServerId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('任务尚未同步，暂无评论')),
+        );
+        return;
+      }
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => TaskCommentsPage(
+            taskServerId: taskServerId,
+            taskTitle: t.title,
+          ),
+        ),
+      );
+      return;
+    }
+    if (choice == 'members') {
+      final db = ref.read(appDatabaseProvider);
+      if (db == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('请先登录')),
+        );
+        return;
+      }
+      final list = await _resolveList(db, t.listId);
+      if (!mounted) return;
+      final listServerId = list?.serverId;
+      if (listServerId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('清单尚未同步，无法打开协作成员')),
+        );
+        return;
+      }
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ListMemberPage(
+            listServerId: listServerId,
+            title: list?.name ?? t.title,
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<TodoList?> _resolveList(AppDatabase db, String localListId) async {
+    // listId 本地 UUID：从本地 drift 反查对应的 list serverId。
+    return db.listByLocalId(localListId);
   }
 
   Future<void> _pickDue(TodoTask t) async {
@@ -347,6 +448,11 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                 icon: const Icon(Icons.move_to_inbox_outlined),
               ),
               IconButton(
+                tooltip: '协作（指派/评论/成员）',
+                onPressed: () => _openCollaborationHub(t),
+                icon: const Icon(Icons.people_outline),
+              ),
+              IconButton(
                 tooltip: '删除',
                 onPressed: () => _delete(t),
                 icon: const Icon(Icons.delete_outline),
@@ -391,6 +497,11 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                 },
                 icon: const Icon(Icons.move_to_inbox_outlined),
               ),
+          IconButton(
+            tooltip: '协作',
+            onPressed: () => _openCollaborationHub(t),
+            icon: const Icon(Icons.people_outline),
+          ),
           IconButton(
             tooltip: '删除',
             onPressed: () => _delete(t),

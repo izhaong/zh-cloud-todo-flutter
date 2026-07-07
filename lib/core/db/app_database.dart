@@ -361,4 +361,9 @@ class AppDatabase extends _$AppDatabase {
   Future<TodoTag?> tagByServerId(int serverId) =>
       (select(todoTags)..where((t) => t.serverId.equals(serverId)))
           .getSingleOrNull();
+
+  /// 按本地 UUID 主键查清单（任务详情反查清单 serverId 用）。
+  Future<TodoList?> listByLocalId(String localId) =>
+      (select(todoLists)..where((t) => t.id.equals(localId)))
+          .getSingleOrNull();
 }

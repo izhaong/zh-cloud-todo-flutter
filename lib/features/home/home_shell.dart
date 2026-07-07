@@ -12,6 +12,7 @@ import '../native/native_entry_page.dart';
 import '../quadrant/quadrant_rules_page.dart';
 import '../reminder/reminder_inbox_page.dart';
 import '../settings/settings_route.dart';
+import '../calendar_sub/calendar_subscription_page.dart';
 import '../task/tasks_by_list_page.dart';
 
 /// 登录后的主导航壳：任务 / 清单 / 效率 / 系统，四个底部 tab。
@@ -148,6 +149,15 @@ class _HomeShellState extends ConsumerState<HomeShell>
             icon: const Icon(Icons.dashboard_outlined),
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const QuadrantRulesPage()),
+            ),
+          ),
+          IconButton(
+            tooltip: '日历订阅',
+            icon: const Icon(Icons.calendar_month_outlined),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const CalendarSubscriptionPage(),
+              ),
             ),
           ),
           IconButton(

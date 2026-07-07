@@ -209,7 +209,11 @@ class TodoRestApi {
         nlp = NlpApi(client),
         tag = TagApi(client),
         reminder = ReminderActionApi(client),
-        repeatOccurrence = RepeatOccurrenceApi(client);
+        repeatOccurrence = RepeatOccurrenceApi(client),
+        listCollaboration = ListCollaborationApi(client),
+        taskAssign = TaskAssignApi(client),
+        comment = TaskCommentApi(client),
+        calSubscription = CalendarSubscriptionApi(client);
 
   final TaskRestApi task;
   final ChecklistApi checklist;
@@ -218,6 +222,10 @@ class TodoRestApi {
   final TagApi tag;
   final ReminderActionApi reminder;
   final RepeatOccurrenceApi repeatOccurrence;
+  final ListCollaborationApi listCollaboration;
+  final TaskAssignApi taskAssign;
+  final TaskCommentApi comment;
+  final CalendarSubscriptionApi calSubscription;
 }
 
 /// 提醒动作（`/reminder-action/**`）直达 REST：收件箱 / 完成 / 忽略 / 延后；不走
@@ -359,4 +367,354 @@ class RepeatOccurrenceApi {
   /// `POST /repeat-occurrence/{id}/catchup` — 追补该周期一次发生。
   Future<void> catchup(int id) =>
       _client.post<Map<String, dynamic>>('/repeat-occurrence/$id/catchup');
+}
+
+
+/// 清单成员：后端 `members.int` 响应单项。
+class ListMember {
+  const ListMember({
+    required this.userId,
+    required this.role,
+    this.mobile,
+    this.displayName,
+  });
+
+  final int userId;
+
+  /// `owner` / `member`（后端约定）。
+  final String role;
+
+  /// 后端可能冗余（脱敏后）的手机号 / 显示名，仅供 UI 展示；可能为 null。
+  final String? mobile;
+  final String? displayName;
+
+  bool get isOwner => role == 'owner';
+}
+
+/// 清单协作助手：成员增删改 + 加入 / 退出。
+/// 不走 sync 协议：协作权限直接在后端维护，本地仅缓存展示。
+class ListCollaborationApi {
+  ListCollaborationApi(this._client);
+
+  final ApiClient _client;
+
+  ListMember _m(Map<String, dynamic> j) => ListMember(
+        userId: (j['userId'] as num?)?.toInt() ??
+            (j['id'] as num?)?.toInt() ??
+            0,
+        role: j['role']?.toString() ?? 'member',
+        mobile: j['mobile']?.toString(),
+        displayName: j['displayName']?.toString() ?? j['name']?.toString(),
+      );
+
+  /// 兼容 `{code,data:[…]}`, `{code,data:{members:[…]}}`,
+  /// `{data:[…]}`, `{data:{members:[…]}}`, 纯数组, `{members:[…]}` 多形态。
+  List<ListMember> _list(Map<String, dynamic> body) {
+    if (body.containsKey('code')) {
+      // data 字段可能是 List（直接成员数组）或 Map（含 members/list/items 任一）。
+      final dynamic data = _unwrapBody(body);
+      if (data is List) {
+        return data
+            .map((e) => _m(Map<String, dynamic>.from(e as Map)))
+            .toList();
+      }
+      if (data is Map) {
+        final raw = (data['members'] as List?) ??
+            (data['list'] as List?) ??
+            (data['items'] as List?) ??
+            const [];
+        return raw
+            .map((e) => _m(Map<String, dynamic>.from(e as Map)))
+            .toList();
+      }
+      return const [];
+    }
+    if (body['data'] is List) {
+      return (body['data'] as List)
+          .map((e) => _m(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
+    if (body['data'] is Map) {
+      final d = Map<String, dynamic>.from(body['data'] as Map);
+      final raw = (d['members'] as List?) ??
+          (d['list'] as List?) ??
+          (d['items'] as List?) ??
+          const [];
+      return raw
+          .map((e) => _m(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
+    return const [];
+  }
+
+  List<ListMember> _listFromArray(Object? raw) {
+    if (raw is List) {
+      return raw
+          .map((e) => _m(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
+    return const [];
+  }
+
+  /// `GET /list/{listId}/members`
+  Future<List<ListMember>> list(int listId) async {
+    final resp = await _client.get('/list/$listId/members');
+    final body = resp.data;
+    if (body is Map<String, dynamic>) return _list(body);
+    return _listFromArray(body);
+  }
+
+  /// `POST /list/{listId}/members` body `{userId, role}`。
+  Future<void> addMember({
+    required int listId,
+    required int userId,
+    String role = 'member',
+  }) async {
+    await _client.post('/list/$listId/members', data: {
+      'userId': userId,
+      'role': role,
+    });
+  }
+
+  /// `PUT /list/{listId}/members/{userId}` body `{role}`。
+  /// 备注：ApiClient 仅有 GET/POST/PUT/DELETE，故 PATCH 改用 PUT。
+  Future<void> updateRole({
+    required int listId,
+    required int userId,
+    required String role,
+  }) async {
+    await _client.put('/list/$listId/members/$userId', data: {'role': role});
+  }
+
+  /// `DELETE /list/{listId}/members/{userId}`。
+  Future<void> removeMember({
+    required int listId,
+    required int userId,
+  }) async {
+    await _client.delete('/list/$listId/members/$userId');
+  }
+
+  /// `POST /list/{listId}/member/join`（通过链接加入）。
+  Future<void> join(int listId) =>
+      _client.post('/list/$listId/member/join');
+
+  /// `POST /list/{listId}/member/exit`（主动退出）。
+  Future<void> exit(int listId) =>
+      _client.post('/list/$listId/member/exit');
+}
+
+/// 任务协作者：指派 / 移除执行人。
+class TaskAssignApi {
+  TaskAssignApi(this._client);
+
+  final ApiClient _client;
+
+  /// `GET /task/{taskId}/assignee` — 返回 null 或 `int`（userId）。
+  Future<int?> assignee(int taskId) async {
+    final resp = await _client.get('/task/$taskId/assignee');
+    final body = resp.data;
+    if (body is Map<String, dynamic>) {
+      if (body.containsKey('code')) {
+        final data = _unwrapBody(body);
+        if (data.isEmpty) return null;
+        return (data['userId'] as num?)?.toInt() ?? data['id'] as int?;
+      }
+      if (body.containsKey('userId')) {
+        return (body['userId'] as num?)?.toInt();
+      }
+      return null;
+    }
+    if (body is num) return body.toInt();
+    return null;
+  }
+
+  /// `PUT /task/{taskId}/assignee` body `{userId}`（null 表示移除）。
+  Future<void> setAssignee({required int taskId, required int? userId}) =>
+      _client.put('/task/$taskId/assignee', data: {
+        'userId': userId,
+      });
+
+  Future<void> removeAssignee(int taskId) =>
+      _client.delete('/task/$taskId/assignee');
+}
+
+/// 一条任务评论。
+class TaskComment {
+  const TaskComment({
+    required this.id,
+    required this.taskId,
+    required this.content,
+    this.userId,
+    this.createdAt,
+  });
+
+  final int id;
+  final int taskId;
+  final String content;
+  final int? userId;
+  final DateTime? createdAt;
+}
+
+/// 任务评论助手：列出 / 添加 / 编辑 / 删除。
+class TaskCommentApi {
+  TaskCommentApi(this._client);
+
+  final ApiClient _client;
+
+  TaskComment _c(Map<String, dynamic> j) => TaskComment(
+        id: (j['id'] as num?)?.toInt() ?? 0,
+        taskId: (j['taskId'] as num?)?.toInt() ?? 0,
+        content: j['content']?.toString() ?? j['text']?.toString() ?? '',
+        userId: (j['userId'] as num?)?.toInt(),
+        createdAt: ReminderActionApi.parseTime(j['createdAt']),
+      );
+
+  List<TaskComment> _list(Map<String, dynamic> body) {
+    final List raw;
+    if (body.containsKey('code')) {
+      final dynamic data = _unwrapBody(body);
+      if (data is List) {
+        raw = data;
+      } else if (data is Map) {
+        raw = (data['list'] as List?) ??
+            (data['items'] as List?) ??
+            (data['comments'] as List?) ??
+            const [];
+      } else {
+        raw = const [];
+      }
+    } else {
+      raw = (body['list'] as List?) ??
+          (body['items'] as List?) ??
+          (body['data'] is List ? body['data'] as List : const []);
+    }
+    return raw
+        .map((e) => _c(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
+  /// `GET /task/{taskId}/comments`
+  Future<List<TaskComment>> list(int taskId) async {
+    final resp = await _client.get<Map<String, dynamic>>(
+      '/task/$taskId/comments',
+    );
+    final body = resp.data;
+    if (body is Map<String, dynamic>) return _list(body);
+    return const [];
+  }
+
+  /// `POST /comment/create` body `{taskId, content}`。
+  /// 备注：后端也兼容 `POST /task/{taskId}/comments`；优先 `/comment/create`。
+  Future<int> add({
+    required int taskId,
+    required String content,
+  }) async {
+    final resp = await _client.post<Map<String, dynamic>>(
+      '/comment/create',
+      data: {'taskId': taskId, 'content': content},
+    );
+    final data = _unwrapBody(resp.data);
+    return (data['id'] as num?)?.toInt() ?? 0;
+  }
+
+  /// `PUT /comment/update` body `{id, content}`（首选）。
+  Future<void> update({required int commentId, required String content}) async {
+    await _client.put('/comment/update', data: {
+      'id': commentId,
+      'content': content,
+    });
+  }
+
+  /// `POST /comment/delete` body `{id}`。
+  Future<void> delete(int commentId) =>
+      _client.delete('/comment/delete', data: {'id': commentId});
+}
+
+/// 一行后端 ICS 订阅。
+class CalSubscription {
+  const CalSubscription({
+    required this.id,
+    required this.url,
+    required this.name,
+    this.enabled = true,
+    this.lastSyncAt,
+    this.syncToken,
+  });
+
+  final int id;
+  final String url;
+  final String name;
+  final bool enabled;
+  final DateTime? lastSyncAt;
+  final String? syncToken;
+}
+
+/// ICS 订阅助手：创建 / 删除 / 列表。
+class CalendarSubscriptionApi {
+  CalendarSubscriptionApi(this._client);
+
+  final ApiClient _client;
+
+  CalSubscription _s(Map<String, dynamic> j) => CalSubscription(
+        id: (j['id'] as num?)?.toInt() ?? 0,
+        url: j['url']?.toString() ?? '',
+        name: j['name']?.toString() ?? (j['url']?.toString() ?? ''),
+        enabled: j['enabled'] != false,
+        lastSyncAt: ReminderActionApi.parseTime(j['lastSyncAt']),
+        syncToken: j['syncToken']?.toString(),
+      );
+
+  List<CalSubscription> _list(Map<String, dynamic> body) {
+    final List raw;
+    if (body.containsKey('code')) {
+      final dynamic data = _unwrapBody(body);
+      if (data is List) {
+        raw = data;
+      } else if (data is Map) {
+        raw = (data['list'] as List?) ??
+            (data['items'] as List?) ??
+            (data['subscriptions'] as List?) ??
+            const [];
+      } else {
+        raw = const [];
+      }
+    } else {
+      raw = (body['list'] as List?) ??
+          (body['items'] as List?) ??
+          const [];
+    }
+    return raw
+        .map((e) => _s(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
+  /// `GET /cal-sub/list`
+  Future<List<CalSubscription>> list() async {
+    final resp = await _client.get<Map<String, dynamic>>('/cal-sub/list');
+    final body = resp.data;
+    if (body is Map<String, dynamic>) return _list(body);
+    return const [];
+  }
+
+  /// `POST /cal-sub/create` body `{url,name?,enabled?}`。
+  Future<int> create({
+    required String url,
+    String? name,
+    bool enabled = true,
+  }) async {
+    final resp = await _client.post<Map<String, dynamic>>(
+      '/cal-sub/create',
+      data: {
+        'url': url,
+        if (name != null) 'name': name,
+        'enabled': enabled,
+      },
+    );
+    final data = _unwrapBody(resp.data);
+    return (data['id'] as num?)?.toInt() ?? 0;
+  }
+
+  /// `POST /cal-sub/delete` body `{id}`。
+  Future<void> delete(int id) =>
+      _client.delete('/cal-sub/delete', data: {'id': id});
 }
