@@ -9,8 +9,8 @@ import '../tag/tag_color.dart';
 class TaskQuickAddSheet extends ConsumerStatefulWidget {
   const TaskQuickAddSheet({super.key, required this.listId, this.parentTaskId});
 
-  final int listId;
-  final int? parentTaskId;
+  final String listId;
+  final String? parentTaskId;
 
   @override
   ConsumerState<TaskQuickAddSheet> createState() => _TaskQuickAddSheetState();
@@ -45,7 +45,7 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
   Future<void> _save() async {
     final text = _titleCtrl.text.trim();
     if (text.isEmpty) return;
-    await ref.read(taskRepositoryProvider).create(
+    await ref.read(taskRepositoryProvider)!.create(
           listId: widget.listId,
           parentTaskId: widget.parentTaskId,
           title: text,

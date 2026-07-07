@@ -1,62 +1,58 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:zh_cloud_todo_flutter/app.dart';
 import 'package:zh_cloud_todo_flutter/state/session_state.dart';
-import 'package:zh_cloud_todo_flutter/todo_member_auth_client.dart';
 
 void main() {
-  setUp(() {
-    SharedPreferences.setMockInitialValues({});
-  });
-
   testWidgets('未登录时显示密码登录表单', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          sessionStoreProvider.overrideWithValue(_FakeSessionStore()),
           authGatewayProvider.overrideWithValue(_FakeAuthClient()),
         ],
         child: const TodoFlutterApp(),
       ),
     );
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.text('密码登录'), findsOneWidget);
     expect(find.widgetWithText(TextFormField, '手机号'), findsOneWidget);
   });
 
   testWidgets('无效本地会话在校验后回到登录页', (tester) async {
-    SharedPreferences.setMockInitialValues({
-      'zh_cloud_todo_flutter_session_v1': jsonEncode({
-        'userId': 1,
-        'accessToken': 'stale-token',
-        'refreshToken': 'refresh',
-        'mobile': '18800000000',
-      }),
-    });
+    final sessionStore = _FakeSessionStore(
+      const TodoAuthSession(
+        userId: 1,
+        accessToken: 'stale-token',
+        refreshToken: 'refresh',
+        tenantId: '1',
+        mobile: '18800000000',
+      ),
+    );
     final fake = _FakeAuthClient(validateSessionResult: false);
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [authGatewayProvider.overrideWithValue(fake)],
+        overrides: [
+          sessionStoreProvider.overrideWithValue(sessionStore),
+          authGatewayProvider.overrideWithValue(fake),
+        ],
         child: const TodoFlutterApp(),
       ),
     );
     await tester.pump();
-    // 完成会话校验异步链路：一次 Future.microtask + SharedPreferences 写。
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.text('密码登录'), findsOneWidget);
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getString('zh_cloud_todo_flutter_session_v1'), isNull);
+    expect(sessionStore.cleared, isTrue);
   });
 }
 
-class _FakeAuthClient implements TodoMemberAuthGateway {
+class _FakeAuthClient implements AuthGateway {
   _FakeAuthClient({this.validateSessionResult = true});
 
   final bool validateSessionResult;
@@ -66,27 +62,32 @@ class _FakeAuthClient implements TodoMemberAuthGateway {
     required String mobile,
     required String password,
   }) async {
-    return TodoAuthSession(
+    return const TodoAuthSession(
       userId: 1,
       accessToken: 'access-token',
       refreshToken: 'refresh-token',
-      mobile: mobile,
+      tenantId: '1',
+      mobile: '',
     );
   }
 
   @override
-  Future<void> sendSmsCode({required String mobile, required int scene}) async {}
+  Future<void> sendSmsCode({
+    required String mobile,
+    required int scene,
+  }) async {}
 
   @override
   Future<TodoAuthSession> smsLogin({
     required String mobile,
     required String code,
   }) async {
-    return TodoAuthSession(
+    return const TodoAuthSession(
       userId: 1,
       accessToken: 'access-token',
       refreshToken: 'refresh-token',
-      mobile: mobile,
+      tenantId: '1',
+      mobile: '',
     );
   }
 
@@ -107,4 +108,25 @@ class _FakeAuthClient implements TodoMemberAuthGateway {
 
   @override
   void close() {}
+}
+
+class _FakeSessionStore extends SessionStore {
+  _FakeSessionStore([this.stored]);
+
+  TodoAuthSession? stored;
+  bool cleared = false;
+
+  @override
+  Future<TodoAuthSession?> readSession() async => stored;
+
+  @override
+  Future<void> writeSession(TodoAuthSession session) async {
+    stored = session;
+  }
+
+  @override
+  Future<void> clearSession() async {
+    stored = null;
+    cleared = true;
+  }
 }

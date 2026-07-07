@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../db/app_database.dart';
+import '../../../core/db/app_database.dart';
 import '../task_detail_page.dart';
 
 /// M11-B3 四象限 (Eisenhower) 视图。

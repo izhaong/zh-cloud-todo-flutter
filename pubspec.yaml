@@ -50,6 +50,12 @@ dependencies:
   intl: ^0.19.0
   uuid: ^4.5.1
 
+  # 凭证安全持久化（替换明文 shared_preferences 存 token）
+  flutter_secure_storage: ^9.2.2
+
+  # 网络状态感知（离线→在线自动增量同步触发）
+  connectivity_plus: ^6.0.5
+
   # 模型生成 / JSON 序列化
   freezed_annotation: ^2.4.1
   json_annotation: ^4.9.0

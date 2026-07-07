@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../db/app_database.dart';
+import '../../core/db/app_database.dart';
 import '../../state/providers.dart';
 import '../filter/filter_bar.dart';
 import 'task_detail_page.dart';
@@ -28,7 +28,7 @@ class TasksByListPage extends ConsumerStatefulWidget {
 }
 
 class _TasksByListPageState extends ConsumerState<TasksByListPage> {
-  int? _selectedListId; // null = 全部
+  String? _selectedListId; // null = 全部
   TaskFilter _filter = TaskFilter();
   TaskViewMode _mode = TaskViewMode.list;
 
@@ -36,9 +36,8 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   Widget build(BuildContext context) {
     final listsAsync = ref.watch(listsStreamProvider);
     final tasksStream = _selectedListId == null
-        ? ref.watch(taskRepositoryProvider).watchAll()
-        : ref
-            .watch(taskRepositoryProvider)
+        ? ref.watch(taskRepositoryProvider)!.watchAll()
+        : ref            .watch(taskRepositoryProvider)!
             .watchTopLevelByList(_selectedListId!);
 
     return Scaffold(
@@ -113,7 +112,7 @@ class _ModeBody extends ConsumerWidget {
   final TaskViewMode mode;
   final Stream<List<TodoTask>> tasksStream;
   final TaskFilter filter;
-  final int? selectedListId;
+  final String? selectedListId;
   final ValueChanged<TodoTask> onTaskTap;
 
   @override
@@ -169,7 +168,7 @@ class _ListBody extends StatelessWidget {
             builder: (ctx, ref, _) => Checkbox(
               value: t.completed,
               onChanged: (_) async {
-                await ref.read(taskRepositoryProvider).toggleComplete(t.id);
+                await ref.read(taskRepositoryProvider)!.toggleComplete(t.id);
               },
             ),
           ),
@@ -201,7 +200,7 @@ class _ListBody extends StatelessWidget {
                 size: 18,
               ),
               onPressed: () =>
-                  ref.read(taskRepositoryProvider).togglePin(t.id),
+                  ref.read(taskRepositoryProvider)!.togglePin(t.id),
             ),
           ),
           onTap: () => onTaskTap(t),
@@ -214,7 +213,7 @@ class _ListBody extends StatelessWidget {
   static List<TodoTask> applyFilter(
     List<TodoTask> src,
     TaskFilter f,
-    int? selectedListId,
+    String? selectedListId,
   ) {
     if (f.isEmpty && selectedListId == null) return src;
     final now = DateTime.now();
@@ -258,8 +257,8 @@ class _ListPicker extends StatelessWidget {
   });
 
   final AsyncValue<List<TodoList>> listsAsync;
-  final int? selectedListId;
-  final ValueChanged<int?> onChanged;
+  final String? selectedListId;
+  final ValueChanged<String?> onChanged;
 
   @override
   Widget build(BuildContext context) {

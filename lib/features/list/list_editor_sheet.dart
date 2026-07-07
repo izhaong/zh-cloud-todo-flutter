@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../db/app_database.dart';
+import '../../core/db/app_database.dart';
 import '../../state/providers.dart';
 
 /// M11-B2 清单创建 / 重命名 / 删除 弹窗。
@@ -33,7 +33,7 @@ class _ListEditorSheetState extends ConsumerState<ListEditorSheet> {
   Future<void> _save() async {
     final text = _name.text.trim();
     if (text.isEmpty) return;
-    final repo = ref.read(listRepositoryProvider);
+    final repo = ref.read(listRepositoryProvider)!;
     if (widget.existing == null) {
       await repo.create(name: text, folderId: widget.folderId);
     } else {
@@ -44,7 +44,7 @@ class _ListEditorSheetState extends ConsumerState<ListEditorSheet> {
 
   Future<void> _delete() async {
     final list = widget.existing!;
-    final open = await ref.read(appDatabaseProvider).countOpenTasksByList(list.id);
+    final open = await ref.read(appDatabaseProvider)!.countOpenTasksByList(list.id);
     if (!mounted) return;
     if (open > 0) {
       final ok = await showDialog<bool>(
@@ -66,7 +66,7 @@ class _ListEditorSheetState extends ConsumerState<ListEditorSheet> {
       );
       if (ok != true) return;
     }
-    await ref.read(listRepositoryProvider).delete(list.id);
+    await ref.read(listRepositoryProvider)!.delete(list.id);
     if (mounted) Navigator.pop(context);
   }
 

@@ -11,16 +11,12 @@ class $TodoListsTable extends TodoLists
   $TodoListsTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
-  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
     'id',
     aliasedName,
     false,
-    hasAutoIncrement: true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'PRIMARY KEY AUTOINCREMENT',
-    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
   );
   static const VerificationMeta _serverIdMeta = const VerificationMeta(
     'serverId',
@@ -111,6 +107,8 @@ class $TodoListsTable extends TodoLists
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
     }
     if (data.containsKey('server_id')) {
       context.handle(
@@ -164,7 +162,7 @@ class $TodoListsTable extends TodoLists
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return TodoList(
       id: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
       serverId: attachedDatabase.typeMapping.read(
@@ -201,7 +199,7 @@ class $TodoListsTable extends TodoLists
 }
 
 class TodoList extends DataClass implements Insertable<TodoList> {
-  final int id;
+  final String id;
   final int? serverId;
   final String name;
   final int? folderId;
@@ -220,7 +218,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['id'] = Variable<int>(id);
+    map['id'] = Variable<String>(id);
     if (!nullToAbsent || serverId != null) {
       map['server_id'] = Variable<int>(serverId);
     }
@@ -256,7 +254,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return TodoList(
-      id: serializer.fromJson<int>(json['id']),
+      id: serializer.fromJson<String>(json['id']),
       serverId: serializer.fromJson<int?>(json['serverId']),
       name: serializer.fromJson<String>(json['name']),
       folderId: serializer.fromJson<int?>(json['folderId']),
@@ -269,7 +267,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'id': serializer.toJson<int>(id),
+      'id': serializer.toJson<String>(id),
       'serverId': serializer.toJson<int?>(serverId),
       'name': serializer.toJson<String>(name),
       'folderId': serializer.toJson<int?>(folderId),
@@ -280,7 +278,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
   }
 
   TodoList copyWith({
-    int? id,
+    String? id,
     Value<int?> serverId = const Value.absent(),
     String? name,
     Value<int?> folderId = const Value.absent(),
@@ -346,13 +344,14 @@ class TodoList extends DataClass implements Insertable<TodoList> {
 }
 
 class TodoListsCompanion extends UpdateCompanion<TodoList> {
-  final Value<int> id;
+  final Value<String> id;
   final Value<int?> serverId;
   final Value<String> name;
   final Value<int?> folderId;
   final Value<int> sortOrder;
   final Value<DateTime> updatedAt;
   final Value<DateTime> createdAt;
+  final Value<int> rowid;
   const TodoListsCompanion({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
@@ -361,26 +360,30 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
     this.sortOrder = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
   });
   TodoListsCompanion.insert({
-    this.id = const Value.absent(),
+    required String id,
     this.serverId = const Value.absent(),
     required String name,
     this.folderId = const Value.absent(),
     this.sortOrder = const Value.absent(),
     required DateTime updatedAt,
     required DateTime createdAt,
-  }) : name = Value(name),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name),
        updatedAt = Value(updatedAt),
        createdAt = Value(createdAt);
   static Insertable<TodoList> custom({
-    Expression<int>? id,
+    Expression<String>? id,
     Expression<int>? serverId,
     Expression<String>? name,
     Expression<int>? folderId,
     Expression<int>? sortOrder,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -390,17 +393,19 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
       if (sortOrder != null) 'sort_order': sortOrder,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
     });
   }
 
   TodoListsCompanion copyWith({
-    Value<int>? id,
+    Value<String>? id,
     Value<int?>? serverId,
     Value<String>? name,
     Value<int?>? folderId,
     Value<int>? sortOrder,
     Value<DateTime>? updatedAt,
     Value<DateTime>? createdAt,
+    Value<int>? rowid,
   }) {
     return TodoListsCompanion(
       id: id ?? this.id,
@@ -410,6 +415,7 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
       sortOrder: sortOrder ?? this.sortOrder,
       updatedAt: updatedAt ?? this.updatedAt,
       createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
     );
   }
 
@@ -417,7 +423,7 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     if (id.present) {
-      map['id'] = Variable<int>(id.value);
+      map['id'] = Variable<String>(id.value);
     }
     if (serverId.present) {
       map['server_id'] = Variable<int>(serverId.value);
@@ -437,6 +443,9 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
     return map;
   }
 
@@ -449,7 +458,8 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
           ..write('folderId: $folderId, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
           ..write(')'))
         .toString();
   }
@@ -463,16 +473,12 @@ class $TodoTasksTable extends TodoTasks
   $TodoTasksTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
-  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
     'id',
     aliasedName,
     false,
-    hasAutoIncrement: true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'PRIMARY KEY AUTOINCREMENT',
-    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
   );
   static const VerificationMeta _serverIdMeta = const VerificationMeta(
     'serverId',
@@ -487,22 +493,22 @@ class $TodoTasksTable extends TodoTasks
   );
   static const VerificationMeta _listIdMeta = const VerificationMeta('listId');
   @override
-  late final GeneratedColumn<int> listId = GeneratedColumn<int>(
+  late final GeneratedColumn<String> listId = GeneratedColumn<String>(
     'list_id',
     aliasedName,
     false,
-    type: DriftSqlType.int,
+    type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
   static const VerificationMeta _parentTaskIdMeta = const VerificationMeta(
     'parentTaskId',
   );
   @override
-  late final GeneratedColumn<int> parentTaskId = GeneratedColumn<int>(
+  late final GeneratedColumn<String> parentTaskId = GeneratedColumn<String>(
     'parent_task_id',
     aliasedName,
     true,
-    type: DriftSqlType.int,
+    type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
   static const VerificationMeta _titleMeta = const VerificationMeta('title');
@@ -662,6 +668,8 @@ class $TodoTasksTable extends TodoTasks
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
     }
     if (data.containsKey('server_id')) {
       context.handle(
@@ -771,7 +779,7 @@ class $TodoTasksTable extends TodoTasks
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return TodoTask(
       id: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
       serverId: attachedDatabase.typeMapping.read(
@@ -779,11 +787,11 @@ class $TodoTasksTable extends TodoTasks
         data['${effectivePrefix}server_id'],
       ),
       listId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}list_id'],
       )!,
       parentTaskId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}parent_task_id'],
       ),
       title: attachedDatabase.typeMapping.read(
@@ -840,10 +848,10 @@ class $TodoTasksTable extends TodoTasks
 }
 
 class TodoTask extends DataClass implements Insertable<TodoTask> {
-  final int id;
+  final String id;
   final int? serverId;
-  final int listId;
-  final int? parentTaskId;
+  final String listId;
+  final String? parentTaskId;
   final String title;
   final String? description;
   final bool completed;
@@ -875,13 +883,13 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['id'] = Variable<int>(id);
+    map['id'] = Variable<String>(id);
     if (!nullToAbsent || serverId != null) {
       map['server_id'] = Variable<int>(serverId);
     }
-    map['list_id'] = Variable<int>(listId);
+    map['list_id'] = Variable<String>(listId);
     if (!nullToAbsent || parentTaskId != null) {
-      map['parent_task_id'] = Variable<int>(parentTaskId);
+      map['parent_task_id'] = Variable<String>(parentTaskId);
     }
     map['title'] = Variable<String>(title);
     if (!nullToAbsent || description != null) {
@@ -943,10 +951,10 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return TodoTask(
-      id: serializer.fromJson<int>(json['id']),
+      id: serializer.fromJson<String>(json['id']),
       serverId: serializer.fromJson<int?>(json['serverId']),
-      listId: serializer.fromJson<int>(json['listId']),
-      parentTaskId: serializer.fromJson<int?>(json['parentTaskId']),
+      listId: serializer.fromJson<String>(json['listId']),
+      parentTaskId: serializer.fromJson<String?>(json['parentTaskId']),
       title: serializer.fromJson<String>(json['title']),
       description: serializer.fromJson<String?>(json['description']),
       completed: serializer.fromJson<bool>(json['completed']),
@@ -964,10 +972,10 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'id': serializer.toJson<int>(id),
+      'id': serializer.toJson<String>(id),
       'serverId': serializer.toJson<int?>(serverId),
-      'listId': serializer.toJson<int>(listId),
-      'parentTaskId': serializer.toJson<int?>(parentTaskId),
+      'listId': serializer.toJson<String>(listId),
+      'parentTaskId': serializer.toJson<String?>(parentTaskId),
       'title': serializer.toJson<String>(title),
       'description': serializer.toJson<String?>(description),
       'completed': serializer.toJson<bool>(completed),
@@ -983,10 +991,10 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
   }
 
   TodoTask copyWith({
-    int? id,
+    String? id,
     Value<int?> serverId = const Value.absent(),
-    int? listId,
-    Value<int?> parentTaskId = const Value.absent(),
+    String? listId,
+    Value<String?> parentTaskId = const Value.absent(),
     String? title,
     Value<String?> description = const Value.absent(),
     bool? completed,
@@ -1101,10 +1109,10 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
 }
 
 class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
-  final Value<int> id;
+  final Value<String> id;
   final Value<int?> serverId;
-  final Value<int> listId;
-  final Value<int?> parentTaskId;
+  final Value<String> listId;
+  final Value<String?> parentTaskId;
   final Value<String> title;
   final Value<String?> description;
   final Value<bool> completed;
@@ -1116,6 +1124,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
   final Value<DateTime?> dueAt;
   final Value<DateTime> updatedAt;
   final Value<DateTime> createdAt;
+  final Value<int> rowid;
   const TodoTasksCompanion({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
@@ -1132,11 +1141,12 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     this.dueAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
   });
   TodoTasksCompanion.insert({
-    this.id = const Value.absent(),
+    required String id,
     this.serverId = const Value.absent(),
-    required int listId,
+    required String listId,
     this.parentTaskId = const Value.absent(),
     required String title,
     this.description = const Value.absent(),
@@ -1149,15 +1159,17 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     this.dueAt = const Value.absent(),
     required DateTime updatedAt,
     required DateTime createdAt,
-  }) : listId = Value(listId),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       listId = Value(listId),
        title = Value(title),
        updatedAt = Value(updatedAt),
        createdAt = Value(createdAt);
   static Insertable<TodoTask> custom({
-    Expression<int>? id,
+    Expression<String>? id,
     Expression<int>? serverId,
-    Expression<int>? listId,
-    Expression<int>? parentTaskId,
+    Expression<String>? listId,
+    Expression<String>? parentTaskId,
     Expression<String>? title,
     Expression<String>? description,
     Expression<bool>? completed,
@@ -1169,6 +1181,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     Expression<DateTime>? dueAt,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1186,14 +1199,15 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
       if (dueAt != null) 'due_at': dueAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
     });
   }
 
   TodoTasksCompanion copyWith({
-    Value<int>? id,
+    Value<String>? id,
     Value<int?>? serverId,
-    Value<int>? listId,
-    Value<int?>? parentTaskId,
+    Value<String>? listId,
+    Value<String?>? parentTaskId,
     Value<String>? title,
     Value<String?>? description,
     Value<bool>? completed,
@@ -1205,6 +1219,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     Value<DateTime?>? dueAt,
     Value<DateTime>? updatedAt,
     Value<DateTime>? createdAt,
+    Value<int>? rowid,
   }) {
     return TodoTasksCompanion(
       id: id ?? this.id,
@@ -1222,6 +1237,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
       dueAt: dueAt ?? this.dueAt,
       updatedAt: updatedAt ?? this.updatedAt,
       createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
     );
   }
 
@@ -1229,16 +1245,16 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     if (id.present) {
-      map['id'] = Variable<int>(id.value);
+      map['id'] = Variable<String>(id.value);
     }
     if (serverId.present) {
       map['server_id'] = Variable<int>(serverId.value);
     }
     if (listId.present) {
-      map['list_id'] = Variable<int>(listId.value);
+      map['list_id'] = Variable<String>(listId.value);
     }
     if (parentTaskId.present) {
-      map['parent_task_id'] = Variable<int>(parentTaskId.value);
+      map['parent_task_id'] = Variable<String>(parentTaskId.value);
     }
     if (title.present) {
       map['title'] = Variable<String>(title.value);
@@ -1273,6 +1289,9 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
     return map;
   }
 
@@ -1293,7 +1312,8 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
           ..write('endAt: $endAt, ')
           ..write('dueAt: $dueAt, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
           ..write(')'))
         .toString();
   }
@@ -1307,16 +1327,12 @@ class $TodoFoldersTable extends TodoFolders
   $TodoFoldersTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
-  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
     'id',
     aliasedName,
     false,
-    hasAutoIncrement: true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'PRIMARY KEY AUTOINCREMENT',
-    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
   );
   static const VerificationMeta _serverIdMeta = const VerificationMeta(
     'serverId',
@@ -1395,6 +1411,8 @@ class $TodoFoldersTable extends TodoFolders
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
     }
     if (data.containsKey('server_id')) {
       context.handle(
@@ -1442,7 +1460,7 @@ class $TodoFoldersTable extends TodoFolders
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return TodoFolder(
       id: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
       serverId: attachedDatabase.typeMapping.read(
@@ -1475,7 +1493,7 @@ class $TodoFoldersTable extends TodoFolders
 }
 
 class TodoFolder extends DataClass implements Insertable<TodoFolder> {
-  final int id;
+  final String id;
   final int? serverId;
   final String name;
   final int sortOrder;
@@ -1492,7 +1510,7 @@ class TodoFolder extends DataClass implements Insertable<TodoFolder> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['id'] = Variable<int>(id);
+    map['id'] = Variable<String>(id);
     if (!nullToAbsent || serverId != null) {
       map['server_id'] = Variable<int>(serverId);
     }
@@ -1522,7 +1540,7 @@ class TodoFolder extends DataClass implements Insertable<TodoFolder> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return TodoFolder(
-      id: serializer.fromJson<int>(json['id']),
+      id: serializer.fromJson<String>(json['id']),
       serverId: serializer.fromJson<int?>(json['serverId']),
       name: serializer.fromJson<String>(json['name']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
@@ -1534,7 +1552,7 @@ class TodoFolder extends DataClass implements Insertable<TodoFolder> {
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'id': serializer.toJson<int>(id),
+      'id': serializer.toJson<String>(id),
       'serverId': serializer.toJson<int?>(serverId),
       'name': serializer.toJson<String>(name),
       'sortOrder': serializer.toJson<int>(sortOrder),
@@ -1544,7 +1562,7 @@ class TodoFolder extends DataClass implements Insertable<TodoFolder> {
   }
 
   TodoFolder copyWith({
-    int? id,
+    String? id,
     Value<int?> serverId = const Value.absent(),
     String? name,
     int? sortOrder,
@@ -1598,12 +1616,13 @@ class TodoFolder extends DataClass implements Insertable<TodoFolder> {
 }
 
 class TodoFoldersCompanion extends UpdateCompanion<TodoFolder> {
-  final Value<int> id;
+  final Value<String> id;
   final Value<int?> serverId;
   final Value<String> name;
   final Value<int> sortOrder;
   final Value<DateTime> updatedAt;
   final Value<DateTime> createdAt;
+  final Value<int> rowid;
   const TodoFoldersCompanion({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
@@ -1611,24 +1630,28 @@ class TodoFoldersCompanion extends UpdateCompanion<TodoFolder> {
     this.sortOrder = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
   });
   TodoFoldersCompanion.insert({
-    this.id = const Value.absent(),
+    required String id,
     this.serverId = const Value.absent(),
     required String name,
     this.sortOrder = const Value.absent(),
     required DateTime updatedAt,
     required DateTime createdAt,
-  }) : name = Value(name),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name),
        updatedAt = Value(updatedAt),
        createdAt = Value(createdAt);
   static Insertable<TodoFolder> custom({
-    Expression<int>? id,
+    Expression<String>? id,
     Expression<int>? serverId,
     Expression<String>? name,
     Expression<int>? sortOrder,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1637,16 +1660,18 @@ class TodoFoldersCompanion extends UpdateCompanion<TodoFolder> {
       if (sortOrder != null) 'sort_order': sortOrder,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
     });
   }
 
   TodoFoldersCompanion copyWith({
-    Value<int>? id,
+    Value<String>? id,
     Value<int?>? serverId,
     Value<String>? name,
     Value<int>? sortOrder,
     Value<DateTime>? updatedAt,
     Value<DateTime>? createdAt,
+    Value<int>? rowid,
   }) {
     return TodoFoldersCompanion(
       id: id ?? this.id,
@@ -1655,6 +1680,7 @@ class TodoFoldersCompanion extends UpdateCompanion<TodoFolder> {
       sortOrder: sortOrder ?? this.sortOrder,
       updatedAt: updatedAt ?? this.updatedAt,
       createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
     );
   }
 
@@ -1662,7 +1688,7 @@ class TodoFoldersCompanion extends UpdateCompanion<TodoFolder> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     if (id.present) {
-      map['id'] = Variable<int>(id.value);
+      map['id'] = Variable<String>(id.value);
     }
     if (serverId.present) {
       map['server_id'] = Variable<int>(serverId.value);
@@ -1679,6 +1705,9 @@ class TodoFoldersCompanion extends UpdateCompanion<TodoFolder> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
     return map;
   }
 
@@ -1690,7 +1719,8 @@ class TodoFoldersCompanion extends UpdateCompanion<TodoFolder> {
           ..write('name: $name, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
           ..write(')'))
         .toString();
   }
@@ -1703,16 +1733,12 @@ class $TodoTagsTable extends TodoTags with TableInfo<$TodoTagsTable, TodoTag> {
   $TodoTagsTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
-  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
     'id',
     aliasedName,
     false,
-    hasAutoIncrement: true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'PRIMARY KEY AUTOINCREMENT',
-    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
   );
   static const VerificationMeta _serverIdMeta = const VerificationMeta(
     'serverId',
@@ -1788,6 +1814,8 @@ class $TodoTagsTable extends TodoTags with TableInfo<$TodoTagsTable, TodoTag> {
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
     }
     if (data.containsKey('server_id')) {
       context.handle(
@@ -1835,7 +1863,7 @@ class $TodoTagsTable extends TodoTags with TableInfo<$TodoTagsTable, TodoTag> {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return TodoTag(
       id: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
       serverId: attachedDatabase.typeMapping.read(
@@ -1868,7 +1896,7 @@ class $TodoTagsTable extends TodoTags with TableInfo<$TodoTagsTable, TodoTag> {
 }
 
 class TodoTag extends DataClass implements Insertable<TodoTag> {
-  final int id;
+  final String id;
   final int? serverId;
   final String name;
   final String? color;
@@ -1885,7 +1913,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['id'] = Variable<int>(id);
+    map['id'] = Variable<String>(id);
     if (!nullToAbsent || serverId != null) {
       map['server_id'] = Variable<int>(serverId);
     }
@@ -1919,7 +1947,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return TodoTag(
-      id: serializer.fromJson<int>(json['id']),
+      id: serializer.fromJson<String>(json['id']),
       serverId: serializer.fromJson<int?>(json['serverId']),
       name: serializer.fromJson<String>(json['name']),
       color: serializer.fromJson<String?>(json['color']),
@@ -1931,7 +1959,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'id': serializer.toJson<int>(id),
+      'id': serializer.toJson<String>(id),
       'serverId': serializer.toJson<int?>(serverId),
       'name': serializer.toJson<String>(name),
       'color': serializer.toJson<String?>(color),
@@ -1941,7 +1969,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
   }
 
   TodoTag copyWith({
-    int? id,
+    String? id,
     Value<int?> serverId = const Value.absent(),
     String? name,
     Value<String?> color = const Value.absent(),
@@ -1995,12 +2023,13 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
 }
 
 class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
-  final Value<int> id;
+  final Value<String> id;
   final Value<int?> serverId;
   final Value<String> name;
   final Value<String?> color;
   final Value<DateTime> updatedAt;
   final Value<DateTime> createdAt;
+  final Value<int> rowid;
   const TodoTagsCompanion({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
@@ -2008,24 +2037,28 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
     this.color = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
   });
   TodoTagsCompanion.insert({
-    this.id = const Value.absent(),
+    required String id,
     this.serverId = const Value.absent(),
     required String name,
     this.color = const Value.absent(),
     required DateTime updatedAt,
     required DateTime createdAt,
-  }) : name = Value(name),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name),
        updatedAt = Value(updatedAt),
        createdAt = Value(createdAt);
   static Insertable<TodoTag> custom({
-    Expression<int>? id,
+    Expression<String>? id,
     Expression<int>? serverId,
     Expression<String>? name,
     Expression<String>? color,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -2034,16 +2067,18 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
       if (color != null) 'color': color,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
     });
   }
 
   TodoTagsCompanion copyWith({
-    Value<int>? id,
+    Value<String>? id,
     Value<int?>? serverId,
     Value<String>? name,
     Value<String?>? color,
     Value<DateTime>? updatedAt,
     Value<DateTime>? createdAt,
+    Value<int>? rowid,
   }) {
     return TodoTagsCompanion(
       id: id ?? this.id,
@@ -2052,6 +2087,7 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
       color: color ?? this.color,
       updatedAt: updatedAt ?? this.updatedAt,
       createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
     );
   }
 
@@ -2059,7 +2095,7 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     if (id.present) {
-      map['id'] = Variable<int>(id.value);
+      map['id'] = Variable<String>(id.value);
     }
     if (serverId.present) {
       map['server_id'] = Variable<int>(serverId.value);
@@ -2076,6 +2112,9 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
     return map;
   }
 
@@ -2087,7 +2126,8 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
           ..write('name: $name, ')
           ..write('color: $color, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
           ..write(')'))
         .toString();
   }
@@ -2101,24 +2141,35 @@ class $TodoTaskTagsTable extends TodoTaskTags
   $TodoTaskTagsTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _taskIdMeta = const VerificationMeta('taskId');
   @override
-  late final GeneratedColumn<int> taskId = GeneratedColumn<int>(
+  late final GeneratedColumn<String> taskId = GeneratedColumn<String>(
     'task_id',
     aliasedName,
     false,
-    type: DriftSqlType.int,
+    type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
   static const VerificationMeta _tagIdMeta = const VerificationMeta('tagId');
   @override
-  late final GeneratedColumn<int> tagId = GeneratedColumn<int>(
+  late final GeneratedColumn<String> tagId = GeneratedColumn<String>(
     'tag_id',
     aliasedName,
     false,
-    type: DriftSqlType.int,
+    type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _serverIdMeta = const VerificationMeta(
+    'serverId',
+  );
   @override
-  List<GeneratedColumn> get $columns => [taskId, tagId];
+  late final GeneratedColumn<int> serverId = GeneratedColumn<int>(
+    'server_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [taskId, tagId, serverId];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -2147,6 +2198,12 @@ class $TodoTaskTagsTable extends TodoTaskTags
     } else if (isInserting) {
       context.missing(_tagIdMeta);
     }
+    if (data.containsKey('server_id')) {
+      context.handle(
+        _serverIdMeta,
+        serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
+      );
+    }
     return context;
   }
 
@@ -2157,13 +2214,17 @@ class $TodoTaskTagsTable extends TodoTaskTags
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return TodoTaskTag(
       taskId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}task_id'],
       )!,
       tagId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}tag_id'],
       )!,
+      serverId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}server_id'],
+      ),
     );
   }
 
@@ -2174,19 +2235,29 @@ class $TodoTaskTagsTable extends TodoTaskTags
 }
 
 class TodoTaskTag extends DataClass implements Insertable<TodoTaskTag> {
-  final int taskId;
-  final int tagId;
-  const TodoTaskTag({required this.taskId, required this.tagId});
+  final String taskId;
+  final String tagId;
+  final int? serverId;
+  const TodoTaskTag({required this.taskId, required this.tagId, this.serverId});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['task_id'] = Variable<int>(taskId);
-    map['tag_id'] = Variable<int>(tagId);
+    map['task_id'] = Variable<String>(taskId);
+    map['tag_id'] = Variable<String>(tagId);
+    if (!nullToAbsent || serverId != null) {
+      map['server_id'] = Variable<int>(serverId);
+    }
     return map;
   }
 
   TodoTaskTagsCompanion toCompanion(bool nullToAbsent) {
-    return TodoTaskTagsCompanion(taskId: Value(taskId), tagId: Value(tagId));
+    return TodoTaskTagsCompanion(
+      taskId: Value(taskId),
+      tagId: Value(tagId),
+      serverId: serverId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(serverId),
+    );
   }
 
   factory TodoTaskTag.fromJson(
@@ -2195,25 +2266,35 @@ class TodoTaskTag extends DataClass implements Insertable<TodoTaskTag> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return TodoTaskTag(
-      taskId: serializer.fromJson<int>(json['taskId']),
-      tagId: serializer.fromJson<int>(json['tagId']),
+      taskId: serializer.fromJson<String>(json['taskId']),
+      tagId: serializer.fromJson<String>(json['tagId']),
+      serverId: serializer.fromJson<int?>(json['serverId']),
     );
   }
   @override
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'taskId': serializer.toJson<int>(taskId),
-      'tagId': serializer.toJson<int>(tagId),
+      'taskId': serializer.toJson<String>(taskId),
+      'tagId': serializer.toJson<String>(tagId),
+      'serverId': serializer.toJson<int?>(serverId),
     };
   }
 
-  TodoTaskTag copyWith({int? taskId, int? tagId}) =>
-      TodoTaskTag(taskId: taskId ?? this.taskId, tagId: tagId ?? this.tagId);
+  TodoTaskTag copyWith({
+    String? taskId,
+    String? tagId,
+    Value<int?> serverId = const Value.absent(),
+  }) => TodoTaskTag(
+    taskId: taskId ?? this.taskId,
+    tagId: tagId ?? this.tagId,
+    serverId: serverId.present ? serverId.value : this.serverId,
+  );
   TodoTaskTag copyWithCompanion(TodoTaskTagsCompanion data) {
     return TodoTaskTag(
       taskId: data.taskId.present ? data.taskId.value : this.taskId,
       tagId: data.tagId.present ? data.tagId.value : this.tagId,
+      serverId: data.serverId.present ? data.serverId.value : this.serverId,
     );
   }
 
@@ -2221,56 +2302,65 @@ class TodoTaskTag extends DataClass implements Insertable<TodoTaskTag> {
   String toString() {
     return (StringBuffer('TodoTaskTag(')
           ..write('taskId: $taskId, ')
-          ..write('tagId: $tagId')
+          ..write('tagId: $tagId, ')
+          ..write('serverId: $serverId')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(taskId, tagId);
+  int get hashCode => Object.hash(taskId, tagId, serverId);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is TodoTaskTag &&
           other.taskId == this.taskId &&
-          other.tagId == this.tagId);
+          other.tagId == this.tagId &&
+          other.serverId == this.serverId);
 }
 
 class TodoTaskTagsCompanion extends UpdateCompanion<TodoTaskTag> {
-  final Value<int> taskId;
-  final Value<int> tagId;
+  final Value<String> taskId;
+  final Value<String> tagId;
+  final Value<int?> serverId;
   final Value<int> rowid;
   const TodoTaskTagsCompanion({
     this.taskId = const Value.absent(),
     this.tagId = const Value.absent(),
+    this.serverId = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   TodoTaskTagsCompanion.insert({
-    required int taskId,
-    required int tagId,
+    required String taskId,
+    required String tagId,
+    this.serverId = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : taskId = Value(taskId),
        tagId = Value(tagId);
   static Insertable<TodoTaskTag> custom({
-    Expression<int>? taskId,
-    Expression<int>? tagId,
+    Expression<String>? taskId,
+    Expression<String>? tagId,
+    Expression<int>? serverId,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (taskId != null) 'task_id': taskId,
       if (tagId != null) 'tag_id': tagId,
+      if (serverId != null) 'server_id': serverId,
       if (rowid != null) 'rowid': rowid,
     });
   }
 
   TodoTaskTagsCompanion copyWith({
-    Value<int>? taskId,
-    Value<int>? tagId,
+    Value<String>? taskId,
+    Value<String>? tagId,
+    Value<int?>? serverId,
     Value<int>? rowid,
   }) {
     return TodoTaskTagsCompanion(
       taskId: taskId ?? this.taskId,
       tagId: tagId ?? this.tagId,
+      serverId: serverId ?? this.serverId,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -2279,10 +2369,13 @@ class TodoTaskTagsCompanion extends UpdateCompanion<TodoTaskTag> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     if (taskId.present) {
-      map['task_id'] = Variable<int>(taskId.value);
+      map['task_id'] = Variable<String>(taskId.value);
     }
     if (tagId.present) {
-      map['tag_id'] = Variable<int>(tagId.value);
+      map['tag_id'] = Variable<String>(tagId.value);
+    }
+    if (serverId.present) {
+      map['server_id'] = Variable<int>(serverId.value);
     }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
@@ -2295,6 +2388,7 @@ class TodoTaskTagsCompanion extends UpdateCompanion<TodoTaskTag> {
     return (StringBuffer('TodoTaskTagsCompanion(')
           ..write('taskId: $taskId, ')
           ..write('tagId: $tagId, ')
+          ..write('serverId: $serverId, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -2309,16 +2403,12 @@ class $TodoRemindersTable extends TodoReminders
   $TodoRemindersTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
-  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
     'id',
     aliasedName,
     false,
-    hasAutoIncrement: true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'PRIMARY KEY AUTOINCREMENT',
-    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
   );
   static const VerificationMeta _serverIdMeta = const VerificationMeta(
     'serverId',
@@ -2333,11 +2423,11 @@ class $TodoRemindersTable extends TodoReminders
   );
   static const VerificationMeta _taskIdMeta = const VerificationMeta('taskId');
   @override
-  late final GeneratedColumn<int> taskId = GeneratedColumn<int>(
+  late final GeneratedColumn<String> taskId = GeneratedColumn<String>(
     'task_id',
     aliasedName,
     false,
-    type: DriftSqlType.int,
+    type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
   static const VerificationMeta _remindAtMeta = const VerificationMeta(
@@ -2407,6 +2497,8 @@ class $TodoRemindersTable extends TodoReminders
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
     }
     if (data.containsKey('server_id')) {
       context.handle(
@@ -2462,7 +2554,7 @@ class $TodoRemindersTable extends TodoReminders
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return TodoReminder(
       id: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
       serverId: attachedDatabase.typeMapping.read(
@@ -2470,7 +2562,7 @@ class $TodoRemindersTable extends TodoReminders
         data['${effectivePrefix}server_id'],
       ),
       taskId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}task_id'],
       )!,
       remindAt: attachedDatabase.typeMapping.read(
@@ -2499,9 +2591,9 @@ class $TodoRemindersTable extends TodoReminders
 }
 
 class TodoReminder extends DataClass implements Insertable<TodoReminder> {
-  final int id;
+  final String id;
   final int? serverId;
-  final int taskId;
+  final String taskId;
   final DateTime remindAt;
   final String status;
   final DateTime updatedAt;
@@ -2518,11 +2610,11 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['id'] = Variable<int>(id);
+    map['id'] = Variable<String>(id);
     if (!nullToAbsent || serverId != null) {
       map['server_id'] = Variable<int>(serverId);
     }
-    map['task_id'] = Variable<int>(taskId);
+    map['task_id'] = Variable<String>(taskId);
     map['remind_at'] = Variable<DateTime>(remindAt);
     map['status'] = Variable<String>(status);
     map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -2550,9 +2642,9 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return TodoReminder(
-      id: serializer.fromJson<int>(json['id']),
+      id: serializer.fromJson<String>(json['id']),
       serverId: serializer.fromJson<int?>(json['serverId']),
-      taskId: serializer.fromJson<int>(json['taskId']),
+      taskId: serializer.fromJson<String>(json['taskId']),
       remindAt: serializer.fromJson<DateTime>(json['remindAt']),
       status: serializer.fromJson<String>(json['status']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
@@ -2563,9 +2655,9 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'id': serializer.toJson<int>(id),
+      'id': serializer.toJson<String>(id),
       'serverId': serializer.toJson<int?>(serverId),
-      'taskId': serializer.toJson<int>(taskId),
+      'taskId': serializer.toJson<String>(taskId),
       'remindAt': serializer.toJson<DateTime>(remindAt),
       'status': serializer.toJson<String>(status),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
@@ -2574,9 +2666,9 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
   }
 
   TodoReminder copyWith({
-    int? id,
+    String? id,
     Value<int?> serverId = const Value.absent(),
-    int? taskId,
+    String? taskId,
     DateTime? remindAt,
     String? status,
     DateTime? updatedAt,
@@ -2633,13 +2725,14 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
 }
 
 class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
-  final Value<int> id;
+  final Value<String> id;
   final Value<int?> serverId;
-  final Value<int> taskId;
+  final Value<String> taskId;
   final Value<DateTime> remindAt;
   final Value<String> status;
   final Value<DateTime> updatedAt;
   final Value<DateTime> createdAt;
+  final Value<int> rowid;
   const TodoRemindersCompanion({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
@@ -2648,27 +2741,31 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
     this.status = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
   });
   TodoRemindersCompanion.insert({
-    this.id = const Value.absent(),
+    required String id,
     this.serverId = const Value.absent(),
-    required int taskId,
+    required String taskId,
     required DateTime remindAt,
     this.status = const Value.absent(),
     required DateTime updatedAt,
     required DateTime createdAt,
-  }) : taskId = Value(taskId),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       taskId = Value(taskId),
        remindAt = Value(remindAt),
        updatedAt = Value(updatedAt),
        createdAt = Value(createdAt);
   static Insertable<TodoReminder> custom({
-    Expression<int>? id,
+    Expression<String>? id,
     Expression<int>? serverId,
-    Expression<int>? taskId,
+    Expression<String>? taskId,
     Expression<DateTime>? remindAt,
     Expression<String>? status,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -2678,17 +2775,19 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
       if (status != null) 'status': status,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
     });
   }
 
   TodoRemindersCompanion copyWith({
-    Value<int>? id,
+    Value<String>? id,
     Value<int?>? serverId,
-    Value<int>? taskId,
+    Value<String>? taskId,
     Value<DateTime>? remindAt,
     Value<String>? status,
     Value<DateTime>? updatedAt,
     Value<DateTime>? createdAt,
+    Value<int>? rowid,
   }) {
     return TodoRemindersCompanion(
       id: id ?? this.id,
@@ -2698,6 +2797,7 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
       status: status ?? this.status,
       updatedAt: updatedAt ?? this.updatedAt,
       createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
     );
   }
 
@@ -2705,13 +2805,13 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     if (id.present) {
-      map['id'] = Variable<int>(id.value);
+      map['id'] = Variable<String>(id.value);
     }
     if (serverId.present) {
       map['server_id'] = Variable<int>(serverId.value);
     }
     if (taskId.present) {
-      map['task_id'] = Variable<int>(taskId.value);
+      map['task_id'] = Variable<String>(taskId.value);
     }
     if (remindAt.present) {
       map['remind_at'] = Variable<DateTime>(remindAt.value);
@@ -2725,6 +2825,9 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
     return map;
   }
 
@@ -2737,7 +2840,8 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
           ..write('remindAt: $remindAt, ')
           ..write('status: $status, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
           ..write(')'))
         .toString();
   }
@@ -2751,16 +2855,12 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
   $TodoRepeatRulesTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
-  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
     'id',
     aliasedName,
     false,
-    hasAutoIncrement: true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'PRIMARY KEY AUTOINCREMENT',
-    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
   );
   static const VerificationMeta _serverIdMeta = const VerificationMeta(
     'serverId',
@@ -2775,11 +2875,11 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
   );
   static const VerificationMeta _taskIdMeta = const VerificationMeta('taskId');
   @override
-  late final GeneratedColumn<int> taskId = GeneratedColumn<int>(
+  late final GeneratedColumn<String> taskId = GeneratedColumn<String>(
     'task_id',
     aliasedName,
     false,
-    type: DriftSqlType.int,
+    type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
   static const VerificationMeta _freqMeta = const VerificationMeta('freq');
@@ -2869,6 +2969,8 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
     }
     if (data.containsKey('server_id')) {
       context.handle(
@@ -2936,7 +3038,7 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return TodoRepeatRule(
       id: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
       serverId: attachedDatabase.typeMapping.read(
@@ -2944,7 +3046,7 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
         data['${effectivePrefix}server_id'],
       ),
       taskId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}task_id'],
       )!,
       freq: attachedDatabase.typeMapping.read(
@@ -2981,9 +3083,9 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
 }
 
 class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
-  final int id;
+  final String id;
   final int? serverId;
-  final int taskId;
+  final String taskId;
   final String freq;
   final int interval;
   final String? byDay;
@@ -3004,11 +3106,11 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['id'] = Variable<int>(id);
+    map['id'] = Variable<String>(id);
     if (!nullToAbsent || serverId != null) {
       map['server_id'] = Variable<int>(serverId);
     }
-    map['task_id'] = Variable<int>(taskId);
+    map['task_id'] = Variable<String>(taskId);
     map['freq'] = Variable<String>(freq);
     map['interval'] = Variable<int>(interval);
     if (!nullToAbsent || byDay != null) {
@@ -3048,9 +3150,9 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return TodoRepeatRule(
-      id: serializer.fromJson<int>(json['id']),
+      id: serializer.fromJson<String>(json['id']),
       serverId: serializer.fromJson<int?>(json['serverId']),
-      taskId: serializer.fromJson<int>(json['taskId']),
+      taskId: serializer.fromJson<String>(json['taskId']),
       freq: serializer.fromJson<String>(json['freq']),
       interval: serializer.fromJson<int>(json['interval']),
       byDay: serializer.fromJson<String?>(json['byDay']),
@@ -3063,9 +3165,9 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'id': serializer.toJson<int>(id),
+      'id': serializer.toJson<String>(id),
       'serverId': serializer.toJson<int?>(serverId),
-      'taskId': serializer.toJson<int>(taskId),
+      'taskId': serializer.toJson<String>(taskId),
       'freq': serializer.toJson<String>(freq),
       'interval': serializer.toJson<int>(interval),
       'byDay': serializer.toJson<String?>(byDay),
@@ -3076,9 +3178,9 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
   }
 
   TodoRepeatRule copyWith({
-    int? id,
+    String? id,
     Value<int?> serverId = const Value.absent(),
-    int? taskId,
+    String? taskId,
     String? freq,
     int? interval,
     Value<String?> byDay = const Value.absent(),
@@ -3154,15 +3256,16 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
 }
 
 class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
-  final Value<int> id;
+  final Value<String> id;
   final Value<int?> serverId;
-  final Value<int> taskId;
+  final Value<String> taskId;
   final Value<String> freq;
   final Value<int> interval;
   final Value<String?> byDay;
   final Value<DateTime?> until;
   final Value<DateTime> updatedAt;
   final Value<DateTime> createdAt;
+  final Value<int> rowid;
   const TodoRepeatRulesCompanion({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
@@ -3173,31 +3276,35 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
     this.until = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
   });
   TodoRepeatRulesCompanion.insert({
-    this.id = const Value.absent(),
+    required String id,
     this.serverId = const Value.absent(),
-    required int taskId,
+    required String taskId,
     required String freq,
     this.interval = const Value.absent(),
     this.byDay = const Value.absent(),
     this.until = const Value.absent(),
     required DateTime updatedAt,
     required DateTime createdAt,
-  }) : taskId = Value(taskId),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       taskId = Value(taskId),
        freq = Value(freq),
        updatedAt = Value(updatedAt),
        createdAt = Value(createdAt);
   static Insertable<TodoRepeatRule> custom({
-    Expression<int>? id,
+    Expression<String>? id,
     Expression<int>? serverId,
-    Expression<int>? taskId,
+    Expression<String>? taskId,
     Expression<String>? freq,
     Expression<int>? interval,
     Expression<String>? byDay,
     Expression<DateTime>? until,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -3209,19 +3316,21 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
       if (until != null) 'until': until,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
     });
   }
 
   TodoRepeatRulesCompanion copyWith({
-    Value<int>? id,
+    Value<String>? id,
     Value<int?>? serverId,
-    Value<int>? taskId,
+    Value<String>? taskId,
     Value<String>? freq,
     Value<int>? interval,
     Value<String?>? byDay,
     Value<DateTime?>? until,
     Value<DateTime>? updatedAt,
     Value<DateTime>? createdAt,
+    Value<int>? rowid,
   }) {
     return TodoRepeatRulesCompanion(
       id: id ?? this.id,
@@ -3233,6 +3342,7 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
       until: until ?? this.until,
       updatedAt: updatedAt ?? this.updatedAt,
       createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
     );
   }
 
@@ -3240,13 +3350,13 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     if (id.present) {
-      map['id'] = Variable<int>(id.value);
+      map['id'] = Variable<String>(id.value);
     }
     if (serverId.present) {
       map['server_id'] = Variable<int>(serverId.value);
     }
     if (taskId.present) {
-      map['task_id'] = Variable<int>(taskId.value);
+      map['task_id'] = Variable<String>(taskId.value);
     }
     if (freq.present) {
       map['freq'] = Variable<String>(freq.value);
@@ -3266,6 +3376,9 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
     return map;
   }
 
@@ -3280,7 +3393,8 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
           ..write('byDay: $byDay, ')
           ..write('until: $until, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
           ..write(')'))
         .toString();
   }
@@ -3294,16 +3408,12 @@ class $TodoRepeatSkipsTable extends TodoRepeatSkips
   $TodoRepeatSkipsTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
-  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
     'id',
     aliasedName,
     false,
-    hasAutoIncrement: true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'PRIMARY KEY AUTOINCREMENT',
-    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
   );
   static const VerificationMeta _serverIdMeta = const VerificationMeta(
     'serverId',
@@ -3320,11 +3430,20 @@ class $TodoRepeatSkipsTable extends TodoRepeatSkips
     'repeatRuleId',
   );
   @override
-  late final GeneratedColumn<int> repeatRuleId = GeneratedColumn<int>(
+  late final GeneratedColumn<String> repeatRuleId = GeneratedColumn<String>(
     'repeat_rule_id',
     aliasedName,
     false,
-    type: DriftSqlType.int,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _taskIdMeta = const VerificationMeta('taskId');
+  @override
+  late final GeneratedColumn<String> taskId = GeneratedColumn<String>(
+    'task_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
   static const VerificationMeta _occurrenceDateMeta = const VerificationMeta(
@@ -3366,6 +3485,7 @@ class $TodoRepeatSkipsTable extends TodoRepeatSkips
     id,
     serverId,
     repeatRuleId,
+    taskId,
     occurrenceDate,
     updatedAt,
     createdAt,
@@ -3384,6 +3504,8 @@ class $TodoRepeatSkipsTable extends TodoRepeatSkips
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
     }
     if (data.containsKey('server_id')) {
       context.handle(
@@ -3401,6 +3523,14 @@ class $TodoRepeatSkipsTable extends TodoRepeatSkips
       );
     } else if (isInserting) {
       context.missing(_repeatRuleIdMeta);
+    }
+    if (data.containsKey('task_id')) {
+      context.handle(
+        _taskIdMeta,
+        taskId.isAcceptableOrUnknown(data['task_id']!, _taskIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_taskIdMeta);
     }
     if (data.containsKey('occurrence_date')) {
       context.handle(
@@ -3439,7 +3569,7 @@ class $TodoRepeatSkipsTable extends TodoRepeatSkips
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return TodoRepeatSkip(
       id: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
       serverId: attachedDatabase.typeMapping.read(
@@ -3447,8 +3577,12 @@ class $TodoRepeatSkipsTable extends TodoRepeatSkips
         data['${effectivePrefix}server_id'],
       ),
       repeatRuleId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}repeat_rule_id'],
+      )!,
+      taskId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}task_id'],
       )!,
       occurrenceDate: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
@@ -3472,9 +3606,10 @@ class $TodoRepeatSkipsTable extends TodoRepeatSkips
 }
 
 class TodoRepeatSkip extends DataClass implements Insertable<TodoRepeatSkip> {
-  final int id;
+  final String id;
   final int? serverId;
-  final int repeatRuleId;
+  final String repeatRuleId;
+  final String taskId;
   final DateTime occurrenceDate;
   final DateTime updatedAt;
   final DateTime createdAt;
@@ -3482,6 +3617,7 @@ class TodoRepeatSkip extends DataClass implements Insertable<TodoRepeatSkip> {
     required this.id,
     this.serverId,
     required this.repeatRuleId,
+    required this.taskId,
     required this.occurrenceDate,
     required this.updatedAt,
     required this.createdAt,
@@ -3489,11 +3625,12 @@ class TodoRepeatSkip extends DataClass implements Insertable<TodoRepeatSkip> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['id'] = Variable<int>(id);
+    map['id'] = Variable<String>(id);
     if (!nullToAbsent || serverId != null) {
       map['server_id'] = Variable<int>(serverId);
     }
-    map['repeat_rule_id'] = Variable<int>(repeatRuleId);
+    map['repeat_rule_id'] = Variable<String>(repeatRuleId);
+    map['task_id'] = Variable<String>(taskId);
     map['occurrence_date'] = Variable<DateTime>(occurrenceDate);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     map['created_at'] = Variable<DateTime>(createdAt);
@@ -3507,6 +3644,7 @@ class TodoRepeatSkip extends DataClass implements Insertable<TodoRepeatSkip> {
           ? const Value.absent()
           : Value(serverId),
       repeatRuleId: Value(repeatRuleId),
+      taskId: Value(taskId),
       occurrenceDate: Value(occurrenceDate),
       updatedAt: Value(updatedAt),
       createdAt: Value(createdAt),
@@ -3519,9 +3657,10 @@ class TodoRepeatSkip extends DataClass implements Insertable<TodoRepeatSkip> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return TodoRepeatSkip(
-      id: serializer.fromJson<int>(json['id']),
+      id: serializer.fromJson<String>(json['id']),
       serverId: serializer.fromJson<int?>(json['serverId']),
-      repeatRuleId: serializer.fromJson<int>(json['repeatRuleId']),
+      repeatRuleId: serializer.fromJson<String>(json['repeatRuleId']),
+      taskId: serializer.fromJson<String>(json['taskId']),
       occurrenceDate: serializer.fromJson<DateTime>(json['occurrenceDate']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
@@ -3531,9 +3670,10 @@ class TodoRepeatSkip extends DataClass implements Insertable<TodoRepeatSkip> {
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'id': serializer.toJson<int>(id),
+      'id': serializer.toJson<String>(id),
       'serverId': serializer.toJson<int?>(serverId),
-      'repeatRuleId': serializer.toJson<int>(repeatRuleId),
+      'repeatRuleId': serializer.toJson<String>(repeatRuleId),
+      'taskId': serializer.toJson<String>(taskId),
       'occurrenceDate': serializer.toJson<DateTime>(occurrenceDate),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
@@ -3541,9 +3681,10 @@ class TodoRepeatSkip extends DataClass implements Insertable<TodoRepeatSkip> {
   }
 
   TodoRepeatSkip copyWith({
-    int? id,
+    String? id,
     Value<int?> serverId = const Value.absent(),
-    int? repeatRuleId,
+    String? repeatRuleId,
+    String? taskId,
     DateTime? occurrenceDate,
     DateTime? updatedAt,
     DateTime? createdAt,
@@ -3551,6 +3692,7 @@ class TodoRepeatSkip extends DataClass implements Insertable<TodoRepeatSkip> {
     id: id ?? this.id,
     serverId: serverId.present ? serverId.value : this.serverId,
     repeatRuleId: repeatRuleId ?? this.repeatRuleId,
+    taskId: taskId ?? this.taskId,
     occurrenceDate: occurrenceDate ?? this.occurrenceDate,
     updatedAt: updatedAt ?? this.updatedAt,
     createdAt: createdAt ?? this.createdAt,
@@ -3562,6 +3704,7 @@ class TodoRepeatSkip extends DataClass implements Insertable<TodoRepeatSkip> {
       repeatRuleId: data.repeatRuleId.present
           ? data.repeatRuleId.value
           : this.repeatRuleId,
+      taskId: data.taskId.present ? data.taskId.value : this.taskId,
       occurrenceDate: data.occurrenceDate.present
           ? data.occurrenceDate.value
           : this.occurrenceDate,
@@ -3576,6 +3719,7 @@ class TodoRepeatSkip extends DataClass implements Insertable<TodoRepeatSkip> {
           ..write('id: $id, ')
           ..write('serverId: $serverId, ')
           ..write('repeatRuleId: $repeatRuleId, ')
+          ..write('taskId: $taskId, ')
           ..write('occurrenceDate: $occurrenceDate, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt')
@@ -3588,6 +3732,7 @@ class TodoRepeatSkip extends DataClass implements Insertable<TodoRepeatSkip> {
     id,
     serverId,
     repeatRuleId,
+    taskId,
     occurrenceDate,
     updatedAt,
     createdAt,
@@ -3599,70 +3744,87 @@ class TodoRepeatSkip extends DataClass implements Insertable<TodoRepeatSkip> {
           other.id == this.id &&
           other.serverId == this.serverId &&
           other.repeatRuleId == this.repeatRuleId &&
+          other.taskId == this.taskId &&
           other.occurrenceDate == this.occurrenceDate &&
           other.updatedAt == this.updatedAt &&
           other.createdAt == this.createdAt);
 }
 
 class TodoRepeatSkipsCompanion extends UpdateCompanion<TodoRepeatSkip> {
-  final Value<int> id;
+  final Value<String> id;
   final Value<int?> serverId;
-  final Value<int> repeatRuleId;
+  final Value<String> repeatRuleId;
+  final Value<String> taskId;
   final Value<DateTime> occurrenceDate;
   final Value<DateTime> updatedAt;
   final Value<DateTime> createdAt;
+  final Value<int> rowid;
   const TodoRepeatSkipsCompanion({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
     this.repeatRuleId = const Value.absent(),
+    this.taskId = const Value.absent(),
     this.occurrenceDate = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
   });
   TodoRepeatSkipsCompanion.insert({
-    this.id = const Value.absent(),
+    required String id,
     this.serverId = const Value.absent(),
-    required int repeatRuleId,
+    required String repeatRuleId,
+    required String taskId,
     required DateTime occurrenceDate,
     required DateTime updatedAt,
     required DateTime createdAt,
-  }) : repeatRuleId = Value(repeatRuleId),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       repeatRuleId = Value(repeatRuleId),
+       taskId = Value(taskId),
        occurrenceDate = Value(occurrenceDate),
        updatedAt = Value(updatedAt),
        createdAt = Value(createdAt);
   static Insertable<TodoRepeatSkip> custom({
-    Expression<int>? id,
+    Expression<String>? id,
     Expression<int>? serverId,
-    Expression<int>? repeatRuleId,
+    Expression<String>? repeatRuleId,
+    Expression<String>? taskId,
     Expression<DateTime>? occurrenceDate,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (serverId != null) 'server_id': serverId,
       if (repeatRuleId != null) 'repeat_rule_id': repeatRuleId,
+      if (taskId != null) 'task_id': taskId,
       if (occurrenceDate != null) 'occurrence_date': occurrenceDate,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
     });
   }
 
   TodoRepeatSkipsCompanion copyWith({
-    Value<int>? id,
+    Value<String>? id,
     Value<int?>? serverId,
-    Value<int>? repeatRuleId,
+    Value<String>? repeatRuleId,
+    Value<String>? taskId,
     Value<DateTime>? occurrenceDate,
     Value<DateTime>? updatedAt,
     Value<DateTime>? createdAt,
+    Value<int>? rowid,
   }) {
     return TodoRepeatSkipsCompanion(
       id: id ?? this.id,
       serverId: serverId ?? this.serverId,
       repeatRuleId: repeatRuleId ?? this.repeatRuleId,
+      taskId: taskId ?? this.taskId,
       occurrenceDate: occurrenceDate ?? this.occurrenceDate,
       updatedAt: updatedAt ?? this.updatedAt,
       createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
     );
   }
 
@@ -3670,13 +3832,16 @@ class TodoRepeatSkipsCompanion extends UpdateCompanion<TodoRepeatSkip> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     if (id.present) {
-      map['id'] = Variable<int>(id.value);
+      map['id'] = Variable<String>(id.value);
     }
     if (serverId.present) {
       map['server_id'] = Variable<int>(serverId.value);
     }
     if (repeatRuleId.present) {
-      map['repeat_rule_id'] = Variable<int>(repeatRuleId.value);
+      map['repeat_rule_id'] = Variable<String>(repeatRuleId.value);
+    }
+    if (taskId.present) {
+      map['task_id'] = Variable<String>(taskId.value);
     }
     if (occurrenceDate.present) {
       map['occurrence_date'] = Variable<DateTime>(occurrenceDate.value);
@@ -3687,6 +3852,9 @@ class TodoRepeatSkipsCompanion extends UpdateCompanion<TodoRepeatSkip> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
     return map;
   }
 
@@ -3696,9 +3864,11 @@ class TodoRepeatSkipsCompanion extends UpdateCompanion<TodoRepeatSkip> {
           ..write('id: $id, ')
           ..write('serverId: $serverId, ')
           ..write('repeatRuleId: $repeatRuleId, ')
+          ..write('taskId: $taskId, ')
           ..write('occurrenceDate: $occurrenceDate, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
           ..write(')'))
         .toString();
   }
@@ -3712,16 +3882,12 @@ class $TodoViewPreferencesTable extends TodoViewPreferences
   $TodoViewPreferencesTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
-  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
     'id',
     aliasedName,
     false,
-    hasAutoIncrement: true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'PRIMARY KEY AUTOINCREMENT',
-    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
   );
   static const VerificationMeta _serverIdMeta = const VerificationMeta(
     'serverId',
@@ -3734,15 +3900,27 @@ class $TodoViewPreferencesTable extends TodoViewPreferences
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _scopeMeta = const VerificationMeta('scope');
+  static const VerificationMeta _sourceTypeMeta = const VerificationMeta(
+    'sourceType',
+  );
   @override
-  late final GeneratedColumn<String> scope = GeneratedColumn<String>(
-    'scope',
+  late final GeneratedColumn<String> sourceType = GeneratedColumn<String>(
+    'source_type',
     aliasedName,
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _sourceKeyMeta = const VerificationMeta(
+    'sourceKey',
+  );
+  @override
+  late final GeneratedColumn<String> sourceKey = GeneratedColumn<String>(
+    'source_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
   );
   static const VerificationMeta _valueJsonMeta = const VerificationMeta(
     'valueJson',
@@ -3781,7 +3959,8 @@ class $TodoViewPreferencesTable extends TodoViewPreferences
   List<GeneratedColumn> get $columns => [
     id,
     serverId,
-    scope,
+    sourceType,
+    sourceKey,
     valueJson,
     updatedAt,
     createdAt,
@@ -3800,6 +3979,8 @@ class $TodoViewPreferencesTable extends TodoViewPreferences
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
     }
     if (data.containsKey('server_id')) {
       context.handle(
@@ -3807,13 +3988,21 @@ class $TodoViewPreferencesTable extends TodoViewPreferences
         serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
       );
     }
-    if (data.containsKey('scope')) {
+    if (data.containsKey('source_type')) {
       context.handle(
-        _scopeMeta,
-        scope.isAcceptableOrUnknown(data['scope']!, _scopeMeta),
+        _sourceTypeMeta,
+        sourceType.isAcceptableOrUnknown(data['source_type']!, _sourceTypeMeta),
       );
     } else if (isInserting) {
-      context.missing(_scopeMeta);
+      context.missing(_sourceTypeMeta);
+    }
+    if (data.containsKey('source_key')) {
+      context.handle(
+        _sourceKeyMeta,
+        sourceKey.isAcceptableOrUnknown(data['source_key']!, _sourceKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceKeyMeta);
     }
     if (data.containsKey('value_json')) {
       context.handle(
@@ -3845,20 +4034,28 @@ class $TodoViewPreferencesTable extends TodoViewPreferences
   @override
   Set<GeneratedColumn> get $primaryKey => {id};
   @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {sourceType, sourceKey},
+  ];
+  @override
   TodoViewPreference map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return TodoViewPreference(
       id: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
       serverId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}server_id'],
       ),
-      scope: attachedDatabase.typeMapping.read(
+      sourceType: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}scope'],
+        data['${effectivePrefix}source_type'],
+      )!,
+      sourceKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_key'],
       )!,
       valueJson: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
@@ -3883,16 +4080,18 @@ class $TodoViewPreferencesTable extends TodoViewPreferences
 
 class TodoViewPreference extends DataClass
     implements Insertable<TodoViewPreference> {
-  final int id;
+  final String id;
   final int? serverId;
-  final String scope;
+  final String sourceType;
+  final String sourceKey;
   final String valueJson;
   final DateTime updatedAt;
   final DateTime createdAt;
   const TodoViewPreference({
     required this.id,
     this.serverId,
-    required this.scope,
+    required this.sourceType,
+    required this.sourceKey,
     required this.valueJson,
     required this.updatedAt,
     required this.createdAt,
@@ -3900,11 +4099,12 @@ class TodoViewPreference extends DataClass
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['id'] = Variable<int>(id);
+    map['id'] = Variable<String>(id);
     if (!nullToAbsent || serverId != null) {
       map['server_id'] = Variable<int>(serverId);
     }
-    map['scope'] = Variable<String>(scope);
+    map['source_type'] = Variable<String>(sourceType);
+    map['source_key'] = Variable<String>(sourceKey);
     map['value_json'] = Variable<String>(valueJson);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     map['created_at'] = Variable<DateTime>(createdAt);
@@ -3917,7 +4117,8 @@ class TodoViewPreference extends DataClass
       serverId: serverId == null && nullToAbsent
           ? const Value.absent()
           : Value(serverId),
-      scope: Value(scope),
+      sourceType: Value(sourceType),
+      sourceKey: Value(sourceKey),
       valueJson: Value(valueJson),
       updatedAt: Value(updatedAt),
       createdAt: Value(createdAt),
@@ -3930,9 +4131,10 @@ class TodoViewPreference extends DataClass
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return TodoViewPreference(
-      id: serializer.fromJson<int>(json['id']),
+      id: serializer.fromJson<String>(json['id']),
       serverId: serializer.fromJson<int?>(json['serverId']),
-      scope: serializer.fromJson<String>(json['scope']),
+      sourceType: serializer.fromJson<String>(json['sourceType']),
+      sourceKey: serializer.fromJson<String>(json['sourceKey']),
       valueJson: serializer.fromJson<String>(json['valueJson']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
@@ -3942,9 +4144,10 @@ class TodoViewPreference extends DataClass
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'id': serializer.toJson<int>(id),
+      'id': serializer.toJson<String>(id),
       'serverId': serializer.toJson<int?>(serverId),
-      'scope': serializer.toJson<String>(scope),
+      'sourceType': serializer.toJson<String>(sourceType),
+      'sourceKey': serializer.toJson<String>(sourceKey),
       'valueJson': serializer.toJson<String>(valueJson),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
@@ -3952,16 +4155,18 @@ class TodoViewPreference extends DataClass
   }
 
   TodoViewPreference copyWith({
-    int? id,
+    String? id,
     Value<int?> serverId = const Value.absent(),
-    String? scope,
+    String? sourceType,
+    String? sourceKey,
     String? valueJson,
     DateTime? updatedAt,
     DateTime? createdAt,
   }) => TodoViewPreference(
     id: id ?? this.id,
     serverId: serverId.present ? serverId.value : this.serverId,
-    scope: scope ?? this.scope,
+    sourceType: sourceType ?? this.sourceType,
+    sourceKey: sourceKey ?? this.sourceKey,
     valueJson: valueJson ?? this.valueJson,
     updatedAt: updatedAt ?? this.updatedAt,
     createdAt: createdAt ?? this.createdAt,
@@ -3970,7 +4175,10 @@ class TodoViewPreference extends DataClass
     return TodoViewPreference(
       id: data.id.present ? data.id.value : this.id,
       serverId: data.serverId.present ? data.serverId.value : this.serverId,
-      scope: data.scope.present ? data.scope.value : this.scope,
+      sourceType: data.sourceType.present
+          ? data.sourceType.value
+          : this.sourceType,
+      sourceKey: data.sourceKey.present ? data.sourceKey.value : this.sourceKey,
       valueJson: data.valueJson.present ? data.valueJson.value : this.valueJson,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
@@ -3982,7 +4190,8 @@ class TodoViewPreference extends DataClass
     return (StringBuffer('TodoViewPreference(')
           ..write('id: $id, ')
           ..write('serverId: $serverId, ')
-          ..write('scope: $scope, ')
+          ..write('sourceType: $sourceType, ')
+          ..write('sourceKey: $sourceKey, ')
           ..write('valueJson: $valueJson, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt')
@@ -3991,79 +4200,103 @@ class TodoViewPreference extends DataClass
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, serverId, scope, valueJson, updatedAt, createdAt);
+  int get hashCode => Object.hash(
+    id,
+    serverId,
+    sourceType,
+    sourceKey,
+    valueJson,
+    updatedAt,
+    createdAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is TodoViewPreference &&
           other.id == this.id &&
           other.serverId == this.serverId &&
-          other.scope == this.scope &&
+          other.sourceType == this.sourceType &&
+          other.sourceKey == this.sourceKey &&
           other.valueJson == this.valueJson &&
           other.updatedAt == this.updatedAt &&
           other.createdAt == this.createdAt);
 }
 
 class TodoViewPreferencesCompanion extends UpdateCompanion<TodoViewPreference> {
-  final Value<int> id;
+  final Value<String> id;
   final Value<int?> serverId;
-  final Value<String> scope;
+  final Value<String> sourceType;
+  final Value<String> sourceKey;
   final Value<String> valueJson;
   final Value<DateTime> updatedAt;
   final Value<DateTime> createdAt;
+  final Value<int> rowid;
   const TodoViewPreferencesCompanion({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
-    this.scope = const Value.absent(),
+    this.sourceType = const Value.absent(),
+    this.sourceKey = const Value.absent(),
     this.valueJson = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
   });
   TodoViewPreferencesCompanion.insert({
-    this.id = const Value.absent(),
+    required String id,
     this.serverId = const Value.absent(),
-    required String scope,
+    required String sourceType,
+    required String sourceKey,
     required String valueJson,
     required DateTime updatedAt,
     required DateTime createdAt,
-  }) : scope = Value(scope),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       sourceType = Value(sourceType),
+       sourceKey = Value(sourceKey),
        valueJson = Value(valueJson),
        updatedAt = Value(updatedAt),
        createdAt = Value(createdAt);
   static Insertable<TodoViewPreference> custom({
-    Expression<int>? id,
+    Expression<String>? id,
     Expression<int>? serverId,
-    Expression<String>? scope,
+    Expression<String>? sourceType,
+    Expression<String>? sourceKey,
     Expression<String>? valueJson,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (serverId != null) 'server_id': serverId,
-      if (scope != null) 'scope': scope,
+      if (sourceType != null) 'source_type': sourceType,
+      if (sourceKey != null) 'source_key': sourceKey,
       if (valueJson != null) 'value_json': valueJson,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
     });
   }
 
   TodoViewPreferencesCompanion copyWith({
-    Value<int>? id,
+    Value<String>? id,
     Value<int?>? serverId,
-    Value<String>? scope,
+    Value<String>? sourceType,
+    Value<String>? sourceKey,
     Value<String>? valueJson,
     Value<DateTime>? updatedAt,
     Value<DateTime>? createdAt,
+    Value<int>? rowid,
   }) {
     return TodoViewPreferencesCompanion(
       id: id ?? this.id,
       serverId: serverId ?? this.serverId,
-      scope: scope ?? this.scope,
+      sourceType: sourceType ?? this.sourceType,
+      sourceKey: sourceKey ?? this.sourceKey,
       valueJson: valueJson ?? this.valueJson,
       updatedAt: updatedAt ?? this.updatedAt,
       createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
     );
   }
 
@@ -4071,13 +4304,16 @@ class TodoViewPreferencesCompanion extends UpdateCompanion<TodoViewPreference> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     if (id.present) {
-      map['id'] = Variable<int>(id.value);
+      map['id'] = Variable<String>(id.value);
     }
     if (serverId.present) {
       map['server_id'] = Variable<int>(serverId.value);
     }
-    if (scope.present) {
-      map['scope'] = Variable<String>(scope.value);
+    if (sourceType.present) {
+      map['source_type'] = Variable<String>(sourceType.value);
+    }
+    if (sourceKey.present) {
+      map['source_key'] = Variable<String>(sourceKey.value);
     }
     if (valueJson.present) {
       map['value_json'] = Variable<String>(valueJson.value);
@@ -4088,6 +4324,9 @@ class TodoViewPreferencesCompanion extends UpdateCompanion<TodoViewPreference> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
     return map;
   }
 
@@ -4096,10 +4335,12 @@ class TodoViewPreferencesCompanion extends UpdateCompanion<TodoViewPreference> {
     return (StringBuffer('TodoViewPreferencesCompanion(')
           ..write('id: $id, ')
           ..write('serverId: $serverId, ')
-          ..write('scope: $scope, ')
+          ..write('sourceType: $sourceType, ')
+          ..write('sourceKey: $sourceKey, ')
           ..write('valueJson: $valueJson, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
           ..write(')'))
         .toString();
   }
@@ -4113,16 +4354,12 @@ class $TodoFiltersTable extends TodoFilters
   $TodoFiltersTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
-  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
     'id',
     aliasedName,
     false,
-    hasAutoIncrement: true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'PRIMARY KEY AUTOINCREMENT',
-    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
   );
   static const VerificationMeta _serverIdMeta = const VerificationMeta(
     'serverId',
@@ -4213,6 +4450,8 @@ class $TodoFiltersTable extends TodoFilters
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
     }
     if (data.containsKey('server_id')) {
       context.handle(
@@ -4271,7 +4510,7 @@ class $TodoFiltersTable extends TodoFilters
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return TodoFilter(
       id: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
       serverId: attachedDatabase.typeMapping.read(
@@ -4308,7 +4547,7 @@ class $TodoFiltersTable extends TodoFilters
 }
 
 class TodoFilter extends DataClass implements Insertable<TodoFilter> {
-  final int id;
+  final String id;
   final int? serverId;
   final String name;
   final String conditionJson;
@@ -4327,7 +4566,7 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['id'] = Variable<int>(id);
+    map['id'] = Variable<String>(id);
     if (!nullToAbsent || serverId != null) {
       map['server_id'] = Variable<int>(serverId);
     }
@@ -4359,7 +4598,7 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return TodoFilter(
-      id: serializer.fromJson<int>(json['id']),
+      id: serializer.fromJson<String>(json['id']),
       serverId: serializer.fromJson<int?>(json['serverId']),
       name: serializer.fromJson<String>(json['name']),
       conditionJson: serializer.fromJson<String>(json['conditionJson']),
@@ -4372,7 +4611,7 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'id': serializer.toJson<int>(id),
+      'id': serializer.toJson<String>(id),
       'serverId': serializer.toJson<int?>(serverId),
       'name': serializer.toJson<String>(name),
       'conditionJson': serializer.toJson<String>(conditionJson),
@@ -4383,7 +4622,7 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
   }
 
   TodoFilter copyWith({
-    int? id,
+    String? id,
     Value<int?> serverId = const Value.absent(),
     String? name,
     String? conditionJson,
@@ -4451,13 +4690,14 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
 }
 
 class TodoFiltersCompanion extends UpdateCompanion<TodoFilter> {
-  final Value<int> id;
+  final Value<String> id;
   final Value<int?> serverId;
   final Value<String> name;
   final Value<String> conditionJson;
   final Value<int> sortOrder;
   final Value<DateTime> updatedAt;
   final Value<DateTime> createdAt;
+  final Value<int> rowid;
   const TodoFiltersCompanion({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
@@ -4466,27 +4706,31 @@ class TodoFiltersCompanion extends UpdateCompanion<TodoFilter> {
     this.sortOrder = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
   });
   TodoFiltersCompanion.insert({
-    this.id = const Value.absent(),
+    required String id,
     this.serverId = const Value.absent(),
     required String name,
     required String conditionJson,
     this.sortOrder = const Value.absent(),
     required DateTime updatedAt,
     required DateTime createdAt,
-  }) : name = Value(name),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name),
        conditionJson = Value(conditionJson),
        updatedAt = Value(updatedAt),
        createdAt = Value(createdAt);
   static Insertable<TodoFilter> custom({
-    Expression<int>? id,
+    Expression<String>? id,
     Expression<int>? serverId,
     Expression<String>? name,
     Expression<String>? conditionJson,
     Expression<int>? sortOrder,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -4496,17 +4740,19 @@ class TodoFiltersCompanion extends UpdateCompanion<TodoFilter> {
       if (sortOrder != null) 'sort_order': sortOrder,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
     });
   }
 
   TodoFiltersCompanion copyWith({
-    Value<int>? id,
+    Value<String>? id,
     Value<int?>? serverId,
     Value<String>? name,
     Value<String>? conditionJson,
     Value<int>? sortOrder,
     Value<DateTime>? updatedAt,
     Value<DateTime>? createdAt,
+    Value<int>? rowid,
   }) {
     return TodoFiltersCompanion(
       id: id ?? this.id,
@@ -4516,6 +4762,7 @@ class TodoFiltersCompanion extends UpdateCompanion<TodoFilter> {
       sortOrder: sortOrder ?? this.sortOrder,
       updatedAt: updatedAt ?? this.updatedAt,
       createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
     );
   }
 
@@ -4523,7 +4770,7 @@ class TodoFiltersCompanion extends UpdateCompanion<TodoFilter> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     if (id.present) {
-      map['id'] = Variable<int>(id.value);
+      map['id'] = Variable<String>(id.value);
     }
     if (serverId.present) {
       map['server_id'] = Variable<int>(serverId.value);
@@ -4543,6 +4790,9 @@ class TodoFiltersCompanion extends UpdateCompanion<TodoFilter> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
     return map;
   }
 
@@ -4555,7 +4805,8 @@ class TodoFiltersCompanion extends UpdateCompanion<TodoFilter> {
           ..write('conditionJson: $conditionJson, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
           ..write(')'))
         .toString();
   }
@@ -4614,11 +4865,11 @@ class $TodoSyncChangesTable extends TodoSyncChanges
     'entityLocalId',
   );
   @override
-  late final GeneratedColumn<int> entityLocalId = GeneratedColumn<int>(
+  late final GeneratedColumn<String> entityLocalId = GeneratedColumn<String>(
     'entity_local_id',
     aliasedName,
     true,
-    type: DriftSqlType.int,
+    type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
   static const VerificationMeta _entityServerIdMeta = const VerificationMeta(
@@ -4806,7 +5057,7 @@ class $TodoSyncChangesTable extends TodoSyncChanges
         data['${effectivePrefix}op'],
       )!,
       entityLocalId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}entity_local_id'],
       ),
       entityServerId: attachedDatabase.typeMapping.read(
@@ -4843,7 +5094,7 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
   final String clientMutationId;
   final String entity;
   final String op;
-  final int? entityLocalId;
+  final String? entityLocalId;
   final int? entityServerId;
   final String payloadJson;
   final DateTime createdAt;
@@ -4869,7 +5120,7 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
     map['entity'] = Variable<String>(entity);
     map['op'] = Variable<String>(op);
     if (!nullToAbsent || entityLocalId != null) {
-      map['entity_local_id'] = Variable<int>(entityLocalId);
+      map['entity_local_id'] = Variable<String>(entityLocalId);
     }
     if (!nullToAbsent || entityServerId != null) {
       map['entity_server_id'] = Variable<int>(entityServerId);
@@ -4910,7 +5161,7 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
       clientMutationId: serializer.fromJson<String>(json['clientMutationId']),
       entity: serializer.fromJson<String>(json['entity']),
       op: serializer.fromJson<String>(json['op']),
-      entityLocalId: serializer.fromJson<int?>(json['entityLocalId']),
+      entityLocalId: serializer.fromJson<String?>(json['entityLocalId']),
       entityServerId: serializer.fromJson<int?>(json['entityServerId']),
       payloadJson: serializer.fromJson<String>(json['payloadJson']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
@@ -4926,7 +5177,7 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
       'clientMutationId': serializer.toJson<String>(clientMutationId),
       'entity': serializer.toJson<String>(entity),
       'op': serializer.toJson<String>(op),
-      'entityLocalId': serializer.toJson<int?>(entityLocalId),
+      'entityLocalId': serializer.toJson<String?>(entityLocalId),
       'entityServerId': serializer.toJson<int?>(entityServerId),
       'payloadJson': serializer.toJson<String>(payloadJson),
       'createdAt': serializer.toJson<DateTime>(createdAt),
@@ -4940,7 +5191,7 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
     String? clientMutationId,
     String? entity,
     String? op,
-    Value<int?> entityLocalId = const Value.absent(),
+    Value<String?> entityLocalId = const Value.absent(),
     Value<int?> entityServerId = const Value.absent(),
     String? payloadJson,
     DateTime? createdAt,
@@ -5038,7 +5289,7 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
   final Value<String> clientMutationId;
   final Value<String> entity;
   final Value<String> op;
-  final Value<int?> entityLocalId;
+  final Value<String?> entityLocalId;
   final Value<int?> entityServerId;
   final Value<String> payloadJson;
   final Value<DateTime> createdAt;
@@ -5077,7 +5328,7 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
     Expression<String>? clientMutationId,
     Expression<String>? entity,
     Expression<String>? op,
-    Expression<int>? entityLocalId,
+    Expression<String>? entityLocalId,
     Expression<int>? entityServerId,
     Expression<String>? payloadJson,
     Expression<DateTime>? createdAt,
@@ -5103,7 +5354,7 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
     Value<String>? clientMutationId,
     Value<String>? entity,
     Value<String>? op,
-    Value<int?>? entityLocalId,
+    Value<String?>? entityLocalId,
     Value<int?>? entityServerId,
     Value<String>? payloadJson,
     Value<DateTime>? createdAt,
@@ -5140,7 +5391,7 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
       map['op'] = Variable<String>(op.value);
     }
     if (entityLocalId.present) {
-      map['entity_local_id'] = Variable<int>(entityLocalId.value);
+      map['entity_local_id'] = Variable<String>(entityLocalId.value);
     }
     if (entityServerId.present) {
       map['entity_server_id'] = Variable<int>(entityServerId.value);
@@ -5743,23 +5994,25 @@ abstract class _$AppDatabase extends GeneratedDatabase {
 
 typedef $$TodoListsTableCreateCompanionBuilder =
     TodoListsCompanion Function({
-      Value<int> id,
+      required String id,
       Value<int?> serverId,
       required String name,
       Value<int?> folderId,
       Value<int> sortOrder,
       required DateTime updatedAt,
       required DateTime createdAt,
+      Value<int> rowid,
     });
 typedef $$TodoListsTableUpdateCompanionBuilder =
     TodoListsCompanion Function({
-      Value<int> id,
+      Value<String> id,
       Value<int?> serverId,
       Value<String> name,
       Value<int?> folderId,
       Value<int> sortOrder,
       Value<DateTime> updatedAt,
       Value<DateTime> createdAt,
+      Value<int> rowid,
     });
 
 class $$TodoListsTableFilterComposer
@@ -5771,7 +6024,7 @@ class $$TodoListsTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<int> get id => $composableBuilder(
+  ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnFilters(column),
   );
@@ -5816,7 +6069,7 @@ class $$TodoListsTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<int> get id => $composableBuilder(
+  ColumnOrderings<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnOrderings(column),
   );
@@ -5861,7 +6114,7 @@ class $$TodoListsTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<int> get id =>
+  GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
   GeneratedColumn<int> get serverId =>
@@ -5911,13 +6164,14 @@ class $$TodoListsTableTableManager
               $$TodoListsTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                Value<String> id = const Value.absent(),
                 Value<int?> serverId = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<int?> folderId = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
               }) => TodoListsCompanion(
                 id: id,
                 serverId: serverId,
@@ -5926,16 +6180,18 @@ class $$TodoListsTableTableManager
                 sortOrder: sortOrder,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
+                rowid: rowid,
               ),
           createCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                required String id,
                 Value<int?> serverId = const Value.absent(),
                 required String name,
                 Value<int?> folderId = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 required DateTime updatedAt,
                 required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
               }) => TodoListsCompanion.insert(
                 id: id,
                 serverId: serverId,
@@ -5944,6 +6200,7 @@ class $$TodoListsTableTableManager
                 sortOrder: sortOrder,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
+                rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -5969,10 +6226,10 @@ typedef $$TodoListsTableProcessedTableManager =
     >;
 typedef $$TodoTasksTableCreateCompanionBuilder =
     TodoTasksCompanion Function({
-      Value<int> id,
+      required String id,
       Value<int?> serverId,
-      required int listId,
-      Value<int?> parentTaskId,
+      required String listId,
+      Value<String?> parentTaskId,
       required String title,
       Value<String?> description,
       Value<bool> completed,
@@ -5984,13 +6241,14 @@ typedef $$TodoTasksTableCreateCompanionBuilder =
       Value<DateTime?> dueAt,
       required DateTime updatedAt,
       required DateTime createdAt,
+      Value<int> rowid,
     });
 typedef $$TodoTasksTableUpdateCompanionBuilder =
     TodoTasksCompanion Function({
-      Value<int> id,
+      Value<String> id,
       Value<int?> serverId,
-      Value<int> listId,
-      Value<int?> parentTaskId,
+      Value<String> listId,
+      Value<String?> parentTaskId,
       Value<String> title,
       Value<String?> description,
       Value<bool> completed,
@@ -6002,6 +6260,7 @@ typedef $$TodoTasksTableUpdateCompanionBuilder =
       Value<DateTime?> dueAt,
       Value<DateTime> updatedAt,
       Value<DateTime> createdAt,
+      Value<int> rowid,
     });
 
 class $$TodoTasksTableFilterComposer
@@ -6013,7 +6272,7 @@ class $$TodoTasksTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<int> get id => $composableBuilder(
+  ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnFilters(column),
   );
@@ -6023,12 +6282,12 @@ class $$TodoTasksTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get listId => $composableBuilder(
+  ColumnFilters<String> get listId => $composableBuilder(
     column: $table.listId,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get parentTaskId => $composableBuilder(
+  ColumnFilters<String> get parentTaskId => $composableBuilder(
     column: $table.parentTaskId,
     builder: (column) => ColumnFilters(column),
   );
@@ -6098,7 +6357,7 @@ class $$TodoTasksTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<int> get id => $composableBuilder(
+  ColumnOrderings<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnOrderings(column),
   );
@@ -6108,12 +6367,12 @@ class $$TodoTasksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get listId => $composableBuilder(
+  ColumnOrderings<String> get listId => $composableBuilder(
     column: $table.listId,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get parentTaskId => $composableBuilder(
+  ColumnOrderings<String> get parentTaskId => $composableBuilder(
     column: $table.parentTaskId,
     builder: (column) => ColumnOrderings(column),
   );
@@ -6183,16 +6442,16 @@ class $$TodoTasksTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<int> get id =>
+  GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
   GeneratedColumn<int> get serverId =>
       $composableBuilder(column: $table.serverId, builder: (column) => column);
 
-  GeneratedColumn<int> get listId =>
+  GeneratedColumn<String> get listId =>
       $composableBuilder(column: $table.listId, builder: (column) => column);
 
-  GeneratedColumn<int> get parentTaskId => $composableBuilder(
+  GeneratedColumn<String> get parentTaskId => $composableBuilder(
     column: $table.parentTaskId,
     builder: (column) => column,
   );
@@ -6261,10 +6520,10 @@ class $$TodoTasksTableTableManager
               $$TodoTasksTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                Value<String> id = const Value.absent(),
                 Value<int?> serverId = const Value.absent(),
-                Value<int> listId = const Value.absent(),
-                Value<int?> parentTaskId = const Value.absent(),
+                Value<String> listId = const Value.absent(),
+                Value<String?> parentTaskId = const Value.absent(),
                 Value<String> title = const Value.absent(),
                 Value<String?> description = const Value.absent(),
                 Value<bool> completed = const Value.absent(),
@@ -6276,6 +6535,7 @@ class $$TodoTasksTableTableManager
                 Value<DateTime?> dueAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
               }) => TodoTasksCompanion(
                 id: id,
                 serverId: serverId,
@@ -6292,13 +6552,14 @@ class $$TodoTasksTableTableManager
                 dueAt: dueAt,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
+                rowid: rowid,
               ),
           createCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                required String id,
                 Value<int?> serverId = const Value.absent(),
-                required int listId,
-                Value<int?> parentTaskId = const Value.absent(),
+                required String listId,
+                Value<String?> parentTaskId = const Value.absent(),
                 required String title,
                 Value<String?> description = const Value.absent(),
                 Value<bool> completed = const Value.absent(),
@@ -6310,6 +6571,7 @@ class $$TodoTasksTableTableManager
                 Value<DateTime?> dueAt = const Value.absent(),
                 required DateTime updatedAt,
                 required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
               }) => TodoTasksCompanion.insert(
                 id: id,
                 serverId: serverId,
@@ -6326,6 +6588,7 @@ class $$TodoTasksTableTableManager
                 dueAt: dueAt,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
+                rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -6351,21 +6614,23 @@ typedef $$TodoTasksTableProcessedTableManager =
     >;
 typedef $$TodoFoldersTableCreateCompanionBuilder =
     TodoFoldersCompanion Function({
-      Value<int> id,
+      required String id,
       Value<int?> serverId,
       required String name,
       Value<int> sortOrder,
       required DateTime updatedAt,
       required DateTime createdAt,
+      Value<int> rowid,
     });
 typedef $$TodoFoldersTableUpdateCompanionBuilder =
     TodoFoldersCompanion Function({
-      Value<int> id,
+      Value<String> id,
       Value<int?> serverId,
       Value<String> name,
       Value<int> sortOrder,
       Value<DateTime> updatedAt,
       Value<DateTime> createdAt,
+      Value<int> rowid,
     });
 
 class $$TodoFoldersTableFilterComposer
@@ -6377,7 +6642,7 @@ class $$TodoFoldersTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<int> get id => $composableBuilder(
+  ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnFilters(column),
   );
@@ -6417,7 +6682,7 @@ class $$TodoFoldersTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<int> get id => $composableBuilder(
+  ColumnOrderings<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnOrderings(column),
   );
@@ -6457,7 +6722,7 @@ class $$TodoFoldersTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<int> get id =>
+  GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
   GeneratedColumn<int> get serverId =>
@@ -6507,12 +6772,13 @@ class $$TodoFoldersTableTableManager
               $$TodoFoldersTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                Value<String> id = const Value.absent(),
                 Value<int?> serverId = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
               }) => TodoFoldersCompanion(
                 id: id,
                 serverId: serverId,
@@ -6520,15 +6786,17 @@ class $$TodoFoldersTableTableManager
                 sortOrder: sortOrder,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
+                rowid: rowid,
               ),
           createCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                required String id,
                 Value<int?> serverId = const Value.absent(),
                 required String name,
                 Value<int> sortOrder = const Value.absent(),
                 required DateTime updatedAt,
                 required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
               }) => TodoFoldersCompanion.insert(
                 id: id,
                 serverId: serverId,
@@ -6536,6 +6804,7 @@ class $$TodoFoldersTableTableManager
                 sortOrder: sortOrder,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
+                rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -6564,21 +6833,23 @@ typedef $$TodoFoldersTableProcessedTableManager =
     >;
 typedef $$TodoTagsTableCreateCompanionBuilder =
     TodoTagsCompanion Function({
-      Value<int> id,
+      required String id,
       Value<int?> serverId,
       required String name,
       Value<String?> color,
       required DateTime updatedAt,
       required DateTime createdAt,
+      Value<int> rowid,
     });
 typedef $$TodoTagsTableUpdateCompanionBuilder =
     TodoTagsCompanion Function({
-      Value<int> id,
+      Value<String> id,
       Value<int?> serverId,
       Value<String> name,
       Value<String?> color,
       Value<DateTime> updatedAt,
       Value<DateTime> createdAt,
+      Value<int> rowid,
     });
 
 class $$TodoTagsTableFilterComposer
@@ -6590,7 +6861,7 @@ class $$TodoTagsTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<int> get id => $composableBuilder(
+  ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnFilters(column),
   );
@@ -6630,7 +6901,7 @@ class $$TodoTagsTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<int> get id => $composableBuilder(
+  ColumnOrderings<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnOrderings(column),
   );
@@ -6670,7 +6941,7 @@ class $$TodoTagsTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<int> get id =>
+  GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
   GeneratedColumn<int> get serverId =>
@@ -6717,12 +6988,13 @@ class $$TodoTagsTableTableManager
               $$TodoTagsTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                Value<String> id = const Value.absent(),
                 Value<int?> serverId = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String?> color = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
               }) => TodoTagsCompanion(
                 id: id,
                 serverId: serverId,
@@ -6730,15 +7002,17 @@ class $$TodoTagsTableTableManager
                 color: color,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
+                rowid: rowid,
               ),
           createCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                required String id,
                 Value<int?> serverId = const Value.absent(),
                 required String name,
                 Value<String?> color = const Value.absent(),
                 required DateTime updatedAt,
                 required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
               }) => TodoTagsCompanion.insert(
                 id: id,
                 serverId: serverId,
@@ -6746,6 +7020,7 @@ class $$TodoTagsTableTableManager
                 color: color,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
+                rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -6771,14 +7046,16 @@ typedef $$TodoTagsTableProcessedTableManager =
     >;
 typedef $$TodoTaskTagsTableCreateCompanionBuilder =
     TodoTaskTagsCompanion Function({
-      required int taskId,
-      required int tagId,
+      required String taskId,
+      required String tagId,
+      Value<int?> serverId,
       Value<int> rowid,
     });
 typedef $$TodoTaskTagsTableUpdateCompanionBuilder =
     TodoTaskTagsCompanion Function({
-      Value<int> taskId,
-      Value<int> tagId,
+      Value<String> taskId,
+      Value<String> tagId,
+      Value<int?> serverId,
       Value<int> rowid,
     });
 
@@ -6791,13 +7068,18 @@ class $$TodoTaskTagsTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<int> get taskId => $composableBuilder(
+  ColumnFilters<String> get taskId => $composableBuilder(
     column: $table.taskId,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get tagId => $composableBuilder(
+  ColumnFilters<String> get tagId => $composableBuilder(
     column: $table.tagId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get serverId => $composableBuilder(
+    column: $table.serverId,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -6811,13 +7093,18 @@ class $$TodoTaskTagsTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<int> get taskId => $composableBuilder(
+  ColumnOrderings<String> get taskId => $composableBuilder(
     column: $table.taskId,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get tagId => $composableBuilder(
+  ColumnOrderings<String> get tagId => $composableBuilder(
     column: $table.tagId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get serverId => $composableBuilder(
+    column: $table.serverId,
     builder: (column) => ColumnOrderings(column),
   );
 }
@@ -6831,11 +7118,14 @@ class $$TodoTaskTagsTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<int> get taskId =>
+  GeneratedColumn<String> get taskId =>
       $composableBuilder(column: $table.taskId, builder: (column) => column);
 
-  GeneratedColumn<int> get tagId =>
+  GeneratedColumn<String> get tagId =>
       $composableBuilder(column: $table.tagId, builder: (column) => column);
+
+  GeneratedColumn<int> get serverId =>
+      $composableBuilder(column: $table.serverId, builder: (column) => column);
 }
 
 class $$TodoTaskTagsTableTableManager
@@ -6869,22 +7159,26 @@ class $$TodoTaskTagsTableTableManager
               $$TodoTaskTagsTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
-                Value<int> taskId = const Value.absent(),
-                Value<int> tagId = const Value.absent(),
+                Value<String> taskId = const Value.absent(),
+                Value<String> tagId = const Value.absent(),
+                Value<int?> serverId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => TodoTaskTagsCompanion(
                 taskId: taskId,
                 tagId: tagId,
+                serverId: serverId,
                 rowid: rowid,
               ),
           createCompanionCallback:
               ({
-                required int taskId,
-                required int tagId,
+                required String taskId,
+                required String tagId,
+                Value<int?> serverId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => TodoTaskTagsCompanion.insert(
                 taskId: taskId,
                 tagId: tagId,
+                serverId: serverId,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -6914,23 +7208,25 @@ typedef $$TodoTaskTagsTableProcessedTableManager =
     >;
 typedef $$TodoRemindersTableCreateCompanionBuilder =
     TodoRemindersCompanion Function({
-      Value<int> id,
+      required String id,
       Value<int?> serverId,
-      required int taskId,
+      required String taskId,
       required DateTime remindAt,
       Value<String> status,
       required DateTime updatedAt,
       required DateTime createdAt,
+      Value<int> rowid,
     });
 typedef $$TodoRemindersTableUpdateCompanionBuilder =
     TodoRemindersCompanion Function({
-      Value<int> id,
+      Value<String> id,
       Value<int?> serverId,
-      Value<int> taskId,
+      Value<String> taskId,
       Value<DateTime> remindAt,
       Value<String> status,
       Value<DateTime> updatedAt,
       Value<DateTime> createdAt,
+      Value<int> rowid,
     });
 
 class $$TodoRemindersTableFilterComposer
@@ -6942,7 +7238,7 @@ class $$TodoRemindersTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<int> get id => $composableBuilder(
+  ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnFilters(column),
   );
@@ -6952,7 +7248,7 @@ class $$TodoRemindersTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get taskId => $composableBuilder(
+  ColumnFilters<String> get taskId => $composableBuilder(
     column: $table.taskId,
     builder: (column) => ColumnFilters(column),
   );
@@ -6987,7 +7283,7 @@ class $$TodoRemindersTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<int> get id => $composableBuilder(
+  ColumnOrderings<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnOrderings(column),
   );
@@ -6997,7 +7293,7 @@ class $$TodoRemindersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get taskId => $composableBuilder(
+  ColumnOrderings<String> get taskId => $composableBuilder(
     column: $table.taskId,
     builder: (column) => ColumnOrderings(column),
   );
@@ -7032,13 +7328,13 @@ class $$TodoRemindersTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<int> get id =>
+  GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
   GeneratedColumn<int> get serverId =>
       $composableBuilder(column: $table.serverId, builder: (column) => column);
 
-  GeneratedColumn<int> get taskId =>
+  GeneratedColumn<String> get taskId =>
       $composableBuilder(column: $table.taskId, builder: (column) => column);
 
   GeneratedColumn<DateTime> get remindAt =>
@@ -7085,13 +7381,14 @@ class $$TodoRemindersTableTableManager
               $$TodoRemindersTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                Value<String> id = const Value.absent(),
                 Value<int?> serverId = const Value.absent(),
-                Value<int> taskId = const Value.absent(),
+                Value<String> taskId = const Value.absent(),
                 Value<DateTime> remindAt = const Value.absent(),
                 Value<String> status = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
               }) => TodoRemindersCompanion(
                 id: id,
                 serverId: serverId,
@@ -7100,16 +7397,18 @@ class $$TodoRemindersTableTableManager
                 status: status,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
+                rowid: rowid,
               ),
           createCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                required String id,
                 Value<int?> serverId = const Value.absent(),
-                required int taskId,
+                required String taskId,
                 required DateTime remindAt,
                 Value<String> status = const Value.absent(),
                 required DateTime updatedAt,
                 required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
               }) => TodoRemindersCompanion.insert(
                 id: id,
                 serverId: serverId,
@@ -7118,6 +7417,7 @@ class $$TodoRemindersTableTableManager
                 status: status,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
+                rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -7146,27 +7446,29 @@ typedef $$TodoRemindersTableProcessedTableManager =
     >;
 typedef $$TodoRepeatRulesTableCreateCompanionBuilder =
     TodoRepeatRulesCompanion Function({
-      Value<int> id,
+      required String id,
       Value<int?> serverId,
-      required int taskId,
+      required String taskId,
       required String freq,
       Value<int> interval,
       Value<String?> byDay,
       Value<DateTime?> until,
       required DateTime updatedAt,
       required DateTime createdAt,
+      Value<int> rowid,
     });
 typedef $$TodoRepeatRulesTableUpdateCompanionBuilder =
     TodoRepeatRulesCompanion Function({
-      Value<int> id,
+      Value<String> id,
       Value<int?> serverId,
-      Value<int> taskId,
+      Value<String> taskId,
       Value<String> freq,
       Value<int> interval,
       Value<String?> byDay,
       Value<DateTime?> until,
       Value<DateTime> updatedAt,
       Value<DateTime> createdAt,
+      Value<int> rowid,
     });
 
 class $$TodoRepeatRulesTableFilterComposer
@@ -7178,7 +7480,7 @@ class $$TodoRepeatRulesTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<int> get id => $composableBuilder(
+  ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnFilters(column),
   );
@@ -7188,7 +7490,7 @@ class $$TodoRepeatRulesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get taskId => $composableBuilder(
+  ColumnFilters<String> get taskId => $composableBuilder(
     column: $table.taskId,
     builder: (column) => ColumnFilters(column),
   );
@@ -7233,7 +7535,7 @@ class $$TodoRepeatRulesTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<int> get id => $composableBuilder(
+  ColumnOrderings<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnOrderings(column),
   );
@@ -7243,7 +7545,7 @@ class $$TodoRepeatRulesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get taskId => $composableBuilder(
+  ColumnOrderings<String> get taskId => $composableBuilder(
     column: $table.taskId,
     builder: (column) => ColumnOrderings(column),
   );
@@ -7288,13 +7590,13 @@ class $$TodoRepeatRulesTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<int> get id =>
+  GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
   GeneratedColumn<int> get serverId =>
       $composableBuilder(column: $table.serverId, builder: (column) => column);
 
-  GeneratedColumn<int> get taskId =>
+  GeneratedColumn<String> get taskId =>
       $composableBuilder(column: $table.taskId, builder: (column) => column);
 
   GeneratedColumn<String> get freq =>
@@ -7353,15 +7655,16 @@ class $$TodoRepeatRulesTableTableManager
               $$TodoRepeatRulesTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                Value<String> id = const Value.absent(),
                 Value<int?> serverId = const Value.absent(),
-                Value<int> taskId = const Value.absent(),
+                Value<String> taskId = const Value.absent(),
                 Value<String> freq = const Value.absent(),
                 Value<int> interval = const Value.absent(),
                 Value<String?> byDay = const Value.absent(),
                 Value<DateTime?> until = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
               }) => TodoRepeatRulesCompanion(
                 id: id,
                 serverId: serverId,
@@ -7372,18 +7675,20 @@ class $$TodoRepeatRulesTableTableManager
                 until: until,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
+                rowid: rowid,
               ),
           createCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                required String id,
                 Value<int?> serverId = const Value.absent(),
-                required int taskId,
+                required String taskId,
                 required String freq,
                 Value<int> interval = const Value.absent(),
                 Value<String?> byDay = const Value.absent(),
                 Value<DateTime?> until = const Value.absent(),
                 required DateTime updatedAt,
                 required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
               }) => TodoRepeatRulesCompanion.insert(
                 id: id,
                 serverId: serverId,
@@ -7394,6 +7699,7 @@ class $$TodoRepeatRulesTableTableManager
                 until: until,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
+                rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -7422,21 +7728,25 @@ typedef $$TodoRepeatRulesTableProcessedTableManager =
     >;
 typedef $$TodoRepeatSkipsTableCreateCompanionBuilder =
     TodoRepeatSkipsCompanion Function({
-      Value<int> id,
+      required String id,
       Value<int?> serverId,
-      required int repeatRuleId,
+      required String repeatRuleId,
+      required String taskId,
       required DateTime occurrenceDate,
       required DateTime updatedAt,
       required DateTime createdAt,
+      Value<int> rowid,
     });
 typedef $$TodoRepeatSkipsTableUpdateCompanionBuilder =
     TodoRepeatSkipsCompanion Function({
-      Value<int> id,
+      Value<String> id,
       Value<int?> serverId,
-      Value<int> repeatRuleId,
+      Value<String> repeatRuleId,
+      Value<String> taskId,
       Value<DateTime> occurrenceDate,
       Value<DateTime> updatedAt,
       Value<DateTime> createdAt,
+      Value<int> rowid,
     });
 
 class $$TodoRepeatSkipsTableFilterComposer
@@ -7448,7 +7758,7 @@ class $$TodoRepeatSkipsTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<int> get id => $composableBuilder(
+  ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnFilters(column),
   );
@@ -7458,8 +7768,13 @@ class $$TodoRepeatSkipsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get repeatRuleId => $composableBuilder(
+  ColumnFilters<String> get repeatRuleId => $composableBuilder(
     column: $table.repeatRuleId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get taskId => $composableBuilder(
+    column: $table.taskId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7488,7 +7803,7 @@ class $$TodoRepeatSkipsTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<int> get id => $composableBuilder(
+  ColumnOrderings<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnOrderings(column),
   );
@@ -7498,8 +7813,13 @@ class $$TodoRepeatSkipsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get repeatRuleId => $composableBuilder(
+  ColumnOrderings<String> get repeatRuleId => $composableBuilder(
     column: $table.repeatRuleId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get taskId => $composableBuilder(
+    column: $table.taskId,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -7528,16 +7848,19 @@ class $$TodoRepeatSkipsTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<int> get id =>
+  GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
   GeneratedColumn<int> get serverId =>
       $composableBuilder(column: $table.serverId, builder: (column) => column);
 
-  GeneratedColumn<int> get repeatRuleId => $composableBuilder(
+  GeneratedColumn<String> get repeatRuleId => $composableBuilder(
     column: $table.repeatRuleId,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get taskId =>
+      $composableBuilder(column: $table.taskId, builder: (column) => column);
 
   GeneratedColumn<DateTime> get occurrenceDate => $composableBuilder(
     column: $table.occurrenceDate,
@@ -7588,35 +7911,43 @@ class $$TodoRepeatSkipsTableTableManager
               $$TodoRepeatSkipsTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                Value<String> id = const Value.absent(),
                 Value<int?> serverId = const Value.absent(),
-                Value<int> repeatRuleId = const Value.absent(),
+                Value<String> repeatRuleId = const Value.absent(),
+                Value<String> taskId = const Value.absent(),
                 Value<DateTime> occurrenceDate = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
               }) => TodoRepeatSkipsCompanion(
                 id: id,
                 serverId: serverId,
                 repeatRuleId: repeatRuleId,
+                taskId: taskId,
                 occurrenceDate: occurrenceDate,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
+                rowid: rowid,
               ),
           createCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                required String id,
                 Value<int?> serverId = const Value.absent(),
-                required int repeatRuleId,
+                required String repeatRuleId,
+                required String taskId,
                 required DateTime occurrenceDate,
                 required DateTime updatedAt,
                 required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
               }) => TodoRepeatSkipsCompanion.insert(
                 id: id,
                 serverId: serverId,
                 repeatRuleId: repeatRuleId,
+                taskId: taskId,
                 occurrenceDate: occurrenceDate,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
+                rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -7645,21 +7976,25 @@ typedef $$TodoRepeatSkipsTableProcessedTableManager =
     >;
 typedef $$TodoViewPreferencesTableCreateCompanionBuilder =
     TodoViewPreferencesCompanion Function({
-      Value<int> id,
+      required String id,
       Value<int?> serverId,
-      required String scope,
+      required String sourceType,
+      required String sourceKey,
       required String valueJson,
       required DateTime updatedAt,
       required DateTime createdAt,
+      Value<int> rowid,
     });
 typedef $$TodoViewPreferencesTableUpdateCompanionBuilder =
     TodoViewPreferencesCompanion Function({
-      Value<int> id,
+      Value<String> id,
       Value<int?> serverId,
-      Value<String> scope,
+      Value<String> sourceType,
+      Value<String> sourceKey,
       Value<String> valueJson,
       Value<DateTime> updatedAt,
       Value<DateTime> createdAt,
+      Value<int> rowid,
     });
 
 class $$TodoViewPreferencesTableFilterComposer
@@ -7671,7 +8006,7 @@ class $$TodoViewPreferencesTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<int> get id => $composableBuilder(
+  ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnFilters(column),
   );
@@ -7681,8 +8016,13 @@ class $$TodoViewPreferencesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get scope => $composableBuilder(
-    column: $table.scope,
+  ColumnFilters<String> get sourceType => $composableBuilder(
+    column: $table.sourceType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceKey => $composableBuilder(
+    column: $table.sourceKey,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7711,7 +8051,7 @@ class $$TodoViewPreferencesTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<int> get id => $composableBuilder(
+  ColumnOrderings<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnOrderings(column),
   );
@@ -7721,8 +8061,13 @@ class $$TodoViewPreferencesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get scope => $composableBuilder(
-    column: $table.scope,
+  ColumnOrderings<String> get sourceType => $composableBuilder(
+    column: $table.sourceType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceKey => $composableBuilder(
+    column: $table.sourceKey,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -7751,14 +8096,19 @@ class $$TodoViewPreferencesTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<int> get id =>
+  GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
   GeneratedColumn<int> get serverId =>
       $composableBuilder(column: $table.serverId, builder: (column) => column);
 
-  GeneratedColumn<String> get scope =>
-      $composableBuilder(column: $table.scope, builder: (column) => column);
+  GeneratedColumn<String> get sourceType => $composableBuilder(
+    column: $table.sourceType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sourceKey =>
+      $composableBuilder(column: $table.sourceKey, builder: (column) => column);
 
   GeneratedColumn<String> get valueJson =>
       $composableBuilder(column: $table.valueJson, builder: (column) => column);
@@ -7813,35 +8163,43 @@ class $$TodoViewPreferencesTableTableManager
               ),
           updateCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                Value<String> id = const Value.absent(),
                 Value<int?> serverId = const Value.absent(),
-                Value<String> scope = const Value.absent(),
+                Value<String> sourceType = const Value.absent(),
+                Value<String> sourceKey = const Value.absent(),
                 Value<String> valueJson = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
               }) => TodoViewPreferencesCompanion(
                 id: id,
                 serverId: serverId,
-                scope: scope,
+                sourceType: sourceType,
+                sourceKey: sourceKey,
                 valueJson: valueJson,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
+                rowid: rowid,
               ),
           createCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                required String id,
                 Value<int?> serverId = const Value.absent(),
-                required String scope,
+                required String sourceType,
+                required String sourceKey,
                 required String valueJson,
                 required DateTime updatedAt,
                 required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
               }) => TodoViewPreferencesCompanion.insert(
                 id: id,
                 serverId: serverId,
-                scope: scope,
+                sourceType: sourceType,
+                sourceKey: sourceKey,
                 valueJson: valueJson,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
+                rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -7874,23 +8232,25 @@ typedef $$TodoViewPreferencesTableProcessedTableManager =
     >;
 typedef $$TodoFiltersTableCreateCompanionBuilder =
     TodoFiltersCompanion Function({
-      Value<int> id,
+      required String id,
       Value<int?> serverId,
       required String name,
       required String conditionJson,
       Value<int> sortOrder,
       required DateTime updatedAt,
       required DateTime createdAt,
+      Value<int> rowid,
     });
 typedef $$TodoFiltersTableUpdateCompanionBuilder =
     TodoFiltersCompanion Function({
-      Value<int> id,
+      Value<String> id,
       Value<int?> serverId,
       Value<String> name,
       Value<String> conditionJson,
       Value<int> sortOrder,
       Value<DateTime> updatedAt,
       Value<DateTime> createdAt,
+      Value<int> rowid,
     });
 
 class $$TodoFiltersTableFilterComposer
@@ -7902,7 +8262,7 @@ class $$TodoFiltersTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<int> get id => $composableBuilder(
+  ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnFilters(column),
   );
@@ -7947,7 +8307,7 @@ class $$TodoFiltersTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<int> get id => $composableBuilder(
+  ColumnOrderings<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnOrderings(column),
   );
@@ -7992,7 +8352,7 @@ class $$TodoFiltersTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<int> get id =>
+  GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
   GeneratedColumn<int> get serverId =>
@@ -8047,13 +8407,14 @@ class $$TodoFiltersTableTableManager
               $$TodoFiltersTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                Value<String> id = const Value.absent(),
                 Value<int?> serverId = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String> conditionJson = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
               }) => TodoFiltersCompanion(
                 id: id,
                 serverId: serverId,
@@ -8062,16 +8423,18 @@ class $$TodoFiltersTableTableManager
                 sortOrder: sortOrder,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
+                rowid: rowid,
               ),
           createCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                required String id,
                 Value<int?> serverId = const Value.absent(),
                 required String name,
                 required String conditionJson,
                 Value<int> sortOrder = const Value.absent(),
                 required DateTime updatedAt,
                 required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
               }) => TodoFiltersCompanion.insert(
                 id: id,
                 serverId: serverId,
@@ -8080,6 +8443,7 @@ class $$TodoFiltersTableTableManager
                 sortOrder: sortOrder,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
+                rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -8112,7 +8476,7 @@ typedef $$TodoSyncChangesTableCreateCompanionBuilder =
       required String clientMutationId,
       required String entity,
       required String op,
-      Value<int?> entityLocalId,
+      Value<String?> entityLocalId,
       Value<int?> entityServerId,
       required String payloadJson,
       required DateTime createdAt,
@@ -8125,7 +8489,7 @@ typedef $$TodoSyncChangesTableUpdateCompanionBuilder =
       Value<String> clientMutationId,
       Value<String> entity,
       Value<String> op,
-      Value<int?> entityLocalId,
+      Value<String?> entityLocalId,
       Value<int?> entityServerId,
       Value<String> payloadJson,
       Value<DateTime> createdAt,
@@ -8162,7 +8526,7 @@ class $$TodoSyncChangesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get entityLocalId => $composableBuilder(
+  ColumnFilters<String> get entityLocalId => $composableBuilder(
     column: $table.entityLocalId,
     builder: (column) => ColumnFilters(column),
   );
@@ -8222,7 +8586,7 @@ class $$TodoSyncChangesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get entityLocalId => $composableBuilder(
+  ColumnOrderings<String> get entityLocalId => $composableBuilder(
     column: $table.entityLocalId,
     builder: (column) => ColumnOrderings(column),
   );
@@ -8276,7 +8640,7 @@ class $$TodoSyncChangesTableAnnotationComposer
   GeneratedColumn<String> get op =>
       $composableBuilder(column: $table.op, builder: (column) => column);
 
-  GeneratedColumn<int> get entityLocalId => $composableBuilder(
+  GeneratedColumn<String> get entityLocalId => $composableBuilder(
     column: $table.entityLocalId,
     builder: (column) => column,
   );
@@ -8344,7 +8708,7 @@ class $$TodoSyncChangesTableTableManager
                 Value<String> clientMutationId = const Value.absent(),
                 Value<String> entity = const Value.absent(),
                 Value<String> op = const Value.absent(),
-                Value<int?> entityLocalId = const Value.absent(),
+                Value<String?> entityLocalId = const Value.absent(),
                 Value<int?> entityServerId = const Value.absent(),
                 Value<String> payloadJson = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -8368,7 +8732,7 @@ class $$TodoSyncChangesTableTableManager
                 required String clientMutationId,
                 required String entity,
                 required String op,
-                Value<int?> entityLocalId = const Value.absent(),
+                Value<String?> entityLocalId = const Value.absent(),
                 Value<int?> entityServerId = const Value.absent(),
                 required String payloadJson,
                 required DateTime createdAt,

@@ -1,99 +1,60 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:package_info_plus/package_info_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 
-import '../../github_release_update.dart';
-import '../../settings_page.dart';
 import '../../state/session_state.dart';
 
-/// [TodoSettingsPage] 的状态容器：管理「检测更新」按钮的加载态与结果展示，
-/// 桌面自动更新逻辑迁移自旧版 main.dart（保持行为不变）；退出登录接入
-/// [sessionProvider]。
-class SettingsRoute extends ConsumerStatefulWidget {
+/// 设置页（精简版）：仅展示当前登录手机号 + 退出登录。
+///
+/// 旧版基于 [github_release_update] 的"检测更新"入口在此轮移除，避免与即将
+/// 删除的遗留文件产生硬依赖；后续若需恢复，可独立实现 IO 更新通道，再回来
+/// 接入。
+class SettingsRoute extends ConsumerWidget {
   const SettingsRoute({super.key, this.signedInMobile});
 
   final String? signedInMobile;
 
   @override
-  ConsumerState<SettingsRoute> createState() => _SettingsRouteState();
-}
-
-class _SettingsRouteState extends ConsumerState<SettingsRoute> {
-  GithubReleaseGateway? _releaseGateway;
-  bool _ownsReleaseGateway = false;
-  bool _checkingUpdate = false;
-
-  bool get _canCheckUpdate => shouldCheckGithubReleaseUpdate();
-
-  @override
-  void initState() {
-    super.initState();
-    if (_canCheckUpdate) {
-      _releaseGateway = GithubReleaseHttpClient(repo: githubReleaseRepo());
-      _ownsReleaseGateway = true;
-    }
-  }
-
-  @override
-  void dispose() {
-    if (_ownsReleaseGateway && _releaseGateway is GithubReleaseHttpClient) {
-      (_releaseGateway! as GithubReleaseHttpClient).close();
-    }
-    super.dispose();
-  }
-
-  Future<void> _checkForUpdate() async {
-    final gateway = _releaseGateway;
-    if (gateway == null || _checkingUpdate) return;
-    setState(() => _checkingUpdate = true);
-    try {
-      final info = await PackageInfo.fromPlatform();
-      final checker = GithubReleaseUpdateChecker(
-        gateway: gateway,
-        currentVersion: info.version,
-        includePrerelease: githubReleaseIncludePrerelease(),
-      );
-      final update = await checker.checkForUpdate();
-      if (!mounted) return;
-      if (update == null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('当前已是最新版本')));
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('发现新版本 ${update.version}'),
-          action: SnackBarAction(
-            label: '下载',
-            onPressed: () => launchUrl(Uri.parse(update.downloadUrl)),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    return Scaffold(
+      appBar: AppBar(title: const Text('设置')),
+      body: ListView(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Text('账号', style: theme.textTheme.titleSmall),
           ),
-        ),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('检测更新失败，请稍后重试')));
-    } finally {
-      if (mounted) setState(() => _checkingUpdate = false);
-    }
-  }
-
-  Future<void> _signOut() async {
-    await ref.read(sessionProvider.notifier).signOut();
-    if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return TodoSettingsPage(
-      canCheckUpdate: _canCheckUpdate,
-      checkingUpdate: _checkingUpdate,
-      onCheckUpdate: _canCheckUpdate ? _checkForUpdate : null,
-      signedInMobile: widget.signedInMobile,
-      onSignOut: _signOut,
+          if (signedInMobile != null && signedInMobile!.isNotEmpty)
+            ListTile(
+              leading: const Icon(Icons.phone_iphone_outlined),
+              title: const Text('当前账号'),
+              subtitle: Text(signedInMobile!),
+            ),
+          ListTile(
+            leading: const Icon(Icons.logout),
+            title: const Text('退出登录'),
+            onTap: () => _signOut(context, ref),
+          ),
+          const Divider(height: 24),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Text('关于', style: theme.textTheme.titleSmall),
+          ),
+          const ListTile(
+            leading: Icon(Icons.info_outline),
+            title: Text('版本号'),
+            subtitle: Text('zh-cloud todo（本地离线优先版）'),
+          ),
+        ],
+      ),
     );
+  }
+
+  Future<void> _signOut(BuildContext context, WidgetRef ref) async {
+    await ref.read(sessionProvider.notifier).signOut();
+    if (context.mounted) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
   }
 }

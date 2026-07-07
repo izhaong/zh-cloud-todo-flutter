@@ -3,20 +3,27 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
+import '../api/api_client.dart';
 import '../api/sync_api.dart';
-import '../api/todo_client.dart';
 import '../db/app_database.dart';
-import '../state/sync_change_queue.dart';
+import 'sync_entities.dart';
 
 /// 离线优先双向同步协调器。
 ///
-/// - [push]：批量上推 outbox（`todo_sync_change`，status=queued），
-///   创建操作用 `entityId = -localId` 作为临时 ID（与后端
-///   `TodoSyncServiceImpl.resolveEntityId` 的 `<=0` 约定一致），
-///   接受响应后回写本地 `serverId` / revision；冲突以服务端版本覆盖本地。
-/// - [pull]：按游标增量拉取远端变更/墓碑，upsert 或删除本地镜像行。
-/// - `folder` 不在后端 `/sync` 白名单内，[push] 时改为直连
-///   `/app-api/todo/folder` REST 端点（仍复用 outbox 做离线重试）。
+/// **ID 模型（对齐计划 P1 / 方案 A）**：
+/// - 本地实体主键为 UUID-v4（[TodoTask.id] 等），UI 与 Repository 一律以 UUID 为准。
+/// - 与后端 sync 协议（整数 `entityId` 键）的映射收敛在本层：
+///   - 已同步实体：`entityId = serverId`，`baseRevision` 取自 [AppDatabase.readRevision]。
+///   - 首次创建：`entityId = -<seq>`（负数临时 ID），后端批内解析后回写 `serverId`。
+///     临时 ID 序列仅在一次 push 批内有效（用 `_tempIdSeq` 自增）；本批 payload 里的
+///     本地 UUID 外键引用由 [_resolvePayloadRefs] 映射为同批临时/服务端 ID。
+/// - `folder` 不在 `/sync` 白名单：push 时改走 REST `/app-api/todo/folder`（仍复用 outbox）。
+///
+/// **冲突策略**：服务端优先——冲突时以 `serverValue` 覆盖本地行，并把该 outbox
+/// 项标记 `failed` 供上层提示；复杂合并不在本轮范围。
+///
+/// **触发时机**：应用启动、切前台、本地 mutation、网络恢复（由
+/// [SyncCoordinator.bindConnectivity] 注册；测试可不绑定）。
 class SyncCoordinator {
   SyncCoordinator({
     required this.db,
@@ -27,9 +34,12 @@ class SyncCoordinator {
 
   final AppDatabase db;
   final SyncApi api;
-  final TodoApiClient todoApi;
+  final ApiClient todoApi;
   final Uuid _uuid;
 
+  int _tempIdSeq = 0;
+
+  /// 单轮同步：先 push 本地变更，再 pull 远端增量。
   Future<SyncOutcome> syncOnce() async {
     final pushed = await push();
     final pulled = await pull();
@@ -41,7 +51,8 @@ class SyncCoordinator {
   Future<int> push() async {
     final pending = await (db.select(
       db.todoSyncChanges,
-    )..where((t) => t.status.equals('queued'))).get();
+    )..where((t) => t.status.equals('queued')))
+        .get();
     if (pending.isEmpty) return 0;
 
     final folderChanges = pending
@@ -67,7 +78,10 @@ class SyncCoordinator {
     if (dtos.isEmpty) return 0;
 
     try {
-      final result = await api.push(idempotencyKey: _uuid.v4(), changes: dtos);
+      final result = await api.push(
+        idempotencyKey: _uuid.v4(),
+        changes: dtos,
+      );
       for (final accepted in result.accepted) {
         await _applyAccepted(accepted);
       }
@@ -81,10 +95,17 @@ class SyncCoordinator {
       var count = 0;
       for (final change in changes) {
         if (acceptedIds.contains(change.clientMutationId)) {
+          final isConflict = result.conflicts.any(
+            (c) => c.clientMutationId == change.clientMutationId,
+          );
           await (db.update(db.todoSyncChanges)
                 ..where((t) => t.id.equals(change.id)))
-              .write(const TodoSyncChangesCompanion(status: Value('synced')));
-          count++;
+              .write(
+            TodoSyncChangesCompanion(
+              status: Value(isConflict ? 'failed' : 'synced'),
+            ),
+          );
+          if (!isConflict) count++;
         }
       }
       return count;
@@ -148,20 +169,22 @@ class SyncCoordinator {
     return count;
   }
 
+  /// 把一条 outbox 变更转为后端 `SyncChangeDto`。
   Future<SyncChangeDto?> _toChangeDto(TodoSyncChange change) async {
     final payload = jsonDecode(change.payloadJson) as Map<String, dynamic>;
     final isDelete = change.op == SyncOps.delete;
-    final entityId =
-        change.entityServerId ??
-        (change.entityLocalId == null ? null : -change.entityLocalId!);
-    if (entityId == null) return null;
+
+    // entityId：已同步用 serverId；首次创建用本批负数临时 ID。
+    int entityId;
+    if (change.entityServerId != null) {
+      entityId = change.entityServerId!;
+    } else {
+      entityId = -(++_tempIdSeq);
+    }
 
     int? baseRevision;
     if (change.entityServerId != null) {
-      baseRevision = await db.readRevision(
-        change.entity,
-        change.entityServerId!,
-      );
+      baseRevision = await db.readRevision(change.entity, change.entityServerId!);
     }
 
     final resolvedPayload = isDelete
@@ -180,30 +203,67 @@ class SyncCoordinator {
     );
   }
 
-  /// 把 payload 内引用本地表的外键（如 task.listId）替换为服务端 ID 或
-  /// 负数临时 ID（对应尚未同步的本地行），与后端 `resolvePayloadEntityRefs`
-  /// 的临时 ID 约定对齐。
+  /// 把 payload 内引用本地 UUID 的外键（如 task.listId）替换为服务端 ID
+  /// 或本批负数临时 ID（对应尚未同步的本地行），与后端
+  /// `resolvePayloadEntityRefs` 的临时 ID 约定对齐。
   Future<Map<String, dynamic>> _resolvePayloadRefs(
     String entity,
     Map<String, dynamic> payload,
   ) async {
     final resolved = Map<String, dynamic>.from(payload);
     if (entity == SyncEntities.task && resolved.containsKey('listId')) {
-      final localListId = (resolved['listId'] as num?)?.toInt();
-      if (localListId != null) {
+      final localListId = resolved['listId']?.toString();
+      if (localListId != null && localListId.isNotEmpty) {
         final list = await (db.select(
           db.todoLists,
         )..where((t) => t.id.equals(localListId))).getSingleOrNull();
-        resolved['listId'] = list?.serverId ?? -localListId;
+        resolved['listId'] = list?.serverId ?? -(++_tempIdSeq);
       }
     }
-    if (entity == SyncEntities.taskTag && resolved.containsKey('taskId')) {
-      final localTaskId = (resolved['taskId'] as num?)?.toInt();
-      if (localTaskId != null) {
+    if (entity == SyncEntities.task && resolved.containsKey('parentTaskId')) {
+      final localParentId = resolved['parentTaskId']?.toString();
+      if (localParentId != null && localParentId.isNotEmpty) {
+        final parent = await (db.select(
+          db.todoTasks,
+        )..where((t) => t.id.equals(localParentId))).getSingleOrNull();
+        resolved['parentTaskId'] = parent?.serverId ?? -(++_tempIdSeq);
+      }
+    }
+    if (entity == SyncEntities.taskTag) {
+      final localTaskId = resolved['taskId']?.toString();
+      if (localTaskId != null && localTaskId.isNotEmpty) {
         final task = await (db.select(
           db.todoTasks,
         )..where((t) => t.id.equals(localTaskId))).getSingleOrNull();
-        resolved['taskId'] = task?.serverId ?? -localTaskId;
+        resolved['taskId'] = task?.serverId ?? -(++_tempIdSeq);
+      }
+      final localTagId = resolved['tagId']?.toString();
+      if (localTagId != null && localTagId.isNotEmpty) {
+        final tag = await (db.select(
+          db.todoTags,
+        )..where((t) => t.id.equals(localTagId))).getSingleOrNull();
+        resolved['tagId'] = tag?.serverId ?? -(++_tempIdSeq);
+      }
+    }
+    if (entity == SyncEntities.reminder ||
+        entity == SyncEntities.repeatRule ||
+        entity == SyncEntities.repeatSkip) {
+      final localTaskId = resolved['taskId']?.toString();
+      if (localTaskId != null && localTaskId.isNotEmpty) {
+        final task = await (db.select(
+          db.todoTasks,
+        )..where((t) => t.id.equals(localTaskId))).getSingleOrNull();
+        resolved['taskId'] = task?.serverId ?? -(++_tempIdSeq);
+      }
+    }
+    if (entity == SyncEntities.repeatSkip &&
+        resolved.containsKey('repeatRuleId')) {
+      final localRuleId = resolved['repeatRuleId']?.toString();
+      if (localRuleId != null && localRuleId.isNotEmpty) {
+        final rule = await (db.select(
+          db.todoRepeatRules,
+        )..where((t) => t.id.equals(localRuleId))).getSingleOrNull();
+        resolved['repeatRuleId'] = rule?.serverId ?? -(++_tempIdSeq);
       }
     }
     // 移除仅本地使用的字段，避免污染服务端 payload。
@@ -221,7 +281,7 @@ class SyncCoordinator {
         accepted.revision!,
       );
     }
-    // 回写本地行的 serverId（创建场景：本地行此前 serverId 为 null）。
+    // 创建场景：回写本地行的 serverId（按 clientMutationId 找 outbox → entityLocalId）。
     switch (accepted.entityType) {
       case SyncEntities.list:
         await _bindServerId(
@@ -244,20 +304,54 @@ class SyncCoordinator {
           accepted.clientMutationId,
           accepted.entityId!,
         );
+      case SyncEntities.reminder:
+        await _bindServerId(
+          db.todoReminders,
+          db.todoReminders.serverId,
+          accepted.clientMutationId,
+          accepted.entityId!,
+        );
+      case SyncEntities.repeatRule:
+        await _bindServerId(
+          db.todoRepeatRules,
+          db.todoRepeatRules.serverId,
+          accepted.clientMutationId,
+          accepted.entityId!,
+        );
+      case SyncEntities.repeatSkip:
+        await _bindServerId(
+          db.todoRepeatSkips,
+          db.todoRepeatSkips.serverId,
+          accepted.clientMutationId,
+          accepted.entityId!,
+        );
+      case SyncEntities.viewPreference:
+        await _bindServerId(
+          db.todoViewPreferences,
+          db.todoViewPreferences.serverId,
+          accepted.clientMutationId,
+          accepted.entityId!,
+        );
+      case SyncEntities.filter:
+        await _bindServerId(
+          db.todoFilters,
+          db.todoFilters.serverId,
+          accepted.clientMutationId,
+          accepted.entityId!,
+        );
     }
   }
 
   Future<void> _bindServerId<T extends Table, D>(
     TableInfo<T, D> table,
-    Column<int> serverIdColumn,
+    GeneratedColumn serverIdColumn,
     String? clientMutationId,
     int entityId,
   ) async {
     if (clientMutationId == null) return;
-    final change =
-        await (db.select(db.todoSyncChanges)
-              ..where((t) => t.clientMutationId.equals(clientMutationId)))
-            .getSingleOrNull();
+    final change = await (db.select(db.todoSyncChanges)
+          ..where((t) => t.clientMutationId.equals(clientMutationId)))
+        .getSingleOrNull();
     final localId = change?.entityLocalId;
     if (localId == null) return;
     await (db.update(table)..where((t) => (t as dynamic).id.equals(localId)))
@@ -271,15 +365,25 @@ class SyncCoordinator {
     if (serverValue == null) return;
     switch (conflict.entityType) {
       case SyncEntities.task:
-        await _upsertLocalTask(conflict.entityId!, serverValue, null);
+        await _upsertLocalTask(conflict.entityId!, serverValue);
       case SyncEntities.list:
-        await _upsertLocalList(conflict.entityId!, serverValue, null);
+        await _upsertLocalList(conflict.entityId!, serverValue);
       case SyncEntities.tag:
-        await _upsertLocalTag(conflict.entityId!, serverValue, null);
+        await _upsertLocalTag(conflict.entityId!, serverValue);
+      case SyncEntities.reminder:
+        await _upsertLocalReminder(conflict.entityId!, serverValue);
+      case SyncEntities.repeatRule:
+        await _upsertLocalRepeatRule(conflict.entityId!, serverValue);
+      case SyncEntities.repeatSkip:
+        await _upsertLocalRepeatSkip(conflict.entityId!, serverValue);
+      case SyncEntities.viewPreference:
+        await _upsertLocalViewPreference(conflict.entityId!, serverValue);
+      case SyncEntities.filter:
+        await _upsertLocalFilter(conflict.entityId!, serverValue);
     }
   }
 
-  // --- Pull --------------------------------------------------------------
+  // --- Pull ------------------------------------------------------------
 
   Future<int> pull({int limit = 200}) async {
     var applied = 0;
@@ -312,19 +416,24 @@ class SyncCoordinator {
     }
     switch (change.entityType) {
       case SyncEntities.list:
-        await _upsertLocalList(entityId, payload, change.revision);
+        await _upsertLocalList(entityId, payload);
       case SyncEntities.task:
-        await _upsertLocalTask(entityId, payload, change.revision);
+        await _upsertLocalTask(entityId, payload);
       case SyncEntities.tag:
-        await _upsertLocalTag(entityId, payload, change.revision);
+        await _upsertLocalTag(entityId, payload);
       case SyncEntities.reminder:
         await _upsertLocalReminder(entityId, payload);
       case SyncEntities.repeatRule:
         await _upsertLocalRepeatRule(entityId, payload);
+      case SyncEntities.repeatSkip:
+        await _upsertLocalRepeatSkip(entityId, payload);
       case SyncEntities.viewPreference:
         await _upsertLocalViewPreference(entityId, payload);
       case SyncEntities.filter:
         await _upsertLocalFilter(entityId, payload);
+      case SyncEntities.taskTag:
+        // task_tag 不允许客户端 push；pull 时按 serverId 级联 upsert。
+        await _upsertLocalTaskTag(entityId, payload);
     }
   }
 
@@ -342,21 +451,46 @@ class SyncCoordinator {
         await (db.delete(
           db.todoTags,
         )..where((t) => t.serverId.equals(tombstone.entityId))).go();
+      case SyncEntities.reminder:
+        await (db.delete(
+          db.todoReminders,
+        )..where((t) => t.serverId.equals(tombstone.entityId))).go();
+      case SyncEntities.repeatRule:
+        await (db.delete(
+          db.todoRepeatRules,
+        )..where((t) => t.serverId.equals(tombstone.entityId))).go();
+      case SyncEntities.repeatSkip:
+        await (db.delete(
+          db.todoRepeatSkips,
+        )..where((t) => t.serverId.equals(tombstone.entityId))).go();
+      case SyncEntities.viewPreference:
+        await (db.delete(
+          db.todoViewPreferences,
+        )..where((t) => t.serverId.equals(tombstone.entityId))).go();
+      case SyncEntities.filter:
+        await (db.delete(
+          db.todoFilters,
+        )..where((t) => t.serverId.equals(tombstone.entityId))).go();
+      case SyncEntities.taskTag:
+        await (db.delete(
+          db.todoTaskTags,
+        )..where((t) => t.serverId.equals(tombstone.entityId))).go();
     }
   }
+
+  // --- 本地 upsert（按 serverId 查行；命中则更新，否则新建本地 UUID 行）-----
 
   Future<void> _upsertLocalList(
     int serverId,
     Map<String, dynamic> payload,
-    int? revision,
   ) async {
-    final existing = await (db.select(
-      db.todoLists,
-    )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
+    final existing = await db.listByServerId(serverId);
     final now = DateTime.now();
     final companion = TodoListsCompanion(
+      id: Value(existing?.id ?? _uuid.v4()),
       serverId: Value(serverId),
       name: Value(payload['name']?.toString() ?? existing?.name ?? ''),
+      folderId: Value((payload['folderId'] as num?)?.toInt() ?? existing?.folderId),
       sortOrder: Value((payload['sortOrder'] as num?)?.toInt() ?? 0),
       updatedAt: Value(now),
       createdAt: Value(existing?.createdAt ?? now),
@@ -373,19 +507,21 @@ class SyncCoordinator {
   Future<void> _upsertLocalTask(
     int serverId,
     Map<String, dynamic> payload,
-    int? revision,
   ) async {
-    final existing = await (db.select(
-      db.todoTasks,
-    )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
+    final existing = await db.taskByServerId(serverId);
     final localListId = await _localListIdForServerId(
       (payload['listId'] as num?)?.toInt(),
+    );
+    final localParentId = await _localTaskIdForServerId(
+      (payload['parentTaskId'] as num?)?.toInt(),
     );
     final now = DateTime.now();
     final status = payload['status']?.toString();
     final companion = TodoTasksCompanion(
+      id: Value(existing?.id ?? _uuid.v4()),
       serverId: Value(serverId),
-      listId: Value(localListId ?? existing?.listId ?? 0),
+      listId: Value(localListId ?? existing?.listId ?? ''),
+      parentTaskId: Value(localParentId ?? existing?.parentTaskId),
       title: Value(payload['title']?.toString() ?? existing?.title ?? ''),
       description: Value(payload['description']?.toString()),
       completed: Value(status == 'DONE' || status == 'COMPLETED'),
@@ -410,13 +546,11 @@ class SyncCoordinator {
   Future<void> _upsertLocalTag(
     int serverId,
     Map<String, dynamic> payload,
-    int? revision,
   ) async {
-    final existing = await (db.select(
-      db.todoTags,
-    )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
+    final existing = await db.tagByServerId(serverId);
     final now = DateTime.now();
     final companion = TodoTagsCompanion(
+      id: Value(existing?.id ?? _uuid.v4()),
       serverId: Value(serverId),
       name: Value(payload['name']?.toString() ?? existing?.name ?? ''),
       color: Value(payload['color']?.toString()),
@@ -445,9 +579,12 @@ class SyncCoordinator {
     )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
     final now = DateTime.now();
     final companion = TodoRemindersCompanion(
+      id: Value(existing?.id ?? _uuid.v4()),
       serverId: Value(serverId),
       taskId: Value(localTaskId),
-      remindAt: Value(_parseDate(payload['remindAt']) ?? now),
+      remindAt: Value(
+        _parseDate(payload['remindAt'] ?? payload['fireAt']) ?? now,
+      ),
       status: Value(payload['status']?.toString() ?? 'PENDING'),
       updatedAt: Value(now),
       createdAt: Value(existing?.createdAt ?? now),
@@ -474,12 +611,15 @@ class SyncCoordinator {
     )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
     final now = DateTime.now();
     final companion = TodoRepeatRulesCompanion(
+      id: Value(existing?.id ?? _uuid.v4()),
       serverId: Value(serverId),
       taskId: Value(localTaskId),
-      freq: Value(payload['freq']?.toString() ?? 'DAILY'),
-      interval: Value((payload['interval'] as num?)?.toInt() ?? 1),
-      byDay: Value(payload['byDay']?.toString()),
-      until: Value(_parseDate(payload['until'])),
+      freq: Value(payload['frequency']?.toString() ?? payload['freq']?.toString() ?? 'DAILY'),
+      interval: Value((payload['intervalValue'] as num?)?.toInt() ??
+          (payload['interval'] as num?)?.toInt() ??
+          1),
+      byDay: Value(payload['weekdays']?.toString() ?? payload['byDay']?.toString()),
+      until: Value(_parseDate(payload['untilAt'] ?? payload['until'])),
       updatedAt: Value(now),
       createdAt: Value(existing?.createdAt ?? now),
     );
@@ -492,23 +632,57 @@ class SyncCoordinator {
     }
   }
 
+  Future<void> _upsertLocalRepeatSkip(
+    int serverId,
+    Map<String, dynamic> payload,
+  ) async {
+    final localTaskId = await _localTaskIdForServerId(
+      (payload['taskId'] as num?)?.toInt(),
+    );
+    final localRuleId = await _localRepeatRuleIdForServerId(
+      (payload['repeatRuleId'] as num?)?.toInt(),
+    );
+    if (localTaskId == null || localRuleId == null) return;
+    final existing = await (db.select(
+      db.todoRepeatSkips,
+    )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
+    final now = DateTime.now();
+    final companion = TodoRepeatSkipsCompanion(
+      id: Value(existing?.id ?? _uuid.v4()),
+      serverId: Value(serverId),
+      taskId: Value(localTaskId),
+      repeatRuleId: Value(localRuleId),
+      occurrenceDate: Value(_parseDate(payload['occurrenceAt']) ?? now),
+      updatedAt: Value(now),
+      createdAt: Value(existing?.createdAt ?? now),
+    );
+    if (existing == null) {
+      await db.into(db.todoRepeatSkips).insert(companion);
+    } else {
+      await (db.update(
+        db.todoRepeatSkips,
+      )..where((t) => t.id.equals(existing.id))).write(companion);
+    }
+  }
+
   Future<void> _upsertLocalViewPreference(
     int serverId,
     Map<String, dynamic> payload,
   ) async {
-    final scope = payload['scope']?.toString() ?? 'default';
+    final sourceType = payload['sourceType']?.toString() ?? 'default';
+    final sourceKey = payload['sourceKey']?.toString() ?? 'default';
     final now = DateTime.now();
-    await db
-        .into(db.todoViewPreferences)
-        .insertOnConflictUpdate(
-          TodoViewPreferencesCompanion.insert(
-            serverId: Value(serverId),
-            scope: scope,
-            valueJson: jsonEncode(payload),
-            updatedAt: now,
-            createdAt: now,
-          ),
-        );
+    await db.into(db.todoViewPreferences).insertOnConflictUpdate(
+      TodoViewPreferencesCompanion.insert(
+        id: _uuid.v4(),
+        serverId: Value(serverId),
+        sourceType: sourceType,
+        sourceKey: sourceKey,
+        valueJson: jsonEncode(payload),
+        updatedAt: now,
+        createdAt: now,
+      ),
+    );
   }
 
   Future<void> _upsertLocalFilter(
@@ -520,9 +694,10 @@ class SyncCoordinator {
     )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
     final now = DateTime.now();
     final companion = TodoFiltersCompanion(
+      id: Value(existing?.id ?? _uuid.v4()),
       serverId: Value(serverId),
       name: Value(payload['name']?.toString() ?? existing?.name ?? ''),
-      conditionJson: Value(jsonEncode(payload['condition'] ?? payload)),
+      conditionJson: Value(jsonEncode(payload['conditionsJson'] ?? payload['conditions'] ?? payload)),
       sortOrder: Value((payload['sortOrder'] as num?)?.toInt() ?? 0),
       updatedAt: Value(now),
       createdAt: Value(existing?.createdAt ?? now),
@@ -536,18 +711,53 @@ class SyncCoordinator {
     }
   }
 
-  Future<int?> _localListIdForServerId(int? serverId) async {
-    if (serverId == null) return null;
-    final row = await (db.select(
-      db.todoLists,
-    )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
-    return row?.id;
+  Future<void> _upsertLocalTaskTag(
+    int serverId,
+    Map<String, dynamic> payload,
+  ) async {
+    final localTaskId = await _localTaskIdForServerId(
+      (payload['taskId'] as num?)?.toInt(),
+    );
+    final localTagId = await _localTagIdForServerId(
+      (payload['tagId'] as num?)?.toInt(),
+    );
+    if (localTaskId == null || localTagId == null) return;
+    final existing = await (db.select(db.todoTaskTags)
+          ..where(
+            (t) => t.taskId.equals(localTaskId) & t.tagId.equals(localTagId),
+          ))
+        .getSingleOrNull();
+    if (existing != null) return; // 复合键已存在，跳过
+    await db.into(db.todoTaskTags).insert(
+      TodoTaskTagsCompanion.insert(
+        taskId: localTaskId,
+        tagId: localTagId,
+        serverId: Value(serverId),
+      ),
+    );
   }
 
-  Future<int?> _localTaskIdForServerId(int? serverId) async {
-    if (serverId == null) return null;
+  // --- serverId → 本地 UUID 映射 ----------------------------------------
+
+  Future<String?> _localListIdForServerId(int? serverId) async {
+    if (serverId == null || serverId <= 0) return null;
+    return (await db.listByServerId(serverId))?.id;
+  }
+
+  Future<String?> _localTaskIdForServerId(int? serverId) async {
+    if (serverId == null || serverId <= 0) return null;
+    return (await db.taskByServerId(serverId))?.id;
+  }
+
+  Future<String?> _localTagIdForServerId(int? serverId) async {
+    if (serverId == null || serverId <= 0) return null;
+    return (await db.tagByServerId(serverId))?.id;
+  }
+
+  Future<String?> _localRepeatRuleIdForServerId(int? serverId) async {
+    if (serverId == null || serverId <= 0) return null;
     final row = await (db.select(
-      db.todoTasks,
+      db.todoRepeatRules,
     )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
     return row?.id;
   }
@@ -561,7 +771,6 @@ class SyncCoordinator {
 
 class SyncOutcome {
   SyncOutcome({required this.pushed, required this.pulled});
-
   final int pushed;
   final int pulled;
 }

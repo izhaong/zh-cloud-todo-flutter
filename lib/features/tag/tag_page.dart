@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../db/app_database.dart';
+import '../../core/db/app_database.dart';
 import '../../state/providers.dart';
 import '../../state/repositories/tag_repository.dart';
 import 'tag_color.dart';
@@ -58,7 +58,7 @@ class TagPage extends ConsumerWidget {
   Future<void> _create(BuildContext context, WidgetRef ref) async {
     final result = await _promptNameColor(context);
     if (result == null) return;
-    await ref.read(tagRepositoryProvider).create(
+    await ref.read(tagRepositoryProvider)!.create(
           name: result.$1,
           color: result.$2,
         );
@@ -75,7 +75,7 @@ class TagPage extends ConsumerWidget {
       initialColor: tag.color,
     );
     if (result == null) return;
-    await ref.read(tagRepositoryProvider).update(
+    await ref.read(tagRepositoryProvider)!.update(
           tag.id,
           name: result.$1,
           color: result.$2,
@@ -105,7 +105,7 @@ class TagPage extends ConsumerWidget {
       ),
     );
     if (ok == true) {
-      await ref.read(tagRepositoryProvider).delete(tag.id);
+      await ref.read(tagRepositoryProvider)!.delete(tag.id);
     }
   }
 

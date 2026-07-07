@@ -1,5 +1,8 @@
 import 'package:dio/dio.dart';
 
+import 'api_client.dart';
+import 'api_config.dart';
+
 /// `/app-api/todo/sync/{pull,push}` 请求/响应 DTO。
 ///
 /// 字段命名严格对齐后端 `AppTodoSync*VO`（Jackson `@JsonProperty` 已注明的
@@ -131,24 +134,22 @@ class SyncPushResult {
   final String? nextCursor;
 }
 
-/// `/app-api/todo/sync/{pull,push}` 客户端；直接用业务 API 的 dio 实例
-/// （已由 [TodoApiClient] 注入 Bearer/tenant-id）。
+/// `/app-api/todo/sync/{pull,push}` 客户端；复用业务 [ApiClient] 的 dio
+/// 实例（已注入 Bearer/tenant-id）。
 class SyncApi {
-  SyncApi(this._dio, {required this.clientId, required this.deviceId});
+  SyncApi(this._client, {required this.clientId, required this.deviceId});
 
-  final Dio _dio;
+  final ApiClient _client;
   final String clientId;
   final String deviceId;
-
-  static const _prefix = '/app-api/todo/sync';
 
   Future<SyncPullResult> pull({
     String? cursor,
     int limit = 200,
     List<String>? entityTypes,
   }) async {
-    final resp = await _dio.post<Map<String, dynamic>>(
-      '$_prefix/pull',
+    final resp = await _client.raw.post<Map<String, dynamic>>(
+      '${ApiConfig.syncPrefix}/pull',
       data: {
         'client_id': clientId,
         'device_id': deviceId,
@@ -178,8 +179,8 @@ class SyncApi {
     required String idempotencyKey,
     required List<SyncChangeDto> changes,
   }) async {
-    final resp = await _dio.post<Map<String, dynamic>>(
-      '$_prefix/push',
+    final resp = await _client.raw.post<Map<String, dynamic>>(
+      '${ApiConfig.syncPrefix}/push',
       data: {
         'client_id': clientId,
         'device_id': deviceId,
@@ -204,15 +205,14 @@ class SyncApi {
     );
   }
 
-  /// 统一响应信封 `{code, msg, data}`，`code != 0` 视为业务错误（由 dio 400+ 状态码
-  /// 或此处对 `code` 的判断共同兜底）。
+  /// 统一响应信封 `{code, msg, data}`，`code != 0` 视为业务错误。
   Map<String, dynamic> _unwrap(Map<String, dynamic>? body) {
     if (body == null) return const {};
     if (body.containsKey('code')) {
       final code = body['code'];
       if (code != 0) {
         throw DioException(
-          requestOptions: RequestOptions(path: _prefix),
+          requestOptions: RequestOptions(path: ApiConfig.syncPrefix),
           error: body['msg'] ?? '同步请求失败',
         );
       }

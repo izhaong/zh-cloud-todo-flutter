@@ -1,18 +1,21 @@
 import 'package:drift/drift.dart';
+import 'package:uuid/uuid.dart';
 
-import '../../db/app_database.dart';
-import '../sync_change_queue.dart';
+import '../../core/db/app_database.dart';
+import '../../core/sync/sync_change_queue.dart';
+import '../../core/sync/sync_entities.dart';
 
 /// M11-B2 清单 / 智能清单仓库。
 ///
-/// - 写操作入 drift（UI 真相源）
-/// - 同时 [SyncChangeQueue.enqueue] 把 mutation 投到 [TodoSyncChanges]
+/// - 写操作入 drift（UI 真相源）+ sync_queue
 /// - 智能清单（`smart:` 前缀的 list）由 [SmartListFilter] 解析
 class ListRepository {
-  ListRepository(this._db, this._queue);
+  ListRepository(this._db, this._queue, {Uuid? uuid})
+    : _uuid = uuid ?? const Uuid();
 
   final AppDatabase _db;
   final SyncChangeQueue _queue;
+  final Uuid _uuid;
 
   /// 顶层非智能清单（不解析 smart 前缀），按 folderId / sortOrder 排序。
   Stream<List<TodoList>> watchAll() {
@@ -56,8 +59,10 @@ class ListRepository {
     int sortOrder = 0,
   }) async {
     final now = DateTime.now();
-    final id = await _db.into(_db.todoLists).insert(
+    final id = _uuid.v4();
+    await _db.into(_db.todoLists).insert(
       TodoListsCompanion.insert(
+        id: id,
         name: name,
         folderId: Value(folderId),
         sortOrder: Value(sortOrder),
@@ -77,7 +82,7 @@ class ListRepository {
     return row;
   }
 
-  Future<TodoList> rename(int listId, String newName) async {
+  Future<TodoList> rename(String listId, String newName) async {
     final now = DateTime.now();
     await (_db.update(_db.todoLists)..where((t) => t.id.equals(listId)))
         .write(TodoListsCompanion(
@@ -97,7 +102,7 @@ class ListRepository {
     return row;
   }
 
-  Future<void> reorder(List<int> orderedIds) async {
+  Future<void> reorder(List<String> orderedIds) async {
     for (var i = 0; i < orderedIds.length; i++) {
       await (_db.update(_db.todoLists)
             ..where((t) => t.id.equals(orderedIds[i])))
@@ -108,13 +113,11 @@ class ListRepository {
     }
   }
 
-  /// 删除清单：调用方应先 [countOpenTasksByList]，如有未完成任务需拦截。
-  Future<void> delete(int listId) async {
+  Future<void> delete(String listId) async {
     final row = await (_db.select(_db.todoLists)
           ..where((t) => t.id.equals(listId)))
         .getSingleOrNull();
-    await (_db.delete(_db.todoLists)..where((t) => t.id.equals(listId)))
-        .go();
+    await (_db.delete(_db.todoLists)..where((t) => t.id.equals(listId))).go();
     await _queue.enqueue(
       entity: SyncEntities.list,
       op: SyncOps.delete,
@@ -124,14 +127,15 @@ class ListRepository {
     );
   }
 
-  /// 把过滤条件物化为"智能清单"：name = `smart:<filterName>`，payloadJson 写进 description。
   Future<TodoList> saveSmart({
     required String filterName,
     required Map<String, dynamic> filter,
   }) async {
     final now = DateTime.now();
-    final id = await _db.into(_db.todoLists).insert(
+    final id = _uuid.v4();
+    await _db.into(_db.todoLists).insert(
       TodoListsCompanion.insert(
+        id: id,
         name: 'smart:$filterName',
         folderId: const Value(null),
         sortOrder: const Value(0),
@@ -167,9 +171,9 @@ class SmartListFilter {
     this.completed,
   });
 
-  final int? listId;
+  final String? listId;
   final int? folderId;
-  final List<int> tagIds;
+  final List<String> tagIds;
   final int? priority;
   final String? dueRange;
   final bool? completed;
@@ -185,9 +189,9 @@ class SmartListFilter {
 
   factory SmartListFilter.fromJson(Map<String, dynamic> json) {
     return SmartListFilter(
-      listId: json['listId'] as int?,
+      listId: json['listId'] as String?,
       folderId: json['folderId'] as int?,
-      tagIds: (json['tagIds'] as List?)?.cast<int>() ?? const [],
+      tagIds: (json['tagIds'] as List?)?.cast<String>() ?? const [],
       priority: json['priority'] as int?,
       dueRange: json['dueRange'] as String?,
       completed: json['completed'] as bool?,
@@ -195,10 +199,7 @@ class SmartListFilter {
   }
 
   factory SmartListFilter.fromListName(String listName) {
-    // 解析 `smart:<filterName>` 中的 filterName 后回退到默认 = 全部
-    if (!listName.startsWith('smart:')) {
-      return SmartListFilter();
-    }
+    if (!listName.startsWith('smart:')) return SmartListFilter();
     final name = listName.substring('smart:'.length);
     switch (name) {
       case 'today':

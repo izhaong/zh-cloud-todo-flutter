@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../db/app_database.dart';
+import '../../core/db/app_database.dart';
 import '../../state/providers.dart';
 import 'task_quick_add_sheet.dart';
 
@@ -16,7 +16,7 @@ import 'task_quick_add_sheet.dart';
 class TaskDetailPage extends ConsumerStatefulWidget {
   const TaskDetailPage({super.key, required this.taskId, this.asSheet = false});
 
-  final int taskId;
+  final String taskId;
 
   /// 是否以 Sheet 模式渲染（无 Scaffold/AppBar，自带拖拽手柄 + 关闭按钮）
   final bool asSheet;
@@ -41,7 +41,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   }
 
   Future<void> _bootstrap() async {
-    final t = await ref.read(taskRepositoryProvider).getById(widget.taskId);
+    final t = await ref.read(taskRepositoryProvider)!.getById(widget.taskId);
     if (!mounted) return;
     setState(() {
       _task = t;
@@ -62,7 +62,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   Future<void> _save() async {
     final t = _task;
     if (t == null) return;
-    await ref.read(taskRepositoryProvider).update(
+    await ref.read(taskRepositoryProvider)!.update(
           t.id,
           title: _title.text.trim(),
           description: _desc.text.trim(),
@@ -76,11 +76,11 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   }
 
   Future<void> _toggleComplete(TodoTask t) async {
-    await ref.read(taskRepositoryProvider).toggleComplete(t.id);
+    await ref.read(taskRepositoryProvider)!.toggleComplete(t.id);
   }
 
   Future<void> _togglePin(TodoTask t) async {
-    final next = await ref.read(taskRepositoryProvider).togglePin(t.id);
+    final next = await ref.read(taskRepositoryProvider)!.togglePin(t.id);
     if (!mounted) return;
     setState(() => _task = next);
     ScaffoldMessenger.of(context).showSnackBar(
@@ -107,7 +107,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
       ),
     );
     if (ok == true) {
-      await ref.read(taskRepositoryProvider).delete(t.id);
+      await ref.read(taskRepositoryProvider)!.delete(t.id);
       if (mounted) Navigator.of(context).pop();
     }
   }
@@ -351,7 +351,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
 /// ```
 Future<void> showTaskDetailSheet(
   BuildContext context,
-  int taskId, {
+  String taskId, {
   bool useRootNavigator = true,
 }) async {
   final isWide = MediaQuery.sizeOf(context).width >= 600;
@@ -416,13 +416,13 @@ class _RightSideSheet extends StatelessWidget {
 class _SubtaskList extends ConsumerWidget {
   const _SubtaskList({required this.taskId, required this.onAdd});
 
-  final int taskId;
+  final String taskId;
   final VoidCallback onAdd;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return StreamBuilder<List<TodoTask>>(
-      stream: ref.watch(taskRepositoryProvider).watchChildrenOf(taskId),
+      stream: ref.watch(taskRepositoryProvider)!.watchChildrenOf(taskId),
       builder: (ctx, snap) {
         final items = snap.data ?? const <TodoTask>[];
         if (items.isEmpty) {
@@ -448,8 +448,7 @@ class _SubtaskList extends ConsumerWidget {
                     ),
                   ),
                   onChanged: (_) async {
-                    await ref
-                        .read(taskRepositoryProvider)
+                    await ref                        .read(taskRepositoryProvider)!
                         .toggleComplete(st.id);
                   },
                 ),
@@ -464,18 +463,18 @@ class _SubtaskList extends ConsumerWidget {
 class _TagChips extends ConsumerStatefulWidget {
   const _TagChips({required this.taskId});
 
-  final int taskId;
+  final String taskId;
 
   @override
   ConsumerState<_TagChips> createState() => _TagChipsState();
 }
 
 class _TagChipsState extends ConsumerState<_TagChips> {
-  Set<int> _selected = {};
+  Set<String> _selected = {};
   bool _loaded = false;
 
   Future<void> _bootstrap() async {
-    final ids = await ref.read(tagRepositoryProvider).tagIdsOf(widget.taskId);
+    final ids = await ref.read(tagRepositoryProvider)!.tagIdsOf(widget.taskId);
     if (!mounted) return;
     setState(() {
       _selected = ids.toSet();
@@ -483,7 +482,7 @@ class _TagChipsState extends ConsumerState<_TagChips> {
     });
   }
 
-  Future<void> _toggle(int tagId) async {
+  Future<void> _toggle(String tagId) async {
     setState(() {
       if (_selected.contains(tagId)) {
         _selected.remove(tagId);
@@ -491,8 +490,7 @@ class _TagChipsState extends ConsumerState<_TagChips> {
         _selected.add(tagId);
       }
     });
-    await ref
-        .read(tagRepositoryProvider)
+    await ref        .read(tagRepositoryProvider)!
         .setTaskTags(widget.taskId, _selected.toList());
   }
 

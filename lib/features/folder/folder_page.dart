@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../db/app_database.dart';
+import '../../core/db/app_database.dart';
 import '../../state/providers.dart';
 
 /// M11-B2 文件夹管理页（独立页面）。
@@ -56,7 +56,7 @@ class FolderPage extends ConsumerWidget {
   Future<void> _create(BuildContext context, WidgetRef ref) async {
     final name = await _promptName(context, '新建文件夹');
     if (name == null || name.isEmpty) return;
-    await ref.read(folderRepositoryProvider).create(name);
+    await ref.read(folderRepositoryProvider)!.create(name);
   }
 
   Future<void> _rename(
@@ -70,7 +70,7 @@ class FolderPage extends ConsumerWidget {
       initial: folder.name,
     );
     if (name == null || name.isEmpty) return;
-    await ref.read(folderRepositoryProvider).rename(folder.id, name);
+    await ref.read(folderRepositoryProvider)!.rename(folder.id, name);
   }
 
   Future<void> _delete(
@@ -96,7 +96,7 @@ class FolderPage extends ConsumerWidget {
       ),
     );
     if (ok == true) {
-      await ref.read(folderRepositoryProvider).delete(folder.id);
+      await ref.read(folderRepositoryProvider)!.delete(folder.id);
     }
   }
 
