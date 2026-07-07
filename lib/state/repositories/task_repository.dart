@@ -179,6 +179,24 @@ class TaskRepository {
     );
   }
 
+  /// 计算任务在父子链中的深度（自身为 0，即顶层任务 = 0）。
+  ///
+  /// 用于 §2.2 子任务深度 ≤5 的抽屉：在 [parentTaskId] 下新增子任务前校验
+  /// `depthOf(parentTaskId) < 5`，避免超过服务端嵌套上限。
+  Future<int> depthOf(String taskId) async {
+    var depth = 0;
+    var current = taskId;
+    while (true) {
+      final row = await (_db.select(_db.todoTasks)
+            ..where((t) => t.id.equals(current)))
+          .getSingleOrNull();
+      final parent = row?.parentTaskId;
+      if (parent == null) return depth;
+      depth += 1;
+      current = parent;
+    }
+  }
+
   Future<List<TodoTask>> _collectDescendants(String parentId) async {
     final result = <TodoTask>[];
     final queue = [parentId];

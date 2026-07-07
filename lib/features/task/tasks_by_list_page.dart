@@ -27,10 +27,14 @@ class TasksByListPage extends ConsumerStatefulWidget {
   ConsumerState<TasksByListPage> createState() => _TasksByListPageState();
 }
 
+/// §2.6 列表视图排序方式。
+enum TaskSort { smart, priorityDesc, dueDate, title, createdAt }
+
 class _TasksByListPageState extends ConsumerState<TasksByListPage> {
-  String? _selectedListId; // null = 全部
+  String? _selectedListId; // null = 全部；kInboxListId = 收件箱
   TaskFilter _filter = TaskFilter();
   TaskViewMode _mode = TaskViewMode.list;
+  TaskSort _sort = TaskSort.smart;
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +47,20 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('任务'),
+        actions: [
+          PopupMenuButton<TaskSort>(
+            tooltip: '排序',
+            icon: const Icon(Icons.sort),
+            onSelected: (v) => setState(() => _sort = v),
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: TaskSort.smart, child: Text('智能（置顶优先）')),
+              PopupMenuItem(value: TaskSort.priorityDesc, child: Text('优先级')),
+              PopupMenuItem(value: TaskSort.dueDate, child: Text('截止日期')),
+              PopupMenuItem(value: TaskSort.title, child: Text('标题')),
+              PopupMenuItem(value: TaskSort.createdAt, child: Text('创建时间')),
+            ],
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -50,6 +68,10 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
             listsAsync: listsAsync,
             selectedListId: _selectedListId,
             onChanged: (id) => setState(() => _selectedListId = id),
+          ),
+          if (_mode == TaskViewMode.list) _SmartTaskChips(
+            filter: _filter,
+            onChanged: (f) => setState(() => _filter = f),
           ),
           TaskViewModeTabs(
             mode: _mode,
@@ -71,13 +93,13 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
               tasksStream: tasksStream,
               filter: _filter,
               selectedListId: _selectedListId,
-onTaskTap: (t) => showTaskDetailSheet(context, t.id),
+              sort: _sort,
+              onTaskTap: (t) => showTaskDetailSheet(context, t.id),
             ),
           ),
         ],
       ),
-      floatingActionButton: listsAsync.valueOrNull == null ||
-              listsAsync.valueOrNull!.isEmpty
+      floatingActionButton: ref.read(taskRepositoryProvider) == null
           ? null
           : FloatingActionButton.extended(
               onPressed: () => _quickAdd(),
@@ -89,8 +111,9 @@ onTaskTap: (t) => showTaskDetailSheet(context, t.id),
 
   Future<void> _quickAdd() async {
     final lists = ref.read(listsStreamProvider).valueOrNull ?? const <TodoList>[];
-    if (lists.isEmpty) return;
-    final listId = _selectedListId ?? lists.first.id;
+    // §2.3 未选清单时，快速新建落入 synthetic inbox。
+    final listId = _selectedListId ??
+        (lists.isNotEmpty ? lists.first.id : kInboxListId);
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -106,6 +129,7 @@ class _ModeBody extends ConsumerWidget {
     required this.tasksStream,
     required this.filter,
     required this.selectedListId,
+    required this.sort,
     required this.onTaskTap,
   });
 
@@ -113,6 +137,7 @@ class _ModeBody extends ConsumerWidget {
   final Stream<List<TodoTask>> tasksStream;
   final TaskFilter filter;
   final String? selectedListId;
+  final TaskSort sort;
   final ValueChanged<TodoTask> onTaskTap;
 
   @override
@@ -127,7 +152,7 @@ class _ModeBody extends ConsumerWidget {
         final items = _ListBody.applyFilter(raw, filter, selectedListId);
         switch (mode) {
           case TaskViewMode.list:
-            return _ListBody(items: items, onTaskTap: onTaskTap);
+            return _ListBody(items: items, onTaskTap: onTaskTap, sort: sort);
           case TaskViewMode.kanban:
             return KanbanView(tasks: items, listId: selectedListId);
           case TaskViewMode.timeline:
@@ -144,10 +169,11 @@ class _ModeBody extends ConsumerWidget {
 
 /// M11-B2 列表分支：保持与 M11-B2 完全一致，单独抽出来便于后续视图共享 filter 管线。
 class _ListBody extends StatelessWidget {
-  const _ListBody({required this.items, required this.onTaskTap});
+  const _ListBody({required this.items, required this.onTaskTap, required this.sort});
 
   final List<TodoTask> items;
   final ValueChanged<TodoTask> onTaskTap;
+  final TaskSort sort;
 
   @override
   Widget build(BuildContext context) {
@@ -155,9 +181,20 @@ class _ListBody extends StatelessWidget {
       return const Center(child: Text('暂无任务'));
     }
     final sorted = [...items]..sort((a, b) {
-        // 置顶优先，再按 updatedAt 倒序。
+        // §2.6 置顶始终优先，其余按当前 [sort] 维度排序。
         if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
-        return b.updatedAt.compareTo(a.updatedAt);
+        switch (sort) {
+          case TaskSort.smart:
+            return b.updatedAt.compareTo(a.updatedAt);
+          case TaskSort.priorityDesc:
+            return b.priority.compareTo(a.priority);
+          case TaskSort.dueDate:
+            return (a.dueAt ?? DateTime(9999)).compareTo(b.dueAt ?? DateTime(9999));
+          case TaskSort.title:
+            return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+          case TaskSort.createdAt:
+            return b.createdAt.compareTo(a.createdAt);
+        }
       });
     return ListView.builder(
       itemCount: sorted.length,
@@ -227,17 +264,22 @@ class _ListBody extends StatelessWidget {
       if (f.dueRange != null) {
         final due = t.dueAt;
         if (due == null) return false;
+        final startOfDay = DateTime(now.year, now.month, now.day);
         switch (f.dueRange) {
           case 'today':
-            if (due.isBefore(DateTime(now.year, now.month, now.day)) ||
-                !due.isBefore(todayEnd)) {
-              return false;
-            }
+            if (due.isBefore(startOfDay) || !due.isBefore(todayEnd)) return false;
+            break;
+          case 'tomorrow':
+            final tmrStart = todayEnd;
+            final tmrEnd = todayEnd.add(const Duration(days: 1));
+            if (due.isBefore(tmrStart) || !due.isBefore(tmrEnd)) return false;
+            break;
+          case 'last7days':
+            final weekStart = startOfDay.subtract(const Duration(days: 7));
+            if (due.isBefore(weekStart) || !due.isBefore(todayEnd)) return false;
             break;
           case 'overdue':
-            if (!due.isBefore(DateTime(now.year, now.month, now.day))) {
-              return false;
-            }
+            if (!due.isBefore(startOfDay)) return false;
             break;
           case 'future':
             if (due.isBefore(todayEnd)) return false;
@@ -277,6 +319,15 @@ class _ListPicker extends StatelessWidget {
                   selected: selectedListId == null,
                   onSelected: (_) => onChanged(null),
                 ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: ChoiceChip(
+                    avatar: const Icon(Icons.inbox, size: 16),
+                    label: const Text('收件箱'),
+                    selected: selectedListId == kInboxListId,
+                    onSelected: (_) => onChanged(kInboxListId),
+                  ),
+                ),
                 ...lists.map(
                   (l) => Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -292,6 +343,60 @@ class _ListPicker extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// §2.5 智能清单快捷 chips：今日 / 明日 / 近 7 天 / 全部 / 已完成。
+/// 全部计算自本地 Drift（离线可用），不走后端。
+class _SmartTaskChips extends StatelessWidget {
+  const _SmartTaskChips({required this.filter, required this.onChanged});
+
+  final TaskFilter filter;
+  final ValueChanged<TaskFilter> onChanged;
+
+  bool _active(String? dueRange, bool? completed) {
+    return filter.dueRange == dueRange &&
+        filter.completed == completed &&
+        filter.listId == null &&
+        filter.priority == null &&
+        filter.tagIds.isEmpty;
+  }
+
+  void _select(String? dueRange, bool? completed) {
+    if (_active(dueRange, completed)) {
+      onChanged(TaskFilter());
+    } else {
+      onChanged(TaskFilter(dueRange: dueRange, completed: completed));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: Row(
+        children: [
+          _chip('全部', Icons.select_all, _active(null, null), () => _select(null, null)),
+          _chip('今日', Icons.today_outlined, _active('today', null), () => _select('today', null)),
+          _chip('明日', Icons.event_outlined, _active('tomorrow', null), () => _select('tomorrow', null)),
+          _chip('近 7 天', Icons.date_range, _active('last7days', null), () => _select('last7days', null)),
+          _chip('已完成', Icons.check_circle_outline, _active(null, true), () => _select(null, true)),
+        ],
+      ),
+    );
+  }
+
+  Widget _chip(String label, IconData icon, bool selected, VoidCallback onTap) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: ChoiceChip(
+        avatar: Icon(icon, size: 16),
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) => onTap(),
+      ),
     );
   }
 }

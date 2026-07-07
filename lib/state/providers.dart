@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../core/api/api_client.dart';
 import '../core/api/api_config.dart';
 import '../core/api/sync_api.dart';
+import '../core/api/todo_api.dart';
 import '../core/auth/auth_session.dart';
 import '../core/auth/auth_gateway.dart';
 import '../core/db/app_database.dart';
@@ -29,6 +30,12 @@ final apiClientProvider = Provider<ApiClient>((ref) {
       Future.microtask(() => ref.read(sessionProvider.notifier).signOut());
     },
   );
+});
+
+/// 直连 REST 容器（TaskRestApi/ChecklistApi/FolderApi/NlpApi/TagApi 的统一入口），
+/// 调用方通过 `ref.read(todoApiProvider).<subApi>` 取任一子 helper。
+final todoApiProvider = Provider<TodoRestApi>((ref) {
+  return TodoRestApi(ref.watch(apiClientProvider));
 });
 
 /// ----- 本地库（多租户隔离）-----------------------------------------------
