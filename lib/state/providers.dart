@@ -1,14 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
-import '../core/api/api_client.dart';
 import '../core/api/api_config.dart';
 import '../core/api/sync_api.dart';
 import '../core/api/todo_api.dart';
-import '../core/auth/auth_session.dart';
-import '../core/auth/auth_gateway.dart';
 import '../core/db/app_database.dart';
-import '../core/storage/session_store.dart';
 import '../core/sync/sync_change_queue.dart';
 import '../core/sync/sync_coordinator.dart';
 import '../state/session_state.dart';
