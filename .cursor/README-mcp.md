@@ -8,7 +8,6 @@
 
 - **Jenkins 官方 MCP 插件**若提供无会话端点，Cursor 中建议使用 **`/mcp-server/stateless`（Stateless HTTP）**，避免有状态会话在负载均衡下因 **`Mcp-Session-Id` 粘贴性** 丢失而连接失败；本仓库结构里对应示例为： **`type: "http"`** + 上述 URL，凭据用 **`Authorization: Basic`（`user:Jenkins API Token` 的 Base64，见 Jenkins 用户设置 → API Token）** 或后续插件支持的等价方式，**真值只放本机 `.cursor/mcp.json`（已在 `.gitignore`）**。
 - 若你方 Jenkins/插件**仍只支持**有状态 Streamable 端点（如原 **`/mcp-server/mcp`**），可只改 URL 不改 `type`，以插件文档为准。
-- **本仓 Job 名与 URL**（`getJob` / `getBuild` 用 `jobFullName`）：见 **`docs/engineering/01-ci-jenkins.md`**（test：`zh-cloud-test/zh-cloud-todo-flutter`；控制台 https://jenkins.zh04.com/view/test/job/zh-cloud-test/job/zh-cloud-todo-flutter/ ）。
 
 ## Cloudflare API MCP（DNS 等全量 API）
 
@@ -37,7 +36,7 @@
 }
 ```
 
-工具面：主要为 `search()`（查 API 端点）与 `execute()`（执行 API 调用）。示例口令：「列出 zh04.com 的 DNS 记录」「为 todo-test.zh04.com 添加 A 记录指向 x.x.x.x」。
+工具面：主要为 `search()`（查 API 端点）与 `execute()`（执行 API 调用）。示例口令：「列出 zh04.com 的 DNS 记录」「为 client-todo-test.zh04.com 添加 A 记录指向 x.x.x.x」。
 
 官方说明：[Cloudflare's own MCP servers](https://developers.cloudflare.com/agents/model-context-protocol/cloudflare/servers-for-cloudflare/)。
 

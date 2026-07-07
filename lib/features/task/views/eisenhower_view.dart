@@ -96,10 +96,7 @@ class EisenhowerView extends ConsumerWidget {
   }
 
   static void _openDetail(BuildContext context, TodoTask t) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => TaskDetailPage(taskId: t.id)),
-    );
+    showTaskDetailSheet(context, t.id);
   }
 
   /// 把任务分到 4 个象限；返回按 Q1/Q2/Q3/Q4 key 的 map。
