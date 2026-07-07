@@ -75,13 +75,7 @@
             "type": "command",
             "command": ".cursor/hooks/block-secrets-in-shell.py",
             "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "if": "Bash(git commit *)",
-        "hooks": [
+          },
           {
             "type": "command",
             "command": ".cursor/hooks/git-commit-conflict-check.py",
@@ -152,15 +146,9 @@
             "type": "command",
             "command": ".cursor/hooks/speak-lifecycle.py Stop",
             "timeout": 3
-          },
-          {
-            "type": "command",
-            "command": ".cursor/hooks/organize-plans.py",
-            "timeout": 20
           }
         ]
       }
     ]
-  },
-  "version": 1
+  }
 }

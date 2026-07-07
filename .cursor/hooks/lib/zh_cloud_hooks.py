@@ -242,3 +242,4 @@ def is_edit_tool(tool_name: str) -> bool:
 
 def is_shell_tool(tool_name: str) -> bool:
     return tool_name in SHELL_TOOL_NAMES
+
