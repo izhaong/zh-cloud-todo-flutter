@@ -5,10 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/providers.dart';
 import '../../state/session_state.dart';
+import '../../core/notification/local_notification_service.dart';
 import '../efficiency/efficiency_hub_page.dart';
 import '../list/list_page.dart';
 import '../native/native_entry_page.dart';
 import '../quadrant/quadrant_rules_page.dart';
+import '../reminder/reminder_inbox_page.dart';
 import '../settings/settings_route.dart';
 import '../task/tasks_by_list_page.dart';
 
@@ -48,11 +50,55 @@ class _HomeShellState extends ConsumerState<HomeShell>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _triggerSync();
-    // 测试环境跳过周期性同步（避免 pumpAndSettle 永远等不到空闲）。
+    // 初始化本地通知（测试环境无平台实现，内部已短路不抛异常）。
+    _initNotifications();
+    // 测试环境跳过周期性同步 / 提醒轮询（避免 pumpAndSettle 永远等不到空闲）。
     if (!const bool.fromEnvironment('FLUTTER_TEST')) {
       _periodicSync = Timer.periodic(const Duration(seconds: 30), (_) {
         _triggerSync();
+        _pollUpcomingReminders();
       });
+    }
+  }
+
+  /// 初始化本地通知并申请权限（测试环境安全短路）。
+  Future<void> _initNotifications() async {
+    final svc = ref.read(localNotificationServiceProvider);
+    try {
+      await svc.init();
+      await svc.requestPermissions();
+    } catch (_) {
+      // 由 service 内部 catch，此处再兜底一层：不允许通知异常影响主壳。
+    }
+  }
+
+  /// 拉取即将到期的提醒，以本地通知提示用户（仅在即将到期窗口内触发）。
+  Future<void> _pollUpcomingReminders() async {
+    if (const bool.fromEnvironment('FLUTTER_TEST')) return;
+    final svc = ref.read(localNotificationServiceProvider);
+    final api = ref.read(todoApiProvider).reminder;
+    final db = ref.read(appDatabaseProvider);
+    if (db == null) return;
+    try {
+      final items = await api.inbox();
+      final now = DateTime.now();
+      for (final it in items.where((e) => e.pending)) {
+        final diff = it.remindAt.difference(now);
+        // 窗口：已过期 或 30 秒内到期。
+        if (diff.inSeconds <= 30) {
+          final task = await db.taskByServerId(it.taskId);
+          final taskTitle =
+              (task != null && task.title.isNotEmpty) ? task.title : it.taskTitle;
+          await svc.show(
+            id: it.id,
+            title: taskTitle.isEmpty ? '提醒' : taskTitle,
+            body: '到期提醒',
+            payload: 'reminder:${it.id}',
+          );
+        }
+      }
+    } catch (_) {
+      // 轮询失败静默，下一次定时器再试。
     }
   }
 
@@ -91,9 +137,11 @@ class _HomeShellState extends ConsumerState<HomeShell>
         title: Text(_labels[_tabIndex]),
         actions: [
           IconButton(
-            tooltip: '立即同步',
-            icon: const Icon(Icons.sync),
-            onPressed: _triggerSync,
+            tooltip: '提醒收件箱',
+            icon: const Icon(Icons.notifications_active_outlined),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ReminderInboxPage()),
+            ),
           ),
           IconButton(
             tooltip: '四象限规则',
