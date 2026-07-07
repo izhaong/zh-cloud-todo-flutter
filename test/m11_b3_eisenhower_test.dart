@@ -77,11 +77,13 @@ void main() {
   testWidgets('TaskViewModeTabs 渲染 5 个 tab 并触发 onChanged', (tester) async {
     TaskViewMode? changed;
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: TaskViewModeTabs(
-            mode: TaskViewMode.list,
-            onChanged: (m) => changed = m,
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: TaskViewModeTabs(
+              mode: TaskViewMode.list,
+              onChanged: (m) => changed = m,
+            ),
           ),
         ),
       ),
