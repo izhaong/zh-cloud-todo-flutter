@@ -250,13 +250,21 @@ class AppDatabase extends _$AppDatabase {
     return row.read<int>('c');
   }
 
-  /// 子任务查询（直接 children）。
-  Future<List<TodoTask>> childrenOf(int parentTaskId) {
-    return (select(todoTasks)
-          ..where((t) => t.parentTaskId.equals(parentTaskId))
-          ..orderBy([(t) => OrderingTerm(expression: t.createdAt)]))
-        .get();
-  }
+/// 子任务查询（直接 children）。
+Future<List<TodoTask>> childrenOf(int parentTaskId) {
+  return (select(todoTasks)
+        ..where((t) => t.parentTaskId.equals(parentTaskId))
+        ..orderBy([(t) => OrderingTerm(expression: t.createdAt)]))
+      .get();
+}
+
+/// 子任务 reactive stream（直接 children），DB 变更时自动推送。
+Stream<List<TodoTask>> watchChildrenOf(int parentTaskId) {
+  return (select(todoTasks)
+        ..where((t) => t.parentTaskId.equals(parentTaskId))
+        ..orderBy([(t) => OrderingTerm(expression: t.createdAt)]))
+      .watch();
+}
 
   /// 读取（或初始化）全局同步游标。
   Future<TodoSyncCursorData?> readSyncCursor() {

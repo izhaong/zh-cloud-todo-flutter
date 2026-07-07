@@ -79,10 +79,7 @@ class KanbanView extends ConsumerWidget {
   }
 
   static void _openDetail(BuildContext context, TodoTask t) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => TaskDetailPage(taskId: t.id)),
-    );
+    showTaskDetailSheet(context, t.id);
   }
 
   static Future<void> _quickAdd(

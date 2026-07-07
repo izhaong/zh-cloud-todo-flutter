@@ -101,10 +101,7 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
   }
 
   void _openDetail(BuildContext context, TodoTask t) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => TaskDetailPage(taskId: t.id)),
-    );
+    showTaskDetailSheet(context, t.id);
   }
 
   Future<void> _showDayTasks(BuildContext context, DateTime day) async {
@@ -585,12 +582,7 @@ class _DayTasksSheet extends StatelessWidget {
                       title: Text(t.title),
                       onTap: () {
                         Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => TaskDetailPage(taskId: t.id),
-                          ),
-                        );
+                        showTaskDetailSheet(context, t.id);
                       },
                     );
                   },

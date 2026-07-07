@@ -72,10 +72,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
               tasksStream: tasksStream,
               filter: _filter,
               selectedListId: _selectedListId,
-              onTaskTap: (t) => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => TaskDetailPage(taskId: t.id)),
-              ),
+onTaskTap: (t) => showTaskDetailSheet(context, t.id),
             ),
           ),
         ],

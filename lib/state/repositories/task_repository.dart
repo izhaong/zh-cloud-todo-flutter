@@ -22,7 +22,7 @@ class TaskRepository {
   }
 
   Stream<List<TodoTask>> watchChildrenOf(int parentTaskId) {
-    return _db.childrenOf(parentTaskId).asStream();
+    return _db.watchChildrenOf(parentTaskId);
   }
 
   Stream<List<TodoTask>> watchAll() {
@@ -46,7 +46,6 @@ class TaskRepository {
     DateTime? endAt,
     DateTime? dueAt,
     int? parentTaskId,
-    int? folderId,
     bool isPinned = false,
   }) async {
     final now = DateTime.now();
@@ -86,7 +85,6 @@ class TaskRepository {
     DateTime? endAt,
     DateTime? dueAt,
     int? listId,
-    int? folderId,
     bool? isPinned,
   }) async {
     final now = DateTime.now();
@@ -155,12 +153,23 @@ class TaskRepository {
     final row = await (_db.select(_db.todoTasks)
           ..where((t) => t.id.equals(taskId)))
         .getSingleOrNull();
-    // 级联删除子任务
-    final children = await _db.childrenOf(taskId);
-    for (final c in children) {
-      await (_db.delete(_db.todoTaskTags)..where((t) => t.taskId.equals(c.id)))
+    // 递归收集所有后代任务
+    final descendants = await _collectDescendants(taskId);
+    // 从最深层开始删除，避免孤儿
+    for (final d in descendants.reversed) {
+      await (_db.delete(_db.todoTaskTags)..where((t) => t.taskId.equals(d.id)))
           .go();
-      await (_db.delete(_db.todoTasks)..where((t) => t.id.equals(c.id))).go();
+      await (_db.delete(_db.todoTasks)..where((t) => t.id.equals(d.id))).go();
+      // 为有 serverId 的后代入队 sync delete
+      if (d.serverId != null) {
+        await _queue.enqueue(
+          entity: SyncEntities.task,
+          op: SyncOps.delete,
+          localId: d.id,
+          serverId: d.serverId,
+          payload: {'id': d.id, 'serverId': d.serverId},
+        );
+      }
     }
     await (_db.delete(_db.todoTaskTags)..where((t) => t.taskId.equals(taskId)))
         .go();
@@ -172,6 +181,21 @@ class TaskRepository {
       serverId: row?.serverId,
       payload: {'id': taskId, 'serverId': row?.serverId},
     );
+  }
+
+  /// 递归收集 taskId 的所有后代（BFS，含孙级及更深）。
+  Future<List<TodoTask>> _collectDescendants(int parentId) async {
+    final result = <TodoTask>[];
+    final queue = [parentId];
+    while (queue.isNotEmpty) {
+      final current = queue.removeAt(0);
+      final children = await _db.childrenOf(current);
+      for (final c in children) {
+        result.add(c);
+        queue.add(c.id);
+      }
+    }
+    return result;
   }
 
   Future<void> reparent(int taskId, int? newParentId) async {

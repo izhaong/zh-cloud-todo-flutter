@@ -44,10 +44,7 @@ class TimelineView extends ConsumerWidget {
   }
 
   static void _openDetail(BuildContext context, TodoTask t) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => TaskDetailPage(taskId: t.id)),
-    );
+showTaskDetailSheet(context, t.id);
   }
 
   /// 把任务分配到 6 个时间桶；返回按显示顺序排好的桶列表。

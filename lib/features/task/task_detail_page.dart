@@ -5,14 +5,21 @@ import '../../db/app_database.dart';
 import '../../state/providers.dart';
 import 'task_quick_add_sheet.dart';
 
-/// M11-B2 任务详情页：
+/// M11-B2 任务详情页 / Sheet（#31 改造为右侧抽屉 + Deep Link）：
 /// - 标题 / 描述 / 优先级 / 起止 / due / list / folder / 标签 chips
 /// - 子任务（多级，通过 parentTaskId）
 /// - 勾选 / 取消勾选（乐观更新 + sync_queue）
+///
+/// 支持两种展示模式：
+/// 1. **Sheet 模式**（默认）：通过 [showTaskDetailSheet] 以右侧抽屉/底部 Sheet 弹出
+/// 2. **Page 模式**：传统全屏页面（保留向后兼容，Deep Link 场景使用）
 class TaskDetailPage extends ConsumerStatefulWidget {
-  const TaskDetailPage({super.key, required this.taskId});
+  const TaskDetailPage({super.key, required this.taskId, this.asSheet = false});
 
   final int taskId;
+
+  /// 是否以 Sheet 模式渲染（无 Scaffold/AppBar，自带拖拽手柄 + 关闭按钮）
+  final bool asSheet;
 
   @override
   ConsumerState<TaskDetailPage> createState() => _TaskDetailPageState();
@@ -54,9 +61,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
 
   Future<void> _save() async {
     final t = _task;
-    if (t == null) {
-      return;
-    }
+    if (t == null) return;
     await ref.read(taskRepositoryProvider).update(
           t.id,
           title: _title.text.trim(),
@@ -103,7 +108,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
     );
     if (ok == true) {
       await ref.read(taskRepositoryProvider).delete(t.id);
-      if (mounted) Navigator.pop(context);
+      if (mounted) Navigator.of(context).pop();
     }
   }
 
@@ -121,15 +126,149 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Center(child: CircularProgressIndicator());
     }
     final t = _task;
     if (t == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('任务不存在')),
-        body: const Center(child: Text('任务不存在或已删除')),
-      );
+      return _buildNotFound();
     }
+
+    final body = ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        TextField(
+          controller: _title,
+          decoration: const InputDecoration(
+            labelText: '标题',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _desc,
+          minLines: 3,
+          maxLines: 6,
+          decoration: const InputDecoration(
+            labelText: '描述',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<int>(
+          initialValue: _priority,
+          decoration: const InputDecoration(
+            labelText: '优先级',
+            border: OutlineInputBorder(),
+          ),
+          items: const [
+            DropdownMenuItem(value: 0, child: Text('无')),
+            DropdownMenuItem(value: 1, child: Text('低')),
+            DropdownMenuItem(value: 2, child: Text('中')),
+            DropdownMenuItem(value: 3, child: Text('高')),
+          ],
+          onChanged: (v) => setState(() => _priority = v ?? 0),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            FilledButton.icon(
+              onPressed: _save,
+              icon: const Icon(Icons.save_outlined),
+              label: const Text('保存'),
+            ),
+          ],
+        ),
+        const Divider(height: 32),
+        Text('标签', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        _TagChips(taskId: t.id),
+        const Divider(height: 32),
+        Row(
+          children: [
+            Text('子任务', style: Theme.of(context).textTheme.titleMedium),
+            const Spacer(),
+            IconButton(
+              onPressed: () => _addSubtask(t),
+              icon: const Icon(Icons.add),
+            ),
+          ],
+        ),
+        _SubtaskList(taskId: t.id, onAdd: () => _addSubtask(t)),
+      ],
+    );
+
+    if (widget.asSheet) {
+      return _buildSheet(context, t, body);
+    }
+    return _buildPage(context, t, body);
+  }
+
+  /// Sheet 模式：自带头部（拖拽手柄 + 标题 + 操作按钮 + 关闭）
+  Widget _buildSheet(BuildContext context, TodoTask t, Widget body) {
+    return Column(
+      children: [
+        // 拖拽手柄
+        Center(
+          child: Container(
+            margin: const EdgeInsets.only(top: 8, bottom: 4),
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.outlineVariant,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ),
+        // 自定义头部
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Row(
+            children: [
+              IconButton(
+                tooltip: '关闭',
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  '任务详情',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              IconButton(
+                tooltip: t.isPinned ? '取消置顶' : '置顶',
+                onPressed: () => _togglePin(t),
+                icon: Icon(
+                  t.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                ),
+              ),
+              IconButton(
+                tooltip: t.completed ? '取消勾选' : '勾选完成',
+                onPressed: () => _toggleComplete(t),
+                icon: Icon(
+                  t.completed
+                      ? Icons.check_circle
+                      : Icons.radio_button_unchecked,
+                ),
+              ),
+              IconButton(
+                tooltip: '删除',
+                onPressed: () => _delete(t),
+                icon: const Icon(Icons.delete_outline),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(child: body),
+      ],
+    );
+  }
+
+  /// 传统全屏页面模式（保留向后兼容）
+  Widget _buildPage(BuildContext context, TodoTask t, Widget body) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('任务详情'),
@@ -157,69 +296,118 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: body,
+    );
+  }
+
+  Widget _buildNotFound() {
+    if (widget.asSheet) {
+      return Column(
         children: [
-          TextField(
-            controller: _title,
-            decoration: const InputDecoration(
-              labelText: '标题',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _desc,
-            minLines: 3,
-            maxLines: 6,
-            decoration: const InputDecoration(
-              labelText: '描述',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            initialValue: _priority,
-            decoration: const InputDecoration(
-              labelText: '优先级',
-              border: OutlineInputBorder(),
-            ),
-            items: const [
-              DropdownMenuItem(value: 0, child: Text('无')),
-              DropdownMenuItem(value: 1, child: Text('低')),
-              DropdownMenuItem(value: 2, child: Text('中')),
-              DropdownMenuItem(value: 3, child: Text('高')),
-            ],
-            onChanged: (v) => setState(() => _priority = v ?? 0),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              FilledButton.icon(
-                onPressed: _save,
-                icon: const Icon(Icons.save_outlined),
-                label: const Text('保存'),
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(top: 8, bottom: 4),
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
               ),
-            ],
+            ),
           ),
-          const Divider(height: 32),
-          Text('标签', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          _TagChips(taskId: t.id),
-          const Divider(height: 32),
-          Row(
-            children: [
-              Text('子任务', style: Theme.of(context).textTheme.titleMedium),
-              const Spacer(),
-              IconButton(
-                onPressed: () => _addSubtask(t),
-                icon: const Icon(Icons.add),
-              ),
-            ],
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
+                ),
+                const Text('任务不存在'),
+              ],
+            ),
           ),
-          _SubtaskList(taskId: t.id, onAdd: () => _addSubtask(t)),
+          const Expanded(
+            child: Center(child: Text('任务不存在或已删除')),
+          ),
         ],
+      );
+    }
+    return Scaffold(
+      appBar: AppBar(title: const Text('任务不存在')),
+      body: const Center(child: Text('任务不存在或已删除')),
+    );
+  }
+}
+
+/// 弹出任务详情 Sheet（#31）。
+///
+/// - **宽屏（≥600dp）**：右侧抽屉，宽度 420dp，从右向左滑出
+/// - **窄屏（<600dp）**：底部 Sheet，高度约 90%，向上滑出
+///
+/// 用法：
+/// ```dart
+/// showTaskDetailSheet(context, task.id);
+/// ```
+Future<void> showTaskDetailSheet(
+  BuildContext context,
+  int taskId, {
+  bool useRootNavigator = true,
+}) async {
+  final isWide = MediaQuery.sizeOf(context).width >= 600;
+
+  if (isWide) {
+    // ── 右侧抽屉模式 ──
+    await showDialog<void>(
+      context: context,
+      useRootNavigator: useRootNavigator,
+      barrierColor: Colors.black54,
+      builder: (ctx) {
+        return _RightSideSheet(
+          width: 420,
+          child: TaskDetailPage(taskId: taskId, asSheet: true),
+        );
+      },
+    );
+  } else {
+    // ── 底部 Sheet 模式 ──
+    await showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: useRootNavigator,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return SizedBox(
+          height: MediaQuery.sizeOf(ctx).height * 0.9,
+          child: TaskDetailPage(taskId: taskId, asSheet: true),
+        );
+      },
+    );
+  }
+}
+
+/// 右侧抽屉容器：从右侧滑入的固定宽度面板。
+class _RightSideSheet extends StatelessWidget {
+  const _RightSideSheet({required this.width, required this.child});
+
+  final double width;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Material(
+        elevation: 16,
+        borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          width: width,
+          child: SafeArea(child: child),
+        ),
       ),
     );
   }
@@ -234,7 +422,7 @@ class _SubtaskList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return StreamBuilder<List<TodoTask>>(
-      stream: ref.watch(appDatabaseProvider).childrenOf(taskId).asStream(),
+      stream: ref.watch(taskRepositoryProvider).watchChildrenOf(taskId),
       builder: (ctx, snap) {
         final items = snap.data ?? const <TodoTask>[];
         if (items.isEmpty) {

@@ -50,6 +50,10 @@ dependencies:
   intl: ^0.19.0
   uuid: ^4.5.1
 
+  # 模型生成 / JSON 序列化
+  freezed_annotation: ^2.4.1
+  json_annotation: ^4.9.0
+
   # 本地通知（提醒收件箱 / 到点提醒）
   flutter_local_notifications: ^18.0.1
 
@@ -70,6 +74,10 @@ dev_dependencies:
   # Drift 代码生成
   drift_dev: ^2.18.0
   build_runner: ^2.4.13
+
+  # 模型代码生成
+  freezed: ^2.5.7
+  json_serializable: ^6.9.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
