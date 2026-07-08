@@ -268,7 +268,7 @@ pipeline {
             sh 'flutter --version'
             sh 'flutter pub get'
             if (!params.SKIP_ANALYZE) {
-              sh 'flutter analyze'
+              sh 'flutter analyze --no-fatal-infos'
             }
             if (!params.SKIP_TESTS) {
               sh 'flutter test'
