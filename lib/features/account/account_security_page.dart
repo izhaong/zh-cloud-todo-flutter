@@ -19,9 +19,6 @@ class AccountSecurityPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final api = ref.watch(todoApiProvider);
-    if (api == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
     return Scaffold(
       appBar: AppBar(title: const Text('账户安全')),
       body: _Body(api: api),
