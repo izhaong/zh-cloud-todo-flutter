@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/app_database.dart';
+import '../../core/widgets/app_widgets.dart';
 import '../../state/providers.dart';
 import '../filter/filter_bar.dart';
 import 'task_detail_page.dart';
 import 'task_quick_add_sheet.dart';
+import 'widgets/task_row_host.dart';
 import 'view_mode.dart';
 import 'views/calendar_view.dart';
 import 'views/eisenhower_view.dart';
@@ -138,6 +140,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
               selectedListId: _selectedListId,
               sort: _sort,
               onTaskTap: (t) => showTaskDetailSheet(context, t.id),
+              onAdd: _quickAdd,
             ),
           ),
         ],
@@ -174,6 +177,7 @@ class _ModeBody extends ConsumerWidget {
     required this.selectedListId,
     required this.sort,
     required this.onTaskTap,
+    required this.onAdd,
   });
 
   final TaskViewMode mode;
@@ -182,6 +186,7 @@ class _ModeBody extends ConsumerWidget {
   final String? selectedListId;
   final TaskSort sort;
   final ValueChanged<TodoTask> onTaskTap;
+  final VoidCallback onAdd;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -195,7 +200,12 @@ class _ModeBody extends ConsumerWidget {
         final items = _ListBody.applyFilter(raw, filter, selectedListId);
         switch (mode) {
           case TaskViewMode.list:
-            return _ListBody(items: items, onTaskTap: onTaskTap, sort: sort);
+            return _ListBody(
+              items: items,
+              onTaskTap: onTaskTap,
+              sort: sort,
+              onAdd: onAdd,
+            );
           case TaskViewMode.kanban:
             return KanbanView(tasks: items, listId: selectedListId);
           case TaskViewMode.timeline:
@@ -210,21 +220,34 @@ class _ModeBody extends ConsumerWidget {
   }
 }
 
-/// M11-B2 列表分支：保持与 M11-B2 完全一致，单独抽出来便于后续视图共享 filter 管线。
-class _ListBody extends StatelessWidget {
-  const _ListBody({required this.items, required this.onTaskTap, required this.sort});
+/// 品牌化任务列表分支：AppEmptyState 空状态 + TaskRowHost 任务行（含滑动）。
+class _ListBody extends ConsumerWidget {
+  const _ListBody({
+    required this.items,
+    required this.onTaskTap,
+    required this.sort,
+    required this.onAdd,
+  });
 
   final List<TodoTask> items;
   final ValueChanged<TodoTask> onTaskTap;
   final TaskSort sort;
+  final VoidCallback onAdd;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (items.isEmpty) {
-      return const Center(child: Text('暂无任务'));
+      return AppEmptyState(
+        title: '没有任务',
+        subtitle: '点击上方输入框快速添加任务，开启专注的一天。',
+        action: AppButton(
+          icon: Icons.add,
+          child: const Text('新建任务'),
+          onPressed: onAdd,
+        ),
+      );
     }
     final sorted = [...items]..sort((a, b) {
-        // §2.6 置顶始终优先，其余按当前 [sort] 维度排序。
         if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
         switch (sort) {
           case TaskSort.smart:
@@ -240,56 +263,11 @@ class _ListBody extends StatelessWidget {
         }
       });
     return ListView.builder(
+      padding: const EdgeInsets.only(bottom: 96),
       itemCount: sorted.length,
       itemBuilder: (_, i) {
         final t = sorted[i];
-        return ListTile(
-          leading: Consumer(
-            builder: (ctx, ref, _) => Checkbox(
-              value: t.completed,
-              onChanged: (_) async {
-                final repo = ref.read(taskRepositoryProvider);
-                if (repo == null) return;
-                await repo.toggleComplete(t.id);
-              },
-            ),
-          ),
-          title: Row(
-            children: [
-              if (t.isPinned) const Icon(Icons.push_pin, size: 14),
-              if (t.isPinned) const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  t.title,
-                  style: TextStyle(
-                    decoration: t.completed ? TextDecoration.lineThrough : null,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          subtitle: Text(
-            priorityLabel(t.priority) +
-                (t.dueAt == null
-                    ? ''
-                    : ' · due ${t.dueAt!.toIso8601String().substring(0, 10)}'),
-          ),
-          trailing: Consumer(
-            builder: (ctx, ref, _) => IconButton(
-              tooltip: t.isPinned ? '取消置顶' : '置顶',
-              icon: Icon(
-                t.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-                size: 18,
-              ),
-              onPressed: () {
-                final repo = ref.read(taskRepositoryProvider);
-                if (repo == null) return;
-                repo.togglePin(t.id);
-              },
-            ),
-          ),
-          onTap: () => onTaskTap(t),
-        );
+        return TaskRowHost(task: t);
       },
     );
   }
