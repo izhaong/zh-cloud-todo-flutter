@@ -3,21 +3,27 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/notification/local_notification_service.dart';
+import '../../core/theme/app_theme.dart';
 import '../../state/providers.dart';
 import '../../state/session_state.dart';
-import '../../core/notification/local_notification_service.dart';
-import '../efficiency/efficiency_hub_page.dart';
-import '../list/list_page.dart';
-import '../native/native_entry_page.dart';
-import '../quadrant/quadrant_rules_page.dart';
-import '../reminder/reminder_inbox_page.dart';
+import '../habit/habit_page.dart';
 import '../settings/settings_route.dart';
-import '../calendar_sub/calendar_subscription_page.dart';
+import '../tag/tag_page.dart';
 import '../task/tasks_by_list_page.dart';
+import '../task/views/calendar_view.dart';
+import '../../core/db/app_database.dart';
+import '../shell/section.dart';
+import '../shell/sidebar.dart';
+import '../shell/quick_add_bar.dart';
 
-/// 登录后的主导航壳：任务 / 清单 / 效率 / 系统，四个底部 tab。
+/// 自适应主壳：依据视口宽度在三套布局间切换。
 ///
-/// 应用启动、恢复前台、任一 tab 手动触发时调用 [SyncCoordinator.syncOnce]。
+/// - 桌面 (≥1024px)：左侧常驻 [Sidebar] + 右侧内容区（顶部 QuickAddBar + 视图）。
+/// - 平板 (600–1023px)：可收起 Sidebar（汉堡 + 抽屉）+ 右侧内容区。
+/// - 移动 (<600px)：底部 TabBar（任务/日历/习惯/我的）+ 抽屉展开 Sidebar + FAB。
+///
+/// 状态（选中的分区 / 智能清单 / 清单）集中在此，Sidebar 与底部 TabBar 共用。
 class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key});
 
@@ -27,33 +33,19 @@ class HomeShell extends ConsumerStatefulWidget {
 
 class _HomeShellState extends ConsumerState<HomeShell>
     with WidgetsBindingObserver {
-  int _tabIndex = 0;
+  Section _section = Section.tasks;
+  SmartList _smart = SmartList.inbox;
+  String? _listId;
+
   bool _syncing = false;
   Timer? _periodicSync;
-
-  static const _pages = [
-    TasksByListPage(),
-    ListPage(),
-    EfficiencyHubPage(),
-    NativeEntryPage(),
-  ];
-
-  static const _labels = ['任务', '清单', '效率', '系统'];
-  static const _icons = [
-    Icons.check_circle_outline,
-    Icons.list_alt,
-    Icons.bolt_outlined,
-    Icons.widgets_outlined,
-  ];
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _triggerSync();
-    // 初始化本地通知（测试环境无平台实现，内部已短路不抛异常）。
     _initNotifications();
-    // 测试环境跳过周期性同步 / 提醒轮询（避免 pumpAndSettle 永远等不到空闲）。
     if (!const bool.fromEnvironment('FLUTTER_TEST')) {
       _periodicSync = Timer.periodic(const Duration(seconds: 30), (_) {
         _triggerSync();
@@ -62,18 +54,14 @@ class _HomeShellState extends ConsumerState<HomeShell>
     }
   }
 
-  /// 初始化本地通知并申请权限（测试环境安全短路）。
   Future<void> _initNotifications() async {
     final svc = ref.read(localNotificationServiceProvider);
     try {
       await svc.init();
       await svc.requestPermissions();
-    } catch (_) {
-      // 由 service 内部 catch，此处再兜底一层：不允许通知异常影响主壳。
-    }
+    } catch (_) {}
   }
 
-  /// 拉取即将到期的提醒，以本地通知提示用户（仅在即将到期窗口内触发）。
   Future<void> _pollUpcomingReminders() async {
     if (const bool.fromEnvironment('FLUTTER_TEST')) return;
     final svc = ref.read(localNotificationServiceProvider);
@@ -85,7 +73,6 @@ class _HomeShellState extends ConsumerState<HomeShell>
       final now = DateTime.now();
       for (final it in items.where((e) => e.pending)) {
         final diff = it.remindAt.difference(now);
-        // 窗口：已过期 或 30 秒内到期。
         if (diff.inSeconds <= 30) {
           final task = await db.taskByServerId(it.taskId);
           final taskTitle =
@@ -98,9 +85,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
           );
         }
       }
-    } catch (_) {
-      // 轮询失败静默，下一次定时器再试。
-    }
+    } catch (_) {}
   }
 
   @override
@@ -112,9 +97,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _triggerSync();
-    }
+    if (state == AppLifecycleState.resumed) _triggerSync();
   }
 
   Future<void> _triggerSync() async {
@@ -124,60 +107,409 @@ class _HomeShellState extends ConsumerState<HomeShell>
     try {
       await coordinator.syncOnce();
     } catch (_) {
-      // 同步失败静默重试（下一次定时器 / 手动触发再试）。
+      // 同步失败静默重试。
     } finally {
       _syncing = false;
     }
   }
 
+  // --- 导航回调 ---
+  void _selectSection(Section s) => setState(() => _section = s);
+  void _selectSmart(SmartList s) => setState(() => _smart = s);
+  void _selectList(String? id) => setState(() => _listId = id);
+
+  void _openTags() {
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const TagPage()));
+  }
+
+  void _openFilters() {
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const _FiltersPage()));
+  }
+
+  void _openSettings() {
+    final session = ref.read(sessionProvider);
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => SettingsRoute(signedInMobile: session?.mobile),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
-    final session = ref.watch(sessionProvider);
+    return LayoutBuilder(builder: (context, constraints) {
+      final width = constraints.maxWidth;
+      if (width >= 1024) {
+        return _desktopShell(width: width);
+      } else if (width >= 600) {
+        return _tabletShell();
+      }
+      return _mobileShell();
+    });
+  }
+
+  /// 当前任务页的 dueRange（由智能清单映射）。
+  String? get _dueRange {
+    switch (_smart) {
+      case SmartList.today:
+        return 'today';
+      case SmartList.upcoming:
+        return 'last7days';
+      default:
+        return null;
+    }
+  }
+
+  /// 任务分区当前选中的清单 id。
+  String? get _effectiveListId {
+    if (_smart == SmartList.inbox) return 'inbox';
+    return _listId;
+  }
+
+  Widget _buildContent() {
+    switch (_section) {
+      case Section.tasks:
+        return _TasksPane(
+          dueRange: _dueRange,
+          listId: _effectiveListId,
+          onQuickAdd: _quickAdd,
+        );
+      case Section.calendar:
+        return const _CalendarHost();
+      case Section.habit:
+        return const HabitPage();
+      case Section.mine:
+        return const _MinePane();
+    }
+  }
+
+  Future<void> _quickAdd(String title) async {
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    final listId = _effectiveListId ?? 'inbox';
+    await repo.create(listId: listId, title: title);
+  }
+
+  // === 桌面：Sidebar 常驻 ===
+  Widget _desktopShell({required double width}) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_labels[_tabIndex]),
-        actions: [
-          IconButton(
-            tooltip: '提醒收件箱',
-            icon: const Icon(Icons.notifications_active_outlined),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ReminderInboxPage()),
-            ),
+      body: Row(
+        children: [
+          Sidebar(
+            selectedSection: _section,
+            selectedSmart: _smart,
+            selectedListId: _listId,
+            onSelectSection: _selectSection,
+            onSelectSmart: _selectSmart,
+            onSelectList: _selectList,
+            onOpenTags: _openTags,
+            onOpenFilters: _openFilters,
+            onOpenSettings: _openSettings,
           ),
-          IconButton(
-            tooltip: '四象限规则',
-            icon: const Icon(Icons.dashboard_outlined),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const QuadrantRulesPage()),
-            ),
-          ),
-          IconButton(
-            tooltip: '日历订阅',
-            icon: const Icon(Icons.calendar_month_outlined),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const CalendarSubscriptionPage(),
-              ),
-            ),
-          ),
-          IconButton(
-            tooltip: '设置',
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => SettingsRoute(signedInMobile: session?.mobile),
-              ),
+          const VerticalDivider(width: 1),
+          Expanded(
+            child: Column(
+              children: [
+                _ContentTopBar(
+                  title: '任务',
+                  onSearch: () {},
+                  onAvatar: () {},
+                ),
+                Expanded(child: _buildContent()),
+              ],
             ),
           ),
         ],
       ),
-      body: IndexedStack(index: _tabIndex, children: _pages),
+    );
+  }
+
+  // === 平板：Sidebar 可收起（抽屉）===
+  Widget _tabletShell() {
+    return Scaffold(
+      appBar: _shellAppBar(),
+      drawer: Drawer(
+        child: Sidebar(
+          selectedSection: _section,
+          selectedSmart: _smart,
+          selectedListId: _listId,
+          onSelectSection: (s) {
+            _selectSection(s);
+            Navigator.pop(context);
+          },
+          onSelectSmart: (s) {
+            _selectSmart(s);
+            Navigator.pop(context);
+          },
+          onSelectList: (id) {
+            _selectList(id);
+            Navigator.pop(context);
+          },
+          onOpenTags: _openTags,
+          onOpenFilters: _openFilters,
+          onOpenSettings: () {
+            Navigator.pop(context);
+            _openSettings();
+          },
+        ),
+      ),
+      body: Column(
+        children: [
+          _ContentTopBar(
+            title: '任务',
+            onSearch: () {},
+            onAvatar: () {},
+          ),
+          Expanded(child: _buildContent()),
+        ],
+      ),
+    );
+  }
+
+  // === 移动：底部 TabBar + 抽屉 + FAB ===
+  Widget _mobileShell() {
+    return Scaffold(
+      appBar: _shellAppBar(),
+      drawer: Drawer(
+        child: Sidebar(
+          selectedSection: _section,
+          selectedSmart: _smart,
+          selectedListId: _listId,
+          onSelectSection: (s) {
+            _selectSection(s);
+            Navigator.pop(context);
+          },
+          onSelectSmart: (s) {
+            _selectSmart(s);
+            Navigator.pop(context);
+          },
+          onSelectList: (id) {
+            _selectList(id);
+            Navigator.pop(context);
+          },
+          onOpenTags: _openTags,
+          onOpenFilters: _openFilters,
+          onOpenSettings: () {
+            Navigator.pop(context);
+            _openSettings();
+          },
+        ),
+      ),
+      body: _buildContent(),
+      floatingActionButton: _section == Section.tasks
+          ? FloatingActionButton(
+              onPressed: () => _showQuickAddSheet(),
+              child: const Icon(Icons.add),
+            )
+          : null,
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _tabIndex,
-        onDestinationSelected: (i) => setState(() => _tabIndex = i),
+        selectedIndex: Section.values.indexOf(_section),
+        onDestinationSelected: (i) =>
+            setState(() => _section = Section.values[i]),
         destinations: [
-          for (var i = 0; i < _labels.length; i++)
-            NavigationDestination(icon: Icon(_icons[i]), label: _labels[i]),
+          for (final s in Section.values)
+            NavigationDestination(icon: Icon(s.icon), label: s.label),
+        ],
+      ),
+    );
+  }
+
+  PreferredSizeWidget _shellAppBar() {
+    return AppBar(
+      title: Text(_section.label),
+      actions: [
+        IconButton(
+          tooltip: '搜索',
+          icon: const Icon(Icons.search),
+          onPressed: () {},
+        ),
+        Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: InkWell(
+            onTap: () {},
+            customBorder: const CircleBorder(),
+            child: CircleAvatar(
+              radius: 15,
+              backgroundColor:
+                  AppColors.light.mutedForeground.withValues(alpha: 0.2),
+              child: Icon(Icons.person,
+                  size: 18, color: AppColors.light.foreground),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showQuickAddSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: TextField(
+          autofocus: true,
+          decoration: const InputDecoration(hintText: '新任务'),
+        ),
+      ),
+    );
+  }
+}
+
+/// 内容区顶栏：标题 + 搜索 + 头像菜单。
+class _ContentTopBar extends StatelessWidget {
+  const _ContentTopBar({
+    required this.title,
+    required this.onSearch,
+    required this.onAvatar,
+  });
+
+  final String title;
+  final VoidCallback onSearch;
+  final VoidCallback onAvatar;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<AppThemeExtension>()!.colors;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
+      decoration: BoxDecoration(
+        color: colors.background,
+        border: Border(bottom: BorderSide(color: colors.border)),
+      ),
+      child: Row(
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: colors.ink,
+            ),
+          ),
+          const Spacer(),
+          IconButton(
+            tooltip: '搜索',
+            icon: Icon(Icons.search, color: colors.mutedForeground),
+            onPressed: onSearch,
+          ),
+          InkWell(
+            onTap: onAvatar,
+            customBorder: const CircleBorder(),
+            child: CircleAvatar(
+              radius: 16,
+              backgroundColor: colors.accent.withValues(alpha: 0.12),
+              child: Icon(Icons.person, size: 18, color: colors.accent),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 任务分区：顶部 QuickAddBar + 任务视图。
+class _TasksPane extends StatelessWidget {
+  const _TasksPane({
+    required this.dueRange,
+    required this.listId,
+    required this.onQuickAdd,
+  });
+
+  final String? dueRange;
+  final String? listId;
+  final ValueChanged<String> onQuickAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        QuickAddBar(onSubmit: onQuickAdd),
+        Expanded(
+          child: TasksByListPage(
+            hideAppBar: true,
+            lockedListId: true,
+            initialListId: listId,
+            initialDueRange: dueRange,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 日历分区：复用 CalendarView，包顶层 AppBar-less 容器。
+class _CalendarHost extends ConsumerWidget {
+  const _CalendarHost();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final repo = ref.watch(taskRepositoryProvider);
+    if (repo == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    return StreamBuilder<List<TodoTask>>(
+      stream: repo.watchAll(),
+      builder: (ctx, snap) {
+        final tasks = snap.data ?? const <TodoTask>[];
+        return CalendarView(tasks: tasks);
+      },
+    );
+  }
+}
+
+/// "我的"分区：账户 + 设置 + 退出登录。
+class _MinePane extends ConsumerWidget {
+  const _MinePane();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final session = ref.watch(sessionProvider);
+    final colors = Theme.of(context).extension<AppThemeExtension>()!.colors;
+    return ListView(
+      padding: const EdgeInsets.all(12),
+      children: [
+        ListTile(
+          leading: CircleAvatar(
+            backgroundColor: colors.accent.withValues(alpha: 0.12),
+            child: Icon(Icons.person, color: colors.accent),
+          ),
+          title: Text(session?.mobile ?? '已登录',
+              style: TextStyle(color: colors.foreground)),
+          subtitle: Text('zh-cloud todo',
+              style: TextStyle(color: colors.mutedForeground)),
+        ),
+        const Divider(),
+        ListTile(
+          leading: Icon(Icons.settings_outlined, color: colors.mutedForeground),
+          title: const Text('设置'),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => SettingsRoute(signedInMobile: session?.mobile),
+          )),
+        ),
+        ListTile(
+          leading: Icon(Icons.logout, color: colors.destructive),
+          title: const Text('退出登录'),
+          onTap: () => ref.read(sessionProvider.notifier).signOut(),
+        ),
+      ],
+    );
+  }
+}
+
+/// 简易筛选器页（占位整合入口）。
+class _FiltersPage extends StatelessWidget {
+  const _FiltersPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('筛选器')),
+      body: ListView(
+        children: const [
+          ListTile(title: Text('今日任务')),
+          ListTile(title: Text('已完成')),
+          ListTile(title: Text('已过期')),
         ],
       ),
     );
