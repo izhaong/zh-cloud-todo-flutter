@@ -318,7 +318,7 @@ test -s .jenkins-dist/todo-flutter-web.tar.gz
       steps {
         input message: '确认将 todo-flutter Web 部署到生产宿主机？',
               ok: '确认部署',
-              submitter: (params.APPROVED_DEPLOY_USERS ?: 'izhaong').split(',')*.trim().join(',')
+              submitter: (params.APPROVED_DEPLOY_USERS ?: 'izhaong').split(',').collect { it.trim() }.join(',')
       }
     }
 
