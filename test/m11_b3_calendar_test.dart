@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:zh_cloud_todo_flutter/db/app_database.dart';
+import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/features/task/views/calendar_view.dart';
 
 /// M11-B3 c5 日历视图：纯函数 + 4 模式渲染。
@@ -11,8 +11,8 @@ void main() {
     final base = DateTime(2026, 6, 15, 18, 30);
     TodoTask build({DateTime? startAt, DateTime? endAt, DateTime? dueAt}) {
       return TodoTask(
-        id: 1,
-        listId: 1,
+        id: '1',
+        listId: '1',
         title: 't',
         completed: false,
         priority: 0,
@@ -91,8 +91,8 @@ void main() {
     final now = DateTime(2026, 6, 15, 12, 0, 0);
     final tasks = <TodoTask>[
       TodoTask(
-        id: 1,
-        listId: 1,
+        id: '1',
+        listId: '1',
         title: '本月任务',
         completed: false,
         priority: 0,
@@ -126,8 +126,8 @@ void main() {
     final now = DateTime(2026, 6, 15, 12, 0, 0);
     final tasks = <TodoTask>[
       TodoTask(
-        id: 1,
-        listId: 1,
+        id: '1',
+        listId: '1',
         title: '晚一点',
         completed: false,
         priority: 0,
@@ -140,8 +140,8 @@ void main() {
         createdAt: now,
       ),
       TodoTask(
-        id: 2,
-        listId: 1,
+        id: '2',
+        listId: '1',
         title: '早一点',
         completed: false,
         priority: 0,

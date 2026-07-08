@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../db/app_database.dart';
+import '../../core/db/app_database.dart';
 import '../../state/providers.dart';
 import 'list_editor_sheet.dart';
 import '../folder/folder_page.dart';
@@ -33,7 +33,7 @@ class _ListPageState extends ConsumerState<ListPage> {
   }
 
   Future<void> _deleteList(TodoList list) async {
-    final db = ref.read(appDatabaseProvider);
+    final db = ref.read(appDatabaseProvider)!;
     final open = await db.countOpenTasksByList(list.id);
     if (!mounted) return;
     if (open > 0) {
@@ -56,11 +56,11 @@ class _ListPageState extends ConsumerState<ListPage> {
       );
       if (force != true) return;
     }
-    await ref.read(listRepositoryProvider).delete(list.id);
+    await ref.read(listRepositoryProvider)!.delete(list.id);
   }
 
   Future<void> _move(TodoList list, int delta) async {
-    final lists = await ref.read(listRepositoryProvider).getAll();
+    final lists = await ref.read(listRepositoryProvider)!.getAll();
     final inFolder = lists.where((l) => l.folderId == list.folderId).toList();
     inFolder.sort((a, b) {
       final c = a.sortOrder.compareTo(b.sortOrder);
@@ -74,8 +74,7 @@ class _ListPageState extends ConsumerState<ListPage> {
     final tmp = inFolder[idx];
     inFolder[idx] = inFolder[newIdx];
     inFolder[newIdx] = tmp;
-    await ref
-        .read(listRepositoryProvider)
+    await ref        .read(listRepositoryProvider)!
         .reorder(inFolder.map((l) => l.id).toList());
   }
 
@@ -124,8 +123,8 @@ class _ListPageState extends ConsumerState<ListPage> {
               _SectionTitle('文件夹'),
               ...folders.map((f) => _FolderGroup(
                     folder: f,
-                    lists: lists.where((l) => l.folderId == f.id).toList(),
-                    onCreate: () => _openCreateSheet(folderId: f.id),
+                    lists: lists.where((l) => l.folderId == f.serverId).toList(),
+                    onCreate: () => _openCreateSheet(folderId: f.serverId),
                     onTap: (l) => _openCreateSheet(existing: l),
                     onDelete: _deleteList,
                     onMove: _move,

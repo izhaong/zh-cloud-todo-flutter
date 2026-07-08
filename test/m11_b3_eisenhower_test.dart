@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:zh_cloud_todo_flutter/db/app_database.dart';
+import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/features/task/view_mode.dart';
 import 'package:zh_cloud_todo_flutter/features/task/views/eisenhower_view.dart';
 import 'package:zh_cloud_todo_flutter/features/task/views/task_view_mode_tabs.dart';
@@ -18,8 +18,8 @@ void main() {
       bool completed = false,
     }) {
       return TodoTask(
-        id: 1,
-        listId: 1,
+        id: '1',
+        listId: '1',
         title: 't',
         completed: completed,
         priority: priority,
@@ -77,11 +77,13 @@ void main() {
   testWidgets('TaskViewModeTabs 渲染 5 个 tab 并触发 onChanged', (tester) async {
     TaskViewMode? changed;
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: TaskViewModeTabs(
-            mode: TaskViewMode.list,
-            onChanged: (m) => changed = m,
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: TaskViewModeTabs(
+              mode: TaskViewMode.list,
+              onChanged: (m) => changed = m,
+            ),
           ),
         ),
       ),
@@ -102,8 +104,8 @@ void main() {
     final now = DateTime(2026, 6, 20, 12, 0, 0);
     final tasks = <TodoTask>[
       TodoTask(
-        id: 1,
-        listId: 1,
+        id: '1',
+        listId: '1',
         title: '紧急且重要',
         priority: 2,
         isPinned: false,
@@ -114,8 +116,8 @@ void main() {
         createdAt: now,
       ),
       TodoTask(
-        id: 2,
-        listId: 1,
+        id: '2',
+        listId: '1',
         title: '重要不紧急',
         priority: 3,
         isPinned: false,
@@ -126,8 +128,8 @@ void main() {
         createdAt: now,
       ),
       TodoTask(
-        id: 3,
-        listId: 1,
+        id: '3',
+        listId: '1',
         title: '紧急不重要',
         priority: 0,
         isPinned: false,
@@ -138,8 +140,8 @@ void main() {
         createdAt: now,
       ),
       TodoTask(
-        id: 4,
-        listId: 1,
+        id: '4',
+        listId: '1',
         title: '不重要不紧急',
         priority: 0,
         isPinned: false,

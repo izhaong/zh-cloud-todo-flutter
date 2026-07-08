@@ -82,7 +82,7 @@ class HabitPage extends ConsumerWidget {
               final name = ctl.text.trim();
               if (name.isEmpty) return;
               try {
-                await ref.read(todoApiClientProvider).raw.post(
+                await ref.read(apiClientProvider).raw.post(
                       '/app-api/todo/habit/create',
                       data: {'name': name, 'targetPerWeek': 7},
                     );

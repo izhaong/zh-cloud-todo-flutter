@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
 
-import '../../api/api_config.dart';
+import '../../core/api/api_config.dart';
 
 /// 习惯数据访问 — M11-B4：纯后端驱动，不依赖本地 Drift 表
 /// （schema 暂未包含 habits/habit_logs，列表与打卡均走 `/app-api/todo/habit/**`）。

@@ -1,24 +1,24 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../api/efficiency_api.dart';
+import '../core/api/efficiency_api.dart';
 import '../features/habit/habit_repository.dart';
 import 'providers.dart';
 
 final pomodoroApiProvider = Provider<PomodoroApi>((ref) {
-  return PomodoroApi(ref.watch(todoApiClientProvider).raw);
+  return PomodoroApi(ref.watch(apiClientProvider).raw);
 });
 
 final countdownApiProvider = Provider<CountdownApi>((ref) {
-  return CountdownApi(ref.watch(todoApiClientProvider).raw);
+  return CountdownApi(ref.watch(apiClientProvider).raw);
 });
 
 final reminderActionApiProvider = Provider<ReminderActionApi>((ref) {
-  return ReminderActionApi(ref.watch(todoApiClientProvider).raw);
+  return ReminderActionApi(ref.watch(apiClientProvider).raw);
 });
 
 /// M11-B4 习惯仓库（纯后端驱动）。
 final habitRepositoryProvider = Provider<HabitRepository>((ref) {
-  return HabitRepository(ref.watch(todoApiClientProvider).raw);
+  return HabitRepository(ref.watch(apiClientProvider).raw);
 });
 
 /// 当前活跃番茄会话 id（null 表示未在专注）。

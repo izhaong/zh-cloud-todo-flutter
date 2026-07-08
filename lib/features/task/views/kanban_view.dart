@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../../../db/app_database.dart';
+import '../../../core/db/app_database.dart';
 import '../task_detail_page.dart';
 import '../task_quick_add_sheet.dart';
 
@@ -25,7 +25,7 @@ class KanbanView extends ConsumerWidget {
 
   /// 渲染用的任务列表（已应用 list/filter 的客户端过滤结果）。
   final List<TodoTask> tasks;
-  final int? listId;
+  final String? listId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -85,7 +85,7 @@ class KanbanView extends ConsumerWidget {
   static Future<void> _quickAdd(
     BuildContext context,
     WidgetRef ref,
-    int listId,
+    String listId,
   ) async {
     await showModalBottomSheet<void>(
       context: context,

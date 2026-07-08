@@ -1,0 +1,115 @@
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:zh_cloud_todo_flutter/core/api/todo_api.dart';
+import 'package:zh_cloud_todo_flutter/features/reminder/reminder_inbox_page.dart'
+    show groupByTask, InboxEntry;
+
+void main() {
+  group('ReminderActionApi.normalize', () {
+    test('解析纯数组', () {
+      final raw = [
+        {'id': 1, 'taskId': 10, 'taskTitle': 'A', 'remindAt': '2026-07-07T10:00:00'},
+        {'id': 2, 'taskId': 10, 'title': 'B', 'remindAt': 1700000000000},
+      ];
+      final items = ReminderActionApi.normalize(raw);
+      expect(items, hasLength(2));
+      expect(items.first.id, 1);
+      expect(items.first.taskTitle, 'A');
+      expect(items[1].taskTitle, 'B');
+    });
+
+    test('解析统一信封 {code,data:[…]}', () {
+      final body = {
+        'code': 0,
+        'msg': 'ok',
+        'data': [
+          {'id': 3, 'taskId': 20, 'taskTitle': 'C'},
+        ],
+      };
+      final items = ReminderActionApi.normalize(body);
+      expect(items, hasLength(1));
+      expect(items.first.id, 3);
+      expect(items.first.taskId, 20);
+    });
+
+    test('解析信封 {code,data:{list:[…]}}', () {
+      final body = {
+        'code': 0,
+        'data': {
+          'list': [
+            {'id': 4, 'taskId': 30, 'taskTitle': 'D'},
+          ],
+        },
+      };
+      final items = ReminderActionApi.normalize(body);
+      expect(items, hasLength(1));
+      expect(items.first.taskTitle, 'D');
+    });
+
+    test('解析兜底 {list:[…]} / {items:[…]}', () {
+      final a = ReminderActionApi.normalize({
+        'list': [
+          {'id': 5, 'taskId': 40, 'taskTitle': 'E'},
+        ],
+      });
+      expect(a, hasLength(1));
+      final b = ReminderActionApi.normalize({
+        'items': [
+          {'id': 6, 'taskId': 50, 'taskTitle': 'F'},
+        ],
+      });
+      expect(b, hasLength(1));
+    });
+
+    test('空 / 非法输入返回空列表', () {
+      expect(ReminderActionApi.normalize(null), isEmpty);
+      expect(ReminderActionApi.normalize({}), isEmpty);
+      expect(ReminderActionApi.normalize({'code': 0, 'data': null}), isEmpty);
+    });
+
+    test('默认 status 为 PENDING，pending 为 true', () {
+      final items = ReminderActionApi.normalize([
+        {'id': 7, 'taskId': 60, 'taskTitle': 'G'},
+      ]);
+      expect(items.first.status, 'PENDING');
+      expect(items.first.pending, isTrue);
+    });
+  });
+
+  group('groupByTask', () {
+    test('按 taskId 分组并按首个 remindAt 升序', () {
+      final now = DateTime.now();
+      final entries = [
+        InboxEntry(
+          ReminderInboxItem(
+            id: 1,
+            taskId: 2,
+            taskTitle: 'T2',
+            remindAt: now.add(const Duration(hours: 2)),
+          ),
+        ),
+        InboxEntry(
+          ReminderInboxItem(
+            id: 2,
+            taskId: 1,
+            taskTitle: 'T1',
+            remindAt: now.add(const Duration(hours: 1)),
+          ),
+        ),
+        InboxEntry(
+          ReminderInboxItem(
+            id: 3,
+            taskId: 2,
+            taskTitle: 'T2',
+            remindAt: now.add(const Duration(hours: 3)),
+          ),
+        ),
+      ];
+      final groups = groupByTask(entries);
+      expect(groups, hasLength(2));
+      expect(groups.first.taskId, 1); // 更早的排前面
+      expect(groups[1].taskId, 2);
+      expect(groups[1].reminders, hasLength(2));
+    });
+  });
+}

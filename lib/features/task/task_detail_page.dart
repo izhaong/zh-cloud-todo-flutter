@@ -1,9 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../db/app_database.dart';
+import '../../core/db/app_database.dart';
+import '../../core/api/todo_api.dart';
 import '../../state/providers.dart';
 import 'task_quick_add_sheet.dart';
+import '../collaboration/task_comments_page.dart';
+import '../collaboration/task_assign_page.dart';
+import '../collaboration/list_member_page.dart';
+
+/// 收件箱的本地清单 id（synthetic inbox）：listId 为该值的任务视为"未归清单"。
+const String kInboxListId = 'inbox';
 
 /// M11-B2 任务详情页 / Sheet（#31 改造为右侧抽屉 + Deep Link）：
 /// - 标题 / 描述 / 优先级 / 起止 / due / list / folder / 标签 chips
@@ -16,7 +23,7 @@ import 'task_quick_add_sheet.dart';
 class TaskDetailPage extends ConsumerStatefulWidget {
   const TaskDetailPage({super.key, required this.taskId, this.asSheet = false});
 
-  final int taskId;
+  final String taskId;
 
   /// 是否以 Sheet 模式渲染（无 Scaffold/AppBar，自带拖拽手柄 + 关闭按钮）
   final bool asSheet;
@@ -31,6 +38,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   late final TextEditingController _desc;
   int _priority = 0;
   bool _loading = true;
+  DateTime? _dueAt;
 
   @override
   void initState() {
@@ -41,13 +49,14 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   }
 
   Future<void> _bootstrap() async {
-    final t = await ref.read(taskRepositoryProvider).getById(widget.taskId);
+    final t = await ref.read(taskRepositoryProvider)!.getById(widget.taskId);
     if (!mounted) return;
     setState(() {
       _task = t;
       _title.text = t?.title ?? '';
       _desc.text = t?.description ?? '';
       _priority = t?.priority ?? 0;
+      _dueAt = t?.dueAt;
       _loading = false;
     });
   }
@@ -62,11 +71,12 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   Future<void> _save() async {
     final t = _task;
     if (t == null) return;
-    await ref.read(taskRepositoryProvider).update(
+    await ref.read(taskRepositoryProvider)!.update(
           t.id,
           title: _title.text.trim(),
           description: _desc.text.trim(),
           priority: _priority,
+          dueAt: _dueAt,
         );
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -76,11 +86,11 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   }
 
   Future<void> _toggleComplete(TodoTask t) async {
-    await ref.read(taskRepositoryProvider).toggleComplete(t.id);
+    await ref.read(taskRepositoryProvider)!.toggleComplete(t.id);
   }
 
   Future<void> _togglePin(TodoTask t) async {
-    final next = await ref.read(taskRepositoryProvider).togglePin(t.id);
+    final next = await ref.read(taskRepositoryProvider)!.togglePin(t.id);
     if (!mounted) return;
     setState(() => _task = next);
     ScaffoldMessenger.of(context).showSnackBar(
@@ -107,12 +117,24 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
       ),
     );
     if (ok == true) {
-      await ref.read(taskRepositoryProvider).delete(t.id);
+      await ref.read(taskRepositoryProvider)!.delete(t.id);
       if (mounted) Navigator.of(context).pop();
     }
   }
 
   Future<void> _addSubtask(TodoTask t) async {
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final depth = await repo.depthOf(t.id);
+    if (!mounted) return;
+    // §2.2 子任务深度 ≤5 守卫：仅允许在深度 <5 的任务下继续添加子任务。
+    if (depth >= 5) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('已达最大嵌套层数（5），无法继续添加子任务')),
+      );
+      return;
+    }
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -121,6 +143,142 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
         parentTaskId: t.id,
       ),
     );
+  }
+
+  /// §2.3 收件箱迁移：把任务挪入 synthetic inbox (listId = 'inbox')。
+  Future<void> _moveToInbox(TodoTask t) async {
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    await repo.update(t.id, listId: kInboxListId);
+    if (!mounted) return;
+    messenger.showSnackBar(
+      const SnackBar(content: Text('已移至收件箱')),
+    );
+  }
+
+  /// P6 协作任务：底部 Sheet 选择（指派 / 评论 / 协作成员）。
+  Future<void> _openCollaborationHub(TodoTask t) async {
+    if (!mounted) return;
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.person_outline),
+              title: const Text('指派执行人'),
+              onTap: () => Navigator.pop(ctx, 'assign'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.chat_bubble_outline),
+              title: const Text('查看/添加评论'),
+              onTap: () => Navigator.pop(ctx, 'comments'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.group_outlined),
+              title: const Text('协作成员'),
+              subtitle: const Text('邀请 / 移除 / 调整成员角色'),
+              onTap: () => Navigator.pop(ctx, 'members'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+    final taskServerId = t.serverId;
+    if (choice == 'assign') {
+      if (taskServerId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('任务尚未同步，无法指派')),
+        );
+        return;
+      }
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => TaskAssignPage(
+            taskServerId: taskServerId,
+            taskTitle: t.title,
+          ),
+        ),
+      );
+      return;
+    }
+    if (choice == 'comments') {
+      if (taskServerId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('任务尚未同步，暂无评论')),
+        );
+        return;
+      }
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => TaskCommentsPage(
+            taskServerId: taskServerId,
+            taskTitle: t.title,
+          ),
+        ),
+      );
+      return;
+    }
+    if (choice == 'members') {
+      final db = ref.read(appDatabaseProvider);
+      if (db == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('请先登录')),
+        );
+        return;
+      }
+      final list = await _resolveList(db, t.listId);
+      if (!mounted) return;
+      final listServerId = list?.serverId;
+      if (listServerId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('清单尚未同步，无法打开协作成员')),
+        );
+        return;
+      }
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ListMemberPage(
+            listServerId: listServerId,
+            title: list?.name ?? t.title,
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<TodoList?> _resolveList(AppDatabase db, String localListId) async {
+    // listId 本地 UUID：从本地 drift 反查对应的 list serverId。
+    return db.listByLocalId(localListId);
+  }
+
+  Future<void> _pickDue(TodoTask t) async {
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    final now = _dueAt ?? t.dueAt ?? DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: now,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 5),
+    );
+    if (date == null || !mounted) return;
+    final timeOfDay = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(now),
+    );
+    setState(() {
+      _dueAt = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        timeOfDay?.hour ?? now.hour,
+        timeOfDay?.minute ?? now.minute,
+      );
+    });
   }
 
   @override
@@ -180,9 +338,36 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
           ],
         ),
         const Divider(height: 32),
+        Text('截止时间', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: () => _pickDue(t),
+          icon: const Icon(Icons.event_outlined),
+          label: Text(
+            _dueAt == null
+                ? '未设置'
+                : '${_dueAt!.toLocal().toString().substring(0, 16)} (本地时区)',
+          ),
+        ),
+        if (_dueAt != null) ...[
+          const SizedBox(height: 4),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => setState(() => _dueAt = null),
+              icon: const Icon(Icons.clear, size: 16),
+              label: const Text('清除'),
+            ),
+          ),
+        ],
+        const Divider(height: 32),
         Text('标签', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         _TagChips(taskId: t.id),
+        const Divider(height: 32),
+        Text('检查事项', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        _ChecklistSection(taskId: t.id),
         const Divider(height: 32),
         Row(
           children: [
@@ -254,6 +439,20 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                 ),
               ),
               IconButton(
+                tooltip: '移至收件箱',
+                onPressed: () async {
+                  final navigator = Navigator.of(context);
+                  await _moveToInbox(t);
+                  if (mounted) navigator.pop();
+                },
+                icon: const Icon(Icons.move_to_inbox_outlined),
+              ),
+              IconButton(
+                tooltip: '协作（指派/评论/成员）',
+                onPressed: () => _openCollaborationHub(t),
+                icon: const Icon(Icons.people_outline),
+              ),
+              IconButton(
                 tooltip: '删除',
                 onPressed: () => _delete(t),
                 icon: const Icon(Icons.delete_outline),
@@ -288,6 +487,20 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                   ? Icons.check_circle
                   : Icons.radio_button_unchecked,
             ),
+          ),
+              IconButton(
+                tooltip: '移至收件箱',
+                onPressed: () async {
+                  final navigator = Navigator.of(context);
+                  await _moveToInbox(t);
+                  if (mounted) navigator.pop();
+                },
+                icon: const Icon(Icons.move_to_inbox_outlined),
+              ),
+          IconButton(
+            tooltip: '协作',
+            onPressed: () => _openCollaborationHub(t),
+            icon: const Icon(Icons.people_outline),
           ),
           IconButton(
             tooltip: '删除',
@@ -351,7 +564,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
 /// ```
 Future<void> showTaskDetailSheet(
   BuildContext context,
-  int taskId, {
+  String taskId, {
   bool useRootNavigator = true,
 }) async {
   final isWide = MediaQuery.sizeOf(context).width >= 600;
@@ -416,13 +629,13 @@ class _RightSideSheet extends StatelessWidget {
 class _SubtaskList extends ConsumerWidget {
   const _SubtaskList({required this.taskId, required this.onAdd});
 
-  final int taskId;
+  final String taskId;
   final VoidCallback onAdd;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return StreamBuilder<List<TodoTask>>(
-      stream: ref.watch(taskRepositoryProvider).watchChildrenOf(taskId),
+      stream: ref.watch(taskRepositoryProvider)!.watchChildrenOf(taskId),
       builder: (ctx, snap) {
         final items = snap.data ?? const <TodoTask>[];
         if (items.isEmpty) {
@@ -448,8 +661,7 @@ class _SubtaskList extends ConsumerWidget {
                     ),
                   ),
                   onChanged: (_) async {
-                    await ref
-                        .read(taskRepositoryProvider)
+                    await ref                        .read(taskRepositoryProvider)!
                         .toggleComplete(st.id);
                   },
                 ),
@@ -464,18 +676,18 @@ class _SubtaskList extends ConsumerWidget {
 class _TagChips extends ConsumerStatefulWidget {
   const _TagChips({required this.taskId});
 
-  final int taskId;
+  final String taskId;
 
   @override
   ConsumerState<_TagChips> createState() => _TagChipsState();
 }
 
 class _TagChipsState extends ConsumerState<_TagChips> {
-  Set<int> _selected = {};
+  Set<String> _selected = {};
   bool _loaded = false;
 
   Future<void> _bootstrap() async {
-    final ids = await ref.read(tagRepositoryProvider).tagIdsOf(widget.taskId);
+    final ids = await ref.read(tagRepositoryProvider)!.tagIdsOf(widget.taskId);
     if (!mounted) return;
     setState(() {
       _selected = ids.toSet();
@@ -483,7 +695,7 @@ class _TagChipsState extends ConsumerState<_TagChips> {
     });
   }
 
-  Future<void> _toggle(int tagId) async {
+  Future<void> _toggle(String tagId) async {
     setState(() {
       if (_selected.contains(tagId)) {
         _selected.remove(tagId);
@@ -491,8 +703,7 @@ class _TagChipsState extends ConsumerState<_TagChips> {
         _selected.add(tagId);
       }
     });
-    await ref
-        .read(tagRepositoryProvider)
+    await ref        .read(tagRepositoryProvider)!
         .setTaskTags(widget.taskId, _selected.toList());
   }
 
@@ -528,6 +739,122 @@ class _TagChipsState extends ConsumerState<_TagChips> {
           }).toList(),
         );
       },
+    );
+  }
+}
+
+/// §2.1 内嵌检查事项（checklist）：直接走 [ChecklistApi] REST，实时与后端同步。
+class _ChecklistSection extends ConsumerStatefulWidget {
+  const _ChecklistSection({required this.taskId});
+
+  final String taskId;
+
+  @override
+  ConsumerState<_ChecklistSection> createState() => _ChecklistSectionState();
+}
+
+class _ChecklistSectionState extends ConsumerState<_ChecklistSection> {
+  List<ChecklistItem> _items = const [];
+  bool _loading = true;
+  String? _error;
+  final _addCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _addCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    final api = ref.read(todoApiProvider).checklist;
+    final items = await api.list(widget.taskId);
+    if (!mounted) return;
+    setState(() {
+      _items = items;
+      _loading = false;
+      _error = null;
+    });
+  }
+
+  Future<void> _add() async {
+    final text = _addCtrl.text.trim();
+    if (text.isEmpty) return;
+    _addCtrl.clear();
+    final api = ref.read(todoApiProvider).checklist;
+    await api.create(taskId: widget.taskId, title: text);
+    await _load();
+  }
+
+  Future<void> _toggle(ChecklistItem it) async {
+    final api = ref.read(todoApiProvider).checklist;
+    await api.update(it.id, completed: !it.completed);
+    await _load();
+  }
+
+  Future<void> _delete(ChecklistItem it) async {
+    final api = ref.read(todoApiProvider).checklist;
+    await api.delete(it.id);
+    await _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _addCtrl,
+                decoration: const InputDecoration(
+                  labelText: '新增检查事项',
+                  border: OutlineInputBorder(),
+                ),
+                onSubmitted: (_) => _add(),
+              ),
+            ),
+            IconButton(
+              tooltip: '添加',
+              onPressed: _add,
+              icon: const Icon(Icons.add),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_loading)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: LinearProgressIndicator(),
+          )
+        else if (_error != null)
+          Text('加载失败: $_error')
+        else if (_items.isEmpty)
+          const Text('暂无检查事项')
+        else
+          ..._items.map((it) => CheckboxListTile(
+                value: it.completed,
+                title: Text(
+                  it.title,
+                  style: TextStyle(
+                    decoration:
+                        it.completed ? TextDecoration.lineThrough : null,
+                  ),
+                ),
+                onChanged: (_) => _toggle(it),
+                secondary: IconButton(
+                  tooltip: '删除',
+                  icon: const Icon(Icons.close),
+                  onPressed: () => _delete(it),
+                ),
+              )),
+      ],
     );
   }
 }

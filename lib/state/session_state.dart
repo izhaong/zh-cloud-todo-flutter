@@ -1,21 +1,25 @@
-import 'dart:convert';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-import '../todo_member_auth_client.dart';
+import '../core/api/api_config.dart';
+import '../core/auth/auth_gateway.dart';
+import '../core/storage/session_store.dart';
+import 'providers.dart';
 
-/// 登录会话持久化 key（与旧版 main.dart 保持一致，兼容历史缓存）。
-const String sessionPrefsKey = 'zh_cloud_todo_flutter_session_v1';
+/// 新架构入口类型的再导出，方便下游 provider / 页面直接 import 本文件即可。
+export '../core/auth/auth_session.dart' show TodoAuthSession;
+export '../core/auth/auth_gateway.dart' show AuthGateway;
+export '../core/storage/session_store.dart' show SessionStore;
+export '../core/api/api_client.dart' show ApiClient;
 
-/// 全局认证网关（登录/注册/找回密码/登出/校验）。
-///
-/// 测试可在 `ProviderScope.overrides` 中通过 `authGatewayProvider.overrideWithValue`
-/// 注入 Fake 实现。
-final authGatewayProvider = Provider<TodoMemberAuthGateway>((ref) {
-  final client = TodoMemberAuthClient();
-  ref.onDispose(client.close);
-  return client;
+/// 会话仓库（secure 持久化）；ProviderScope.overrides 可注入 Fake。
+final sessionStoreProvider = Provider<SessionStore>((ref) => SessionStore());
+
+/// 认证网关；tenant 从 [ApiConfig.defaultTenantId]（可由 --dart-define 覆盖）。
+final authGatewayProvider = Provider<AuthGateway>((ref) {
+  final client = ref.watch(apiClientProvider);
+  final gateway = AuthGatewayImpl(client, tenantId: ApiConfig.defaultTenantId);
+  ref.onDispose(gateway.close);
+  return gateway;
 });
 
 /// 当前登录会话；null 表示未登录。
@@ -30,27 +34,24 @@ class SessionController extends Notifier<TodoAuthSession?> {
   @override
   TodoAuthSession? build() => null;
 
-  /// 应用启动时读取本地持久化会话，并向后端校验是否仍然有效。
+  /// 应用启动时读取本地 secure 会话，并向后端校验是否仍然有效。
   Future<void> bootstrap() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(sessionPrefsKey);
-    if (raw == null || raw.isEmpty) {
-      ref.read(sessionBootstrappedProvider.notifier).state = true;
-      return;
-    }
+    final store = ref.read(sessionStoreProvider);
     try {
-      final session = TodoAuthSession.fromJson(
-        jsonDecode(raw) as Map<String, dynamic>,
-      );
+      final session = await store.readSession();
+      if (session == null) {
+        ref.read(sessionBootstrappedProvider.notifier).state = true;
+        return;
+      }
       final gateway = ref.read(authGatewayProvider);
       final valid = await gateway.validateSession(session.accessToken);
-      state = valid ? session : null;
-      if (!valid) {
-        await prefs.remove(sessionPrefsKey);
+      if (valid) {
+        state = session;
+      } else {
+        await store.clearSession();
       }
     } catch (_) {
-      state = null;
-      await prefs.remove(sessionPrefsKey);
+      await store.clearSession();
     } finally {
       ref.read(sessionBootstrappedProvider.notifier).state = true;
     }
@@ -58,21 +59,20 @@ class SessionController extends Notifier<TodoAuthSession?> {
 
   Future<void> setSession(TodoAuthSession session) async {
     state = session;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(sessionPrefsKey, jsonEncode(session.toJson()));
+    final store = ref.read(sessionStoreProvider);
+    await store.writeSession(session);
   }
 
   Future<void> signOut() async {
     final current = state;
+    if (current == null) return;
     state = null;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(sessionPrefsKey);
-    if (current != null) {
-      try {
-        await ref.read(authGatewayProvider).logout(current.accessToken);
-      } catch (_) {
-        // 登出失败（如已离线）不阻塞本地清理。
-      }
+    final store = ref.read(sessionStoreProvider);
+    await store.clearSession();
+    try {
+      await ref.read(authGatewayProvider).logout(current.accessToken);
+    } catch (_) {
+      // 登出失败（如已离线）不阻塞本地清理。
     }
   }
 }

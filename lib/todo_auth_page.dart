@@ -1,26 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'todo_member_auth_client.dart';
+import 'core/auth/auth_gateway.dart';
+import 'state/session_state.dart';
 
 /// todo-member 登录 / 注册 / 找回密码（居中卡片布局，8pt 间距网格）。
-class TodoAuthPage extends StatefulWidget {
-  const TodoAuthPage({
-    super.key,
-    required this.authClient,
-    required this.onAuthenticated,
-  });
-
-  final TodoMemberAuthGateway authClient;
-  final Future<void> Function(TodoAuthSession session, String action)
-  onAuthenticated;
+///
+/// 不再由上层注入 [AuthGateway]：直接读取 [authGatewayProvider]，登录成功后通过
+/// [sessionProvider] 的 [SessionController.setSession] 持久化会话，go_router 的
+/// redirect 会把路由从 `/login` 切到 `/`。
+class TodoAuthPage extends ConsumerStatefulWidget {
+  const TodoAuthPage({super.key});
 
   @override
-  State<TodoAuthPage> createState() => _TodoAuthPageState();
+  ConsumerState<TodoAuthPage> createState() => _TodoAuthPageState();
 }
 
 enum _AuthMode { password, sms, register, forgotPassword }
 
-class _TodoAuthPageState extends State<TodoAuthPage> {
+class _TodoAuthPageState extends ConsumerState<TodoAuthPage> {
   static const _formMaxWidth = 420.0;
   static const _horizontalPadding = 24.0;
   static const _fieldGap = 16.0;
@@ -347,7 +345,7 @@ class _TodoAuthPageState extends State<TodoAuthPage> {
       _message = null;
     });
     try {
-      await widget.authClient.sendSmsCode(
+      await ref.read(authGatewayProvider).sendSmsCode(
         mobile: _mobileController.text.trim(),
         scene: _mode == _AuthMode.forgotPassword ? 4 : 1,
       );
@@ -357,7 +355,7 @@ class _TodoAuthPageState extends State<TodoAuthPage> {
             : '登录验证码已发送';
         _messageIsError = false;
       });
-    } on TodoMemberAuthException catch (error) {
+    } on TodoAuthException catch (error) {
       setState(() {
         _message = error.message;
         _messageIsError = true;
@@ -386,15 +384,15 @@ class _TodoAuthPageState extends State<TodoAuthPage> {
     });
     try {
       if (_mode == _AuthMode.password) {
-        final session = await widget.authClient.passwordLogin(
+        final session = await ref.read(authGatewayProvider).passwordLogin(
           mobile: _mobileController.text.trim(),
           password: _passwordController.text,
         );
-        await widget.onAuthenticated(session, 'password login');
+        await ref.read(sessionProvider.notifier).setSession(session);
         return;
       }
       if (_mode == _AuthMode.forgotPassword) {
-        await widget.authClient.resetPassword(
+        await ref.read(authGatewayProvider).resetPassword(
           mobile: _mobileController.text.trim(),
           code: _codeController.text.trim(),
           password: _passwordController.text,
@@ -408,15 +406,12 @@ class _TodoAuthPageState extends State<TodoAuthPage> {
         });
         return;
       }
-      final session = await widget.authClient.smsLogin(
+      final session = await ref.read(authGatewayProvider).smsLogin(
         mobile: _mobileController.text.trim(),
         code: _codeController.text.trim(),
       );
-      await widget.onAuthenticated(
-        session,
-        _mode == _AuthMode.register ? 'sms register' : 'sms login',
-      );
-    } on TodoMemberAuthException catch (error) {
+      await ref.read(sessionProvider.notifier).setSession(session);
+    } on TodoAuthException catch (error) {
       setState(() {
         _message = error.message;
         _messageIsError = true;

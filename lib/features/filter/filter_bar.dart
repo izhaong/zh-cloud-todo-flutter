@@ -14,17 +14,17 @@ class TaskFilter {
     this.completed,
   });
 
-  final int? listId;
+  final String? listId;
   final int? folderId;
-  final List<int> tagIds;
+  final List<String> tagIds;
   final int? priority;
   final String? dueRange; // today / overdue / future
   final bool? completed;
 
   TaskFilter copyWith({
-    int? listId,
+    String? listId,
     int? folderId,
-    List<int>? tagIds,
+    List<String>? tagIds,
     int? priority,
     String? dueRange,
     bool? completed,
@@ -114,8 +114,7 @@ class FilterBar extends ConsumerWidget {
               onPressed: () async {
                 final name = await _promptSmartName(context);
                 if (name == null || name.isEmpty) return;
-                await ref
-                    .read(listRepositoryProvider)
+                await ref                    .read(listRepositoryProvider)!
                     .saveSmart(filterName: name, filter: filter.toJson());
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(

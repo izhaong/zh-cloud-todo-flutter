@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:zh_cloud_todo_flutter/db/app_database.dart';
+import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/features/task/views/timeline_view.dart';
 
 /// M11-B3 c4 时间线视图：纯函数分类 + widget 渲染。
@@ -17,8 +17,8 @@ void main() {
 
     TodoTask build({DateTime? dueAt, bool completed = false}) {
       return TodoTask(
-        id: 1,
-        listId: 1,
+        id: '1',
+        listId: '1',
         title: 't',
         completed: completed,
         priority: 0,
@@ -100,8 +100,8 @@ void main() {
     final now = DateTime(2026, 6, 15, 12, 0, 0);
     final tasks = <TodoTask>[
       TodoTask(
-        id: 1,
-        listId: 1,
+        id: '1',
+        listId: '1',
         title: '昨天的事',
         completed: false,
         priority: 0,
@@ -114,8 +114,8 @@ void main() {
         createdAt: now,
       ),
       TodoTask(
-        id: 2,
-        listId: 1,
+        id: '2',
+        listId: '1',
         title: '今天要完成',
         completed: false,
         priority: 0,
@@ -128,8 +128,8 @@ void main() {
         createdAt: now,
       ),
       TodoTask(
-        id: 3,
-        listId: 1,
+        id: '3',
+        listId: '1',
         title: '本周要做',
         completed: false,
         priority: 0,
