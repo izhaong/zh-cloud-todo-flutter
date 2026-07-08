@@ -2,12 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/session_state.dart';
+import '../account/account_security_page.dart';
 
-/// 设置页（精简版）：仅展示当前登录手机号 + 退出登录。
-///
-/// 旧版基于 [github_release_update] 的"检测更新"入口在此轮移除，避免与即将
-/// 删除的遗留文件产生硬依赖；后续若需恢复，可独立实现 IO 更新通道，再回来
-/// 接入。
+/// 设置页：账户安全 + 当前账号 + 退出登录。
 class SettingsRoute extends ConsumerWidget {
   const SettingsRoute({super.key, this.signedInMobile});
 
@@ -31,6 +28,15 @@ class SettingsRoute extends ConsumerWidget {
               title: const Text('当前账号'),
               subtitle: Text(signedInMobile!),
             ),
+          ListTile(
+            leading: const Icon(Icons.verified_user_outlined),
+            title: const Text('账户安全'),
+            subtitle: const Text('双重验证（2FA）与数据导出'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const AccountSecurityPage()),
+            ),
+          ),
           ListTile(
             leading: const Icon(Icons.logout),
             title: const Text('退出登录'),
