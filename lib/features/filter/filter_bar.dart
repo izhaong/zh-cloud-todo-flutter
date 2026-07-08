@@ -114,8 +114,9 @@ class FilterBar extends ConsumerWidget {
               onPressed: () async {
                 final name = await _promptSmartName(context);
                 if (name == null || name.isEmpty) return;
-                await ref                    .read(listRepositoryProvider)!
-                    .saveSmart(filterName: name, filter: filter.toJson());
+                final repo = ref.read(listRepositoryProvider);
+                if (repo == null) return;
+                await repo.saveSmart(filterName: name, filter: filter.toJson());
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('已保存为智能清单：$name')),

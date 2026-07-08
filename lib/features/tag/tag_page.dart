@@ -58,10 +58,9 @@ class TagPage extends ConsumerWidget {
   Future<void> _create(BuildContext context, WidgetRef ref) async {
     final result = await _promptNameColor(context);
     if (result == null) return;
-    await ref.read(tagRepositoryProvider)!.create(
-          name: result.$1,
-          color: result.$2,
-        );
+    final repo = ref.read(tagRepositoryProvider);
+    if (repo == null) return;
+    await repo.create(name: result.$1, color: result.$2);
   }
 
   Future<void> _edit(
@@ -75,11 +74,9 @@ class TagPage extends ConsumerWidget {
       initialColor: tag.color,
     );
     if (result == null) return;
-    await ref.read(tagRepositoryProvider)!.update(
-          tag.id,
-          name: result.$1,
-          color: result.$2,
-        );
+    final repo = ref.read(tagRepositoryProvider);
+    if (repo == null) return;
+    await repo.update(tag.id, name: result.$1, color: result.$2);
   }
 
   Future<void> _delete(
@@ -105,7 +102,9 @@ class TagPage extends ConsumerWidget {
       ),
     );
     if (ok == true) {
-      await ref.read(tagRepositoryProvider)!.delete(tag.id);
+      final repo = ref.read(tagRepositoryProvider);
+      if (repo == null) return;
+      await repo.delete(tag.id);
     }
   }
 

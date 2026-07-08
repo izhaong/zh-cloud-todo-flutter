@@ -33,7 +33,8 @@ class _ListEditorSheetState extends ConsumerState<ListEditorSheet> {
   Future<void> _save() async {
     final text = _name.text.trim();
     if (text.isEmpty) return;
-    final repo = ref.read(listRepositoryProvider)!;
+    final repo = ref.read(listRepositoryProvider);
+    if (repo == null) return;
     if (widget.existing == null) {
       await repo.create(name: text, folderId: widget.folderId);
     } else {
@@ -44,7 +45,9 @@ class _ListEditorSheetState extends ConsumerState<ListEditorSheet> {
 
   Future<void> _delete() async {
     final list = widget.existing!;
-    final open = await ref.read(appDatabaseProvider)!.countOpenTasksByList(list.id);
+    final db = ref.read(appDatabaseProvider);
+    if (db == null) return;
+    final open = await db.countOpenTasksByList(list.id);
     if (!mounted) return;
     if (open > 0) {
       final ok = await showDialog<bool>(
@@ -66,7 +69,9 @@ class _ListEditorSheetState extends ConsumerState<ListEditorSheet> {
       );
       if (ok != true) return;
     }
-    await ref.read(listRepositoryProvider)!.delete(list.id);
+    final repo = ref.read(listRepositoryProvider);
+    if (repo == null) return;
+    await repo.delete(list.id);
     if (mounted) Navigator.pop(context);
   }
 

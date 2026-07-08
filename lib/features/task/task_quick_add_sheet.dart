@@ -45,7 +45,9 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
   Future<void> _save() async {
     final text = _titleCtrl.text.trim();
     if (text.isEmpty) return;
-    await ref.read(taskRepositoryProvider)!.create(
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    await repo.create(
           listId: widget.listId,
           parentTaskId: widget.parentTaskId,
           title: text,
