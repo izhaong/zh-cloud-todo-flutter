@@ -232,7 +232,7 @@ pipeline {
         sh 'docker --version'
         script {
           // 密钥类变量走 mask，避免日志全量打印。
-          String maskValue = { key, value ->
+          def maskValue = { key, value ->
             String text = value == null ? '' : value.toString()
             return (key ==~ /(?i).*(TOKEN|PASSWORD|PASS|SECRET|COOKIE|CREDENTIAL|ACCESS_KEY|SECRET_KEY|WEBHOOK|PRIVATE_KEY).*/) ? '****' : text
           }
