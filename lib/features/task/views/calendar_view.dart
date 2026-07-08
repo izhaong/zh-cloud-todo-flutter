@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/db/app_database.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/brand_colors.dart';
 import '../task_detail_page.dart';
 
 /// M11-B3 日历视图：周 / 月 / 年 / 列表 4 模式。
@@ -138,8 +140,6 @@ extension CalendarModeX on CalendarMode {
   }
 }
 
-/// 任务的"落点日期"。优先级 dueAt > endAt > startAt；都为空返回 null。
-/// 已完成任务仍落点（上层不区分）。
 DateTime? resolveTaskDate(TodoTask t) {
   final d = t.dueAt ?? t.endAt ?? t.startAt;
   if (d == null) return null;
@@ -285,13 +285,18 @@ class _DayHeader extends StatelessWidget {
   final String label;
   @override
   Widget build(BuildContext context) {
+    final colors = brandColors(context);
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 4),
         alignment: Alignment.center,
         child: Text(
           label,
-          style: Theme.of(context).textTheme.labelSmall,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: colors.mutedForeground,
+          ),
         ),
       ),
     );
@@ -312,6 +317,7 @@ class _DayCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = brandColors(context);
     final isCurrentMonth = day.month == anchor.month;
     final today = DateTime.now();
     final isToday = day.year == today.year &&
@@ -321,15 +327,17 @@ class _DayCell extends StatelessWidget {
       padding: const EdgeInsets.all(2),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         child: Container(
           decoration: BoxDecoration(
             color: isToday
-                ? Theme.of(context).colorScheme.primaryContainer
-                : (isCurrentMonth
-                    ? Theme.of(context).colorScheme.surfaceContainerHighest
-                    : Theme.of(context).disabledColor.withValues(alpha: 0.05)),
-            borderRadius: BorderRadius.circular(6),
+                ? colors.accent.withValues(alpha: 0.12)
+                : (isCurrentMonth ? colors.surface : colors.background),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            border: Border.all(
+              color: isToday ? colors.accent : colors.border,
+              width: isToday ? 1.5 : 0.5,
+            ),
           ),
           padding: const EdgeInsets.all(4),
           child: Column(
@@ -337,22 +345,47 @@ class _DayCell extends StatelessWidget {
             children: [
               Text(
                 '${day.day}',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: isCurrentMonth ? null : Theme.of(context).disabledColor,
-                      fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-                    ),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isToday
+                      ? colors.accent
+                      : isCurrentMonth
+                          ? colors.foreground
+                          : colors.mutedForeground,
+                  fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                ),
               ),
               if (tasks.isNotEmpty)
-                Container(
-                  margin: const EdgeInsets.only(top: 4),
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '${tasks.length} 项',
-                    style: Theme.of(context).textTheme.labelSmall,
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 彩色任务点（颜色 = 任务最高优先级）
+                      Wrap(
+                        spacing: 2,
+                        runSpacing: 2,
+                        children: tasks
+                            .take(3)
+                            .map((t) => Container(
+                                  width: 5,
+                                  height: 5,
+                                  decoration: BoxDecoration(
+                                    color: _priorityColor(t.priority, colors),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ))
+                            .toList(),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          '${tasks.length} 项',
+                          style: TextStyle(
+                              fontSize: 9, color: colors.mutedForeground),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
             ],
@@ -360,6 +393,20 @@ class _DayCell extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// 任务优先级色点（对齐 TickTick 任务点颜色）。
+  Color _priorityColor(int priority, AppColors colors) {
+    switch (priority) {
+      case 3:
+        return colors.destructive;
+      case 2:
+        return colors.warning;
+      case 1:
+        return colors.info;
+      default:
+        return colors.accent;
+    }
   }
 }
 
@@ -388,6 +435,7 @@ class _WeekView extends StatelessWidget {
       tasksByDay.putIfAbsent('${d.year}-${d.month}-${d.day}', () => []).add(t);
     }
     final df = DateFormat('M/d');
+    final colors = brandColors(context);
     return Padding(
       padding: const EdgeInsets.all(4),
       child: Row(
@@ -398,8 +446,9 @@ class _WeekView extends StatelessWidget {
                 margin: const EdgeInsets.symmetric(horizontal: 2),
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(6),
+                  color: colors.surface,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  border: Border.all(color: colors.border, width: 0.5),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -467,6 +516,7 @@ class _YearView extends StatelessWidget {
       countByMonth[d.month - 1] += 1;
     }
     final df = DateFormat('M 月');
+    final colors = brandColors(context);
     return GridView.builder(
       padding: const EdgeInsets.all(8),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -480,11 +530,12 @@ class _YearView extends StatelessWidget {
         final m = i + 1;
         return InkWell(
           onTap: () => onMonthTap(m),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(AppRadius.sm),
           child: Container(
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(8),
+              color: colors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              border: Border.all(color: colors.border, width: 0.5),
             ),
             padding: const EdgeInsets.all(8),
             child: Column(

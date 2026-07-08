@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/theme/brand_colors.dart';
 import '../../../state/providers.dart';
 import '../view_mode.dart';
 
@@ -76,7 +77,7 @@ class _TabButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final colors = brandColors(context);
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -85,19 +86,15 @@ class _TabButton extends StatelessWidget {
           border: Border(
             bottom: BorderSide(
               width: 2,
-              color: selected
-                  ? theme.colorScheme.primary
-                  : Colors.transparent,
+              color: selected ? colors.accent : Colors.transparent,
             ),
           ),
         ),
         child: Text(
           label,
-          style: theme.textTheme.bodyMedium?.copyWith(
+          style: TextStyle(
             fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-            color: selected
-                ? theme.colorScheme.primary
-                : theme.colorScheme.onSurfaceVariant,
+            color: selected ? colors.accent : colors.mutedForeground,
           ),
         ),
       ),

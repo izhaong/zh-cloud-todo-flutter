@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/db/app_database.dart';
+import '../../../core/theme/brand_colors.dart';
+import '../../../core/widgets/app_widgets.dart';
 import '../task_detail_page.dart';
 import '../task_quick_add_sheet.dart';
 
@@ -121,10 +123,12 @@ class _KanbanColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = brandColors(context);
     return SizedBox(
       width: 260,
-      child: Card(
+      child: AppCard(
         margin: EdgeInsets.zero,
+        padding: EdgeInsets.zero,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -143,18 +147,24 @@ class _KanbanColumn extends StatelessWidget {
                   const SizedBox(width: 8),
                   Text(
                     data.title,
-                    style: Theme.of(context).textTheme.titleSmall,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: colors.foreground,
+                    ),
                   ),
                   const Spacer(),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: data.color.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
                       '${data.tasks.length}',
-                      style: Theme.of(context).textTheme.labelSmall,
+                      style: TextStyle(
+                          fontSize: 11, color: colors.mutedForeground),
                     ),
                   ),
                   if (onAdd != null)
@@ -210,53 +220,41 @@ class _KanbanCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = brandColors(context);
     final df = DateFormat('MM-dd');
-    return Card(
-      margin: EdgeInsets.zero,
-      elevation: 1,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return AppCard(
+      padding: const EdgeInsets.all(10),
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            task.title,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: task.completed ? colors.mutedForeground : colors.foreground,
+              decoration: task.completed ? TextDecoration.lineThrough : null,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 6),
+          Row(
             children: [
-              Text(
-                task.title,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w500,
-                      decoration:
-                          task.completed ? TextDecoration.lineThrough : null,
-                    ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              AppTag(
+                label: priorityLabel(task.priority),
+                color: accent,
               ),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: accent.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      priorityLabel(task.priority),
-                      style: Theme.of(context).textTheme.labelSmall,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (task.dueAt != null)
-                    Text(
-                      df.format(task.dueAt!),
-                      style: Theme.of(context).textTheme.labelSmall,
-                    ),
-                ],
-              ),
+              const Spacer(),
+              if (task.dueAt != null)
+                Text(
+                  df.format(task.dueAt!),
+                  style: TextStyle(fontSize: 11, color: colors.mutedForeground),
+                ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }

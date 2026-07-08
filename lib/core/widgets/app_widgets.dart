@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import '../theme/brand_colors.dart';
 
 /// 品牌化卡片：替换 Material 默认 Card。
 /// 圆角 12 + 细微边框 + 底阴影，背景纯白（surface）。
@@ -14,7 +15,7 @@ class AppCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).extension<AppThemeExtension>()!.colors;
+    final colors = brandColors(context);
     final card = Container(
       margin: margin,
       decoration: BoxDecoration(
@@ -52,7 +53,7 @@ class AppCheckbox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).extension<AppThemeExtension>()!.colors;
+    final colors = brandColors(context);
     return InkWell(
       onTap: onChanged == null ? null : () => onChanged!(!value),
       customBorder: const CircleBorder(),
@@ -96,7 +97,7 @@ class AppButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).extension<AppThemeExtension>()!.colors;
+    final colors = brandColors(context);
     final bg = danger ? colors.destructive : colors.accent;
     final fg = danger ? colors.destructiveForeground : colors.accentForeground;
     return FilledButton.icon(
@@ -137,7 +138,7 @@ class AppTag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).extension<AppThemeExtension>()!.colors;
+    final colors = brandColors(context);
     final c = color ?? colors.accent;
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -184,7 +185,7 @@ class AppChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).extension<AppThemeExtension>()!.colors;
+    final colors = brandColors(context);
     return FilterChip(
       label: Text(label),
       selected: selected,
@@ -219,7 +220,7 @@ class AppEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).extension<AppThemeExtension>()!.colors;
+    final colors = brandColors(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.xl),

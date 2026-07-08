@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/db/app_database.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/brand_colors.dart';
+import '../../../core/widgets/app_widgets.dart';
 import '../task_detail_page.dart';
 
 /// M11-B3 时间线 (Timeline) 视图。
@@ -186,52 +189,81 @@ class _TimelineSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = brandColors(context);
     final tf = DateFormat('MM-dd HH:mm');
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: Row(
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: data.accent,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                data.label,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: AppCard(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+              child: Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
                       color: data.accent,
-                      fontWeight: FontWeight.w600,
+                      shape: BoxShape.circle,
                     ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    data.label,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: data.accent,
+                    ),
+                  ),
+                  const Spacer(),
+                  _BucketCount(count: data.items.length, accent: data.accent, colors: colors),
+                ],
               ),
-              const Spacer(),
-              Text(
-                '${data.items.length}',
-                style: Theme.of(context).textTheme.labelSmall,
-              ),
-            ],
-          ),
-        ),
-        for (final t in data.items)
-          ListTile(
-            dense: true,
-            leading: const Icon(Icons.schedule, size: 18),
-            title: Text(
-              t.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
             ),
-            subtitle: t.dueAt == null ? null : Text(tf.format(t.dueAt!)),
-            onTap: () => onTaskTap(t),
-          ),
-        const SizedBox(height: 4),
-      ],
+            const Divider(height: 1),
+            for (final t in data.items)
+              ListTile(
+                dense: true,
+                leading: Icon(Icons.schedule, size: 18, color: colors.mutedForeground),
+                title: Text(
+                  t.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: colors.foreground),
+                ),
+                subtitle: t.dueAt == null ? null : Text(tf.format(t.dueAt!), style: TextStyle(color: colors.mutedForeground)),
+                onTap: () => onTaskTap(t),
+              ),
+            const SizedBox(height: 4),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BucketCount extends StatelessWidget {
+  const _BucketCount({required this.count, required this.accent, required this.colors});
+  final int count;
+  final Color accent;
+  final AppColors colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        '$count',
+        style: TextStyle(fontSize: 12, color: accent, fontWeight: FontWeight.w600),
+      ),
     );
   }
 }

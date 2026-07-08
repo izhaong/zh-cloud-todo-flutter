@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/app_database.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/brand_colors.dart';
 import '../task_detail_page.dart';
 
 /// M11-B3 四象限 (Eisenhower) 视图。
@@ -203,9 +205,11 @@ class _QuadrantTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = brandColors(context);
     return Material(
       color: color,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      clipBehavior: Clip.antiAlias,
       child: Padding(
         padding: const EdgeInsets.all(8),
         child: Column(
@@ -216,29 +220,30 @@ class _QuadrantTile extends StatelessWidget {
                 Expanded(
                   child: Text(
                     data.quadrant.label,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: accent,
-                          fontWeight: FontWeight.w600,
-                        ),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: accent,
+                      fontWeight: FontWeight.w700,
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                   decoration: BoxDecoration(
                     color: accent.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
                     '${data.tasks.length}',
-                    style: Theme.of(context).textTheme.labelSmall,
+                    style: TextStyle(fontSize: 11, color: accent, fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
             ),
             Text(
               data.quadrant.hint,
-              style: Theme.of(context).textTheme.labelSmall,
+              style: TextStyle(fontSize: 11, color: accent.withValues(alpha: 0.8)),
             ),
             const SizedBox(height: 6),
             Expanded(
@@ -246,9 +251,7 @@ class _QuadrantTile extends StatelessWidget {
                   ? Center(
                       child: Text(
                         '空',
-                        style: TextStyle(
-                          color: Theme.of(context).disabledColor,
-                        ),
+                        style: TextStyle(color: accent.withValues(alpha: 0.6)),
                       ),
                     )
                   : ListView.separated(
@@ -262,6 +265,7 @@ class _QuadrantTile extends StatelessWidget {
                             t.title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 13, color: colors.foreground),
                           ),
                           onTap: () => onTaskTap(t),
                         );
