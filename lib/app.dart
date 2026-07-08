@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'core/theme/app_theme.dart';
 import 'features/home/home_shell.dart';
 import 'state/session_state.dart';
 import 'todo_auth_page.dart';
@@ -91,10 +92,43 @@ class _TodoFlutterAppState extends ConsumerState<TodoFlutterApp> {
   }
 
   ThemeData _theme() => ThemeData(
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: const Color(0xFF155EEF),
-      brightness: Brightness.light,
+    brightness: Brightness.light,
+    colorScheme: ColorScheme.light(
+      primary: AppColors.light.accent,
+      onPrimary: AppColors.light.accentForeground,
+      secondary: AppColors.light.accent,
+      surface: AppColors.light.surface,
+      error: AppColors.light.destructive,
+      onSurface: AppColors.light.foreground,
     ),
+    scaffoldBackgroundColor: AppColors.light.background,
     useMaterial3: true,
+    extensions: const [AppThemeExtension(AppColors.light)],
+    appBarTheme: AppBarTheme(
+      backgroundColor: AppColors.light.background,
+      foregroundColor: AppColors.light.foreground,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+    ),
+    cardTheme: CardThemeData(
+      color: AppColors.light.surface,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        side: BorderSide(color: AppColors.light.border, width: 0.5),
+      ),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: AppColors.light.surface,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        borderSide: BorderSide(color: AppColors.light.border),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        borderSide: BorderSide(color: AppColors.light.border),
+      ),
+    ),
   );
 }
