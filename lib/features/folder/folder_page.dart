@@ -56,7 +56,9 @@ class FolderPage extends ConsumerWidget {
   Future<void> _create(BuildContext context, WidgetRef ref) async {
     final name = await _promptName(context, '新建文件夹');
     if (name == null || name.isEmpty) return;
-    await ref.read(folderRepositoryProvider)!.create(name);
+    final repo = ref.read(folderRepositoryProvider);
+    if (repo == null) return;
+    await repo.create(name);
   }
 
   Future<void> _rename(
@@ -70,7 +72,9 @@ class FolderPage extends ConsumerWidget {
       initial: folder.name,
     );
     if (name == null || name.isEmpty) return;
-    await ref.read(folderRepositoryProvider)!.rename(folder.id, name);
+    final repo = ref.read(folderRepositoryProvider);
+    if (repo == null) return;
+    await repo.rename(folder.id, name);
   }
 
   Future<void> _delete(
@@ -96,7 +100,9 @@ class FolderPage extends ConsumerWidget {
       ),
     );
     if (ok == true) {
-      await ref.read(folderRepositoryProvider)!.delete(folder.id);
+      final repo = ref.read(folderRepositoryProvider);
+      if (repo == null) return;
+      await repo.delete(folder.id);
     }
   }
 

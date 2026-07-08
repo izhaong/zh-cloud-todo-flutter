@@ -49,7 +49,9 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   }
 
   Future<void> _bootstrap() async {
-    final t = await ref.read(taskRepositoryProvider)!.getById(widget.taskId);
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    final t = await repo.getById(widget.taskId);
     if (!mounted) return;
     setState(() {
       _task = t;
@@ -71,7 +73,9 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   Future<void> _save() async {
     final t = _task;
     if (t == null) return;
-    await ref.read(taskRepositoryProvider)!.update(
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    await repo.update(
           t.id,
           title: _title.text.trim(),
           description: _desc.text.trim(),
@@ -86,11 +90,15 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   }
 
   Future<void> _toggleComplete(TodoTask t) async {
-    await ref.read(taskRepositoryProvider)!.toggleComplete(t.id);
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    await repo.toggleComplete(t.id);
   }
 
   Future<void> _togglePin(TodoTask t) async {
-    final next = await ref.read(taskRepositoryProvider)!.togglePin(t.id);
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    final next = await repo.togglePin(t.id);
     if (!mounted) return;
     setState(() => _task = next);
     ScaffoldMessenger.of(context).showSnackBar(
@@ -117,7 +125,9 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
       ),
     );
     if (ok == true) {
-      await ref.read(taskRepositoryProvider)!.delete(t.id);
+      final repo = ref.read(taskRepositoryProvider);
+      if (repo == null) return;
+      await repo.delete(t.id);
       if (mounted) Navigator.of(context).pop();
     }
   }
@@ -634,8 +644,12 @@ class _SubtaskList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final repo = ref.watch(taskRepositoryProvider);
+    if (repo == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
     return StreamBuilder<List<TodoTask>>(
-      stream: ref.watch(taskRepositoryProvider)!.watchChildrenOf(taskId),
+      stream: repo.watchChildrenOf(taskId),
       builder: (ctx, snap) {
         final items = snap.data ?? const <TodoTask>[];
         if (items.isEmpty) {
@@ -661,8 +675,9 @@ class _SubtaskList extends ConsumerWidget {
                     ),
                   ),
                   onChanged: (_) async {
-                    await ref                        .read(taskRepositoryProvider)!
-                        .toggleComplete(st.id);
+                    final repo = ref.read(taskRepositoryProvider);
+                    if (repo == null) return;
+                    await repo.toggleComplete(st.id);
                   },
                 ),
               )
@@ -687,7 +702,9 @@ class _TagChipsState extends ConsumerState<_TagChips> {
   bool _loaded = false;
 
   Future<void> _bootstrap() async {
-    final ids = await ref.read(tagRepositoryProvider)!.tagIdsOf(widget.taskId);
+    final repo = ref.read(tagRepositoryProvider);
+    if (repo == null) return;
+    final ids = await repo.tagIdsOf(widget.taskId);
     if (!mounted) return;
     setState(() {
       _selected = ids.toSet();
@@ -703,8 +720,9 @@ class _TagChipsState extends ConsumerState<_TagChips> {
         _selected.add(tagId);
       }
     });
-    await ref        .read(tagRepositoryProvider)!
-        .setTaskTags(widget.taskId, _selected.toList());
+    final repo = ref.read(tagRepositoryProvider);
+    if (repo == null) return;
+    await repo.setTaskTags(widget.taskId, _selected.toList());
   }
 
   @override

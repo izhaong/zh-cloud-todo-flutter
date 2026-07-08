@@ -33,7 +33,8 @@ class _ListPageState extends ConsumerState<ListPage> {
   }
 
   Future<void> _deleteList(TodoList list) async {
-    final db = ref.read(appDatabaseProvider)!;
+    final db = ref.read(appDatabaseProvider);
+    if (db == null) return;
     final open = await db.countOpenTasksByList(list.id);
     if (!mounted) return;
     if (open > 0) {
@@ -56,11 +57,15 @@ class _ListPageState extends ConsumerState<ListPage> {
       );
       if (force != true) return;
     }
-    await ref.read(listRepositoryProvider)!.delete(list.id);
+    final repo = ref.read(listRepositoryProvider);
+    if (repo == null) return;
+    await repo.delete(list.id);
   }
 
   Future<void> _move(TodoList list, int delta) async {
-    final lists = await ref.read(listRepositoryProvider)!.getAll();
+    final repo = ref.read(listRepositoryProvider);
+    if (repo == null) return;
+    final lists = await repo.getAll();
     final inFolder = lists.where((l) => l.folderId == list.folderId).toList();
     inFolder.sort((a, b) {
       final c = a.sortOrder.compareTo(b.sortOrder);
@@ -74,8 +79,9 @@ class _ListPageState extends ConsumerState<ListPage> {
     final tmp = inFolder[idx];
     inFolder[idx] = inFolder[newIdx];
     inFolder[newIdx] = tmp;
-    await ref        .read(listRepositoryProvider)!
-        .reorder(inFolder.map((l) => l.id).toList());
+    final reorderRepo = ref.read(listRepositoryProvider);
+    if (reorderRepo == null) return;
+    await reorderRepo.reorder(inFolder.map((l) => l.id).toList());
   }
 
   @override

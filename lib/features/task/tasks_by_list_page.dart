@@ -39,10 +39,14 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   @override
   Widget build(BuildContext context) {
     final listsAsync = ref.watch(listsStreamProvider);
+    final taskRepo = ref.watch(taskRepositoryProvider);
+    // 会话未就绪（DB 仍在初始化 / 注销过渡）时防空降级为 loading，避免 crash。
+    if (taskRepo == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
     final tasksStream = _selectedListId == null
-        ? ref.watch(taskRepositoryProvider)!.watchAll()
-        : ref            .watch(taskRepositoryProvider)!
-            .watchTopLevelByList(_selectedListId!);
+        ? taskRepo.watchAll()
+        : taskRepo.watchTopLevelByList(_selectedListId!);
 
     return Scaffold(
       appBar: AppBar(
@@ -205,7 +209,9 @@ class _ListBody extends StatelessWidget {
             builder: (ctx, ref, _) => Checkbox(
               value: t.completed,
               onChanged: (_) async {
-                await ref.read(taskRepositoryProvider)!.toggleComplete(t.id);
+                final repo = ref.read(taskRepositoryProvider);
+                if (repo == null) return;
+                await repo.toggleComplete(t.id);
               },
             ),
           ),
@@ -236,8 +242,11 @@ class _ListBody extends StatelessWidget {
                 t.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
                 size: 18,
               ),
-              onPressed: () =>
-                  ref.read(taskRepositoryProvider)!.togglePin(t.id),
+              onPressed: () {
+                final repo = ref.read(taskRepositoryProvider);
+                if (repo == null) return;
+                repo.togglePin(t.id);
+              },
             ),
           ),
           onTap: () => onTaskTap(t),
