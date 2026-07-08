@@ -406,7 +406,7 @@ else
   TMP_ADD="\$(mktemp -t env-add.XXXXXX)"
   APPENDED=0
   while IFS= read -r line || [ -n "\$line" ]; do
-    case "\$line" in ''|\#*) continue ;; esac
+    case "\$line" in ''|#*) continue ;; esac
     key="\${line%%=*}"
     [ -z "\$key" ] && continue
     if ! grep -qE "^\${key}=" "\$DST_ENV"; then
