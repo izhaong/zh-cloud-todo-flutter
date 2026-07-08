@@ -97,17 +97,17 @@ class AppColors {
   );
 }
 
-/// 颜色 ThemeExtension（便于 Theme.of(context).extension<AppColors>()）
-class AppThemeExtension extends ThemeExtension<AppColors> {
+/// 颜色 ThemeExtension（便于 Theme.of(context).extension<AppThemeExtension>()）
+class AppThemeExtension extends ThemeExtension<AppThemeExtension> {
   const AppThemeExtension(this.colors);
   final AppColors colors;
 
   @override
-  ThemeExtension<AppColors> copyWith({AppColors? colors}) =>
+  ThemeExtension<AppThemeExtension> copyWith({AppColors? colors}) =>
       AppThemeExtension(colors ?? this.colors);
 
   @override
-  ThemeExtension<AppColors> lerp(covariant ThemeExtension<AppColors>? other, double t) {
+  ThemeExtension<AppThemeExtension> lerp(covariant ThemeExtension<AppThemeExtension>? other, double t) {
     if (other is! AppThemeExtension) return this;
     return t < 0.5 ? this : other;
   }
@@ -137,14 +137,14 @@ class AppSpacing {
 class AppShadows {
   static List<BoxShadow> card(BuildContext context) => [
         BoxShadow(
-          color: Colors.black.withValues(alpha: 0.04),
+          color: Colors.black.withOpacity(0.04),
           blurRadius: 8,
           offset: const Offset(0, 2),
         ),
       ];
   static List<BoxShadow> popup(BuildContext context) => [
         BoxShadow(
-          color: Colors.black.withValues(alpha: 0.12),
+          color: Colors.black.withOpacity(0.12),
           blurRadius: 24,
           offset: const Offset(0, 8),
         ),
