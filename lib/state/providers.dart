@@ -156,3 +156,48 @@ final tagsStreamProvider = StreamProvider<List<TodoTag>>((ref) {
   if (repo == null) return const Stream<List<TodoTag>>.empty();
   return repo.watchAll();
 });
+
+/// 任务统计（all / inbox / today / upcoming），供 Sidebar 徽章计数。
+/// 完全基于本地 Drift watchAll()，离线可用。
+final taskStatsProvider = StreamProvider<TaskStats>((ref) {
+  final repo = ref.watch(taskRepositoryProvider);
+  if (repo == null) return Stream.value(TaskStats.empty);
+  return repo.watchAll().map(TaskStats.fromTasks);
+});
+
+/// 轻量任务计数集合（Sidebar 徽章用）。
+/// - all: 全部顶层未完成任务
+/// - inbox: listId == kInboxListId 的未完成任务
+/// - today: 截止日 = 今天 的未完成任务
+/// - upcoming: 截止日在 (今天, +7天] 的未完成任务
+class TaskStats {
+  const TaskStats(this.all, this.inbox, this.today, this.upcoming);
+  final int all;
+  final int inbox;
+  final int today;
+  final int upcoming;
+
+  static const empty = TaskStats(0, 0, 0, 0);
+
+  static TaskStats fromTasks(List tasks) {
+    var all = 0, inbox = 0, today = 0, upcoming = 0;
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    final todayEnd = todayStart.add(const Duration(days: 1));
+    final weekEnd = todayStart.add(const Duration(days: 7));
+    for (final t in tasks) {
+      if (t.completed) continue;
+      all++;
+      if (t.listId == 'inbox') inbox++;
+      final due = t.dueAt;
+      if (due != null) {
+        if (due.isBefore(todayEnd) && !due.isBefore(todayStart)) {
+          today++;
+        } else if (due.isAfter(todayStart) && !due.isAfter(weekEnd)) {
+          upcoming++;
+        }
+      }
+    }
+    return TaskStats(all, inbox, today, upcoming);
+  }
+}

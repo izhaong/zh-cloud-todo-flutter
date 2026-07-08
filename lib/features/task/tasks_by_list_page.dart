@@ -21,7 +21,25 @@ import 'views/timeline_view.dart';
 /// - 点击进入 TaskDetailPage
 /// - FAB 快速添加任务
 class TasksByListPage extends ConsumerStatefulWidget {
-  const TasksByListPage({super.key});
+  const TasksByListPage({
+    super.key,
+    this.initialListId,
+    this.initialDueRange,
+    this.lockedListId = false,
+    this.hideAppBar = false,
+  });
+
+  /// 初始选定的清单 id（Sidebar 驱动）。null = 全部；'inbox' = 收件箱。
+  final String? initialListId;
+
+  /// 初始智能清单的时间过滤（Sidebar 的今天/即将到期）。
+  final String? initialDueRange;
+
+  /// 是否锁定清单选择（Sidebar 模式下由外部 chips 控制，本页仍可切智能清单）。
+  final bool lockedListId;
+
+  /// 是否隐藏本页 AppBar（嵌入 Shell 内容区时由 Shell 提供顶部栏）。
+  final bool hideAppBar;
 
   @override
   ConsumerState<TasksByListPage> createState() => _TasksByListPageState();
@@ -37,6 +55,25 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   TaskSort _sort = TaskSort.smart;
 
   @override
+  void initState() {
+    super.initState();
+    _selectedListId = widget.initialListId;
+    if (widget.initialDueRange != null) {
+      _filter = TaskFilter(dueRange: widget.initialDueRange);
+    }
+  }
+
+  /// Sidebar 切换清单时，从外部同步选中态。
+  @override
+  void didUpdateWidget(covariant TasksByListPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.lockedListId &&
+        widget.initialListId != oldWidget.initialListId) {
+      setState(() => _selectedListId = widget.initialListId);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final listsAsync = ref.watch(listsStreamProvider);
     final taskRepo = ref.watch(taskRepositoryProvider);
@@ -49,9 +86,11 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         : taskRepo.watchTopLevelByList(_selectedListId!);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('任务'),
-        actions: [
+      appBar: widget.hideAppBar
+          ? null
+          : AppBar(
+              title: const Text('任务'),
+              actions: [
           PopupMenuButton<TaskSort>(
             tooltip: '排序',
             icon: const Icon(Icons.sort),
