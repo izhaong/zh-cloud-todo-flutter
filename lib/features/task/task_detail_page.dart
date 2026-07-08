@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/app_database.dart';
 import '../../core/api/todo_api.dart';
+import '../../core/theme/brand_colors.dart';
+import '../../core/widgets/app_widgets.dart';
 import '../../state/providers.dart';
+import '../shell/app_dialog.dart';
 import 'task_quick_add_sheet.dart';
 import '../collaboration/task_comments_page.dart';
 import '../collaboration/task_assign_page.dart';
@@ -107,22 +110,12 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   }
 
   Future<void> _delete(TodoTask t) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('删除任务'),
-        content: Text('确认删除"${t.title}"？子任务也会被一并删除。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+    final ok = await AppDialog.confirm(
+      context,
+      title: '删除任务',
+      content: '确认删除"${t.title}"？子任务也会被一并删除。',
+      confirmLabel: '删除',
+      danger: true,
     );
     if (ok == true) {
       final repo = ref.read(taskRepositoryProvider);
@@ -301,6 +294,20 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
       return _buildNotFound();
     }
 
+    final colors = brandColors(context);
+    Widget sh(String s) => Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 6),
+          child: Text(
+            s,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: colors.mutedForeground,
+              letterSpacing: 0.3,
+            ),
+          ),
+        );
+
     final body = ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -340,15 +347,15 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            FilledButton.icon(
+            AppButton(
               onPressed: _save,
-              icon: const Icon(Icons.save_outlined),
-              label: const Text('保存'),
+              icon: Icons.save_outlined,
+              child: const Text('保存'),
             ),
           ],
         ),
         const Divider(height: 32),
-        Text('截止时间', style: Theme.of(context).textTheme.titleMedium),
+        sh('截止时间'),
         const SizedBox(height: 8),
         OutlinedButton.icon(
           onPressed: () => _pickDue(t),
@@ -371,18 +378,17 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
           ),
         ],
         const Divider(height: 32),
-        Text('标签', style: Theme.of(context).textTheme.titleMedium),
+        sh('标签'),
         const SizedBox(height: 8),
         _TagChips(taskId: t.id),
         const Divider(height: 32),
-        Text('检查事项', style: Theme.of(context).textTheme.titleMedium),
+        sh('检查事项'),
         const SizedBox(height: 8),
         _ChecklistSection(taskId: t.id),
         const Divider(height: 32),
         Row(
           children: [
-            Text('子任务', style: Theme.of(context).textTheme.titleMedium),
-            const Spacer(),
+            Expanded(child: sh('子任务')),
             IconButton(
               onPressed: () => _addSubtask(t),
               icon: const Icon(Icons.add),
