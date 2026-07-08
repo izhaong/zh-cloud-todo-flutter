@@ -327,6 +327,7 @@ test -s .jenkins-dist/todo-flutter-web.tar.gz
         allOf {
           expression { return params.DEPLOY_TO_HOST == null || params.DEPLOY_TO_HOST }
           not { changeRequest() }
+          expression { return env.RESOLVED_ENV != 'test' }
         }
       }
       steps {
