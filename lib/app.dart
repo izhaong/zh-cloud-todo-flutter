@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import 'core/theme/app_theme.dart';
 import 'features/home/home_shell.dart';
+import 'features/shell/app_theme_controller.dart';
 import 'state/session_state.dart';
 import 'todo_auth_page.dart';
 
@@ -74,11 +75,14 @@ class _TodoFlutterAppState extends ConsumerState<TodoFlutterApp> {
   @override
   Widget build(BuildContext context) {
     final bootstrapped = ref.watch(sessionBootstrappedProvider);
+    final themeMode = ref.watch(themeModeProvider);
     if (!bootstrapped) {
       return MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'zh-cloud todo',
-        theme: _theme(),
+        theme: _lightTheme(),
+        darkTheme: _darkTheme(),
+        themeMode: themeMode,
         home: const Scaffold(body: Center(child: CircularProgressIndicator())),
       );
     }
@@ -86,49 +90,92 @@ class _TodoFlutterAppState extends ConsumerState<TodoFlutterApp> {
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       title: 'zh-cloud todo',
-      theme: _theme(),
+      theme: _lightTheme(),
+      darkTheme: _darkTheme(),
+      themeMode: themeMode,
       routerConfig: router,
     );
   }
-
-  ThemeData _theme() => ThemeData(
-    brightness: Brightness.light,
-    colorScheme: ColorScheme.light(
-      primary: AppColors.light.accent,
-      onPrimary: AppColors.light.accentForeground,
-      secondary: AppColors.light.accent,
-      surface: AppColors.light.surface,
-      error: AppColors.light.destructive,
-      onSurface: AppColors.light.foreground,
-    ),
-    scaffoldBackgroundColor: AppColors.light.background,
-    useMaterial3: true,
-    extensions: const [AppThemeExtension(AppColors.light)],
-    appBarTheme: AppBarTheme(
-      backgroundColor: AppColors.light.background,
-      foregroundColor: AppColors.light.foreground,
-      elevation: 0,
-      scrolledUnderElevation: 0,
-    ),
-    cardTheme: CardThemeData(
-      color: AppColors.light.surface,
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        side: BorderSide(color: AppColors.light.border, width: 0.5),
-      ),
-    ),
-    inputDecorationTheme: InputDecorationTheme(
-      filled: true,
-      fillColor: AppColors.light.surface,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        borderSide: BorderSide(color: AppColors.light.border),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        borderSide: BorderSide(color: AppColors.light.border),
-      ),
-    ),
-  );
 }
+
+ThemeData _darkTheme() => ThemeData(
+  brightness: Brightness.dark,
+  colorScheme: ColorScheme.dark(
+    primary: AppColors.dark.accent,
+    onPrimary: AppColors.dark.accentForeground,
+    secondary: AppColors.dark.accent,
+    surface: AppColors.dark.surface,
+    error: AppColors.dark.destructive,
+    onSurface: AppColors.dark.foreground,
+  ),
+  scaffoldBackgroundColor: AppColors.dark.background,
+  useMaterial3: true,
+  extensions: const [AppThemeExtension(AppColors.dark)],
+  appBarTheme: AppBarTheme(
+    backgroundColor: AppColors.dark.background,
+    foregroundColor: AppColors.dark.foreground,
+    elevation: 0,
+    scrolledUnderElevation: 0,
+  ),
+  cardTheme: CardThemeData(
+    color: AppColors.dark.surface,
+    elevation: 0,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      side: BorderSide(color: AppColors.dark.border, width: 0.5),
+    ),
+  ),
+  inputDecorationTheme: InputDecorationTheme(
+    filled: true,
+    fillColor: AppColors.dark.surface,
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      borderSide: BorderSide(color: AppColors.dark.border),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      borderSide: BorderSide(color: AppColors.dark.border),
+    ),
+  ),
+);
+
+ThemeData _lightTheme() => ThemeData(
+  brightness: Brightness.light,
+  colorScheme: ColorScheme.light(
+    primary: AppColors.light.accent,
+    onPrimary: AppColors.light.accentForeground,
+    secondary: AppColors.light.accent,
+    surface: AppColors.light.surface,
+    error: AppColors.light.destructive,
+    onSurface: AppColors.light.foreground,
+  ),
+  scaffoldBackgroundColor: AppColors.light.background,
+  useMaterial3: true,
+  extensions: const [AppThemeExtension(AppColors.light)],
+  appBarTheme: AppBarTheme(
+    backgroundColor: AppColors.light.background,
+    foregroundColor: AppColors.light.foreground,
+    elevation: 0,
+    scrolledUnderElevation: 0,
+  ),
+  cardTheme: CardThemeData(
+    color: AppColors.light.surface,
+    elevation: 0,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      side: BorderSide(color: AppColors.light.border, width: 0.5),
+    ),
+  ),
+  inputDecorationTheme: InputDecorationTheme(
+    filled: true,
+    fillColor: AppColors.light.surface,
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      borderSide: BorderSide(color: AppColors.light.border),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      borderSide: BorderSide(color: AppColors.light.border),
+    ),
+  ),
+);

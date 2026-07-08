@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/db/app_database.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/brand_colors.dart';
+import '../../../core/widgets/app_widgets.dart';
 import '../task_detail_page.dart';
 
 /// M11-B3 日历视图：周 / 月 / 年 / 列表 4 模式。
@@ -576,7 +577,12 @@ class _ListView extends StatelessWidget {
       if (bd == null) return -1;
       return ad.compareTo(bd);
     });
-    if (sorted.isEmpty) return const Center(child: Text('暂无任务'));
+    if (sorted.isEmpty) {
+      return AppEmptyState(
+        title: '该日无任务',
+        subtitle: '在日历上选择日期，点击即可添加任务。',
+      );
+    }
     final df = DateFormat('yyyy-MM-dd');
     return ListView.separated(
       itemCount: sorted.length,

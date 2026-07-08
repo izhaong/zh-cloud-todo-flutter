@@ -6,6 +6,7 @@ import '../../core/theme/brand_colors.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../state/session_state.dart';
 import '../account/account_security_page.dart';
+import '../shell/app_theme_controller.dart';
 
 /// 设置页：分组列表（账户/主题/关于）+ 2FA 开关（复用 AccountSecurityPage）。
 class SettingsRoute extends ConsumerWidget {
@@ -50,6 +51,30 @@ class SettingsRoute extends ConsumerWidget {
                   destructive: true,
                   onTap: () => _signOut(context, ref),
                 ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _Section(title: '主题'),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                for (final mode in ThemeMode.values)
+                  _Tile(
+                    icon: mode == ThemeMode.system
+                        ? Icons.brightness_auto
+                        : (mode == ThemeMode.dark
+                            ? Icons.dark_mode_outlined
+                            : Icons.light_mode_outlined),
+                    title: themeModeLabel(mode),
+                    colors: colors,
+                    trailing: ref.watch(themeModeProvider) == mode
+                        ? Icons.check
+                        : null,
+                    onTap: () =>
+                        ref.read(themeModeProvider.notifier).set(mode),
+                  ),
               ],
             ),
           ),
