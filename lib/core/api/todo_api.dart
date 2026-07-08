@@ -1,15 +1,15 @@
+import 'package:dio/dio.dart';
+
+import 'api_client.dart';
+
+export 'api_config.dart' show ApiConfig;
+
 /// 任务 / 清单 / 文件夹 / 标签 的直连 REST 助手（`/app-api/todo/**` 前缀由
 /// [ApiClient] 自动补全，传参使用无前缀路径如 `/task/complete`）。
 ///
 /// 以下端点**不在** `/app-api/todo/sync` 白名单内（checklist / complete /
-/// reorder / folder / tag-task-bind / nlp），故直接调用 REST；其余 9 个同步实体
-/// 仍走各 Repository 的 drift + outbox 路径，不再这里重复。
-///
-/// 统一响应信封 `{code, msg, data}`：`code != 0` 视为业务错误（与
-/// [SyncApi] / [ApiClient] 一致）。
-import 'package:dio/dio.dart';
-
-import 'api_client.dart';
+/// reorder / folder / tag-task-bind / nlp / security），故直接调用 REST；其余
+/// 9 个同步实体仍走各 Repository 的 drift + outbox 路径，不再这里重复。
 
 Map<String, dynamic> _unwrapBody(Map<String, dynamic>? body) {
   if (body == null) return const {};
@@ -200,6 +200,90 @@ class TagApi {
       });
 }
 
+/// 单个数据导出记录（`/security/export/list` 返回行）。
+class DataExportItem {
+  DataExportItem({
+    required this.id,
+    required this.exportType,
+    required this.exportUrl,
+    required this.status,
+  });
+
+  final int id;
+  final String exportType;
+  final String exportUrl;
+  final String status;
+
+  factory DataExportItem.fromJson(Map<String, dynamic> j) => DataExportItem(
+        id: (j['id'] as num?)?.toInt() ?? 0,
+        exportType: j['exportType']?.toString() ?? 'FULL',
+        exportUrl: j['exportUrl']?.toString() ?? '',
+        status: j['status']?.toString() ?? 'PENDING',
+      );
+}
+
+/// 账户安全 REST（`/security/**`）：2FA 状态 / 开关 + 数据导出，直连 REST。
+class SecurityApi {
+  SecurityApi(this._client);
+
+  final ApiClient _client;
+
+  /// 统一响应信封 `{code, msg, data}`：`code != 0` 抛异常，返回 `data`。
+  dynamic _unwrap(Map<String, dynamic>? body) {
+    if (body == null) return null;
+    if (body.containsKey('code')) {
+      final code = body['code'];
+      if (code != 0) {
+        throw Exception(body['msg'] ?? '安全请求失败');
+      }
+      return body['data'];
+    }
+    return body;
+  }
+
+  /// `GET /security/2fa/status` — 当前用户 2FA 是否开启。
+  Future<bool> isTwoFactorEnabled() async {
+    final resp =
+        await _client.get<Map<String, dynamic>>('/security/2fa/status');
+    final data = _unwrap(resp.data);
+    return data == true || data == 'true';
+  }
+
+  /// `POST /security/2fa/enable` — 开启 2FA，返回 2FA 记录 ID。
+  Future<int> enableTwoFactor() async {
+    final resp =
+        await _client.post<Map<String, dynamic>>('/security/2fa/enable');
+    final data = _unwrap(resp.data);
+    return (data as num?)?.toInt() ?? 0;
+  }
+
+  /// `POST /security/2fa/disable` — 关闭 2FA。
+  Future<void> disableTwoFactor() async {
+    final resp =
+        await _client.post<Map<String, dynamic>>('/security/2fa/disable');
+    _unwrap(resp.data);
+  }
+
+  /// `POST /security/export?exportType=FULL` — 请求数据导出。
+  Future<int> requestExport({String exportType = 'FULL'}) async {
+    final resp = await _client.post<Map<String, dynamic>>(
+      '/security/export',
+      data: {'exportType': exportType},
+    );
+    final data = _unwrap(resp.data);
+    return (data as num?)?.toInt() ?? 0;
+  }
+
+  /// `GET /security/export/list` — 我的导出记录。
+  Future<List<DataExportItem>> listExports() async {
+    final resp =
+        await _client.get<Map<String, dynamic>>('/security/export/list');
+    final data = _unwrap(resp.data);
+    final raw = (data is List ? data : <dynamic>[]).cast<Map<String, dynamic>>();
+    return raw.map(DataExportItem.fromJson).toList();
+  }
+}
+
 /// 直连 REST helper 容器：一次性拿到所有子 helper，便于页面注入。
 class TodoRestApi {
   TodoRestApi(ApiClient client)
@@ -213,7 +297,8 @@ class TodoRestApi {
         listCollaboration = ListCollaborationApi(client),
         taskAssign = TaskAssignApi(client),
         comment = TaskCommentApi(client),
-        calSubscription = CalendarSubscriptionApi(client);
+        calSubscription = CalendarSubscriptionApi(client),
+        security = SecurityApi(client);
 
   final TaskRestApi task;
   final ChecklistApi checklist;
@@ -226,6 +311,7 @@ class TodoRestApi {
   final TaskAssignApi taskAssign;
   final TaskCommentApi comment;
   final CalendarSubscriptionApi calSubscription;
+  final SecurityApi security;
 }
 
 /// 提醒动作（`/reminder-action/**`）直达 REST：收件箱 / 完成 / 忽略 / 延后；不走
