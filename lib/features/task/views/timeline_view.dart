@@ -226,17 +226,20 @@ class _TimelineSection extends StatelessWidget {
             ),
             const Divider(height: 1),
             for (final t in data.items)
-              ListTile(
-                dense: true,
-                leading: Icon(Icons.schedule, size: 18, color: colors.mutedForeground),
-                title: Text(
-                  t.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: colors.foreground),
+              Material(
+                type: MaterialType.transparency,
+                child: ListTile(
+                  dense: true,
+                  leading: Icon(Icons.schedule, size: 18, color: colors.mutedForeground),
+                  title: Text(
+                    t.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: colors.foreground),
+                  ),
+                  subtitle: t.dueAt == null ? null : Text(tf.format(t.dueAt!), style: TextStyle(color: colors.mutedForeground)),
+                  onTap: () => onTaskTap(t),
                 ),
-                subtitle: t.dueAt == null ? null : Text(tf.format(t.dueAt!), style: TextStyle(color: colors.mutedForeground)),
-                onTap: () => onTaskTap(t),
               ),
             const SizedBox(height: 4),
           ],
