@@ -12,8 +12,12 @@ import 'package:zh_cloud_todo_flutter/features/shell/sidebar.dart';
 void main() {
   group('Section 枚举', () {
     test('4 个分区文案', () {
-      expect(Section.values.map((s) => s.label).toList(),
-          ['任务', '日历', '习惯', '我的']);
+      expect(Section.values.map((s) => s.label).toList(), [
+        '任务',
+        '日历',
+        '习惯',
+        '我的',
+      ]);
     });
     test('每个分区都有图标', () {
       for (final s in Section.values) {
@@ -23,9 +27,15 @@ void main() {
   });
 
   group('SmartList 枚举', () {
-    test('4 个智能清单文案', () {
-      expect(SmartList.values.map((s) => s.label).toList(),
-          ['收件箱', '今天', '即将到期', '全部']);
+    test('6 个智能清单文案', () {
+      expect(SmartList.values.map((s) => s.label).toList(), [
+        '收件箱',
+        '今天',
+        '最近7天',
+        '全部',
+        '已完成',
+        '垃圾桶',
+      ]);
     });
   });
 
@@ -46,8 +56,10 @@ void main() {
       expect(find.text('智能清单'), findsOneWidget);
       expect(find.text('收件箱'), findsOneWidget);
       expect(find.text('今天'), findsOneWidget);
-      expect(find.text('即将到期'), findsOneWidget);
+      expect(find.text('最近7天'), findsOneWidget);
       expect(find.text('全部'), findsOneWidget);
+      expect(find.text('已完成'), findsOneWidget);
+      expect(find.text('垃圾桶'), findsOneWidget);
       // 浏览入口
       expect(find.text('浏览'), findsOneWidget);
       expect(find.text('日历'), findsOneWidget);

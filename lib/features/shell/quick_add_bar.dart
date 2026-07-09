@@ -35,37 +35,31 @@ class _QuickAddBarState extends State<QuickAddBar> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<AppThemeExtension>()!.colors;
     return Container(
-      margin: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      margin: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+        color: colors.surface.withValues(alpha: 0.98),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(color: colors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
       child: Row(
         children: [
-          Icon(Icons.add_circle_outline, color: colors.accent, size: 22),
+          Icon(Icons.add, color: colors.accent, size: 20),
           const SizedBox(width: 8),
           Expanded(
             child: TextField(
               controller: _ctrl,
               textInputAction: TextInputAction.done,
               onSubmitted: (_) => _submit(),
+              cursorColor: colors.accent,
               decoration: InputDecoration(
-                hintText: '添加任务，试试"今晚8点写周报"',
+                hintText: '添加任务，回车创建',
                 hintStyle: TextStyle(color: colors.mutedForeground),
                 border: InputBorder.none,
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                contentPadding: const EdgeInsets.symmetric(vertical: 9),
               ),
-              style: TextStyle(fontSize: 14, color: colors.foreground),
+              style: TextStyle(fontSize: 13.5, color: colors.foreground),
             ),
           ),
           _ToolIcon(

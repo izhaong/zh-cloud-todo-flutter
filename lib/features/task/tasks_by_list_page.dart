@@ -26,6 +26,7 @@ class TasksByListPage extends ConsumerStatefulWidget {
     super.key,
     this.initialListId,
     this.initialDueRange,
+    this.initialCompleted,
     this.lockedListId = false,
     this.hideAppBar = false,
   });
@@ -35,6 +36,9 @@ class TasksByListPage extends ConsumerStatefulWidget {
 
   /// 初始智能清单的时间过滤（Sidebar 的今天/即将到期）。
   final String? initialDueRange;
+
+  /// 初始完成状态过滤（Sidebar 的已完成）。
+  final bool? initialCompleted;
 
   /// 是否锁定清单选择（Sidebar 模式下由外部 chips 控制，本页仍可切智能清单）。
   final bool lockedListId;
@@ -62,9 +66,10 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   void initState() {
     super.initState();
     _selectedListId = widget.initialListId;
-    if (widget.initialDueRange != null) {
-      _filter = TaskFilter(dueRange: widget.initialDueRange);
-    }
+    _filter = TaskFilter(
+      dueRange: widget.initialDueRange,
+      completed: widget.initialCompleted,
+    );
   }
 
   /// Sidebar 切换清单时，从外部同步选中态。

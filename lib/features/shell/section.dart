@@ -39,7 +39,7 @@ extension SectionX on Section {
 /// 智能清单（Sidebar 内嵌）。
 ///
 /// 选择后驱动任务页的过滤条件；[listId] 非空时等价于选中某清单。
-enum SmartList { inbox, today, upcoming, all }
+enum SmartList { inbox, today, upcoming, all, completed, trash }
 
 extension SmartListX on SmartList {
   String get label {
@@ -49,22 +49,30 @@ extension SmartListX on SmartList {
       case SmartList.today:
         return '今天';
       case SmartList.upcoming:
-        return '即将到期';
+        return '最近7天';
       case SmartList.all:
         return '全部';
+      case SmartList.completed:
+        return '已完成';
+      case SmartList.trash:
+        return '垃圾桶';
     }
   }
 
   IconData get icon {
     switch (this) {
       case SmartList.inbox:
-        return Icons.inbox;
+        return Icons.inbox_outlined;
       case SmartList.today:
         return Icons.today_outlined;
       case SmartList.upcoming:
         return Icons.date_range;
       case SmartList.all:
         return Icons.select_all;
+      case SmartList.completed:
+        return Icons.check_circle_outline;
+      case SmartList.trash:
+        return Icons.delete_outline;
     }
   }
 }

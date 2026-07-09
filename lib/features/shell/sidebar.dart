@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/db/app_database.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/brand_colors.dart';
 import '../../state/providers.dart';
 import 'section.dart';
 
-/// 品牌化左侧导航 Sidebar（TickTick 风格）。
+/// TickTick 风格侧栏。
 ///
-/// - 顶部自定义背景区（品牌蓝渐变 + 问候 / 头像）
-/// - 智能清单：收件箱 / 今天 / 即将到期 / 全部（带徽章计数）
-/// - 一级入口：日历 / 收集箱 / 标签 / 筛选器
-/// - 可展开清单树（按 folder 分组 + 徽章）+ 新建
-/// - 选中态高亮（accent 左侧指示条 + 浅色背景）
-///
-/// 纯展示 + 回调：状态由上层 [HomeShell] 持有，便于桌面 Sidebar 与
-/// 移动抽屉复用同一组件。
+/// 结构：
+/// - 顶部用户区
+/// - 智能清单
+/// - 浏览
+/// - 清单树
+/// - 设置
 class Sidebar extends ConsumerWidget {
   const Sidebar({
     super.key,
@@ -27,8 +27,10 @@ class Sidebar extends ConsumerWidget {
     required this.onOpenTags,
     required this.onOpenFilters,
     required this.onOpenSettings,
+    this.width = 286,
   });
 
+  final double width;
   final Section selectedSection;
   final SmartList selectedSmart;
   final String? selectedListId;
@@ -43,189 +45,194 @@ class Sidebar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final colors = Theme.of(context).extension<AppThemeExtension>()!.colors;
+    final colors = brandColors(context);
     final stats = ref.watch(taskStatsProvider).valueOrNull ?? TaskStats.empty;
     final lists = ref.watch(listsStreamProvider).valueOrNull ?? const [];
     final folders = ref.watch(foldersStreamProvider).valueOrNull ?? const [];
 
     return Container(
-      width: 248,
-      color: colors.background,
-      child: ListView(
-        padding: EdgeInsets.zero,
-        children: [
-          _Header(colors: colors),
-          const SizedBox(height: 4),
-          // ── 智能清单 ──
-          _SidebarGroupTitle('智能清单', colors: colors),
-          _SmartRow(
-            smart: SmartList.inbox,
-            icon: SmartList.inbox.icon,
-            label: SmartList.inbox.label,
-            badge: stats.inbox,
-            selected: _isTasksSelected(selectedSection) &&
-                selectedSmart == SmartList.inbox,
-            colors: colors,
-            onTap: () {
-              onSelectSection(Section.tasks);
-              onSelectSmart(SmartList.inbox);
-              onSelectList('inbox');
-            },
-          ),
-          _SmartRow(
-            smart: SmartList.today,
-            icon: SmartList.today.icon,
-            label: SmartList.today.label,
-            badge: stats.today,
-            selected: _isTasksSelected(selectedSection) &&
-                selectedSmart == SmartList.today,
-            colors: colors,
-            onTap: () {
-              onSelectSection(Section.tasks);
-              onSelectSmart(SmartList.today);
-            },
-          ),
-          _SmartRow(
-            smart: SmartList.upcoming,
-            icon: SmartList.upcoming.icon,
-            label: SmartList.upcoming.label,
-            badge: stats.upcoming,
-            selected: _isTasksSelected(selectedSection) &&
-                selectedSmart == SmartList.upcoming,
-            colors: colors,
-            onTap: () {
-              onSelectSection(Section.tasks);
-              onSelectSmart(SmartList.upcoming);
-            },
-          ),
-          _SmartRow(
-            smart: SmartList.all,
-            icon: SmartList.all.icon,
-            label: SmartList.all.label,
-            badge: stats.all,
-            selected: _isTasksSelected(selectedSection) &&
-                selectedSmart == SmartList.all,
-            colors: colors,
-            onTap: () {
-              onSelectSection(Section.tasks);
-              onSelectSmart(SmartList.all);
-              onSelectList(null);
-            },
-          ),
-          const SizedBox(height: 8),
-          // ── 一级入口 ──
-          _SidebarGroupTitle('浏览', colors: colors),
-          _NavRow(
-            icon: Section.calendar.icon,
-            label: Section.calendar.label,
-            selected: selectedSection == Section.calendar,
-            colors: colors,
-            onTap: () => onSelectSection(Section.calendar),
-          ),
-          _NavRow(
-            icon: Icons.label_outline,
-            label: '标签',
-            selected: false,
-            colors: colors,
-            onTap: onOpenTags,
-          ),
-          _NavRow(
-            icon: Icons.filter_list,
-            label: '筛选器',
-            selected: false,
-            colors: colors,
-            onTap: onOpenFilters,
-          ),
-          const SizedBox(height: 8),
-          // ── 清单树 ──
-          _SidebarGroupTitle('清单', colors: colors),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: TextButton.icon(
-              onPressed: () => _CreateListSheet.show(context),
-              icon: Icon(Icons.add, size: 18, color: colors.accent),
-              label: Text(
-                '新建清单',
-                style: TextStyle(color: colors.accent),
-              ),
-              style: TextButton.styleFrom(
-                alignment: Alignment.centerLeft,
-              ),
-            ),
-          ),
-          ...folders.map((f) => _FolderGroup(
-                folder: f,
-                lists: lists.where((l) => l.folderId == f.serverId).toList(),
-                selectedListId: selectedListId,
-                colors: colors,
-                onSelect: (id) {
-                  onSelectSection(Section.tasks);
-                  onSelectList(id);
-                },
-              )),
-          ...lists
-              .where((l) => l.folderId == null)
-              .map((l) => _ListRow(
-                    list: l,
-                    selected: _isTasksSelected(selectedSection) &&
-                        selectedListId == l.id,
+      width: width,
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(right: BorderSide(color: colors.border, width: 0.5)),
+      ),
+      child: SafeArea(
+        child: Column(
+          children: [
+            const _SidebarHeader(),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.only(bottom: 12),
+                children: [
+                  const SizedBox(height: 4),
+                  _GroupTitle('智能清单', colors: colors),
+                  _SmartRow(
+                    icon: SmartList.inbox.icon,
+                    label: SmartList.inbox.label,
+                    badge: stats.inbox,
+                    selected:
+                        _isTasksSelected(selectedSection) &&
+                        selectedSmart == SmartList.inbox,
                     colors: colors,
                     onTap: () {
                       onSelectSection(Section.tasks);
-                      onSelectList(l.id);
+                      onSelectSmart(SmartList.inbox);
+                      onSelectList('inbox');
                     },
-                  )),
-          const SizedBox(height: 12),
-          const Divider(height: 1),
-          _NavRow(
-            icon: Icons.settings_outlined,
-            label: '设置',
-            selected: selectedSection == Section.mine,
-            colors: colors,
-            onTap: onOpenSettings,
-          ),
-          const SizedBox(height: 16),
-        ],
-      ),
-    );
-  }
-}
-
-/// 顶部品牌背景区：品牌蓝渐变 + 问候语 + 头像。
-class _Header extends StatelessWidget {
-  const _Header({required this.colors});
-  final AppColors colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [colors.accent, colors.accent.withValues(alpha: 0.75)],
-        ),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: colors.accentForeground.withValues(alpha: 0.85),
-              child: Icon(Icons.person, size: 20, color: colors.accent),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                '保持专注',
-                style: TextStyle(
-                  color: colors.accentForeground,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
+                  ),
+                  _SmartRow(
+                    icon: SmartList.today.icon,
+                    label: SmartList.today.label,
+                    badge: stats.today,
+                    selected:
+                        _isTasksSelected(selectedSection) &&
+                        selectedSmart == SmartList.today,
+                    colors: colors,
+                    onTap: () {
+                      onSelectSection(Section.tasks);
+                      onSelectSmart(SmartList.today);
+                    },
+                  ),
+                  _SmartRow(
+                    icon: SmartList.upcoming.icon,
+                    label: SmartList.upcoming.label,
+                    badge: stats.upcoming,
+                    selected:
+                        _isTasksSelected(selectedSection) &&
+                        selectedSmart == SmartList.upcoming,
+                    colors: colors,
+                    onTap: () {
+                      onSelectSection(Section.tasks);
+                      onSelectSmart(SmartList.upcoming);
+                    },
+                  ),
+                  _SmartRow(
+                    icon: SmartList.all.icon,
+                    label: SmartList.all.label,
+                    badge: stats.all,
+                    selected:
+                        _isTasksSelected(selectedSection) &&
+                        selectedSmart == SmartList.all,
+                    colors: colors,
+                    onTap: () {
+                      onSelectSection(Section.tasks);
+                      onSelectSmart(SmartList.all);
+                      onSelectList(null);
+                    },
+                  ),
+                  _SmartRow(
+                    icon: SmartList.completed.icon,
+                    label: SmartList.completed.label,
+                    badge: 0,
+                    selected:
+                        _isTasksSelected(selectedSection) &&
+                        selectedSmart == SmartList.completed,
+                    colors: colors,
+                    onTap: () {
+                      onSelectSection(Section.tasks);
+                      onSelectSmart(SmartList.completed);
+                    },
+                  ),
+                  _SmartRow(
+                    icon: SmartList.trash.icon,
+                    label: SmartList.trash.label,
+                    badge: 0,
+                    selected:
+                        _isTasksSelected(selectedSection) &&
+                        selectedSmart == SmartList.trash,
+                    colors: colors,
+                    onTap: () {
+                      onSelectSection(Section.tasks);
+                      onSelectSmart(SmartList.trash);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  _GroupTitle('浏览', colors: colors),
+                  _NavRow(
+                    icon: Section.calendar.icon,
+                    label: Section.calendar.label,
+                    selected: selectedSection == Section.calendar,
+                    colors: colors,
+                    onTap: () => onSelectSection(Section.calendar),
+                  ),
+                  _NavRow(
+                    icon: Icons.sell_outlined,
+                    label: '标签',
+                    selected: false,
+                    colors: colors,
+                    onTap: onOpenTags,
+                  ),
+                  _NavRow(
+                    icon: Icons.filter_alt_outlined,
+                    label: '筛选器',
+                    selected: false,
+                    colors: colors,
+                    onTap: onOpenFilters,
+                  ),
+                  const SizedBox(height: 10),
+                  _GroupTitle('清单', colors: colors),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: TextButton.icon(
+                      onPressed: () => _CreateListSheet.show(context),
+                      icon: Icon(Icons.add, size: 18, color: colors.accent),
+                      label: Text(
+                        '新建清单',
+                        style: TextStyle(
+                          color: colors.accent,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: TextButton.styleFrom(
+                        alignment: Alignment.centerLeft,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 8,
+                        ),
+                      ),
+                    ),
+                  ),
+                  ...folders.map(
+                    (folder) => _FolderGroup(
+                      folder: folder,
+                      lists: lists
+                          .where((l) => l.folderId == folder.serverId)
+                          .toList(),
+                      selectedListId: selectedListId,
+                      colors: colors,
+                      onSelect: (id) {
+                        onSelectSection(Section.tasks);
+                        onSelectList(id);
+                      },
+                    ),
+                  ),
+                  ...lists
+                      .where((list) => list.folderId == null)
+                      .map(
+                        (list) => _ListRow(
+                          list: list,
+                          selected:
+                              _isTasksSelected(selectedSection) &&
+                              selectedListId == list.id,
+                          colors: colors,
+                          onTap: () {
+                            onSelectSection(Section.tasks);
+                            onSelectList(list.id);
+                          },
+                        ),
+                      ),
+                  const SizedBox(height: 8),
+                  Divider(height: 1, color: colors.border),
+                  const SizedBox(height: 8),
+                  _NavRow(
+                    icon: Icons.settings_outlined,
+                    label: '设置',
+                    selected: selectedSection == Section.mine,
+                    colors: colors,
+                    onTap: onOpenSettings,
+                  ),
+                  const SizedBox(height: 16),
+                ],
               ),
             ),
           ],
@@ -235,32 +242,81 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _SidebarGroupTitle extends StatelessWidget {
-  const _SidebarGroupTitle(this.title, {required this.colors});
+class _SidebarHeader extends StatelessWidget {
+  const _SidebarHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = brandColors(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+      decoration: BoxDecoration(
+        color: colors.background,
+        border: Border(
+          bottom: BorderSide(color: colors.border.withValues(alpha: 0.8)),
+        ),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 17,
+            backgroundColor: colors.accent.withValues(alpha: 0.16),
+            child: Icon(Icons.person, size: 18, color: colors.accent),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '保持专注',
+                  style: TextStyle(
+                    color: colors.foreground,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'TickTick 风格工作台',
+                  style: TextStyle(color: colors.mutedForeground, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GroupTitle extends StatelessWidget {
+  const _GroupTitle(this.title, {required this.colors});
+
   final String title;
   final AppColors colors;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
       child: Text(
         title,
         style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w700,
           color: colors.mutedForeground,
-          letterSpacing: 0.5,
+          letterSpacing: 0.2,
         ),
       ),
     );
   }
 }
 
-/// 智能清单行（带徽章计数）。
 class _SmartRow extends StatelessWidget {
   const _SmartRow({
-    required this.smart,
     required this.icon,
     required this.label,
     required this.badge,
@@ -269,7 +325,6 @@ class _SmartRow extends StatelessWidget {
     required this.onTap,
   });
 
-  final SmartList smart;
   final IconData icon;
   final String label;
   final int badge;
@@ -279,15 +334,13 @@ class _SmartRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _Row(
+    return _SidebarRow(
       icon: icon,
       label: label,
       selected: selected,
       colors: colors,
+      trailing: badge > 0 ? _Badge(text: '$badge', colors: colors) : null,
       onTap: onTap,
-      trailing: badge > 0
-          ? _Badge('$badge', accent: colors.accentForeground, bg: colors.muted)
-          : null,
     );
   }
 }
@@ -309,7 +362,7 @@ class _NavRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _Row(
+    return _SidebarRow(
       icon: icon,
       label: label,
       selected: selected,
@@ -319,7 +372,7 @@ class _NavRow extends StatelessWidget {
   }
 }
 
-class _FolderGroup extends ConsumerWidget {
+class _FolderGroup extends StatelessWidget {
   const _FolderGroup({
     required this.folder,
     required this.lists,
@@ -328,32 +381,47 @@ class _FolderGroup extends ConsumerWidget {
     required this.onSelect,
   });
 
-  final dynamic folder;
-  final List<dynamic> lists;
+  final TodoFolder folder;
+  final List<TodoList> lists;
   final String? selectedListId;
   final AppColors colors;
   final ValueChanged<String> onSelect;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return ExpansionTile(
-      dense: true,
-      leading: Icon(Icons.folder_open, size: 18, color: colors.mutedForeground),
-      title: Text(
-        folder.name,
-        style: TextStyle(fontSize: 13, color: colors.foreground),
+  Widget build(BuildContext context) {
+    return Theme(
+      data: Theme.of(context).copyWith(
+        dividerColor: Colors.transparent,
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
       ),
-      iconColor: colors.mutedForeground,
-      collapsedIconColor: colors.mutedForeground,
-      children: lists
-          .map((l) => _ListRow(
-                list: l,
-                selected: selectedListId == l.id,
-                colors: colors,
-                onTap: () => onSelect(l.id),
-                dense: true,
-              ))
-          .toList(),
+      child: ExpansionTile(
+        dense: true,
+        visualDensity: VisualDensity.compact,
+        tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+        childrenPadding: const EdgeInsets.only(left: 8, right: 8, bottom: 4),
+        leading: Icon(
+          Icons.folder_open_outlined,
+          size: 18,
+          color: colors.mutedForeground,
+        ),
+        title: Text(
+          folder.name,
+          style: TextStyle(fontSize: 13, color: colors.foreground),
+        ),
+        iconColor: colors.mutedForeground,
+        collapsedIconColor: colors.mutedForeground,
+        children: [
+          for (final list in lists)
+            _ListRow(
+              list: list,
+              selected: selectedListId == list.id,
+              colors: colors,
+              onTap: () => onSelect(list.id),
+              dense: true,
+            ),
+        ],
+      ),
     );
   }
 }
@@ -367,7 +435,7 @@ class _ListRow extends StatelessWidget {
     this.dense = false,
   });
 
-  final dynamic list;
+  final TodoList list;
   final bool selected;
   final AppColors colors;
   final VoidCallback onTap;
@@ -375,8 +443,8 @@ class _ListRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _Row(
-      icon: Icons.list_alt,
+    return _SidebarRow(
+      icon: Icons.list_alt_outlined,
       label: list.name,
       selected: selected,
       colors: colors,
@@ -386,9 +454,8 @@ class _ListRow extends StatelessWidget {
   }
 }
 
-/// 通用行（带选中态左侧 accent 指示条 + 背景高亮）。
-class _Row extends StatelessWidget {
-  const _Row({
+class _SidebarRow extends StatelessWidget {
+  const _SidebarRow({
     required this.icon,
     required this.label,
     required this.selected,
@@ -408,49 +475,48 @@ class _Row extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        color: selected ? colors.accent.withValues(alpha: 0.08) : null,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+      child: Material(
+        color: selected
+            ? colors.accent.withValues(alpha: 0.14)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(AppRadius.md),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        onTap: onTap,
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: dense ? 6 : 9,
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 3,
-                height: dense ? 14 : 16,
-                decoration: BoxDecoration(
-                  color: selected ? colors.accent : Colors.transparent,
-                  borderRadius: BorderRadius.circular(2),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          onTap: onTap,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: selected
+                  ? Border(left: BorderSide(color: colors.accent, width: 3))
+                  : null,
+            ),
+            padding: EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: dense ? 6 : 8,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: selected ? colors.accent : colors.mutedForeground,
                 ),
-              ),
-              const SizedBox(width: 8),
-              Icon(
-                icon,
-                size: 18,
-                color: selected ? colors.accent : colors.mutedForeground,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                    color: selected ? colors.accent : colors.foreground,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                      color: selected ? colors.accent : colors.foreground,
+                    ),
                   ),
                 ),
-              ),
-              trailing ?? const SizedBox.shrink(),
-            ],
+                if (trailing != null) trailing!,
+              ],
+            ),
           ),
         ),
       ),
@@ -459,25 +525,25 @@ class _Row extends StatelessWidget {
 }
 
 class _Badge extends StatelessWidget {
-  const _Badge(this.text, {required this.accent, required this.bg});
+  const _Badge({required this.text, required this.colors});
+
   final String text;
-  final Color accent;
-  final Color bg;
+  final AppColors colors;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(10),
+        color: colors.muted,
+        borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         text,
         style: TextStyle(
           fontSize: 11,
-          color: accent == Colors.white ? const Color(0xFF2C2C2C) : accent,
-          fontWeight: FontWeight.w500,
+          color: colors.mutedForeground,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -494,9 +560,7 @@ class _CreateListSheet {
         padding: EdgeInsets.all(16),
         child: Row(
           children: [
-            Expanded(
-              child: Text('新建清单', style: TextStyle(fontSize: 16)),
-            ),
+            Expanded(child: Text('新建清单', style: TextStyle(fontSize: 16))),
           ],
         ),
       ),
