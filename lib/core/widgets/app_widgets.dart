@@ -6,12 +6,20 @@ import '../theme/brand_colors.dart';
 /// 品牌化卡片：替换 Material 默认 Card。
 /// 圆角 12 + 细微边框 + 底阴影，背景纯白（surface）。
 class AppCard extends StatelessWidget {
-  const AppCard({super.key, required this.child, this.padding, this.onTap, this.margin});
+  const AppCard({
+    super.key,
+    required this.child,
+    this.padding,
+    this.onTap,
+    this.margin,
+    this.hovered = false,
+  });
 
   final Widget child;
   final EdgeInsetsGeometry? padding;
   final VoidCallback? onTap;
   final EdgeInsetsGeometry? margin;
+  final bool hovered;
 
   @override
   Widget build(BuildContext context) {
@@ -21,11 +29,14 @@ class AppCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: colors.border, width: 0.5),
+        border: Border.all(
+          color: hovered ? colors.accent.withOpacity(0.28) : colors.border,
+          width: hovered ? 0.9 : 0.5,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 6,
+            color: Colors.black.withOpacity(hovered ? 0.06 : 0.03),
+            blurRadius: hovered ? 10 : 6,
             offset: const Offset(0, 2),
           ),
         ],
@@ -106,10 +117,7 @@ class AppButton extends StatelessWidget {
           ? SizedBox(
               width: 16,
               height: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: fg,
-              ),
+              child: CircularProgressIndicator(strokeWidth: 2, color: fg),
             )
           : (icon == null ? const SizedBox.shrink() : Icon(icon)),
       label: child,
@@ -255,10 +263,7 @@ class AppEmptyState extends StatelessWidget {
               Text(
                 subtitle!,
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: colors.mutedForeground,
-                ),
+                style: TextStyle(fontSize: 14, color: colors.mutedForeground),
               ),
             ],
             if (action != null) ...[

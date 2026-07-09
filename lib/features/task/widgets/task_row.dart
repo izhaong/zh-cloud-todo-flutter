@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/brand_colors.dart';
 import '../../../core/widgets/app_widgets.dart';
 
 /// 日期徽章的语义分类（对齐 AppColors 的 overdue/today/future/completed）。
@@ -60,6 +61,10 @@ class TaskRow extends StatelessWidget {
     required this.onToggleComplete,
     required this.onTap,
     required this.onPin,
+    this.onMore,
+    this.dragHandle,
+    this.desktopMode = false,
+    this.hovered = false,
     this.now,
   });
 
@@ -67,17 +72,22 @@ class TaskRow extends StatelessWidget {
   final VoidCallback onToggleComplete;
   final VoidCallback onTap;
   final VoidCallback onPin;
+  final VoidCallback? onMore;
+  final Widget? dragHandle;
+  final bool desktopMode;
+  final bool hovered;
   final DateTime? now;
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).extension<AppThemeExtension>()!.colors;
+    final colors = brandColors(context);
     final b = data.badge(now ?? DateTime.now());
     final df = _formatDue(data.dueAt);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       child: AppCard(
+        hovered: hovered,
         padding: const EdgeInsets.fromLTRB(6, 8, 10, 8),
         onTap: onTap,
         child: Row(
@@ -111,8 +121,11 @@ class TaskRow extends StatelessWidget {
                       if (data.isPinned)
                         Padding(
                           padding: const EdgeInsets.only(right: 4),
-                          child: Icon(Icons.push_pin,
-                              size: 13, color: colors.accent),
+                          child: Icon(
+                            Icons.push_pin,
+                            size: 13,
+                            color: colors.accent,
+                          ),
                         ),
                       Expanded(
                         child: Text(
@@ -165,7 +178,23 @@ class TaskRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 6),
-            // 置顶切换
+            // 桌面悬停：拖拽手柄 + 更多；移动端：仅保留置顶。
+            if (desktopMode && hovered && dragHandle != null) ...[
+              dragHandle!,
+              const SizedBox(width: 4),
+            ],
+            if (desktopMode && hovered && onMore != null) ...[
+              IconButton(
+                tooltip: '更多',
+                icon: Icon(
+                  Icons.more_horiz,
+                  size: 18,
+                  color: colors.mutedForeground,
+                ),
+                onPressed: onMore,
+                splashRadius: 18,
+              ),
+            ],
             IconButton(
               tooltip: data.isPinned ? '取消置顶' : '置顶',
               icon: Icon(
@@ -197,7 +226,11 @@ String? _formatDue(DateTime? due) {
 }
 
 class _DateTag extends StatelessWidget {
-  const _DateTag({required this.badge, required this.label, required this.colors});
+  const _DateTag({
+    required this.badge,
+    required this.label,
+    required this.colors,
+  });
   final DateBadge badge;
   final String label;
   final AppColors colors;

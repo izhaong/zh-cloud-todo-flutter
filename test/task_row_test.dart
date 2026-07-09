@@ -42,14 +42,14 @@ void main() {
 
 extension on TaskRowData {
   TaskRowData copyWith({bool? completed, DateTime? dueAt}) => TaskRowData(
-        id: id,
-        title: title,
-        completed: completed ?? this.completed,
-        isPinned: isPinned,
-        priority: priority,
-        dueAt: dueAt ?? this.dueAt,
-        subtaskCount: subtaskCount,
-        tagNames: tagNames,
-        listColor: listColor,
-      );
+    id: id,
+    title: title,
+    completed: completed ?? this.completed,
+    isPinned: isPinned,
+    priority: priority,
+    dueAt: dueAt ?? this.dueAt,
+    subtaskCount: subtaskCount,
+    tagNames: tagNames,
+    listColor: listColor,
+  );
 }

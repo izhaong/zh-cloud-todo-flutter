@@ -5,7 +5,6 @@ import '../../core/db/app_database.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../state/providers.dart';
 import '../filter/filter_bar.dart';
-import 'task_detail_page.dart';
 import 'task_quick_add_sheet.dart';
 import 'widgets/task_row_host.dart';
 import 'view_mode.dart';
@@ -50,6 +49,9 @@ class TasksByListPage extends ConsumerStatefulWidget {
 /// §2.6 列表视图排序方式。
 enum TaskSort { smart, priorityDesc, dueDate, title, createdAt }
 
+/// 任务收件箱的 synthetic listId。
+const String kInboxListId = 'inbox';
+
 class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   String? _selectedListId; // null = 全部；kInboxListId = 收件箱
   TaskFilter _filter = TaskFilter();
@@ -79,6 +81,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   Widget build(BuildContext context) {
     final listsAsync = ref.watch(listsStreamProvider);
     final taskRepo = ref.watch(taskRepositoryProvider);
+    final desktopMode = MediaQuery.sizeOf(context).width >= 1024;
     // 会话未就绪（DB 仍在初始化 / 注销过渡）时防空降级为 loading，避免 crash。
     if (taskRepo == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -93,20 +96,29 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           : AppBar(
               title: const Text('任务'),
               actions: [
-          PopupMenuButton<TaskSort>(
-            tooltip: '排序',
-            icon: const Icon(Icons.sort),
-            onSelected: (v) => setState(() => _sort = v),
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: TaskSort.smart, child: Text('智能（置顶优先）')),
-              PopupMenuItem(value: TaskSort.priorityDesc, child: Text('优先级')),
-              PopupMenuItem(value: TaskSort.dueDate, child: Text('截止日期')),
-              PopupMenuItem(value: TaskSort.title, child: Text('标题')),
-              PopupMenuItem(value: TaskSort.createdAt, child: Text('创建时间')),
-            ],
-          ),
-        ],
-      ),
+                PopupMenuButton<TaskSort>(
+                  tooltip: '排序',
+                  icon: const Icon(Icons.sort),
+                  onSelected: (v) => setState(() => _sort = v),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: TaskSort.smart,
+                      child: Text('智能（置顶优先）'),
+                    ),
+                    PopupMenuItem(
+                      value: TaskSort.priorityDesc,
+                      child: Text('优先级'),
+                    ),
+                    PopupMenuItem(value: TaskSort.dueDate, child: Text('截止日期')),
+                    PopupMenuItem(value: TaskSort.title, child: Text('标题')),
+                    PopupMenuItem(
+                      value: TaskSort.createdAt,
+                      child: Text('创建时间'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
       body: Column(
         children: [
           _ListPicker(
@@ -114,10 +126,11 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
             selectedListId: _selectedListId,
             onChanged: (id) => setState(() => _selectedListId = id),
           ),
-          if (_mode == TaskViewMode.list) _SmartTaskChips(
-            filter: _filter,
-            onChanged: (f) => setState(() => _filter = f),
-          ),
+          if (_mode == TaskViewMode.list)
+            _SmartTaskChips(
+              filter: _filter,
+              onChanged: (f) => setState(() => _filter = f),
+            ),
           TaskViewModeTabs(
             mode: _mode,
             onChanged: (m) => setState(() => _mode = m),
@@ -139,7 +152,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
               filter: _filter,
               selectedListId: _selectedListId,
               sort: _sort,
-              onTaskTap: (t) => showTaskDetailSheet(context, t.id),
+              desktopMode: desktopMode,
               onAdd: _quickAdd,
             ),
           ),
@@ -156,10 +169,11 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   }
 
   Future<void> _quickAdd() async {
-    final lists = ref.read(listsStreamProvider).valueOrNull ?? const <TodoList>[];
+    final lists =
+        ref.read(listsStreamProvider).valueOrNull ?? const <TodoList>[];
     // §2.3 未选清单时，快速新建落入 synthetic inbox。
-    final listId = _selectedListId ??
-        (lists.isNotEmpty ? lists.first.id : kInboxListId);
+    final listId =
+        _selectedListId ?? (lists.isNotEmpty ? lists.first.id : kInboxListId);
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -176,7 +190,7 @@ class _ModeBody extends ConsumerWidget {
     required this.filter,
     required this.selectedListId,
     required this.sort,
-    required this.onTaskTap,
+    required this.desktopMode,
     required this.onAdd,
   });
 
@@ -185,7 +199,7 @@ class _ModeBody extends ConsumerWidget {
   final TaskFilter filter;
   final String? selectedListId;
   final TaskSort sort;
-  final ValueChanged<TodoTask> onTaskTap;
+  final bool desktopMode;
   final VoidCallback onAdd;
 
   @override
@@ -202,8 +216,8 @@ class _ModeBody extends ConsumerWidget {
           case TaskViewMode.list:
             return _ListBody(
               items: items,
-              onTaskTap: onTaskTap,
               sort: sort,
+              desktopMode: desktopMode,
               onAdd: onAdd,
             );
           case TaskViewMode.kanban:
@@ -221,41 +235,150 @@ class _ModeBody extends ConsumerWidget {
 }
 
 /// 品牌化任务列表分支：AppEmptyState 空状态 + TaskRowHost 任务行（含滑动）。
-class _ListBody extends ConsumerWidget {
+class _ListBody extends StatefulWidget {
   const _ListBody({
     required this.items,
-    required this.onTaskTap,
     required this.sort,
+    required this.desktopMode,
     required this.onAdd,
   });
 
   final List<TodoTask> items;
-  final ValueChanged<TodoTask> onTaskTap;
   final TaskSort sort;
+  final bool desktopMode;
   final VoidCallback onAdd;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    if (items.isEmpty) {
+  State<_ListBody> createState() => _ListBodyState();
+
+  /// 把 filter 套在 `List` 上的 TodoTask 客户端过滤（保持 UI 纯本地）。
+  static List<TodoTask> applyFilter(
+    List<TodoTask> src,
+    TaskFilter f,
+    String? selectedListId,
+  ) {
+    if (f.isEmpty && selectedListId == null) return src;
+    final now = DateTime.now();
+    final todayEnd = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).add(const Duration(days: 1));
+    return src.where((t) {
+      if (selectedListId != null && t.listId != selectedListId) return false;
+      if (f.listId != null && t.listId != f.listId) return false;
+      if (f.priority != null && t.priority != f.priority) return false;
+      if (f.completed != null && t.completed != f.completed) return false;
+      if (f.dueRange != null) {
+        final due = t.dueAt;
+        if (due == null) return false;
+        final startOfDay = DateTime(now.year, now.month, now.day);
+        switch (f.dueRange) {
+          case 'today':
+            if (due.isBefore(startOfDay) || !due.isBefore(todayEnd))
+              return false;
+            break;
+          case 'tomorrow':
+            final tmrStart = todayEnd;
+            final tmrEnd = todayEnd.add(const Duration(days: 1));
+            if (due.isBefore(tmrStart) || !due.isBefore(tmrEnd)) return false;
+            break;
+          case 'last7days':
+            final weekStart = startOfDay.subtract(const Duration(days: 7));
+            if (due.isBefore(weekStart) || !due.isBefore(todayEnd))
+              return false;
+            break;
+          case 'overdue':
+            if (!due.isBefore(startOfDay)) return false;
+            break;
+          case 'future':
+            if (due.isBefore(todayEnd)) return false;
+            break;
+        }
+      }
+      return true;
+    }).toList();
+  }
+}
+
+class _ListBodyState extends State<_ListBody> {
+  List<String> _orderedIds = const [];
+  bool _hasCustomOrder = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _orderedIds = _sortedItems(widget.items).map((t) => t.id).toList();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ListBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final currentIds = _sortedItems(widget.items).map((t) => t.id).toList();
+    if (!_hasCustomOrder) {
+      _orderedIds = currentIds;
+      return;
+    }
+    _orderedIds = _normalizeTaskIds(_orderedIds, currentIds);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.items.isEmpty) {
       return AppEmptyState(
         title: '没有任务',
         subtitle: '点击上方输入框快速添加任务，开启专注的一天。',
         action: AppButton(
           icon: Icons.add,
           child: const Text('新建任务'),
-          onPressed: onAdd,
+          onPressed: widget.onAdd,
         ),
       );
     }
-    final sorted = [...items]..sort((a, b) {
+    final sortedItems = _sortedItems(widget.items);
+    final byId = {for (final t in sortedItems) t.id: t};
+    final ordered =
+        (_hasCustomOrder ? _orderedIds : sortedItems.map((t) => t.id).toList())
+            .map((id) => byId[id])
+            .whereType<TodoTask>()
+            .toList(growable: false);
+    if (widget.desktopMode) {
+      return ReorderableListView.builder(
+        buildDefaultDragHandles: false,
+        padding: const EdgeInsets.only(bottom: 96),
+        itemCount: ordered.length,
+        onReorder: (oldIndex, newIndex) {
+          setState(() {
+            _orderedIds = reorderTaskIds(_orderedIds, oldIndex, newIndex);
+            _hasCustomOrder = true;
+          });
+        },
+        itemBuilder: (_, i) {
+          final t = ordered[i];
+          return KeyedSubtree(
+            key: ValueKey(t.id),
+            child: TaskRowHost(
+              task: t,
+              desktopMode: true,
+              enableSwipeGestures: false,
+              reorderIndex: i,
+            ),
+          );
+        },
+      );
+    }
+    final sorted = [...ordered]
+      ..sort((a, b) {
         if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
-        switch (sort) {
+        switch (widget.sort) {
           case TaskSort.smart:
             return b.updatedAt.compareTo(a.updatedAt);
           case TaskSort.priorityDesc:
             return b.priority.compareTo(a.priority);
           case TaskSort.dueDate:
-            return (a.dueAt ?? DateTime(9999)).compareTo(b.dueAt ?? DateTime(9999));
+            return (a.dueAt ?? DateTime(9999)).compareTo(
+              b.dueAt ?? DateTime(9999),
+            );
           case TaskSort.title:
             return a.title.toLowerCase().compareTo(b.title.toLowerCase());
           case TaskSort.createdAt:
@@ -272,49 +395,48 @@ class _ListBody extends ConsumerWidget {
     );
   }
 
-  /// 把 filter 套在 `List` 上的 TodoTask 客户端过滤（保持 UI 纯本地）。
-  static List<TodoTask> applyFilter(
-    List<TodoTask> src,
-    TaskFilter f,
-    String? selectedListId,
-  ) {
-    if (f.isEmpty && selectedListId == null) return src;
-    final now = DateTime.now();
-    final todayEnd = DateTime(now.year, now.month, now.day)
-        .add(const Duration(days: 1));
-    return src.where((t) {
-      if (selectedListId != null && t.listId != selectedListId) return false;
-      if (f.listId != null && t.listId != f.listId) return false;
-      if (f.priority != null && t.priority != f.priority) return false;
-      if (f.completed != null && t.completed != f.completed) return false;
-      if (f.dueRange != null) {
-        final due = t.dueAt;
-        if (due == null) return false;
-        final startOfDay = DateTime(now.year, now.month, now.day);
-        switch (f.dueRange) {
-          case 'today':
-            if (due.isBefore(startOfDay) || !due.isBefore(todayEnd)) return false;
-            break;
-          case 'tomorrow':
-            final tmrStart = todayEnd;
-            final tmrEnd = todayEnd.add(const Duration(days: 1));
-            if (due.isBefore(tmrStart) || !due.isBefore(tmrEnd)) return false;
-            break;
-          case 'last7days':
-            final weekStart = startOfDay.subtract(const Duration(days: 7));
-            if (due.isBefore(weekStart) || !due.isBefore(todayEnd)) return false;
-            break;
-          case 'overdue':
-            if (!due.isBefore(startOfDay)) return false;
-            break;
-          case 'future':
-            if (due.isBefore(todayEnd)) return false;
-            break;
-        }
+  List<TodoTask> _sortedItems(List<TodoTask> items) {
+    final sorted = [...items];
+    sorted.sort((a, b) {
+      if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
+      switch (widget.sort) {
+        case TaskSort.smart:
+          return b.updatedAt.compareTo(a.updatedAt);
+        case TaskSort.priorityDesc:
+          return b.priority.compareTo(a.priority);
+        case TaskSort.dueDate:
+          return (a.dueAt ?? DateTime(9999)).compareTo(
+            b.dueAt ?? DateTime(9999),
+          );
+        case TaskSort.title:
+          return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+        case TaskSort.createdAt:
+          return b.createdAt.compareTo(a.createdAt);
       }
-      return true;
-    }).toList();
+    });
+    return sorted;
   }
+}
+
+List<String> reorderTaskIds(List<String> ids, int oldIndex, int newIndex) {
+  final next = [...ids];
+  if (oldIndex < 0 || oldIndex >= next.length) return next;
+  final item = next.removeAt(oldIndex);
+  if (newIndex > next.length) newIndex = next.length;
+  if (newIndex > oldIndex) newIndex -= 1;
+  next.insert(newIndex, item);
+  return next;
+}
+
+List<String> _normalizeTaskIds(
+  List<String> orderedIds,
+  List<String> currentIds,
+) {
+  final kept = orderedIds.where(currentIds.contains).toList(growable: true);
+  for (final id in currentIds) {
+    if (!kept.contains(id)) kept.add(id);
+  }
+  return kept;
 }
 
 class _ListPicker extends StatelessWidget {
@@ -404,11 +526,36 @@ class _SmartTaskChips extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: Row(
         children: [
-          _chip('全部', Icons.select_all, _active(null, null), () => _select(null, null)),
-          _chip('今日', Icons.today_outlined, _active('today', null), () => _select('today', null)),
-          _chip('明日', Icons.event_outlined, _active('tomorrow', null), () => _select('tomorrow', null)),
-          _chip('近 7 天', Icons.date_range, _active('last7days', null), () => _select('last7days', null)),
-          _chip('已完成', Icons.check_circle_outline, _active(null, true), () => _select(null, true)),
+          _chip(
+            '全部',
+            Icons.select_all,
+            _active(null, null),
+            () => _select(null, null),
+          ),
+          _chip(
+            '今日',
+            Icons.today_outlined,
+            _active('today', null),
+            () => _select('today', null),
+          ),
+          _chip(
+            '明日',
+            Icons.event_outlined,
+            _active('tomorrow', null),
+            () => _select('tomorrow', null),
+          ),
+          _chip(
+            '近 7 天',
+            Icons.date_range,
+            _active('last7days', null),
+            () => _select('last7days', null),
+          ),
+          _chip(
+            '已完成',
+            Icons.check_circle_outline,
+            _active(null, true),
+            () => _select(null, true),
+          ),
         ],
       ),
     );
