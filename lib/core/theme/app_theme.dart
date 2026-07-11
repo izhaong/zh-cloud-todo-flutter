@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
-/// 品牌化设计令牌 —— 来自 TickTick 视觉基准 + ui-ux-pro-max Productivity 域。
+import 'todo_layout_tokens.dart';
+
+/// Todo 产品的基础语义色与通用设计令牌。
 ///
 /// 色板角色（5 角色系统，对齐 impeccable/ui-ux-pro-max 语义）：
-/// - background: 页面底色（TickTick 暖白，非纯白）
+/// - background: 页面画布底色
 /// - surface: 卡片/输入框 底色（纯白）
 /// - ink / foreground: 主文字（深墨绿黑）
 /// - accent: 强调色（品牌蓝，选中/按钮/链接）
@@ -52,37 +54,37 @@ class AppColors {
   final Color future; // 未来灰
   final Color completed; // 已完成绿/灰
 
-  /// Phase 0 初始品牌色 —— TickTick 视觉基准。
+  /// 浅色品牌语义色。
   static const light = AppColors(
-    background: Color(0xFFF7F6F3), // TickTick 暖白底
-    surface: Color(0xFFFFFFFF), // 卡片纯白
-    ink: Color(0xFF1A1A1A), // 空状态/强调标题
-    foreground: Color(0xFF2C2C2C), // 主文字
-    muted: Color(0xFFE8E6E1), // 次要元素
-    mutedForeground: Color(0xFF8A8A89), // 次要文字
-    border: Color(0xFFE0DFDA), // 分割线
+    background: TodoLayoutTokens.lightCanvas,
+    surface: TodoLayoutTokens.lightSurface,
+    ink: TodoLayoutTokens.lightPrimaryText,
+    foreground: TodoLayoutTokens.lightPrimaryText,
+    muted: TodoLayoutTokens.lightSelectedRow,
+    mutedForeground: TodoLayoutTokens.lightMutedText,
+    border: TodoLayoutTokens.lightDivider,
     accent: Color(0xFF2B7EFD), // 品牌蓝（选中/按钮/链接）
     accentForeground: Color(0xFFFFFFFF),
     destructive: Color(0xFFE5484D), // 删除红
     destructiveForeground: Color(0xFFFFFFFF),
     success: Color(0xFF30A46C), // 完成绿
-    warning: Color(0xFFF59E0B), // 提醒橙
+    warning: Color(0xFFB45309), // 提醒橙（白底可读）
     info: Color(0xFF3E63DD), // 信息蓝
-    overdue: Color(0xFFE5484D), // 逾期
-    today: Color(0xFF2B7EFD), // 今天
-    future: Color(0xFF8A8A89), // 未来
-    completed: Color(0xFF30A46C), // 已完成
+    overdue: Color(0xFFC52A30), // 逾期
+    today: Color(0xFF1D5FD1), // 今天
+    future: Color(0xFF5F6368), // 未来
+    completed: Color(0xFF666666), // 已完成
   );
 
   /// 暗色模式（后续解锁；Phase 0 先置 stub）
   static const dark = AppColors(
-    background: Color(0xFF1A1A1A),
-    surface: Color(0xFF2C2C2C),
+    background: TodoLayoutTokens.darkCanvas,
+    surface: TodoLayoutTokens.darkSurface,
     ink: Color(0xFFFFFFFF),
     foreground: Color(0xFFF5F5F5),
     muted: Color(0xFF3A3A3A),
     mutedForeground: Color(0xFFA1A1A1),
-    border: Color(0xFF3A3A3A),
+    border: TodoLayoutTokens.darkDivider,
     accent: Color(0xFF4D8FFA),
     accentForeground: Color(0xFFFFFFFF),
     destructive: Color(0xFFE5484D),
@@ -90,14 +92,14 @@ class AppColors {
     success: Color(0xFF30A46C),
     warning: Color(0xFFF59E0B),
     info: Color(0xFF3E63DD),
-    overdue: Color(0xFFE5484D),
+    overdue: Color(0xFFFF6B70),
     today: Color(0xFF4D8FFA),
     future: Color(0xFFA1A1A1),
-    completed: Color(0xFF30A46C),
+    completed: Color(0xFFB0B0B0),
   );
 }
 
-/// 颜色 ThemeExtension（便于 Theme.of(context).extension<AppThemeExtension>()）
+/// 颜色 ThemeExtension（便于 `Theme.of(context).extension<AppThemeExtension>()`）。
 class AppThemeExtension extends ThemeExtension<AppThemeExtension> {
   const AppThemeExtension(this.colors);
   final AppColors colors;
@@ -107,7 +109,10 @@ class AppThemeExtension extends ThemeExtension<AppThemeExtension> {
       AppThemeExtension(colors ?? this.colors);
 
   @override
-  ThemeExtension<AppThemeExtension> lerp(covariant ThemeExtension<AppThemeExtension>? other, double t) {
+  ThemeExtension<AppThemeExtension> lerp(
+    covariant ThemeExtension<AppThemeExtension>? other,
+    double t,
+  ) {
     if (other is! AppThemeExtension) return this;
     return t < 0.5 ? this : other;
   }
@@ -136,17 +141,17 @@ class AppSpacing {
 /// 阴影令牌
 class AppShadows {
   static List<BoxShadow> card(BuildContext context) => [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.04),
-          blurRadius: 8,
-          offset: const Offset(0, 2),
-        ),
-      ];
+    BoxShadow(
+      color: Colors.black.withValues(alpha: 0.04),
+      blurRadius: 8,
+      offset: const Offset(0, 2),
+    ),
+  ];
   static List<BoxShadow> popup(BuildContext context) => [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.12),
-          blurRadius: 24,
-          offset: const Offset(0, 8),
-        ),
-      ];
+    BoxShadow(
+      color: Colors.black.withValues(alpha: 0.12),
+      blurRadius: 24,
+      offset: const Offset(0, 8),
+    ),
+  ];
 }

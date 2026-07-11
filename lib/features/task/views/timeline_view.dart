@@ -18,10 +18,12 @@ class TimelineView extends ConsumerWidget {
     super.key,
     required this.tasks,
     DateTime? now,
+    this.onTaskSelected,
   }) : _now = now;
 
   final DateTime? _now;
   final List<TodoTask> tasks;
+  final ValueChanged<String>? onTaskSelected;
 
   DateTime get _effectiveNow => _now ?? DateTime.now();
 
@@ -46,15 +48,22 @@ class TimelineView extends ConsumerWidget {
     );
   }
 
-  static void _openDetail(BuildContext context, TodoTask t) {
-showTaskDetailSheet(context, t.id);
+  void _openDetail(BuildContext context, TodoTask t) {
+    final callback = onTaskSelected;
+    if (callback != null) {
+      callback(t.id);
+      return;
+    }
+    showTaskDetailSheet(context, t.id);
   }
 
   /// 把任务分配到 6 个时间桶；返回按显示顺序排好的桶列表。
   static List<_TimelineGroup> _buildGroups(List<TodoTask> tasks, DateTime now) {
     final todayStart = DateTime(now.year, now.month, now.day);
     // 本周范围：今天 所在的"自然周"周一 ~ 周日
-    final weekStart = todayStart.subtract(Duration(days: todayStart.weekday - 1));
+    final weekStart = todayStart.subtract(
+      Duration(days: todayStart.weekday - 1),
+    );
     final weekEnd = weekStart.add(const Duration(days: 7));
     final nextWeekEnd = weekEnd.add(const Duration(days: 7));
 
@@ -67,8 +76,13 @@ showTaskDetailSheet(context, t.id);
 
     for (final t in tasks) {
       if (t.completed) continue; // 已完成不展示
-      final bucket = classifyTimelineBucket(t, now,
-          weekStart: weekStart, weekEnd: weekEnd, nextWeekEnd: nextWeekEnd);
+      final bucket = classifyTimelineBucket(
+        t,
+        now,
+        weekStart: weekStart,
+        weekEnd: weekEnd,
+        nextWeekEnd: nextWeekEnd,
+      );
       switch (bucket) {
         case TimelineBucket.overdue:
           overdue.add(t);
@@ -113,23 +127,12 @@ showTaskDetailSheet(context, t.id);
       _TimelineGroup(label: '明天', accent: Colors.amber, items: tomorrow),
       _TimelineGroup(label: '本周', accent: Colors.blue, items: thisWeek),
       _TimelineGroup(label: '下周', accent: Colors.indigo, items: nextWeek),
-      _TimelineGroup(
-        label: '更晚 / 无截止',
-        accent: Colors.grey,
-        items: later,
-      ),
+      _TimelineGroup(label: '更晚 / 无截止', accent: Colors.grey, items: later),
     ];
   }
 }
 
-enum TimelineBucket {
-  overdue,
-  today,
-  tomorrow,
-  thisWeek,
-  nextWeek,
-  later,
-}
+enum TimelineBucket { overdue, today, tomorrow, thisWeek, nextWeek, later }
 
 /// 把单个任务分类到时间桶之一；纯函数可单测。
 ///
@@ -153,9 +156,11 @@ TimelineBucket classifyTimelineBucket(
   if (due == null) return TimelineBucket.later;
   final todayStart = DateTime(now.year, now.month, now.day);
   final tomorrowStart = todayStart.add(const Duration(days: 1));
-  final weekStartLocal = weekStart ?? todayStart.subtract(Duration(days: todayStart.weekday - 1));
+  final weekStartLocal =
+      weekStart ?? todayStart.subtract(Duration(days: todayStart.weekday - 1));
   final weekEndLocal = weekEnd ?? weekStartLocal.add(const Duration(days: 7));
-  final nextWeekEndLocal = nextWeekEnd ?? weekEndLocal.add(const Duration(days: 7));
+  final nextWeekEndLocal =
+      nextWeekEnd ?? weekEndLocal.add(const Duration(days: 7));
 
   if (due.isBefore(todayStart)) return TimelineBucket.overdue;
   if (due.isBefore(tomorrowStart)) return TimelineBucket.today;
@@ -220,7 +225,11 @@ class _TimelineSection extends StatelessWidget {
                     ),
                   ),
                   const Spacer(),
-                  _BucketCount(count: data.items.length, accent: data.accent, colors: colors),
+                  _BucketCount(
+                    count: data.items.length,
+                    accent: data.accent,
+                    colors: colors,
+                  ),
                 ],
               ),
             ),
@@ -230,14 +239,23 @@ class _TimelineSection extends StatelessWidget {
                 type: MaterialType.transparency,
                 child: ListTile(
                   dense: true,
-                  leading: Icon(Icons.schedule, size: 18, color: colors.mutedForeground),
+                  leading: Icon(
+                    Icons.schedule,
+                    size: 18,
+                    color: colors.mutedForeground,
+                  ),
                   title: Text(
                     t.title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: colors.foreground),
                   ),
-                  subtitle: t.dueAt == null ? null : Text(tf.format(t.dueAt!), style: TextStyle(color: colors.mutedForeground)),
+                  subtitle: t.dueAt == null
+                      ? null
+                      : Text(
+                          tf.format(t.dueAt!),
+                          style: TextStyle(color: colors.mutedForeground),
+                        ),
                   onTap: () => onTaskTap(t),
                 ),
               ),
@@ -250,7 +268,11 @@ class _TimelineSection extends StatelessWidget {
 }
 
 class _BucketCount extends StatelessWidget {
-  const _BucketCount({required this.count, required this.accent, required this.colors});
+  const _BucketCount({
+    required this.count,
+    required this.accent,
+    required this.colors,
+  });
   final int count;
   final Color accent;
   final AppColors colors;
@@ -265,7 +287,11 @@ class _BucketCount extends StatelessWidget {
       ),
       child: Text(
         '$count',
-        style: TextStyle(fontSize: 12, color: accent, fontWeight: FontWeight.w600),
+        style: TextStyle(
+          fontSize: 12,
+          color: accent,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }

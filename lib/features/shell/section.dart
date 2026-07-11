@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// 顶层导航分区（对齐 TickTick 信息架构）。
+/// Todo 产品顶层导航分区。
 ///
 /// - tasks: 任务（智能清单 + 列表 + 多视图）
 /// - calendar: 日历

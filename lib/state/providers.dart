@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
-import '../core/api/api_config.dart';
 import '../core/api/sync_api.dart';
 import '../core/api/todo_api.dart';
 import '../core/db/app_database.dart';
@@ -13,6 +12,12 @@ import 'repositories/list_repository.dart';
 import 'repositories/tag_repository.dart';
 import 'repositories/task_repository.dart';
 
+/// UI-facing clock. Production reads the current instant on each rebuild;
+/// deterministic widget/golden fixtures override the callback explicitly.
+final currentDateTimeProvider = Provider<DateTime Function()>(
+  (ref) => DateTime.now,
+);
+
 /// ----- API 客户端 --------------------------------------------------------
 
 /// 业务 API 客户端：随 [sessionProvider] 变化重建，始终携带最新 token。
@@ -21,7 +26,8 @@ final apiClientProvider = Provider<ApiClient>((ref) {
   ref.watch(sessionProvider);
   return ApiClient(
     tokenProvider: () => ref.read(sessionProvider)?.accessToken ?? '',
-    tenantIdProvider: () => ref.read(sessionProvider)?.tenantId ?? ApiConfig.defaultTenantId,
+    tenantIdProvider: () =>
+        ref.read(sessionProvider)?.tenantId ?? ApiConfig.defaultTenantId,
     onUnauthorized: () {
       Future.microtask(() => ref.read(sessionProvider.notifier).signOut());
     },
@@ -162,7 +168,8 @@ final tagsStreamProvider = StreamProvider<List<TodoTag>>((ref) {
 final taskStatsProvider = StreamProvider<TaskStats>((ref) {
   final repo = ref.watch(taskRepositoryProvider);
   if (repo == null) return Stream.value(TaskStats.empty);
-  return repo.watchAll().map(TaskStats.fromTasks);
+  final now = ref.watch(currentDateTimeProvider)();
+  return repo.watchAll().map((tasks) => TaskStats.fromTasks(tasks, now: now));
 });
 
 /// 轻量任务计数集合（Sidebar 徽章用）。
@@ -179,10 +186,14 @@ class TaskStats {
 
   static const empty = TaskStats(0, 0, 0, 0);
 
-  static TaskStats fromTasks(List tasks) {
+  static TaskStats fromTasks(List tasks, {DateTime? now}) {
     var all = 0, inbox = 0, today = 0, upcoming = 0;
-    final now = DateTime.now();
-    final todayStart = DateTime(now.year, now.month, now.day);
+    final effectiveNow = now ?? DateTime.now();
+    final todayStart = DateTime(
+      effectiveNow.year,
+      effectiveNow.month,
+      effectiveNow.day,
+    );
     final todayEnd = todayStart.add(const Duration(days: 1));
     final weekEnd = todayStart.add(const Duration(days: 7));
     for (final t in tasks) {
