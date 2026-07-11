@@ -11,15 +11,19 @@ void main() {
     await _setViewport(tester, const Size(1440, 900));
     await _pumpAuthPage(tester);
 
-    expect(
-      find.byKey(const ValueKey('todo-auth-wide-layout')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('todo-auth-wide-layout')), findsOneWidget);
     expect(find.text('把今天安排得更清楚'), findsOneWidget);
     expect(find.text('欢迎回来'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('todo-auth-password-visibility')),
       findsOneWidget,
+    );
+    expect(
+      tester
+          .getRect(find.byKey(const ValueKey('todo-auth-wide-layout')))
+          .center
+          .dy,
+      closeTo(450, 2),
     );
     expect(tester.takeException(), isNull);
   });
@@ -33,10 +37,7 @@ void main() {
         find.byKey(const ValueKey('todo-auth-compact-layout')),
         findsOneWidget,
       );
-      expect(
-        find.byKey(const ValueKey('todo-auth-wide-layout')),
-        findsNothing,
-      );
+      expect(find.byKey(const ValueKey('todo-auth-wide-layout')), findsNothing);
       expect(tester.takeException(), isNull);
     }
   });
@@ -86,11 +87,16 @@ void main() {
       find.byKey(const ValueKey('todo-auth-forgot-password-link')),
     );
     await tester.pump();
-    expect(find.text('重置密码'), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('todo-auth-title'))).data,
+      '重置密码',
+    );
     expect(find.text('验证手机号并设置新密码'), findsOneWidget);
   });
 
   testWidgets('未知登录异常显示可操作提示且不暴露异常对象', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await _setViewport(tester, const Size(800, 1000));
     await _pumpAuthPage(
       tester,
       authGateway: _FakeAuthGateway(failPasswordLogin: true),
@@ -100,15 +106,34 @@ void main() {
       find.widgetWithText(TextFormField, '手机号'),
       '18800000000',
     );
-    await tester.enterText(
-      find.widgetWithText(TextFormField, '密码'),
-      '123456',
-    );
+    await tester.enterText(find.widgetWithText(TextFormField, '密码'), '123456');
     await tester.tap(find.byKey(const ValueKey('todo-auth-submit')));
     await tester.pumpAndSettle();
 
     expect(find.text('暂时无法完成请求，请稍后重试'), findsOneWidget);
     expect(find.textContaining('internal-auth-error'), findsNothing);
+    expect(
+      tester.getSemantics(find.byKey(const ValueKey('todo-auth-message'))),
+      matchesSemantics(label: '错误：暂时无法完成请求，请稍后重试', isLiveRegion: true),
+    );
+    semantics.dispose();
+  });
+
+  testWidgets('深色主题与 200% 文本缩放在最小宽度保持可用', (tester) async {
+    await _setViewport(tester, const Size(320, 1000));
+    await _pumpAuthPage(
+      tester,
+      themeMode: ThemeMode.dark,
+      textScaler: const TextScaler.linear(2),
+    );
+
+    expect(
+      find.byKey(const ValueKey('todo-auth-compact-layout')),
+      findsOneWidget,
+    );
+    expect(find.text('欢迎回来'), findsOneWidget);
+    expect(find.byTooltip('显示密码'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }
 
@@ -122,6 +147,8 @@ Future<void> _setViewport(WidgetTester tester, Size size) async {
 Future<void> _pumpAuthPage(
   WidgetTester tester, {
   AuthGateway? authGateway,
+  ThemeMode themeMode = ThemeMode.light,
+  TextScaler textScaler = TextScaler.noScaling,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -131,7 +158,16 @@ Future<void> _pumpAuthPage(
         ),
         sessionStoreProvider.overrideWithValue(_MemorySessionStore()),
       ],
-      child: const MaterialApp(home: TodoAuthPage()),
+      child: MaterialApp(
+        theme: ThemeData.light(useMaterial3: true),
+        darkTheme: ThemeData.dark(useMaterial3: true),
+        themeMode: themeMode,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+          child: child!,
+        ),
+        home: const TodoAuthPage(),
+      ),
     ),
   );
   await tester.pump();
@@ -160,7 +196,10 @@ class _FakeAuthGateway implements AuthGateway {
   }
 
   @override
-  Future<void> sendSmsCode({required String mobile, required int scene}) async {}
+  Future<void> sendSmsCode({
+    required String mobile,
+    required int scene,
+  }) async {}
 
   @override
   Future<TodoAuthSession> smsLogin({
