@@ -197,6 +197,6 @@ git commit -m "docs(spec): 完成登录界面优化验收"
 
 - [ ] **Step 5: 推送当前功能分支**
 
-Run: `git push origin feat/85-todo-visual-fidelity`
+Run: `git push origin feat/87-todo-auth-visual-polish`
 
 Expected: 远端分支更新到本地 HEAD；现有 PR #86 自动包含新增提交。

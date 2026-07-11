@@ -1,6 +1,6 @@
 # Feature Specification: Todo 登录界面视觉与易用性优化
 
-**Feature Branch**: `feat/85-todo-visual-fidelity`  
+**Feature Branch**: `feat/87-todo-auth-visual-polish`
 **Created**: 2026-07-12  
 **Status**: Approved  
 **Input**: 用户要求“Todo 的登录界面也优化一下”，并批准在不改变后端认证接口的前提下，同时优化视觉布局、用户文案、密码可见切换、加载/错误状态与响应式适配；用户授权 Agent 自主选择方案并直接交付结果。
