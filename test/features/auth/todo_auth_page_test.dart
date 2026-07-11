@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:zh_cloud_todo_flutter/core/auth/auth_gateway.dart';
 import 'package:zh_cloud_todo_flutter/state/session_state.dart';
 import 'package:zh_cloud_todo_flutter/todo_auth_page.dart';
 
@@ -26,6 +26,10 @@ void main() {
       closeTo(450, 2),
     );
     expect(tester.takeException(), isNull);
+
+    await _setViewport(tester, const Size(900, 900));
+    await _pumpAuthPage(tester);
+    expect(find.byKey(const ValueKey('todo-auth-wide-layout')), findsOneWidget);
   });
 
   testWidgets('窄屏在 390 与 320 宽度使用无溢出的单栏布局', (tester) async {
@@ -134,6 +138,16 @@ void main() {
     expect(find.text('欢迎回来'), findsOneWidget);
     expect(find.byTooltip('显示密码'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('键盘 Tab 可以进入登录表单焦点顺序', (tester) async {
+    await _pumpAuthPage(tester);
+    FocusManager.instance.primaryFocus?.unfocus();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+
+    expect(FocusManager.instance.primaryFocus, isNotNull);
   });
 }
 
