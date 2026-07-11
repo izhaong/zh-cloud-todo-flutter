@@ -19,7 +19,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(find.text('密码登录'), findsOneWidget);
+    expect(find.text('欢迎回来'), findsOneWidget);
     expect(find.widgetWithText(TextFormField, '手机号'), findsOneWidget);
   });
 
@@ -47,7 +47,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(find.text('密码登录'), findsOneWidget);
+    expect(find.text('欢迎回来'), findsOneWidget);
     expect(sessionStore.cleared, isTrue);
   });
 }
