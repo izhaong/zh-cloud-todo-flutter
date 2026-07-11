@@ -15,7 +15,21 @@ Todo 应用 **唯一 C 端客户端**（**Web / H5**、iOS、Android、macOS、W
 
 - 产品需求与对照矩阵：`zh-cloud-docs/todo/01_需求阶段/`
 - 系统架构 / DB / API：`zh-cloud-docs/todo/02_技术设计/`
-- 本仓功能规格：`specs/001-todo-dida-core-parity/`
+- 功能能力事实源：`specs/001-todo-dida-core-parity/{spec,plan,tasks}.md`
+- 视觉与响应式事实源：`specs/002-todo-visual-fidelity/{spec,plan,tasks}.md`
+
+## 视觉与响应式基线
+
+Todo 工作区以 `1440×900` Web/PC 桌面视口为第一视觉母版，同时显示全局 rail、任务 sidebar、任务主区和固定详情区。窄屏沿用同一任务流与稳定任务身份，只改变导航和详情容器：
+
+| 档位      | 逻辑宽度      | 导航                               | 详情             |
+| --------- | ------------- | ---------------------------------- | ---------------- |
+| `wide`    | `>= 1366`     | 固定 56px rail + 272px sidebar     | 固定 432px 右栏  |
+| `compact` | `1100–1365`   | 固定 56px rail + 256px sidebar     | end drawer       |
+| `tablet`  | `600–1099`    | 固定 56px rail + sidebar drawer    | end drawer/覆盖层 |
+| `mobile`  | `< 600`       | 顶栏 + bottom navigation + drawer | 独立全屏详情     |
+
+完整布局、状态与验收矩阵见 `specs/002-todo-visual-fidelity/contracts/workspace-ui-contract.md`。
 
 ## API 契约
 
@@ -99,9 +113,10 @@ CI 产物目录：`.gha-dist/desktop/`（zip 或 tar.gz）。
 
 ## 架构与规格
 
-- 唯一事实源：`specs/001-todo-dida-core-parity/{spec,plan,tasks}.md`（spec-kit）
+- 功能能力事实源：`specs/001-todo-dida-core-parity/{spec,plan,tasks}.md`（spec-kit）
+- 视觉与响应式事实源：`specs/002-todo-visual-fidelity/{spec,plan,tasks}.md`（spec-kit）
 - 目录分层：`lib/core/{api,db,sync,storage}` + `lib/features/*`（Riverpod + go_router + Drift + dio 离线优先架构）
-- 跨仓编排：`zh-cloud/.cursor/plans/滴答清单对齐交付计划_*.plan.md`
+- 响应式 UI 契约：`specs/002-todo-visual-fidelity/contracts/workspace-ui-contract.md`
 
 ## Git 约定
 

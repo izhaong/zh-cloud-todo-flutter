@@ -40,7 +40,8 @@ class HabitRepository {
       '${ApiConfig.todoPrefix}/habit/page',
       queryParameters: {'pageNo': pageNo, 'pageSize': pageSize},
     );
-    final raw = (r.data?['data']?['list'] as List?) ?? (r.data?['list'] as List?) ?? [];
+    final raw =
+        (r.data?['data']?['list'] as List?) ?? (r.data?['list'] as List?) ?? [];
     return raw
         .map((e) => HabitDto.fromJson(Map<String, dynamic>.from(e as Map)))
         .toList();

@@ -14,7 +14,9 @@ class SessionStore {
           storage ??
           const FlutterSecureStorage(
             aOptions: AndroidOptions(encryptedSharedPreferences: true),
-            iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
+            iOptions: IOSOptions(
+              accessibility: KeychainAccessibility.first_unlock,
+            ),
           );
 
   final FlutterSecureStorage _storage;
@@ -26,9 +28,7 @@ class SessionStore {
     final raw = await _storage.read(key: _sessionKey);
     if (raw == null || raw.isEmpty) return null;
     try {
-      return TodoAuthSession.fromJson(
-        jsonDecode(raw) as Map<String, dynamic>,
-      );
+      return TodoAuthSession.fromJson(jsonDecode(raw) as Map<String, dynamic>);
     } catch (_) {
       await _storage.delete(key: _sessionKey);
       return null;
@@ -36,10 +36,7 @@ class SessionStore {
   }
 
   Future<void> writeSession(TodoAuthSession session) async {
-    await _storage.write(
-      key: _sessionKey,
-      value: jsonEncode(session.toJson()),
-    );
+    await _storage.write(key: _sessionKey, value: jsonEncode(session.toJson()));
   }
 
   Future<void> clearSession() async {

@@ -1,12 +1,31 @@
 # spec.md — zh-cloud-todo-flutter 设计/架构总览
 
 > **范围说明**：本文件是**仓库级架构总览**，方便 Agent 与新人快速建立全局认知。
-> **功能级规格（需求、契约、任务）以 spec-kit `specs/<NNN>/{spec,plan,tasks}.md` 为唯一事实源**（见 `zh-cloud/.cursor/rules/spec-kit-single-source.mdc`），本文件不替代、不与之竞争。
+> **功能级规格（需求、契约、任务）以 spec-kit `specs/<NNN>/{spec,plan,tasks}.md` 为唯一事实源**（见 `zh-cloud/.cursor/rules/spec-kit-single-source.mdc`）：`001-todo-dida-core-parity` 负责功能能力，`002-todo-visual-fidelity` 负责视觉与响应式。本文件不替代、不与之竞争。
 > 修改功能、命令、接口契约或输出格式后，须同步更新本文件与对应规格。
 
 ## 1. 定位
 
-zh-cloud 平台 Todo 产品的 **唯一 C 端客户端**（**Web / H5**、iOS、Android、macOS、Windows、Linux，均为 Flutter 构建）。通过 `/app-api/todo-member` 完成会员登录，通过 `/app-api/todo` 与 `/app-api/todo/sync` 与后端 `zh-cloud-service` 联调。`zh-cloud-client/apps/todo`（React）**已废弃、不再维护**。当前处于**早期脚手架**阶段。
+zh-cloud 平台 Todo 产品的 **唯一 C 端客户端**（**Web / H5**、iOS、Android、macOS、Windows、Linux，均为 Flutter 构建）。通过 `/app-api/todo-member` 完成会员登录，通过 `/app-api/todo` 与 `/app-api/todo/sync` 与后端 `zh-cloud-service` 联调。`zh-cloud-client/apps/todo`（React）**已废弃、不再维护**。当前处于功能能力与多端视觉持续交付阶段。
+
+### 1.1 规格事实源
+
+- `specs/001-todo-dida-core-parity/{spec,plan,tasks}.md`：功能能力事实源，定义任务、清单、同步、多视图、日历、效率、提醒、协作与账号能力。
+- `specs/002-todo-visual-fidelity/{spec,plan,tasks}.md`：视觉与响应式事实源，定义工作区结构、视觉状态、布局档位、验收视口与 golden 基准。
+- 两套规格按职责互补；视觉规格不得改写账号、数据、同步、接口或权限语义，功能规格不得复制视觉契约正文。
+
+### 1.2 桌面母版与响应式档位
+
+第一视觉母版为 `1440×900` Web/PC 工作区：固定 56px 全局 rail、272px 任务 sidebar、弹性任务主区和 432px 固定详情区。任务主区保持视觉焦点；跨档位缩放时保留当前 section、listId 与有效 taskId，只切换容器结构。
+
+| 档位      | 逻辑宽度    | 导航                            | 详情              | 主添加入口      |
+| --------- | ----------- | ------------------------------- | ----------------- | --------------- |
+| `wide`    | `>= 1366`   | 56px rail + 272px sidebar 固定  | 432px 固定右栏    | 主区 QuickAdd   |
+| `compact` | `1100–1365` | 56px rail + 256px sidebar 固定  | end drawer        | 主区 QuickAdd   |
+| `tablet`  | `600–1099`  | 56px rail 固定，sidebar 为 drawer | end drawer/覆盖层 | 主区 QuickAdd   |
+| `mobile`  | `< 600`     | 顶栏 + bottom navigation + drawer | 独立全屏详情      | 单一移动添加入口 |
+
+精确组件边界、状态转换和九个视觉场景见 `specs/002-todo-visual-fidelity/contracts/workspace-ui-contract.md`。
 
 ## 2. 技术栈
 
@@ -67,6 +86,7 @@ pubspec.yaml
 ## 7. 相关文档入口
 
 - Agent 指南：`AGENTS.md` / `CLAUDE.md`；运行与账号：`README.md`。
+- 功能能力规格：`specs/001-todo-dida-core-parity/`；视觉与响应式规格：`specs/002-todo-visual-fidelity/`。
 - 架构文档（父仓）：`zh-cloud-docs` 的 `todo/03-architecture/11-前端架构.md`（并列克隆 `../zh-cloud-docs/todo/...`）。
 - 跨仓核心规则：`.cursor/rules/00-zh-cloud-core.mdc`；UX：`.cursor/rules/ux-preferences.mdc`。
 - 斜杠命令：`.cursor/COMMANDS.md`；Skills：`.cursor/skills/`；Subagent：`.cursor/agents/`。

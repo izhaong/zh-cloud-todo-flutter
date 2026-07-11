@@ -38,8 +38,15 @@ class TaskRepository {
   }
 
   Future<TodoTask?> getById(String id) {
-    return (_db.select(_db.todoTasks)..where((t) => t.id.equals(id)))
-        .getSingleOrNull();
+    return (_db.select(
+      _db.todoTasks,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
+  }
+
+  Stream<TodoTask?> watchById(String id) {
+    return (_db.select(
+      _db.todoTasks,
+    )..where((t) => t.id.equals(id))).watchSingleOrNull();
   }
 
   Future<TodoTask> create({
@@ -55,25 +62,27 @@ class TaskRepository {
   }) async {
     final now = DateTime.now();
     final id = _uuid.v4();
-    await _db.into(_db.todoTasks).insert(
-      TodoTasksCompanion.insert(
-        id: id,
-        listId: listId,
-        parentTaskId: Value(parentTaskId),
-        title: title,
-        description: Value(description),
-        priority: Value(priority),
-        isPinned: Value(isPinned),
-        startAt: Value(startAt),
-        endAt: Value(endAt),
-        dueAt: Value(dueAt),
-        updatedAt: now,
-        createdAt: now,
-      ),
-    );
-    final row = await (_db.select(_db.todoTasks)
-          ..where((t) => t.id.equals(id)))
-        .getSingle();
+    await _db
+        .into(_db.todoTasks)
+        .insert(
+          TodoTasksCompanion.insert(
+            id: id,
+            listId: listId,
+            parentTaskId: Value(parentTaskId),
+            title: title,
+            description: Value(description),
+            priority: Value(priority),
+            isPinned: Value(isPinned),
+            startAt: Value(startAt),
+            endAt: Value(endAt),
+            dueAt: Value(dueAt),
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    final row = await (_db.select(
+      _db.todoTasks,
+    )..where((t) => t.id.equals(id))).getSingle();
     await _queue.enqueue(
       entity: SyncEntities.task,
       op: SyncOps.upsert,
@@ -95,21 +104,24 @@ class TaskRepository {
     bool? isPinned,
   }) async {
     final now = DateTime.now();
-    await (_db.update(_db.todoTasks)..where((t) => t.id.equals(taskId)))
-        .write(TodoTasksCompanion(
-      title: title == null ? const Value.absent() : Value(title),
-      description: description == null ? const Value.absent() : Value(description),
-      priority: priority == null ? const Value.absent() : Value(priority),
-      isPinned: isPinned == null ? const Value.absent() : Value(isPinned),
-      startAt: startAt == null ? const Value.absent() : Value(startAt),
-      endAt: endAt == null ? const Value.absent() : Value(endAt),
-      dueAt: dueAt == null ? const Value.absent() : Value(dueAt),
-      listId: listId == null ? const Value.absent() : Value(listId),
-      updatedAt: Value(now),
-    ));
-    final row = await (_db.select(_db.todoTasks)
-          ..where((t) => t.id.equals(taskId)))
-        .getSingle();
+    await (_db.update(_db.todoTasks)..where((t) => t.id.equals(taskId))).write(
+      TodoTasksCompanion(
+        title: title == null ? const Value.absent() : Value(title),
+        description: description == null
+            ? const Value.absent()
+            : Value(description),
+        priority: priority == null ? const Value.absent() : Value(priority),
+        isPinned: isPinned == null ? const Value.absent() : Value(isPinned),
+        startAt: startAt == null ? const Value.absent() : Value(startAt),
+        endAt: endAt == null ? const Value.absent() : Value(endAt),
+        dueAt: dueAt == null ? const Value.absent() : Value(dueAt),
+        listId: listId == null ? const Value.absent() : Value(listId),
+        updatedAt: Value(now),
+      ),
+    );
+    final row = await (_db.select(
+      _db.todoTasks,
+    )..where((t) => t.id.equals(taskId))).getSingle();
     await _queue.enqueue(
       entity: SyncEntities.task,
       op: SyncOps.upsert,
@@ -122,11 +134,16 @@ class TaskRepository {
 
   /// 切换置顶状态 + sync_queue。
   Future<TodoTask> togglePin(String taskId) async {
-    final current = await (_db.select(_db.todoTasks)
-          ..where((t) => t.id.equals(taskId)))
-        .getSingle();
-    final next = current.copyWith(isPinned: !current.isPinned, updatedAt: DateTime.now());
-    await (_db.update(_db.todoTasks)..where((t) => t.id.equals(taskId))).write(next);
+    final current = await (_db.select(
+      _db.todoTasks,
+    )..where((t) => t.id.equals(taskId))).getSingle();
+    final next = current.copyWith(
+      isPinned: !current.isPinned,
+      updatedAt: DateTime.now(),
+    );
+    await (_db.update(
+      _db.todoTasks,
+    )..where((t) => t.id.equals(taskId))).write(next);
     await _queue.enqueue(
       entity: SyncEntities.task,
       op: SyncOps.upsert,
@@ -151,12 +168,14 @@ class TaskRepository {
   }
 
   Future<void> delete(String taskId) async {
-    final row = await (_db.select(_db.todoTasks)
-          ..where((t) => t.id.equals(taskId)))
-        .getSingleOrNull();
+    final row = await (_db.select(
+      _db.todoTasks,
+    )..where((t) => t.id.equals(taskId))).getSingleOrNull();
     final descendants = await _collectDescendants(taskId);
     for (final d in descendants.reversed) {
-      await (_db.delete(_db.todoTaskTags)..where((t) => t.taskId.equals(d.id))).go();
+      await (_db.delete(
+        _db.todoTaskTags,
+      )..where((t) => t.taskId.equals(d.id))).go();
       await (_db.delete(_db.todoTasks)..where((t) => t.id.equals(d.id))).go();
       if (d.serverId != null) {
         await _queue.enqueue(
@@ -168,7 +187,9 @@ class TaskRepository {
         );
       }
     }
-    await (_db.delete(_db.todoTaskTags)..where((t) => t.taskId.equals(taskId))).go();
+    await (_db.delete(
+      _db.todoTaskTags,
+    )..where((t) => t.taskId.equals(taskId))).go();
     await (_db.delete(_db.todoTasks)..where((t) => t.id.equals(taskId))).go();
     await _queue.enqueue(
       entity: SyncEntities.task,
@@ -187,9 +208,9 @@ class TaskRepository {
     var depth = 0;
     var current = taskId;
     while (true) {
-      final row = await (_db.select(_db.todoTasks)
-            ..where((t) => t.id.equals(current)))
-          .getSingleOrNull();
+      final row = await (_db.select(
+        _db.todoTasks,
+      )..where((t) => t.id.equals(current))).getSingleOrNull();
       final parent = row?.parentTaskId;
       if (parent == null) return depth;
       depth += 1;
@@ -213,9 +234,9 @@ class TaskRepository {
 
   Future<void> reparent(String taskId, String? newParentId) async {
     await _db.reparentTask(taskId, newParentId);
-    final row = await (_db.select(_db.todoTasks)
-          ..where((t) => t.id.equals(taskId)))
-        .getSingle();
+    final row = await (_db.select(
+      _db.todoTasks,
+    )..where((t) => t.id.equals(taskId))).getSingle();
     await _queue.enqueue(
       entity: SyncEntities.task,
       op: SyncOps.upsert,

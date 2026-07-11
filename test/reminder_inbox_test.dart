@@ -8,7 +8,12 @@ void main() {
   group('ReminderActionApi.normalize', () {
     test('解析纯数组', () {
       final raw = [
-        {'id': 1, 'taskId': 10, 'taskTitle': 'A', 'remindAt': '2026-07-07T10:00:00'},
+        {
+          'id': 1,
+          'taskId': 10,
+          'taskTitle': 'A',
+          'remindAt': '2026-07-07T10:00:00',
+        },
         {'id': 2, 'taskId': 10, 'title': 'B', 'remindAt': 1700000000000},
       ];
       final items = ReminderActionApi.normalize(raw);

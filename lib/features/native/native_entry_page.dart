@@ -40,13 +40,14 @@ class _NativeEntryPageState extends State<NativeEntryPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          if (_lastResult.isNotEmpty) Card(
-            color: Theme.of(context).colorScheme.secondaryContainer,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Text(_lastResult),
+          if (_lastResult.isNotEmpty)
+            Card(
+              color: Theme.of(context).colorScheme.secondaryContainer,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text(_lastResult),
+              ),
             ),
-          ),
           const SizedBox(height: 16),
           _SectionTitle('桌面便签'),
           TextField(
@@ -123,12 +124,14 @@ class _NativeEntryPageState extends State<NativeEntryPage> {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: items
-                    .map((t) => ListTile(
-                          dense: true,
-                          leading: const Icon(Icons.task_alt),
-                          title: Text(t['title']?.toString() ?? ''),
-                          subtitle: Text(t['dueAt']?.toString() ?? ''),
-                        ))
+                    .map(
+                      (t) => ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.task_alt),
+                        title: Text(t['title']?.toString() ?? ''),
+                        subtitle: Text(t['dueAt']?.toString() ?? ''),
+                      ),
+                    )
                     .toList(),
               );
             },
@@ -149,7 +152,7 @@ class _SectionTitle extends StatelessWidget {
   final String text;
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Text(text, style: Theme.of(context).textTheme.titleMedium),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 8),
+    child: Text(text, style: Theme.of(context).textTheme.titleMedium),
+  );
 }

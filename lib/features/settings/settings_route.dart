@@ -41,7 +41,9 @@ class SettingsRoute extends ConsumerWidget {
                   trailing: Icons.chevron_right,
                   colors: colors,
                   onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const AccountSecurityPage()),
+                    MaterialPageRoute(
+                      builder: (_) => const AccountSecurityPage(),
+                    ),
                   ),
                 ),
                 _Tile(
@@ -65,15 +67,14 @@ class SettingsRoute extends ConsumerWidget {
                     icon: mode == ThemeMode.system
                         ? Icons.brightness_auto
                         : (mode == ThemeMode.dark
-                            ? Icons.dark_mode_outlined
-                            : Icons.light_mode_outlined),
+                              ? Icons.dark_mode_outlined
+                              : Icons.light_mode_outlined),
                     title: themeModeLabel(mode),
                     colors: colors,
                     trailing: ref.watch(themeModeProvider) == mode
                         ? Icons.check
                         : null,
-                    onTap: () =>
-                        ref.read(themeModeProvider.notifier).set(mode),
+                    onTap: () => ref.read(themeModeProvider.notifier).set(mode),
                   ),
               ],
             ),
@@ -153,7 +154,9 @@ class _Tile extends StatelessWidget {
       subtitle: subtitle == null
           ? null
           : Text(subtitle!, style: TextStyle(color: colors.mutedForeground)),
-      trailing: trailing == null ? null : Icon(trailing, color: colors.mutedForeground),
+      trailing: trailing == null
+          ? null
+          : Icon(trailing, color: colors.mutedForeground),
       onTap: onTap,
     );
   }

@@ -35,10 +35,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: '/login',
         builder: (context, state) => const TodoAuthPage(),
       ),
-      GoRoute(
-        path: '/',
-        builder: (context, state) => const HomeShell(),
-      ),
+      GoRoute(path: '/', builder: (context, state) => const HomeShell()),
     ],
   );
 

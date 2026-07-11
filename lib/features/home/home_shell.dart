@@ -12,12 +12,14 @@ import '../../state/session_state.dart';
 import '../habit/habit_page.dart';
 import '../settings/settings_route.dart';
 import '../shell/section.dart';
+import '../task/task_detail_page.dart';
+import '../task/task_detail_pane.dart';
 import '../task/tasks_by_list_page.dart';
 import '../task/views/calendar_view.dart';
 import '../tag/tag_page.dart';
-import 'ticktick_workspace.dart';
+import 'todo_workspace.dart';
 
-/// TickTick 风格主壳：只负责状态与内容分发，布局交给 [TickTickWorkspace]。
+/// Todo 主壳：只负责状态与内容分发，布局交给 [TodoWorkspace]。
 class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key});
 
@@ -30,6 +32,13 @@ class _HomeShellState extends ConsumerState<HomeShell>
   Section _section = Section.tasks;
   SmartList _smart = SmartList.inbox;
   String? _listId;
+  String? _selectedTaskId;
+  final _workspaceScaffoldKey = GlobalKey<ScaffoldState>();
+  TodoWorkspaceProfile? _layoutProfile;
+  int _detailPresentationGeneration = 0;
+  Route<void>? _mobileDetailRoute;
+  bool _mobileDetailDismissInProgress = false;
+  bool _preserveSelectionWhenMobileRouteCloses = false;
 
   bool _syncing = false;
   Timer? _periodicSync;
@@ -108,15 +117,145 @@ class _HomeShellState extends ConsumerState<HomeShell>
     }
   }
 
-  void _selectSection(Section s) => setState(() => _section = s);
-  void _selectSmart(SmartList s) => setState(() {
-    _smart = s;
-    _listId = null;
-  });
-  void _selectList(String? id) => setState(() {
-    _smart = SmartList.all;
-    _listId = id;
-  });
+  void _selectSection(Section section) {
+    if (section == _section) return;
+    final hadTaskSelection = _selectedTaskId != null;
+    setState(() {
+      _section = section;
+      _selectedTaskId = null;
+    });
+    if (hadTaskSelection) _dismissDetailPresentation();
+  }
+
+  void _selectSmart(SmartList smart) {
+    if (smart == _smart && _listId == null) return;
+    final hadTaskSelection = _selectedTaskId != null;
+    setState(() {
+      _smart = smart;
+      _listId = null;
+      _selectedTaskId = null;
+    });
+    if (hadTaskSelection) _dismissDetailPresentation();
+  }
+
+  void _selectList(String? id) {
+    final smart = id == 'inbox' ? SmartList.inbox : SmartList.all;
+    if (smart == _smart && id == _listId) return;
+    final hadTaskSelection = _selectedTaskId != null;
+    setState(() {
+      _smart = smart;
+      _listId = id;
+      _selectedTaskId = null;
+    });
+    if (hadTaskSelection) _dismissDetailPresentation();
+  }
+
+  void _selectTask(String taskId) {
+    final profile = todoWorkspaceProfileForWidth(
+      MediaQuery.sizeOf(context).width,
+    );
+    if (taskId == _selectedTaskId) {
+      _presentTask(taskId, profile);
+      return;
+    }
+    setState(() => _selectedTaskId = taskId);
+    _presentTask(taskId, profile);
+  }
+
+  void _invalidateTaskSelection(String taskId) {
+    if (taskId != _selectedTaskId) return;
+    setState(() => _selectedTaskId = null);
+    _dismissDetailPresentation();
+  }
+
+  void _clearTaskSelection() {
+    if (_selectedTaskId == null) return;
+    setState(() => _selectedTaskId = null);
+    _dismissDetailPresentation();
+  }
+
+  void _handleDetailDrawerChanged(TodoWorkspaceProfile profile, bool isOpen) {
+    if (isOpen || profile != _layoutProfile || _selectedTaskId == null) return;
+    _detailPresentationGeneration++;
+    setState(() => _selectedTaskId = null);
+  }
+
+  void _syncLayoutProfile(TodoWorkspaceProfile profile) {
+    final previous = _layoutProfile;
+    if (previous == profile) return;
+    _layoutProfile = profile;
+    final selectedTaskId = _selectedTaskId;
+    if (selectedTaskId == null) {
+      if (profile != TodoWorkspaceProfile.mobile) {
+        _dismissMobileDetail(preserveSelection: true);
+      }
+      return;
+    }
+    _presentTask(selectedTaskId, profile);
+  }
+
+  void _presentTask(String taskId, TodoWorkspaceProfile profile) {
+    final generation = ++_detailPresentationGeneration;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          generation != _detailPresentationGeneration ||
+          _selectedTaskId != taskId ||
+          _layoutProfile != profile) {
+        return;
+      }
+      switch (profile) {
+        case TodoWorkspaceProfile.wide:
+          _dismissMobileDetail(preserveSelection: true);
+          return;
+        case TodoWorkspaceProfile.compact:
+        case TodoWorkspaceProfile.tablet:
+          _dismissMobileDetail(preserveSelection: true);
+          final scaffold = _workspaceScaffoldKey.currentState;
+          if (scaffold != null && !scaffold.isEndDrawerOpen) {
+            scaffold.openEndDrawer();
+          }
+          return;
+        case TodoWorkspaceProfile.mobile:
+          unawaited(_openMobileDetail(taskId));
+          return;
+      }
+    });
+  }
+
+  Future<void> _openMobileDetail(String taskId) async {
+    if (_mobileDetailRoute != null) return;
+    final route = MaterialPageRoute<void>(
+      settings: RouteSettings(name: 'todo-task-detail-$taskId'),
+      builder: (_) => _MobileTaskDetailRoute(
+        taskId: taskId,
+        onLeaveMobile: () => _dismissMobileDetail(preserveSelection: true),
+      ),
+    );
+    _mobileDetailRoute = route;
+    await Navigator.of(context).push(route);
+    if (!identical(_mobileDetailRoute, route)) return;
+    final preserveSelection = _preserveSelectionWhenMobileRouteCloses;
+    _mobileDetailRoute = null;
+    _mobileDetailDismissInProgress = false;
+    _preserveSelectionWhenMobileRouteCloses = false;
+    if (!mounted || preserveSelection || _selectedTaskId != taskId) return;
+    setState(() => _selectedTaskId = null);
+  }
+
+  void _dismissDetailPresentation() {
+    _detailPresentationGeneration++;
+    final scaffold = _workspaceScaffoldKey.currentState;
+    if (scaffold?.isEndDrawerOpen ?? false) scaffold!.closeEndDrawer();
+    _dismissMobileDetail(preserveSelection: false);
+  }
+
+  void _dismissMobileDetail({required bool preserveSelection}) {
+    final route = _mobileDetailRoute;
+    if (route == null || _mobileDetailDismissInProgress) return;
+    _mobileDetailDismissInProgress = true;
+    _preserveSelectionWhenMobileRouteCloses = preserveSelection;
+    Navigator.of(context).removeRoute(route);
+  }
 
   void _openTags() {
     Navigator.of(
@@ -151,19 +290,28 @@ class _HomeShellState extends ConsumerState<HomeShell>
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        return TickTickWorkspace(
+        final profile = todoWorkspaceProfileForWidth(width);
+        _syncLayoutProfile(profile);
+        return TodoWorkspace(
           width: width,
           section: _section,
           smart: _smart,
           listId: _listId,
           content: _buildContent(),
+          detail: TaskDetailPane(
+            taskId: _selectedTaskId,
+            embedded: true,
+            onClose: _clearTaskSelection,
+            onUnavailable: _invalidateTaskSelection,
+          ),
           onSelectSection: _selectSection,
           onSelectSmart: _selectSmart,
           onSelectList: _selectList,
           onOpenTags: _openTags,
           onOpenFilters: _openFilters,
           onOpenSettings: _openSettings,
-          onQuickAdd: _quickAdd,
+          scaffoldKey: _workspaceScaffoldKey,
+          onDetailDrawerChanged: _handleDetailDrawerChanged,
         );
       },
     );
@@ -215,12 +363,63 @@ class _HomeShellState extends ConsumerState<HomeShell>
       );
     }
     return TasksByListPage(
+      title: _taskPaneTitle,
       hideAppBar: true,
       lockedListId: true,
       initialListId: _effectiveListId,
       initialDueRange: _dueRange,
       initialCompleted: _smart == SmartList.completed ? true : null,
+      selectedTaskId: _selectedTaskId,
+      onTaskSelected: _selectTask,
+      onSelectionInvalidated: _invalidateTaskSelection,
+      onQuickAdd: _quickAdd,
     );
+  }
+
+  String get _taskPaneTitle {
+    final listId = _effectiveListId;
+    if (listId == 'inbox') return SmartList.inbox.label;
+    if (listId != null) return '清单';
+    return _smart.label;
+  }
+}
+
+class _MobileTaskDetailRoute extends StatefulWidget {
+  const _MobileTaskDetailRoute({
+    required this.taskId,
+    required this.onLeaveMobile,
+  });
+
+  final String taskId;
+  final VoidCallback onLeaveMobile;
+
+  @override
+  State<_MobileTaskDetailRoute> createState() => _MobileTaskDetailRouteState();
+}
+
+class _MobileTaskDetailRouteState extends State<_MobileTaskDetailRoute> {
+  bool _exitScheduled = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = todoWorkspaceProfileForWidth(
+      MediaQuery.sizeOf(context).width,
+    );
+    if (profile != TodoWorkspaceProfile.mobile && !_exitScheduled) {
+      _exitScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final currentProfile = todoWorkspaceProfileForWidth(
+          MediaQuery.sizeOf(context).width,
+        );
+        if (currentProfile == TodoWorkspaceProfile.mobile) {
+          _exitScheduled = false;
+          return;
+        }
+        widget.onLeaveMobile();
+      });
+    }
+    return TaskDetailPage(taskId: widget.taskId);
   }
 }
 

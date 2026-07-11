@@ -23,11 +23,13 @@ class KanbanView extends ConsumerWidget {
     super.key,
     required this.tasks,
     this.listId,
+    this.onTaskSelected,
   });
 
   /// 渲染用的任务列表（已应用 list/filter 的客户端过滤结果）。
   final List<TodoTask> tasks;
   final String? listId;
+  final ValueChanged<String>? onTaskSelected;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -80,7 +82,12 @@ class KanbanView extends ConsumerWidget {
     );
   }
 
-  static void _openDetail(BuildContext context, TodoTask t) {
+  void _openDetail(BuildContext context, TodoTask t) {
+    final callback = onTaskSelected;
+    if (callback != null) {
+      callback(t.id);
+      return;
+    }
     showTaskDetailSheet(context, t.id);
   }
 
@@ -156,7 +163,9 @@ class _KanbanColumn extends StatelessWidget {
                   const Spacer(),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 2),
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: data.color.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
@@ -164,7 +173,9 @@ class _KanbanColumn extends StatelessWidget {
                     child: Text(
                       '${data.tasks.length}',
                       style: TextStyle(
-                          fontSize: 11, color: colors.mutedForeground),
+                        fontSize: 11,
+                        color: colors.mutedForeground,
+                      ),
                     ),
                   ),
                   if (onAdd != null)
@@ -233,7 +244,9 @@ class _KanbanCard extends StatelessWidget {
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w500,
-              color: task.completed ? colors.mutedForeground : colors.foreground,
+              color: task.completed
+                  ? colors.mutedForeground
+                  : colors.foreground,
               decoration: task.completed ? TextDecoration.lineThrough : null,
             ),
             maxLines: 2,
@@ -242,10 +255,7 @@ class _KanbanCard extends StatelessWidget {
           const SizedBox(height: 6),
           Row(
             children: [
-              AppTag(
-                label: priorityLabel(task.priority),
-                color: accent,
-              ),
+              AppTag(label: priorityLabel(task.priority), color: accent),
               const Spacer(),
               if (task.dueAt != null)
                 Text(

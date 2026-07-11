@@ -4,7 +4,7 @@
 ///
 /// **测试安全**：所有平台通道调用均用 `try/catch` 包裹；在测试环境（无
 /// no-op 实现）下任何调用都不会抛异常、也不调度真实定时器。
-library local_notification_service;
+library;
 
 /// **延迟展示的实现取舍**：持久化跨重启的 OS 级定时需要引入 `timezone` 包
 /// （TZDateTime）；本轮最小交付版本采用内存 `Timer` 延迟触发，App 仍在前台
@@ -81,18 +81,18 @@ class LocalNotificationService {
   }
 
   Future<NotificationDetails> get _details => Future.value(
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            ReminderChannel.id,
-            ReminderChannel.name,
-            channelDescription: ReminderChannel.description,
-            importance: Importance.max,
-            priority: Priority.high,
-            ongoing: true,
-          ),
-          iOS: DarwinNotificationDetails(presentAlert: true),
-        ),
-      );
+    const NotificationDetails(
+      android: AndroidNotificationDetails(
+        ReminderChannel.id,
+        ReminderChannel.name,
+        channelDescription: ReminderChannel.description,
+        importance: Importance.max,
+        priority: Priority.high,
+        ongoing: true,
+      ),
+      iOS: DarwinNotificationDetails(presentAlert: true),
+    ),
+  );
 
   /// 立即展示一条提醒通知。[id] 通常取服务端 reminderId，保证可去重。
   Future<void> show({
@@ -151,5 +151,6 @@ class LocalNotificationService {
 }
 
 /// 全局本地通知服务单例。
-final localNotificationServiceProvider =
-    Provider<LocalNotificationService>((ref) => LocalNotificationService());
+final localNotificationServiceProvider = Provider<LocalNotificationService>(
+  (ref) => LocalNotificationService(),
+);

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
+import 'package:zh_cloud_todo_flutter/core/theme/app_theme.dart';
 import 'package:zh_cloud_todo_flutter/features/task/view_mode.dart';
 import 'package:zh_cloud_todo_flutter/features/task/views/eisenhower_view.dart';
 import 'package:zh_cloud_todo_flutter/features/task/views/task_view_mode_tabs.dart';
@@ -39,7 +40,10 @@ void main() {
     });
 
     test('Q1: priority>=2 且 due 已过期', () {
-      final t = build(priority: 3, dueAt: now.subtract(const Duration(hours: 1)));
+      final t = build(
+        priority: 3,
+        dueAt: now.subtract(const Duration(hours: 1)),
+      );
       expect(classifyEisenhower(t, now), Quadrant.q1);
     });
 
@@ -173,4 +177,137 @@ void main() {
       expect(find.text(label), findsOneWidget);
     }
   });
+
+  testWidgets(
+    'EisenhowerView dark quadrants keep title and body contrast at least 4.5',
+    (tester) async {
+      final now = DateTime(2026, 6, 20, 12);
+      final tasks = _quadrantTasks(now);
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            theme: ThemeData.dark().copyWith(
+              extensions: const [AppThemeExtension(AppColors.dark)],
+            ),
+            home: Scaffold(
+              body: EisenhowerView(tasks: tasks, now: now),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final quadrantContent = <String, String>{
+        'Q1 · 重要且紧急': '紧急且重要',
+        'Q2 · 重要不紧急': '重要不紧急',
+        'Q3 · 紧急不重要': '紧急不重要',
+        'Q4 · 不紧急不重要': '不重要不紧急',
+      };
+      final contrastRatios = <String, double>{};
+
+      for (final entry in quadrantContent.entries) {
+        final background = _visibleQuadrantBackground(tester, entry.key);
+        final titleColor = tester
+            .widget<Text>(find.text(entry.key))
+            .style!
+            .color!;
+        final bodyColor = tester
+            .widget<Text>(find.text(entry.value))
+            .style!
+            .color!;
+        contrastRatios['${entry.key} title'] = _contrastRatio(
+          titleColor,
+          background,
+        );
+        contrastRatios['${entry.key} body'] = _contrastRatio(
+          bodyColor,
+          background,
+        );
+      }
+
+      final unreadable = Map.fromEntries(
+        contrastRatios.entries.where((entry) => entry.value < 4.5),
+      );
+      expect(
+        unreadable,
+        isEmpty,
+        reason: '深色主题象限的普通文本对比度需 >= 4.5；实测 $contrastRatios',
+      );
+    },
+  );
+}
+
+List<TodoTask> _quadrantTasks(DateTime now) {
+  return [
+    TodoTask(
+      id: 'dark-q1',
+      listId: '1',
+      title: '紧急且重要',
+      priority: 2,
+      isPinned: false,
+      sortOrder: 0,
+      completed: false,
+      dueAt: now.add(const Duration(hours: 1)),
+      updatedAt: now,
+      createdAt: now,
+    ),
+    TodoTask(
+      id: 'dark-q2',
+      listId: '1',
+      title: '重要不紧急',
+      priority: 3,
+      isPinned: false,
+      sortOrder: 0,
+      completed: false,
+      dueAt: now.add(const Duration(days: 5)),
+      updatedAt: now,
+      createdAt: now,
+    ),
+    TodoTask(
+      id: 'dark-q3',
+      listId: '1',
+      title: '紧急不重要',
+      priority: 0,
+      isPinned: false,
+      sortOrder: 0,
+      completed: false,
+      dueAt: now.add(const Duration(hours: 2)),
+      updatedAt: now,
+      createdAt: now,
+    ),
+    TodoTask(
+      id: 'dark-q4',
+      listId: '1',
+      title: '不重要不紧急',
+      priority: 0,
+      isPinned: false,
+      sortOrder: 0,
+      completed: false,
+      updatedAt: now,
+      createdAt: now,
+    ),
+  ];
+}
+
+Color _visibleQuadrantBackground(WidgetTester tester, String title) {
+  final surface = find.ancestor(
+    of: find.text(title),
+    matching: find.byWidgetPredicate(
+      (widget) => widget is Material && widget.borderRadius != null,
+    ),
+  );
+  expect(surface, findsOneWidget);
+  return tester.widget<Material>(surface).color!;
+}
+
+double _contrastRatio(Color foreground, Color background) {
+  final foregroundLuminance = foreground.computeLuminance();
+  final backgroundLuminance = background.computeLuminance();
+  final lighter = foregroundLuminance > backgroundLuminance
+      ? foregroundLuminance
+      : backgroundLuminance;
+  final darker = foregroundLuminance > backgroundLuminance
+      ? backgroundLuminance
+      : foregroundLuminance;
+  return (lighter + 0.05) / (darker + 0.05);
 }

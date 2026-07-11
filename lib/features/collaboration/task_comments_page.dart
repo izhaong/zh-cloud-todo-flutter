@@ -19,28 +19,25 @@ class TaskCommentsState {
 }
 
 /// 拉取任务评论列表。
-final taskCommentsProvider =
-    FutureProvider.family.autoDispose<TaskCommentsState, int>((
-  ref,
-  taskServerId,
-) async {
-  final api = ref.watch(todoApiProvider).comment;
-  try {
-    final list = await api.list(taskServerId);
-    list.sort((a, b) {
-      final at = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-      final bt = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-      return at.compareTo(bt);
+final taskCommentsProvider = FutureProvider.family
+    .autoDispose<TaskCommentsState, int>((ref, taskServerId) async {
+      final api = ref.watch(todoApiProvider).comment;
+      try {
+        final list = await api.list(taskServerId);
+        list.sort((a, b) {
+          final at = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final bt = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return at.compareTo(bt);
+        });
+        return TaskCommentsState(loading: false, items: list);
+      } catch (e) {
+        return TaskCommentsState(
+          loading: false,
+          items: const [],
+          error: e.toString(),
+        );
+      }
     });
-    return TaskCommentsState(loading: false, items: list);
-  } catch (e) {
-    return TaskCommentsState(
-      loading: false,
-      items: const [],
-      error: e.toString(),
-    );
-  }
-});
 
 /// 任务评论页：列表 + 新增 + 编辑。
 class TaskCommentsPage extends ConsumerStatefulWidget {
@@ -247,7 +244,7 @@ class _TaskCommentsPageState extends ConsumerState<TaskCommentsPage> {
         return ListView.separated(
           padding: const EdgeInsets.all(8),
           itemCount: s.items.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 6),
+          separatorBuilder: (_, _) => const SizedBox(height: 6),
           itemBuilder: (_, i) {
             final c = s.items[i];
             return _CommentTile(
@@ -304,7 +301,10 @@ class _CommentTile extends StatelessWidget {
                 Text(
                   comment.createdAt == null
                       ? ''
-                      : comment.createdAt!.toLocal().toString().substring(0, 16),
+                      : comment.createdAt!.toLocal().toString().substring(
+                          0,
+                          16,
+                        ),
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
@@ -314,22 +314,14 @@ class _CommentTile extends StatelessWidget {
               TextField(
                 controller: editController,
                 autofocus: true,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                ),
+                decoration: const InputDecoration(border: OutlineInputBorder()),
               ),
               const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  TextButton(
-                    onPressed: onCancelEdit,
-                    child: const Text('取消'),
-                  ),
-                  FilledButton(
-                    onPressed: onSaveEdit,
-                    child: const Text('保存'),
-                  ),
+                  TextButton(onPressed: onCancelEdit, child: const Text('取消')),
+                  FilledButton(onPressed: onSaveEdit, child: const Text('保存')),
                 ],
               ),
             ] else ...[

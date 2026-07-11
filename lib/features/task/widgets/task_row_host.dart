@@ -2,16 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/app_database.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/brand_colors.dart';
 import '../../../state/providers.dart';
-import '../task_detail_page.dart';
 import 'task_row.dart';
 
-/// 任务行 + 滑动手势（左滑完成 / 右滑更多）+ 数据组装。
-///
-/// 把本地仓库的 [TodoTask] + 关联标签 / 子任务数 组装成 [TaskRowData]，复用
-/// 品牌化 [TaskRow]；并通过 [Dismissible] 提供两端滑动交互。
+/// Provider-aware adapter that assembles row data and reports task actions.
 class TaskRowHost extends ConsumerStatefulWidget {
   const TaskRowHost({
     super.key,
@@ -20,6 +15,8 @@ class TaskRowHost extends ConsumerStatefulWidget {
     this.enableSwipeGestures = true,
     this.desktopMode = false,
     this.reorderIndex,
+    this.selected = false,
+    this.onTap,
   });
 
   final TodoTask task;
@@ -27,119 +24,145 @@ class TaskRowHost extends ConsumerStatefulWidget {
   final bool enableSwipeGestures;
   final bool desktopMode;
   final int? reorderIndex;
+  final bool selected;
+  final ValueChanged<String>? onTap;
 
   @override
   ConsumerState<TaskRowHost> createState() => _TaskRowHostState();
 }
 
 class _TaskRowHostState extends ConsumerState<TaskRowHost> {
+  late final FocusNode _focusNode;
   bool _hovered = false;
+  bool _focused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = FocusNode(debugLabel: 'task-row-${widget.task.id}');
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = brandColors(context);
     final tagRepo = ref.watch(tagRepositoryProvider);
     final taskRepo = ref.watch(taskRepositoryProvider);
+    final now = ref.watch(currentDateTimeProvider)();
+    final showContextActions =
+        widget.desktopMode && (_hovered || _focused || widget.selected);
 
-    return MouseRegion(
-      onEnter: widget.desktopMode
-          ? (_) => setState(() => _hovered = true)
-          : null,
-      onExit: widget.desktopMode
-          ? (_) => setState(() => _hovered = false)
-          : null,
-      cursor: widget.desktopMode ? SystemMouseCursors.click : MouseCursor.defer,
-      child: StreamBuilder<List<TodoTag>>(
-        stream:
-            tagRepo?.watchTagsOfTask(widget.task.id) ?? const Stream.empty(),
-        builder: (ctx, tagSnap) {
-          final tagNames = (tagSnap.data ?? const <TodoTag>[])
-              .map((t) => t.name)
-              .toList();
+    return Focus(
+      key: Key('task-row-focus-${widget.task.id}'),
+      focusNode: _focusNode,
+      onFocusChange: (focused) => setState(() => _focused = focused),
+      child: MouseRegion(
+        onEnter: widget.desktopMode
+            ? (_) => setState(() => _hovered = true)
+            : null,
+        onExit: widget.desktopMode
+            ? (_) => setState(() => _hovered = false)
+            : null,
+        cursor: widget.desktopMode
+            ? SystemMouseCursors.click
+            : MouseCursor.defer,
+        child: StreamBuilder<List<TodoTag>>(
+          stream:
+              tagRepo?.watchTagsOfTask(widget.task.id) ?? const Stream.empty(),
+          builder: (context, tagSnapshot) {
+            final tagNames = (tagSnapshot.data ?? const <TodoTag>[])
+                .map((tag) => tag.name)
+                .toList();
 
-          return StreamBuilder<List<TodoTask>>(
-            stream:
-                taskRepo?.watchChildrenOf(widget.task.id) ??
-                const Stream.empty(),
-            builder: (ctx, childSnap) {
-              final subtaskCount = childSnap.data?.length ?? 0;
-              final dragHandle =
-                  widget.desktopMode && _hovered && widget.reorderIndex != null
-                  ? ReorderableDragStartListener(
-                      index: widget.reorderIndex!,
-                      child: Tooltip(
-                        message: '拖动排序',
-                        child: Icon(
-                          Icons.drag_indicator,
-                          size: 18,
-                          color: colors.mutedForeground,
+            return StreamBuilder<List<TodoTask>>(
+              stream:
+                  taskRepo?.watchChildrenOf(widget.task.id) ??
+                  const Stream.empty(),
+              builder: (context, childSnapshot) {
+                final dragHandle =
+                    showContextActions && widget.reorderIndex != null
+                    ? ReorderableDragStartListener(
+                        index: widget.reorderIndex!,
+                        child: Tooltip(
+                          message: '拖动排序',
+                          child: Icon(
+                            Icons.drag_indicator,
+                            size: 18,
+                            color: colors.mutedForeground,
+                          ),
                         ),
-                      ),
-                    )
-                  : null;
-              final data = TaskRowData(
-                id: widget.task.id,
-                title: widget.task.title,
-                completed: widget.task.completed,
-                isPinned: widget.task.isPinned,
-                priority: widget.task.priority,
-                dueAt: widget.task.dueAt,
-                subtaskCount: subtaskCount,
-                tagNames: tagNames,
-                listColor: widget.listColor,
-              );
+                      )
+                    : null;
+                final data = TaskRowData(
+                  id: widget.task.id,
+                  title: widget.task.title,
+                  completed: widget.task.completed,
+                  isPinned: widget.task.isPinned,
+                  priority: widget.task.priority,
+                  dueAt: widget.task.dueAt,
+                  subtaskCount: childSnapshot.data?.length ?? 0,
+                  tagNames: tagNames,
+                  listColor: widget.listColor,
+                );
 
-              final row = TaskRow(
-                data: data,
-                desktopMode: widget.desktopMode,
-                hovered: _hovered,
-                dragHandle: dragHandle,
-                onMore: widget.desktopMode
-                    ? () => _showMoreMenu(context)
-                    : null,
-                onToggleComplete: () {
-                  taskRepo?.toggleComplete(widget.task.id);
-                },
-                onPin: () {
-                  taskRepo?.togglePin(widget.task.id);
-                },
-                onTap: () => showTaskDetailSheet(context, widget.task.id),
-              );
+                final row = TaskRow(
+                  data: data,
+                  desktopMode: widget.desktopMode,
+                  hovered: _hovered,
+                  focused: _focused,
+                  selected: widget.selected,
+                  now: now,
+                  dragHandle: dragHandle,
+                  onMore: widget.desktopMode
+                      ? () => _showMoreMenu(context)
+                      : null,
+                  onToggleComplete: () {
+                    taskRepo?.toggleComplete(widget.task.id);
+                  },
+                  onPin: () {
+                    taskRepo?.togglePin(widget.task.id);
+                  },
+                  onTap: () => widget.onTap?.call(widget.task.id),
+                );
 
-              if (!widget.enableSwipeGestures) return row;
-              return Dismissible(
-                key: ValueKey('task-${widget.task.id}'),
-                direction: DismissDirection.horizontal,
-                // 背景：左滑 = 完成
-                background: _SwipeBg(
-                  alignment: Alignment.centerLeft,
-                  icon: widget.task.completed ? Icons.undo : Icons.check_circle,
-                  label: widget.task.completed ? '取消完成' : '完成',
-                  color: colors.success,
-                ),
-                // 二次背景：右滑 = 更多
-                secondaryBackground: _SwipeBg(
-                  alignment: Alignment.centerRight,
-                  icon: Icons.more_horiz,
-                  label: '更多',
-                  color: colors.accent,
-                ),
-                confirmDismiss: (dir) async {
-                  if (taskRepo == null) return false;
-                  if (dir == DismissDirection.startToEnd) {
-                    // 左滑 → 切换完成
-                    await taskRepo.toggleComplete(widget.task.id);
-                    return false; // 不真正删除行，只切换状态
-                  }
-                  // 右滑 → 更多
-                  await _showMoreMenu(context);
-                  return false;
-                },
-                child: row,
-              );
-            },
-          );
-        },
+                if (!widget.enableSwipeGestures) return row;
+                return Dismissible(
+                  key: ValueKey('task-${widget.task.id}'),
+                  direction: DismissDirection.horizontal,
+                  background: _SwipeBackground(
+                    alignment: Alignment.centerLeft,
+                    icon: widget.task.completed
+                        ? Icons.undo
+                        : Icons.check_circle,
+                    label: widget.task.completed ? '取消完成' : '完成',
+                    color: colors.success,
+                  ),
+                  secondaryBackground: _SwipeBackground(
+                    alignment: Alignment.centerRight,
+                    icon: Icons.more_horiz,
+                    label: '更多',
+                    color: colors.accent,
+                  ),
+                  confirmDismiss: (direction) async {
+                    if (taskRepo == null) return false;
+                    if (direction == DismissDirection.startToEnd) {
+                      await taskRepo.toggleComplete(widget.task.id);
+                      return false;
+                    }
+                    await _showMoreMenu(context);
+                    return false;
+                  },
+                  child: row,
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }
@@ -148,14 +171,14 @@ class _TaskRowHostState extends ConsumerState<TaskRowHost> {
     final colors = brandColors(context);
     await showModalBottomSheet<void>(
       context: context,
-      builder: (ctx) => SafeArea(
+      builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
               leading: Icon(Icons.delete_outline, color: colors.destructive),
               title: const Text('删除'),
-              onTap: () => Navigator.pop(ctx),
+              onTap: () => Navigator.pop(sheetContext),
             ),
             ListTile(
               leading: Icon(
@@ -163,17 +186,17 @@ class _TaskRowHostState extends ConsumerState<TaskRowHost> {
                 color: colors.accent,
               ),
               title: const Text('移动到清单'),
-              onTap: () => Navigator.pop(ctx),
+              onTap: () => Navigator.pop(sheetContext),
             ),
             ListTile(
               leading: Icon(Icons.alarm_add_outlined, color: colors.accent),
               title: const Text('设置提醒'),
-              onTap: () => Navigator.pop(ctx),
+              onTap: () => Navigator.pop(sheetContext),
             ),
             ListTile(
               leading: Icon(Icons.label_outline, color: colors.accent),
               title: const Text('编辑标签'),
-              onTap: () => Navigator.pop(ctx),
+              onTap: () => Navigator.pop(sheetContext),
             ),
           ],
         ),
@@ -182,8 +205,8 @@ class _TaskRowHostState extends ConsumerState<TaskRowHost> {
   }
 }
 
-class _SwipeBg extends StatelessWidget {
-  const _SwipeBg({
+class _SwipeBackground extends StatelessWidget {
+  const _SwipeBackground({
     required this.alignment,
     required this.icon,
     required this.label,
@@ -197,27 +220,26 @@ class _SwipeBg extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final left = alignment == Alignment.centerLeft;
+    final alignLeft = alignment == Alignment.centerLeft;
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+      color: color,
+      padding: EdgeInsets.only(
+        left: alignLeft ? 20 : 0,
+        right: alignLeft ? 0 : 20,
       ),
-      padding: EdgeInsets.only(left: left ? 20 : 0, right: left ? 0 : 20),
       alignment: alignment,
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: left
+        mainAxisAlignment: alignLeft
             ? MainAxisAlignment.start
             : MainAxisAlignment.end,
         children: [
-          if (left) ...[
+          if (alignLeft) ...[
             Icon(icon, color: Colors.white, size: 22),
             const SizedBox(width: 6),
-            _label(),
+            _labelWidget(),
           ] else ...[
-            _label(),
+            _labelWidget(),
             const SizedBox(width: 6),
             Icon(icon, color: Colors.white, size: 22),
           ],
@@ -226,7 +248,7 @@ class _SwipeBg extends StatelessWidget {
     );
   }
 
-  Widget _label() => Text(
+  Widget _labelWidget() => Text(
     label,
     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
   );

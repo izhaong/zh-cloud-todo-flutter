@@ -1,11 +1,10 @@
-/// widget 测试：用 FakeApi + ProviderContainer 覆写后端 provider，验证新页面渲染。
+// widget 测试：用 FakeApi + ProviderContainer 覆写后端 provider，验证新页面渲染。
 import 'package:dio/dio.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:zh_cloud_todo_flutter/core/api/api_client.dart';
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/features/collaboration/list_member_page.dart';
 import 'package:zh_cloud_todo_flutter/features/collaboration/task_assign_page.dart';
@@ -31,20 +30,21 @@ class _FakeApiClient extends ApiClient {
 
   @override
   Future<Response<T>> post<T>(String path, {Object? data}) async => Response<T>(
-        data: const {'code': 0, 'data': <String, Object>{}} as T,
-        statusCode: 200,
-        requestOptions: RequestOptions(path: path),
-      );
+    data: const {'code': 0, 'data': <String, Object>{}} as T,
+    statusCode: 200,
+    requestOptions: RequestOptions(path: path),
+  );
 
   @override
   Future<Response<T>> put<T>(String path, {Object? data}) async => Response<T>(
-        data: const {'code': 0, 'data': <String, Object>{}} as T,
-        statusCode: 200,
-        requestOptions: RequestOptions(path: path),
-      );
+    data: const {'code': 0, 'data': <String, Object>{}} as T,
+    statusCode: 200,
+    requestOptions: RequestOptions(path: path),
+  );
 
   @override
-  Future<Response<T>> delete<T>(String path, {Object? data}) async => Response<T>(
+  Future<Response<T>> delete<T>(String path, {Object? data}) async =>
+      Response<T>(
         data: const {'code': 0, 'data': <String, Object>{}} as T,
         statusCode: 200,
         requestOptions: RequestOptions(path: path),
@@ -54,12 +54,12 @@ class _FakeApiClient extends ApiClient {
 class _FakeSession extends SessionController {
   @override
   TodoAuthSession? build() => const TodoAuthSession(
-        userId: 1,
-        accessToken: 'test-token',
-        refreshToken: 'test-refresh',
-        tenantId: '1',
-        mobile: '18800000000',
-      );
+    userId: 1,
+    accessToken: 'test-token',
+    refreshToken: 'test-refresh',
+    tenantId: '1',
+    mobile: '18800000000',
+  );
 }
 
 ProviderContainer _containerWith(ApiClient client, AppDatabase db) {

@@ -63,11 +63,7 @@ class TagPage extends ConsumerWidget {
     await repo.create(name: result.$1, color: result.$2);
   }
 
-  Future<void> _edit(
-    BuildContext context,
-    WidgetRef ref,
-    TodoTag tag,
-  ) async {
+  Future<void> _edit(BuildContext context, WidgetRef ref, TodoTag tag) async {
     final result = await _promptNameColor(
       context,
       initialName: tag.name,
@@ -79,11 +75,7 @@ class TagPage extends ConsumerWidget {
     await repo.update(tag.id, name: result.$1, color: result.$2);
   }
 
-  Future<void> _delete(
-    BuildContext context,
-    WidgetRef ref,
-    TodoTag tag,
-  ) async {
+  Future<void> _delete(BuildContext context, WidgetRef ref, TodoTag tag) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(

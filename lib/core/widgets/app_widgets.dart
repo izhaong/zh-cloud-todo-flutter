@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 import '../theme/brand_colors.dart';
+import '../theme/todo_layout_tokens.dart';
 
 /// 品牌化卡片：替换 Material 默认 Card。
 /// 圆角 12 + 细微边框 + 底阴影，背景纯白（surface）。
@@ -30,12 +31,14 @@ class AppCard extends StatelessWidget {
         color: colors.surface,
         borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(
-          color: hovered ? colors.accent.withOpacity(0.28) : colors.border,
+          color: hovered
+              ? colors.accent.withValues(alpha: 0.28)
+              : colors.border,
           width: hovered ? 0.9 : 0.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(hovered ? 0.06 : 0.03),
+            color: Colors.black.withValues(alpha: hovered ? 0.06 : 0.03),
             blurRadius: hovered ? 10 : 6,
             offset: const Offset(0, 2),
           ),
@@ -57,33 +60,62 @@ class AppCard extends StatelessWidget {
 
 /// 品牌化圆形 checkbox（带填充动画），替换 Material 默认 Checkbox。
 class AppCheckbox extends StatelessWidget {
-  const AppCheckbox({super.key, required this.value, required this.onChanged});
+  const AppCheckbox({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    this.visualSize = 22,
+    this.tapTargetSize = 22,
+    this.strokeWidth = 1.5,
+  }) : assert(visualSize > 0),
+       assert(tapTargetSize >= visualSize),
+       assert(strokeWidth > 0);
 
   final bool value;
   final ValueChanged<bool>? onChanged;
+  final double visualSize;
+  final double tapTargetSize;
+  final double strokeWidth;
 
   @override
   Widget build(BuildContext context) {
     final colors = brandColors(context);
-    return InkWell(
-      onTap: onChanged == null ? null : () => onChanged!(!value),
-      customBorder: const CircleBorder(),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOutCubic,
-        width: 22,
-        height: 22,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: value ? colors.accent : Colors.transparent,
-          border: Border.all(
-            color: value ? colors.accent : colors.mutedForeground,
-            width: 1.5,
+    final toggle = onChanged == null ? null : () => onChanged!(!value);
+    return Semantics(
+      key: const Key('app-checkbox-semantics'),
+      checked: value,
+      enabled: onChanged != null,
+      onTap: toggle,
+      child: SizedBox.square(
+        dimension: tapTargetSize,
+        child: InkWell(
+          onTap: toggle,
+          excludeFromSemantics: true,
+          customBorder: const CircleBorder(),
+          child: Center(
+            child: AnimatedContainer(
+              duration: TodoLayoutTokens.stateTransitionDurationFor(context),
+              curve: Curves.easeOutCubic,
+              width: visualSize,
+              height: visualSize,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: value ? colors.accent : Colors.transparent,
+                border: Border.all(
+                  color: value ? colors.accent : colors.mutedForeground,
+                  width: strokeWidth,
+                ),
+              ),
+              child: value
+                  ? Icon(
+                      Icons.check,
+                      size: visualSize * 7 / 11,
+                      color: colors.accentForeground,
+                    )
+                  : null,
+            ),
           ),
         ),
-        child: value
-            ? Icon(Icons.check, size: 14, color: colors.accentForeground)
-            : null,
       ),
     );
   }
@@ -154,7 +186,7 @@ class AppTag extends StatelessWidget {
         vertical: 2,
       ),
       decoration: BoxDecoration(
-        color: c.withOpacity(0.12),
+        color: c.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Row(
@@ -198,7 +230,7 @@ class AppChip extends StatelessWidget {
       label: Text(label),
       selected: selected,
       onSelected: onSelected,
-      selectedColor: colors.accent.withOpacity(0.12),
+      selectedColor: colors.accent.withValues(alpha: 0.12),
       checkmarkColor: colors.accent,
       labelStyle: TextStyle(
         color: selected ? colors.accent : colors.foreground,

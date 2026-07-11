@@ -20,11 +20,16 @@ import '../task_detail_page.dart';
 ///   - [resolveTaskDate] 取单个任务落点日期
 ///   - [buildMonthGrid] 生成月模式网格
 class CalendarView extends ConsumerStatefulWidget {
-  const CalendarView({super.key, required this.tasks, DateTime? now})
-      : _now = now;
+  const CalendarView({
+    super.key,
+    required this.tasks,
+    DateTime? now,
+    this.onTaskSelected,
+  }) : _now = now;
 
   final DateTime? _now;
   final List<TodoTask> tasks;
+  final ValueChanged<String>? onTaskSelected;
 
   @override
   ConsumerState<CalendarView> createState() => _CalendarViewState();
@@ -57,29 +62,29 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
         Expanded(
           child: switch (_mode) {
             CalendarMode.month => _MonthGrid(
-                anchor: _anchor,
-                tasks: widget.tasks,
-                onDayTap: (d) => _showDayTasks(context, d),
-              ),
+              anchor: _anchor,
+              tasks: widget.tasks,
+              onDayTap: (d) => _showDayTasks(context, d),
+            ),
             CalendarMode.week => _WeekView(
-                anchor: _anchor,
-                tasks: widget.tasks,
-                onTaskTap: (t) => _openDetail(context, t),
-              ),
+              anchor: _anchor,
+              tasks: widget.tasks,
+              onTaskTap: (t) => _openDetail(context, t),
+            ),
             CalendarMode.year => _YearView(
-                anchor: _anchor,
-                tasks: widget.tasks,
-                onMonthTap: (m) {
-                  setState(() {
-                    _mode = CalendarMode.month;
-                    _anchor = DateTime(_anchor.year, m, 1);
-                  });
-                },
-              ),
+              anchor: _anchor,
+              tasks: widget.tasks,
+              onMonthTap: (m) {
+                setState(() {
+                  _mode = CalendarMode.month;
+                  _anchor = DateTime(_anchor.year, m, 1);
+                });
+              },
+            ),
             CalendarMode.list => _ListView(
-                tasks: widget.tasks,
-                onTaskTap: (t) => _openDetail(context, t),
-              ),
+              tasks: widget.tasks,
+              onTaskTap: (t) => _openDetail(context, t),
+            ),
           },
         ),
       ],
@@ -104,22 +109,29 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
   }
 
   void _openDetail(BuildContext context, TodoTask t) {
+    final callback = widget.onTaskSelected;
+    if (callback != null) {
+      callback(t.id);
+      return;
+    }
     showTaskDetailSheet(context, t.id);
   }
 
   Future<void> _showDayTasks(BuildContext context, DateTime day) async {
-    final dayTasks = widget.tasks
-        .where((t) {
-          final d = resolveTaskDate(t);
-          if (d == null) return false;
-          return d.year == day.year && d.month == day.month && d.day == day.day;
-        })
-        .toList();
+    final dayTasks = widget.tasks.where((t) {
+      final d = resolveTaskDate(t);
+      if (d == null) return false;
+      return d.year == day.year && d.month == day.month && d.day == day.day;
+    }).toList();
     if (!context.mounted) return;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _DayTasksSheet(day: day, tasks: dayTasks),
+      builder: (_) => _DayTasksSheet(
+        day: day,
+        tasks: dayTasks,
+        onTaskSelected: widget.onTaskSelected,
+      ),
     );
   }
 }
@@ -189,36 +201,64 @@ class _Toolbar extends StatelessWidget {
       CalendarMode.year => y,
       CalendarMode.list => '全部任务',
     };
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: Row(
-        children: [
-          SegmentedButton<CalendarMode>(
-            segments: [
-              for (final m in CalendarMode.values)
-                ButtonSegment(value: m, label: Text(m.label)),
-            ],
-            selected: {mode},
-            onSelectionChanged: (s) => onModeChanged(s.first),
-            showSelectedIcon: false,
-            style: const ButtonStyle(
-              visualDensity: VisualDensity.compact,
-            ),
-          ),
-          const Spacer(),
-          IconButton(
-            tooltip: '上一个',
-            icon: const Icon(Icons.chevron_left),
-            onPressed: onPrev,
-          ),
-          Text(label, style: Theme.of(context).textTheme.titleSmall),
-          IconButton(
-            tooltip: '下一个',
-            icon: const Icon(Icons.chevron_right),
-            onPressed: onNext,
-          ),
-        ],
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final modeSelector = SegmentedButton<CalendarMode>(
+          segments: [
+            for (final m in CalendarMode.values)
+              ButtonSegment(value: m, label: Text(m.label)),
+          ],
+          selected: {mode},
+          onSelectionChanged: (s) => onModeChanged(s.first),
+          showSelectedIcon: false,
+          style: const ButtonStyle(visualDensity: VisualDensity.compact),
+        );
+        final previousButton = IconButton(
+          tooltip: '上一个',
+          icon: const Icon(Icons.chevron_left),
+          onPressed: onPrev,
+        );
+        final nextButton = IconButton(
+          tooltip: '下一个',
+          icon: const Icon(Icons.chevron_right),
+          onPressed: onNext,
+        );
+        final labelText = Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleSmall,
+        );
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: constraints.maxWidth < 600
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Align(alignment: Alignment.center, child: modeSelector),
+                    Row(
+                      children: [
+                        previousButton,
+                        Expanded(child: labelText),
+                        nextButton,
+                      ],
+                    ),
+                  ],
+                )
+              : Row(
+                  children: [
+                    modeSelector,
+                    const Spacer(),
+                    previousButton,
+                    labelText,
+                    nextButton,
+                  ],
+                ),
+        );
+      },
     );
   }
 }
@@ -268,7 +308,9 @@ class _MonthGrid extends StatelessWidget {
                       child: _DayCell(
                         day: d,
                         anchor: anchor,
-                        tasks: tasksByDay['${d.year}-${d.month}-${d.day}'] ?? const [],
+                        tasks:
+                            tasksByDay['${d.year}-${d.month}-${d.day}'] ??
+                            const [],
                         onTap: () => onDayTap(d),
                       ),
                     ),
@@ -321,7 +363,8 @@ class _DayCell extends StatelessWidget {
     final colors = brandColors(context);
     final isCurrentMonth = day.month == anchor.month;
     final today = DateTime.now();
-    final isToday = day.year == today.year &&
+    final isToday =
+        day.year == today.year &&
         day.month == today.month &&
         day.day == today.day;
     return Padding(
@@ -351,8 +394,8 @@ class _DayCell extends StatelessWidget {
                   color: isToday
                       ? colors.accent
                       : isCurrentMonth
-                          ? colors.foreground
-                          : colors.mutedForeground,
+                      ? colors.foreground
+                      : colors.mutedForeground,
                   fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
                 ),
               ),
@@ -368,14 +411,16 @@ class _DayCell extends StatelessWidget {
                         runSpacing: 2,
                         children: tasks
                             .take(3)
-                            .map((t) => Container(
-                                  width: 5,
-                                  height: 5,
-                                  decoration: BoxDecoration(
-                                    color: _priorityColor(t.priority, colors),
-                                    shape: BoxShape.circle,
-                                  ),
-                                ))
+                            .map(
+                              (t) => Container(
+                                width: 5,
+                                height: 5,
+                                decoration: BoxDecoration(
+                                  color: _priorityColor(t.priority, colors),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            )
                             .toList(),
                       ),
                       Padding(
@@ -383,7 +428,9 @@ class _DayCell extends StatelessWidget {
                         child: Text(
                           '${tasks.length} 项',
                           style: TextStyle(
-                              fontSize: 9, color: colors.mutedForeground),
+                            fontSize: 9,
+                            color: colors.mutedForeground,
+                          ),
                         ),
                       ),
                     ],
@@ -396,7 +443,7 @@ class _DayCell extends StatelessWidget {
     );
   }
 
-  /// 任务优先级色点（对齐 TickTick 任务点颜色）。
+  /// 任务优先级色点，沿用 Todo 产品的语义色层级。
   Color _priorityColor(int priority, AppColors colors) {
     switch (priority) {
       case 3:
@@ -423,8 +470,7 @@ class _WeekView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final weekStart =
-        anchor.subtract(Duration(days: anchor.weekday - 1));
+    final weekStart = anchor.subtract(Duration(days: anchor.weekday - 1));
     final days = List<DateTime>.generate(
       7,
       (i) => weekStart.add(Duration(days: i)),
@@ -463,7 +509,7 @@ class _WeekView extends StatelessWidget {
                       child: () {
                         final list =
                             tasksByDay['${d.year}-${d.month}-${d.day}'] ??
-                                const <TodoTask>[];
+                            const <TodoTask>[];
                         if (list.isEmpty) {
                           return const SizedBox.shrink();
                         }
@@ -474,7 +520,9 @@ class _WeekView extends StatelessWidget {
                             return InkWell(
                               onTap: () => onTaskTap(t),
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 2),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 2,
+                                ),
                                 child: Text(
                                   t.title,
                                   style: Theme.of(context).textTheme.labelSmall,
@@ -578,10 +626,7 @@ class _ListView extends StatelessWidget {
       return ad.compareTo(bd);
     });
     if (sorted.isEmpty) {
-      return AppEmptyState(
-        title: '该日无任务',
-        subtitle: '在日历上选择日期，点击即可添加任务。',
-      );
+      return AppEmptyState(title: '该日无任务', subtitle: '在日历上选择日期，点击即可添加任务。');
     }
     final df = DateFormat('yyyy-MM-dd');
     return ListView.separated(
@@ -602,9 +647,14 @@ class _ListView extends StatelessWidget {
 }
 
 class _DayTasksSheet extends StatelessWidget {
-  const _DayTasksSheet({required this.day, required this.tasks});
+  const _DayTasksSheet({
+    required this.day,
+    required this.tasks,
+    this.onTaskSelected,
+  });
   final DateTime day;
   final List<TodoTask> tasks;
+  final ValueChanged<String>? onTaskSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -639,7 +689,12 @@ class _DayTasksSheet extends StatelessWidget {
                       title: Text(t.title),
                       onTap: () {
                         Navigator.pop(context);
-                        showTaskDetailSheet(context, t.id);
+                        final callback = onTaskSelected;
+                        if (callback != null) {
+                          callback(t.id);
+                        } else {
+                          showTaskDetailSheet(context, t.id);
+                        }
                       },
                     );
                   },

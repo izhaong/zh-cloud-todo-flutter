@@ -24,6 +24,7 @@ class EisenhowerView extends ConsumerWidget {
     super.key,
     required this.tasks,
     DateTime? now,
+    this.onTaskSelected,
   }) : _now = now;
 
   /// 用于分类的"当前时间"（测试可注入；缺省 `DateTime.now()`）。
@@ -31,6 +32,7 @@ class EisenhowerView extends ConsumerWidget {
 
   /// 已应用 list/filter 的任务集合。
   final List<TodoTask> tasks;
+  final ValueChanged<String>? onTaskSelected;
 
   DateTime get _effectiveNow => _now ?? DateTime.now();
 
@@ -38,6 +40,11 @@ class EisenhowerView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final now = _effectiveNow;
     final quadrants = _buildQuadrants(tasks, now);
+    final brightness = Theme.of(context).brightness;
+    final q1Palette = _quadrantPalette(Quadrant.q1, brightness);
+    final q2Palette = _quadrantPalette(Quadrant.q2, brightness);
+    final q3Palette = _quadrantPalette(Quadrant.q3, brightness);
+    final q4Palette = _quadrantPalette(Quadrant.q4, brightness);
 
     return Padding(
       padding: const EdgeInsets.all(8),
@@ -50,8 +57,8 @@ class EisenhowerView extends ConsumerWidget {
                 Expanded(
                   child: _QuadrantTile(
                     data: quadrants[Quadrant.q1]!,
-                    color: Colors.red.shade100,
-                    accent: Colors.red,
+                    color: q1Palette.background,
+                    accent: q1Palette.foreground,
                     onTaskTap: (t) => _openDetail(context, t),
                   ),
                 ),
@@ -59,8 +66,8 @@ class EisenhowerView extends ConsumerWidget {
                 Expanded(
                   child: _QuadrantTile(
                     data: quadrants[Quadrant.q2]!,
-                    color: Colors.amber.shade100,
-                    accent: Colors.amber.shade800,
+                    color: q2Palette.background,
+                    accent: q2Palette.foreground,
                     onTaskTap: (t) => _openDetail(context, t),
                   ),
                 ),
@@ -75,8 +82,8 @@ class EisenhowerView extends ConsumerWidget {
                 Expanded(
                   child: _QuadrantTile(
                     data: quadrants[Quadrant.q3]!,
-                    color: Colors.blue.shade100,
-                    accent: Colors.blue,
+                    color: q3Palette.background,
+                    accent: q3Palette.foreground,
                     onTaskTap: (t) => _openDetail(context, t),
                   ),
                 ),
@@ -84,8 +91,8 @@ class EisenhowerView extends ConsumerWidget {
                 Expanded(
                   child: _QuadrantTile(
                     data: quadrants[Quadrant.q4]!,
-                    color: Colors.grey.shade300,
-                    accent: Colors.grey,
+                    color: q4Palette.background,
+                    accent: q4Palette.foreground,
                     onTaskTap: (t) => _openDetail(context, t),
                   ),
                 ),
@@ -97,7 +104,12 @@ class EisenhowerView extends ConsumerWidget {
     );
   }
 
-  static void _openDetail(BuildContext context, TodoTask t) {
+  void _openDetail(BuildContext context, TodoTask t) {
+    final callback = onTaskSelected;
+    if (callback != null) {
+      callback(t.id);
+      return;
+    }
     showTaskDetailSheet(context, t.id);
   }
 
@@ -157,6 +169,54 @@ extension QuadrantX on Quadrant {
         return '可考虑放弃';
     }
   }
+}
+
+class _QuadrantPalette {
+  const _QuadrantPalette({required this.background, required this.foreground});
+
+  final Color background;
+  final Color foreground;
+}
+
+_QuadrantPalette _quadrantPalette(Quadrant quadrant, Brightness brightness) {
+  if (brightness == Brightness.dark) {
+    return switch (quadrant) {
+      Quadrant.q1 => const _QuadrantPalette(
+        background: Color(0xFF3A171B),
+        foreground: Color(0xFFFFB4AB),
+      ),
+      Quadrant.q2 => const _QuadrantPalette(
+        background: Color(0xFF332600),
+        foreground: Color(0xFFFFD166),
+      ),
+      Quadrant.q3 => const _QuadrantPalette(
+        background: Color(0xFF132A3A),
+        foreground: Color(0xFFA8D1FF),
+      ),
+      Quadrant.q4 => const _QuadrantPalette(
+        background: Color(0xFF24272B),
+        foreground: Color(0xFFD1D5DB),
+      ),
+    };
+  }
+  return switch (quadrant) {
+    Quadrant.q1 => const _QuadrantPalette(
+      background: Color(0xFFFFEBEA),
+      foreground: Color(0xFF8A1C18),
+    ),
+    Quadrant.q2 => const _QuadrantPalette(
+      background: Color(0xFFFFF4D6),
+      foreground: Color(0xFF6C4E00),
+    ),
+    Quadrant.q3 => const _QuadrantPalette(
+      background: Color(0xFFEAF3FF),
+      foreground: Color(0xFF174A7E),
+    ),
+    Quadrant.q4 => const _QuadrantPalette(
+      background: Color(0xFFF0F1F2),
+      foreground: Color(0xFF404347),
+    ),
+  };
 }
 
 /// 把单个任务分类到 4 象限之一。
@@ -229,21 +289,31 @@ class _QuadrantTile extends StatelessWidget {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: accent.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
                     '${data.tasks.length}',
-                    style: TextStyle(fontSize: 11, color: accent, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: accent,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],
             ),
             Text(
               data.quadrant.hint,
-              style: TextStyle(fontSize: 11, color: accent.withValues(alpha: 0.8)),
+              style: TextStyle(
+                fontSize: 11,
+                color: accent.withValues(alpha: 0.8),
+              ),
             ),
             const SizedBox(height: 6),
             Expanded(
@@ -265,7 +335,10 @@ class _QuadrantTile extends StatelessWidget {
                             t.title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 13, color: colors.foreground),
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: colors.foreground,
+                            ),
                           ),
                           onTap: () => onTaskTap(t),
                         );

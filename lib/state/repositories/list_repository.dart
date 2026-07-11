@@ -60,19 +60,21 @@ class ListRepository {
   }) async {
     final now = DateTime.now();
     final id = _uuid.v4();
-    await _db.into(_db.todoLists).insert(
-      TodoListsCompanion.insert(
-        id: id,
-        name: name,
-        folderId: Value(folderId),
-        sortOrder: Value(sortOrder),
-        updatedAt: now,
-        createdAt: now,
-      ),
-    );
-    final row = await (_db.select(_db.todoLists)
-          ..where((t) => t.id.equals(id)))
-        .getSingle();
+    await _db
+        .into(_db.todoLists)
+        .insert(
+          TodoListsCompanion.insert(
+            id: id,
+            name: name,
+            folderId: Value(folderId),
+            sortOrder: Value(sortOrder),
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    final row = await (_db.select(
+      _db.todoLists,
+    )..where((t) => t.id.equals(id))).getSingle();
     await _queue.enqueue(
       entity: SyncEntities.list,
       op: SyncOps.upsert,
@@ -84,14 +86,12 @@ class ListRepository {
 
   Future<TodoList> rename(String listId, String newName) async {
     final now = DateTime.now();
-    await (_db.update(_db.todoLists)..where((t) => t.id.equals(listId)))
-        .write(TodoListsCompanion(
-      name: Value(newName),
-      updatedAt: Value(now),
-    ));
-    final row = await (_db.select(_db.todoLists)
-          ..where((t) => t.id.equals(listId)))
-        .getSingle();
+    await (_db.update(_db.todoLists)..where((t) => t.id.equals(listId))).write(
+      TodoListsCompanion(name: Value(newName), updatedAt: Value(now)),
+    );
+    final row = await (_db.select(
+      _db.todoLists,
+    )..where((t) => t.id.equals(listId))).getSingle();
     await _queue.enqueue(
       entity: SyncEntities.list,
       op: SyncOps.upsert,
@@ -104,19 +104,21 @@ class ListRepository {
 
   Future<void> reorder(List<String> orderedIds) async {
     for (var i = 0; i < orderedIds.length; i++) {
-      await (_db.update(_db.todoLists)
-            ..where((t) => t.id.equals(orderedIds[i])))
-          .write(TodoListsCompanion(
-        sortOrder: Value(i),
-        updatedAt: Value(DateTime.now()),
-      ));
+      await (_db.update(
+        _db.todoLists,
+      )..where((t) => t.id.equals(orderedIds[i]))).write(
+        TodoListsCompanion(
+          sortOrder: Value(i),
+          updatedAt: Value(DateTime.now()),
+        ),
+      );
     }
   }
 
   Future<void> delete(String listId) async {
-    final row = await (_db.select(_db.todoLists)
-          ..where((t) => t.id.equals(listId)))
-        .getSingleOrNull();
+    final row = await (_db.select(
+      _db.todoLists,
+    )..where((t) => t.id.equals(listId))).getSingleOrNull();
     await (_db.delete(_db.todoLists)..where((t) => t.id.equals(listId))).go();
     await _queue.enqueue(
       entity: SyncEntities.list,
@@ -133,28 +135,26 @@ class ListRepository {
   }) async {
     final now = DateTime.now();
     final id = _uuid.v4();
-    await _db.into(_db.todoLists).insert(
-      TodoListsCompanion.insert(
-        id: id,
-        name: 'smart:$filterName',
-        folderId: const Value(null),
-        sortOrder: const Value(0),
-        updatedAt: now,
-        createdAt: now,
-      ),
-    );
-    final row = await (_db.select(_db.todoLists)
-          ..where((t) => t.id.equals(id)))
-        .getSingle();
+    await _db
+        .into(_db.todoLists)
+        .insert(
+          TodoListsCompanion.insert(
+            id: id,
+            name: 'smart:$filterName',
+            folderId: const Value(null),
+            sortOrder: const Value(0),
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    final row = await (_db.select(
+      _db.todoLists,
+    )..where((t) => t.id.equals(id))).getSingle();
     await _queue.enqueue(
       entity: SyncEntities.list,
       op: SyncOps.upsert,
       localId: id,
-      payload: {
-        ...row.toJson(),
-        'isSmart': true,
-        'filter': filter,
-      },
+      payload: {...row.toJson(), 'isSmart': true, 'filter': filter},
     );
     return row;
   }

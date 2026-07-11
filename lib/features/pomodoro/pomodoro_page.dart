@@ -169,8 +169,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
             const SizedBox(height: 48),
             const Divider(),
             const SizedBox(height: 16),
-            Text('最近 7 天统计',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text('最近 7 天统计', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             stats.when(
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -215,7 +214,7 @@ class _ModeSelector extends StatelessWidget {
       selected: {mode},
       onSelectionChanged: enabled
           ? (s) => onChanged(s.first)
-          : (_) {}, /* 运行中禁止切换模式 */
+          : (_) {} /* 运行中禁止切换模式 */,
     );
   }
 }

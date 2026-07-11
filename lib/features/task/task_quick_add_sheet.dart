@@ -48,12 +48,12 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
     final repo = ref.read(taskRepositoryProvider);
     if (repo == null) return;
     await repo.create(
-          listId: widget.listId,
-          parentTaskId: widget.parentTaskId,
-          title: text,
-          priority: _priority,
-          dueAt: _nlpResolvedDueAt,
-        );
+      listId: widget.listId,
+      parentTaskId: widget.parentTaskId,
+      title: text,
+      priority: _priority,
+      dueAt: _nlpResolvedDueAt,
+    );
     if (mounted) Navigator.pop(context);
   }
 
@@ -104,8 +104,8 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
                 child: Text(
                   '已识别截止时间：${_nlpResolvedDueAt!.toLocal()}',
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                 ),
               ),
             Row(

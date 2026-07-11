@@ -108,7 +108,9 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
-          home: Scaffold(body: CalendarView(tasks: tasks, now: now)),
+          home: Scaffold(
+            body: CalendarView(tasks: tasks, now: now),
+          ),
         ),
       ),
     );
@@ -158,10 +160,7 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           home: Scaffold(
-            body: CalendarView(
-              tasks: tasks,
-              now: now,
-            ),
+            body: CalendarView(tasks: tasks, now: now),
           ),
         ),
       ),
@@ -179,4 +178,90 @@ void main() {
     final later = tester.getTopLeft(find.text('晚一点'));
     expect(earlier.dy < later.dy, isTrue);
   });
+
+  testWidgets(
+    'CalendarView 360x800 at 1.3x has no toolbar overflow and all modes are reachable',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final now = DateTime(2026, 6, 15, 12);
+      final tasks = <TodoTask>[
+        TodoTask(
+          id: 'compact-calendar-task',
+          listId: '1',
+          title: '窄屏日历任务',
+          completed: false,
+          priority: 0,
+          isPinned: false,
+          sortOrder: 0,
+          dueAt: DateTime(2026, 6, 20, 9),
+          updatedAt: now,
+          createdAt: now,
+        ),
+      ];
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: const TextScaler.linear(1.3)),
+              child: child!,
+            ),
+            home: Scaffold(
+              body: CalendarView(tasks: tasks, now: now),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final layoutErrors = <Object>[..._takeFlutterExceptions(tester)];
+      final expectedModes = <String, CalendarMode>{
+        '月': CalendarMode.month,
+        '周': CalendarMode.week,
+        '年': CalendarMode.year,
+        '列表': CalendarMode.list,
+      };
+      expect(_selectedCalendarMode(tester), CalendarMode.month);
+
+      for (final entry in expectedModes.entries) {
+        await tester.tap(find.text(entry.key));
+        await tester.pump();
+        expect(
+          _selectedCalendarMode(tester),
+          entry.value,
+          reason: '360px 窄屏下仍应可达「${entry.key}」模式',
+        );
+        layoutErrors.addAll(_takeFlutterExceptions(tester));
+      }
+
+      expect(
+        layoutErrors,
+        isEmpty,
+        reason: '360x800、1.3x 文字缩放下默认工具栏不应产生 RenderFlex overflow',
+      );
+    },
+  );
+}
+
+CalendarMode _selectedCalendarMode(WidgetTester tester) {
+  return tester
+      .widget<SegmentedButton<CalendarMode>>(
+        find.byType(SegmentedButton<CalendarMode>),
+      )
+      .selected
+      .single;
+}
+
+List<Object> _takeFlutterExceptions(WidgetTester tester) {
+  final exceptions = <Object>[];
+  Object? exception;
+  while ((exception = tester.takeException()) != null) {
+    exceptions.add(exception!);
+  }
+  return exceptions;
 }

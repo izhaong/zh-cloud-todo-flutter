@@ -1,4 +1,4 @@
-/// M11-B4 效率域 API client（番茄专注 / 习惯 / 倒数日）
+// M11-B4 效率域 API client（番茄专注 / 习惯 / 倒数日）
 import 'package:dio/dio.dart';
 
 import 'api_config.dart';
@@ -57,8 +57,7 @@ class CountdownDto {
     return CountdownDto(
       id: (j['id'] as num?)?.toInt() ?? 0,
       title: j['title']?.toString() ?? '',
-      targetDate:
-          _parseDate(j['targetDate']) ?? DateTime.now(),
+      targetDate: _parseDate(j['targetDate']) ?? DateTime.now(),
       isCountUp: j['isCountUp'] == true,
       color: j['color']?.toString(),
     );
@@ -84,11 +83,7 @@ class PomodoroApi {
   }) async {
     final r = await _dio.post<Map<String, dynamic>>(
       '${ApiConfig.todoPrefix}/pomodoro/start',
-      data: {
-        'taskId': taskId,
-        'mode': mode,
-        if (plannedMinutes != null) 'plannedMinutes': plannedMinutes,
-      },
+      data: {'taskId': taskId, 'mode': mode, 'plannedMinutes': ?plannedMinutes},
     );
     return PomodoroSessionDto.fromJson(r.data ?? {});
   }
@@ -97,9 +92,10 @@ class PomodoroApi {
       _dio.post('${ApiConfig.todoPrefix}/pomodoro/$id/pause');
   Future<void> resume(int id) =>
       _dio.post('${ApiConfig.todoPrefix}/pomodoro/$id/resume');
-  Future<void> complete(int id, {String? remark}) =>
-      _dio.post('${ApiConfig.todoPrefix}/pomodoro/$id/complete',
-          data: {'remark': remark});
+  Future<void> complete(int id, {String? remark}) => _dio.post(
+    '${ApiConfig.todoPrefix}/pomodoro/$id/complete',
+    data: {'remark': remark},
+  );
   Future<void> cancel(int id) =>
       _dio.post('${ApiConfig.todoPrefix}/pomodoro/$id/cancel');
 
@@ -139,7 +135,7 @@ class CountdownApi {
         'title': title,
         'targetDate': targetDate.toIso8601String(),
         'isCountUp': isCountUp,
-        if (color != null) 'color': color,
+        'color': ?color,
       },
     );
     return (r.data?['data']?['id'] as num?)?.toInt() ?? 0;
@@ -152,12 +148,12 @@ class ReminderActionApi {
   final Dio _dio;
 
   Future<void> dismiss(int reminderId) => _dio.post(
-        '${ApiConfig.todoPrefix}/reminder-action/dismiss',
-        data: {'reminderId': reminderId},
-      );
+    '${ApiConfig.todoPrefix}/reminder-action/dismiss',
+    data: {'reminderId': reminderId},
+  );
 
   Future<void> snooze(int reminderId, {int minutes = 10}) => _dio.post(
-        '${ApiConfig.todoPrefix}/reminder-action/snooze',
-        data: {'reminderId': reminderId, 'minutes': minutes},
-      );
+    '${ApiConfig.todoPrefix}/reminder-action/snooze',
+    data: {'reminderId': reminderId, 'minutes': minutes},
+  );
 }

@@ -60,11 +60,7 @@ class TaskFilter {
 
 /// M11-B2 顶部过滤条 + "保存为智能清单" 按钮。
 class FilterBar extends ConsumerWidget {
-  const FilterBar({
-    super.key,
-    required this.filter,
-    required this.onChanged,
-  });
+  const FilterBar({super.key, required this.filter, required this.onChanged});
 
   final TaskFilter filter;
   final ValueChanged<TaskFilter> onChanged;
@@ -118,9 +114,9 @@ class FilterBar extends ConsumerWidget {
                 if (repo == null) return;
                 await repo.saveSmart(filterName: name, filter: filter.toJson());
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('已保存为智能清单：$name')),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text('已保存为智能清单：$name')));
                 }
               },
               icon: const Icon(Icons.bookmark_add_outlined),
@@ -131,7 +127,10 @@ class FilterBar extends ConsumerWidget {
     );
   }
 
-  static Future<String?> _pickDueRange(BuildContext context, String? cur) async {
+  static Future<String?> _pickDueRange(
+    BuildContext context,
+    String? cur,
+  ) async {
     return showModalBottomSheet<String?>(
       context: context,
       builder: (ctx) => SafeArea(
@@ -141,25 +140,19 @@ class FilterBar extends ConsumerWidget {
             ListTile(
               leading: const Icon(Icons.calendar_today),
               title: const Text('今日'),
-              trailing: cur == 'today'
-                  ? const Icon(Icons.check)
-                  : null,
+              trailing: cur == 'today' ? const Icon(Icons.check) : null,
               onTap: () => Navigator.pop(ctx, 'today'),
             ),
             ListTile(
               leading: const Icon(Icons.history),
               title: const Text('已过期'),
-              trailing: cur == 'overdue'
-                  ? const Icon(Icons.check)
-                  : null,
+              trailing: cur == 'overdue' ? const Icon(Icons.check) : null,
               onTap: () => Navigator.pop(ctx, 'overdue'),
             ),
             ListTile(
               leading: const Icon(Icons.upcoming),
               title: const Text('将来'),
-              trailing: cur == 'future'
-                  ? const Icon(Icons.check)
-                  : null,
+              trailing: cur == 'future' ? const Icon(Icons.check) : null,
               onTap: () => Navigator.pop(ctx, 'future'),
             ),
             const Divider(height: 1),
@@ -184,13 +177,17 @@ class FilterBar extends ConsumerWidget {
             ListTile(
               leading: const Icon(Icons.check),
               title: const Text('已完成'),
-              trailing: cur == true ? const Icon(Icons.radio_button_checked) : null,
+              trailing: cur == true
+                  ? const Icon(Icons.radio_button_checked)
+                  : null,
               onTap: () => Navigator.pop(ctx, true),
             ),
             ListTile(
               leading: const Icon(Icons.radio_button_unchecked),
               title: const Text('未完成'),
-              trailing: cur == false ? const Icon(Icons.radio_button_checked) : null,
+              trailing: cur == false
+                  ? const Icon(Icons.radio_button_checked)
+                  : null,
               onTap: () => Navigator.pop(ctx, false),
             ),
             const Divider(height: 1),

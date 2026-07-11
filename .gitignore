@@ -29,6 +29,7 @@ devtools_options.yaml
 **/ios/Flutter/.last_build_id
 .dart_tool/
 .devtools/
+.claude/worktrees/
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/

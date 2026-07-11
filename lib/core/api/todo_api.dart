@@ -69,12 +69,12 @@ class ChecklistApi {
   final ApiClient _client;
 
   ChecklistItem _fromJson(Map<String, dynamic> j) => ChecklistItem(
-        id: (j['id'] as num?)?.toInt() ?? 0,
-        taskId: j['taskId']?.toString(),
-        title: j['title']?.toString() ?? '',
-        completed: j['completed'] == true,
-        sortOrder: (j['sortOrder'] as num?)?.toInt() ?? 0,
-      );
+    id: (j['id'] as num?)?.toInt() ?? 0,
+    taskId: j['taskId']?.toString(),
+    title: j['title']?.toString() ?? '',
+    completed: j['completed'] == true,
+    sortOrder: (j['sortOrder'] as num?)?.toInt() ?? 0,
+  );
 
   /// `GET /task/checklist?taskId=...`
   Future<List<ChecklistItem>> list(String taskId) async {
@@ -109,13 +109,15 @@ class ChecklistApi {
     String? title,
     bool? completed,
     int? sortOrder,
-  }) =>
-      _client.put('/task/checklist/update', data: {
-        'id': checklistId,
-        if (title != null) 'title': title,
-        if (completed != null) 'completed': completed,
-        if (sortOrder != null) 'sortOrder': sortOrder,
-      });
+  }) => _client.put(
+    '/task/checklist/update',
+    data: {
+      'id': checklistId,
+      'title': ?title,
+      'completed': ?completed,
+      'sortOrder': ?sortOrder,
+    },
+  );
 
   /// `POST /task/checklist/delete`
   Future<void> delete(int checklistId) =>
@@ -138,11 +140,10 @@ class FolderApi {
   Future<void> moveList({
     required int listServerId,
     required int folderServerId,
-  }) =>
-      _client.post('/folder/move-list', data: {
-        'listId': listServerId,
-        'folderId': folderServerId,
-      });
+  }) => _client.post(
+    '/folder/move-list',
+    data: {'listId': listServerId, 'folderId': folderServerId},
+  );
 }
 
 /// NLP 自然语言日期解析（`POST /nlp/parse`）。
@@ -180,24 +181,18 @@ class TagApi {
   final ApiClient _client;
 
   /// `POST /tag/task-bind`
-  Future<void> taskBind({
-    required String taskId,
-    required int tagServerId,
-  }) =>
-      _client.post('/tag/task-bind', data: {
-        'taskId': taskId,
-        'tagId': tagServerId,
-      });
+  Future<void> taskBind({required String taskId, required int tagServerId}) =>
+      _client.post(
+        '/tag/task-bind',
+        data: {'taskId': taskId, 'tagId': tagServerId},
+      );
 
   /// `DELETE /tag/task-unbind`
-  Future<void> taskUnbind({
-    required String taskId,
-    required int tagServerId,
-  }) =>
-      _client.delete('/tag/task-unbind', data: {
-        'taskId': taskId,
-        'tagId': tagServerId,
-      });
+  Future<void> taskUnbind({required String taskId, required int tagServerId}) =>
+      _client.delete(
+        '/tag/task-unbind',
+        data: {'taskId': taskId, 'tagId': tagServerId},
+      );
 }
 
 /// 单个数据导出记录（`/security/export/list` 返回行）。
@@ -215,11 +210,11 @@ class DataExportItem {
   final String status;
 
   factory DataExportItem.fromJson(Map<String, dynamic> j) => DataExportItem(
-        id: (j['id'] as num?)?.toInt() ?? 0,
-        exportType: j['exportType']?.toString() ?? 'FULL',
-        exportUrl: j['exportUrl']?.toString() ?? '',
-        status: j['status']?.toString() ?? 'PENDING',
-      );
+    id: (j['id'] as num?)?.toInt() ?? 0,
+    exportType: j['exportType']?.toString() ?? 'FULL',
+    exportUrl: j['exportUrl']?.toString() ?? '',
+    status: j['status']?.toString() ?? 'PENDING',
+  );
 }
 
 /// 账户安全 REST（`/security/**`）：2FA 状态 / 开关 + 数据导出，直连 REST。
@@ -243,24 +238,27 @@ class SecurityApi {
 
   /// `GET /security/2fa/status` — 当前用户 2FA 是否开启。
   Future<bool> isTwoFactorEnabled() async {
-    final resp =
-        await _client.get<Map<String, dynamic>>('/security/2fa/status');
+    final resp = await _client.get<Map<String, dynamic>>(
+      '/security/2fa/status',
+    );
     final data = _unwrap(resp.data);
     return data == true || data == 'true';
   }
 
   /// `POST /security/2fa/enable` — 开启 2FA，返回 2FA 记录 ID。
   Future<int> enableTwoFactor() async {
-    final resp =
-        await _client.post<Map<String, dynamic>>('/security/2fa/enable');
+    final resp = await _client.post<Map<String, dynamic>>(
+      '/security/2fa/enable',
+    );
     final data = _unwrap(resp.data);
     return (data as num?)?.toInt() ?? 0;
   }
 
   /// `POST /security/2fa/disable` — 关闭 2FA。
   Future<void> disableTwoFactor() async {
-    final resp =
-        await _client.post<Map<String, dynamic>>('/security/2fa/disable');
+    final resp = await _client.post<Map<String, dynamic>>(
+      '/security/2fa/disable',
+    );
     _unwrap(resp.data);
   }
 
@@ -276,10 +274,12 @@ class SecurityApi {
 
   /// `GET /security/export/list` — 我的导出记录。
   Future<List<DataExportItem>> listExports() async {
-    final resp =
-        await _client.get<Map<String, dynamic>>('/security/export/list');
+    final resp = await _client.get<Map<String, dynamic>>(
+      '/security/export/list',
+    );
     final data = _unwrap(resp.data);
-    final raw = (data is List ? data : <dynamic>[]).cast<Map<String, dynamic>>();
+    final raw = (data is List ? data : <dynamic>[])
+        .cast<Map<String, dynamic>>();
     return raw.map(DataExportItem.fromJson).toList();
   }
 }
@@ -287,18 +287,18 @@ class SecurityApi {
 /// 直连 REST helper 容器：一次性拿到所有子 helper，便于页面注入。
 class TodoRestApi {
   TodoRestApi(ApiClient client)
-      : task = TaskRestApi(client),
-        checklist = ChecklistApi(client),
-        folder = FolderApi(client),
-        nlp = NlpApi(client),
-        tag = TagApi(client),
-        reminder = ReminderActionApi(client),
-        repeatOccurrence = RepeatOccurrenceApi(client),
-        listCollaboration = ListCollaborationApi(client),
-        taskAssign = TaskAssignApi(client),
-        comment = TaskCommentApi(client),
-        calSubscription = CalendarSubscriptionApi(client),
-        security = SecurityApi(client);
+    : task = TaskRestApi(client),
+      checklist = ChecklistApi(client),
+      folder = FolderApi(client),
+      nlp = NlpApi(client),
+      tag = TagApi(client),
+      reminder = ReminderActionApi(client),
+      repeatOccurrence = RepeatOccurrenceApi(client),
+      listCollaboration = ListCollaborationApi(client),
+      taskAssign = TaskAssignApi(client),
+      comment = TaskCommentApi(client),
+      calSubscription = CalendarSubscriptionApi(client),
+      security = SecurityApi(client);
 
   final TaskRestApi task;
   final ChecklistApi checklist;
@@ -332,12 +332,12 @@ class ReminderActionApi {
   }
 
   static ReminderInboxItem _item(Map<String, dynamic> j) => ReminderInboxItem(
-        id: (j['id'] as num?)?.toInt() ?? 0,
-        taskId: (j['taskId'] as num?)?.toInt() ?? 0,
-        taskTitle: (j['taskTitle'] ?? j['title'])?.toString() ?? '',
-        remindAt: parseTime(j['remindAt'] ?? j['fireAt']),
-        status: j['status']?.toString() ?? 'PENDING',
-      );
+    id: (j['id'] as num?)?.toInt() ?? 0,
+    taskId: (j['taskId'] as num?)?.toInt() ?? 0,
+    taskTitle: (j['taskTitle'] ?? j['title'])?.toString() ?? '',
+    remindAt: parseTime(j['remindAt'] ?? j['fireAt']),
+    status: j['status']?.toString() ?? 'PENDING',
+  );
 
   /// 把非标准信封（纯数组 / `{data:{list}}` / `{data:[…]}` 等）归一化为提醒列表。
   static List<ReminderInboxItem> normalize(Object? data) {
@@ -385,18 +385,16 @@ class ReminderActionApi {
   }
 
   /// `POST /reminder-action/complete` body `{reminderId}`。
-  Future<void> complete(int reminderId) =>
-      _client.post<Map<String, dynamic>>(
-        '/reminder-action/complete',
-        data: {'reminderId': reminderId},
-      );
+  Future<void> complete(int reminderId) => _client.post<Map<String, dynamic>>(
+    '/reminder-action/complete',
+    data: {'reminderId': reminderId},
+  );
 
   /// `POST /reminder-action/dismiss` body `{reminderId}`。
-  Future<void> dismiss(int reminderId) =>
-      _client.post<Map<String, dynamic>>(
-        '/reminder-action/dismiss',
-        data: {'reminderId': reminderId},
-      );
+  Future<void> dismiss(int reminderId) => _client.post<Map<String, dynamic>>(
+    '/reminder-action/dismiss',
+    data: {'reminderId': reminderId},
+  );
 
   /// `POST /reminder-action/snooze` body `{reminderId, minutes}`。
   Future<void> snooze(int reminderId, {int minutes = 10}) =>
@@ -406,10 +404,9 @@ class ReminderActionApi {
       );
 
   /// `POST /reminder-action/{id}/persistent` — 持续响铃（后端标记，仅信息态）。
-  Future<void> persistent(int reminderId) =>
-      _client.post<Map<String, dynamic>>(
-        '/reminder-action/$reminderId/persistent',
-      );
+  Future<void> persistent(int reminderId) => _client.post<Map<String, dynamic>>(
+    '/reminder-action/$reminderId/persistent',
+  );
 }
 
 /// 收件箱中一个待处理的提醒（来自 `GET /reminder-action/inbox`）。
@@ -455,7 +452,6 @@ class RepeatOccurrenceApi {
       _client.post<Map<String, dynamic>>('/repeat-occurrence/$id/catchup');
 }
 
-
 /// 清单成员：后端 `members.int` 响应单项。
 class ListMember {
   const ListMember({
@@ -485,13 +481,11 @@ class ListCollaborationApi {
   final ApiClient _client;
 
   ListMember _m(Map<String, dynamic> j) => ListMember(
-        userId: (j['userId'] as num?)?.toInt() ??
-            (j['id'] as num?)?.toInt() ??
-            0,
-        role: j['role']?.toString() ?? 'member',
-        mobile: j['mobile']?.toString(),
-        displayName: j['displayName']?.toString() ?? j['name']?.toString(),
-      );
+    userId: (j['userId'] as num?)?.toInt() ?? (j['id'] as num?)?.toInt() ?? 0,
+    role: j['role']?.toString() ?? 'member',
+    mobile: j['mobile']?.toString(),
+    displayName: j['displayName']?.toString() ?? j['name']?.toString(),
+  );
 
   /// 兼容 `{code,data:[…]}`, `{code,data:{members:[…]}}`,
   /// `{data:[…]}`, `{data:{members:[…]}}`, 纯数组, `{members:[…]}` 多形态。
@@ -505,13 +499,12 @@ class ListCollaborationApi {
             .toList();
       }
       if (data is Map) {
-        final raw = (data['members'] as List?) ??
+        final raw =
+            (data['members'] as List?) ??
             (data['list'] as List?) ??
             (data['items'] as List?) ??
             const [];
-        return raw
-            .map((e) => _m(Map<String, dynamic>.from(e as Map)))
-            .toList();
+        return raw.map((e) => _m(Map<String, dynamic>.from(e as Map))).toList();
       }
       return const [];
     }
@@ -522,22 +515,19 @@ class ListCollaborationApi {
     }
     if (body['data'] is Map) {
       final d = Map<String, dynamic>.from(body['data'] as Map);
-      final raw = (d['members'] as List?) ??
+      final raw =
+          (d['members'] as List?) ??
           (d['list'] as List?) ??
           (d['items'] as List?) ??
           const [];
-      return raw
-          .map((e) => _m(Map<String, dynamic>.from(e as Map)))
-          .toList();
+      return raw.map((e) => _m(Map<String, dynamic>.from(e as Map))).toList();
     }
     return const [];
   }
 
   List<ListMember> _listFromArray(Object? raw) {
     if (raw is List) {
-      return raw
-          .map((e) => _m(Map<String, dynamic>.from(e as Map)))
-          .toList();
+      return raw.map((e) => _m(Map<String, dynamic>.from(e as Map))).toList();
     }
     return const [];
   }
@@ -556,10 +546,10 @@ class ListCollaborationApi {
     required int userId,
     String role = 'member',
   }) async {
-    await _client.post('/list/$listId/members', data: {
-      'userId': userId,
-      'role': role,
-    });
+    await _client.post(
+      '/list/$listId/members',
+      data: {'userId': userId, 'role': role},
+    );
   }
 
   /// `PUT /list/{listId}/members/{userId}` body `{role}`。
@@ -573,20 +563,15 @@ class ListCollaborationApi {
   }
 
   /// `DELETE /list/{listId}/members/{userId}`。
-  Future<void> removeMember({
-    required int listId,
-    required int userId,
-  }) async {
+  Future<void> removeMember({required int listId, required int userId}) async {
     await _client.delete('/list/$listId/members/$userId');
   }
 
   /// `POST /list/{listId}/member/join`（通过链接加入）。
-  Future<void> join(int listId) =>
-      _client.post('/list/$listId/member/join');
+  Future<void> join(int listId) => _client.post('/list/$listId/member/join');
 
   /// `POST /list/{listId}/member/exit`（主动退出）。
-  Future<void> exit(int listId) =>
-      _client.post('/list/$listId/member/exit');
+  Future<void> exit(int listId) => _client.post('/list/$listId/member/exit');
 }
 
 /// 任务协作者：指派 / 移除执行人。
@@ -616,9 +601,7 @@ class TaskAssignApi {
 
   /// `PUT /task/{taskId}/assignee` body `{userId}`（null 表示移除）。
   Future<void> setAssignee({required int taskId, required int? userId}) =>
-      _client.put('/task/$taskId/assignee', data: {
-        'userId': userId,
-      });
+      _client.put('/task/$taskId/assignee', data: {'userId': userId});
 
   Future<void> removeAssignee(int taskId) =>
       _client.delete('/task/$taskId/assignee');
@@ -648,12 +631,12 @@ class TaskCommentApi {
   final ApiClient _client;
 
   TaskComment _c(Map<String, dynamic> j) => TaskComment(
-        id: (j['id'] as num?)?.toInt() ?? 0,
-        taskId: (j['taskId'] as num?)?.toInt() ?? 0,
-        content: j['content']?.toString() ?? j['text']?.toString() ?? '',
-        userId: (j['userId'] as num?)?.toInt(),
-        createdAt: ReminderActionApi.parseTime(j['createdAt']),
-      );
+    id: (j['id'] as num?)?.toInt() ?? 0,
+    taskId: (j['taskId'] as num?)?.toInt() ?? 0,
+    content: j['content']?.toString() ?? j['text']?.toString() ?? '',
+    userId: (j['userId'] as num?)?.toInt(),
+    createdAt: ReminderActionApi.parseTime(j['createdAt']),
+  );
 
   List<TaskComment> _list(Map<String, dynamic> body) {
     final List raw;
@@ -662,7 +645,8 @@ class TaskCommentApi {
       if (data is List) {
         raw = data;
       } else if (data is Map) {
-        raw = (data['list'] as List?) ??
+        raw =
+            (data['list'] as List?) ??
             (data['items'] as List?) ??
             (data['comments'] as List?) ??
             const [];
@@ -670,13 +654,12 @@ class TaskCommentApi {
         raw = const [];
       }
     } else {
-      raw = (body['list'] as List?) ??
+      raw =
+          (body['list'] as List?) ??
           (body['items'] as List?) ??
           (body['data'] is List ? body['data'] as List : const []);
     }
-    return raw
-        .map((e) => _c(Map<String, dynamic>.from(e as Map)))
-        .toList();
+    return raw.map((e) => _c(Map<String, dynamic>.from(e as Map))).toList();
   }
 
   /// `GET /task/{taskId}/comments`
@@ -691,10 +674,7 @@ class TaskCommentApi {
 
   /// `POST /comment/create` body `{taskId, content}`。
   /// 备注：后端也兼容 `POST /task/{taskId}/comments`；优先 `/comment/create`。
-  Future<int> add({
-    required int taskId,
-    required String content,
-  }) async {
+  Future<int> add({required int taskId, required String content}) async {
     final resp = await _client.post<Map<String, dynamic>>(
       '/comment/create',
       data: {'taskId': taskId, 'content': content},
@@ -705,10 +685,10 @@ class TaskCommentApi {
 
   /// `PUT /comment/update` body `{id, content}`（首选）。
   Future<void> update({required int commentId, required String content}) async {
-    await _client.put('/comment/update', data: {
-      'id': commentId,
-      'content': content,
-    });
+    await _client.put(
+      '/comment/update',
+      data: {'id': commentId, 'content': content},
+    );
   }
 
   /// `POST /comment/delete` body `{id}`。
@@ -742,13 +722,13 @@ class CalendarSubscriptionApi {
   final ApiClient _client;
 
   CalSubscription _s(Map<String, dynamic> j) => CalSubscription(
-        id: (j['id'] as num?)?.toInt() ?? 0,
-        url: j['url']?.toString() ?? '',
-        name: j['name']?.toString() ?? (j['url']?.toString() ?? ''),
-        enabled: j['enabled'] != false,
-        lastSyncAt: ReminderActionApi.parseTime(j['lastSyncAt']),
-        syncToken: j['syncToken']?.toString(),
-      );
+    id: (j['id'] as num?)?.toInt() ?? 0,
+    url: j['url']?.toString() ?? '',
+    name: j['name']?.toString() ?? (j['url']?.toString() ?? ''),
+    enabled: j['enabled'] != false,
+    lastSyncAt: ReminderActionApi.parseTime(j['lastSyncAt']),
+    syncToken: j['syncToken']?.toString(),
+  );
 
   List<CalSubscription> _list(Map<String, dynamic> body) {
     final List raw;
@@ -757,7 +737,8 @@ class CalendarSubscriptionApi {
       if (data is List) {
         raw = data;
       } else if (data is Map) {
-        raw = (data['list'] as List?) ??
+        raw =
+            (data['list'] as List?) ??
             (data['items'] as List?) ??
             (data['subscriptions'] as List?) ??
             const [];
@@ -765,13 +746,9 @@ class CalendarSubscriptionApi {
         raw = const [];
       }
     } else {
-      raw = (body['list'] as List?) ??
-          (body['items'] as List?) ??
-          const [];
+      raw = (body['list'] as List?) ?? (body['items'] as List?) ?? const [];
     }
-    return raw
-        .map((e) => _s(Map<String, dynamic>.from(e as Map)))
-        .toList();
+    return raw.map((e) => _s(Map<String, dynamic>.from(e as Map))).toList();
   }
 
   /// `GET /cal-sub/list`
@@ -790,11 +767,7 @@ class CalendarSubscriptionApi {
   }) async {
     final resp = await _client.post<Map<String, dynamic>>(
       '/cal-sub/create',
-      data: {
-        'url': url,
-        if (name != null) 'name': name,
-        'enabled': enabled,
-      },
+      data: {'url': url, 'name': ?name, 'enabled': enabled},
     );
     final data = _unwrapBody(resp.data);
     return (data['id'] as num?)?.toInt() ?? 0;

@@ -14,9 +14,7 @@ void main() {
     addTearDown(db.close);
 
     final container = ProviderContainer(
-      overrides: [
-        appDatabaseProvider.overrideWithValue(db),
-      ],
+      overrides: [appDatabaseProvider.overrideWithValue(db)],
     );
     addTearDown(container.dispose);
 

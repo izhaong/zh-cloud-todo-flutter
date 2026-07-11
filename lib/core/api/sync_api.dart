@@ -153,9 +153,9 @@ class SyncApi {
       data: {
         'client_id': clientId,
         'device_id': deviceId,
-        if (cursor != null) 'cursor': cursor,
+        'cursor': ?cursor,
         'limit': limit,
-        if (entityTypes != null) 'entityTypes': entityTypes,
+        'entityTypes': ?entityTypes,
       },
     );
     final data = _unwrap(resp.data);
