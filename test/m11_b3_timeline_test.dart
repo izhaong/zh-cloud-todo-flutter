@@ -35,8 +35,13 @@ void main() {
     test('overdue: due 在今天 00:00 之前', () {
       final t = build(dueAt: DateTime(2026, 6, 14, 23, 59));
       expect(
-        classifyTimelineBucket(t, now,
-            weekStart: weekStart, weekEnd: weekEnd, nextWeekEnd: nextWeekEnd),
+        classifyTimelineBucket(
+          t,
+          now,
+          weekStart: weekStart,
+          weekEnd: weekEnd,
+          nextWeekEnd: nextWeekEnd,
+        ),
         TimelineBucket.overdue,
       );
     });
@@ -44,8 +49,13 @@ void main() {
     test('today: due 落在今天 00:00 ~ 明天 00:00', () {
       final t = build(dueAt: DateTime(2026, 6, 15, 18, 0));
       expect(
-        classifyTimelineBucket(t, now,
-            weekStart: weekStart, weekEnd: weekEnd, nextWeekEnd: nextWeekEnd),
+        classifyTimelineBucket(
+          t,
+          now,
+          weekStart: weekStart,
+          weekEnd: weekEnd,
+          nextWeekEnd: nextWeekEnd,
+        ),
         TimelineBucket.today,
       );
     });
@@ -53,8 +63,13 @@ void main() {
     test('tomorrow: due 落在明天 00:00 ~ 后天 00:00', () {
       final t = build(dueAt: DateTime(2026, 6, 16, 9, 0));
       expect(
-        classifyTimelineBucket(t, now,
-            weekStart: weekStart, weekEnd: weekEnd, nextWeekEnd: nextWeekEnd),
+        classifyTimelineBucket(
+          t,
+          now,
+          weekStart: weekStart,
+          weekEnd: weekEnd,
+          nextWeekEnd: nextWeekEnd,
+        ),
         TimelineBucket.tomorrow,
       );
     });
@@ -62,8 +77,13 @@ void main() {
     test('thisWeek: due 落在本周 [weekStart, weekEnd)', () {
       final t = build(dueAt: DateTime(2026, 6, 18, 9, 0));
       expect(
-        classifyTimelineBucket(t, now,
-            weekStart: weekStart, weekEnd: weekEnd, nextWeekEnd: nextWeekEnd),
+        classifyTimelineBucket(
+          t,
+          now,
+          weekStart: weekStart,
+          weekEnd: weekEnd,
+          nextWeekEnd: nextWeekEnd,
+        ),
         TimelineBucket.thisWeek,
       );
     });
@@ -71,8 +91,13 @@ void main() {
     test('nextWeek: due 落在下周 [weekEnd, nextWeekEnd)', () {
       final t = build(dueAt: DateTime(2026, 6, 23, 9, 0));
       expect(
-        classifyTimelineBucket(t, now,
-            weekStart: weekStart, weekEnd: weekEnd, nextWeekEnd: nextWeekEnd),
+        classifyTimelineBucket(
+          t,
+          now,
+          weekStart: weekStart,
+          weekEnd: weekEnd,
+          nextWeekEnd: nextWeekEnd,
+        ),
         TimelineBucket.nextWeek,
       );
     });
@@ -80,8 +105,13 @@ void main() {
     test('later: due > nextWeekEnd', () {
       final t = build(dueAt: DateTime(2026, 7, 1, 9, 0));
       expect(
-        classifyTimelineBucket(t, now,
-            weekStart: weekStart, weekEnd: weekEnd, nextWeekEnd: nextWeekEnd),
+        classifyTimelineBucket(
+          t,
+          now,
+          weekStart: weekStart,
+          weekEnd: weekEnd,
+          nextWeekEnd: nextWeekEnd,
+        ),
         TimelineBucket.later,
       );
     });
@@ -89,8 +119,13 @@ void main() {
     test('later: 无 dueAt', () {
       final t = build();
       expect(
-        classifyTimelineBucket(t, now,
-            weekStart: weekStart, weekEnd: weekEnd, nextWeekEnd: nextWeekEnd),
+        classifyTimelineBucket(
+          t,
+          now,
+          weekStart: weekStart,
+          weekEnd: weekEnd,
+          nextWeekEnd: nextWeekEnd,
+        ),
         TimelineBucket.later,
       );
     });
@@ -146,7 +181,9 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
-          home: Scaffold(body: TimelineView(tasks: tasks, now: now)),
+          home: Scaffold(
+            body: TimelineView(tasks: tasks, now: now),
+          ),
         ),
       ),
     );

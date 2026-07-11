@@ -31,16 +31,18 @@ class SyncChangeQueue {
     int? serverId,
     required Map<String, dynamic> payload,
   }) async {
-    await _db.into(_db.todoSyncChanges).insert(
-      TodoSyncChangesCompanion.insert(
-        clientMutationId: _uuid.v4(),
-        entity: entity,
-        op: op,
-        entityLocalId: Value(localId),
-        entityServerId: Value(serverId),
-        payloadJson: jsonEncode(payload),
-        createdAt: DateTime.now(),
-      ),
-    );
+    await _db
+        .into(_db.todoSyncChanges)
+        .insert(
+          TodoSyncChangesCompanion.insert(
+            clientMutationId: _uuid.v4(),
+            entity: entity,
+            op: op,
+            entityLocalId: Value(localId),
+            entityServerId: Value(serverId),
+            payloadJson: jsonEncode(payload),
+            createdAt: DateTime.now(),
+          ),
+        );
   }
 }

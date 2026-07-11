@@ -32,9 +32,7 @@ class CountdownPage extends ConsumerWidget {
             separatorBuilder: (_, _) => const Divider(height: 1),
             itemBuilder: (_, i) {
               final c = items[i];
-              final daysLeft = c.targetDate
-                  .difference(DateTime.now())
-                  .inDays;
+              final daysLeft = c.targetDate.difference(DateTime.now()).inDays;
               return ListTile(
                 leading: CircleAvatar(
                   backgroundColor: _parseColor(c.color),
@@ -45,9 +43,7 @@ class CountdownPage extends ConsumerWidget {
                 ),
                 title: Text(c.title),
                 subtitle: Text(
-                  c.isCountUp
-                      ? '已 ${-daysLeft} 天'
-                      : '还有 $daysLeft 天',
+                  c.isCountUp ? '已 ${-daysLeft} 天' : '还有 $daysLeft 天',
                 ),
               );
             },
@@ -68,7 +64,10 @@ class CountdownPage extends ConsumerWidget {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(controller: titleCtl, decoration: const InputDecoration(labelText: '标题')),
+              TextField(
+                controller: titleCtl,
+                decoration: const InputDecoration(labelText: '标题'),
+              ),
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -78,8 +77,12 @@ class CountdownPage extends ConsumerWidget {
                       final picked = await showDatePicker(
                         context: ctx,
                         initialDate: target,
-                        firstDate: DateTime.now().subtract(const Duration(days: 365 * 5)),
-                        lastDate: DateTime.now().add(const Duration(days: 365 * 10)),
+                        firstDate: DateTime.now().subtract(
+                          const Duration(days: 365 * 5),
+                        ),
+                        lastDate: DateTime.now().add(
+                          const Duration(days: 365 * 10),
+                        ),
                       );
                       if (picked != null) setState(() => target = picked);
                     },
@@ -90,14 +93,16 @@ class CountdownPage extends ConsumerWidget {
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('取消'),
+            ),
             FilledButton(
               onPressed: () async {
                 if (titleCtl.text.trim().isEmpty) return;
-                await ref.read(countdownApiProvider).create(
-                      title: titleCtl.text.trim(),
-                      targetDate: target,
-                    );
+                await ref
+                    .read(countdownApiProvider)
+                    .create(title: titleCtl.text.trim(), targetDate: target);
                 ref.invalidate(countdownsProvider);
                 if (ctx.mounted) Navigator.pop(ctx);
               },

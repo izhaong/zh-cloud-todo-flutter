@@ -10,7 +10,7 @@ class ResolvedDate {
 
 class NlpDateParser {
   NlpDateParser({DateTime Function()? nowProvider})
-      : _nowProvider = nowProvider ?? DateTime.now;
+    : _nowProvider = nowProvider ?? DateTime.now;
 
   final DateTime Function() _nowProvider;
 
@@ -40,33 +40,49 @@ class NlpDateParser {
     }
 
     // "明天 8 点" / "明天 8:30" / "tomorrow 8am"
-    final tomorrowRe = RegExp(r'(明天|后天|tomorrow)(?:\s*)?(\d{1,2})(?:[:：.](\d{1,2}))?(?:[\s]*([点时])|[\s]*(am|pm))?');
+    final tomorrowRe = RegExp(
+      r'(明天|后天|tomorrow)(?:\s*)?(\d{1,2})(?:[:：.](\d{1,2}))?(?:[\s]*([点时])|[\s]*(am|pm))?',
+    );
     final tm = tomorrowRe.firstMatch(lower);
     if (tm != null) {
-      final offset = lower.contains('后天') || lower.contains('day after') ? 2 : 1;
+      final offset = lower.contains('后天') || lower.contains('day after')
+          ? 2
+          : 1;
       final hour = int.parse(tm.group(2)!);
       final minute = int.tryParse(tm.group(3) ?? '') ?? 0;
       final base = _todayAtMidnight(now).add(Duration(days: offset));
       return ResolvedDate(
-        DateTime(base.year, base.month, base.day, _adjustHour(hour, tm.group(5) ?? tm.group(4)), minute),
+        DateTime(
+          base.year,
+          base.month,
+          base.day,
+          _adjustHour(hour, tm.group(5) ?? tm.group(4)),
+          minute,
+        ),
         tm.group(0)!,
       );
     }
 
     // "今天 14:30" / "今天下午 3 点"
-    final todayRe = RegExp(r'(今天|今日|today)(?:\s*)?(\d{1,2})(?:[:：.](\d{1,2}))?');
+    final todayRe = RegExp(
+      r'(今天|今日|today)(?:\s*)?(\d{1,2})(?:[:：.](\d{1,2}))?',
+    );
     final tdm = todayRe.firstMatch(lower);
     if (tdm != null) {
       final base = _todayAtMidnight(now);
       final hour = int.parse(tdm.group(2)!);
       final minute = int.tryParse(tdm.group(3) ?? '') ?? 0;
-      return ResolvedDate(DateTime(base.year, base.month, base.day, hour, minute), tdm.group(0)!);
+      return ResolvedDate(
+        DateTime(base.year, base.month, base.day, hour, minute),
+        tdm.group(0)!,
+      );
     }
 
     return null;
   }
 
-  DateTime _todayAtMidnight(DateTime now) => DateTime(now.year, now.month, now.day);
+  DateTime _todayAtMidnight(DateTime now) =>
+      DateTime(now.year, now.month, now.day);
   int _defaultHour(DateTime now) => now.hour;
 
   int _adjustHour(int hour, String? suffix) {

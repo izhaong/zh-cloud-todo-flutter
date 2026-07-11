@@ -51,8 +51,7 @@ class SyncCoordinator {
   Future<int> push() async {
     final pending = await (db.select(
       db.todoSyncChanges,
-    )..where((t) => t.status.equals('queued')))
-        .get();
+    )..where((t) => t.status.equals('queued'))).get();
     if (pending.isEmpty) return 0;
 
     final folderChanges = pending
@@ -78,10 +77,7 @@ class SyncCoordinator {
     if (dtos.isEmpty) return 0;
 
     try {
-      final result = await api.push(
-        idempotencyKey: _uuid.v4(),
-        changes: dtos,
-      );
+      final result = await api.push(idempotencyKey: _uuid.v4(), changes: dtos);
       for (final accepted in result.accepted) {
         await _applyAccepted(accepted);
       }
@@ -98,9 +94,9 @@ class SyncCoordinator {
           final isConflict = result.conflicts.any(
             (c) => c.clientMutationId == change.clientMutationId,
           );
-          await (db.update(db.todoSyncChanges)
-                ..where((t) => t.id.equals(change.id)))
-              .write(
+          await (db.update(
+            db.todoSyncChanges,
+          )..where((t) => t.id.equals(change.id))).write(
             TodoSyncChangesCompanion(
               status: Value(isConflict ? 'failed' : 'synced'),
             ),
@@ -184,7 +180,10 @@ class SyncCoordinator {
 
     int? baseRevision;
     if (change.entityServerId != null) {
-      baseRevision = await db.readRevision(change.entity, change.entityServerId!);
+      baseRevision = await db.readRevision(
+        change.entity,
+        change.entityServerId!,
+      );
     }
 
     final resolvedPayload = isDelete
@@ -349,9 +348,10 @@ class SyncCoordinator {
     int entityId,
   ) async {
     if (clientMutationId == null) return;
-    final change = await (db.select(db.todoSyncChanges)
-          ..where((t) => t.clientMutationId.equals(clientMutationId)))
-        .getSingleOrNull();
+    final change =
+        await (db.select(db.todoSyncChanges)
+              ..where((t) => t.clientMutationId.equals(clientMutationId)))
+            .getSingleOrNull();
     final localId = change?.entityLocalId;
     if (localId == null) return;
     await (db.update(table)..where((t) => (t as dynamic).id.equals(localId)))
@@ -490,7 +490,9 @@ class SyncCoordinator {
       id: Value(existing?.id ?? _uuid.v4()),
       serverId: Value(serverId),
       name: Value(payload['name']?.toString() ?? existing?.name ?? ''),
-      folderId: Value((payload['folderId'] as num?)?.toInt() ?? existing?.folderId),
+      folderId: Value(
+        (payload['folderId'] as num?)?.toInt() ?? existing?.folderId,
+      ),
       sortOrder: Value((payload['sortOrder'] as num?)?.toInt() ?? 0),
       updatedAt: Value(now),
       createdAt: Value(existing?.createdAt ?? now),
@@ -614,11 +616,19 @@ class SyncCoordinator {
       id: Value(existing?.id ?? _uuid.v4()),
       serverId: Value(serverId),
       taskId: Value(localTaskId),
-      freq: Value(payload['frequency']?.toString() ?? payload['freq']?.toString() ?? 'DAILY'),
-      interval: Value((payload['intervalValue'] as num?)?.toInt() ??
-          (payload['interval'] as num?)?.toInt() ??
-          1),
-      byDay: Value(payload['weekdays']?.toString() ?? payload['byDay']?.toString()),
+      freq: Value(
+        payload['frequency']?.toString() ??
+            payload['freq']?.toString() ??
+            'DAILY',
+      ),
+      interval: Value(
+        (payload['intervalValue'] as num?)?.toInt() ??
+            (payload['interval'] as num?)?.toInt() ??
+            1,
+      ),
+      byDay: Value(
+        payload['weekdays']?.toString() ?? payload['byDay']?.toString(),
+      ),
       until: Value(_parseDate(payload['untilAt'] ?? payload['until'])),
       updatedAt: Value(now),
       createdAt: Value(existing?.createdAt ?? now),
@@ -672,17 +682,19 @@ class SyncCoordinator {
     final sourceType = payload['sourceType']?.toString() ?? 'default';
     final sourceKey = payload['sourceKey']?.toString() ?? 'default';
     final now = DateTime.now();
-    await db.into(db.todoViewPreferences).insertOnConflictUpdate(
-      TodoViewPreferencesCompanion.insert(
-        id: _uuid.v4(),
-        serverId: Value(serverId),
-        sourceType: sourceType,
-        sourceKey: sourceKey,
-        valueJson: jsonEncode(payload),
-        updatedAt: now,
-        createdAt: now,
-      ),
-    );
+    await db
+        .into(db.todoViewPreferences)
+        .insertOnConflictUpdate(
+          TodoViewPreferencesCompanion.insert(
+            id: _uuid.v4(),
+            serverId: Value(serverId),
+            sourceType: sourceType,
+            sourceKey: sourceKey,
+            valueJson: jsonEncode(payload),
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
   }
 
   Future<void> _upsertLocalFilter(
@@ -697,7 +709,11 @@ class SyncCoordinator {
       id: Value(existing?.id ?? _uuid.v4()),
       serverId: Value(serverId),
       name: Value(payload['name']?.toString() ?? existing?.name ?? ''),
-      conditionJson: Value(jsonEncode(payload['conditionsJson'] ?? payload['conditions'] ?? payload)),
+      conditionJson: Value(
+        jsonEncode(
+          payload['conditionsJson'] ?? payload['conditions'] ?? payload,
+        ),
+      ),
       sortOrder: Value((payload['sortOrder'] as num?)?.toInt() ?? 0),
       updatedAt: Value(now),
       createdAt: Value(existing?.createdAt ?? now),
@@ -722,19 +738,21 @@ class SyncCoordinator {
       (payload['tagId'] as num?)?.toInt(),
     );
     if (localTaskId == null || localTagId == null) return;
-    final existing = await (db.select(db.todoTaskTags)
-          ..where(
-            (t) => t.taskId.equals(localTaskId) & t.tagId.equals(localTagId),
-          ))
-        .getSingleOrNull();
+    final existing =
+        await (db.select(db.todoTaskTags)..where(
+              (t) => t.taskId.equals(localTaskId) & t.tagId.equals(localTagId),
+            ))
+            .getSingleOrNull();
     if (existing != null) return; // 复合键已存在，跳过
-    await db.into(db.todoTaskTags).insert(
-      TodoTaskTagsCompanion.insert(
-        taskId: localTaskId,
-        tagId: localTagId,
-        serverId: Value(serverId),
-      ),
-    );
+    await db
+        .into(db.todoTaskTags)
+        .insert(
+          TodoTaskTagsCompanion.insert(
+            taskId: localTaskId,
+            tagId: localTagId,
+            serverId: Value(serverId),
+          ),
+        );
   }
 
   // --- serverId → 本地 UUID 映射 ----------------------------------------

@@ -25,10 +25,7 @@ class _ListPageState extends ConsumerState<ListPage> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => ListEditorSheet(
-        folderId: folderId,
-        existing: existing,
-      ),
+      builder: (_) => ListEditorSheet(folderId: folderId, existing: existing),
     );
   }
 
@@ -127,14 +124,16 @@ class _ListPageState extends ConsumerState<ListPage> {
               _SmartListSection(),
               const SizedBox(height: 12),
               _SectionTitle('文件夹'),
-              ...folders.map((f) => _FolderGroup(
-                    folder: f,
-                    lists: lists.where((l) => l.folderId == f.serverId).toList(),
-                    onCreate: () => _openCreateSheet(folderId: f.serverId),
-                    onTap: (l) => _openCreateSheet(existing: l),
-                    onDelete: _deleteList,
-                    onMove: _move,
-                  )),
+              ...folders.map(
+                (f) => _FolderGroup(
+                  folder: f,
+                  lists: lists.where((l) => l.folderId == f.serverId).toList(),
+                  onCreate: () => _openCreateSheet(folderId: f.serverId),
+                  onTap: (l) => _openCreateSheet(existing: l),
+                  onDelete: _deleteList,
+                  onMove: _move,
+                ),
+              ),
               const SizedBox(height: 8),
               _SectionTitle('未分组清单'),
               _UngroupedGroup(
@@ -190,9 +189,9 @@ class _SmartListSection extends ConsumerWidget {
                 title: Text(l.name.substring('smart:'.length)),
                 subtitle: Text(l.createdAt.toIso8601String().substring(0, 10)),
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('智能清单：${l.name}')),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text('智能清单：${l.name}')));
                 },
               ),
             )),
@@ -284,9 +283,7 @@ class _UngroupedGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (lists.isEmpty) {
-      return const Card(
-        child: ListTile(title: Text('暂无未分组清单')),
-      );
+      return const Card(child: ListTile(title: Text('暂无未分组清单')));
     }
     return Card(
       child: Column(
@@ -355,10 +352,7 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 12, 8, 6),
-      child: Text(
-        text,
-        style: Theme.of(context).textTheme.titleSmall,
-      ),
+      child: Text(text, style: Theme.of(context).textTheme.titleSmall),
     );
   }
 }

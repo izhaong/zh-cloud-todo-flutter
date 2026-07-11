@@ -47,9 +47,7 @@ class AuthGatewayImpl implements AuthGateway {
       final code = body['code'];
       if (code != 0) {
         throw TodoAuthException(
-          body['msg']?.toString() ??
-              body['message']?.toString() ??
-              '账号请求失败',
+          body['msg']?.toString() ?? body['message']?.toString() ?? '账号请求失败',
         );
       }
       return body['data'];
@@ -136,9 +134,7 @@ class AuthGatewayImpl implements AuthGateway {
   Future<bool> validateSession(String accessToken) async {
     if (accessToken.isEmpty) return false;
     try {
-      final resp = await _client.memberGet<Map<String, dynamic>>(
-        '/user/get',
-      );
+      final resp = await _client.memberGet<Map<String, dynamic>>('/user/get');
       _unwrap(resp);
       return true;
     } on TodoAuthException {

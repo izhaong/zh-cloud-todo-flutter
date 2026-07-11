@@ -38,25 +38,25 @@ class QuadrantRulesPage extends ConsumerWidget {
   }
 
   String quadrantLabel(Quadrant q) => switch (q) {
-        Quadrant.q1 => 'Q1 重要且紧急',
-        Quadrant.q2 => 'Q2 重要不紧急',
-        Quadrant.q3 => 'Q3 紧急不重要',
-        Quadrant.q4 => 'Q4 不紧急不重要',
-      };
+    Quadrant.q1 => 'Q1 重要且紧急',
+    Quadrant.q2 => 'Q2 重要不紧急',
+    Quadrant.q3 => 'Q3 紧急不重要',
+    Quadrant.q4 => 'Q4 不紧急不重要',
+  };
 
   IconData quadrantIcon(Quadrant q) => switch (q) {
-        Quadrant.q1 => Icons.local_fire_department,
-        Quadrant.q2 => Icons.schedule,
-        Quadrant.q3 => Icons.forward_to_inbox,
-        Quadrant.q4 => Icons.dashboard_customize_outlined,
-      };
+    Quadrant.q1 => Icons.local_fire_department,
+    Quadrant.q2 => Icons.schedule,
+    Quadrant.q3 => Icons.forward_to_inbox,
+    Quadrant.q4 => Icons.dashboard_customize_outlined,
+  };
 
   Color quadrantColor(Quadrant q) => switch (q) {
-        Quadrant.q1 => Colors.red,
-        Quadrant.q2 => Colors.amber,
-        Quadrant.q3 => Colors.lightBlue,
-        Quadrant.q4 => Colors.grey,
-      };
+    Quadrant.q1 => Colors.red,
+    Quadrant.q2 => Colors.amber,
+    Quadrant.q3 => Colors.lightBlue,
+    Quadrant.q4 => Colors.grey,
+  };
 
   String quadrantDescription(QuadrantRule? r) {
     if (r == null) return '';

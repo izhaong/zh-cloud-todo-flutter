@@ -29,12 +29,8 @@ class InboxEntry {
 @immutable
 class InboxState {
   const InboxState.loading() : loading = true, error = null, entries = const [];
-  const InboxState.error(this.error)
-      : loading = false,
-        entries = const [];
-  const InboxState.data(this.entries)
-      : loading = false,
-        error = null;
+  const InboxState.error(this.error) : loading = false, entries = const [];
+  const InboxState.data(this.entries) : loading = false, error = null;
 
   final bool loading;
   final String? error;
@@ -46,6 +42,7 @@ class InboxGroup {
   InboxGroup({required this.taskId, required this.taskTitle});
 
   final int taskId;
+
   /// 任务本地/后端标题。
   final String taskTitle;
 
@@ -135,8 +132,7 @@ class ReminderInboxPage extends ConsumerWidget {
       body: notLoggedIn
           ? const Center(child: Text('请先登录后再查看提醒'))
           : async.when(
-              loading: () =>
-                  const Center(child: CircularProgressIndicator()),
+              loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -177,22 +173,16 @@ class ReminderInboxPage extends ConsumerWidget {
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.maybeOf(context);
     unawaited(
-      db.taskByServerId(taskId).then(
-        (t) {
-          if (t == null) {
-            messenger?.showSnackBar(
-              const SnackBar(content: Text('未找到对应任务')),
-            );
-            return;
-          }
-          // 直接以 page 模式跳转任务详情（nbavigator 在 await 前捕获，上下文有效）。
-          navigator.push(
-            MaterialPageRoute(
-              builder: (_) => TaskDetailPage(taskId: t.id),
-            ),
-          );
-        },
-      ),
+      db.taskByServerId(taskId).then((t) {
+        if (t == null) {
+          messenger?.showSnackBar(const SnackBar(content: Text('未找到对应任务')));
+          return;
+        }
+        // 直接以 page 模式跳转任务详情（nbavigator 在 await 前捕获，上下文有效）。
+        navigator.push(
+          MaterialPageRoute(builder: (_) => TaskDetailPage(taskId: t.id)),
+        );
+      }),
     );
   }
 }
@@ -246,23 +236,19 @@ class _InboxGroupCard extends ConsumerWidget {
                 spacing: 8,
                 children: [
                   FilledButton.tonal(
-                    onPressed: () => onAct(
-                      () async {
-                        for (final r in pending) {
-                          await api.complete(r.id);
-                        }
-                      },
-                    ),
+                    onPressed: () => onAct(() async {
+                      for (final r in pending) {
+                        await api.complete(r.id);
+                      }
+                    }),
                     child: const Text('全部完成'),
                   ),
                   OutlinedButton(
-                    onPressed: () => onAct(
-                      () async {
-                        for (final r in pending) {
-                          await api.dismiss(r.id);
-                        }
-                      },
-                    ),
+                    onPressed: () => onAct(() async {
+                      for (final r in pending) {
+                        await api.dismiss(r.id);
+                      }
+                    }),
                     child: const Text('全部忽略'),
                   ),
                 ],

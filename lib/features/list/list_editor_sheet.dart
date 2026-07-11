@@ -116,10 +116,7 @@ class _ListEditorSheetState extends ConsumerState<ListEditorSheet> {
                   onPressed: () => Navigator.pop(context),
                   child: const Text('取消'),
                 ),
-                FilledButton(
-                  onPressed: _save,
-                  child: const Text('保存'),
-                ),
+                FilledButton(onPressed: _save, child: const Text('保存')),
               ],
             ),
           ],

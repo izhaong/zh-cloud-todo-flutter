@@ -17,23 +17,20 @@ class TaskAssignState {
 }
 
 /// 拉取当前任务的执行人（一次异步）。
-final taskAssignProvider =
-    FutureProvider.family.autoDispose<TaskAssignState, int>((
-  ref,
-  taskServerId,
-) async {
-  final api = ref.watch(todoApiProvider).taskAssign;
-  try {
-    final userId = await api.assignee(taskServerId);
-    return TaskAssignState(loading: false, assigneeUserId: userId);
-  } catch (e) {
-    return TaskAssignState(
-      loading: false,
-      assigneeUserId: null,
-      error: e.toString(),
-    );
-  }
-});
+final taskAssignProvider = FutureProvider.family
+    .autoDispose<TaskAssignState, int>((ref, taskServerId) async {
+      final api = ref.watch(todoApiProvider).taskAssign;
+      try {
+        final userId = await api.assignee(taskServerId);
+        return TaskAssignState(loading: false, assigneeUserId: userId);
+      } catch (e) {
+        return TaskAssignState(
+          loading: false,
+          assigneeUserId: null,
+          error: e.toString(),
+        );
+      }
+    });
 
 /// 任务执行人指派页：
 /// - 显示当前执行人
@@ -42,11 +39,7 @@ final taskAssignProvider =
 ///
 /// 注：按后端契约走 REST，后端负责校验成员是否属于清单；本地不再额外做清单/成员交叉校验。
 class TaskAssignPage extends ConsumerStatefulWidget {
-  const TaskAssignPage({
-    super.key,
-    required this.taskServerId,
-    this.taskTitle,
-  });
+  const TaskAssignPage({super.key, required this.taskServerId, this.taskTitle});
 
   final int taskServerId;
   final String? taskTitle;
@@ -176,13 +169,13 @@ class _TaskAssignPageState extends ConsumerState<TaskAssignPage> {
         ListTile(
           leading: const Icon(Icons.person_outline),
           title: Text(
-            s.assigneeUserId == null
-                ? '尚未指派'
-                : '执行人 #${s.assigneeUserId}',
+            s.assigneeUserId == null ? '尚未指派' : '执行人 #${s.assigneeUserId}',
           ),
-          subtitle: Text(s.assigneeUserId == null
-              ? '该任务当前没有执行人'
-              : '服务端用户 ID：${s.assigneeUserId}'),
+          subtitle: Text(
+            s.assigneeUserId == null
+                ? '该任务当前没有执行人'
+                : '服务端用户 ID：${s.assigneeUserId}',
+          ),
         ),
         const Divider(),
         Row(
@@ -205,9 +198,7 @@ class _TaskAssignPageState extends ConsumerState<TaskAssignPage> {
                       final userId = int.tryParse(_userIdCtrl.text.trim());
                       if (userId == null) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('请输入合法的用户 ID（数字）'),
-                          ),
+                          const SnackBar(content: Text('请输入合法的用户 ID（数字）')),
                         );
                         return;
                       }

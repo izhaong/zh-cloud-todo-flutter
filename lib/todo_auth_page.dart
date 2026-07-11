@@ -345,10 +345,12 @@ class _TodoAuthPageState extends ConsumerState<TodoAuthPage> {
       _message = null;
     });
     try {
-      await ref.read(authGatewayProvider).sendSmsCode(
-        mobile: _mobileController.text.trim(),
-        scene: _mode == _AuthMode.forgotPassword ? 4 : 1,
-      );
+      await ref
+          .read(authGatewayProvider)
+          .sendSmsCode(
+            mobile: _mobileController.text.trim(),
+            scene: _mode == _AuthMode.forgotPassword ? 4 : 1,
+          );
       setState(() {
         _message = _mode == _AuthMode.forgotPassword
             ? '重置密码验证码已发送'
@@ -384,19 +386,23 @@ class _TodoAuthPageState extends ConsumerState<TodoAuthPage> {
     });
     try {
       if (_mode == _AuthMode.password) {
-        final session = await ref.read(authGatewayProvider).passwordLogin(
-          mobile: _mobileController.text.trim(),
-          password: _passwordController.text,
-        );
+        final session = await ref
+            .read(authGatewayProvider)
+            .passwordLogin(
+              mobile: _mobileController.text.trim(),
+              password: _passwordController.text,
+            );
         await ref.read(sessionProvider.notifier).setSession(session);
         return;
       }
       if (_mode == _AuthMode.forgotPassword) {
-        await ref.read(authGatewayProvider).resetPassword(
-          mobile: _mobileController.text.trim(),
-          code: _codeController.text.trim(),
-          password: _passwordController.text,
-        );
+        await ref
+            .read(authGatewayProvider)
+            .resetPassword(
+              mobile: _mobileController.text.trim(),
+              code: _codeController.text.trim(),
+              password: _passwordController.text,
+            );
         setState(() {
           _mode = _AuthMode.password;
           _passwordController.clear();
@@ -406,10 +412,12 @@ class _TodoAuthPageState extends ConsumerState<TodoAuthPage> {
         });
         return;
       }
-      final session = await ref.read(authGatewayProvider).smsLogin(
-        mobile: _mobileController.text.trim(),
-        code: _codeController.text.trim(),
-      );
+      final session = await ref
+          .read(authGatewayProvider)
+          .smsLogin(
+            mobile: _mobileController.text.trim(),
+            code: _codeController.text.trim(),
+          );
       await ref.read(sessionProvider.notifier).setSession(session);
     } on TodoAuthException catch (error) {
       setState(() {

@@ -41,7 +41,8 @@ class ApiClient {
           if (token != null && token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
           }
-          options.headers['tenant-id'] = tenantIdProvider?.call() ?? ApiConfig.defaultTenantId;
+          options.headers['tenant-id'] =
+              tenantIdProvider?.call() ?? ApiConfig.defaultTenantId;
           handler.next(options);
         },
         onError: (error, handler) {

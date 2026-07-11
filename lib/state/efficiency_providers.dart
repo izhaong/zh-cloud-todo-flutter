@@ -25,29 +25,33 @@ final habitRepositoryProvider = Provider<HabitRepository>((ref) {
 final activePomodoroIdProvider = StateProvider<int?>((ref) => null);
 
 /// 番茄会话历史（最近 7 天）。
-final pomodoroStatsProvider =
-    FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {
+final pomodoroStatsProvider = FutureProvider.autoDispose<Map<String, dynamic>>((
+  ref,
+) async {
   final api = ref.watch(pomodoroApiProvider);
   return api.stats(days: 7);
 });
 
 /// 倒数日列表。
-final countdownsProvider =
-    FutureProvider.autoDispose<List<CountdownDto>>((ref) async {
+final countdownsProvider = FutureProvider.autoDispose<List<CountdownDto>>((
+  ref,
+) async {
   final api = ref.watch(countdownApiProvider);
   return api.list();
 });
 
 /// 我的习惯列表。
-final myHabitsProvider =
-    FutureProvider.autoDispose<List<HabitDto>>((ref) async {
+final myHabitsProvider = FutureProvider.autoDispose<List<HabitDto>>((
+  ref,
+) async {
   final repo = ref.watch(habitRepositoryProvider);
   return repo.listMine();
 });
 
 /// 习惯统计。
-final habitStatsProvider =
-    FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {
+final habitStatsProvider = FutureProvider.autoDispose<Map<String, dynamic>>((
+  ref,
+) async {
   final repo = ref.watch(habitRepositoryProvider);
   return repo.stats();
 });

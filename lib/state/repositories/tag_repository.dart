@@ -26,32 +26,34 @@ class TagRepository {
   ];
 
   Stream<List<TodoTag>> watchAll() {
-    return (_db.select(_db.todoTags)
-          ..orderBy([(t) => OrderingTerm(expression: t.createdAt)]))
-        .watch();
+    return (_db.select(
+      _db.todoTags,
+    )..orderBy([(t) => OrderingTerm(expression: t.createdAt)])).watch();
   }
 
   Future<List<TodoTag>> getAll() {
-    return (_db.select(_db.todoTags)
-          ..orderBy([(t) => OrderingTerm(expression: t.createdAt)]))
-        .get();
+    return (_db.select(
+      _db.todoTags,
+    )..orderBy([(t) => OrderingTerm(expression: t.createdAt)])).get();
   }
 
   Future<TodoTag> create({required String name, String? color}) async {
     final now = DateTime.now();
     final id = _uuid.v4();
-    await _db.into(_db.todoTags).insert(
-      TodoTagsCompanion.insert(
-        id: id,
-        name: name,
-        color: Value(color),
-        updatedAt: now,
-        createdAt: now,
-      ),
-    );
-    final row = await (_db.select(_db.todoTags)
-          ..where((t) => t.id.equals(id)))
-        .getSingle();
+    await _db
+        .into(_db.todoTags)
+        .insert(
+          TodoTagsCompanion.insert(
+            id: id,
+            name: name,
+            color: Value(color),
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    final row = await (_db.select(
+      _db.todoTags,
+    )..where((t) => t.id.equals(id))).getSingle();
     await _queue.enqueue(
       entity: SyncEntities.tag,
       op: SyncOps.upsert,
@@ -63,15 +65,16 @@ class TagRepository {
 
   Future<TodoTag> update(String tagId, {String? name, String? color}) async {
     final now = DateTime.now();
-    await (_db.update(_db.todoTags)..where((t) => t.id.equals(tagId)))
-        .write(TodoTagsCompanion(
-      name: name == null ? const Value.absent() : Value(name),
-      color: color == null ? const Value.absent() : Value(color),
-      updatedAt: Value(now),
-    ));
-    final row = await (_db.select(_db.todoTags)
-          ..where((t) => t.id.equals(tagId)))
-        .getSingle();
+    await (_db.update(_db.todoTags)..where((t) => t.id.equals(tagId))).write(
+      TodoTagsCompanion(
+        name: name == null ? const Value.absent() : Value(name),
+        color: color == null ? const Value.absent() : Value(color),
+        updatedAt: Value(now),
+      ),
+    );
+    final row = await (_db.select(
+      _db.todoTags,
+    )..where((t) => t.id.equals(tagId))).getSingle();
     await _queue.enqueue(
       entity: SyncEntities.tag,
       op: SyncOps.upsert,
@@ -83,10 +86,12 @@ class TagRepository {
   }
 
   Future<void> delete(String tagId) async {
-    final row = await (_db.select(_db.todoTags)
-          ..where((t) => t.id.equals(tagId)))
-        .getSingleOrNull();
-    await (_db.delete(_db.todoTaskTags)..where((t) => t.tagId.equals(tagId))).go();
+    final row = await (_db.select(
+      _db.todoTags,
+    )..where((t) => t.id.equals(tagId))).getSingleOrNull();
+    await (_db.delete(
+      _db.todoTaskTags,
+    )..where((t) => t.tagId.equals(tagId))).go();
     await (_db.delete(_db.todoTags)..where((t) => t.id.equals(tagId))).go();
     await _queue.enqueue(
       entity: SyncEntities.tag,
@@ -105,27 +110,30 @@ class TagRepository {
         _db.todoTags,
         _db.todoTags.id.equalsExp(_db.todoTaskTags.tagId),
       ),
-    ])
-      ..where(_db.todoTaskTags.taskId.equals(taskId));
+    ])..where(_db.todoTaskTags.taskId.equals(taskId));
     return q.watch().map(
-          (rows) => rows.map((r) => r.readTable(_db.todoTags)).toList(),
-        );
+      (rows) => rows.map((r) => r.readTable(_db.todoTags)).toList(),
+    );
   }
 
   Future<List<String>> tagIdsOf(String taskId) async {
-    final rows = await (_db.select(_db.todoTaskTags)
-          ..where((t) => t.taskId.equals(taskId)))
-        .get();
+    final rows = await (_db.select(
+      _db.todoTaskTags,
+    )..where((t) => t.taskId.equals(taskId))).get();
     return rows.map((r) => r.tagId).toList();
   }
 
   Future<void> setTaskTags(String taskId, List<String> tagIds) async {
-    await (_db.delete(_db.todoTaskTags)..where((t) => t.taskId.equals(taskId))).go();
+    await (_db.delete(
+      _db.todoTaskTags,
+    )..where((t) => t.taskId.equals(taskId))).go();
     for (final tagId in tagIds.toSet()) {
-      await _db.into(_db.todoTaskTags).insert(
-        TodoTaskTagsCompanion.insert(taskId: taskId, tagId: tagId),
-        mode: InsertMode.insertOrIgnore,
-      );
+      await _db
+          .into(_db.todoTaskTags)
+          .insert(
+            TodoTaskTagsCompanion.insert(taskId: taskId, tagId: tagId),
+            mode: InsertMode.insertOrIgnore,
+          );
     }
     await _queue.enqueue(
       entity: SyncEntities.taskTag,

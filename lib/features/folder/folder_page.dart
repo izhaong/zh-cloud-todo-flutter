@@ -66,11 +66,7 @@ class FolderPage extends ConsumerWidget {
     WidgetRef ref,
     TodoFolder folder,
   ) async {
-    final name = await _promptName(
-      context,
-      '重命名文件夹',
-      initial: folder.name,
-    );
+    final name = await _promptName(context, '重命名文件夹', initial: folder.name);
     if (name == null || name.isEmpty) return;
     final repo = ref.read(folderRepositoryProvider);
     if (repo == null) return;

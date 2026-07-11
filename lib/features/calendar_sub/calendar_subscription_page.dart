@@ -7,11 +7,7 @@ import '../../state/providers.dart';
 /// ICS 订阅状态容器。
 @immutable
 class CalSubState {
-  const CalSubState({
-    required this.loading,
-    required this.items,
-    this.error,
-  });
+  const CalSubState({required this.loading, required this.items, this.error});
 
   final bool loading;
   final List<CalSubscription> items;
@@ -19,18 +15,15 @@ class CalSubState {
 }
 
 /// 拉取当前用户的 ICS 订阅列表。
-final calSubscriptionProvider =
-    FutureProvider.autoDispose<CalSubState>((ref) async {
+final calSubscriptionProvider = FutureProvider.autoDispose<CalSubState>((
+  ref,
+) async {
   final api = ref.watch(todoApiProvider).calSubscription;
   try {
     final list = await api.list();
     return CalSubState(loading: false, items: list);
   } catch (e) {
-    return CalSubState(
-      loading: false,
-      items: const [],
-      error: e.toString(),
-    );
+    return CalSubState(loading: false, items: const [], error: e.toString());
   }
 });
 
@@ -56,9 +49,9 @@ class _CalendarSubscriptionPageState
   Future<void> _add() async {
     final url = _urlCtrl.text.trim();
     if (url.isEmpty || Uri.tryParse(url)?.isAbsolute != true) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入合法的 URL（含 http:// 等）')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请输入合法的 URL（含 http:// 等）')));
       return;
     }
     final name = _nameCtrl.text.trim();
@@ -67,10 +60,10 @@ class _CalendarSubscriptionPageState
     setState(() => _busy = true);
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await ref.read(todoApiProvider).calSubscription.create(
-            url: url,
-            name: name.isEmpty ? null : name,
-          );
+      await ref
+          .read(todoApiProvider)
+          .calSubscription
+          .create(url: url, name: name.isEmpty ? null : name);
       if (!mounted) return;
       messenger.showSnackBar(const SnackBar(content: Text('已添加订阅')));
       ref.invalidate(calSubscriptionProvider);
@@ -202,27 +195,27 @@ class _CalendarSubscriptionPageState
             child: Center(child: Text('暂无 ICS 订阅')),
           )
         else
-          ...s.items.map((it) => Card(
-                child: ListTile(
-                  leading: Icon(
-                    it.enabled
-                        ? Icons.event_available
-                        : Icons.event_busy,
-                  ),
-                  title: Text(it.name),
-                  subtitle: Text(
-                    '${it.url}${it.lastSyncAt != null ? '\n同步于 ${it.lastSyncAt!.toLocal().toString().substring(0, 16)}' : ''}',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  isThreeLine: it.lastSyncAt != null,
-                  trailing: IconButton(
-                    tooltip: '删除',
-                    icon: const Icon(Icons.delete_outline),
-                    onPressed: () => _remove(it),
-                  ),
+          ...s.items.map(
+            (it) => Card(
+              child: ListTile(
+                leading: Icon(
+                  it.enabled ? Icons.event_available : Icons.event_busy,
                 ),
-              )),
+                title: Text(it.name),
+                subtitle: Text(
+                  '${it.url}${it.lastSyncAt != null ? '\n同步于 ${it.lastSyncAt!.toLocal().toString().substring(0, 16)}' : ''}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                isThreeLine: it.lastSyncAt != null,
+                trailing: IconButton(
+                  tooltip: '删除',
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: () => _remove(it),
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -232,9 +225,7 @@ class _CalendarSubscriptionPageState
   // Clipboard.setData，目前仅作为入口示意。
   Future<void> _exportOwnFeed(BuildContext context) async {
     const snackBar = SnackBar(
-      content: Text(
-        '导出自己的 ICS 链接：GET /cal-sub/export-ics（由后端生成）',
-      ),
+      content: Text('导出自己的 ICS 链接：GET /cal-sub/export-ics（由后端生成）'),
     );
     ScaffoldMessenger.of(context).showSnackBar(snackBar);
   }

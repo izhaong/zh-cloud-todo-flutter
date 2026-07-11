@@ -37,17 +37,20 @@ class HabitPage extends ConsumerWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
                     _Stat(
-                        label: '连续打卡',
-                        value: '${s['currentStreak'] ?? 0}',
-                        color: brandColors(context).warning),
+                      label: '连续打卡',
+                      value: '${s['currentStreak'] ?? 0}',
+                      color: brandColors(context).warning,
+                    ),
                     _Stat(
-                        label: '本周完成',
-                        value: '${s['weeklyDone'] ?? 0}',
-                        color: brandColors(context).today),
+                      label: '本周完成',
+                      value: '${s['weeklyDone'] ?? 0}',
+                      color: brandColors(context).today,
+                    ),
                     _Stat(
-                        label: '总打卡',
-                        value: '${s['totalCheckIns'] ?? 0}',
-                        color: brandColors(context).success),
+                      label: '总打卡',
+                      value: '${s['totalCheckIns'] ?? 0}',
+                      color: brandColors(context).success,
+                    ),
                   ],
                 ),
               ),
@@ -89,13 +92,19 @@ class HabitPage extends ConsumerWidget {
           decoration: const InputDecoration(hintText: '习惯名'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
           FilledButton(
             onPressed: () async {
               final name = ctl.text.trim();
               if (name.isEmpty) return;
               try {
-                await ref.read(apiClientProvider).raw.post(
+                await ref
+                    .read(apiClientProvider)
+                    .raw
+                    .post(
                       '/app-api/todo/habit/create',
                       data: {'name': name, 'targetPerWeek': 7},
                     );
@@ -104,9 +113,9 @@ class HabitPage extends ConsumerWidget {
                 if (ctx.mounted) Navigator.pop(ctx);
               } catch (e) {
                 if (ctx.mounted) {
-                  ScaffoldMessenger.of(ctx).showSnackBar(
-                    SnackBar(content: Text('创建失败: $e')),
-                  );
+                  ScaffoldMessenger.of(
+                    ctx,
+                  ).showSnackBar(SnackBar(content: Text('创建失败: $e')));
                 }
               }
             },
