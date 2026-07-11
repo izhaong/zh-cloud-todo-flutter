@@ -1,4 +1,4 @@
-# Feature Specification: 滴答清单核心能力对齐（Flutter 客户端重建）
+# Feature Specification: Todo 核心能力与多端交付（Flutter 客户端重建）
 
 **Feature Branch**: `001-todo-dida-core-parity`
 
@@ -6,11 +6,11 @@
 
 **Status**: Draft
 
-**Input**: 用户描述："实现一个与滴答清单一模一样的应用，现阶段偏差和遗漏太大，需要彻底完成 Flutter 客户端（手机/Web/桌面）+ 后端 todo 模块 + admin-vben 管理端对齐"
+**Input**: 用户描述："补齐 Todo 应用当前偏差和遗漏，彻底完成 Flutter 客户端（手机/Web/桌面）与后端 todo 模块、admin-vben 管理端的能力闭环"
 
-**范围决策**（已与用户确认，详见 `zh-cloud/.cursor/plans/滴答清单对齐交付计划_7dae23b6.plan.md`）：
+**范围决策**（已与用户确认，本规格为功能能力事实源）：
 
-- 核心产品对齐优先；第三方生态（Google/iCloud/Outlook/Exchange 日历、微信、Notion、Siri、Apple 健康、课表导入、MCP）仅做 ICS URL 订阅 + 导出订阅源，其余排入后续里程碑。
+- 核心产品能力优先；第三方日历、通信、笔记、语音与健康生态仅做 ICS URL 订阅 + 导出订阅源，其余排入后续里程碑。
 - 本仓（`zh-cloud-todo-flutter`）承担唯一 C 端全量重建；`zh-cloud-admin-vben` 仅补小缺口；`zh-cloud-admin-uniapp` 暂缓。
 - 后端 `zh-cloud-service` 的 `yudao-module-todo` 已有 42 张表与全域 `/app-api/todo/**`，本 spec 以消费既有 API 为主，仅在实测发现缺口时在 service 仓开小 Issue 补齐。
 
@@ -36,7 +36,7 @@
 
 用户可以在列表、看板、时间线三种视图间切换查看任务，并通过日历的周/月/年/列表/日程视图查看任务的时间分布，视图偏好跨端保持。
 
-**Why this priority**：滴答清单的核心差异化体验之一，是当前 Flutter 客户端完全缺失的部分。
+**Why this priority**：多视图与日历是 Todo 产品的核心差异化体验，也是当前 Flutter 客户端需要补齐的能力。
 
 **Independent Test**：切换视图后杀进程重启应用，验证视图偏好被记住（本地 + 服务端 `view_preference` 同步）。
 
@@ -52,7 +52,7 @@
 
 用户可以用四象限（重要/紧急）整理任务、启动番茄钟专注并统计时长、创建习惯并每日打卡看连续天数、创建倒数纪念日查看剩余天数——四者均为真实后端数据，而非本地演示。
 
-**Why this priority**：效率工具是滴答清单的招牌功能，当前实现是纯本地 mock，必须接入 `/app-api/todo/{quadrant,pomodoro,habit,countdown}` 真实闭环。
+**Why this priority**：效率工具是完整 Todo 体验的重要组成，当前实现是纯本地 mock，必须接入 `/app-api/todo/{quadrant,pomodoro,habit,countdown}` 真实闭环。
 
 **Independent Test**：完成一次番茄钟后查看统计页，验证时长来自服务端 `todo_pomodoro_session` 而非本地缓存（换设备登录仍可见）。
 
@@ -158,5 +158,5 @@
 
 - 后端 `/app-api/todo/**` 契约以当前 `zh-cloud-service` 实测行为为准；发现字段缺口时以最小 ALTER/接口补丁处理，不推翻既有表结构。
 - 本地通知使用 `flutter_local_notifications`，不依赖服务端推送通道（后续如需远程推送再评估）。
-- 第三方日历深度集成（Google/iCloud/Outlook/Exchange OAuth）不在本 spec 范围内，仅做 ICS URL 层。
+- 第三方日历的 OAuth 深度集成不在本 spec 范围内，仅做 ICS URL 层。
 - `zh-cloud-admin-uniapp` 的 Todo 移动管理端本轮不做，不影响本 spec 验收。

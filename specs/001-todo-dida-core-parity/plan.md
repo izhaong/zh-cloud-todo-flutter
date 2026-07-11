@@ -1,8 +1,8 @@
-# Implementation Plan: 滴答清单核心能力对齐（Flutter 客户端重建）
+# Implementation Plan: Todo 核心能力与多端交付（Flutter 客户端重建）
 
 **Branch**: `001-todo-dida-core-parity` | **Date**: 2026-07-04 | **Spec**: [spec.md](./spec.md)
 
-**Input**: Feature specification from `/specs/001-todo-dida-core-parity/spec.md`；跨仓编排见 `zh-cloud/.cursor/plans/滴答清单对齐交付计划_7dae23b6.plan.md`
+**Input**: Feature specification from `/specs/001-todo-dida-core-parity/spec.md`
 
 ## Summary
 
