@@ -1,26 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:zh_cloud_todo_flutter/core/theme/app_theme.dart';
+import 'package:zh_cloud_todo_flutter/features/home/todo_workspace.dart';
 import 'package:zh_cloud_todo_flutter/features/shell/section.dart';
 import 'package:zh_cloud_todo_flutter/features/shell/sidebar.dart';
+import 'package:zh_cloud_todo_flutter/state/providers.dart';
+
+import '../../support/todo_visual_fixture.dart';
+import '../../support/todo_visual_test_harness.dart';
 
 void main() {
-  testWidgets('Sidebar 渲染 TickTick 风格分组与词汇', (tester) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        child: MaterialApp(
-          theme: ThemeData.dark().copyWith(
-            extensions: const [AppThemeExtension(AppColors.dark)],
-          ),
-          home: const _TestSidebar(),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
+  testWidgets('Sidebar uses the Todo product header and keeps navigation', (
+    tester,
+  ) async {
+    await _pumpSidebar(tester);
 
-    expect(find.text('TickTick 风格工作台'), findsOneWidget);
+    expect(find.text('任务清单'), findsOneWidget);
     expect(find.text('智能清单'), findsOneWidget);
     expect(find.text('收件箱'), findsOneWidget);
     expect(find.text('今天'), findsOneWidget);
@@ -36,6 +32,185 @@ void main() {
     expect(find.text('新建清单'), findsOneWidget);
     expect(find.text('设置'), findsOneWidget);
   });
+
+  testWidgets('Sidebar navigation rows use the fixed 40px density', (
+    tester,
+  ) async {
+    await _pumpSidebar(tester);
+
+    final inboxRow = find.byKey(const Key('todo-sidebar-row-inbox'));
+    expect(inboxRow, findsOneWidget);
+    expect(tester.getSize(inboxRow).height, 40);
+  });
+
+  testWidgets(
+    'Sidebar long-content list stays one 40px line with ellipsis at 1.3x text',
+    (tester) async {
+      const longListName = '跨团队协作与长期规划清单名称用于验证单行截断策略';
+      final fixture = await _pumpSidebar(
+        tester,
+        fixtureSet: TodoVisualFixtureSet.longContent,
+        textScale: 1.3,
+      );
+      await fixture.container
+          .read(listRepositoryProvider)!
+          .rename(TodoVisualFixture.readingListId, longListName);
+      await tester.pumpAndSettle();
+
+      final row = find.byKey(
+        const ValueKey('todo-sidebar-list-${TodoVisualFixture.readingListId}'),
+      );
+      expect(row, findsOneWidget);
+      await tester.ensureVisible(row);
+      await tester.pump();
+
+      expect(tester.takeException(), isNull, reason: '长清单名不应导致布局溢出');
+      expect(tester.getSize(row).height, 40);
+      final label = tester.widget<Text>(find.text(longListName));
+      expect(label.maxLines, 1);
+      expect(label.overflow, TextOverflow.ellipsis);
+    },
+  );
+
+  group('keyboard focus outline contract (TodoRail → Sidebar)', () {
+    testWidgets('TodoRail keyboard focus has a non-color outline', (
+      tester,
+    ) async {
+      await _pumpRail(tester);
+
+      final railItem = find.byWidgetPredicate(
+        (widget) => widget is Tooltip && widget.message == '任务',
+      );
+      expect(railItem, findsOneWidget);
+      await _focusByKeyboard(tester, railItem);
+
+      expect(
+        _visibleOutlineSides(tester, railItem),
+        isNotEmpty,
+        reason: 'TodoRail 键盘焦点需要独立 outline，不能只改背景色',
+      );
+    });
+
+    testWidgets('Sidebar keyboard focus has a non-color outline', (
+      tester,
+    ) async {
+      await _pumpSidebar(tester);
+
+      final inboxRow = find.byKey(const Key('todo-sidebar-row-inbox'));
+      expect(inboxRow, findsOneWidget);
+      await _focusByKeyboard(tester, inboxRow);
+
+      expect(
+        _visibleOutlineSides(tester, inboxRow),
+        isNotEmpty,
+        reason: 'Sidebar 键盘焦点需要独立 outline，不能只改背景色',
+      );
+    });
+  });
+}
+
+Future<TodoVisualFixture> _pumpSidebar(
+  WidgetTester tester, {
+  TodoVisualFixtureSet fixtureSet = TodoVisualFixtureSet.populated,
+  double textScale = 1,
+}) {
+  return pumpTodoVisualScenario(
+    tester,
+    viewport: TodoVisualViewports.wide,
+    fixtureSet: fixtureSet,
+    child: Align(
+      alignment: Alignment.topLeft,
+      child: _TextScale(scale: textScale, child: const _TestSidebar()),
+    ),
+  );
+}
+
+Future<void> _pumpRail(WidgetTester tester) async {
+  await pumpTodoVisualScenario(
+    tester,
+    viewport: TodoVisualViewports.wide,
+    fixtureSet: TodoVisualFixtureSet.populated,
+    child: const Material(
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: TodoRail(section: Section.tasks, onSelect: _noopSection),
+      ),
+    ),
+  );
+}
+
+Future<void> _focusByKeyboard(WidgetTester tester, Finder target) async {
+  for (var i = 0; i < 30; i++) {
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    final focusContext = FocusManager.instance.primaryFocus?.context;
+    if (focusContext == null) continue;
+    final focusedElement = find.byElementPredicate(
+      (element) => identical(element, focusContext),
+    );
+    if (find
+        .ancestor(of: focusedElement, matching: target)
+        .evaluate()
+        .isNotEmpty) {
+      await tester.pump(const Duration(milliseconds: 250));
+      return;
+    }
+  }
+  fail('未能通过 Tab 键将焦点移到目标控件');
+}
+
+List<BorderSide> _visibleOutlineSides(WidgetTester tester, Finder root) {
+  final sides = <BorderSide>[];
+  final decoratedWidgets = find.descendant(
+    of: root,
+    matching: find.byWidgetPredicate(
+      (widget) =>
+          widget is AnimatedContainer ||
+          widget is Container ||
+          widget is DecoratedBox ||
+          widget is Material,
+    ),
+  );
+
+  for (final element in decoratedWidgets.evaluate()) {
+    final widget = element.widget;
+    BoxDecoration? decoration;
+    if (widget is AnimatedContainer) {
+      decoration = widget.decoration as BoxDecoration?;
+    } else if (widget is Container) {
+      decoration = widget.decoration as BoxDecoration?;
+    } else if (widget is DecoratedBox) {
+      decoration = widget.decoration as BoxDecoration?;
+    }
+    final border = decoration?.border;
+    if (border is Border) {
+      sides.addAll([border.top, border.right, border.bottom, border.left]);
+    }
+
+    if (widget is Material && widget.shape is RoundedRectangleBorder) {
+      sides.add((widget.shape! as RoundedRectangleBorder).side);
+    }
+  }
+  return sides
+      .where((side) => side.style != BorderStyle.none && side.width > 0)
+      .toList();
+}
+
+class _TextScale extends StatelessWidget {
+  const _TextScale({required this.scale, required this.child});
+
+  final double scale;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return MediaQuery(
+      data: MediaQuery.of(
+        context,
+      ).copyWith(textScaler: TextScaler.linear(scale)),
+      child: child,
+    );
+  }
 }
 
 class _TestSidebar extends StatelessWidget {
