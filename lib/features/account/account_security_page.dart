@@ -12,7 +12,7 @@ import '../../state/session_state.dart';
 /// - `POST /security/2fa/enable` → Long（2FA 记录 ID）
 /// - `POST /security/2fa/disable` → Boolean
 /// - `POST /security/export?exportType=FULL` → Long（导出任务 ID）
-/// - `GET /security/export/list` → List<DataExportItem>
+/// - `GET /security/export/list` → `List<DataExportItem>`
 class AccountSecurityPage extends ConsumerWidget {
   const AccountSecurityPage({super.key});
 
@@ -104,15 +104,15 @@ class _TwoFactorCardState extends ConsumerState<_TwoFactorCard> {
       }
       if (mounted) setState(() => _enabled = target);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(target ? '已开启双重验证' : '已关闭双重验证')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(target ? '已开启双重验证' : '已关闭双重验证')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('操作失败：$e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('操作失败：$e')));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -149,9 +149,7 @@ class _TwoFactorCardState extends ConsumerState<_TwoFactorCard> {
             ),
             const SizedBox(height: 8),
             Text(
-              enabled
-                  ? '已开启：登录时需要额外的动态验证码，账号更安全。'
-                  : '未开启：建议开启双重验证以保护账号。',
+              enabled ? '已开启：登录时需要额外的动态验证码，账号更安全。' : '未开启：建议开启双重验证以保护账号。',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
           ],
@@ -196,16 +194,16 @@ class _ExportCardState extends ConsumerState<_ExportCard> {
     try {
       await widget.api.security.requestExport(exportType: 'FULL');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已提交导出请求，请稍后回来下载')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('已提交导出请求，请稍后回来下载')));
       }
       await _load();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('导出失败：$e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('导出失败：$e')));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -224,10 +222,7 @@ class _ExportCardState extends ConsumerState<_ExportCard> {
               children: [
                 const Icon(Icons.download_outlined),
                 const SizedBox(width: 8),
-                Text(
-                  '数据导出',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
+                Text('数据导出', style: Theme.of(context).textTheme.titleMedium),
                 const Spacer(),
                 FilledButton.icon(
                   onPressed: _busy ? null : _requestExport,
@@ -244,10 +239,7 @@ class _ExportCardState extends ConsumerState<_ExportCard> {
             ),
             const SizedBox(height: 8),
             if (_items.isEmpty)
-              Text(
-                '暂无导出记录',
-                style: Theme.of(context).textTheme.bodyMedium,
-              )
+              Text('暂无导出记录', style: Theme.of(context).textTheme.bodyMedium)
             else
               ..._items.map(
                 (e) => ListTile(

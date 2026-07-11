@@ -5,7 +5,7 @@ part 'app_database.g.dart';
 
 /// 离线优先本地库（Drift）。
 ///
-/// **设计要点（对齐滴答对齐计划 P1）**：
+/// **设计要点（对齐 Todo 离线优先能力规划）**：
 /// - **UUID-v4 本地主键**：所有 sync 白名单实体本地主键为 `String`（客户端
 ///   自生成 UUID-v4），本地外键（`listId` / `taskId` / ...）也走 `String`。
 ///   支持完全离线 CRUD，无需占位 ID。
@@ -40,7 +40,8 @@ class TodoTasks extends Table {
   TextColumn get id => text()(); // UUID-v4 本地主键
   IntColumn get serverId => integer().nullable()();
   TextColumn get listId => text()(); // 本地 UUID 外键 → todo_list.id
-  TextColumn get parentTaskId => text().nullable()(); // 本地 UUID 外键 → todo_task.id
+  TextColumn get parentTaskId =>
+      text().nullable()(); // 本地 UUID 外键 → todo_task.id
   TextColumn get title => text()();
   TextColumn get description => text().nullable()();
   BoolColumn get completed => boolean().withDefault(const Constant(false))();
@@ -179,8 +180,7 @@ class TodoSyncChanges extends Table {
   TextColumn get entity =>
       text()(); // list/task/reminder/repeat_rule/... （见 SyncEntities）
   TextColumn get op => text()(); // upsert/delete
-  TextColumn get entityLocalId =>
-      text().nullable()(); // 本地 UUID（离线实体真相源）
+  TextColumn get entityLocalId => text().nullable()(); // 本地 UUID（离线实体真相源）
   IntColumn get entityServerId => integer().nullable()(); // 已同步实体的服务端 ID
   TextColumn get payloadJson => text()();
   DateTimeColumn get createdAt => dateTime()();
@@ -229,7 +229,7 @@ class TodoEntityRevisions extends Table {
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_open(null));
-  AppDatabase.forTesting(QueryExecutor e) : super(e);
+  AppDatabase.forTesting(super.e);
 
   /// 多租户隔离构造：按 `tenantId + userId` 命名 SQLite 文件。
   /// 未登录阶段（tenantId/userId 未知）用共享占位库，登录后由
@@ -352,18 +352,17 @@ class AppDatabase extends _$AppDatabase {
   }
 
   /// 按 serverId 查本地行（pull/冲突回写时用）。
-  Future<TodoTask?> taskByServerId(int serverId) =>
-      (select(todoTasks)..where((t) => t.serverId.equals(serverId)))
-          .getSingleOrNull();
-  Future<TodoList?> listByServerId(int serverId) =>
-      (select(todoLists)..where((t) => t.serverId.equals(serverId)))
-          .getSingleOrNull();
-  Future<TodoTag?> tagByServerId(int serverId) =>
-      (select(todoTags)..where((t) => t.serverId.equals(serverId)))
-          .getSingleOrNull();
+  Future<TodoTask?> taskByServerId(int serverId) => (select(
+    todoTasks,
+  )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
+  Future<TodoList?> listByServerId(int serverId) => (select(
+    todoLists,
+  )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
+  Future<TodoTag?> tagByServerId(int serverId) => (select(
+    todoTags,
+  )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
 
   /// 按本地 UUID 主键查清单（任务详情反查清单 serverId 用）。
   Future<TodoList?> listByLocalId(String localId) =>
-      (select(todoLists)..where((t) => t.id.equals(localId)))
-          .getSingleOrNull();
+      (select(todoLists)..where((t) => t.id.equals(localId))).getSingleOrNull();
 }

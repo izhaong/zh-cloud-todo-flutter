@@ -26,26 +26,20 @@ class ListMembersState {
 }
 
 /// 拉取清单成员流：未登录返回空（UI 层负责提示）。
-final listMembersProvider =
-    FutureProvider.family.autoDispose<ListMembersState, int>((
-  ref,
-  listServerId,
-) async {
-  final api = ref.watch(todoApiProvider).listCollaboration;
-  try {
-    final members = await api.list(listServerId);
-    return ListMembersState(
-      status: MembersState.ready,
-      members: members,
-    );
-  } catch (e) {
-    return ListMembersState(
-      status: MembersState.error,
-      members: const [],
-      error: e.toString(),
-    );
-  }
-});
+final listMembersProvider = FutureProvider.family
+    .autoDispose<ListMembersState, int>((ref, listServerId) async {
+      final api = ref.watch(todoApiProvider).listCollaboration;
+      try {
+        final members = await api.list(listServerId);
+        return ListMembersState(status: MembersState.ready, members: members);
+      } catch (e) {
+        return ListMembersState(
+          status: MembersState.error,
+          members: const [],
+          error: e.toString(),
+        );
+      }
+    });
 
 /// 列表成员管理页：
 /// - 展示成员列表（owner/member 角色标签）
@@ -87,49 +81,56 @@ class _ListMemberPageState extends ConsumerState<ListMemberPage> {
     _addCtrl.clear();
     final userId = int.tryParse(raw);
     if (userId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入合法的用户 ID（数字）')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请输入合法的用户 ID（数字）')));
       return;
     }
-    await _act(() => ref
-        .read(todoApiProvider)
-        .listCollaboration
-        .addMember(listId: widget.listServerId, userId: userId));
+    await _act(
+      () => ref
+          .read(todoApiProvider)
+          .listCollaboration
+          .addMember(listId: widget.listServerId, userId: userId),
+    );
   }
 
   Future<void> _remove(ListMember m) async {
     final ok = await _confirm('移除成员', '确认移除成员 #${m.userId}？');
     if (ok != true) return;
-    await _act(() => ref
-        .read(todoApiProvider)
-        .listCollaboration
-        .removeMember(listId: widget.listServerId, userId: m.userId));
+    await _act(
+      () => ref
+          .read(todoApiProvider)
+          .listCollaboration
+          .removeMember(listId: widget.listServerId, userId: m.userId),
+    );
   }
 
   Future<void> _toggleRole(ListMember m) async {
     // 不能修改自己的角色（避免意外丢失 owner）。
     final session = ref.read(sessionProvider);
     if (session != null && session.userId == m.userId) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('不能修改自己的角色')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('不能修改自己的角色')));
       return;
     }
     final next = m.isOwner ? 'member' : 'owner';
-    await _act(() => ref.read(todoApiProvider).listCollaboration.updateRole(
-          listId: widget.listServerId,
-          userId: m.userId,
-          role: next,
-        ));
-  }
-
-  Future<void> _join() async {
     await _act(
       () => ref
           .read(todoApiProvider)
           .listCollaboration
-          .join(widget.listServerId),
+          .updateRole(
+            listId: widget.listServerId,
+            userId: m.userId,
+            role: next,
+          ),
+    );
+  }
+
+  Future<void> _join() async {
+    await _act(
+      () =>
+          ref.read(todoApiProvider).listCollaboration.join(widget.listServerId),
     );
   }
 
@@ -137,10 +138,8 @@ class _ListMemberPageState extends ConsumerState<ListMemberPage> {
     final ok = await _confirm('退出协作', '确认退出该清单？');
     if (ok != true) return;
     await _act(
-      () => ref
-          .read(todoApiProvider)
-          .listCollaboration
-          .exit(widget.listServerId),
+      () =>
+          ref.read(todoApiProvider).listCollaboration.exit(widget.listServerId),
     );
   }
 
@@ -203,10 +202,7 @@ class _ListMemberPageState extends ConsumerState<ListMemberPage> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: _add,
-                  child: const Text('邀请'),
-                ),
+                FilledButton(onPressed: _add, child: const Text('邀请')),
               ],
             ),
           ),
@@ -263,7 +259,7 @@ class _ListMemberPageState extends ConsumerState<ListMemberPage> {
         return ListView.separated(
           padding: const EdgeInsets.all(12),
           itemCount: s.members.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 8),
+          separatorBuilder: (_, _) => const SizedBox(height: 8),
           itemBuilder: (_, i) {
             final m = s.members[i];
             return Card(
@@ -274,10 +270,7 @@ class _ListMemberPageState extends ConsumerState<ListMemberPage> {
                 ),
                 title: Text(m.displayName ?? '成员 #${m.userId}'),
                 subtitle: Text(
-                  (m.mobile != null && m.mobile!.isNotEmpty
-                          ? '${m.mobile} · '
-                          : '') +
-                      'ID ${m.userId}',
+                  '${m.mobile != null && m.mobile!.isNotEmpty ? '${m.mobile} · ' : ''}ID ${m.userId}',
                 ),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,

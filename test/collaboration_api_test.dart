@@ -1,5 +1,5 @@
-/// 纯单元测试逻辑：命中 CollaborationApi/CalendarSubscriptionApi 的 response parser，
-/// 不连网；只验证模型构造。
+// 纯单元测试逻辑：命中 CollaborationApi/CalendarSubscriptionApi 的 response parser，
+// 不连网；只验证模型构造。
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zh_cloud_todo_flutter/core/api/todo_api.dart';

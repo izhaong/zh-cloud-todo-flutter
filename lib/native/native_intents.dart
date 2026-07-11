@@ -33,10 +33,7 @@ class NativeIntents {
   /// 系统分享入口：把文本/链接转发到 Android Share / iOS UIActivityViewController。
   static Future<bool> shareText(String text, {String? subject}) async {
     try {
-      await _channel.invokeMethod('share', {
-        'text': text,
-        if (subject != null) 'subject': subject,
-      });
+      await _channel.invokeMethod('share', {'text': text, 'subject': ?subject});
       return true;
     } on PlatformException {
       return false;
@@ -57,9 +54,7 @@ class NativeIntents {
   /// 锁屏重要任务：把任务 id 列表推送给系统（Android: KeyguardManager；iOS: Lock Screen widget）。
   static Future<bool> pushLockScreenTasks(List<int> taskIds) async {
     try {
-      await _channel.invokeMethod('pushLockScreenTasks', {
-        'ids': taskIds,
-      });
+      await _channel.invokeMethod('pushLockScreenTasks', {'ids': taskIds});
       return true;
     } on PlatformException {
       return false;
@@ -69,7 +64,9 @@ class NativeIntents {
   /// 小组件数据：返回今日任务的 JSON 序列化字符串（widget renderer 读取）。
   static Future<List<Map<String, dynamic>>> widgetTodaySnapshot() async {
     try {
-      final r = await _channel.invokeMethod<List<dynamic>>('widgetTodaySnapshot');
+      final r = await _channel.invokeMethod<List<dynamic>>(
+        'widgetTodaySnapshot',
+      );
       if (r == null) return const [];
       return r.map((e) => Map<String, dynamic>.from(e as Map)).toList();
     } on PlatformException {
