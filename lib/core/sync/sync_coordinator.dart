@@ -65,6 +65,9 @@ class SyncCoordinator {
     final attachmentChanges = pending
         .where((c) => c.entity == SyncEntities.attachment)
         .toList();
+    final templateChanges = pending
+        .where((c) => c.entity == SyncEntities.template)
+        .toList();
     final syncableChanges = pending
         .where((c) => SyncEntities.syncable.contains(c.entity))
         .toList();
@@ -72,6 +75,7 @@ class SyncCoordinator {
     var succeeded = 0;
     succeeded += await _pushFolderChanges(folderChanges);
     succeeded += await _pushAttachmentChanges(attachmentChanges);
+    succeeded += await _pushTemplateChanges(templateChanges);
     succeeded += await _pushSyncableChanges(syncableChanges);
     return succeeded;
   }
@@ -163,6 +167,58 @@ class SyncCoordinator {
             updatedAt: Value(DateTime.now()),
           ),
         );
+        await (db.update(
+          db.todoSyncChanges,
+        )..where((row) => row.id.equals(change.id))).write(
+          TodoSyncChangesCompanion(
+            status: const Value('failed'),
+            attemptCount: Value(change.attemptCount + 1),
+          ),
+        );
+      }
+    }
+    return succeeded;
+  }
+
+  Future<int> _pushTemplateChanges(List<TodoSyncChange> changes) async {
+    var succeeded = 0;
+    for (final change in changes) {
+      if (change.op == SyncOps.delete || change.entityLocalId == null) continue;
+      final localId = change.entityLocalId!;
+      final template = await (db.select(
+        db.todoTemplates,
+      )..where((row) => row.id.equals(localId))).getSingleOrNull();
+      if (template == null || template.serverId != null) continue;
+      try {
+        final response = await todoApi.post<Map<String, dynamic>>(
+          '/template/create',
+          data: {
+            'name': template.name,
+            'templateType': 1,
+            'content': template.contentJson,
+            'clientMutationId': change.clientMutationId,
+          },
+        );
+        final body = response.data ?? const <String, dynamic>{};
+        if (body['code'] != null && body['code'] != 0) {
+          throw StateError(body['msg']?.toString() ?? '模板登记失败');
+        }
+        final serverId = (body['data'] as num?)?.toInt();
+        if (serverId == null) throw StateError('模板登记未返回 ID');
+        await (db.update(
+          db.todoTemplates,
+        )..where((row) => row.id.equals(localId))).write(
+          TodoTemplatesCompanion(
+            serverId: Value(serverId),
+            status: const Value('synced'),
+            updatedAt: Value(DateTime.now()),
+          ),
+        );
+        await (db.update(db.todoSyncChanges)
+              ..where((row) => row.id.equals(change.id)))
+            .write(const TodoSyncChangesCompanion(status: Value('synced')));
+        succeeded++;
+      } catch (_) {
         await (db.update(
           db.todoSyncChanges,
         )..where((row) => row.id.equals(change.id))).write(

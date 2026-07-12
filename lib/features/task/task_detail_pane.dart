@@ -631,6 +631,10 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
             taskServerId: t.serverId!,
           ),
         const Divider(height: 32),
+        sh('模板'),
+        const SizedBox(height: 8),
+        _TemplateSection(key: ValueKey('task-templates-${t.id}'), task: t),
+        const Divider(height: 32),
         Row(
           children: [
             Expanded(child: sh('子任务')),
@@ -1364,4 +1368,81 @@ class _ActivitySectionState extends ConsumerState<_ActivitySection> {
     'comment_created' => '添加了评论',
     _ => action,
   };
+}
+
+class _TemplateSection extends ConsumerWidget {
+  const _TemplateSection({super.key, required this.task});
+
+  final TodoTask task;
+
+  Future<void> _saveCurrent(BuildContext context, WidgetRef ref) async {
+    final templates = ref.read(templateRepositoryProvider);
+    if (templates == null) return;
+    await templates.saveTask(task: task, name: '${task.title} 模板');
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已保存为模板，等待同步')));
+  }
+
+  Future<void> _apply(
+    BuildContext context,
+    WidgetRef ref,
+    TodoTemplate template,
+  ) async {
+    final templates = ref.read(templateRepositoryProvider);
+    final tasks = ref.read(taskRepositoryProvider);
+    if (templates == null || tasks == null) return;
+    final seed = templates.taskSeed(template);
+    await tasks.create(
+      listId: task.listId,
+      title: seed.title,
+      description: seed.description,
+      priority: seed.priority,
+    );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('已应用模板“${template.name}”')));
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final repo = ref.watch(templateRepositoryProvider);
+    if (repo == null) return const SizedBox(height: 32);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        OutlinedButton.icon(
+          onPressed: () => _saveCurrent(context, ref),
+          icon: const Icon(Icons.bookmark_add_outlined),
+          label: const Text('保存当前任务为模板'),
+        ),
+        StreamBuilder<List<TodoTemplate>>(
+          stream: repo.watchAll(),
+          builder: (context, snapshot) {
+            final templates = snapshot.data ?? const <TodoTemplate>[];
+            if (templates.isEmpty) return const Text('暂无本地模板');
+            return Column(
+              children: templates
+                  .map(
+                    (template) => ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(template.name),
+                      subtitle: Text(
+                        template.status == 'synced' ? '已同步' : '等待同步',
+                      ),
+                      trailing: TextButton(
+                        onPressed: () => _apply(context, ref, template),
+                        child: const Text('应用'),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            );
+          },
+        ),
+      ],
+    );
+  }
 }

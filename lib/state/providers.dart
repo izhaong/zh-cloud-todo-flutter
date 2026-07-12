@@ -11,6 +11,7 @@ import 'repositories/folder_repository.dart';
 import 'repositories/activity_repository.dart';
 import 'repositories/list_repository.dart';
 import 'repositories/tag_repository.dart';
+import 'repositories/template_repository.dart';
 import 'repositories/task_repository.dart';
 
 /// UI-facing clock. Production reads the current instant on each rebuild;
@@ -104,6 +105,13 @@ final activityRepositoryProvider = Provider<ActivityRepository?>((ref) {
   final db = ref.watch(appDatabaseProvider);
   if (db == null) return null;
   return ActivityRepository(db, ref.watch(todoApiProvider).activity);
+});
+
+final templateRepositoryProvider = Provider<TemplateRepository?>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  final queue = ref.watch(syncChangeQueueProvider);
+  if (db == null || queue == null) return null;
+  return TemplateRepository(db, queue);
 });
 
 // --- 同步 ---------------------------------------------------------------

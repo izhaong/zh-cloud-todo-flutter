@@ -143,6 +143,20 @@ class TodoActivities extends Table {
   Set<Column> get primaryKey => {serverId};
 }
 
+/// 任务模板的本地真相源；服务端登记通过 outbox 异步完成。
+class TodoTemplates extends Table {
+  TextColumn get id => text()();
+  IntColumn get serverId => integer().nullable()();
+  TextColumn get name => text()();
+  TextColumn get contentJson => text()();
+  TextColumn get status => text().withDefault(const Constant('queued'))();
+  DateTimeColumn get updatedAt => dateTime()();
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 /// 提醒（任务维度，单任务可有多条提醒规则）。
 class TodoReminders extends Table {
   TextColumn get id => text()();
@@ -269,6 +283,7 @@ class TodoEntityRevisions extends Table {
     TodoChecklistItems,
     TodoAttachments,
     TodoActivities,
+    TodoTemplates,
     TodoReminders,
     TodoRepeatRules,
     TodoRepeatSkips,
@@ -290,7 +305,7 @@ class AppDatabase extends _$AppDatabase {
     : super(_open('todo_t${tenantId}_u$userId'));
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -316,6 +331,9 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 8) {
         await m.createTable(todoActivities);
+      }
+      if (from < 9) {
+        await m.createTable(todoTemplates);
       }
     },
   );

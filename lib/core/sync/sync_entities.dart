@@ -11,6 +11,7 @@ class SyncEntities {
   static const taskTag = 'task_tag';
   static const filter = 'filter';
   static const attachment = 'attachment';
+  static const template = 'template';
 
   /// 不在后端 `/sync` 白名单内、由 [SyncCoordinator] 路由到普通 REST 的实体。
   static const folder = 'folder';
