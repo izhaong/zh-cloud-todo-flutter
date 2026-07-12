@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -544,6 +545,13 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
           taskId: t.id,
         ),
         const Divider(height: 32),
+        sh('附件'),
+        const SizedBox(height: 8),
+        _AttachmentSection(
+          key: ValueKey('task-attachments-${t.id}'),
+          taskId: t.id,
+        ),
+        const Divider(height: 32),
         Row(
           children: [
             Expanded(child: sh('子任务')),
@@ -1002,6 +1010,155 @@ class _ChecklistSectionState extends ConsumerState<_ChecklistSection> {
                     ),
                   )
                   .toList(),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+/// 任务附件始终先进入 Drift + outbox；这里不直接调用后端。
+class _AttachmentSection extends ConsumerStatefulWidget {
+  const _AttachmentSection({super.key, required this.taskId});
+
+  final String taskId;
+
+  @override
+  ConsumerState<_AttachmentSection> createState() => _AttachmentSectionState();
+}
+
+class _AttachmentSectionState extends ConsumerState<_AttachmentSection> {
+  Future<void> _pickAndQueue() async {
+    final result = await FilePicker.pickFiles(allowMultiple: true);
+    if (result == null) return;
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    var queued = 0;
+    for (final file in result.files) {
+      final path = file.path;
+      if (path == null || path.isEmpty) continue;
+      await repo.queueAttachment(
+        taskId: widget.taskId,
+        name: file.name,
+        localPath: path,
+        mimeType: _mimeTypeFor(file.name),
+        size: file.size,
+      );
+      queued++;
+    }
+    if (!mounted || queued == 0) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('已加入 $queued 个附件上传队列')));
+  }
+
+  Future<void> _retry(TodoAttachment attachment) async {
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    await repo.retryAttachment(attachment.id);
+  }
+
+  Future<void> _delete(TodoAttachment attachment) async {
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    await repo.deleteAttachment(attachment.id);
+  }
+
+  String _mimeTypeFor(String fileName) {
+    final normalized = fileName.toLowerCase();
+    if (normalized.endsWith('.pdf')) return 'application/pdf';
+    if (normalized.endsWith('.png')) return 'image/png';
+    if (normalized.endsWith('.jpg') || normalized.endsWith('.jpeg')) {
+      return 'image/jpeg';
+    }
+    if (normalized.endsWith('.txt') || normalized.endsWith('.md')) {
+      return 'text/plain';
+    }
+    return 'application/octet-stream';
+  }
+
+  ({String label, IconData icon, Color color}) _status(
+    BuildContext context,
+    TodoAttachment attachment,
+  ) {
+    final colors = brandColors(context);
+    return switch (attachment.status) {
+      'uploading' => (
+        label: '正在上传',
+        icon: Icons.cloud_upload_outlined,
+        color: colors.mutedForeground,
+      ),
+      'failed' => (
+        label: '上传失败',
+        icon: Icons.error_outline,
+        color: Theme.of(context).colorScheme.error,
+      ),
+      'uploaded' => (
+        label: '已完成',
+        icon: Icons.cloud_done_outlined,
+        color: colors.success,
+      ),
+      _ => (
+        label: '等待上传',
+        icon: Icons.schedule_outlined,
+        color: colors.mutedForeground,
+      ),
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final repo = ref.watch(taskRepositoryProvider);
+    if (repo == null) return const SizedBox(height: 32);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        OutlinedButton.icon(
+          onPressed: _pickAndQueue,
+          icon: const Icon(Icons.attach_file),
+          label: const Text('添加附件'),
+        ),
+        const SizedBox(height: 8),
+        StreamBuilder<List<TodoAttachment>>(
+          stream: repo.watchAttachments(widget.taskId),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const LinearProgressIndicator();
+            }
+            final attachments = snapshot.data!;
+            if (attachments.isEmpty) return const Text('暂无附件');
+            return Column(
+              children: attachments.map((attachment) {
+                final status = _status(context, attachment);
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(status.icon, color: status.color),
+                  title: Text(attachment.name),
+                  subtitle: Text(
+                    attachment.status == 'failed' && attachment.error != null
+                        ? '${status.label}：${attachment.error}'
+                        : status.label,
+                    style: TextStyle(color: status.color),
+                  ),
+                  trailing: Wrap(
+                    spacing: 0,
+                    children: [
+                      if (attachment.status == 'failed')
+                        IconButton(
+                          tooltip: '重试上传',
+                          onPressed: () => _retry(attachment),
+                          icon: const Icon(Icons.refresh),
+                        ),
+                      IconButton(
+                        tooltip: '删除附件',
+                        onPressed: () => _delete(attachment),
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
             );
           },
         ),

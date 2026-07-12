@@ -52,6 +52,39 @@ void main() {
       );
     },
   );
+
+  test(
+    'attachment delete mutation removes server metadata and marks outbox synced',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final now = DateTime(2026, 7, 12);
+      await db
+          .into(db.todoSyncChanges)
+          .insert(
+            TodoSyncChangesCompanion.insert(
+              clientMutationId: 'attachment-delete-mutation',
+              entity: 'attachment',
+              op: 'delete',
+              entityLocalId: const Value('attachment-local'),
+              entityServerId: const Value(51),
+              payloadJson: '{}',
+              createdAt: now,
+            ),
+          );
+      final api = _DeletingAttachmentUploadApi();
+      final coordinator = _coordinator(db, api);
+
+      final pushed = await coordinator.push();
+
+      expect(pushed, 1);
+      expect(api.deletedServerId, 51);
+      expect(
+        (await db.select(db.todoSyncChanges).getSingle()).status,
+        'synced',
+      );
+    },
+  );
 }
 
 Future<void> _seedAttachment(AppDatabase db) async {
@@ -111,6 +144,10 @@ SyncCoordinator _coordinator(
 
 class _SuccessfulAttachmentUploadApi implements AttachmentUploadApi {
   @override
+  Future<void> deleteTaskAttachment({required int serverId}) =>
+      throw StateError('not reached');
+
+  @override
   Future<int> registerTaskAttachment({
     required int taskServerId,
     required String name,
@@ -129,6 +166,10 @@ class _SuccessfulAttachmentUploadApi implements AttachmentUploadApi {
 
 class _FailingAttachmentUploadApi implements AttachmentUploadApi {
   @override
+  Future<void> deleteTaskAttachment({required int serverId}) =>
+      throw StateError('not reached');
+
+  @override
   Future<int> registerTaskAttachment({
     required int taskServerId,
     required String name,
@@ -143,4 +184,29 @@ class _FailingAttachmentUploadApi implements AttachmentUploadApi {
     required String localPath,
     required String name,
   }) => throw StateError('network unreachable');
+}
+
+class _DeletingAttachmentUploadApi implements AttachmentUploadApi {
+  int? deletedServerId;
+
+  @override
+  Future<void> deleteTaskAttachment({required int serverId}) async {
+    deletedServerId = serverId;
+  }
+
+  @override
+  Future<int> registerTaskAttachment({
+    required int taskServerId,
+    required String name,
+    required String url,
+    required int size,
+    required String mimeType,
+    required String clientMutationId,
+  }) => throw StateError('not reached');
+
+  @override
+  Future<String> uploadFile({
+    required String localPath,
+    required String name,
+  }) => throw StateError('not reached');
 }

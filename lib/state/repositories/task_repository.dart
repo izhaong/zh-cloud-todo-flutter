@@ -349,6 +349,33 @@ class TaskRepository {
     });
   }
 
+  Future<void> deleteAttachment(String attachmentId) async {
+    await _db.transaction(() async {
+      final attachment = await (_db.select(
+        _db.todoAttachments,
+      )..where((row) => row.id.equals(attachmentId))).getSingle();
+      await (_db.delete(
+        _db.todoAttachments,
+      )..where((row) => row.id.equals(attachmentId))).go();
+      if (attachment.serverId == null) {
+        await (_db.delete(_db.todoSyncChanges)..where(
+              (change) =>
+                  change.entity.equals(SyncEntities.attachment) &
+                  change.entityLocalId.equals(attachmentId),
+            ))
+            .go();
+        return;
+      }
+      await _queue.enqueue(
+        entity: SyncEntities.attachment,
+        op: SyncOps.delete,
+        localId: attachmentId,
+        serverId: attachment.serverId,
+        payload: const {},
+      );
+    });
+  }
+
   Future<void> deleteChecklistItem(String itemId) async {
     await _db.transaction(() async {
       final item = await (_db.select(

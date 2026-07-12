@@ -80,6 +80,30 @@ void main() {
   );
 
   test(
+    'deleting an unsynced attachment removes its local row and outbox entry',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final repository = TaskRepository(db, SyncChangeQueue(db));
+      final task = await repository.create(listId: 'inbox', title: '撰写周报');
+      final attachment = await repository.queueAttachment(
+        taskId: task.id,
+        name: 'weekly-report.pdf',
+        localPath: '/tmp/weekly-report.pdf',
+        mimeType: 'application/pdf',
+        size: 1024,
+      );
+
+      await repository.deleteAttachment(attachment.id);
+
+      expect(await db.select(db.todoAttachments).get(), isEmpty);
+      final attachmentChanges = (await db.select(db.todoSyncChanges).get())
+          .where((change) => change.entity == 'attachment');
+      expect(attachmentChanges, isEmpty);
+    },
+  );
+
+  test(
     'offline checklist creation persists locally and enqueues a mutation',
     () async {
       final db = AppDatabase.forTesting(NativeDatabase.memory());

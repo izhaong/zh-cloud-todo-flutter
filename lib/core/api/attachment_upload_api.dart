@@ -13,6 +13,8 @@ abstract interface class AttachmentUploadApi {
     required String mimeType,
     required String clientMutationId,
   });
+
+  Future<void> deleteTaskAttachment({required int serverId});
 }
 
 class DioAttachmentUploadApi implements AttachmentUploadApi {
@@ -63,6 +65,16 @@ class DioAttachmentUploadApi implements AttachmentUploadApi {
     final id = (data as num?)?.toInt();
     if (id == null) throw StateError('附件登记未返回 ID');
     return id;
+  }
+
+  @override
+  Future<void> deleteTaskAttachment({required int serverId}) async {
+    final response = await _client.raw.delete<Map<String, dynamic>>(
+      '/app-api/todo/attachment/delete',
+      queryParameters: {'id': serverId},
+    );
+    final deleted = _unwrap(response.data);
+    if (deleted != true) throw StateError('附件删除未确认');
   }
 
   Object? _unwrap(Map<String, dynamic>? body) {

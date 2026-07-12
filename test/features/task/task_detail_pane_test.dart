@@ -261,6 +261,29 @@ void main() {
     expect(unavailable, [_taskId]);
     expect(find.text('任务不存在或已删除'), findsOneWidget);
   });
+
+  testWidgets(
+    'detail shows queued attachments with a retryable delivery state',
+    (tester) async {
+      final fixture = await _pumpDirectPane(tester, taskId: _taskId);
+      await fixture.container
+          .read(taskRepositoryProvider)!
+          .queueAttachment(
+            taskId: _taskId,
+            name: 'weekly-report.pdf',
+            localPath: '/tmp/weekly-report.pdf',
+            mimeType: 'application/pdf',
+            size: 1024,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(ListView), const Offset(0, -900));
+    await tester.pumpAndSettle();
+    expect(find.text('附件'), findsOneWidget);
+      expect(find.text('weekly-report.pdf'), findsOneWidget);
+      expect(find.text('等待上传'), findsOneWidget);
+    },
+  );
 }
 
 Finder get _detailRegion => find.byKey(const Key('todo-detail'));

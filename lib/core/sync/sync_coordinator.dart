@@ -80,7 +80,34 @@ class SyncCoordinator {
     var succeeded = 0;
     for (final change in changes) {
       final localId = change.entityLocalId;
-      if (localId == null || change.op == SyncOps.delete) continue;
+      if (change.op == SyncOps.delete) {
+        final serverId = change.entityServerId;
+        if (serverId == null) {
+          await (db.update(db.todoSyncChanges)
+                ..where((row) => row.id.equals(change.id)))
+              .write(const TodoSyncChangesCompanion(status: Value('synced')));
+          succeeded++;
+          continue;
+        }
+        try {
+          await _attachmentApi.deleteTaskAttachment(serverId: serverId);
+          await (db.update(db.todoSyncChanges)
+                ..where((row) => row.id.equals(change.id)))
+              .write(const TodoSyncChangesCompanion(status: Value('synced')));
+          succeeded++;
+        } catch (_) {
+          await (db.update(
+            db.todoSyncChanges,
+          )..where((row) => row.id.equals(change.id))).write(
+            TodoSyncChangesCompanion(
+              status: const Value('failed'),
+              attemptCount: Value(change.attemptCount + 1),
+            ),
+          );
+        }
+        continue;
+      }
+      if (localId == null) continue;
       final attachment = await (db.select(
         db.todoAttachments,
       )..where((row) => row.id.equals(localId))).getSingleOrNull();
