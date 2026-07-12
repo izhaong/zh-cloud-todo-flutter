@@ -100,6 +100,9 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   Widget build(BuildContext context) {
     final colors = brandColors(context);
     final taskRepo = ref.watch(taskRepositoryProvider);
+    final tagOptions = (ref.watch(tagsStreamProvider).valueOrNull ?? const [])
+        .map((tag) => QuickAddTagOption(id: tag.id, name: tag.name))
+        .toList(growable: false);
     final now = ref.watch(currentDateTimeProvider)();
     final viewportWidth = MediaQuery.sizeOf(context).width;
     final desktopMode = viewportWidth >= TodoLayoutTokens.compactMinWidth;
@@ -137,7 +140,8 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 onSortChanged: (sort) => setState(() => _sort = sort),
                 onFilterPressed: _openFilterPanel,
               ),
-            if (showQuickAdd) QuickAddBar(onSubmit: _submitQuickAdd),
+            if (showQuickAdd)
+              QuickAddBar(onSubmit: _submitQuickAdd, tagOptions: tagOptions),
             Expanded(
               child: mobileMode
                   ? Padding(
@@ -295,19 +299,33 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     });
   }
 
-  Future<void> _submitQuickAdd(String title) async {
+  Future<void> _submitQuickAdd(QuickAddRequest request) async {
     final callback = widget.onQuickAdd;
     if (callback != null) {
-      await callback(title);
+      await callback(request);
       return;
     }
     final repo = ref.read(taskRepositoryProvider);
     if (repo == null) return;
-    await repo.createBatch(
+    final defaults = await ref
+        .read(taskCaptureDefaultsRepositoryProvider)
+        ?.get();
+    final created = await repo.createBatch(
       listId: _selectedListId ?? kInboxListId,
-      input: title,
-      dueAtResolver: (line) => NlpDateParser().parse(line)?.date,
+      input: request.input,
+      priority: request.priorityOverride ?? defaults?.defaultPriority ?? 0,
+      dueAtResolver: request.dueAtOverride != null
+          ? (_) => request.dueAtOverride
+          : request.useNlpDate
+          ? (line) => NlpDateParser().parse(line)?.date
+          : null,
     );
+    final tags = ref.read(tagRepositoryProvider);
+    if (tags != null && request.tagIds.isNotEmpty) {
+      await Future.wait(
+        created.map((task) => tags.setTaskTags(task.id, request.tagIds)),
+      );
+    }
   }
 
   Future<void> _openFilterPanel() async {

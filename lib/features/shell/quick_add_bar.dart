@@ -5,16 +5,45 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/todo_layout_tokens.dart';
 
-typedef QuickAddSubmitCallback = FutureOr<void> Function(String title);
+class QuickAddRequest {
+  const QuickAddRequest({
+    required this.input,
+    this.dueAtOverride,
+    this.priorityOverride,
+    this.tagIds = const [],
+    this.useNlpDate = true,
+  });
+
+  final String input;
+  final DateTime? dueAtOverride;
+  final int? priorityOverride;
+  final List<String> tagIds;
+  final bool useNlpDate;
+}
+
+class QuickAddTagOption {
+  const QuickAddTagOption({required this.id, required this.name});
+
+  final String id;
+  final String name;
+}
+
+typedef QuickAddSubmitCallback =
+    FutureOr<void> Function(QuickAddRequest request);
 
 /// 顶部嵌入式快速添加条（QuickAddBar）。
 ///
 /// 嵌入式输入框 + 日期 / 优先级 / 标签快捷图标。提交逻辑由上层 [onSubmit]
 /// 提供，组件本身不决定任务落入哪个清单。
 class QuickAddBar extends StatefulWidget {
-  const QuickAddBar({super.key, required this.onSubmit});
+  const QuickAddBar({
+    super.key,
+    required this.onSubmit,
+    this.tagOptions = const [],
+  });
 
   final QuickAddSubmitCallback onSubmit;
+  final List<QuickAddTagOption> tagOptions;
 
   @override
   State<QuickAddBar> createState() => _QuickAddBarState();
@@ -67,7 +96,7 @@ class _MobileQuickAddSheetState extends State<_MobileQuickAddSheet> {
     if (title.isEmpty || _submitting) return;
     setState(() => _submitting = true);
     try {
-      await widget.onSubmit(title);
+      await widget.onSubmit(QuickAddRequest(input: title));
     } catch (_) {
       if (mounted) setState(() => _submitting = false);
       rethrow;
@@ -123,6 +152,10 @@ class _QuickAddBarState extends State<QuickAddBar> {
   final _ctrl = TextEditingController();
   bool _submitting = false;
   int _visibleLines = 1;
+  DateTime? _dueAtOverride;
+  int? _priorityOverride;
+  bool _useNlpDate = true;
+  final Set<String> _tagIds = {};
 
   @override
   void initState() {
@@ -148,10 +181,115 @@ class _QuickAddBarState extends State<QuickAddBar> {
     if (text.isEmpty || _submitting) return;
     setState(() => _submitting = true);
     try {
-      await widget.onSubmit(text);
-      if (mounted) _ctrl.clear();
+      await widget.onSubmit(
+        QuickAddRequest(
+          input: text,
+          dueAtOverride: _dueAtOverride,
+          priorityOverride: _priorityOverride,
+          tagIds: _tagIds.toList(growable: false),
+          useNlpDate: _useNlpDate,
+        ),
+      );
+      if (mounted) {
+        setState(() {
+          _ctrl.clear();
+          _dueAtOverride = null;
+          _priorityOverride = null;
+          _useNlpDate = true;
+          _tagIds.clear();
+        });
+      }
     } finally {
       if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _pickDueDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _dueAtOverride ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _dueAtOverride = picked;
+      _useNlpDate = false;
+    });
+  }
+
+  Future<void> _pickPriority() async {
+    final value = await showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final entry in const [(0, '无'), (1, '低'), (2, '中'), (3, '高')])
+              ListTile(
+                title: Text('${entry.$2}优先级'),
+                trailing: _priorityOverride == entry.$1
+                    ? const Icon(Icons.check)
+                    : null,
+                onTap: () => Navigator.pop(context, entry.$1),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (value != null && mounted) {
+      setState(() => _priorityOverride = value);
+    }
+  }
+
+  Future<void> _pickTags() async {
+    if (widget.tagOptions.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请先在标签页创建标签')));
+      return;
+    }
+    final selected = Set<String>.from(_tagIds);
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              const ListTile(title: Text('本次添加的标签')),
+              for (final tag in widget.tagOptions)
+                CheckboxListTile(
+                  value: selected.contains(tag.id),
+                  title: Text(tag.name),
+                  onChanged: (checked) {
+                    setSheetState(() {
+                      if (checked ?? false) {
+                        selected.add(tag.id);
+                      } else {
+                        selected.remove(tag.id);
+                      }
+                    });
+                  },
+                ),
+              ListTile(
+                title: const Text('完成'),
+                trailing: const Icon(Icons.check),
+                onTap: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (mounted) {
+      setState(() {
+        _tagIds
+          ..clear()
+          ..addAll(selected);
+      });
     }
   }
 
@@ -197,19 +335,23 @@ class _QuickAddBarState extends State<QuickAddBar> {
                 icon: Icons.calendar_today_outlined,
                 tooltip: '日期',
                 colors: colors,
-                onTap: () {},
+                onTap: _pickDueDate,
+                onLongPress: () => setState(() {
+                  _dueAtOverride = null;
+                  _useNlpDate = false;
+                }),
               ),
               _ToolIcon(
                 icon: Icons.flag_outlined,
                 tooltip: '优先级',
                 colors: colors,
-                onTap: () {},
+                onTap: _pickPriority,
               ),
               _ToolIcon(
                 icon: Icons.label_outline,
                 tooltip: '标签',
                 colors: colors,
-                onTap: () {},
+                onTap: _pickTags,
               ),
             ],
           ),
@@ -225,22 +367,27 @@ class _ToolIcon extends StatelessWidget {
     required this.tooltip,
     required this.colors,
     required this.onTap,
+    this.onLongPress,
   });
 
   final IconData icon;
   final String tooltip;
   final AppColors colors;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
-      tooltip: tooltip,
-      icon: Icon(icon, size: 18, color: colors.mutedForeground),
-      onPressed: onTap,
-      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-      padding: EdgeInsets.zero,
-      splashRadius: 18,
+    return GestureDetector(
+      onLongPress: onLongPress,
+      child: IconButton(
+        tooltip: tooltip,
+        icon: Icon(icon, size: 18, color: colors.mutedForeground),
+        onPressed: onTap,
+        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+        padding: EdgeInsets.zero,
+        splashRadius: 18,
+      ),
     );
   }
 }

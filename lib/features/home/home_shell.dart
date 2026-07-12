@@ -13,6 +13,7 @@ import '../../state/session_state.dart';
 import '../habit/habit_page.dart';
 import '../settings/settings_route.dart';
 import '../shell/section.dart';
+import '../shell/quick_add_bar.dart';
 import '../task/task_detail_page.dart';
 import '../task/task_detail_pane.dart';
 import '../task/tasks_by_list_page.dart';
@@ -279,7 +280,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
     );
   }
 
-  Future<void> _quickAdd(String title) async {
+  Future<void> _quickAdd(QuickAddRequest request) async {
     final repo = ref.read(taskRepositoryProvider);
     if (repo == null) return;
     final defaults = await ref
@@ -291,10 +292,20 @@ class _HomeShellState extends ConsumerState<HomeShell>
         : selectedListId;
     final created = await repo.createBatch(
       listId: listId,
-      input: title,
-      priority: defaults?.defaultPriority ?? 0,
-      dueAtResolver: (line) => NlpDateParser().parse(line)?.date,
+      input: request.input,
+      priority: request.priorityOverride ?? defaults?.defaultPriority ?? 0,
+      dueAtResolver: request.dueAtOverride != null
+          ? (_) => request.dueAtOverride
+          : request.useNlpDate
+          ? (line) => NlpDateParser().parse(line)?.date
+          : null,
     );
+    final tags = ref.read(tagRepositoryProvider);
+    if (tags != null && request.tagIds.isNotEmpty) {
+      await Future.wait(
+        created.map((task) => tags.setTaskTags(task.id, request.tagIds)),
+      );
+    }
     if (!mounted || created.isEmpty) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()

@@ -22,7 +22,9 @@ void main() {
         theme: ThemeData.light().copyWith(
           extensions: const [AppThemeExtension(AppColors.light)],
         ),
-        home: Scaffold(body: QuickAddBar(onSubmit: (text) => submitted = text)),
+        home: Scaffold(
+          body: QuickAddBar(onSubmit: (request) => submitted = request.input),
+        ),
       ),
     );
 
@@ -51,6 +53,42 @@ void main() {
     );
 
     expect(tester.getSize(find.byType(QuickAddBar)).height, 44);
+  });
+
+  testWidgets('QuickAddBar sends explicit priority and tag overrides', (
+    tester,
+  ) async {
+    QuickAddRequest? submitted;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData.light().copyWith(
+          extensions: const [AppThemeExtension(AppColors.light)],
+        ),
+        home: Scaffold(
+          body: QuickAddBar(
+            tagOptions: const [QuickAddTagOption(id: 'focus', name: '专注')],
+            onSubmit: (request) => submitted = request,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('优先级'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('高优先级'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('标签'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('专注'));
+    await tester.tap(find.text('完成'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '覆盖默认值');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(submitted?.input, '覆盖默认值');
+    expect(submitted?.priorityOverride, 3);
+    expect(submitted?.tagIds, ['focus']);
   });
 
   testWidgets('desktop workspace has one QuickAdd and no duplicate controls', (
