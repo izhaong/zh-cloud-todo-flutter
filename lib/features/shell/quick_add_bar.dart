@@ -122,11 +122,25 @@ class _MobileQuickAddSheetState extends State<_MobileQuickAddSheet> {
 class _QuickAddBarState extends State<QuickAddBar> {
   final _ctrl = TextEditingController();
   bool _submitting = false;
+  int _visibleLines = 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl.addListener(_syncVisibleLines);
+  }
 
   @override
   void dispose() {
+    _ctrl.removeListener(_syncVisibleLines);
     _ctrl.dispose();
     super.dispose();
+  }
+
+  void _syncVisibleLines() {
+    final lines = _ctrl.text.split(RegExp(r'\r?\n')).length.clamp(1, 3);
+    if (lines == _visibleLines) return;
+    setState(() => _visibleLines = lines);
   }
 
   Future<void> _submit() async {
@@ -146,7 +160,7 @@ class _QuickAddBarState extends State<QuickAddBar> {
     final colors = Theme.of(context).extension<AppThemeExtension>()!.colors;
     return SizedBox(
       key: const Key('todo-quick-add'),
-      height: TodoLayoutTokens.quickAddHeight,
+      height: TodoLayoutTokens.quickAddHeight * _visibleLines,
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: colors.surface,
@@ -164,6 +178,8 @@ class _QuickAddBarState extends State<QuickAddBar> {
                 child: TextField(
                   controller: _ctrl,
                   enabled: !_submitting,
+                  minLines: 1,
+                  maxLines: 3,
                   textInputAction: TextInputAction.done,
                   onSubmitted: (_) => _submit(),
                   cursorColor: colors.accent,

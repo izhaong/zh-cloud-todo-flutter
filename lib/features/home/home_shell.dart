@@ -7,6 +7,7 @@ import '../../core/db/app_database.dart';
 import '../../core/notification/local_notification_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_widgets.dart';
+import '../../state/nlp_date.dart';
 import '../../state/providers.dart';
 import '../../state/session_state.dart';
 import '../habit/habit_page.dart';
@@ -282,7 +283,25 @@ class _HomeShellState extends ConsumerState<HomeShell>
     final repo = ref.read(taskRepositoryProvider);
     if (repo == null) return;
     final listId = _effectiveListId ?? 'inbox';
-    await repo.create(listId: listId, title: title);
+    final created = await repo.createBatch(
+      listId: listId,
+      input: title,
+      dueAtResolver: (line) => NlpDateParser().parse(line)?.date,
+    );
+    if (!mounted || created.isEmpty) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('已创建 ${created.length} 项任务'),
+          action: SnackBarAction(
+            label: '撤销',
+            onPressed: () => unawaited(
+              Future.wait(created.map((task) => repo.delete(task.id))),
+            ),
+          ),
+        ),
+      );
   }
 
   @override

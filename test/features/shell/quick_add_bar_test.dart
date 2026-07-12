@@ -124,6 +124,52 @@ void main() {
   );
 
   testWidgets(
+    'HomeShell QuickAdd batches nonblank lines, resolves dates, and can undo',
+    (tester) async {
+      const input = '明天 8点复盘 B1 证据\n\n整理验收清单';
+      final fixture = await pumpTodoVisualScenario(
+        tester,
+        viewport: TodoVisualViewports.wide,
+        fixtureSet: TodoVisualFixtureSet.populated,
+        child: const HomeShell(),
+      );
+      final quickAdd = find.descendant(
+        of: find.byType(QuickAddBar),
+        matching: find.byType(TextField),
+      );
+
+      await tester.enterText(quickAdd, input);
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      final created =
+          (await fixture.database.select(fixture.database.todoTasks).get())
+              .where(
+                (task) =>
+                    task.title == '明天 8点复盘 B1 证据' || task.title == '整理验收清单',
+              )
+              .toList();
+      expect(created, hasLength(2));
+      expect(
+        created.singleWhere((task) => task.title == '明天 8点复盘 B1 证据').dueAt,
+        isNotNull,
+      );
+      expect(find.text('已创建 2 项任务'), findsOneWidget);
+      expect(find.text('撤销'), findsOneWidget);
+
+      await tester.tap(find.text('撤销'));
+      await tester.pumpAndSettle();
+      final afterUndo =
+          (await fixture.database.select(fixture.database.todoTasks).get())
+              .where(
+                (task) =>
+                    task.title == '明天 8点复盘 B1 证据' || task.title == '整理验收清单',
+              );
+      expect(afterUndo, isEmpty);
+    },
+  );
+
+  testWidgets(
     'today add select complete flow uses one target action per step and stays in workspace',
     (tester) async {
       const addedTitle = '今天核心流程点击预算验收';
