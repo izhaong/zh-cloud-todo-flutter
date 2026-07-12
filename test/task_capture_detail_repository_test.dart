@@ -103,6 +103,34 @@ void main() {
     },
   );
 
+  test('copying a task creates an independent local mutation', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final repository = TaskRepository(db, SyncChangeQueue(db));
+    final original = await repository.create(
+      listId: 'inbox',
+      title: '撰写周报',
+      description: '## 本周目标',
+      priority: 2,
+      dueAt: DateTime(2026, 7, 15, 9),
+      isPinned: true,
+    );
+
+    final copied = await repository.copy(original.id);
+
+    expect(copied.id, isNot(original.id));
+    expect(copied.title, '撰写周报（副本）');
+    expect(copied.description, original.description);
+    expect(copied.priority, original.priority);
+    expect(copied.dueAt, original.dueAt);
+    expect(copied.isPinned, isFalse);
+    final outbox = await db.select(db.todoSyncChanges).get();
+    expect(
+      outbox.where((change) => change.entityLocalId == copied.id),
+      hasLength(1),
+    );
+  });
+
   test(
     'offline checklist creation persists locally and enqueues a mutation',
     () async {

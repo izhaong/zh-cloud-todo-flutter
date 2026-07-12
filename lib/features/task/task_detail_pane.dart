@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/db/app_database.dart';
 import '../../core/theme/brand_colors.dart';
 import '../../core/widgets/app_widgets.dart';
+import '../../native/native_intents.dart';
 import '../../state/providers.dart';
 import '../shell/app_dialog.dart';
 import 'task_quick_add_sheet.dart';
@@ -18,7 +19,14 @@ import '../collaboration/list_member_page.dart';
 /// 收件箱的本地清单 id（synthetic inbox）：listId 为该值的任务视为"未归清单"。
 const String kInboxListId = 'inbox';
 
-enum _TaskDetailAction { togglePin, moveToInbox, collaboration, delete }
+enum _TaskDetailAction {
+  togglePin,
+  moveToInbox,
+  copy,
+  share,
+  collaboration,
+  delete,
+}
 
 /// 可复用的真实任务详情内容：
 /// - 标题 / 描述 / 优先级 / 起止 / due / list / folder / 标签 chips
@@ -297,6 +305,30 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
   Future<void> _moveToInboxAndClose(TodoTask t) async {
     await _moveToInbox(t);
     if (_isCurrentTask(t.id)) _close();
+  }
+
+  Future<void> _copy(TodoTask t) async {
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    final copied = await repo.copy(t.id);
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('已创建“${copied.title}”')));
+  }
+
+  Future<void> _share(TodoTask t) async {
+    final body = [
+      t.title,
+      if ((t.description ?? '').trim().isNotEmpty) t.description!.trim(),
+      if (t.dueAt != null)
+        '截止：${t.dueAt!.toLocal().toString().substring(0, 16)}',
+    ].join('\n');
+    final shared = await NativeIntents.shareText(body, subject: t.title);
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(shared ? '已打开系统分享' : '当前设备不支持系统分享')));
   }
 
   /// P6 协作任务：底部 Sheet 选择（指派 / 评论 / 协作成员）。
@@ -708,6 +740,12 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                       case _TaskDetailAction.moveToInbox:
                         unawaited(_moveToInboxAndClose(t));
                         return;
+                      case _TaskDetailAction.copy:
+                        unawaited(_copy(t));
+                        return;
+                      case _TaskDetailAction.share:
+                        unawaited(_share(t));
+                        return;
                       case _TaskDetailAction.collaboration:
                         unawaited(_openCollaborationHub(t));
                         return;
@@ -724,6 +762,14 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                     const PopupMenuItem(
                       value: _TaskDetailAction.moveToInbox,
                       child: Text('移至收件箱'),
+                    ),
+                    const PopupMenuItem(
+                      value: _TaskDetailAction.copy,
+                      child: Text('复制任务'),
+                    ),
+                    const PopupMenuItem(
+                      value: _TaskDetailAction.share,
+                      child: Text('分享任务'),
                     ),
                     const PopupMenuItem(
                       value: _TaskDetailAction.collaboration,
@@ -757,6 +803,16 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                   tooltip: '移至收件箱',
                   onPressed: () => _moveToInboxAndClose(t),
                   icon: const Icon(Icons.move_to_inbox_outlined),
+                ),
+                IconButton(
+                  tooltip: '复制任务',
+                  onPressed: () => _copy(t),
+                  icon: const Icon(Icons.copy_outlined),
+                ),
+                IconButton(
+                  tooltip: '分享任务',
+                  onPressed: () => _share(t),
+                  icon: const Icon(Icons.share_outlined),
                 ),
                 IconButton(
                   tooltip: '协作',

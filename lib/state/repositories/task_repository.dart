@@ -137,6 +137,23 @@ class TaskRepository {
     return tasks;
   }
 
+  /// 复制任务主体为新的离线任务；检查事项、附件及服务端活动不随副本复制。
+  Future<TodoTask> copy(String taskId) async {
+    final original = await (_db.select(
+      _db.todoTasks,
+    )..where((task) => task.id.equals(taskId))).getSingle();
+    return create(
+      listId: original.listId,
+      parentTaskId: original.parentTaskId,
+      title: '${original.title}（副本）',
+      description: original.description,
+      priority: original.priority,
+      startAt: original.startAt,
+      endAt: original.endAt,
+      dueAt: original.dueAt,
+    );
+  }
+
   Future<TodoTask> update(
     String taskId, {
     String? title,
