@@ -132,6 +132,46 @@ class TaskRepository {
     return row;
   }
 
+  /// 离线创建检查事项。服务端映射和同步白名单由 B1 契约完成后接入。
+  Future<TodoChecklistItem> createChecklistItem({
+    required String taskId,
+    required String title,
+    int sortOrder = 0,
+  }) async {
+    final normalizedTitle = title.trim();
+    if (normalizedTitle.isEmpty) {
+      throw ArgumentError.value(title, 'title', '检查事项标题不能为空');
+    }
+    final now = DateTime.now();
+    final id = _uuid.v4();
+    await _db.transaction(() async {
+      await _db
+          .into(_db.todoChecklistItems)
+          .insert(
+            TodoChecklistItemsCompanion.insert(
+              id: id,
+              taskId: taskId,
+              title: normalizedTitle,
+              sortOrder: Value(sortOrder),
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      final row = await (_db.select(
+        _db.todoChecklistItems,
+      )..where((item) => item.id.equals(id))).getSingle();
+      await _queue.enqueue(
+        entity: SyncEntities.checklist,
+        op: SyncOps.upsert,
+        localId: id,
+        payload: row.toJson(),
+      );
+    });
+    return (_db.select(
+      _db.todoChecklistItems,
+    )..where((item) => item.id.equals(id))).getSingle();
+  }
+
   /// 切换置顶状态 + sync_queue。
   Future<TodoTask> togglePin(String taskId) async {
     final current = await (_db.select(

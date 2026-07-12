@@ -94,6 +94,21 @@ class TodoTaskTags extends Table {
   Set<Column> get primaryKey => {taskId, tagId};
 }
 
+/// 任务检查事项：本地 UUID 保证任务尚未同步时也能离线编辑。
+class TodoChecklistItems extends Table {
+  TextColumn get id => text()();
+  IntColumn get serverId => integer().nullable()();
+  TextColumn get taskId => text()();
+  TextColumn get title => text()();
+  BoolColumn get completed => boolean().withDefault(const Constant(false))();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+  DateTimeColumn get updatedAt => dateTime()();
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 /// 提醒（任务维度，单任务可有多条提醒规则）。
 class TodoReminders extends Table {
   TextColumn get id => text()();
@@ -217,6 +232,7 @@ class TodoEntityRevisions extends Table {
     TodoFolders,
     TodoTags,
     TodoTaskTags,
+    TodoChecklistItems,
     TodoReminders,
     TodoRepeatRules,
     TodoRepeatSkips,
@@ -238,7 +254,7 @@ class AppDatabase extends _$AppDatabase {
     : super(_open('todo_t${tenantId}_u$userId'));
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -253,6 +269,8 @@ class AppDatabase extends _$AppDatabase {
           await m.deleteTable(table.actualTableName);
         }
         await m.createAll();
+      } else if (from < 5) {
+        await m.createTable(todoChecklistItems);
       }
     },
   );
