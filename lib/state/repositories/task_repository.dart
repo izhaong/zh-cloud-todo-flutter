@@ -49,6 +49,13 @@ class TaskRepository {
     )..where((t) => t.id.equals(id))).watchSingleOrNull();
   }
 
+  Stream<List<TodoChecklistItem>> watchChecklistItems(String taskId) {
+    return (_db.select(_db.todoChecklistItems)
+          ..where((item) => item.taskId.equals(taskId))
+          ..orderBy([(item) => OrderingTerm(expression: item.sortOrder)]))
+        .watch();
+  }
+
   Future<TodoTask> create({
     required String listId,
     required String title,
@@ -185,6 +192,71 @@ class TaskRepository {
     return (_db.select(
       _db.todoChecklistItems,
     )..where((item) => item.id.equals(id))).getSingle();
+  }
+
+  Future<TodoChecklistItem> toggleChecklistItem(String itemId) async {
+    late TodoChecklistItem next;
+    await _db.transaction(() async {
+      final current = await (_db.select(
+        _db.todoChecklistItems,
+      )..where((item) => item.id.equals(itemId))).getSingle();
+      final parent = await (_db.select(
+        _db.todoTasks,
+      )..where((task) => task.id.equals(current.taskId))).getSingle();
+      next = current.copyWith(
+        completed: !current.completed,
+        updatedAt: DateTime.now(),
+      );
+      await (_db.update(
+        _db.todoChecklistItems,
+      )..where((item) => item.id.equals(itemId))).write(next);
+      await _queue.enqueue(
+        entity: SyncEntities.task,
+        op: SyncOps.upsert,
+        localId: next.id,
+        serverId: next.serverId,
+        payload: {
+          'listId': parent.listId,
+          'parentTaskId': next.taskId,
+          'title': next.title,
+          'isChecklistItem': true,
+          'status': next.completed ? 'DONE' : 'TODO',
+          'priority': 0,
+          'sortOrder': next.sortOrder,
+          'completedAt': next.completed
+              ? next.updatedAt.toIso8601String()
+              : null,
+        },
+      );
+    });
+    return next;
+  }
+
+  Future<void> deleteChecklistItem(String itemId) async {
+    await _db.transaction(() async {
+      final item = await (_db.select(
+        _db.todoChecklistItems,
+      )..where((row) => row.id.equals(itemId))).getSingle();
+      await (_db.delete(
+        _db.todoChecklistItems,
+      )..where((row) => row.id.equals(itemId))).go();
+      if (item.serverId == null) {
+        await (_db.delete(_db.todoSyncChanges)..where(
+              (change) =>
+                  change.entity.equals(SyncEntities.task) &
+                  change.entityLocalId.equals(itemId),
+            ))
+            .go();
+        return;
+      }
+      await _queue.enqueue(
+        entity: SyncEntities.task,
+        op: SyncOps.delete,
+        localId: itemId,
+        serverId: item.serverId,
+        payload: const {},
+      );
+    });
   }
 
   /// 切换置顶状态 + sync_queue。

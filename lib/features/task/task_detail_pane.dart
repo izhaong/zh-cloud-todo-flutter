@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/app_database.dart';
-import '../../core/api/todo_api.dart';
 import '../../core/theme/brand_colors.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../state/providers.dart';
@@ -903,7 +902,7 @@ class _TagChipsState extends ConsumerState<_TagChips> {
   }
 }
 
-/// §2.1 内嵌检查事项（checklist）：直接走 [ChecklistApi] REST，实时与后端同步。
+/// §2.1 内嵌检查事项：通过本地 Repository 与 outbox 离线优先同步。
 class _ChecklistSection extends ConsumerStatefulWidget {
   const _ChecklistSection({super.key, required this.taskId});
 
@@ -914,16 +913,7 @@ class _ChecklistSection extends ConsumerStatefulWidget {
 }
 
 class _ChecklistSectionState extends ConsumerState<_ChecklistSection> {
-  List<ChecklistItem> _items = const [];
-  bool _loading = true;
-  String? _error;
   final _addCtrl = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
 
   @override
   void dispose() {
@@ -931,49 +921,31 @@ class _ChecklistSectionState extends ConsumerState<_ChecklistSection> {
     super.dispose();
   }
 
-  Future<void> _load() async {
-    try {
-      final api = ref.read(todoApiProvider).checklist;
-      final items = await api.list(widget.taskId);
-      if (!mounted) return;
-      setState(() {
-        _items = items;
-        _loading = false;
-        _error = null;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _items = const [];
-        _loading = false;
-        _error = '检查事项暂不可用';
-      });
-    }
-  }
-
   Future<void> _add() async {
     final text = _addCtrl.text.trim();
     if (text.isEmpty) return;
-    _addCtrl.clear();
-    final api = ref.read(todoApiProvider).checklist;
-    await api.create(taskId: widget.taskId, title: text);
-    await _load();
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    await repo.createChecklistItem(taskId: widget.taskId, title: text);
+    if (mounted) _addCtrl.clear();
   }
 
-  Future<void> _toggle(ChecklistItem it) async {
-    final api = ref.read(todoApiProvider).checklist;
-    await api.update(it.id, completed: !it.completed);
-    await _load();
+  Future<void> _toggle(TodoChecklistItem item) async {
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    await repo.toggleChecklistItem(item.id);
   }
 
-  Future<void> _delete(ChecklistItem it) async {
-    final api = ref.read(todoApiProvider).checklist;
-    await api.delete(it.id);
-    await _load();
+  Future<void> _delete(TodoChecklistItem item) async {
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    await repo.deleteChecklistItem(item.id);
   }
 
   @override
   Widget build(BuildContext context) {
+    final repo = ref.watch(taskRepositoryProvider);
+    if (repo == null) return const SizedBox(height: 32);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -997,33 +969,42 @@ class _ChecklistSectionState extends ConsumerState<_ChecklistSection> {
           ],
         ),
         const SizedBox(height: 8),
-        if (_loading)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8),
-            child: LinearProgressIndicator(),
-          )
-        else if (_error != null)
-          Text('加载失败: $_error')
-        else if (_items.isEmpty)
-          const Text('暂无检查事项')
-        else
-          ..._items.map(
-            (it) => CheckboxListTile(
-              value: it.completed,
-              title: Text(
-                it.title,
-                style: TextStyle(
-                  decoration: it.completed ? TextDecoration.lineThrough : null,
-                ),
-              ),
-              onChanged: (_) => _toggle(it),
-              secondary: IconButton(
-                tooltip: '删除',
-                icon: const Icon(Icons.close),
-                onPressed: () => _delete(it),
-              ),
-            ),
-          ),
+        StreamBuilder<List<TodoChecklistItem>>(
+          stream: repo.watchChecklistItems(widget.taskId),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: LinearProgressIndicator(),
+              );
+            }
+            final items = snapshot.data!;
+            if (items.isEmpty) return const Text('暂无检查事项');
+            return Column(
+              children: items
+                  .map(
+                    (item) => CheckboxListTile(
+                      value: item.completed,
+                      title: Text(
+                        item.title,
+                        style: TextStyle(
+                          decoration: item.completed
+                              ? TextDecoration.lineThrough
+                              : null,
+                        ),
+                      ),
+                      onChanged: (_) => _toggle(item),
+                      secondary: IconButton(
+                        tooltip: '删除',
+                        icon: const Icon(Icons.close),
+                        onPressed: () => _delete(item),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            );
+          },
+        ),
       ],
     );
   }

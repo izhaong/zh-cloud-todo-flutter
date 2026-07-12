@@ -36,4 +36,29 @@ void main() {
       expect(payload['listId'], task.listId);
     },
   );
+
+  test(
+    'offline checklist edits and deletion stay local and enqueue task mutations',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final repository = TaskRepository(db, SyncChangeQueue(db));
+      final task = await repository.create(listId: 'inbox', title: '撰写周报');
+      final item = await repository.createChecklistItem(
+        taskId: task.id,
+        title: '整理数据',
+      );
+
+      final completed = await repository.toggleChecklistItem(item.id);
+      expect(completed.completed, isTrue);
+
+      await repository.deleteChecklistItem(item.id);
+      expect(await db.select(db.todoChecklistItems).get(), isEmpty);
+      final outbox = await db.select(db.todoSyncChanges).get();
+      expect(
+        outbox.where((change) => change.entityLocalId == item.id),
+        isEmpty,
+      );
+    },
+  );
 }
