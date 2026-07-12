@@ -441,6 +441,30 @@ class SyncCoordinator {
             rule?.serverId ?? _temporaryIdFor(localRuleId);
       }
     }
+    if (entity == SyncEntities.viewPreference &&
+        resolved['sourceType'] == 'TASK_CAPTURE' &&
+        resolved['sourceKey'] == 'defaults') {
+      final valueJson = resolved['valueJson'];
+      if (valueJson is String) {
+        try {
+          final value = jsonDecode(valueJson);
+          if (value is Map<String, dynamic>) {
+            final localListId = value['defaultListId']?.toString();
+            if (localListId != null && localListId != 'inbox') {
+              final list = await (db.select(
+                db.todoLists,
+              )..where((row) => row.id.equals(localListId))).getSingleOrNull();
+              if (list?.serverId != null) {
+                value['defaultListServerId'] = list!.serverId;
+              }
+            }
+            resolved['valueJson'] = jsonEncode(value);
+          }
+        } on FormatException {
+          // Repository 会以安全默认值处理损坏的本地偏好；同步不阻塞其他变更。
+        }
+      }
+    }
     // 移除仅本地使用的字段，避免污染服务端 payload。
     resolved.remove('id');
     resolved.remove('serverId');
@@ -922,6 +946,29 @@ class SyncCoordinator {
   ) async {
     final sourceType = payload['sourceType']?.toString() ?? 'default';
     final sourceKey = payload['sourceKey']?.toString() ?? 'default';
+    final localPayload = Map<String, dynamic>.from(payload);
+    final nestedValue = localPayload['valueJson'];
+    if (sourceType == 'TASK_CAPTURE' &&
+        sourceKey == 'defaults' &&
+        nestedValue is String) {
+      try {
+        final value = jsonDecode(nestedValue);
+        if (value is Map<String, dynamic>) {
+          final listServerId = (value['defaultListServerId'] as num?)?.toInt();
+          if (listServerId != null) {
+            final list =
+                await (db.select(db.todoLists)
+                      ..where((row) => row.serverId.equals(listServerId)))
+                    .getSingleOrNull();
+            if (list != null) value['defaultListId'] = list.id;
+          }
+          value.remove('defaultListServerId');
+          localPayload['valueJson'] = jsonEncode(value);
+        }
+      } on FormatException {
+        // 与本地 defaults repository 一致：保留原文，由读取侧降级为空默认值。
+      }
+    }
     final now = DateTime.now();
     await db
         .into(db.todoViewPreferences)
@@ -931,7 +978,7 @@ class SyncCoordinator {
             serverId: Value(serverId),
             sourceType: sourceType,
             sourceKey: sourceKey,
-            valueJson: jsonEncode(payload),
+            valueJson: jsonEncode(localPayload),
             updatedAt: now,
             createdAt: now,
           ),

@@ -5,6 +5,8 @@ import 'package:zh_cloud_todo_flutter/core/theme/app_theme.dart';
 import 'package:zh_cloud_todo_flutter/core/widgets/app_widgets.dart';
 import 'package:zh_cloud_todo_flutter/features/home/home_shell.dart';
 import 'package:zh_cloud_todo_flutter/features/shell/quick_add_bar.dart';
+import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/task_capture_defaults_repository.dart';
 import 'package:zh_cloud_todo_flutter/features/task/views/task_view_mode_tabs.dart';
 
 import '../../support/todo_visual_fixture.dart';
@@ -168,6 +170,35 @@ void main() {
       expect(afterUndo, isEmpty);
     },
   );
+
+  testWidgets('HomeShell QuickAdd applies locally persisted capture defaults', (
+    tester,
+  ) async {
+    const title = '继承默认优先级的任务';
+    final fixture = await pumpTodoVisualScenario(
+      tester,
+      viewport: TodoVisualViewports.wide,
+      fixtureSet: TodoVisualFixtureSet.populated,
+      child: const HomeShell(),
+    );
+    await TaskCaptureDefaultsRepository(
+      fixture.database,
+      SyncChangeQueue(fixture.database),
+    ).save(const TaskCaptureDefaults(defaultPriority: 2));
+
+    final quickAdd = find.descendant(
+      of: find.byType(QuickAddBar),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(quickAdd, title);
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    final created =
+        (await fixture.database.select(fixture.database.todoTasks).get())
+            .singleWhere((task) => task.title == title);
+    expect(created.priority, 2);
+  });
 
   testWidgets(
     'today add select complete flow uses one target action per step and stays in workspace',

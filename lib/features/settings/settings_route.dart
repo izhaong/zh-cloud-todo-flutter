@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/brand_colors.dart';
 import '../../core/widgets/app_widgets.dart';
+import '../../state/providers.dart';
+import '../../state/repositories/task_capture_defaults_repository.dart';
 import '../../state/session_state.dart';
 import '../account/account_security_page.dart';
 import '../shell/app_theme_controller.dart';
@@ -57,6 +59,23 @@ class SettingsRoute extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 16),
+          _Section(title: '任务'),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: _Tile(
+              icon: Icons.playlist_add_check_outlined,
+              title: '新任务默认值',
+              subtitle: '默认清单与优先级；离线保存后自动同步',
+              trailing: Icons.chevron_right,
+              colors: colors,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const _TaskCaptureDefaultsPage(),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
           _Section(title: '主题'),
           AppCard(
             padding: EdgeInsets.zero,
@@ -101,6 +120,114 @@ class SettingsRoute extends ConsumerWidget {
     if (context.mounted) {
       Navigator.of(context).popUntil((route) => route.isFirst);
     }
+  }
+}
+
+class _TaskCaptureDefaultsPage extends ConsumerStatefulWidget {
+  const _TaskCaptureDefaultsPage();
+
+  @override
+  ConsumerState<_TaskCaptureDefaultsPage> createState() =>
+      _TaskCaptureDefaultsPageState();
+}
+
+class _TaskCaptureDefaultsPageState
+    extends ConsumerState<_TaskCaptureDefaultsPage> {
+  TaskCaptureDefaults? _defaults;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() async {
+      final defaults = await ref
+          .read(taskCaptureDefaultsRepositoryProvider)
+          ?.get();
+      if (mounted) {
+        setState(() => _defaults = defaults ?? const TaskCaptureDefaults());
+      }
+    });
+  }
+
+  Future<void> _save() async {
+    final defaults = _defaults;
+    final repo = ref.read(taskCaptureDefaultsRepositoryProvider);
+    if (defaults == null || repo == null) return;
+    setState(() => _saving = true);
+    await repo.save(defaults);
+    if (!mounted) return;
+    setState(() => _saving = false);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('新任务默认值已保存，等待同步')));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final defaults = _defaults;
+    final lists = ref.watch(listsStreamProvider).valueOrNull ?? const [];
+    return Scaffold(
+      appBar: AppBar(title: const Text('新任务默认值')),
+      body: defaults == null
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                DropdownButtonFormField<String?>(
+                  key: ValueKey(defaults.defaultListId),
+                  initialValue: defaults.defaultListId,
+                  decoration: const InputDecoration(
+                    labelText: '默认清单',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    const DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text('收件箱'),
+                    ),
+                    ...lists.map(
+                      (list) => DropdownMenuItem<String?>(
+                        value: list.id,
+                        child: Text(list.name),
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) => setState(
+                    () => _defaults = TaskCaptureDefaults(
+                      defaultListId: value,
+                      defaultPriority: defaults.defaultPriority,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<int>(
+                  key: ValueKey(defaults.defaultPriority),
+                  initialValue: defaults.defaultPriority,
+                  decoration: const InputDecoration(
+                    labelText: '默认优先级',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 0, child: Text('无')),
+                    DropdownMenuItem(value: 1, child: Text('低')),
+                    DropdownMenuItem(value: 2, child: Text('中')),
+                    DropdownMenuItem(value: 3, child: Text('高')),
+                  ],
+                  onChanged: (value) => setState(
+                    () => _defaults = TaskCaptureDefaults(
+                      defaultListId: defaults.defaultListId,
+                      defaultPriority: value ?? 0,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                FilledButton(
+                  onPressed: _saving ? null : _save,
+                  child: Text(_saving ? '保存中…' : '保存默认值'),
+                ),
+              ],
+            ),
+    );
   }
 }
 

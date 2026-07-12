@@ -12,6 +12,7 @@ import 'repositories/activity_repository.dart';
 import 'repositories/list_repository.dart';
 import 'repositories/tag_repository.dart';
 import 'repositories/template_repository.dart';
+import 'repositories/task_capture_defaults_repository.dart';
 import 'repositories/task_repository.dart';
 
 /// UI-facing clock. Production reads the current instant on each rebuild;
@@ -100,6 +101,14 @@ final taskRepositoryProvider = Provider<TaskRepository?>((ref) {
   if (db == null || queue == null) return null;
   return TaskRepository(db, queue);
 });
+
+final taskCaptureDefaultsRepositoryProvider =
+    Provider<TaskCaptureDefaultsRepository?>((ref) {
+      final db = ref.watch(appDatabaseProvider);
+      final queue = ref.watch(syncChangeQueueProvider);
+      if (db == null || queue == null) return null;
+      return TaskCaptureDefaultsRepository(db, queue);
+    });
 
 final activityRepositoryProvider = Provider<ActivityRepository?>((ref) {
   final db = ref.watch(appDatabaseProvider);

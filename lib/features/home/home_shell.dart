@@ -282,10 +282,17 @@ class _HomeShellState extends ConsumerState<HomeShell>
   Future<void> _quickAdd(String title) async {
     final repo = ref.read(taskRepositoryProvider);
     if (repo == null) return;
-    final listId = _effectiveListId ?? 'inbox';
+    final defaults = await ref
+        .read(taskCaptureDefaultsRepositoryProvider)
+        ?.get();
+    final selectedListId = _effectiveListId;
+    final listId = selectedListId == null || selectedListId == 'inbox'
+        ? defaults?.defaultListId ?? 'inbox'
+        : selectedListId;
     final created = await repo.createBatch(
       listId: listId,
       input: title,
+      priority: defaults?.defaultPriority ?? 0,
       dueAtResolver: (line) => NlpDateParser().parse(line)?.date,
     );
     if (!mounted || created.isEmpty) return;
