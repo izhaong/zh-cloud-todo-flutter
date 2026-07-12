@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
+import '../api/attachment_upload_api.dart';
 import '../api/api_client.dart';
 import '../api/sync_api.dart';
 import '../db/app_database.dart';
@@ -29,12 +30,15 @@ class SyncCoordinator {
     required this.db,
     required this.api,
     required this.todoApi,
+    AttachmentUploadApi? attachmentApi,
     Uuid? uuid,
-  }) : _uuid = uuid ?? const Uuid();
+  }) : _attachmentApi = attachmentApi ?? DioAttachmentUploadApi(todoApi),
+       _uuid = uuid ?? const Uuid();
 
   final AppDatabase db;
   final SyncApi api;
   final ApiClient todoApi;
+  final AttachmentUploadApi _attachmentApi;
   final Uuid _uuid;
 
   int _tempIdSeq = 0;
@@ -58,13 +62,89 @@ class SyncCoordinator {
     final folderChanges = pending
         .where((c) => c.entity == SyncEntities.folder)
         .toList();
+    final attachmentChanges = pending
+        .where((c) => c.entity == SyncEntities.attachment)
+        .toList();
     final syncableChanges = pending
         .where((c) => SyncEntities.syncable.contains(c.entity))
         .toList();
 
     var succeeded = 0;
     succeeded += await _pushFolderChanges(folderChanges);
+    succeeded += await _pushAttachmentChanges(attachmentChanges);
     succeeded += await _pushSyncableChanges(syncableChanges);
+    return succeeded;
+  }
+
+  Future<int> _pushAttachmentChanges(List<TodoSyncChange> changes) async {
+    var succeeded = 0;
+    for (final change in changes) {
+      final localId = change.entityLocalId;
+      if (localId == null || change.op == SyncOps.delete) continue;
+      final attachment = await (db.select(
+        db.todoAttachments,
+      )..where((row) => row.id.equals(localId))).getSingleOrNull();
+      if (attachment == null || attachment.localPath == null) continue;
+      final task = await (db.select(
+        db.todoTasks,
+      )..where((row) => row.id.equals(attachment.taskId))).getSingleOrNull();
+      if (task?.serverId == null) continue;
+      try {
+        await (db.update(
+          db.todoAttachments,
+        )..where((row) => row.id.equals(localId))).write(
+          TodoAttachmentsCompanion(
+            status: const Value('uploading'),
+            error: const Value(null),
+            updatedAt: Value(DateTime.now()),
+          ),
+        );
+        final url = await _attachmentApi.uploadFile(
+          localPath: attachment.localPath!,
+          name: attachment.name,
+        );
+        final serverId = await _attachmentApi.registerTaskAttachment(
+          taskServerId: task!.serverId!,
+          name: attachment.name,
+          url: url,
+          size: attachment.size,
+          mimeType: attachment.mimeType,
+        );
+        await (db.update(
+          db.todoAttachments,
+        )..where((row) => row.id.equals(localId))).write(
+          TodoAttachmentsCompanion(
+            serverId: Value(serverId),
+            remoteUrl: Value(url),
+            status: const Value('uploaded'),
+            error: const Value(null),
+            updatedAt: Value(DateTime.now()),
+          ),
+        );
+        await (db.update(db.todoSyncChanges)
+              ..where((row) => row.id.equals(change.id)))
+            .write(const TodoSyncChangesCompanion(status: Value('synced')));
+        succeeded++;
+      } catch (error) {
+        await (db.update(
+          db.todoAttachments,
+        )..where((row) => row.id.equals(localId))).write(
+          TodoAttachmentsCompanion(
+            status: const Value('failed'),
+            error: Value(error.toString()),
+            updatedAt: Value(DateTime.now()),
+          ),
+        );
+        await (db.update(
+          db.todoSyncChanges,
+        )..where((row) => row.id.equals(change.id))).write(
+          TodoSyncChangesCompanion(
+            status: const Value('failed'),
+            attemptCount: Value(change.attemptCount + 1),
+          ),
+        );
+      }
+    }
     return succeeded;
   }
 

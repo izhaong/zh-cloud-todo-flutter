@@ -329,16 +329,24 @@ class TaskRepository {
     );
   }
 
-  Future<void> retryAttachment(String attachmentId) {
-    return (_db.update(
-      _db.todoAttachments,
-    )..where((row) => row.id.equals(attachmentId))).write(
-      TodoAttachmentsCompanion(
-        status: const Value('queued'),
-        error: const Value(null),
-        updatedAt: Value(DateTime.now()),
-      ),
-    );
+  Future<void> retryAttachment(String attachmentId) async {
+    await _db.transaction(() async {
+      await (_db.update(
+        _db.todoAttachments,
+      )..where((row) => row.id.equals(attachmentId))).write(
+        TodoAttachmentsCompanion(
+          status: const Value('queued'),
+          error: const Value(null),
+          updatedAt: Value(DateTime.now()),
+        ),
+      );
+      await (_db.update(_db.todoSyncChanges)..where(
+            (change) =>
+                change.entity.equals(SyncEntities.attachment) &
+                change.entityLocalId.equals(attachmentId),
+          ))
+          .write(const TodoSyncChangesCompanion(status: Value('queued')));
+    });
   }
 
   Future<void> deleteChecklistItem(String itemId) async {
