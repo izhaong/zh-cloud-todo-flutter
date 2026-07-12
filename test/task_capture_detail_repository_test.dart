@@ -9,6 +9,34 @@ import 'package:zh_cloud_todo_flutter/state/repositories/task_repository.dart';
 
 void main() {
   test(
+    'batch capture skips blank lines and preserves each nonblank title',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final repository = TaskRepository(db, SyncChangeQueue(db));
+
+      final tasks = await repository.createBatch(
+        listId: 'inbox',
+        input: '写周报\n\n  整理数据  \n',
+      );
+
+      expect(tasks.map((task) => task.title), ['写周报', '整理数据']);
+      expect(await db.select(db.todoTasks).get(), hasLength(2));
+    },
+  );
+
+  test('task creation rejects a blank title', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final repository = TaskRepository(db, SyncChangeQueue(db));
+
+    await expectLater(
+      repository.create(listId: 'inbox', title: '   '),
+      throwsArgumentError,
+    );
+  });
+
+  test(
     'offline checklist creation persists locally and enqueues a mutation',
     () async {
       final db = AppDatabase.forTesting(NativeDatabase.memory());

@@ -67,36 +67,57 @@ class TaskRepository {
     String? parentTaskId,
     bool isPinned = false,
   }) async {
+    final normalizedTitle = title.trim();
+    if (normalizedTitle.isEmpty) {
+      throw ArgumentError.value(title, 'title', '任务标题不能为空');
+    }
     final now = DateTime.now();
     final id = _uuid.v4();
-    await _db
-        .into(_db.todoTasks)
-        .insert(
-          TodoTasksCompanion.insert(
-            id: id,
-            listId: listId,
-            parentTaskId: Value(parentTaskId),
-            title: title,
-            description: Value(description),
-            priority: Value(priority),
-            isPinned: Value(isPinned),
-            startAt: Value(startAt),
-            endAt: Value(endAt),
-            dueAt: Value(dueAt),
-            updatedAt: now,
-            createdAt: now,
-          ),
-        );
-    final row = await (_db.select(
-      _db.todoTasks,
-    )..where((t) => t.id.equals(id))).getSingle();
-    await _queue.enqueue(
-      entity: SyncEntities.task,
-      op: SyncOps.upsert,
-      localId: id,
-      payload: row.toJson(),
-    );
+    late TodoTask row;
+    await _db.transaction(() async {
+      await _db
+          .into(_db.todoTasks)
+          .insert(
+            TodoTasksCompanion.insert(
+              id: id,
+              listId: listId,
+              parentTaskId: Value(parentTaskId),
+              title: normalizedTitle,
+              description: Value(description),
+              priority: Value(priority),
+              isPinned: Value(isPinned),
+              startAt: Value(startAt),
+              endAt: Value(endAt),
+              dueAt: Value(dueAt),
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      row = await (_db.select(
+        _db.todoTasks,
+      )..where((t) => t.id.equals(id))).getSingle();
+      await _queue.enqueue(
+        entity: SyncEntities.task,
+        op: SyncOps.upsert,
+        localId: id,
+        payload: row.toJson(),
+      );
+    });
     return row;
+  }
+
+  Future<List<TodoTask>> createBatch({
+    required String listId,
+    required String input,
+    int priority = 0,
+  }) async {
+    final tasks = <TodoTask>[];
+    for (final line in input.split(RegExp(r'\r?\n'))) {
+      final title = line.trim();
+      if (title.isEmpty) continue;
+      tasks.add(await create(listId: listId, title: title, priority: priority));
+    }
+    return tasks;
   }
 
   Future<TodoTask> update(

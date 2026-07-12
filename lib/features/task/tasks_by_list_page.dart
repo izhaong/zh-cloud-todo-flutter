@@ -302,7 +302,10 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     }
     final repo = ref.read(taskRepositoryProvider);
     if (repo == null) return;
-    await repo.create(listId: _selectedListId ?? kInboxListId, title: title);
+    await repo.createBatch(
+      listId: _selectedListId ?? kInboxListId,
+      input: title,
+    );
   }
 
   Future<void> _openFilterPanel() async {
