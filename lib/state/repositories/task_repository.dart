@@ -110,12 +110,20 @@ class TaskRepository {
     required String listId,
     required String input,
     int priority = 0,
+    DateTime? Function(String title)? dueAtResolver,
   }) async {
     final tasks = <TodoTask>[];
     for (final line in input.split(RegExp(r'\r?\n'))) {
       final title = line.trim();
       if (title.isEmpty) continue;
-      tasks.add(await create(listId: listId, title: title, priority: priority));
+      tasks.add(
+        await create(
+          listId: listId,
+          title: title,
+          priority: priority,
+          dueAt: dueAtResolver?.call(title),
+        ),
+      );
     }
     return tasks;
   }

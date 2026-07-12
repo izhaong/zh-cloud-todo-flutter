@@ -18,9 +18,13 @@ void main() {
       final tasks = await repository.createBatch(
         listId: 'inbox',
         input: '写周报\n\n  整理数据  \n',
+        dueAtResolver: (title) =>
+            title == '写周报' ? DateTime(2026, 7, 13, 10) : null,
       );
 
       expect(tasks.map((task) => task.title), ['写周报', '整理数据']);
+      expect(tasks.first.dueAt, DateTime(2026, 7, 13, 10));
+      expect(tasks.last.dueAt, isNull);
       expect(await db.select(db.todoTasks).get(), hasLength(2));
     },
   );

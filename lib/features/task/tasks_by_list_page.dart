@@ -5,6 +5,7 @@ import '../../core/db/app_database.dart';
 import '../../core/theme/brand_colors.dart';
 import '../../core/theme/todo_layout_tokens.dart';
 import '../../core/widgets/app_widgets.dart';
+import '../../state/nlp_date.dart';
 import '../../state/providers.dart';
 import '../../state/repositories/task_repository.dart';
 import '../filter/filter_bar.dart';
@@ -305,6 +306,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     await repo.createBatch(
       listId: _selectedListId ?? kInboxListId,
       input: title,
+      dueAtResolver: (line) => NlpDateParser().parse(line)?.date,
     );
   }
 
