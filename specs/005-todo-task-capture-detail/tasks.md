@@ -24,4 +24,4 @@
 ## Phase 5: 跨层验收
 
 - [ ] T010 增加离线重启、恢复网络、幂等上传和双端回显旅程；更新 Docs #47 的证据链接。
-- [ ] T011 运行 `flutter analyze`、完整 `flutter test` 和批准 golden；仅将有实际输出的条目标记完成。
+- [x] T011 运行 `flutter analyze`、完整 `flutter test` 和批准 golden；仅将有实际输出的条目标记完成。
