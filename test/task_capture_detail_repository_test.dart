@@ -249,4 +249,36 @@ void main() {
       );
     },
   );
+
+  test(
+    'offline checklist rename and reorder preserve the aggregate sync payload',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final repository = TaskRepository(db, SyncChangeQueue(db));
+      final task = await repository.create(listId: 'inbox', title: '撰写周报');
+      final item = await repository.createChecklistItem(
+        taskId: task.id,
+        title: '整理数据',
+        sortOrder: 2,
+      );
+
+      final updated = await repository.updateChecklistItem(
+        item.id,
+        title: '复核数据',
+        sortOrder: 1,
+      );
+
+      expect(updated.title, '复核数据');
+      expect(updated.sortOrder, 1);
+      final change = (await db.select(db.todoSyncChanges).get()).last;
+      final payload = jsonDecode(change.payloadJson) as Map<String, dynamic>;
+      expect(payload['title'], '复核数据');
+      expect(payload['sortOrder'], 1);
+      await expectLater(
+        repository.updateChecklistItem(item.id, title: '   '),
+        throwsArgumentError,
+      );
+    },
+  );
 }

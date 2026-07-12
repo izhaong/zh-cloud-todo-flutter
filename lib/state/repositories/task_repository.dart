@@ -302,6 +302,61 @@ class TaskRepository {
     return next;
   }
 
+  /// 离线更新检查事项文本或顺序；变更复用 checklist task 的同步载荷。
+  Future<TodoChecklistItem> updateChecklistItem(
+    String itemId, {
+    String? title,
+    int? sortOrder,
+  }) async {
+    final normalizedTitle = title?.trim();
+    if (title != null && normalizedTitle!.isEmpty) {
+      throw ArgumentError.value(title, 'title', '检查事项标题不能为空');
+    }
+    if (sortOrder != null && sortOrder < 0) {
+      throw ArgumentError.value(sortOrder, 'sortOrder', '检查事项顺序不能为负数');
+    }
+    late TodoChecklistItem next;
+    await _db.transaction(() async {
+      final current = await (_db.select(
+        _db.todoChecklistItems,
+      )..where((item) => item.id.equals(itemId))).getSingle();
+      final parent = await (_db.select(
+        _db.todoTasks,
+      )..where((task) => task.id.equals(current.taskId))).getSingle();
+      if (title == null && sortOrder == null) {
+        next = current;
+        return;
+      }
+      next = current.copyWith(
+        title: normalizedTitle ?? current.title,
+        sortOrder: sortOrder ?? current.sortOrder,
+        updatedAt: DateTime.now(),
+      );
+      await (_db.update(
+        _db.todoChecklistItems,
+      )..where((item) => item.id.equals(itemId))).write(next);
+      await _queue.enqueue(
+        entity: SyncEntities.task,
+        op: SyncOps.upsert,
+        localId: next.id,
+        serverId: next.serverId,
+        payload: {
+          'listId': parent.listId,
+          'parentTaskId': next.taskId,
+          'title': next.title,
+          'isChecklistItem': true,
+          'status': next.completed ? 'DONE' : 'TODO',
+          'priority': 0,
+          'sortOrder': next.sortOrder,
+          'completedAt': next.completed
+              ? next.updatedAt.toIso8601String()
+              : null,
+        },
+      );
+    });
+    return next;
+  }
+
   Future<TodoAttachment> queueAttachment({
     required String taskId,
     required String name,

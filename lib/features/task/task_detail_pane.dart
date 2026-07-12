@@ -1245,6 +1245,18 @@ class _ChecklistSectionState extends ConsumerState<_ChecklistSection> {
     await repo.deleteChecklistItem(item.id);
   }
 
+  Future<void> _edit(TodoChecklistItem item) async {
+    final title = await showDialog<String>(
+      context: context,
+      builder: (_) => _ChecklistEditDialog(initialTitle: item.title),
+    );
+    final normalized = title?.trim();
+    if (normalized == null || normalized.isEmpty) return;
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    await repo.updateChecklistItem(item.id, title: normalized);
+  }
+
   @override
   Widget build(BuildContext context) {
     final repo = ref.watch(taskRepositoryProvider);
@@ -1286,21 +1298,24 @@ class _ChecklistSectionState extends ConsumerState<_ChecklistSection> {
             return Column(
               children: items
                   .map(
-                    (item) => CheckboxListTile(
-                      value: item.completed,
-                      title: Text(
-                        item.title,
-                        style: TextStyle(
-                          decoration: item.completed
-                              ? TextDecoration.lineThrough
-                              : null,
+                    (item) => GestureDetector(
+                      onLongPress: () => _edit(item),
+                      child: CheckboxListTile(
+                        value: item.completed,
+                        title: Text(
+                          item.title,
+                          style: TextStyle(
+                            decoration: item.completed
+                                ? TextDecoration.lineThrough
+                                : null,
+                          ),
                         ),
-                      ),
-                      onChanged: (_) => _toggle(item),
-                      secondary: IconButton(
-                        tooltip: '删除',
-                        icon: const Icon(Icons.close),
-                        onPressed: () => _delete(item),
+                        onChanged: (_) => _toggle(item),
+                        secondary: IconButton(
+                          tooltip: '删除',
+                          icon: const Icon(Icons.close),
+                          onPressed: () => _delete(item),
+                        ),
                       ),
                     ),
                   )
@@ -1311,6 +1326,55 @@ class _ChecklistSectionState extends ConsumerState<_ChecklistSection> {
       ],
     );
   }
+}
+
+class _ChecklistEditDialog extends StatefulWidget {
+  const _ChecklistEditDialog({required this.initialTitle});
+
+  final String initialTitle;
+
+  @override
+  State<_ChecklistEditDialog> createState() => _ChecklistEditDialogState();
+}
+
+class _ChecklistEditDialogState extends State<_ChecklistEditDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialTitle);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('编辑检查事项'),
+    content: TextField(
+      controller: _controller,
+      autofocus: true,
+      decoration: const InputDecoration(
+        labelText: '检查事项',
+        border: OutlineInputBorder(),
+      ),
+      onSubmitted: (value) => Navigator.pop(context, value),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('取消'),
+      ),
+      FilledButton(
+        onPressed: () => Navigator.pop(context, _controller.text),
+        child: const Text('保存'),
+      ),
+    ],
+  );
 }
 
 /// 任务附件始终先进入 Drift + outbox；这里不直接调用后端。

@@ -123,6 +123,34 @@ void main() {
   });
 
   testWidgets(
+    'detail long press edits a checklist item through the repository',
+    (tester) async {
+      final fixture = await _pumpDirectPane(tester, taskId: _taskId);
+      final repository = fixture.container.read(taskRepositoryProvider)!;
+      final item = await repository.createChecklistItem(
+        taskId: _taskId,
+        title: '整理数据',
+      );
+      await tester.pumpAndSettle();
+
+      final checklistTitle = find.text('整理数据');
+      await tester.ensureVisible(checklistTitle);
+      await tester.pumpAndSettle();
+      await tester.longPress(checklistTitle);
+      await tester.pumpAndSettle();
+      expect(find.text('编辑检查事项'), findsOneWidget);
+      await tester.enterText(_directTextField('检查事项'), '复核数据');
+      await tester.tap(find.text('保存'));
+      await tester.pumpAndSettle();
+
+      final items = await (fixture.database.select(
+        fixture.database.todoChecklistItems,
+      )..where((entry) => entry.id.equals(item.id))).get();
+      expect(items.single.title, '复核数据');
+    },
+  );
+
+  testWidgets(
     'detail moves a task to another list through the offline repository',
     (tester) async {
       final fixture = await _pumpDirectPane(tester, taskId: _taskId);
