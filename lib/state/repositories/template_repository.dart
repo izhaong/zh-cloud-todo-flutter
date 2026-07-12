@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../core/api/api_client.dart';
 import '../../core/db/app_database.dart';
 import '../../core/sync/sync_change_queue.dart';
 import '../../core/sync/sync_entities.dart';
@@ -20,17 +21,62 @@ class TemplateTaskSeed {
 }
 
 class TemplateRepository {
-  TemplateRepository(this._db, this._queue, {Uuid? uuid})
-    : _uuid = uuid ?? const Uuid();
+  TemplateRepository(this._db, this._queue, {ApiClient? api, Uuid? uuid})
+    : _api = api,
+      _uuid = uuid ?? const Uuid();
 
   final AppDatabase _db;
   final SyncChangeQueue _queue;
+  final ApiClient? _api;
   final Uuid _uuid;
 
   Stream<List<TodoTemplate>> watchAll() {
     return (_db.select(
       _db.todoTemplates,
     )..orderBy([(row) => OrderingTerm.desc(row.createdAt)])).watch();
+  }
+
+  /// 拉取当前账号模板并写入 Drift。远端缺失项不在这里删除，避免离线队列中的
+  /// 本地模板被错误清理；删除语义由后续模板删除用例单独处理。
+  Future<int> refreshMy() async {
+    final api = _api;
+    if (api == null) throw StateError('TemplateRepository requires ApiClient');
+    final response = await api.get<dynamic>('/template/list-my');
+    final envelope = response.data;
+    final rawItems = envelope is Map<String, dynamic>
+        ? envelope['data']
+        : envelope;
+    if (rawItems is! List) return 0;
+    var refreshed = 0;
+    for (final raw in rawItems) {
+      if (raw is! Map) continue;
+      final item = Map<String, dynamic>.from(raw);
+      final serverId = (item['id'] as num?)?.toInt();
+      final name = item['name']?.toString().trim();
+      final content = item['content']?.toString();
+      if (serverId == null || name == null || name.isEmpty || content == null) {
+        continue;
+      }
+      final existing = await (_db.select(
+        _db.todoTemplates,
+      )..where((row) => row.serverId.equals(serverId))).getSingleOrNull();
+      final now = DateTime.now();
+      await _db
+          .into(_db.todoTemplates)
+          .insertOnConflictUpdate(
+            TodoTemplatesCompanion.insert(
+              id: existing?.id ?? _uuid.v4(),
+              serverId: Value(serverId),
+              name: name,
+              contentJson: content,
+              status: const Value('synced'),
+              updatedAt: now,
+              createdAt: existing?.createdAt ?? now,
+            ),
+          );
+      refreshed++;
+    }
+    return refreshed;
   }
 
   Future<TodoTemplate> saveTask({

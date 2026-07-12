@@ -1417,6 +1417,23 @@ class _TemplateSection extends ConsumerWidget {
     ).showSnackBar(SnackBar(content: Text('已应用模板“${template.name}”')));
   }
 
+  Future<void> _refresh(BuildContext context, WidgetRef ref) async {
+    final templates = ref.read(templateRepositoryProvider);
+    if (templates == null) return;
+    try {
+      final count = await templates.refreshMy();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('已刷新 $count 个模板')));
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('模板刷新失败，将继续显示本地缓存')));
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final repo = ref.watch(templateRepositoryProvider);
@@ -1424,10 +1441,20 @@ class _TemplateSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        OutlinedButton.icon(
-          onPressed: () => _saveCurrent(context, ref),
-          icon: const Icon(Icons.bookmark_add_outlined),
-          label: const Text('保存当前任务为模板'),
+        Row(
+          children: [
+            OutlinedButton.icon(
+              onPressed: () => _saveCurrent(context, ref),
+              icon: const Icon(Icons.bookmark_add_outlined),
+              label: const Text('保存当前任务为模板'),
+            ),
+            const SizedBox(width: 4),
+            IconButton(
+              tooltip: '刷新模板',
+              onPressed: () => _refresh(context, ref),
+              icon: const Icon(Icons.refresh),
+            ),
+          ],
         ),
         StreamBuilder<List<TodoTemplate>>(
           stream: repo.watchAll(),
