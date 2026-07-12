@@ -162,6 +162,7 @@ class TaskRepository {
     DateTime? startAt,
     DateTime? endAt,
     DateTime? dueAt,
+    bool clearDueAt = false,
     String? listId,
     bool? isPinned,
   }) async {
@@ -176,7 +177,11 @@ class TaskRepository {
         isPinned: isPinned == null ? const Value.absent() : Value(isPinned),
         startAt: startAt == null ? const Value.absent() : Value(startAt),
         endAt: endAt == null ? const Value.absent() : Value(endAt),
-        dueAt: dueAt == null ? const Value.absent() : Value(dueAt),
+        dueAt: clearDueAt
+            ? const Value(null)
+            : dueAt == null
+            ? const Value.absent()
+            : Value(dueAt),
         listId: listId == null ? const Value.absent() : Value(listId),
         updatedAt: Value(now),
       ),

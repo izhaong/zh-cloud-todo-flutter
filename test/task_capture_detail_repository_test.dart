@@ -149,6 +149,25 @@ void main() {
     },
   );
 
+  test('detail can explicitly clear an already persisted due date', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final repository = TaskRepository(db, SyncChangeQueue(db));
+    final task = await repository.create(
+      listId: 'inbox',
+      title: '清理日期',
+      dueAt: DateTime(2026, 7, 13, 9),
+    );
+
+    final cleared = await repository.update(task.id, clearDueAt: true);
+
+    expect(cleared.dueAt, isNull);
+    final payload =
+        jsonDecode((await db.select(db.todoSyncChanges).get()).last.payloadJson)
+            as Map<String, dynamic>;
+    expect(payload['dueAt'], isNull);
+  });
+
   test(
     'offline checklist creation persists locally and enqueues a mutation',
     () async {

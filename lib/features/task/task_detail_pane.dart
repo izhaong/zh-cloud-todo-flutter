@@ -228,6 +228,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       description: _desc.text.trim(),
       priority: _priority,
       dueAt: _dueAt,
+      clearDueAt: _dueAt == null && t.dueAt != null,
     );
     if (mounted && widget.taskId == updated.id) {
       setState(() => _task = updated);
