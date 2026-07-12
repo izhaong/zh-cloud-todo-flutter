@@ -122,6 +122,35 @@ void main() {
     expect(afterSave?.description, updatedDescription);
   });
 
+  testWidgets(
+    'detail moves a task to another list through the offline repository',
+    (tester) async {
+      final fixture = await _pumpDirectPane(tester, taskId: _taskId);
+      final listPicker = find.byKey(const Key('task-list-visual-task-pinned'));
+
+      expect(listPicker, findsOneWidget);
+      await tester.tap(listPicker);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('生活').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('保存'));
+      await tester.pumpAndSettle();
+
+      final task = await fixture.container
+          .read(taskRepositoryProvider)!
+          .getById(_taskId);
+      expect(task?.listId, TodoVisualFixture.personalListId);
+      final changes = await fixture.database
+          .select(fixture.database.todoSyncChanges)
+          .get();
+      expect(changes.last.entity, 'task');
+      expect(
+        changes.last.payloadJson,
+        contains(TodoVisualFixture.personalListId),
+      );
+    },
+  );
+
   testWidgets('late pin result from task A cannot overwrite selected task B', (
     tester,
   ) async {

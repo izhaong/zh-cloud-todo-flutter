@@ -64,6 +64,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
   DateTime? _endAt;
   bool _loading = true;
   DateTime? _dueAt;
+  String? _selectedListId;
   String? _listName;
   StreamSubscription<TodoTask?>? _taskSubscription;
   int _loadGeneration = 0;
@@ -103,6 +104,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       _startAt = null;
       _endAt = null;
       _dueAt = null;
+      _selectedListId = null;
       _listName = null;
       _loading = taskId != null;
       _unavailableNotifiedFor = null;
@@ -130,6 +132,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       _startAt = t?.startAt;
       _endAt = t?.endAt;
       _dueAt = t?.dueAt;
+      _selectedListId = t?.listId;
       _listName = listName;
       _loading = false;
     });
@@ -167,6 +170,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     final startDirty = previous != null && _startAt != previous.startAt;
     final endDirty = previous != null && _endAt != previous.endAt;
     final dueDirty = previous != null && _dueAt != previous.dueAt;
+    final listDirty = previous != null && _selectedListId != previous.listId;
     setState(() {
       _task = latest;
       if (!titleDirty) _title.text = latest.title;
@@ -175,7 +179,10 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       if (!startDirty) _startAt = latest.startAt;
       if (!endDirty) _endAt = latest.endAt;
       if (!dueDirty) _dueAt = latest.dueAt;
-      _listName = listName;
+      if (!listDirty) {
+        _selectedListId = latest.listId;
+        _listName = listName;
+      }
       _loading = false;
       _unavailableNotifiedFor = null;
     });
@@ -243,6 +250,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       clearStartAt: _startAt == null && t.startAt != null,
       clearEndAt: _endAt == null && t.endAt != null,
       clearDueAt: _dueAt == null && t.dueAt != null,
+      listId: _selectedListId == t.listId ? null : _selectedListId,
     );
     if (mounted && widget.taskId == updated.id) {
       setState(() => _task = updated);
@@ -637,19 +645,14 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
         const Divider(height: 32),
         sh('清单'),
         const SizedBox(height: 8),
-        Row(
-          children: [
-            Icon(Icons.list_alt_outlined, color: colors.mutedForeground),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                _listName ?? '未知清单',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: colors.foreground),
-              ),
-            ),
-          ],
+        _TaskListPicker(
+          taskId: t.id,
+          selectedListId: _selectedListId ?? t.listId,
+          selectedListName: _listName,
+          onChanged: (listId, listName) => setState(() {
+            _selectedListId = listId;
+            _listName = listName;
+          }),
         ),
         const Divider(height: 32),
         sh('标签'),
@@ -993,6 +996,85 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     return Scaffold(
       appBar: AppBar(title: const Text('任务不存在')),
       body: const Center(child: Text('任务不存在或已删除')),
+    );
+  }
+}
+
+class _TaskListPicker extends ConsumerWidget {
+  const _TaskListPicker({
+    required this.taskId,
+    required this.selectedListId,
+    required this.selectedListName,
+    required this.onChanged,
+  });
+
+  final String taskId;
+  final String selectedListId;
+  final String? selectedListName;
+  final void Function(String listId, String listName) onChanged;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final lists = ref.watch(listsStreamProvider).valueOrNull ?? const [];
+    final colors = brandColors(context);
+    return InkWell(
+      key: Key('task-list-$taskId'),
+      borderRadius: BorderRadius.circular(8),
+      onTap: () async {
+        final nextListId = await showModalBottomSheet<String>(
+          context: context,
+          showDragHandle: true,
+          builder: (context) => SafeArea(
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.inbox_outlined),
+                  title: const Text('收件箱'),
+                  trailing: selectedListId == kInboxListId
+                      ? const Icon(Icons.check)
+                      : null,
+                  onTap: () => Navigator.pop(context, kInboxListId),
+                ),
+                for (final list in lists)
+                  if (list.id != kInboxListId)
+                    ListTile(
+                      leading: const Icon(Icons.list_alt_outlined),
+                      title: Text(list.name),
+                      trailing: selectedListId == list.id
+                          ? const Icon(Icons.check)
+                          : null,
+                      onTap: () => Navigator.pop(context, list.id),
+                    ),
+              ],
+            ),
+          ),
+        );
+        if (nextListId == null) return;
+        final nextListName = nextListId == kInboxListId
+            ? '收件箱'
+            : lists
+                      .where((list) => list.id == nextListId)
+                      .map((list) => list.name)
+                      .firstOrNull ??
+                  selectedListName ??
+                  '未知清单';
+        onChanged(nextListId, nextListName);
+      },
+      child: Row(
+        children: [
+          Icon(Icons.list_alt_outlined, color: colors.mutedForeground),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              selectedListName ?? '未知清单',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: colors.foreground),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
