@@ -11,6 +11,7 @@ abstract interface class AttachmentUploadApi {
     required String url,
     required int size,
     required String mimeType,
+    required String clientMutationId,
   });
 }
 
@@ -44,6 +45,7 @@ class DioAttachmentUploadApi implements AttachmentUploadApi {
     required String url,
     required int size,
     required String mimeType,
+    required String clientMutationId,
   }) async {
     final response = await _client.post<Map<String, dynamic>>(
       '/attachment/upload',
@@ -54,6 +56,7 @@ class DioAttachmentUploadApi implements AttachmentUploadApi {
         'url': url,
         'size': size,
         'mimeType': mimeType,
+        'clientMutationId': clientMutationId,
       },
     );
     final data = _unwrap(response.data);

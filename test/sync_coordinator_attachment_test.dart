@@ -117,6 +117,7 @@ class _SuccessfulAttachmentUploadApi implements AttachmentUploadApi {
     required String url,
     required int size,
     required String mimeType,
+    required String clientMutationId,
   }) async => 51;
 
   @override
@@ -134,6 +135,7 @@ class _FailingAttachmentUploadApi implements AttachmentUploadApi {
     required String url,
     required int size,
     required String mimeType,
+    required String clientMutationId,
   }) => throw StateError('not reached');
 
   @override

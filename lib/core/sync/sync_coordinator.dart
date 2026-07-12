@@ -109,6 +109,7 @@ class SyncCoordinator {
           url: url,
           size: attachment.size,
           mimeType: attachment.mimeType,
+          clientMutationId: change.clientMutationId,
         );
         await (db.update(
           db.todoAttachments,
