@@ -109,6 +109,25 @@ class TodoChecklistItems extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+/// 任务附件元数据及本地上传状态。二进制由本地路径和上传队列管理。
+class TodoAttachments extends Table {
+  TextColumn get id => text()();
+  IntColumn get serverId => integer().nullable()();
+  TextColumn get taskId => text()();
+  TextColumn get name => text()();
+  TextColumn get localPath => text().nullable()();
+  TextColumn get remoteUrl => text().nullable()();
+  TextColumn get mimeType => text()();
+  IntColumn get size => integer()();
+  TextColumn get status => text().withDefault(const Constant('queued'))();
+  TextColumn get error => text().nullable()();
+  DateTimeColumn get updatedAt => dateTime()();
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 /// 提醒（任务维度，单任务可有多条提醒规则）。
 class TodoReminders extends Table {
   TextColumn get id => text()();
@@ -233,6 +252,7 @@ class TodoEntityRevisions extends Table {
     TodoTags,
     TodoTaskTags,
     TodoChecklistItems,
+    TodoAttachments,
     TodoReminders,
     TodoRepeatRules,
     TodoRepeatSkips,
@@ -254,7 +274,7 @@ class AppDatabase extends _$AppDatabase {
     : super(_open('todo_t${tenantId}_u$userId'));
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -271,6 +291,9 @@ class AppDatabase extends _$AppDatabase {
         await m.createAll();
       } else if (from < 5) {
         await m.createTable(todoChecklistItems);
+      }
+      if (from < 6) {
+        await m.createTable(todoAttachments);
       }
     },
   );

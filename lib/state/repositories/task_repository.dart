@@ -56,6 +56,15 @@ class TaskRepository {
         .watch();
   }
 
+  Stream<List<TodoAttachment>> watchAttachments(String taskId) {
+    return (_db.select(_db.todoAttachments)
+          ..where((attachment) => attachment.taskId.equals(taskId))
+          ..orderBy([
+            (attachment) => OrderingTerm(expression: attachment.createdAt),
+          ]))
+        .watch();
+  }
+
   Future<TodoTask> create({
     required String listId,
     required String title,
@@ -259,6 +268,77 @@ class TaskRepository {
       );
     });
     return next;
+  }
+
+  Future<TodoAttachment> queueAttachment({
+    required String taskId,
+    required String name,
+    required String localPath,
+    required String mimeType,
+    required int size,
+  }) async {
+    final now = DateTime.now();
+    final id = _uuid.v4();
+    late TodoAttachment attachment;
+    await _db.transaction(() async {
+      await (_db.select(
+        _db.todoTasks,
+      )..where((task) => task.id.equals(taskId))).getSingle();
+      await _db
+          .into(_db.todoAttachments)
+          .insert(
+            TodoAttachmentsCompanion.insert(
+              id: id,
+              taskId: taskId,
+              name: name,
+              localPath: Value(localPath),
+              mimeType: mimeType,
+              size: size,
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      attachment = await (_db.select(
+        _db.todoAttachments,
+      )..where((row) => row.id.equals(id))).getSingle();
+      await _queue.enqueue(
+        entity: SyncEntities.attachment,
+        op: SyncOps.upsert,
+        localId: id,
+        payload: {
+          'taskId': taskId,
+          'name': name,
+          'localPath': localPath,
+          'mimeType': mimeType,
+          'size': size,
+        },
+      );
+    });
+    return attachment;
+  }
+
+  Future<void> markAttachmentFailed(String attachmentId, String error) {
+    return (_db.update(
+      _db.todoAttachments,
+    )..where((row) => row.id.equals(attachmentId))).write(
+      TodoAttachmentsCompanion(
+        status: const Value('failed'),
+        error: Value(error),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  Future<void> retryAttachment(String attachmentId) {
+    return (_db.update(
+      _db.todoAttachments,
+    )..where((row) => row.id.equals(attachmentId))).write(
+      TodoAttachmentsCompanion(
+        status: const Value('queued'),
+        error: const Value(null),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
   }
 
   Future<void> deleteChecklistItem(String itemId) async {

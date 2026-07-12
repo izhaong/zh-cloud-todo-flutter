@@ -41,6 +41,45 @@ void main() {
   });
 
   test(
+    'attachment starts queued locally and can be marked failed then retried',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final repository = TaskRepository(db, SyncChangeQueue(db));
+      final task = await repository.create(listId: 'inbox', title: '撰写周报');
+
+      final attachment = await repository.queueAttachment(
+        taskId: task.id,
+        name: 'weekly-report.pdf',
+        localPath: '/tmp/weekly-report.pdf',
+        mimeType: 'application/pdf',
+        size: 1024,
+      );
+      expect(attachment.status, 'queued');
+      expect(
+        (await db.select(db.todoSyncChanges).get()).where(
+          (change) => change.entity == 'attachment',
+        ),
+        hasLength(1),
+      );
+
+      await repository.markAttachmentFailed(
+        attachment.id,
+        'network unreachable',
+      );
+      expect(
+        (await db.select(db.todoAttachments).getSingle()).status,
+        'failed',
+      );
+      await repository.retryAttachment(attachment.id);
+      expect(
+        (await db.select(db.todoAttachments).getSingle()).status,
+        'queued',
+      );
+    },
+  );
+
+  test(
     'offline checklist creation persists locally and enqueues a mutation',
     () async {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
