@@ -274,16 +274,42 @@ void main() {
             localPath: '/tmp/weekly-report.pdf',
             mimeType: 'application/pdf',
             size: 1024,
-    );
-    await tester.pumpAndSettle();
+          );
+      await tester.pumpAndSettle();
 
-    await tester.drag(find.byType(ListView), const Offset(0, -900));
-    await tester.pumpAndSettle();
-    expect(find.text('附件'), findsOneWidget);
+      await tester.drag(find.byType(ListView), const Offset(0, -900));
+      await tester.pumpAndSettle();
+      expect(find.text('附件'), findsOneWidget);
       expect(find.text('weekly-report.pdf'), findsOneWidget);
       expect(find.text('等待上传'), findsOneWidget);
     },
   );
+
+  testWidgets('detail renders a local Markdown preview after saving', (
+    tester,
+  ) async {
+    final fixture = await _pumpDirectPane(tester, taskId: _taskId);
+    const markdown = '## 本周目标\n\n完成 **B1 验收**';
+    await fixture.container
+        .read(taskRepositoryProvider)!
+        .update(_taskId, description: markdown);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Markdown 预览'), findsOneWidget);
+    await tester.tap(find.text('Markdown 预览'));
+    await tester.pumpAndSettle();
+    expect(find.text('本周目标'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is EditableText &&
+            widget.readOnly &&
+            widget.controller.text.contains('B1 验收'),
+        description: 'rendered Markdown content',
+      ),
+      findsOneWidget,
+    );
+  });
 }
 
 Finder get _detailRegion => find.byKey(const Key('todo-detail'));

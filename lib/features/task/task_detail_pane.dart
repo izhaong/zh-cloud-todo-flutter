@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/app_database.dart';
@@ -466,6 +467,23 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
             border: OutlineInputBorder(),
           ),
         ),
+        if ((t.description ?? '').trim().isNotEmpty) ...[
+          const SizedBox(height: 12),
+          ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            title: const Text('Markdown 预览'),
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: MarkdownBody(
+                  data: t.description!,
+                  selectable: true,
+                  softLineBreak: true,
+                ),
+              ),
+            ],
+          ),
+        ],
         const SizedBox(height: 12),
         DropdownButtonFormField<int>(
           key: ValueKey('task-priority-${t.id}-$_priority'),
