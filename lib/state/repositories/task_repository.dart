@@ -109,7 +109,7 @@ class TaskRepository {
         entity: SyncEntities.task,
         op: SyncOps.upsert,
         localId: id,
-        payload: row.toJson(),
+        payload: _taskPayload(row),
       );
     });
     return row;
@@ -189,7 +189,7 @@ class TaskRepository {
       op: SyncOps.upsert,
       localId: taskId,
       serverId: row.serverId,
-      payload: row.toJson(),
+      payload: _taskPayload(row),
     );
     return row;
   }
@@ -437,7 +437,7 @@ class TaskRepository {
       op: SyncOps.upsert,
       localId: taskId,
       serverId: next.serverId,
-      payload: next.toJson(),
+      payload: _taskPayload(next),
     );
     return next;
   }
@@ -450,7 +450,28 @@ class TaskRepository {
       op: SyncOps.upsert,
       localId: taskId,
       serverId: next.serverId,
-      payload: next.toJson(),
+      payload: _taskPayload(next),
+    );
+    return next;
+  }
+
+  Future<TodoTask> abandon(String taskId) async {
+    final current = await getById(taskId);
+    if (current == null) throw StateError('任务不存在');
+    final next = current.copyWith(
+      cancelled: true,
+      completed: false,
+      updatedAt: DateTime.now(),
+    );
+    await (_db.update(
+      _db.todoTasks,
+    )..where((task) => task.id.equals(taskId))).write(next);
+    await _queue.enqueue(
+      entity: SyncEntities.task,
+      op: SyncOps.upsert,
+      localId: taskId,
+      serverId: next.serverId,
+      payload: _taskPayload(next),
     );
     return next;
   }
@@ -530,7 +551,16 @@ class TaskRepository {
       op: SyncOps.upsert,
       localId: taskId,
       serverId: row.serverId,
-      payload: row.toJson(),
+      payload: _taskPayload(row),
     );
   }
+
+  Map<String, dynamic> _taskPayload(TodoTask task) => {
+    ...task.toJson(),
+    'status': task.cancelled
+        ? 'cancelled'
+        : task.completed
+        ? 'done'
+        : 'todo',
+  };
 }

@@ -676,7 +676,10 @@ class SyncCoordinator {
       parentTaskId: Value(localParentId ?? existing?.parentTaskId),
       title: Value(payload['title']?.toString() ?? existing?.title ?? ''),
       description: Value(payload['description']?.toString()),
-      completed: Value(status == 'DONE' || status == 'COMPLETED'),
+      completed: Value(
+        status == 'DONE' || status == 'COMPLETED' || status == 'done',
+      ),
+      cancelled: Value(status == 'CANCELLED' || status == 'cancelled'),
       priority: Value((payload['priority'] as num?)?.toInt() ?? 0),
       isPinned: Value(payload['isPinned'] as bool? ?? false),
       sortOrder: Value((payload['sortOrder'] as num?)?.toInt() ?? 0),

@@ -132,6 +132,24 @@ void main() {
   });
 
   test(
+    'abandoning a task persists a cancelled state and sync payload',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final repository = TaskRepository(db, SyncChangeQueue(db));
+      final task = await repository.create(listId: 'inbox', title: '过期方案');
+
+      final abandoned = await repository.abandon(task.id);
+
+      expect(abandoned.cancelled, isTrue);
+      expect(abandoned.completed, isFalse);
+      final change = (await db.select(db.todoSyncChanges).get()).last;
+      final payload = jsonDecode(change.payloadJson) as Map<String, dynamic>;
+      expect(payload['status'], 'cancelled');
+    },
+  );
+
+  test(
     'offline checklist creation persists locally and enqueues a mutation',
     () async {
       final db = AppDatabase.forTesting(NativeDatabase.memory());

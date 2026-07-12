@@ -24,6 +24,7 @@ enum _TaskDetailAction {
   moveToInbox,
   copy,
   share,
+  abandon,
   collaboration,
   delete,
 }
@@ -329,6 +330,24 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(shared ? '已打开系统分享' : '当前设备不支持系统分享')));
+  }
+
+  Future<void> _abandon(TodoTask t) async {
+    final confirmed = await AppDialog.confirm(
+      context,
+      title: '放弃任务',
+      content: '放弃后会保留记录，但不会再计入待办。',
+      confirmLabel: '放弃',
+      danger: true,
+    );
+    if (confirmed != true || !_isCurrentTask(t.id)) return;
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    await repo.abandon(t.id);
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('任务已放弃')));
   }
 
   /// P6 协作任务：底部 Sheet 选择（指派 / 评论 / 协作成员）。
@@ -746,6 +765,9 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                       case _TaskDetailAction.share:
                         unawaited(_share(t));
                         return;
+                      case _TaskDetailAction.abandon:
+                        unawaited(_abandon(t));
+                        return;
                       case _TaskDetailAction.collaboration:
                         unawaited(_openCollaborationHub(t));
                         return;
@@ -770,6 +792,10 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                     const PopupMenuItem(
                       value: _TaskDetailAction.share,
                       child: Text('分享任务'),
+                    ),
+                    const PopupMenuItem(
+                      value: _TaskDetailAction.abandon,
+                      child: Text('放弃任务'),
                     ),
                     const PopupMenuItem(
                       value: _TaskDetailAction.collaboration,
@@ -813,6 +839,11 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                   tooltip: '分享任务',
                   onPressed: () => _share(t),
                   icon: const Icon(Icons.share_outlined),
+                ),
+                IconButton(
+                  tooltip: '放弃任务',
+                  onPressed: t.cancelled ? null : () => _abandon(t),
+                  icon: const Icon(Icons.block_outlined),
                 ),
                 IconButton(
                   tooltip: '协作',

@@ -546,6 +546,21 @@ class $TodoTasksTable extends TodoTasks
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _cancelledMeta = const VerificationMeta(
+    'cancelled',
+  );
+  @override
+  late final GeneratedColumn<bool> cancelled = GeneratedColumn<bool>(
+    'cancelled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("cancelled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _priorityMeta = const VerificationMeta(
     'priority',
   );
@@ -645,6 +660,7 @@ class $TodoTasksTable extends TodoTasks
     title,
     description,
     completed,
+    cancelled,
     priority,
     isPinned,
     sortOrder,
@@ -715,6 +731,12 @@ class $TodoTasksTable extends TodoTasks
       context.handle(
         _completedMeta,
         completed.isAcceptableOrUnknown(data['completed']!, _completedMeta),
+      );
+    }
+    if (data.containsKey('cancelled')) {
+      context.handle(
+        _cancelledMeta,
+        cancelled.isAcceptableOrUnknown(data['cancelled']!, _cancelledMeta),
       );
     }
     if (data.containsKey('priority')) {
@@ -806,6 +828,10 @@ class $TodoTasksTable extends TodoTasks
         DriftSqlType.bool,
         data['${effectivePrefix}completed'],
       )!,
+      cancelled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}cancelled'],
+      )!,
       priority: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}priority'],
@@ -855,6 +881,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
   final String title;
   final String? description;
   final bool completed;
+  final bool cancelled;
   final int priority;
   final bool isPinned;
   final int sortOrder;
@@ -871,6 +898,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     required this.title,
     this.description,
     required this.completed,
+    required this.cancelled,
     required this.priority,
     required this.isPinned,
     required this.sortOrder,
@@ -896,6 +924,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       map['description'] = Variable<String>(description);
     }
     map['completed'] = Variable<bool>(completed);
+    map['cancelled'] = Variable<bool>(cancelled);
     map['priority'] = Variable<int>(priority);
     map['is_pinned'] = Variable<bool>(isPinned);
     map['sort_order'] = Variable<int>(sortOrder);
@@ -928,6 +957,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           ? const Value.absent()
           : Value(description),
       completed: Value(completed),
+      cancelled: Value(cancelled),
       priority: Value(priority),
       isPinned: Value(isPinned),
       sortOrder: Value(sortOrder),
@@ -958,6 +988,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       title: serializer.fromJson<String>(json['title']),
       description: serializer.fromJson<String?>(json['description']),
       completed: serializer.fromJson<bool>(json['completed']),
+      cancelled: serializer.fromJson<bool>(json['cancelled']),
       priority: serializer.fromJson<int>(json['priority']),
       isPinned: serializer.fromJson<bool>(json['isPinned']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
@@ -979,6 +1010,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       'title': serializer.toJson<String>(title),
       'description': serializer.toJson<String?>(description),
       'completed': serializer.toJson<bool>(completed),
+      'cancelled': serializer.toJson<bool>(cancelled),
       'priority': serializer.toJson<int>(priority),
       'isPinned': serializer.toJson<bool>(isPinned),
       'sortOrder': serializer.toJson<int>(sortOrder),
@@ -998,6 +1030,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     String? title,
     Value<String?> description = const Value.absent(),
     bool? completed,
+    bool? cancelled,
     int? priority,
     bool? isPinned,
     int? sortOrder,
@@ -1014,6 +1047,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     title: title ?? this.title,
     description: description.present ? description.value : this.description,
     completed: completed ?? this.completed,
+    cancelled: cancelled ?? this.cancelled,
     priority: priority ?? this.priority,
     isPinned: isPinned ?? this.isPinned,
     sortOrder: sortOrder ?? this.sortOrder,
@@ -1036,6 +1070,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           ? data.description.value
           : this.description,
       completed: data.completed.present ? data.completed.value : this.completed,
+      cancelled: data.cancelled.present ? data.cancelled.value : this.cancelled,
       priority: data.priority.present ? data.priority.value : this.priority,
       isPinned: data.isPinned.present ? data.isPinned.value : this.isPinned,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
@@ -1057,6 +1092,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           ..write('title: $title, ')
           ..write('description: $description, ')
           ..write('completed: $completed, ')
+          ..write('cancelled: $cancelled, ')
           ..write('priority: $priority, ')
           ..write('isPinned: $isPinned, ')
           ..write('sortOrder: $sortOrder, ')
@@ -1078,6 +1114,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     title,
     description,
     completed,
+    cancelled,
     priority,
     isPinned,
     sortOrder,
@@ -1098,6 +1135,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           other.title == this.title &&
           other.description == this.description &&
           other.completed == this.completed &&
+          other.cancelled == this.cancelled &&
           other.priority == this.priority &&
           other.isPinned == this.isPinned &&
           other.sortOrder == this.sortOrder &&
@@ -1116,6 +1154,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
   final Value<String> title;
   final Value<String?> description;
   final Value<bool> completed;
+  final Value<bool> cancelled;
   final Value<int> priority;
   final Value<bool> isPinned;
   final Value<int> sortOrder;
@@ -1133,6 +1172,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     this.title = const Value.absent(),
     this.description = const Value.absent(),
     this.completed = const Value.absent(),
+    this.cancelled = const Value.absent(),
     this.priority = const Value.absent(),
     this.isPinned = const Value.absent(),
     this.sortOrder = const Value.absent(),
@@ -1151,6 +1191,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     required String title,
     this.description = const Value.absent(),
     this.completed = const Value.absent(),
+    this.cancelled = const Value.absent(),
     this.priority = const Value.absent(),
     this.isPinned = const Value.absent(),
     this.sortOrder = const Value.absent(),
@@ -1173,6 +1214,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     Expression<String>? title,
     Expression<String>? description,
     Expression<bool>? completed,
+    Expression<bool>? cancelled,
     Expression<int>? priority,
     Expression<bool>? isPinned,
     Expression<int>? sortOrder,
@@ -1191,6 +1233,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
       if (title != null) 'title': title,
       if (description != null) 'description': description,
       if (completed != null) 'completed': completed,
+      if (cancelled != null) 'cancelled': cancelled,
       if (priority != null) 'priority': priority,
       if (isPinned != null) 'is_pinned': isPinned,
       if (sortOrder != null) 'sort_order': sortOrder,
@@ -1211,6 +1254,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     Value<String>? title,
     Value<String?>? description,
     Value<bool>? completed,
+    Value<bool>? cancelled,
     Value<int>? priority,
     Value<bool>? isPinned,
     Value<int>? sortOrder,
@@ -1229,6 +1273,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
       title: title ?? this.title,
       description: description ?? this.description,
       completed: completed ?? this.completed,
+      cancelled: cancelled ?? this.cancelled,
       priority: priority ?? this.priority,
       isPinned: isPinned ?? this.isPinned,
       sortOrder: sortOrder ?? this.sortOrder,
@@ -1264,6 +1309,9 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     }
     if (completed.present) {
       map['completed'] = Variable<bool>(completed.value);
+    }
+    if (cancelled.present) {
+      map['cancelled'] = Variable<bool>(cancelled.value);
     }
     if (priority.present) {
       map['priority'] = Variable<int>(priority.value);
@@ -1305,6 +1353,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
           ..write('title: $title, ')
           ..write('description: $description, ')
           ..write('completed: $completed, ')
+          ..write('cancelled: $cancelled, ')
           ..write('priority: $priority, ')
           ..write('isPinned: $isPinned, ')
           ..write('sortOrder: $sortOrder, ')
@@ -7445,6 +7494,7 @@ typedef $$TodoTasksTableCreateCompanionBuilder =
       required String title,
       Value<String?> description,
       Value<bool> completed,
+      Value<bool> cancelled,
       Value<int> priority,
       Value<bool> isPinned,
       Value<int> sortOrder,
@@ -7464,6 +7514,7 @@ typedef $$TodoTasksTableUpdateCompanionBuilder =
       Value<String> title,
       Value<String?> description,
       Value<bool> completed,
+      Value<bool> cancelled,
       Value<int> priority,
       Value<bool> isPinned,
       Value<int> sortOrder,
@@ -7516,6 +7567,11 @@ class $$TodoTasksTableFilterComposer
 
   ColumnFilters<bool> get completed => $composableBuilder(
     column: $table.completed,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get cancelled => $composableBuilder(
+    column: $table.cancelled,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7604,6 +7660,11 @@ class $$TodoTasksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get cancelled => $composableBuilder(
+    column: $table.cancelled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get priority => $composableBuilder(
     column: $table.priority,
     builder: (column) => ColumnOrderings(column),
@@ -7679,6 +7740,9 @@ class $$TodoTasksTableAnnotationComposer
   GeneratedColumn<bool> get completed =>
       $composableBuilder(column: $table.completed, builder: (column) => column);
 
+  GeneratedColumn<bool> get cancelled =>
+      $composableBuilder(column: $table.cancelled, builder: (column) => column);
+
   GeneratedColumn<int> get priority =>
       $composableBuilder(column: $table.priority, builder: (column) => column);
 
@@ -7739,6 +7803,7 @@ class $$TodoTasksTableTableManager
                 Value<String> title = const Value.absent(),
                 Value<String?> description = const Value.absent(),
                 Value<bool> completed = const Value.absent(),
+                Value<bool> cancelled = const Value.absent(),
                 Value<int> priority = const Value.absent(),
                 Value<bool> isPinned = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
@@ -7756,6 +7821,7 @@ class $$TodoTasksTableTableManager
                 title: title,
                 description: description,
                 completed: completed,
+                cancelled: cancelled,
                 priority: priority,
                 isPinned: isPinned,
                 sortOrder: sortOrder,
@@ -7775,6 +7841,7 @@ class $$TodoTasksTableTableManager
                 required String title,
                 Value<String?> description = const Value.absent(),
                 Value<bool> completed = const Value.absent(),
+                Value<bool> cancelled = const Value.absent(),
                 Value<int> priority = const Value.absent(),
                 Value<bool> isPinned = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
@@ -7792,6 +7859,7 @@ class $$TodoTasksTableTableManager
                 title: title,
                 description: description,
                 completed: completed,
+                cancelled: cancelled,
                 priority: priority,
                 isPinned: isPinned,
                 sortOrder: sortOrder,

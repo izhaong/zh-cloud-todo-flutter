@@ -45,6 +45,7 @@ class TodoTasks extends Table {
   TextColumn get title => text()();
   TextColumn get description => text().nullable()();
   BoolColumn get completed => boolean().withDefault(const Constant(false))();
+  BoolColumn get cancelled => boolean().withDefault(const Constant(false))();
   IntColumn get priority => integer().withDefault(const Constant(0))();
   BoolColumn get isPinned => boolean().withDefault(const Constant(false))();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
@@ -274,7 +275,7 @@ class AppDatabase extends _$AppDatabase {
     : super(_open('todo_t${tenantId}_u$userId'));
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -295,6 +296,9 @@ class AppDatabase extends _$AppDatabase {
       if (from < 6) {
         await m.createTable(todoAttachments);
       }
+      if (from < 7) {
+        await m.addColumn(todoTasks, todoTasks.cancelled);
+      }
     },
   );
 
@@ -313,6 +317,7 @@ class AppDatabase extends _$AppDatabase {
     )..where((t) => t.id.equals(taskId))).getSingle();
     final next = row.copyWith(
       completed: !row.completed,
+      cancelled: false,
       updatedAt: DateTime.now(),
     );
     await (update(todoTasks)..where((t) => t.id.equals(taskId))).write(next);

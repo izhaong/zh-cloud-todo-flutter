@@ -197,7 +197,7 @@ class TaskStats {
     final todayEnd = todayStart.add(const Duration(days: 1));
     final weekEnd = todayStart.add(const Duration(days: 7));
     for (final t in tasks) {
-      if (t.completed) continue;
+      if (t.completed || t.cancelled) continue;
       all++;
       if (t.listId == 'inbox') inbox++;
       final due = t.dueAt;
