@@ -20,6 +20,7 @@ import '../collaboration/list_member_page.dart';
 const String kInboxListId = 'inbox';
 
 enum _TaskDetailAction {
+  previewMarkdown,
   togglePin,
   moveToInbox,
   copy,
@@ -332,6 +333,25 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     ).showSnackBar(SnackBar(content: Text(shared ? '已打开系统分享' : '当前设备不支持系统分享')));
   }
 
+  Future<void> _previewMarkdown(TodoTask t) async {
+    final description = t.description?.trim();
+    if (description == null || description.isEmpty) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: SingleChildScrollView(
+          child: MarkdownBody(
+            data: description,
+            selectable: true,
+            softLineBreak: true,
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _abandon(TodoTask t) async {
     final confirmed = await AppDialog.confirm(
       context,
@@ -518,23 +538,6 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
             border: OutlineInputBorder(),
           ),
         ),
-        if ((t.description ?? '').trim().isNotEmpty) ...[
-          const SizedBox(height: 12),
-          ExpansionTile(
-            tilePadding: EdgeInsets.zero,
-            title: const Text('Markdown 预览'),
-            children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: MarkdownBody(
-                  data: t.description!,
-                  selectable: true,
-                  softLineBreak: true,
-                ),
-              ),
-            ],
-          ),
-        ],
         const SizedBox(height: 12),
         DropdownButtonFormField<int>(
           key: ValueKey('task-priority-${t.id}-$_priority'),
@@ -767,6 +770,9 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                   tooltip: '更多任务操作',
                   onSelected: (action) {
                     switch (action) {
+                      case _TaskDetailAction.previewMarkdown:
+                        unawaited(_previewMarkdown(t));
+                        return;
                       case _TaskDetailAction.togglePin:
                         unawaited(_togglePin(t));
                         return;
@@ -791,6 +797,11 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                     }
                   },
                   itemBuilder: (context) => [
+                    if ((t.description ?? '').trim().isNotEmpty)
+                      const PopupMenuItem(
+                        value: _TaskDetailAction.previewMarkdown,
+                        child: Text('Markdown 预览'),
+                      ),
                     PopupMenuItem(
                       value: _TaskDetailAction.togglePin,
                       child: Text(t.isPinned ? '取消置顶' : '置顶'),

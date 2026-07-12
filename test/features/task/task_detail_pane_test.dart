@@ -285,17 +285,18 @@ void main() {
     },
   );
 
-  testWidgets('detail renders a local Markdown preview after saving', (
+  testWidgets('mobile detail opens a local Markdown preview on demand', (
     tester,
   ) async {
-    final fixture = await _pumpDirectPane(tester, taskId: _taskId);
+    final fixture = await _pumpPagePane(tester, taskId: _taskId);
     const markdown = '## 本周目标\n\n完成 **B1 验收**';
     await fixture.container
         .read(taskRepositoryProvider)!
         .update(_taskId, description: markdown);
     await tester.pumpAndSettle();
 
-    expect(find.text('Markdown 预览'), findsOneWidget);
+    await tester.tap(find.byTooltip('更多任务操作'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Markdown 预览'));
     await tester.pumpAndSettle();
     expect(find.text('本周目标'), findsOneWidget);
@@ -405,6 +406,33 @@ Future<TodoVisualFixture> _pumpDirectPane(
           extensions: const [AppThemeExtension(AppColors.light)],
         ),
         home: Scaffold(body: pane),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  return fixture;
+}
+
+Future<TodoVisualFixture> _pumpPagePane(
+  WidgetTester tester, {
+  required String taskId,
+}) async {
+  final fixture = await TodoVisualFixture.create();
+  addTearDown(fixture.dispose);
+
+  tester.view.physicalSize = const Size(390, 844);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: fixture.container,
+      child: MaterialApp(
+        theme: ThemeData.light().copyWith(
+          extensions: const [AppThemeExtension(AppColors.light)],
+        ),
+        home: Scaffold(body: TaskDetailPane(taskId: taskId)),
       ),
     ),
   );
