@@ -8,6 +8,8 @@ import 'package:zh_cloud_todo_flutter/core/api/attachment_upload_api.dart';
 import 'package:zh_cloud_todo_flutter/core/api/sync_api.dart';
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_coordinator.dart';
+import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/task_repository.dart';
 
 void main() {
   test(
@@ -84,6 +86,34 @@ void main() {
         (await db.select(db.todoSyncChanges).getSingle()).status,
         'synced',
       );
+    },
+  );
+
+  test(
+    'attachment retry after an offline failure registers metadata once',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      await _seedAttachment(db);
+      final api = _RecoveringAttachmentUploadApi();
+      final coordinator = _coordinator(db, api);
+      final repository = TaskRepository(db, SyncChangeQueue(db));
+
+      expect(await coordinator.push(), 0);
+      expect(
+        (await db.select(db.todoAttachments).getSingle()).status,
+        'failed',
+      );
+
+      await repository.retryAttachment('attachment-local');
+      expect(await coordinator.push(), 1);
+      expect(await coordinator.push(), 0);
+
+      expect(api.uploadAttempts, 2);
+      expect(api.registerAttempts, 1);
+      final attachment = await db.select(db.todoAttachments).getSingle();
+      expect(attachment.status, 'uploaded');
+      expect(attachment.serverId, 61);
     },
   );
 
@@ -319,4 +349,36 @@ class _DeletingAttachmentUploadApi implements AttachmentUploadApi {
     required String localPath,
     required String name,
   }) => throw StateError('not reached');
+}
+
+class _RecoveringAttachmentUploadApi implements AttachmentUploadApi {
+  var uploadAttempts = 0;
+  var registerAttempts = 0;
+
+  @override
+  Future<void> deleteTaskAttachment({required int serverId}) =>
+      throw StateError('not reached');
+
+  @override
+  Future<int> registerTaskAttachment({
+    required int taskServerId,
+    required String name,
+    required String url,
+    required int size,
+    required String mimeType,
+    required String clientMutationId,
+  }) async {
+    registerAttempts++;
+    return 61;
+  }
+
+  @override
+  Future<String> uploadFile({
+    required String localPath,
+    required String name,
+  }) async {
+    uploadAttempts++;
+    if (uploadAttempts == 1) throw StateError('network unreachable');
+    return 'https://files.example/weekly-report.pdf';
+  }
 }
