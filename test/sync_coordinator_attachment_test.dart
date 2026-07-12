@@ -1,5 +1,6 @@
-import 'package:drift/drift.dart';
+import 'package:drift/drift.dart' hide isNull;
 import 'package:drift/native.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zh_cloud_todo_flutter/core/api/api_client.dart';
@@ -85,6 +86,56 @@ void main() {
       );
     },
   );
+
+  test('template sync registers the local template exactly once', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    await _seedTemplate(db);
+    Map<String, dynamic>? requestData;
+    final client = _templateClient(
+      onRequest: (options) {
+        requestData = Map<String, dynamic>.from(options.data as Map);
+        return {'code': 0, 'data': 77};
+      },
+    );
+
+    final pushed = await _coordinatorWithClient(db, client).push();
+
+    expect(pushed, 1);
+    expect(requestData, {
+      'name': '周报模板',
+      'templateType': 1,
+      'content': '{"title":"撰写周报"}',
+      'clientMutationId': 'template-mutation',
+    });
+    final template = await db.select(db.todoTemplates).getSingle();
+    expect(template.serverId, 77);
+    expect(template.status, 'synced');
+    expect((await db.select(db.todoSyncChanges).getSingle()).status, 'synced');
+  });
+
+  test(
+    'template sync keeps the local record and marks a failed outbox retry',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      await _seedTemplate(db);
+      final client = _templateClient(
+        onRequest: (_) => throw DioException(
+          requestOptions: RequestOptions(path: '/template/create'),
+          message: 'network unreachable',
+        ),
+      );
+
+      final pushed = await _coordinatorWithClient(db, client).push();
+
+      expect(pushed, 0);
+      expect((await db.select(db.todoTemplates).getSingle()).serverId, isNull);
+      final change = await db.select(db.todoSyncChanges).getSingle();
+      expect(change.status, 'failed');
+      expect(change.attemptCount, 1);
+    },
+  );
 }
 
 Future<void> _seedAttachment(AppDatabase db) async {
@@ -129,6 +180,33 @@ Future<void> _seedAttachment(AppDatabase db) async {
       );
 }
 
+Future<void> _seedTemplate(AppDatabase db) async {
+  final now = DateTime(2026, 7, 12);
+  await db
+      .into(db.todoTemplates)
+      .insert(
+        TodoTemplatesCompanion.insert(
+          id: 'template-local',
+          name: '周报模板',
+          contentJson: '{"title":"撰写周报"}',
+          updatedAt: now,
+          createdAt: now,
+        ),
+      );
+  await db
+      .into(db.todoSyncChanges)
+      .insert(
+        TodoSyncChangesCompanion.insert(
+          clientMutationId: 'template-mutation',
+          entity: 'template',
+          op: 'upsert',
+          entityLocalId: const Value('template-local'),
+          payloadJson: '{}',
+          createdAt: now,
+        ),
+      );
+}
+
 SyncCoordinator _coordinator(
   AppDatabase db,
   AttachmentUploadApi attachmentApi,
@@ -140,6 +218,38 @@ SyncCoordinator _coordinator(
     todoApi: client,
     attachmentApi: attachmentApi,
   );
+}
+
+SyncCoordinator _coordinatorWithClient(AppDatabase db, ApiClient client) {
+  return SyncCoordinator(
+    db: db,
+    api: SyncApi(client, clientId: 'test', deviceId: 'test'),
+    todoApi: client,
+    attachmentApi: _SuccessfulAttachmentUploadApi(),
+  );
+}
+
+ApiClient _templateClient({
+  required Map<String, dynamic> Function(RequestOptions options) onRequest,
+}) {
+  final dio = Dio(BaseOptions(baseUrl: 'https://todo.test'));
+  dio.interceptors.add(
+    InterceptorsWrapper(
+      onRequest: (options, handler) {
+        try {
+          handler.resolve(
+            Response<Map<String, dynamic>>(
+              requestOptions: options,
+              data: onRequest(options),
+            ),
+          );
+        } on DioException catch (error) {
+          handler.reject(error);
+        }
+      },
+    ),
+  );
+  return ApiClient(dio: dio);
 }
 
 class _SuccessfulAttachmentUploadApi implements AttachmentUploadApi {
