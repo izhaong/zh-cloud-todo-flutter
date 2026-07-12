@@ -17,4 +17,4 @@
 
 - [x] T006 运行 `flutter analyze` 与 B0 指定的定向测试，记录实际结果到 Issue #89。证据：2026-07-12 `flutter analyze` 无问题；定向 21 项通过。
 - [x] T007 复核九张视觉基准未变，并确认 B0 没有修改 `lib/`、`test/` 或 golden。证据：2026-07-12 九项 golden 定向测试通过；本分支仅新增 `specs/004-*`。
-- [ ] T008 仅在 Docs 矩阵、Flutter/Service Spec 与 Issue 互链完整后关闭 B0；否则保持本文件和总控 Plan 未完成。
+- [x] T008 Docs 矩阵、Flutter/Service Spec 与 Issue 互链已完整；B0 审计结论已落盘。证据：Docs PR #46 已合并；Flutter #89、Service #177、Docs #45 互链与提交链接已写入 Issue；Flutter 本地分析与 21 项定向测试、Service 29 份 Todo Surefire 报告均可复现。远端 Action #3401 仍 queued，未将其记为通过。
