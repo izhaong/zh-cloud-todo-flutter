@@ -129,6 +129,20 @@ class TodoAttachments extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+/// 服务端任务动态的本地只读缓存；联网刷新后离线仍可展示最近活动。
+class TodoActivities extends Table {
+  IntColumn get serverId => integer()();
+  IntColumn get taskServerId => integer()();
+  IntColumn get actorUserId => integer().nullable()();
+  TextColumn get actorUserName => text().nullable()();
+  TextColumn get action => text()();
+  TextColumn get detail => text().nullable()();
+  DateTimeColumn get occurredAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {serverId};
+}
+
 /// 提醒（任务维度，单任务可有多条提醒规则）。
 class TodoReminders extends Table {
   TextColumn get id => text()();
@@ -254,6 +268,7 @@ class TodoEntityRevisions extends Table {
     TodoTaskTags,
     TodoChecklistItems,
     TodoAttachments,
+    TodoActivities,
     TodoReminders,
     TodoRepeatRules,
     TodoRepeatSkips,
@@ -275,7 +290,7 @@ class AppDatabase extends _$AppDatabase {
     : super(_open('todo_t${tenantId}_u$userId'));
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -298,6 +313,9 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 7) {
         await m.addColumn(todoTasks, todoTasks.cancelled);
+      }
+      if (from < 8) {
+        await m.createTable(todoActivities);
       }
     },
   );

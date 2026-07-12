@@ -621,6 +621,16 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
           taskId: t.id,
         ),
         const Divider(height: 32),
+        sh('任务动态'),
+        const SizedBox(height: 8),
+        if (t.serverId == null)
+          const Text('任务同步后可查看动态')
+        else
+          _ActivitySection(
+            key: ValueKey('task-activities-${t.id}'),
+            taskServerId: t.serverId!,
+          ),
+        const Divider(height: 32),
         Row(
           children: [
             Expanded(child: sh('子任务')),
@@ -1270,4 +1280,88 @@ class _AttachmentSectionState extends ConsumerState<_AttachmentSection> {
       ],
     );
   }
+}
+
+class _ActivitySection extends ConsumerStatefulWidget {
+  const _ActivitySection({super.key, required this.taskServerId});
+
+  final int taskServerId;
+
+  @override
+  ConsumerState<_ActivitySection> createState() => _ActivitySectionState();
+}
+
+class _ActivitySectionState extends ConsumerState<_ActivitySection> {
+  String? _refreshError;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_refresh());
+  }
+
+  Future<void> _refresh() async {
+    final repo = ref.read(activityRepositoryProvider);
+    if (repo == null) return;
+    try {
+      await repo.refreshTask(widget.taskServerId);
+      if (mounted) setState(() => _refreshError = null);
+    } catch (_) {
+      if (mounted) setState(() => _refreshError = '离线显示已缓存的动态');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final repo = ref.watch(activityRepositoryProvider);
+    if (repo == null) return const SizedBox(height: 32);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_refreshError != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(_refreshError!),
+          ),
+        StreamBuilder<List<TodoActivity>>(
+          stream: repo.watchTask(widget.taskServerId),
+          builder: (context, snapshot) {
+            final activities = snapshot.data ?? const <TodoActivity>[];
+            if (activities.isEmpty) return const Text('暂无任务动态');
+            return Column(
+              children: activities
+                  .map(
+                    (activity) => ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.history_outlined),
+                      title: Text(_activityLabel(activity.action)),
+                      subtitle: Text(
+                        '${activity.actorUserName ?? '成员'} · ${activity.occurredAt.toLocal().toString().substring(0, 16)}',
+                      ),
+                    ),
+                  )
+                  .toList(),
+            );
+          },
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: _refresh,
+            icon: const Icon(Icons.refresh, size: 16),
+            label: const Text('刷新动态'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _activityLabel(String action) => switch (action) {
+    'task_created' => '创建了任务',
+    'task_updated' => '更新了任务',
+    'task_completed' => '完成了任务',
+    'task_uncompleted' => '取消完成任务',
+    'comment_created' => '添加了评论',
+    _ => action,
+  };
 }

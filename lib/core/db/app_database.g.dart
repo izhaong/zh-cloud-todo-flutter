@@ -3649,6 +3649,479 @@ class TodoAttachmentsCompanion extends UpdateCompanion<TodoAttachment> {
   }
 }
 
+class $TodoActivitiesTable extends TodoActivities
+    with TableInfo<$TodoActivitiesTable, TodoActivity> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TodoActivitiesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _serverIdMeta = const VerificationMeta(
+    'serverId',
+  );
+  @override
+  late final GeneratedColumn<int> serverId = GeneratedColumn<int>(
+    'server_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _taskServerIdMeta = const VerificationMeta(
+    'taskServerId',
+  );
+  @override
+  late final GeneratedColumn<int> taskServerId = GeneratedColumn<int>(
+    'task_server_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _actorUserIdMeta = const VerificationMeta(
+    'actorUserId',
+  );
+  @override
+  late final GeneratedColumn<int> actorUserId = GeneratedColumn<int>(
+    'actor_user_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _actorUserNameMeta = const VerificationMeta(
+    'actorUserName',
+  );
+  @override
+  late final GeneratedColumn<String> actorUserName = GeneratedColumn<String>(
+    'actor_user_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _actionMeta = const VerificationMeta('action');
+  @override
+  late final GeneratedColumn<String> action = GeneratedColumn<String>(
+    'action',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _detailMeta = const VerificationMeta('detail');
+  @override
+  late final GeneratedColumn<String> detail = GeneratedColumn<String>(
+    'detail',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _occurredAtMeta = const VerificationMeta(
+    'occurredAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> occurredAt = GeneratedColumn<DateTime>(
+    'occurred_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    serverId,
+    taskServerId,
+    actorUserId,
+    actorUserName,
+    action,
+    detail,
+    occurredAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'todo_activities';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<TodoActivity> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('server_id')) {
+      context.handle(
+        _serverIdMeta,
+        serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
+      );
+    }
+    if (data.containsKey('task_server_id')) {
+      context.handle(
+        _taskServerIdMeta,
+        taskServerId.isAcceptableOrUnknown(
+          data['task_server_id']!,
+          _taskServerIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_taskServerIdMeta);
+    }
+    if (data.containsKey('actor_user_id')) {
+      context.handle(
+        _actorUserIdMeta,
+        actorUserId.isAcceptableOrUnknown(
+          data['actor_user_id']!,
+          _actorUserIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('actor_user_name')) {
+      context.handle(
+        _actorUserNameMeta,
+        actorUserName.isAcceptableOrUnknown(
+          data['actor_user_name']!,
+          _actorUserNameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('action')) {
+      context.handle(
+        _actionMeta,
+        action.isAcceptableOrUnknown(data['action']!, _actionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_actionMeta);
+    }
+    if (data.containsKey('detail')) {
+      context.handle(
+        _detailMeta,
+        detail.isAcceptableOrUnknown(data['detail']!, _detailMeta),
+      );
+    }
+    if (data.containsKey('occurred_at')) {
+      context.handle(
+        _occurredAtMeta,
+        occurredAt.isAcceptableOrUnknown(data['occurred_at']!, _occurredAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_occurredAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {serverId};
+  @override
+  TodoActivity map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TodoActivity(
+      serverId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}server_id'],
+      )!,
+      taskServerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}task_server_id'],
+      )!,
+      actorUserId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}actor_user_id'],
+      ),
+      actorUserName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}actor_user_name'],
+      ),
+      action: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}action'],
+      )!,
+      detail: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}detail'],
+      ),
+      occurredAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}occurred_at'],
+      )!,
+    );
+  }
+
+  @override
+  $TodoActivitiesTable createAlias(String alias) {
+    return $TodoActivitiesTable(attachedDatabase, alias);
+  }
+}
+
+class TodoActivity extends DataClass implements Insertable<TodoActivity> {
+  final int serverId;
+  final int taskServerId;
+  final int? actorUserId;
+  final String? actorUserName;
+  final String action;
+  final String? detail;
+  final DateTime occurredAt;
+  const TodoActivity({
+    required this.serverId,
+    required this.taskServerId,
+    this.actorUserId,
+    this.actorUserName,
+    required this.action,
+    this.detail,
+    required this.occurredAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['server_id'] = Variable<int>(serverId);
+    map['task_server_id'] = Variable<int>(taskServerId);
+    if (!nullToAbsent || actorUserId != null) {
+      map['actor_user_id'] = Variable<int>(actorUserId);
+    }
+    if (!nullToAbsent || actorUserName != null) {
+      map['actor_user_name'] = Variable<String>(actorUserName);
+    }
+    map['action'] = Variable<String>(action);
+    if (!nullToAbsent || detail != null) {
+      map['detail'] = Variable<String>(detail);
+    }
+    map['occurred_at'] = Variable<DateTime>(occurredAt);
+    return map;
+  }
+
+  TodoActivitiesCompanion toCompanion(bool nullToAbsent) {
+    return TodoActivitiesCompanion(
+      serverId: Value(serverId),
+      taskServerId: Value(taskServerId),
+      actorUserId: actorUserId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(actorUserId),
+      actorUserName: actorUserName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(actorUserName),
+      action: Value(action),
+      detail: detail == null && nullToAbsent
+          ? const Value.absent()
+          : Value(detail),
+      occurredAt: Value(occurredAt),
+    );
+  }
+
+  factory TodoActivity.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TodoActivity(
+      serverId: serializer.fromJson<int>(json['serverId']),
+      taskServerId: serializer.fromJson<int>(json['taskServerId']),
+      actorUserId: serializer.fromJson<int?>(json['actorUserId']),
+      actorUserName: serializer.fromJson<String?>(json['actorUserName']),
+      action: serializer.fromJson<String>(json['action']),
+      detail: serializer.fromJson<String?>(json['detail']),
+      occurredAt: serializer.fromJson<DateTime>(json['occurredAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'serverId': serializer.toJson<int>(serverId),
+      'taskServerId': serializer.toJson<int>(taskServerId),
+      'actorUserId': serializer.toJson<int?>(actorUserId),
+      'actorUserName': serializer.toJson<String?>(actorUserName),
+      'action': serializer.toJson<String>(action),
+      'detail': serializer.toJson<String?>(detail),
+      'occurredAt': serializer.toJson<DateTime>(occurredAt),
+    };
+  }
+
+  TodoActivity copyWith({
+    int? serverId,
+    int? taskServerId,
+    Value<int?> actorUserId = const Value.absent(),
+    Value<String?> actorUserName = const Value.absent(),
+    String? action,
+    Value<String?> detail = const Value.absent(),
+    DateTime? occurredAt,
+  }) => TodoActivity(
+    serverId: serverId ?? this.serverId,
+    taskServerId: taskServerId ?? this.taskServerId,
+    actorUserId: actorUserId.present ? actorUserId.value : this.actorUserId,
+    actorUserName: actorUserName.present
+        ? actorUserName.value
+        : this.actorUserName,
+    action: action ?? this.action,
+    detail: detail.present ? detail.value : this.detail,
+    occurredAt: occurredAt ?? this.occurredAt,
+  );
+  TodoActivity copyWithCompanion(TodoActivitiesCompanion data) {
+    return TodoActivity(
+      serverId: data.serverId.present ? data.serverId.value : this.serverId,
+      taskServerId: data.taskServerId.present
+          ? data.taskServerId.value
+          : this.taskServerId,
+      actorUserId: data.actorUserId.present
+          ? data.actorUserId.value
+          : this.actorUserId,
+      actorUserName: data.actorUserName.present
+          ? data.actorUserName.value
+          : this.actorUserName,
+      action: data.action.present ? data.action.value : this.action,
+      detail: data.detail.present ? data.detail.value : this.detail,
+      occurredAt: data.occurredAt.present
+          ? data.occurredAt.value
+          : this.occurredAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TodoActivity(')
+          ..write('serverId: $serverId, ')
+          ..write('taskServerId: $taskServerId, ')
+          ..write('actorUserId: $actorUserId, ')
+          ..write('actorUserName: $actorUserName, ')
+          ..write('action: $action, ')
+          ..write('detail: $detail, ')
+          ..write('occurredAt: $occurredAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    serverId,
+    taskServerId,
+    actorUserId,
+    actorUserName,
+    action,
+    detail,
+    occurredAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TodoActivity &&
+          other.serverId == this.serverId &&
+          other.taskServerId == this.taskServerId &&
+          other.actorUserId == this.actorUserId &&
+          other.actorUserName == this.actorUserName &&
+          other.action == this.action &&
+          other.detail == this.detail &&
+          other.occurredAt == this.occurredAt);
+}
+
+class TodoActivitiesCompanion extends UpdateCompanion<TodoActivity> {
+  final Value<int> serverId;
+  final Value<int> taskServerId;
+  final Value<int?> actorUserId;
+  final Value<String?> actorUserName;
+  final Value<String> action;
+  final Value<String?> detail;
+  final Value<DateTime> occurredAt;
+  const TodoActivitiesCompanion({
+    this.serverId = const Value.absent(),
+    this.taskServerId = const Value.absent(),
+    this.actorUserId = const Value.absent(),
+    this.actorUserName = const Value.absent(),
+    this.action = const Value.absent(),
+    this.detail = const Value.absent(),
+    this.occurredAt = const Value.absent(),
+  });
+  TodoActivitiesCompanion.insert({
+    this.serverId = const Value.absent(),
+    required int taskServerId,
+    this.actorUserId = const Value.absent(),
+    this.actorUserName = const Value.absent(),
+    required String action,
+    this.detail = const Value.absent(),
+    required DateTime occurredAt,
+  }) : taskServerId = Value(taskServerId),
+       action = Value(action),
+       occurredAt = Value(occurredAt);
+  static Insertable<TodoActivity> custom({
+    Expression<int>? serverId,
+    Expression<int>? taskServerId,
+    Expression<int>? actorUserId,
+    Expression<String>? actorUserName,
+    Expression<String>? action,
+    Expression<String>? detail,
+    Expression<DateTime>? occurredAt,
+  }) {
+    return RawValuesInsertable({
+      if (serverId != null) 'server_id': serverId,
+      if (taskServerId != null) 'task_server_id': taskServerId,
+      if (actorUserId != null) 'actor_user_id': actorUserId,
+      if (actorUserName != null) 'actor_user_name': actorUserName,
+      if (action != null) 'action': action,
+      if (detail != null) 'detail': detail,
+      if (occurredAt != null) 'occurred_at': occurredAt,
+    });
+  }
+
+  TodoActivitiesCompanion copyWith({
+    Value<int>? serverId,
+    Value<int>? taskServerId,
+    Value<int?>? actorUserId,
+    Value<String?>? actorUserName,
+    Value<String>? action,
+    Value<String?>? detail,
+    Value<DateTime>? occurredAt,
+  }) {
+    return TodoActivitiesCompanion(
+      serverId: serverId ?? this.serverId,
+      taskServerId: taskServerId ?? this.taskServerId,
+      actorUserId: actorUserId ?? this.actorUserId,
+      actorUserName: actorUserName ?? this.actorUserName,
+      action: action ?? this.action,
+      detail: detail ?? this.detail,
+      occurredAt: occurredAt ?? this.occurredAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (serverId.present) {
+      map['server_id'] = Variable<int>(serverId.value);
+    }
+    if (taskServerId.present) {
+      map['task_server_id'] = Variable<int>(taskServerId.value);
+    }
+    if (actorUserId.present) {
+      map['actor_user_id'] = Variable<int>(actorUserId.value);
+    }
+    if (actorUserName.present) {
+      map['actor_user_name'] = Variable<String>(actorUserName.value);
+    }
+    if (action.present) {
+      map['action'] = Variable<String>(action.value);
+    }
+    if (detail.present) {
+      map['detail'] = Variable<String>(detail.value);
+    }
+    if (occurredAt.present) {
+      map['occurred_at'] = Variable<DateTime>(occurredAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TodoActivitiesCompanion(')
+          ..write('serverId: $serverId, ')
+          ..write('taskServerId: $taskServerId, ')
+          ..write('actorUserId: $actorUserId, ')
+          ..write('actorUserName: $actorUserName, ')
+          ..write('action: $action, ')
+          ..write('detail: $detail, ')
+          ..write('occurredAt: $occurredAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $TodoRemindersTable extends TodoReminders
     with TableInfo<$TodoRemindersTable, TodoReminder> {
   @override
@@ -7214,6 +7687,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $TodoAttachmentsTable todoAttachments = $TodoAttachmentsTable(
     this,
   );
+  late final $TodoActivitiesTable todoActivities = $TodoActivitiesTable(this);
   late final $TodoRemindersTable todoReminders = $TodoRemindersTable(this);
   late final $TodoRepeatRulesTable todoRepeatRules = $TodoRepeatRulesTable(
     this,
@@ -7242,6 +7716,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     todoTaskTags,
     todoChecklistItems,
     todoAttachments,
+    todoActivities,
     todoReminders,
     todoRepeatRules,
     todoRepeatSkips,
@@ -9093,6 +9568,248 @@ typedef $$TodoAttachmentsTableProcessedTableManager =
         BaseReferences<_$AppDatabase, $TodoAttachmentsTable, TodoAttachment>,
       ),
       TodoAttachment,
+      PrefetchHooks Function()
+    >;
+typedef $$TodoActivitiesTableCreateCompanionBuilder =
+    TodoActivitiesCompanion Function({
+      Value<int> serverId,
+      required int taskServerId,
+      Value<int?> actorUserId,
+      Value<String?> actorUserName,
+      required String action,
+      Value<String?> detail,
+      required DateTime occurredAt,
+    });
+typedef $$TodoActivitiesTableUpdateCompanionBuilder =
+    TodoActivitiesCompanion Function({
+      Value<int> serverId,
+      Value<int> taskServerId,
+      Value<int?> actorUserId,
+      Value<String?> actorUserName,
+      Value<String> action,
+      Value<String?> detail,
+      Value<DateTime> occurredAt,
+    });
+
+class $$TodoActivitiesTableFilterComposer
+    extends Composer<_$AppDatabase, $TodoActivitiesTable> {
+  $$TodoActivitiesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get serverId => $composableBuilder(
+    column: $table.serverId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get taskServerId => $composableBuilder(
+    column: $table.taskServerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get actorUserId => $composableBuilder(
+    column: $table.actorUserId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get actorUserName => $composableBuilder(
+    column: $table.actorUserName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get action => $composableBuilder(
+    column: $table.action,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get detail => $composableBuilder(
+    column: $table.detail,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get occurredAt => $composableBuilder(
+    column: $table.occurredAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$TodoActivitiesTableOrderingComposer
+    extends Composer<_$AppDatabase, $TodoActivitiesTable> {
+  $$TodoActivitiesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get serverId => $composableBuilder(
+    column: $table.serverId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get taskServerId => $composableBuilder(
+    column: $table.taskServerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get actorUserId => $composableBuilder(
+    column: $table.actorUserId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get actorUserName => $composableBuilder(
+    column: $table.actorUserName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get action => $composableBuilder(
+    column: $table.action,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get detail => $composableBuilder(
+    column: $table.detail,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get occurredAt => $composableBuilder(
+    column: $table.occurredAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$TodoActivitiesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $TodoActivitiesTable> {
+  $$TodoActivitiesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get serverId =>
+      $composableBuilder(column: $table.serverId, builder: (column) => column);
+
+  GeneratedColumn<int> get taskServerId => $composableBuilder(
+    column: $table.taskServerId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get actorUserId => $composableBuilder(
+    column: $table.actorUserId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get actorUserName => $composableBuilder(
+    column: $table.actorUserName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get action =>
+      $composableBuilder(column: $table.action, builder: (column) => column);
+
+  GeneratedColumn<String> get detail =>
+      $composableBuilder(column: $table.detail, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get occurredAt => $composableBuilder(
+    column: $table.occurredAt,
+    builder: (column) => column,
+  );
+}
+
+class $$TodoActivitiesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $TodoActivitiesTable,
+          TodoActivity,
+          $$TodoActivitiesTableFilterComposer,
+          $$TodoActivitiesTableOrderingComposer,
+          $$TodoActivitiesTableAnnotationComposer,
+          $$TodoActivitiesTableCreateCompanionBuilder,
+          $$TodoActivitiesTableUpdateCompanionBuilder,
+          (
+            TodoActivity,
+            BaseReferences<_$AppDatabase, $TodoActivitiesTable, TodoActivity>,
+          ),
+          TodoActivity,
+          PrefetchHooks Function()
+        > {
+  $$TodoActivitiesTableTableManager(
+    _$AppDatabase db,
+    $TodoActivitiesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$TodoActivitiesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$TodoActivitiesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$TodoActivitiesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> serverId = const Value.absent(),
+                Value<int> taskServerId = const Value.absent(),
+                Value<int?> actorUserId = const Value.absent(),
+                Value<String?> actorUserName = const Value.absent(),
+                Value<String> action = const Value.absent(),
+                Value<String?> detail = const Value.absent(),
+                Value<DateTime> occurredAt = const Value.absent(),
+              }) => TodoActivitiesCompanion(
+                serverId: serverId,
+                taskServerId: taskServerId,
+                actorUserId: actorUserId,
+                actorUserName: actorUserName,
+                action: action,
+                detail: detail,
+                occurredAt: occurredAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> serverId = const Value.absent(),
+                required int taskServerId,
+                Value<int?> actorUserId = const Value.absent(),
+                Value<String?> actorUserName = const Value.absent(),
+                required String action,
+                Value<String?> detail = const Value.absent(),
+                required DateTime occurredAt,
+              }) => TodoActivitiesCompanion.insert(
+                serverId: serverId,
+                taskServerId: taskServerId,
+                actorUserId: actorUserId,
+                actorUserName: actorUserName,
+                action: action,
+                detail: detail,
+                occurredAt: occurredAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$TodoActivitiesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $TodoActivitiesTable,
+      TodoActivity,
+      $$TodoActivitiesTableFilterComposer,
+      $$TodoActivitiesTableOrderingComposer,
+      $$TodoActivitiesTableAnnotationComposer,
+      $$TodoActivitiesTableCreateCompanionBuilder,
+      $$TodoActivitiesTableUpdateCompanionBuilder,
+      (
+        TodoActivity,
+        BaseReferences<_$AppDatabase, $TodoActivitiesTable, TodoActivity>,
+      ),
+      TodoActivity,
       PrefetchHooks Function()
     >;
 typedef $$TodoRemindersTableCreateCompanionBuilder =
@@ -11024,6 +11741,8 @@ class $AppDatabaseManager {
       $$TodoChecklistItemsTableTableManager(_db, _db.todoChecklistItems);
   $$TodoAttachmentsTableTableManager get todoAttachments =>
       $$TodoAttachmentsTableTableManager(_db, _db.todoAttachments);
+  $$TodoActivitiesTableTableManager get todoActivities =>
+      $$TodoActivitiesTableTableManager(_db, _db.todoActivities);
   $$TodoRemindersTableTableManager get todoReminders =>
       $$TodoRemindersTableTableManager(_db, _db.todoReminders);
   $$TodoRepeatRulesTableTableManager get todoRepeatRules =>
