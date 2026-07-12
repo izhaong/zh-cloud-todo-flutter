@@ -65,6 +65,29 @@ void main() {
     expect(created.listId, TodoVisualFixture.inboxListId);
   });
 
+  testWidgets(
+    '360 mobile quick add exposes date priority and tag overrides without overflow',
+    (tester) async {
+      await _pumpMobile(
+        tester,
+        viewport: TodoVisualViewports.mobileMin,
+        fixtureSet: TodoVisualFixtureSet.populated,
+      );
+
+      await tester.tap(find.byKey(const Key('todo-mobile-add')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('日期'), findsOneWidget);
+      expect(find.text('无优先级'), findsOneWidget);
+      expect(find.text('标签'), findsOneWidget);
+      expect(
+        _drainRenderingErrors(tester),
+        isEmpty,
+        reason: 'mobile quick add fields must remain usable at 360px width',
+      );
+    },
+  );
+
   testWidgets('mobile sidebar selection closes the drawer after navigation', (
     tester,
   ) async {

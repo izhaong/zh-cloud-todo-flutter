@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
@@ -198,6 +200,94 @@ void main() {
         db.todoChecklistItems,
       )..where((item) => item.id.equals('local-checklist'))).getSingle();
       expect(checklist.serverId, 11);
+    },
+  );
+
+  test(
+    'unsynced task capture default list never pushes its local UUID',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final now = DateTime.utc(2026, 7, 12);
+      await db
+          .into(db.todoLists)
+          .insert(
+            TodoListsCompanion.insert(
+              id: 'local-unsynced-list',
+              name: '离线项目',
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      await db
+          .into(db.todoSyncChanges)
+          .insert(
+            TodoSyncChangesCompanion.insert(
+              clientMutationId: 'capture-defaults-mutation',
+              entity: 'view_preference',
+              op: 'upsert',
+              entityLocalId: const Value('local-defaults'),
+              payloadJson: jsonEncode({
+                'sourceType': 'TASK_CAPTURE',
+                'sourceKey': 'defaults',
+                'valueJson': jsonEncode({
+                  'defaultListId': 'local-unsynced-list',
+                  'defaultPriority': 2,
+                }),
+              }),
+              createdAt: now,
+            ),
+          );
+
+      Map<String, dynamic>? pushedPayload;
+      final dio = Dio()
+        ..interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (options, handler) {
+              final change = ((options.data as Map)['changes'] as List)
+                  .cast<Map<String, dynamic>>()
+                  .single;
+              pushedPayload = Map<String, dynamic>.from(
+                change['payload'] as Map,
+              );
+              handler.resolve(
+                Response<Map<String, dynamic>>(
+                  requestOptions: options,
+                  data: {
+                    'code': 0,
+                    'data': {
+                      'ok': true,
+                      'accepted': [
+                        {
+                          'entityType': 'view_preference',
+                          'entityId': 12,
+                          'operation': 'upsert',
+                          'clientMutationId': 'capture-defaults-mutation',
+                        },
+                      ],
+                      'conflicts': <Map<String, dynamic>>[],
+                    },
+                  },
+                ),
+              );
+            },
+          ),
+        );
+      final client = ApiClient(dio: dio);
+      final coordinator = SyncCoordinator(
+        db: db,
+        api: SyncApi(client, clientId: 'test-client', deviceId: 'test-device'),
+        todoApi: client,
+      );
+
+      await coordinator.push();
+
+      final nested =
+          jsonDecode(pushedPayload!['valueJson'] as String)
+              as Map<String, dynamic>;
+      expect(nested['defaultListId'], equals(null));
+      expect(nested['defaultListServerId'], equals(null));
+      expect(nested['defaultPriority'], 2);
     },
   );
 

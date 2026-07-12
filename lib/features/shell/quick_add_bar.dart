@@ -51,9 +51,14 @@ class QuickAddBar extends StatefulWidget {
 
 /// Mobile keeps one low-noise add entry and expands it only when requested.
 class MobileQuickAddButton extends StatelessWidget {
-  const MobileQuickAddButton({super.key, required this.onSubmit});
+  const MobileQuickAddButton({
+    super.key,
+    required this.onSubmit,
+    this.tagOptions = const [],
+  });
 
   final QuickAddSubmitCallback onSubmit;
+  final List<QuickAddTagOption> tagOptions;
 
   @override
   Widget build(BuildContext context) {
@@ -65,7 +70,8 @@ class MobileQuickAddButton extends StatelessWidget {
         context: context,
         isScrollControlled: true,
         useSafeArea: true,
-        builder: (_) => _MobileQuickAddSheet(onSubmit: onSubmit),
+        builder: (_) =>
+            _MobileQuickAddSheet(onSubmit: onSubmit, tagOptions: tagOptions),
       ),
       child: const Icon(Icons.add),
     );
@@ -73,9 +79,13 @@ class MobileQuickAddButton extends StatelessWidget {
 }
 
 class _MobileQuickAddSheet extends StatefulWidget {
-  const _MobileQuickAddSheet({required this.onSubmit});
+  const _MobileQuickAddSheet({
+    required this.onSubmit,
+    required this.tagOptions,
+  });
 
   final QuickAddSubmitCallback onSubmit;
+  final List<QuickAddTagOption> tagOptions;
 
   @override
   State<_MobileQuickAddSheet> createState() => _MobileQuickAddSheetState();
@@ -84,6 +94,9 @@ class _MobileQuickAddSheet extends StatefulWidget {
 class _MobileQuickAddSheetState extends State<_MobileQuickAddSheet> {
   final _controller = TextEditingController();
   bool _submitting = false;
+  DateTime? _dueAtOverride;
+  int? _priorityOverride;
+  final Set<String> _tagIds = {};
 
   @override
   void dispose() {
@@ -96,13 +109,78 @@ class _MobileQuickAddSheetState extends State<_MobileQuickAddSheet> {
     if (title.isEmpty || _submitting) return;
     setState(() => _submitting = true);
     try {
-      await widget.onSubmit(QuickAddRequest(input: title));
+      await widget.onSubmit(
+        QuickAddRequest(
+          input: title,
+          dueAtOverride: _dueAtOverride,
+          priorityOverride: _priorityOverride,
+          tagIds: _tagIds.toList(growable: false),
+        ),
+      );
     } catch (_) {
       if (mounted) setState(() => _submitting = false);
       rethrow;
     }
     if (!mounted) return;
     Navigator.pop(context);
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _dueAtOverride ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null && mounted) {
+      setState(() => _dueAtOverride = picked);
+    }
+  }
+
+  Future<void> _pickTags() async {
+    if (widget.tagOptions.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请先在标签页创建标签')));
+      return;
+    }
+    final selected = Set<String>.from(_tagIds);
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              for (final tag in widget.tagOptions)
+                CheckboxListTile(
+                  value: selected.contains(tag.id),
+                  title: Text(tag.name),
+                  onChanged: (checked) => setSheetState(() {
+                    if (checked ?? false) {
+                      selected.add(tag.id);
+                    } else {
+                      selected.remove(tag.id);
+                    }
+                  }),
+                ),
+              ListTile(
+                title: const Text('完成'),
+                trailing: const Icon(Icons.check),
+                onTap: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (mounted) {
+      setState(() {
+        _tagIds
+          ..clear()
+          ..addAll(selected);
+      });
+    }
   }
 
   @override
@@ -114,33 +192,67 @@ class _MobileQuickAddSheetState extends State<_MobileQuickAddSheet> {
         16,
         16 + MediaQuery.viewInsetsOf(context).bottom,
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: TextField(
-              key: const Key('todo-mobile-add-field'),
-              controller: _controller,
-              autofocus: true,
-              enabled: !_submitting,
-              textInputAction: TextInputAction.done,
-              onSubmitted: (_) => _submit(),
-              decoration: const InputDecoration(
-                labelText: '任务标题',
-                hintText: '输入后按回车创建',
-                border: OutlineInputBorder(),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  key: const Key('todo-mobile-add-field'),
+                  controller: _controller,
+                  autofocus: true,
+                  enabled: !_submitting,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _submit(),
+                  decoration: const InputDecoration(
+                    labelText: '任务标题',
+                    hintText: '输入后按回车创建',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: 8),
+              IconButton.filled(
+                tooltip: '创建任务',
+                onPressed: _submitting ? null : _submit,
+                icon: _submitting
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.arrow_upward),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          IconButton.filled(
-            tooltip: '创建任务',
-            onPressed: _submitting ? null : _submit,
-            icon: _submitting
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.arrow_upward),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              TextButton.icon(
+                onPressed: _submitting ? null : _pickDate,
+                icon: const Icon(Icons.calendar_today_outlined, size: 18),
+                label: Text(_dueAtOverride == null ? '日期' : '已选日期'),
+              ),
+              const SizedBox(width: 8),
+              DropdownButton<int>(
+                value: _priorityOverride ?? 0,
+                items: const [
+                  DropdownMenuItem(value: 0, child: Text('无优先级')),
+                  DropdownMenuItem(value: 1, child: Text('低优先级')),
+                  DropdownMenuItem(value: 2, child: Text('中优先级')),
+                  DropdownMenuItem(value: 3, child: Text('高优先级')),
+                ],
+                onChanged: _submitting
+                    ? null
+                    : (value) => setState(() => _priorityOverride = value ?? 0),
+              ),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: _submitting ? null : _pickTags,
+                icon: const Icon(Icons.label_outline, size: 18),
+                label: Text(_tagIds.isEmpty ? '标签' : '标签 ${_tagIds.length}'),
+              ),
+            ],
           ),
         ],
       ),

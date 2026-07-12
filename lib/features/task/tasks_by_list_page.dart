@@ -159,7 +159,10 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
             Positioned(
               right: 16,
               bottom: 16,
-              child: MobileQuickAddButton(onSubmit: _submitQuickAdd),
+              child: MobileQuickAddButton(
+                onSubmit: _submitQuickAdd,
+                tagOptions: tagOptions,
+              ),
             ),
           ],
         );

@@ -451,6 +451,9 @@ class SyncCoordinator {
           if (value is Map<String, dynamic>) {
             final localListId = value['defaultListId']?.toString();
             if (localListId != null && localListId != 'inbox') {
+              // 本地 UUID 对另一台设备没有意义；服务端只保存可解析的
+              // Todo list serverId。若列表尚未同步，远端安全降级为收件箱。
+              value.remove('defaultListId');
               final list = await (db.select(
                 db.todoLists,
               )..where((row) => row.id.equals(localListId))).getSingleOrNull();
