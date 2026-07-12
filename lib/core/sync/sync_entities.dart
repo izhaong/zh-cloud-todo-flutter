@@ -9,7 +9,6 @@ class SyncEntities {
   static const viewPreference = 'view_preference';
   static const tag = 'tag';
   static const taskTag = 'task_tag';
-  static const checklist = 'checklist';
   static const filter = 'filter';
 
   /// 不在后端 `/sync` 白名单内、由 [SyncCoordinator] 路由到普通 REST 的实体。

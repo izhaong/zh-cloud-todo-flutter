@@ -38,6 +38,7 @@ class SyncCoordinator {
   final Uuid _uuid;
 
   int _tempIdSeq = 0;
+  final Map<String, int> _tempEntityIdsByLocalId = {};
 
   /// 单轮同步：先 push 本地变更，再 pull 远端增量。
   Future<SyncOutcome> syncOnce() async {
@@ -69,6 +70,13 @@ class SyncCoordinator {
 
   Future<int> _pushSyncableChanges(List<TodoSyncChange> changes) async {
     if (changes.isEmpty) return 0;
+    _tempIdSeq = 0;
+    _tempEntityIdsByLocalId.clear();
+    for (final change in changes) {
+      if (change.entityServerId == null && change.entityLocalId != null) {
+        _temporaryIdFor(change.entityLocalId!);
+      }
+    }
     final dtos = <SyncChangeDto>[];
     for (final change in changes) {
       final dto = await _toChangeDto(change);
@@ -174,6 +182,8 @@ class SyncCoordinator {
     int entityId;
     if (change.entityServerId != null) {
       entityId = change.entityServerId!;
+    } else if (change.entityLocalId != null) {
+      entityId = _temporaryIdFor(change.entityLocalId!);
     } else {
       entityId = -(++_tempIdSeq);
     }
@@ -216,7 +226,7 @@ class SyncCoordinator {
         final list = await (db.select(
           db.todoLists,
         )..where((t) => t.id.equals(localListId))).getSingleOrNull();
-        resolved['listId'] = list?.serverId ?? -(++_tempIdSeq);
+        resolved['listId'] = list?.serverId ?? _temporaryIdFor(localListId);
       }
     }
     if (entity == SyncEntities.task && resolved.containsKey('parentTaskId')) {
@@ -225,7 +235,8 @@ class SyncCoordinator {
         final parent = await (db.select(
           db.todoTasks,
         )..where((t) => t.id.equals(localParentId))).getSingleOrNull();
-        resolved['parentTaskId'] = parent?.serverId ?? -(++_tempIdSeq);
+        resolved['parentTaskId'] =
+            parent?.serverId ?? _temporaryIdFor(localParentId);
       }
     }
     if (entity == SyncEntities.taskTag) {
@@ -234,14 +245,14 @@ class SyncCoordinator {
         final task = await (db.select(
           db.todoTasks,
         )..where((t) => t.id.equals(localTaskId))).getSingleOrNull();
-        resolved['taskId'] = task?.serverId ?? -(++_tempIdSeq);
+        resolved['taskId'] = task?.serverId ?? _temporaryIdFor(localTaskId);
       }
       final localTagId = resolved['tagId']?.toString();
       if (localTagId != null && localTagId.isNotEmpty) {
         final tag = await (db.select(
           db.todoTags,
         )..where((t) => t.id.equals(localTagId))).getSingleOrNull();
-        resolved['tagId'] = tag?.serverId ?? -(++_tempIdSeq);
+        resolved['tagId'] = tag?.serverId ?? _temporaryIdFor(localTagId);
       }
     }
     if (entity == SyncEntities.reminder ||
@@ -252,7 +263,7 @@ class SyncCoordinator {
         final task = await (db.select(
           db.todoTasks,
         )..where((t) => t.id.equals(localTaskId))).getSingleOrNull();
-        resolved['taskId'] = task?.serverId ?? -(++_tempIdSeq);
+        resolved['taskId'] = task?.serverId ?? _temporaryIdFor(localTaskId);
       }
     }
     if (entity == SyncEntities.repeatSkip &&
@@ -262,7 +273,8 @@ class SyncCoordinator {
         final rule = await (db.select(
           db.todoRepeatRules,
         )..where((t) => t.id.equals(localRuleId))).getSingleOrNull();
-        resolved['repeatRuleId'] = rule?.serverId ?? -(++_tempIdSeq);
+        resolved['repeatRuleId'] =
+            rule?.serverId ?? _temporaryIdFor(localRuleId);
       }
     }
     // 移除仅本地使用的字段，避免污染服务端 payload。
@@ -270,6 +282,9 @@ class SyncCoordinator {
     resolved.remove('serverId');
     return resolved;
   }
+
+  int _temporaryIdFor(String localId) =>
+      _tempEntityIdsByLocalId.putIfAbsent(localId, () => -(++_tempIdSeq));
 
   Future<void> _applyAccepted(SyncChangeDto accepted) async {
     if (accepted.entityId == null) return;
@@ -290,12 +305,21 @@ class SyncCoordinator {
           accepted.entityId!,
         );
       case SyncEntities.task:
-        await _bindServerId(
-          db.todoTasks,
-          db.todoTasks.serverId,
-          accepted.clientMutationId,
-          accepted.entityId!,
-        );
+        if (await _isChecklistMutation(accepted.clientMutationId)) {
+          await _bindServerId(
+            db.todoChecklistItems,
+            db.todoChecklistItems.serverId,
+            accepted.clientMutationId,
+            accepted.entityId!,
+          );
+        } else {
+          await _bindServerId(
+            db.todoTasks,
+            db.todoTasks.serverId,
+            accepted.clientMutationId,
+            accepted.entityId!,
+          );
+        }
       case SyncEntities.tag:
         await _bindServerId(
           db.todoTags,
@@ -356,6 +380,17 @@ class SyncCoordinator {
     if (localId == null) return;
     await (db.update(table)..where((t) => (t as dynamic).id.equals(localId)))
         .write(RawValuesInsertable({serverIdColumn.name: Variable(entityId)}));
+  }
+
+  Future<bool> _isChecklistMutation(String? clientMutationId) async {
+    if (clientMutationId == null) return false;
+    final change =
+        await (db.select(db.todoSyncChanges)
+              ..where((t) => t.clientMutationId.equals(clientMutationId)))
+            .getSingleOrNull();
+    if (change == null) return false;
+    final payload = jsonDecode(change.payloadJson) as Map<String, dynamic>;
+    return payload['isChecklistItem'] == true;
   }
 
   Future<void> _applyConflict(SyncConflictDto conflict) async {
@@ -447,6 +482,9 @@ class SyncCoordinator {
         await (db.delete(
           db.todoTasks,
         )..where((t) => t.serverId.equals(tombstone.entityId))).go();
+        await (db.delete(
+          db.todoChecklistItems,
+        )..where((t) => t.serverId.equals(tombstone.entityId))).go();
       case SyncEntities.tag:
         await (db.delete(
           db.todoTags,
@@ -510,6 +548,10 @@ class SyncCoordinator {
     int serverId,
     Map<String, dynamic> payload,
   ) async {
+    if (payload['isChecklistItem'] == true) {
+      await _upsertLocalChecklistItem(serverId, payload);
+      return;
+    }
     final existing = await db.taskByServerId(serverId);
     final localListId = await _localListIdForServerId(
       (payload['listId'] as num?)?.toInt(),
@@ -541,6 +583,38 @@ class SyncCoordinator {
     } else {
       await (db.update(
         db.todoTasks,
+      )..where((t) => t.id.equals(existing.id))).write(companion);
+    }
+  }
+
+  Future<void> _upsertLocalChecklistItem(
+    int serverId,
+    Map<String, dynamic> payload,
+  ) async {
+    final localTaskId = await _localTaskIdForServerId(
+      (payload['parentTaskId'] as num?)?.toInt(),
+    );
+    if (localTaskId == null) return;
+    final existing = await (db.select(
+      db.todoChecklistItems,
+    )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
+    final now = DateTime.now();
+    final status = payload['status']?.toString();
+    final companion = TodoChecklistItemsCompanion(
+      id: Value(existing?.id ?? _uuid.v4()),
+      serverId: Value(serverId),
+      taskId: Value(localTaskId),
+      title: Value(payload['title']?.toString() ?? existing?.title ?? ''),
+      completed: Value(status == 'DONE' || status == 'COMPLETED'),
+      sortOrder: Value((payload['sortOrder'] as num?)?.toInt() ?? 0),
+      updatedAt: Value(now),
+      createdAt: Value(existing?.createdAt ?? now),
+    );
+    if (existing == null) {
+      await db.into(db.todoChecklistItems).insert(companion);
+    } else {
+      await (db.update(
+        db.todoChecklistItems,
       )..where((t) => t.id.equals(existing.id))).write(companion);
     }
   }

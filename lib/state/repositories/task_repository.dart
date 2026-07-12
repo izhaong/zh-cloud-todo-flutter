@@ -132,7 +132,7 @@ class TaskRepository {
     return row;
   }
 
-  /// 离线创建检查事项。服务端映射和同步白名单由 B1 契约完成后接入。
+  /// 离线创建检查事项。服务端将其作为带 `isChecklistItem` 的 task 同步。
   Future<TodoChecklistItem> createChecklistItem({
     required String taskId,
     required String title,
@@ -145,6 +145,12 @@ class TaskRepository {
     final now = DateTime.now();
     final id = _uuid.v4();
     await _db.transaction(() async {
+      final parent = await (_db.select(
+        _db.todoTasks,
+      )..where((task) => task.id.equals(taskId))).getSingleOrNull();
+      if (parent == null) {
+        throw StateError('检查事项所属任务不存在');
+      }
       await _db
           .into(_db.todoChecklistItems)
           .insert(
@@ -161,10 +167,19 @@ class TaskRepository {
         _db.todoChecklistItems,
       )..where((item) => item.id.equals(id))).getSingle();
       await _queue.enqueue(
-        entity: SyncEntities.checklist,
+        entity: SyncEntities.task,
         op: SyncOps.upsert,
         localId: id,
-        payload: row.toJson(),
+        payload: {
+          'listId': parent.listId,
+          'parentTaskId': taskId,
+          'title': row.title,
+          'isChecklistItem': true,
+          'status': 'TODO',
+          'priority': 0,
+          'sortOrder': row.sortOrder,
+          'completedAt': null,
+        },
       );
     });
     return (_db.select(

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -24,10 +26,14 @@ void main() {
       final stored = await db.select(db.todoChecklistItems).get();
       expect(stored, hasLength(1));
       final outbox = await db.select(db.todoSyncChanges).get();
-      expect(
-        outbox.where((change) => change.entity == 'checklist'),
-        hasLength(1),
+      final checklistChange = outbox.singleWhere(
+        (change) => change.entity == 'task' && change.entityLocalId == item.id,
       );
+      final payload =
+          jsonDecode(checklistChange.payloadJson) as Map<String, dynamic>;
+      expect(payload['isChecklistItem'], isTrue);
+      expect(payload['parentTaskId'], task.id);
+      expect(payload['listId'], task.listId);
     },
   );
 }
