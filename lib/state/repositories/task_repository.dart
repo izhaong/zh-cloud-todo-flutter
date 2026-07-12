@@ -162,6 +162,8 @@ class TaskRepository {
     DateTime? startAt,
     DateTime? endAt,
     DateTime? dueAt,
+    bool clearStartAt = false,
+    bool clearEndAt = false,
     bool clearDueAt = false,
     String? listId,
     bool? isPinned,
@@ -175,8 +177,16 @@ class TaskRepository {
             : Value(description),
         priority: priority == null ? const Value.absent() : Value(priority),
         isPinned: isPinned == null ? const Value.absent() : Value(isPinned),
-        startAt: startAt == null ? const Value.absent() : Value(startAt),
-        endAt: endAt == null ? const Value.absent() : Value(endAt),
+        startAt: clearStartAt
+            ? const Value(null)
+            : startAt == null
+            ? const Value.absent()
+            : Value(startAt),
+        endAt: clearEndAt
+            ? const Value(null)
+            : endAt == null
+            ? const Value.absent()
+            : Value(endAt),
         dueAt: clearDueAt
             ? const Value(null)
             : dueAt == null

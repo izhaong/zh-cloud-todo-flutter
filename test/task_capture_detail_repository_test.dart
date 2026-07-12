@@ -169,6 +169,34 @@ void main() {
   });
 
   test(
+    'detail persists and explicitly clears its start and end times',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final repository = TaskRepository(db, SyncChangeQueue(db));
+      final task = await repository.create(listId: 'inbox', title: '安排时段');
+      final start = DateTime(2026, 7, 13, 9);
+      final end = DateTime(2026, 7, 13, 10, 30);
+
+      final scheduled = await repository.update(
+        task.id,
+        startAt: start,
+        endAt: end,
+      );
+      expect(scheduled.startAt, start);
+      expect(scheduled.endAt, end);
+
+      final cleared = await repository.update(
+        task.id,
+        clearStartAt: true,
+        clearEndAt: true,
+      );
+      expect(cleared.startAt, isNull);
+      expect(cleared.endAt, isNull);
+    },
+  );
+
+  test(
     'offline checklist creation persists locally and enqueues a mutation',
     () async {
       final db = AppDatabase.forTesting(NativeDatabase.memory());

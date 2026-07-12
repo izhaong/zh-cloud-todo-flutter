@@ -60,6 +60,8 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
   late final TextEditingController _title;
   late final TextEditingController _desc;
   int _priority = 0;
+  DateTime? _startAt;
+  DateTime? _endAt;
   bool _loading = true;
   DateTime? _dueAt;
   String? _listName;
@@ -98,6 +100,8 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       _title.clear();
       _desc.clear();
       _priority = 0;
+      _startAt = null;
+      _endAt = null;
       _dueAt = null;
       _listName = null;
       _loading = taskId != null;
@@ -123,6 +127,8 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       _title.text = t?.title ?? '';
       _desc.text = t?.description ?? '';
       _priority = t?.priority ?? 0;
+      _startAt = t?.startAt;
+      _endAt = t?.endAt;
       _dueAt = t?.dueAt;
       _listName = listName;
       _loading = false;
@@ -158,12 +164,16 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     final descriptionDirty =
         previous != null && _desc.text != (previous.description ?? '');
     final priorityDirty = previous != null && _priority != previous.priority;
+    final startDirty = previous != null && _startAt != previous.startAt;
+    final endDirty = previous != null && _endAt != previous.endAt;
     final dueDirty = previous != null && _dueAt != previous.dueAt;
     setState(() {
       _task = latest;
       if (!titleDirty) _title.text = latest.title;
       if (!descriptionDirty) _desc.text = latest.description ?? '';
       if (!priorityDirty) _priority = latest.priority;
+      if (!startDirty) _startAt = latest.startAt;
+      if (!endDirty) _endAt = latest.endAt;
       if (!dueDirty) _dueAt = latest.dueAt;
       _listName = listName;
       _loading = false;
@@ -227,7 +237,11 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       title: _title.text.trim(),
       description: _desc.text.trim(),
       priority: _priority,
+      startAt: _startAt,
+      endAt: _endAt,
       dueAt: _dueAt,
+      clearStartAt: _startAt == null && t.startAt != null,
+      clearEndAt: _endAt == null && t.endAt != null,
       clearDueAt: _dueAt == null && t.dueAt != null,
     );
     if (mounted && widget.taskId == updated.id) {
@@ -492,6 +506,37 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     });
   }
 
+  Future<void> _pickSchedule(TodoTask t, {required bool isStart}) async {
+    final current = isStart ? _startAt : _endAt;
+    final now = current ?? (isStart ? t.startAt : t.endAt) ?? DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: now,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 5),
+    );
+    if (date == null || !mounted || widget.taskId != t.id) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(now),
+    );
+    if (!_isCurrentTask(t.id)) return;
+    final selected = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time?.hour ?? now.hour,
+      time?.minute ?? now.minute,
+    );
+    setState(() {
+      if (isStart) {
+        _startAt = selected;
+      } else {
+        _endAt = selected;
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.taskId == null) {
@@ -650,6 +695,43 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
           ],
         ),
         _SubtaskList(taskId: t.id, onAdd: () => _addSubtask(t)),
+        const Divider(height: 32),
+        sh('时间段（可选）'),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: () => _pickSchedule(t, isStart: true),
+          icon: const Icon(Icons.play_circle_outline),
+          label: Text(
+            _startAt == null
+                ? '设置开始时间'
+                : '开始：${_startAt!.toLocal().toString().substring(0, 16)}',
+          ),
+        ),
+        if (_startAt != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () => setState(() => _startAt = null),
+              child: const Text('清除开始时间'),
+            ),
+          ),
+        OutlinedButton.icon(
+          onPressed: () => _pickSchedule(t, isStart: false),
+          icon: const Icon(Icons.stop_circle_outlined),
+          label: Text(
+            _endAt == null
+                ? '设置结束时间'
+                : '结束：${_endAt!.toLocal().toString().substring(0, 16)}',
+          ),
+        ),
+        if (_endAt != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () => setState(() => _endAt = null),
+              child: const Text('清除结束时间'),
+            ),
+          ),
       ],
     );
 
