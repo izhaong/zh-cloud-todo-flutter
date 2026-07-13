@@ -48,7 +48,7 @@ void main() {
       _withinDetail(find.textContaining(RegExp(r'(2026[-/]0?7[-/]11|7月11)'))),
       findsOneWidget,
     );
-    expect(_withinDetail(find.text('收件箱')), findsOneWidget);
+    expect(_withinDetail(find.text('收集箱')), findsOneWidget);
     _expectTodoDetailIdentity(selected: true);
   });
 
@@ -72,7 +72,7 @@ void main() {
 
     expect(_withinDetail(find.textContaining('选择任务')), findsOneWidget);
     expect(_withinDetail(find.text(_taskTitle)), findsNothing);
-    expect(find.text('收件箱'), findsWidgets);
+    expect(find.text('收集箱'), findsWidgets);
   });
 
   testWidgets('deleting the selected task returns detail to no selection', (

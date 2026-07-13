@@ -4,12 +4,12 @@
 
 ## Technical Context
 
-Flutter/Dart、Drift、Riverpod、dio 与现有 `SyncChangeQueue`。现有 `TaskRepository` 仅覆盖任务主记录；`ChecklistApi`、`TagApi`、附件和评论/活动仍有直连缺口。
+Flutter/Dart、Drift、Riverpod、dio 与现有 `SyncChangeQueue`。任务聚合写入通过 Repository 与 outbox；技术 `inbox` 默认归属须作为物理“收集箱”清单先于任务同步，并在拉取时映射回同一内部 ID。仍须持续核验 `ChecklistApi`、`TagApi`、附件和评论/活动是否存在直连缺口。
 
 ## Design
 
 1. 先与 Service #179 固定任务详情、checklist、attachment 与 activity 的请求、响应、幂等键和错误契约。
-2. 添加 Drift 子实体和迁移，令 TaskRepository 的聚合写入在同一事务完成并 enqueue。
+2. 添加 Drift 子实体和迁移，令 TaskRepository 的聚合写入在同一事务完成并 enqueue；默认收集箱的物理清单变更必须与引用它的新任务保持同批、先清单后任务的顺序。
 3. 用 Repository/use-case 替换详情/快速添加的直连调用，再接入既有视觉组件。
 4. 以 Service、Repository、Widget、契约和离线重启旅程逐层验收；仅凭页面存在不关闭任务。
 

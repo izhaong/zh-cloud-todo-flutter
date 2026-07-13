@@ -44,6 +44,9 @@ class SyncCoordinator {
   int _tempIdSeq = 0;
   final Map<String, int> _tempEntityIdsByLocalId = {};
 
+  static const _inboxListId = 'inbox';
+  static const _inboxListName = '收集箱';
+
   /// 单轮同步：先 push 本地变更，再 pull 远端增量。
   Future<SyncOutcome> syncOnce() async {
     final pushed = await push();
@@ -54,6 +57,7 @@ class SyncCoordinator {
   // --- Push ------------------------------------------------------------
 
   Future<int> push() async {
+    await _prepareInboxChangesForPush();
     final pending = await (db.select(
       db.todoSyncChanges,
     )..where((t) => t.status.equals('queued'))).get();
@@ -68,9 +72,9 @@ class SyncCoordinator {
     final templateChanges = pending
         .where((c) => c.entity == SyncEntities.template)
         .toList();
-    final syncableChanges = pending
-        .where((c) => SyncEntities.syncable.contains(c.entity))
-        .toList();
+    final syncableChanges =
+        pending.where((c) => SyncEntities.syncable.contains(c.entity)).toList()
+          ..sort(_compareSyncChanges);
 
     var succeeded = 0;
     succeeded += await _pushFolderChanges(folderChanges);
@@ -78,6 +82,101 @@ class SyncCoordinator {
     succeeded += await _pushTemplateChanges(templateChanges);
     succeeded += await _pushSyncableChanges(syncableChanges);
     return succeeded;
+  }
+
+  /// 兼容旧版本已经在本地使用 `inbox` 但没有真实 list outbox 的任务。
+  ///
+  /// 这类创建变更曾被错误地转换为孤立临时 list ID。升级后补齐收集箱 list
+  /// 变更并仅重排尚未拥有服务端 ID 的失败任务，使下一次同步可恢复。
+  Future<void> _prepareInboxChangesForPush() async {
+    final changes = await db.select(db.todoSyncChanges).get();
+    final inboxTaskChanges = <TodoSyncChange>[];
+    for (final change in changes) {
+      if (change.entity != SyncEntities.task ||
+          change.op != SyncOps.upsert ||
+          (change.status != 'queued' && change.status != 'failed')) {
+        continue;
+      }
+      try {
+        final payload = jsonDecode(change.payloadJson) as Map<String, dynamic>;
+        if (payload['listId'] == _inboxListId) {
+          inboxTaskChanges.add(change);
+        }
+      } on FormatException {
+        // 损坏 outbox 仍由既有失败处理保留，不能阻塞其它可恢复任务。
+      }
+    }
+    if (inboxTaskChanges.isEmpty) return;
+
+    await db.transaction(() async {
+      var inbox = await db.listByLocalId(_inboxListId);
+      if (inbox == null) {
+        final now = DateTime.now();
+        await db
+            .into(db.todoLists)
+            .insert(
+              TodoListsCompanion.insert(
+                id: _inboxListId,
+                name: _inboxListName,
+                sortOrder: const Value(0),
+                updatedAt: now,
+                createdAt: now,
+              ),
+            );
+        inbox = await db.listByLocalId(_inboxListId);
+      }
+      TodoSyncChange? existingInboxChange;
+      for (final change in changes) {
+        if (change.entity == SyncEntities.list &&
+            change.entityLocalId == _inboxListId &&
+            (change.status == 'queued' || change.status == 'failed')) {
+          existingInboxChange = change;
+          break;
+        }
+      }
+      if (inbox!.serverId == null) {
+        if (existingInboxChange == null) {
+          await db
+              .into(db.todoSyncChanges)
+              .insert(
+                TodoSyncChangesCompanion.insert(
+                  clientMutationId: _uuid.v4(),
+                  entity: SyncEntities.list,
+                  op: SyncOps.upsert,
+                  entityLocalId: const Value(_inboxListId),
+                  payloadJson: jsonEncode(inbox.toJson()),
+                  createdAt: DateTime.now(),
+                ),
+              );
+        } else if (existingInboxChange.status == 'failed') {
+          await (db.update(db.todoSyncChanges)
+                ..where((row) => row.id.equals(existingInboxChange!.id)))
+              .write(const TodoSyncChangesCompanion(status: Value('queued')));
+        }
+      }
+      for (final change in inboxTaskChanges) {
+        if (change.status == 'failed' && change.entityServerId == null) {
+          await (db.update(db.todoSyncChanges)
+                ..where((row) => row.id.equals(change.id)))
+              .write(const TodoSyncChangesCompanion(status: Value('queued')));
+        }
+      }
+    });
+  }
+
+  int _compareSyncChanges(TodoSyncChange left, TodoSyncChange right) {
+    final priority = {
+      SyncEntities.list: 0,
+      SyncEntities.tag: 1,
+      SyncEntities.task: 2,
+      SyncEntities.reminder: 3,
+      SyncEntities.repeatRule: 3,
+      SyncEntities.repeatSkip: 4,
+    };
+    final byEntity = (priority[left.entity] ?? 9).compareTo(
+      priority[right.entity] ?? 9,
+    );
+    return byEntity != 0 ? byEntity : left.createdAt.compareTo(right.createdAt);
   }
 
   Future<int> _pushAttachmentChanges(List<TodoSyncChange> changes) async {
@@ -452,7 +551,7 @@ class SyncCoordinator {
             final localListId = value['defaultListId']?.toString();
             if (localListId != null && localListId != 'inbox') {
               // 本地 UUID 对另一台设备没有意义；服务端只保存可解析的
-              // Todo list serverId。若列表尚未同步，远端安全降级为收件箱。
+              // Todo list serverId。若列表尚未同步，远端安全降级为收集箱。
               value.remove('defaultListId');
               final list = await (db.select(
                 db.todoLists,
@@ -713,10 +812,13 @@ class SyncCoordinator {
     int serverId,
     Map<String, dynamic> payload,
   ) async {
-    final existing = await db.listByServerId(serverId);
+    final isInbox = payload['name']?.toString() == _inboxListName;
+    final existing =
+        await db.listByServerId(serverId) ??
+        (isInbox ? await db.listByLocalId(_inboxListId) : null);
     final now = DateTime.now();
     final companion = TodoListsCompanion(
-      id: Value(existing?.id ?? _uuid.v4()),
+      id: Value(existing?.id ?? (isInbox ? _inboxListId : _uuid.v4())),
       serverId: Value(serverId),
       name: Value(payload['name']?.toString() ?? existing?.name ?? ''),
       folderId: Value(

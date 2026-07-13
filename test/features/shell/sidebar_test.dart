@@ -18,7 +18,7 @@ void main() {
 
     expect(find.text('任务清单'), findsOneWidget);
     expect(find.text('智能清单'), findsOneWidget);
-    expect(find.text('收件箱'), findsOneWidget);
+    expect(find.text('收集箱'), findsOneWidget);
     expect(find.text('今天'), findsOneWidget);
     expect(find.text('最近7天'), findsOneWidget);
     expect(find.text('全部'), findsOneWidget);

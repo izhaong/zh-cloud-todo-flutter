@@ -18,6 +18,9 @@ class TaskRepository {
   final SyncChangeQueue _queue;
   final Uuid _uuid;
 
+  static const _inboxListId = 'inbox';
+  static const _inboxListName = '收集箱';
+
   /// 顶层任务（无 parent）的 stream，按 listId 过滤。[listId] 本地 UUID。
   Stream<List<TodoTask>> watchTopLevelByList(String listId) {
     return (_db.select(_db.todoTasks)
@@ -84,6 +87,7 @@ class TaskRepository {
     final id = _uuid.v4();
     late TodoTask row;
     await _db.transaction(() async {
+      await _ensureInboxList(listId, now);
       await _db
           .into(_db.todoTasks)
           .insert(
@@ -113,6 +117,34 @@ class TaskRepository {
       );
     });
     return row;
+  }
+
+  /// 收集箱在 UI 中是固定入口，但同步协议需要真实的可写清单。
+  ///
+  /// 首次离线创建时先把保留的收集箱作为 list outbox 变更写入，再写任务，
+  /// 使 [SyncCoordinator] 能在同一个批次内先创建服务端清单、再解析任务引用。
+  Future<void> _ensureInboxList(String listId, DateTime now) async {
+    if (listId != _inboxListId) return;
+    final existing = await _db.listByLocalId(_inboxListId);
+    if (existing != null) return;
+    await _db
+        .into(_db.todoLists)
+        .insert(
+          TodoListsCompanion.insert(
+            id: _inboxListId,
+            name: _inboxListName,
+            sortOrder: const Value(0),
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    final inbox = await _db.listByLocalId(_inboxListId);
+    await _queue.enqueue(
+      entity: SyncEntities.list,
+      op: SyncOps.upsert,
+      localId: _inboxListId,
+      payload: inbox!.toJson(),
+    );
   }
 
   Future<List<TodoTask>> createBatch({
@@ -169,43 +201,52 @@ class TaskRepository {
     bool? isPinned,
   }) async {
     final now = DateTime.now();
-    await (_db.update(_db.todoTasks)..where((t) => t.id.equals(taskId))).write(
-      TodoTasksCompanion(
-        title: title == null ? const Value.absent() : Value(title),
-        description: description == null
-            ? const Value.absent()
-            : Value(description),
-        priority: priority == null ? const Value.absent() : Value(priority),
-        isPinned: isPinned == null ? const Value.absent() : Value(isPinned),
-        startAt: clearStartAt
-            ? const Value(null)
-            : startAt == null
-            ? const Value.absent()
-            : Value(startAt),
-        endAt: clearEndAt
-            ? const Value(null)
-            : endAt == null
-            ? const Value.absent()
-            : Value(endAt),
-        dueAt: clearDueAt
-            ? const Value(null)
-            : dueAt == null
-            ? const Value.absent()
-            : Value(dueAt),
-        listId: listId == null ? const Value.absent() : Value(listId),
-        updatedAt: Value(now),
-      ),
-    );
-    final row = await (_db.select(
-      _db.todoTasks,
-    )..where((t) => t.id.equals(taskId))).getSingle();
-    await _queue.enqueue(
-      entity: SyncEntities.task,
-      op: SyncOps.upsert,
-      localId: taskId,
-      serverId: row.serverId,
-      payload: _taskPayload(row),
-    );
+    late TodoTask row;
+    await _db.transaction(() async {
+      if (listId != null) await _ensureInboxList(listId, now);
+      await (_db.update(_db.todoTasks)..where((t) => t.id.equals(taskId)))
+          .write(
+            TodoTasksCompanion(
+              title: title == null ? const Value.absent() : Value(title),
+              description: description == null
+                  ? const Value.absent()
+                  : Value(description),
+              priority: priority == null
+                  ? const Value.absent()
+                  : Value(priority),
+              isPinned: isPinned == null
+                  ? const Value.absent()
+                  : Value(isPinned),
+              startAt: clearStartAt
+                  ? const Value(null)
+                  : startAt == null
+                  ? const Value.absent()
+                  : Value(startAt),
+              endAt: clearEndAt
+                  ? const Value(null)
+                  : endAt == null
+                  ? const Value.absent()
+                  : Value(endAt),
+              dueAt: clearDueAt
+                  ? const Value(null)
+                  : dueAt == null
+                  ? const Value.absent()
+                  : Value(dueAt),
+              listId: listId == null ? const Value.absent() : Value(listId),
+              updatedAt: Value(now),
+            ),
+          );
+      row = await (_db.select(
+        _db.todoTasks,
+      )..where((t) => t.id.equals(taskId))).getSingle();
+      await _queue.enqueue(
+        entity: SyncEntities.task,
+        op: SyncOps.upsert,
+        localId: taskId,
+        serverId: row.serverId,
+        payload: _taskPayload(row),
+      );
+    });
     return row;
   }
 

@@ -38,7 +38,7 @@ void main() {
     expect(mobileAdd.hitTestable(), findsOneWidget);
   });
 
-  testWidgets('mobile add submits one task to the current inbox', (
+  testWidgets('移动端快速添加写入当前收集箱', (
     tester,
   ) async {
     final fixture = await _pumpMobile(
@@ -222,7 +222,7 @@ void main() {
       await tester.tap(more);
       await tester.pumpAndSettle();
       expect(find.text('置顶'), findsOneWidget);
-      expect(find.text('移至收件箱'), findsOneWidget);
+      expect(find.text('移至收集箱'), findsOneWidget);
       expect(find.text('协作'), findsOneWidget);
       expect(find.text('删除'), findsOneWidget);
 

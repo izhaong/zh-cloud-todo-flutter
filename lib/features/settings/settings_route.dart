@@ -183,7 +183,7 @@ class _TaskCaptureDefaultsPageState
                   items: [
                     const DropdownMenuItem<String?>(
                       value: null,
-                      child: Text('收件箱'),
+                      child: Text('收集箱'),
                     ),
                     ...lists.map(
                       (list) => DropdownMenuItem<String?>(

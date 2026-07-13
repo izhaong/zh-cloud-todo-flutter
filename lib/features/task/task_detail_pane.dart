@@ -16,7 +16,7 @@ import '../collaboration/task_comments_page.dart';
 import '../collaboration/task_assign_page.dart';
 import '../collaboration/list_member_page.dart';
 
-/// 收件箱的本地清单 id（synthetic inbox）：listId 为该值的任务视为"未归清单"。
+/// 收集箱的本地清单 id（synthetic inbox）：listId 为该值的任务视为"未归清单"。
 const String kInboxListId = 'inbox';
 
 enum _TaskDetailAction {
@@ -189,7 +189,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
   }
 
   Future<String> _resolveListName(String listId) async {
-    if (listId == kInboxListId) return '收件箱';
+    if (listId == kInboxListId) return '收集箱';
     final repository = ref.read(listRepositoryProvider);
     final lists = await repository?.getAll() ?? const <TodoList>[];
     for (final list in lists) {
@@ -317,14 +317,14 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     );
   }
 
-  /// §2.3 收件箱迁移：把任务挪入 synthetic inbox (listId = 'inbox')。
+  /// §2.3 收集箱迁移：把任务挪入 synthetic inbox (listId = 'inbox')。
   Future<void> _moveToInbox(TodoTask t) async {
     final repo = ref.read(taskRepositoryProvider);
     if (repo == null) return;
     final messenger = ScaffoldMessenger.of(context);
     await repo.update(t.id, listId: kInboxListId);
     if (!_isCurrentTask(t.id)) return;
-    messenger.showSnackBar(const SnackBar(content: Text('已移至收件箱')));
+    messenger.showSnackBar(const SnackBar(content: Text('已移至收集箱')));
   }
 
   Future<void> _moveToInboxAndClose(TodoTask t) async {
@@ -812,7 +812,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                 ),
               ),
               IconButton(
-                tooltip: '移至收件箱',
+                tooltip: '移至收集箱',
                 onPressed: () => _moveToInboxAndClose(t),
                 icon: const Icon(Icons.move_to_inbox_outlined),
               ),
@@ -894,7 +894,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                     ),
                     const PopupMenuItem(
                       value: _TaskDetailAction.moveToInbox,
-                      child: Text('移至收件箱'),
+                      child: Text('移至收集箱'),
                     ),
                     const PopupMenuItem(
                       value: _TaskDetailAction.copy,
@@ -937,7 +937,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                   ),
                 ),
                 IconButton(
-                  tooltip: '移至收件箱',
+                  tooltip: '移至收集箱',
                   onPressed: () => _moveToInboxAndClose(t),
                   icon: const Icon(Icons.move_to_inbox_outlined),
                 ),
@@ -1030,7 +1030,7 @@ class _TaskListPicker extends ConsumerWidget {
               children: [
                 ListTile(
                   leading: const Icon(Icons.inbox_outlined),
-                  title: const Text('收件箱'),
+                  title: const Text('收集箱'),
                   trailing: selectedListId == kInboxListId
                       ? const Icon(Icons.check)
                       : null,
@@ -1052,7 +1052,7 @@ class _TaskListPicker extends ConsumerWidget {
         );
         if (nextListId == null) return;
         final nextListName = nextListId == kInboxListId
-            ? '收件箱'
+            ? '收集箱'
             : lists
                       .where((list) => list.id == nextListId)
                       .map((list) => list.name)
