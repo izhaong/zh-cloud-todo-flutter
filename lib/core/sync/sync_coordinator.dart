@@ -78,9 +78,11 @@ class SyncCoordinator {
 
     var succeeded = 0;
     succeeded += await _pushFolderChanges(folderChanges);
+    // 附件登记依赖任务刚回写的 serverId，必须在 task/list 等同步实体
+    // 成功映射后执行，避免网络恢复后的首轮同步遗留 queued 附件。
+    succeeded += await _pushSyncableChanges(syncableChanges);
     succeeded += await _pushAttachmentChanges(attachmentChanges);
     succeeded += await _pushTemplateChanges(templateChanges);
-    succeeded += await _pushSyncableChanges(syncableChanges);
     return succeeded;
   }
 

@@ -117,6 +117,83 @@ void main() {
     },
   );
 
+  test(
+    'new task uploads its queued attachment in the same recovery push',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final now = DateTime(2026, 7, 13);
+      await db.into(db.todoLists).insert(
+        TodoListsCompanion.insert(
+          id: 'list-local',
+          serverId: const Value(10),
+          name: '工作',
+          updatedAt: now,
+          createdAt: now,
+        ),
+      );
+      await db.into(db.todoTasks).insert(
+        TodoTasksCompanion.insert(
+          id: 'task-new',
+          listId: 'list-local',
+          title: '带附件的新任务',
+          updatedAt: now,
+          createdAt: now,
+        ),
+      );
+      await db.into(db.todoAttachments).insert(
+        TodoAttachmentsCompanion.insert(
+          id: 'attachment-new',
+          taskId: 'task-new',
+          name: 'brief.txt',
+          localPath: const Value('/tmp/brief.txt'),
+          mimeType: 'text/plain',
+          size: 12,
+          updatedAt: now,
+          createdAt: now,
+        ),
+      );
+      await db.into(db.todoSyncChanges).insert(
+        TodoSyncChangesCompanion.insert(
+          clientMutationId: 'task-new-mutation',
+          entity: 'task',
+          op: 'upsert',
+          entityLocalId: const Value('task-new'),
+          payloadJson: '{"listId":"list-local","title":"带附件的新任务"}',
+          createdAt: now,
+        ),
+      );
+      await db.into(db.todoSyncChanges).insert(
+        TodoSyncChangesCompanion.insert(
+          clientMutationId: 'attachment-new-mutation',
+          entity: 'attachment',
+          op: 'upsert',
+          entityLocalId: const Value('attachment-new'),
+          payloadJson: '{}',
+          createdAt: now.add(const Duration(milliseconds: 1)),
+        ),
+      );
+      final attachmentApi = _CapturingAttachmentUploadApi();
+      final coordinator = SyncCoordinator(
+        db: db,
+        api: SyncApi(_syncClient(), clientId: 'test', deviceId: 'test'),
+        todoApi: _syncClient(),
+        attachmentApi: attachmentApi,
+      );
+
+      expect(await coordinator.push(), 2);
+
+      expect(attachmentApi.registeredTaskServerId, 20);
+      final attachment = await db.select(db.todoAttachments).getSingle();
+      expect(attachment.status, 'uploaded');
+      expect(attachment.serverId, 52);
+      expect(
+        (await db.select(db.todoSyncChanges).get()).map((change) => change.status),
+        everyElement('synced'),
+      );
+    },
+  );
+
   test('template sync registers the local template exactly once', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
@@ -282,6 +359,41 @@ ApiClient _templateClient({
   return ApiClient(dio: dio);
 }
 
+ApiClient _syncClient() {
+  final dio = Dio(BaseOptions(baseUrl: 'https://todo.test'));
+  dio.interceptors.add(
+    InterceptorsWrapper(
+      onRequest: (options, handler) {
+        final changes = ((options.data as Map?)?['changes'] as List? ?? [])
+            .cast<Map<String, dynamic>>();
+        handler.resolve(
+          Response<Map<String, dynamic>>(
+            requestOptions: options,
+            data: {
+              'code': 0,
+              'data': {
+                'ok': true,
+                'accepted': changes
+                    .map(
+                      (change) => {
+                        'entityType': change['entityType'],
+                        'entityId': 20,
+                        'operation': 'upsert',
+                        'clientMutationId': change['clientMutationId'],
+                      },
+                    )
+                    .toList(),
+                'conflicts': <Map<String, dynamic>>[],
+              },
+            },
+          ),
+        );
+      },
+    ),
+  );
+  return ApiClient(dio: dio);
+}
+
 class _SuccessfulAttachmentUploadApi implements AttachmentUploadApi {
   @override
   Future<void> deleteTaskAttachment({required int serverId}) =>
@@ -302,6 +414,33 @@ class _SuccessfulAttachmentUploadApi implements AttachmentUploadApi {
     required String localPath,
     required String name,
   }) async => 'https://files.example/weekly-report.pdf';
+}
+
+class _CapturingAttachmentUploadApi implements AttachmentUploadApi {
+  int? registeredTaskServerId;
+
+  @override
+  Future<void> deleteTaskAttachment({required int serverId}) =>
+      throw StateError('not reached');
+
+  @override
+  Future<int> registerTaskAttachment({
+    required int taskServerId,
+    required String name,
+    required String url,
+    required int size,
+    required String mimeType,
+    required String clientMutationId,
+  }) async {
+    registeredTaskServerId = taskServerId;
+    return 52;
+  }
+
+  @override
+  Future<String> uploadFile({
+    required String localPath,
+    required String name,
+  }) async => 'https://files.example/brief.txt';
 }
 
 class _FailingAttachmentUploadApi implements AttachmentUploadApi {
