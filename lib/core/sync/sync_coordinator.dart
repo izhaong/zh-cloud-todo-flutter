@@ -716,7 +716,7 @@ class SyncCoordinator {
     var hasMore = true;
     while (hasMore) {
       final result = await api.pull(cursor: cursor, limit: limit);
-      for (final change in result.changes) {
+      for (final change in _orderPulledChanges(result.changes)) {
         await _applyPulledChange(change);
         applied++;
       }
@@ -730,6 +730,31 @@ class SyncCoordinator {
       if (result.changes.isEmpty && result.tombstones.isEmpty) break;
     }
     return applied;
+  }
+
+  /// 服务端变更流不承诺父子实体的返回顺序。先应用清单和普通父任务，
+  /// 再应用依赖父任务 ID 的子任务、提醒和检查事项，避免首次第二设备拉取
+  /// 因本地映射尚未建立而静默丢弃子实体。
+  List<SyncChangeDto> _orderPulledChanges(List<SyncChangeDto> changes) {
+    final indexed = changes.indexed.toList()
+      ..sort((left, right) {
+        final byPriority = _pulledChangePriority(
+          left.$2,
+        ).compareTo(_pulledChangePriority(right.$2));
+        return byPriority != 0 ? byPriority : left.$1.compareTo(right.$1);
+      });
+    return indexed.map((entry) => entry.$2).toList();
+  }
+
+  int _pulledChangePriority(SyncChangeDto change) {
+    if (change.entityType == SyncEntities.list) return 0;
+    if (change.entityType == SyncEntities.task) {
+      if (change.payload?['isChecklistItem'] == true) return 5;
+      return change.payload?['parentTaskId'] == null ? 1 : 2;
+    }
+    if (change.entityType == SyncEntities.tag) return 3;
+    if (change.entityType == SyncEntities.taskTag) return 6;
+    return 4;
   }
 
   Future<void> _applyPulledChange(SyncChangeDto change) async {

@@ -360,4 +360,70 @@ void main() {
       expect(checklist.sortOrder, 2);
     },
   );
+
+  test(
+    'pulled checklist waits for its parent when the server returns child first',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final dio = Dio()
+        ..interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (options, handler) => handler.resolve(
+              Response<Map<String, dynamic>>(
+                requestOptions: options,
+                data: {
+                  'code': 0,
+                  'data': {
+                    'changes': [
+                      {
+                        'entityType': 'task',
+                        'entityId': 11,
+                        'operation': 'upsert',
+                        'revision': 2,
+                        'payload': {
+                          'listId': 10,
+                          'parentTaskId': 9,
+                          'title': '先返回的检查事项',
+                          'isChecklistItem': true,
+                          'status': 'TODO',
+                          'sortOrder': 2,
+                        },
+                      },
+                      {
+                        'entityType': 'task',
+                        'entityId': 9,
+                        'operation': 'upsert',
+                        'revision': 1,
+                        'payload': {
+                          'listId': 10,
+                          'title': '后返回的父任务',
+                          'isChecklistItem': false,
+                          'status': 'TODO',
+                        },
+                      },
+                    ],
+                    'tombstones': <Map<String, dynamic>>[],
+                    'nextCursor': 'cursor-child-first',
+                    'hasMore': false,
+                  },
+                },
+              ),
+            ),
+          ),
+        );
+      final client = ApiClient(dio: dio);
+      final coordinator = SyncCoordinator(
+        db: db,
+        api: SyncApi(client, clientId: 'test-client', deviceId: 'test-device'),
+        todoApi: client,
+      );
+
+      await coordinator.pull();
+
+      final checklist = await db.select(db.todoChecklistItems).getSingle();
+      expect(checklist.serverId, 11);
+      expect(checklist.title, '先返回的检查事项');
+    },
+  );
 }
