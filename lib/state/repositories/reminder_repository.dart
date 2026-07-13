@@ -27,13 +27,7 @@ class ReminderRepository {
     String? timeZone,
     bool fixedTimezone = false,
   }) async {
-    if (persistent && (intervalMinutes == null || intervalMinutes <= 0)) {
-      throw ArgumentError.value(
-        intervalMinutes,
-        'intervalMinutes',
-        '持续提醒间隔必须为正分钟数',
-      );
-    }
+    _validatePersistentInterval(persistent, intervalMinutes);
     final now = DateTime.now();
     final id = _uuid.v4();
     final mutationId = _uuid.v4();
@@ -69,6 +63,88 @@ class ReminderRepository {
       );
     });
     return row;
+  }
+
+  Future<TodoReminder> update({
+    required String id,
+    required DateTime fireAt,
+    required String anchorType,
+    int? offsetMinutes,
+    required bool persistent,
+    int? intervalMinutes,
+    String? timeZone,
+    required bool fixedTimezone,
+  }) async {
+    _validatePersistentInterval(persistent, intervalMinutes);
+    final existing = await (_db.select(
+      _db.todoReminders,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (existing == null) {
+      throw StateError('提醒规则不存在：$id');
+    }
+
+    final now = DateTime.now();
+    final mutationId = _uuid.v4();
+    late TodoReminder row;
+    await _db.transaction(() async {
+      await (_db.update(
+        _db.todoReminders,
+      )..where((t) => t.id.equals(id))).write(
+        TodoRemindersCompanion(
+          remindAt: Value(fireAt),
+          anchorType: Value(anchorType),
+          offsetMinutes: Value(offsetMinutes),
+          persistent: Value(persistent),
+          intervalMinutes: Value(intervalMinutes),
+          timeZone: Value(timeZone),
+          fixedTimezone: Value(fixedTimezone),
+          clientMutationId: Value(mutationId),
+          updatedAt: Value(now),
+        ),
+      );
+      row = await (_db.select(
+        _db.todoReminders,
+      )..where((t) => t.id.equals(id))).getSingle();
+      await _queue.enqueue(
+        entity: SyncEntities.reminder,
+        op: SyncOps.upsert,
+        localId: row.id,
+        serverId: row.serverId,
+        clientMutationId: mutationId,
+        payload: _payload(row),
+      );
+    });
+    return row;
+  }
+
+  Future<void> remove(String id) async {
+    final row = await (_db.select(
+      _db.todoReminders,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (row == null) {
+      throw StateError('提醒规则不存在：$id');
+    }
+
+    await _db.transaction(() async {
+      await (_db.delete(_db.todoReminders)..where((t) => t.id.equals(id))).go();
+      await _queue.enqueue(
+        entity: SyncEntities.reminder,
+        op: SyncOps.delete,
+        localId: row.id,
+        serverId: row.serverId,
+        payload: {'id': row.id, 'serverId': row.serverId},
+      );
+    });
+  }
+
+  void _validatePersistentInterval(bool persistent, int? intervalMinutes) {
+    if (!persistent) return;
+    if (intervalMinutes != null && intervalMinutes > 0) return;
+    throw ArgumentError.value(
+      intervalMinutes,
+      'intervalMinutes',
+      '持续提醒间隔必须为正分钟数',
+    );
   }
 
   Map<String, dynamic> _payload(TodoReminder row) => {

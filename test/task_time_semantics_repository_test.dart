@@ -118,4 +118,48 @@ void main() {
       expect(firstPayload['anchorType'], 'START');
     },
   );
+
+  test('updates and deletes reminder rules through the outbox', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final reminders = ReminderRepository(db, SyncChangeQueue(db));
+
+    final first = await reminders.create(
+      taskId: 'task-1',
+      fireAt: DateTime(2026, 7, 13, 9),
+    );
+    final second = await reminders.create(
+      taskId: 'task-1',
+      fireAt: DateTime(2026, 7, 13, 10),
+    );
+
+    final updated = await reminders.update(
+      id: first.id,
+      fireAt: DateTime(2026, 7, 13, 9, 30),
+      anchorType: 'END',
+      persistent: true,
+      intervalMinutes: 30,
+      timeZone: 'Asia/Shanghai',
+      fixedTimezone: true,
+    );
+    await reminders.remove(second.id);
+
+    final rows = await db.select(db.todoReminders).get();
+    final changes = await db.select(db.todoSyncChanges).get();
+    final updatePayload =
+        jsonDecode(changes[2].payloadJson) as Map<String, dynamic>;
+
+    expect(rows, hasLength(1));
+    expect(rows.single.id, first.id);
+    expect(updated.anchorType, 'END');
+    expect(updated.persistent, isTrue);
+    expect(updated.intervalMinutes, 30);
+    expect(updated.clientMutationId, isNot(first.clientMutationId));
+    expect(changes, hasLength(4));
+    expect(changes[2].op, 'upsert');
+    expect(changes[2].clientMutationId, updated.clientMutationId);
+    expect(updatePayload['fixedTimezone'], isTrue);
+    expect(changes[3].op, 'delete');
+    expect(changes[3].entityLocalId, second.id);
+  });
 }
