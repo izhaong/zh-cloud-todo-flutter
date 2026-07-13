@@ -106,6 +106,16 @@ class TaskRepository {
     String? listId,
     bool? isPinned,
   }) async {
+    final current = await (_db.select(
+      _db.todoTasks,
+    )..where((t) => t.id.equals(taskId))).getSingle();
+    final nextStartAt = startAt ?? current.startAt;
+    final nextEndAt = endAt ?? current.endAt;
+    if (nextStartAt != null &&
+        nextEndAt != null &&
+        !nextEndAt.isAfter(nextStartAt)) {
+      throw ArgumentError.value(nextEndAt, 'endAt', '结束时间必须晚于开始时间');
+    }
     final now = DateTime.now();
     await (_db.update(_db.todoTasks)..where((t) => t.id.equals(taskId))).write(
       TodoTasksCompanion(

@@ -21,4 +21,20 @@ void main() {
       throwsArgumentError,
     );
   });
+
+  test('rejects an invalid time range when updating a task', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final repository = TaskRepository(db, SyncChangeQueue(db));
+    final task = await repository.create(listId: 'inbox', title: '可编辑时段');
+
+    await expectLater(
+      repository.update(
+        task.id,
+        startAt: DateTime(2026, 7, 13, 10),
+        endAt: DateTime(2026, 7, 13, 9, 30),
+      ),
+      throwsArgumentError,
+    );
+  });
 }
