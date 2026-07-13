@@ -101,8 +101,17 @@ class TodoReminders extends Table {
   IntColumn get serverId => integer().nullable()();
   TextColumn get taskId => text()(); // → todo_task.id
   DateTimeColumn get remindAt => dateTime()();
+  TextColumn get anchorType => text().withDefault(const Constant('ABSOLUTE'))();
+  IntColumn get offsetMinutes => integer().nullable()();
   TextColumn get status =>
       text().withDefault(const Constant('PENDING'))(); // PENDING/DISMISSED/DONE
+  DateTimeColumn get firedAt => dateTime().nullable()();
+  BoolColumn get persistent => boolean().withDefault(const Constant(false))();
+  IntColumn get intervalMinutes => integer().nullable()();
+  TextColumn get timeZone => text().nullable()();
+  BoolColumn get fixedTimezone =>
+      boolean().withDefault(const Constant(false))();
+  TextColumn get clientMutationId => text().nullable()();
   DateTimeColumn get updatedAt => dateTime()();
   DateTimeColumn get createdAt => dateTime()();
 
@@ -239,7 +248,7 @@ class AppDatabase extends _$AppDatabase {
     : super(_open('todo_t${tenantId}_u$userId'));
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -254,8 +263,19 @@ class AppDatabase extends _$AppDatabase {
           await m.deleteTable(table.actualTableName);
         }
         await m.createAll();
+        return;
       } else if (from < 5) {
         await m.addColumn(todoTasks, todoTasks.allDay);
+      }
+      if (from < 6) {
+        await m.addColumn(todoReminders, todoReminders.anchorType);
+        await m.addColumn(todoReminders, todoReminders.offsetMinutes);
+        await m.addColumn(todoReminders, todoReminders.firedAt);
+        await m.addColumn(todoReminders, todoReminders.persistent);
+        await m.addColumn(todoReminders, todoReminders.intervalMinutes);
+        await m.addColumn(todoReminders, todoReminders.timeZone);
+        await m.addColumn(todoReminders, todoReminders.fixedTimezone);
+        await m.addColumn(todoReminders, todoReminders.clientMutationId);
       }
     },
   );

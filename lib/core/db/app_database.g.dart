@@ -2488,6 +2488,29 @@ class $TodoRemindersTable extends TodoReminders
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _anchorTypeMeta = const VerificationMeta(
+    'anchorType',
+  );
+  @override
+  late final GeneratedColumn<String> anchorType = GeneratedColumn<String>(
+    'anchor_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('ABSOLUTE'),
+  );
+  static const VerificationMeta _offsetMinutesMeta = const VerificationMeta(
+    'offsetMinutes',
+  );
+  @override
+  late final GeneratedColumn<int> offsetMinutes = GeneratedColumn<int>(
+    'offset_minutes',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _statusMeta = const VerificationMeta('status');
   @override
   late final GeneratedColumn<String> status = GeneratedColumn<String>(
@@ -2497,6 +2520,80 @@ class $TodoRemindersTable extends TodoReminders
     type: DriftSqlType.string,
     requiredDuringInsert: false,
     defaultValue: const Constant('PENDING'),
+  );
+  static const VerificationMeta _firedAtMeta = const VerificationMeta(
+    'firedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> firedAt = GeneratedColumn<DateTime>(
+    'fired_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _persistentMeta = const VerificationMeta(
+    'persistent',
+  );
+  @override
+  late final GeneratedColumn<bool> persistent = GeneratedColumn<bool>(
+    'persistent',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("persistent" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _intervalMinutesMeta = const VerificationMeta(
+    'intervalMinutes',
+  );
+  @override
+  late final GeneratedColumn<int> intervalMinutes = GeneratedColumn<int>(
+    'interval_minutes',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _timeZoneMeta = const VerificationMeta(
+    'timeZone',
+  );
+  @override
+  late final GeneratedColumn<String> timeZone = GeneratedColumn<String>(
+    'time_zone',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _fixedTimezoneMeta = const VerificationMeta(
+    'fixedTimezone',
+  );
+  @override
+  late final GeneratedColumn<bool> fixedTimezone = GeneratedColumn<bool>(
+    'fixed_timezone',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("fixed_timezone" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _clientMutationIdMeta = const VerificationMeta(
+    'clientMutationId',
+  );
+  @override
+  late final GeneratedColumn<String> clientMutationId = GeneratedColumn<String>(
+    'client_mutation_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _updatedAtMeta = const VerificationMeta(
     'updatedAt',
@@ -2526,7 +2623,15 @@ class $TodoRemindersTable extends TodoReminders
     serverId,
     taskId,
     remindAt,
+    anchorType,
+    offsetMinutes,
     status,
+    firedAt,
+    persistent,
+    intervalMinutes,
+    timeZone,
+    fixedTimezone,
+    clientMutationId,
     updatedAt,
     createdAt,
   ];
@@ -2569,10 +2674,70 @@ class $TodoRemindersTable extends TodoReminders
     } else if (isInserting) {
       context.missing(_remindAtMeta);
     }
+    if (data.containsKey('anchor_type')) {
+      context.handle(
+        _anchorTypeMeta,
+        anchorType.isAcceptableOrUnknown(data['anchor_type']!, _anchorTypeMeta),
+      );
+    }
+    if (data.containsKey('offset_minutes')) {
+      context.handle(
+        _offsetMinutesMeta,
+        offsetMinutes.isAcceptableOrUnknown(
+          data['offset_minutes']!,
+          _offsetMinutesMeta,
+        ),
+      );
+    }
     if (data.containsKey('status')) {
       context.handle(
         _statusMeta,
         status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    }
+    if (data.containsKey('fired_at')) {
+      context.handle(
+        _firedAtMeta,
+        firedAt.isAcceptableOrUnknown(data['fired_at']!, _firedAtMeta),
+      );
+    }
+    if (data.containsKey('persistent')) {
+      context.handle(
+        _persistentMeta,
+        persistent.isAcceptableOrUnknown(data['persistent']!, _persistentMeta),
+      );
+    }
+    if (data.containsKey('interval_minutes')) {
+      context.handle(
+        _intervalMinutesMeta,
+        intervalMinutes.isAcceptableOrUnknown(
+          data['interval_minutes']!,
+          _intervalMinutesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('time_zone')) {
+      context.handle(
+        _timeZoneMeta,
+        timeZone.isAcceptableOrUnknown(data['time_zone']!, _timeZoneMeta),
+      );
+    }
+    if (data.containsKey('fixed_timezone')) {
+      context.handle(
+        _fixedTimezoneMeta,
+        fixedTimezone.isAcceptableOrUnknown(
+          data['fixed_timezone']!,
+          _fixedTimezoneMeta,
+        ),
+      );
+    }
+    if (data.containsKey('client_mutation_id')) {
+      context.handle(
+        _clientMutationIdMeta,
+        clientMutationId.isAcceptableOrUnknown(
+          data['client_mutation_id']!,
+          _clientMutationIdMeta,
+        ),
       );
     }
     if (data.containsKey('updated_at')) {
@@ -2616,10 +2781,42 @@ class $TodoRemindersTable extends TodoReminders
         DriftSqlType.dateTime,
         data['${effectivePrefix}remind_at'],
       )!,
+      anchorType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}anchor_type'],
+      )!,
+      offsetMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}offset_minutes'],
+      ),
       status: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}status'],
       )!,
+      firedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}fired_at'],
+      ),
+      persistent: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}persistent'],
+      )!,
+      intervalMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}interval_minutes'],
+      ),
+      timeZone: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}time_zone'],
+      ),
+      fixedTimezone: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}fixed_timezone'],
+      )!,
+      clientMutationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}client_mutation_id'],
+      ),
       updatedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}updated_at'],
@@ -2642,7 +2839,15 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
   final int? serverId;
   final String taskId;
   final DateTime remindAt;
+  final String anchorType;
+  final int? offsetMinutes;
   final String status;
+  final DateTime? firedAt;
+  final bool persistent;
+  final int? intervalMinutes;
+  final String? timeZone;
+  final bool fixedTimezone;
+  final String? clientMutationId;
   final DateTime updatedAt;
   final DateTime createdAt;
   const TodoReminder({
@@ -2650,7 +2855,15 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
     this.serverId,
     required this.taskId,
     required this.remindAt,
+    required this.anchorType,
+    this.offsetMinutes,
     required this.status,
+    this.firedAt,
+    required this.persistent,
+    this.intervalMinutes,
+    this.timeZone,
+    required this.fixedTimezone,
+    this.clientMutationId,
     required this.updatedAt,
     required this.createdAt,
   });
@@ -2663,7 +2876,25 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
     }
     map['task_id'] = Variable<String>(taskId);
     map['remind_at'] = Variable<DateTime>(remindAt);
+    map['anchor_type'] = Variable<String>(anchorType);
+    if (!nullToAbsent || offsetMinutes != null) {
+      map['offset_minutes'] = Variable<int>(offsetMinutes);
+    }
     map['status'] = Variable<String>(status);
+    if (!nullToAbsent || firedAt != null) {
+      map['fired_at'] = Variable<DateTime>(firedAt);
+    }
+    map['persistent'] = Variable<bool>(persistent);
+    if (!nullToAbsent || intervalMinutes != null) {
+      map['interval_minutes'] = Variable<int>(intervalMinutes);
+    }
+    if (!nullToAbsent || timeZone != null) {
+      map['time_zone'] = Variable<String>(timeZone);
+    }
+    map['fixed_timezone'] = Variable<bool>(fixedTimezone);
+    if (!nullToAbsent || clientMutationId != null) {
+      map['client_mutation_id'] = Variable<String>(clientMutationId);
+    }
     map['updated_at'] = Variable<DateTime>(updatedAt);
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
@@ -2677,7 +2908,25 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
           : Value(serverId),
       taskId: Value(taskId),
       remindAt: Value(remindAt),
+      anchorType: Value(anchorType),
+      offsetMinutes: offsetMinutes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(offsetMinutes),
       status: Value(status),
+      firedAt: firedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(firedAt),
+      persistent: Value(persistent),
+      intervalMinutes: intervalMinutes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(intervalMinutes),
+      timeZone: timeZone == null && nullToAbsent
+          ? const Value.absent()
+          : Value(timeZone),
+      fixedTimezone: Value(fixedTimezone),
+      clientMutationId: clientMutationId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(clientMutationId),
       updatedAt: Value(updatedAt),
       createdAt: Value(createdAt),
     );
@@ -2693,7 +2942,15 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
       serverId: serializer.fromJson<int?>(json['serverId']),
       taskId: serializer.fromJson<String>(json['taskId']),
       remindAt: serializer.fromJson<DateTime>(json['remindAt']),
+      anchorType: serializer.fromJson<String>(json['anchorType']),
+      offsetMinutes: serializer.fromJson<int?>(json['offsetMinutes']),
       status: serializer.fromJson<String>(json['status']),
+      firedAt: serializer.fromJson<DateTime?>(json['firedAt']),
+      persistent: serializer.fromJson<bool>(json['persistent']),
+      intervalMinutes: serializer.fromJson<int?>(json['intervalMinutes']),
+      timeZone: serializer.fromJson<String?>(json['timeZone']),
+      fixedTimezone: serializer.fromJson<bool>(json['fixedTimezone']),
+      clientMutationId: serializer.fromJson<String?>(json['clientMutationId']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
@@ -2706,7 +2963,15 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
       'serverId': serializer.toJson<int?>(serverId),
       'taskId': serializer.toJson<String>(taskId),
       'remindAt': serializer.toJson<DateTime>(remindAt),
+      'anchorType': serializer.toJson<String>(anchorType),
+      'offsetMinutes': serializer.toJson<int?>(offsetMinutes),
       'status': serializer.toJson<String>(status),
+      'firedAt': serializer.toJson<DateTime?>(firedAt),
+      'persistent': serializer.toJson<bool>(persistent),
+      'intervalMinutes': serializer.toJson<int?>(intervalMinutes),
+      'timeZone': serializer.toJson<String?>(timeZone),
+      'fixedTimezone': serializer.toJson<bool>(fixedTimezone),
+      'clientMutationId': serializer.toJson<String?>(clientMutationId),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
@@ -2717,7 +2982,15 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
     Value<int?> serverId = const Value.absent(),
     String? taskId,
     DateTime? remindAt,
+    String? anchorType,
+    Value<int?> offsetMinutes = const Value.absent(),
     String? status,
+    Value<DateTime?> firedAt = const Value.absent(),
+    bool? persistent,
+    Value<int?> intervalMinutes = const Value.absent(),
+    Value<String?> timeZone = const Value.absent(),
+    bool? fixedTimezone,
+    Value<String?> clientMutationId = const Value.absent(),
     DateTime? updatedAt,
     DateTime? createdAt,
   }) => TodoReminder(
@@ -2725,7 +2998,21 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
     serverId: serverId.present ? serverId.value : this.serverId,
     taskId: taskId ?? this.taskId,
     remindAt: remindAt ?? this.remindAt,
+    anchorType: anchorType ?? this.anchorType,
+    offsetMinutes: offsetMinutes.present
+        ? offsetMinutes.value
+        : this.offsetMinutes,
     status: status ?? this.status,
+    firedAt: firedAt.present ? firedAt.value : this.firedAt,
+    persistent: persistent ?? this.persistent,
+    intervalMinutes: intervalMinutes.present
+        ? intervalMinutes.value
+        : this.intervalMinutes,
+    timeZone: timeZone.present ? timeZone.value : this.timeZone,
+    fixedTimezone: fixedTimezone ?? this.fixedTimezone,
+    clientMutationId: clientMutationId.present
+        ? clientMutationId.value
+        : this.clientMutationId,
     updatedAt: updatedAt ?? this.updatedAt,
     createdAt: createdAt ?? this.createdAt,
   );
@@ -2735,7 +3022,27 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
       serverId: data.serverId.present ? data.serverId.value : this.serverId,
       taskId: data.taskId.present ? data.taskId.value : this.taskId,
       remindAt: data.remindAt.present ? data.remindAt.value : this.remindAt,
+      anchorType: data.anchorType.present
+          ? data.anchorType.value
+          : this.anchorType,
+      offsetMinutes: data.offsetMinutes.present
+          ? data.offsetMinutes.value
+          : this.offsetMinutes,
       status: data.status.present ? data.status.value : this.status,
+      firedAt: data.firedAt.present ? data.firedAt.value : this.firedAt,
+      persistent: data.persistent.present
+          ? data.persistent.value
+          : this.persistent,
+      intervalMinutes: data.intervalMinutes.present
+          ? data.intervalMinutes.value
+          : this.intervalMinutes,
+      timeZone: data.timeZone.present ? data.timeZone.value : this.timeZone,
+      fixedTimezone: data.fixedTimezone.present
+          ? data.fixedTimezone.value
+          : this.fixedTimezone,
+      clientMutationId: data.clientMutationId.present
+          ? data.clientMutationId.value
+          : this.clientMutationId,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
@@ -2748,7 +3055,15 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
           ..write('serverId: $serverId, ')
           ..write('taskId: $taskId, ')
           ..write('remindAt: $remindAt, ')
+          ..write('anchorType: $anchorType, ')
+          ..write('offsetMinutes: $offsetMinutes, ')
           ..write('status: $status, ')
+          ..write('firedAt: $firedAt, ')
+          ..write('persistent: $persistent, ')
+          ..write('intervalMinutes: $intervalMinutes, ')
+          ..write('timeZone: $timeZone, ')
+          ..write('fixedTimezone: $fixedTimezone, ')
+          ..write('clientMutationId: $clientMutationId, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -2756,8 +3071,23 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, serverId, taskId, remindAt, status, updatedAt, createdAt);
+  int get hashCode => Object.hash(
+    id,
+    serverId,
+    taskId,
+    remindAt,
+    anchorType,
+    offsetMinutes,
+    status,
+    firedAt,
+    persistent,
+    intervalMinutes,
+    timeZone,
+    fixedTimezone,
+    clientMutationId,
+    updatedAt,
+    createdAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -2766,7 +3096,15 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
           other.serverId == this.serverId &&
           other.taskId == this.taskId &&
           other.remindAt == this.remindAt &&
+          other.anchorType == this.anchorType &&
+          other.offsetMinutes == this.offsetMinutes &&
           other.status == this.status &&
+          other.firedAt == this.firedAt &&
+          other.persistent == this.persistent &&
+          other.intervalMinutes == this.intervalMinutes &&
+          other.timeZone == this.timeZone &&
+          other.fixedTimezone == this.fixedTimezone &&
+          other.clientMutationId == this.clientMutationId &&
           other.updatedAt == this.updatedAt &&
           other.createdAt == this.createdAt);
 }
@@ -2776,7 +3114,15 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
   final Value<int?> serverId;
   final Value<String> taskId;
   final Value<DateTime> remindAt;
+  final Value<String> anchorType;
+  final Value<int?> offsetMinutes;
   final Value<String> status;
+  final Value<DateTime?> firedAt;
+  final Value<bool> persistent;
+  final Value<int?> intervalMinutes;
+  final Value<String?> timeZone;
+  final Value<bool> fixedTimezone;
+  final Value<String?> clientMutationId;
   final Value<DateTime> updatedAt;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
@@ -2785,7 +3131,15 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
     this.serverId = const Value.absent(),
     this.taskId = const Value.absent(),
     this.remindAt = const Value.absent(),
+    this.anchorType = const Value.absent(),
+    this.offsetMinutes = const Value.absent(),
     this.status = const Value.absent(),
+    this.firedAt = const Value.absent(),
+    this.persistent = const Value.absent(),
+    this.intervalMinutes = const Value.absent(),
+    this.timeZone = const Value.absent(),
+    this.fixedTimezone = const Value.absent(),
+    this.clientMutationId = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -2795,7 +3149,15 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
     this.serverId = const Value.absent(),
     required String taskId,
     required DateTime remindAt,
+    this.anchorType = const Value.absent(),
+    this.offsetMinutes = const Value.absent(),
     this.status = const Value.absent(),
+    this.firedAt = const Value.absent(),
+    this.persistent = const Value.absent(),
+    this.intervalMinutes = const Value.absent(),
+    this.timeZone = const Value.absent(),
+    this.fixedTimezone = const Value.absent(),
+    this.clientMutationId = const Value.absent(),
     required DateTime updatedAt,
     required DateTime createdAt,
     this.rowid = const Value.absent(),
@@ -2809,7 +3171,15 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
     Expression<int>? serverId,
     Expression<String>? taskId,
     Expression<DateTime>? remindAt,
+    Expression<String>? anchorType,
+    Expression<int>? offsetMinutes,
     Expression<String>? status,
+    Expression<DateTime>? firedAt,
+    Expression<bool>? persistent,
+    Expression<int>? intervalMinutes,
+    Expression<String>? timeZone,
+    Expression<bool>? fixedTimezone,
+    Expression<String>? clientMutationId,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
@@ -2819,7 +3189,15 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
       if (serverId != null) 'server_id': serverId,
       if (taskId != null) 'task_id': taskId,
       if (remindAt != null) 'remind_at': remindAt,
+      if (anchorType != null) 'anchor_type': anchorType,
+      if (offsetMinutes != null) 'offset_minutes': offsetMinutes,
       if (status != null) 'status': status,
+      if (firedAt != null) 'fired_at': firedAt,
+      if (persistent != null) 'persistent': persistent,
+      if (intervalMinutes != null) 'interval_minutes': intervalMinutes,
+      if (timeZone != null) 'time_zone': timeZone,
+      if (fixedTimezone != null) 'fixed_timezone': fixedTimezone,
+      if (clientMutationId != null) 'client_mutation_id': clientMutationId,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
@@ -2831,7 +3209,15 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
     Value<int?>? serverId,
     Value<String>? taskId,
     Value<DateTime>? remindAt,
+    Value<String>? anchorType,
+    Value<int?>? offsetMinutes,
     Value<String>? status,
+    Value<DateTime?>? firedAt,
+    Value<bool>? persistent,
+    Value<int?>? intervalMinutes,
+    Value<String?>? timeZone,
+    Value<bool>? fixedTimezone,
+    Value<String?>? clientMutationId,
     Value<DateTime>? updatedAt,
     Value<DateTime>? createdAt,
     Value<int>? rowid,
@@ -2841,7 +3227,15 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
       serverId: serverId ?? this.serverId,
       taskId: taskId ?? this.taskId,
       remindAt: remindAt ?? this.remindAt,
+      anchorType: anchorType ?? this.anchorType,
+      offsetMinutes: offsetMinutes ?? this.offsetMinutes,
       status: status ?? this.status,
+      firedAt: firedAt ?? this.firedAt,
+      persistent: persistent ?? this.persistent,
+      intervalMinutes: intervalMinutes ?? this.intervalMinutes,
+      timeZone: timeZone ?? this.timeZone,
+      fixedTimezone: fixedTimezone ?? this.fixedTimezone,
+      clientMutationId: clientMutationId ?? this.clientMutationId,
       updatedAt: updatedAt ?? this.updatedAt,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
@@ -2863,8 +3257,32 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
     if (remindAt.present) {
       map['remind_at'] = Variable<DateTime>(remindAt.value);
     }
+    if (anchorType.present) {
+      map['anchor_type'] = Variable<String>(anchorType.value);
+    }
+    if (offsetMinutes.present) {
+      map['offset_minutes'] = Variable<int>(offsetMinutes.value);
+    }
     if (status.present) {
       map['status'] = Variable<String>(status.value);
+    }
+    if (firedAt.present) {
+      map['fired_at'] = Variable<DateTime>(firedAt.value);
+    }
+    if (persistent.present) {
+      map['persistent'] = Variable<bool>(persistent.value);
+    }
+    if (intervalMinutes.present) {
+      map['interval_minutes'] = Variable<int>(intervalMinutes.value);
+    }
+    if (timeZone.present) {
+      map['time_zone'] = Variable<String>(timeZone.value);
+    }
+    if (fixedTimezone.present) {
+      map['fixed_timezone'] = Variable<bool>(fixedTimezone.value);
+    }
+    if (clientMutationId.present) {
+      map['client_mutation_id'] = Variable<String>(clientMutationId.value);
     }
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
@@ -2885,7 +3303,15 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
           ..write('serverId: $serverId, ')
           ..write('taskId: $taskId, ')
           ..write('remindAt: $remindAt, ')
+          ..write('anchorType: $anchorType, ')
+          ..write('offsetMinutes: $offsetMinutes, ')
           ..write('status: $status, ')
+          ..write('firedAt: $firedAt, ')
+          ..write('persistent: $persistent, ')
+          ..write('intervalMinutes: $intervalMinutes, ')
+          ..write('timeZone: $timeZone, ')
+          ..write('fixedTimezone: $fixedTimezone, ')
+          ..write('clientMutationId: $clientMutationId, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
@@ -7278,7 +7704,15 @@ typedef $$TodoRemindersTableCreateCompanionBuilder =
       Value<int?> serverId,
       required String taskId,
       required DateTime remindAt,
+      Value<String> anchorType,
+      Value<int?> offsetMinutes,
       Value<String> status,
+      Value<DateTime?> firedAt,
+      Value<bool> persistent,
+      Value<int?> intervalMinutes,
+      Value<String?> timeZone,
+      Value<bool> fixedTimezone,
+      Value<String?> clientMutationId,
       required DateTime updatedAt,
       required DateTime createdAt,
       Value<int> rowid,
@@ -7289,7 +7723,15 @@ typedef $$TodoRemindersTableUpdateCompanionBuilder =
       Value<int?> serverId,
       Value<String> taskId,
       Value<DateTime> remindAt,
+      Value<String> anchorType,
+      Value<int?> offsetMinutes,
       Value<String> status,
+      Value<DateTime?> firedAt,
+      Value<bool> persistent,
+      Value<int?> intervalMinutes,
+      Value<String?> timeZone,
+      Value<bool> fixedTimezone,
+      Value<String?> clientMutationId,
       Value<DateTime> updatedAt,
       Value<DateTime> createdAt,
       Value<int> rowid,
@@ -7324,8 +7766,48 @@ class $$TodoRemindersTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get anchorType => $composableBuilder(
+    column: $table.anchorType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get offsetMinutes => $composableBuilder(
+    column: $table.offsetMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get status => $composableBuilder(
     column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get firedAt => $composableBuilder(
+    column: $table.firedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get persistent => $composableBuilder(
+    column: $table.persistent,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get intervalMinutes => $composableBuilder(
+    column: $table.intervalMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get timeZone => $composableBuilder(
+    column: $table.timeZone,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get fixedTimezone => $composableBuilder(
+    column: $table.fixedTimezone,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get clientMutationId => $composableBuilder(
+    column: $table.clientMutationId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7369,8 +7851,48 @@ class $$TodoRemindersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get anchorType => $composableBuilder(
+    column: $table.anchorType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get offsetMinutes => $composableBuilder(
+    column: $table.offsetMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get status => $composableBuilder(
     column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get firedAt => $composableBuilder(
+    column: $table.firedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get persistent => $composableBuilder(
+    column: $table.persistent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get intervalMinutes => $composableBuilder(
+    column: $table.intervalMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get timeZone => $composableBuilder(
+    column: $table.timeZone,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get fixedTimezone => $composableBuilder(
+    column: $table.fixedTimezone,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get clientMutationId => $composableBuilder(
+    column: $table.clientMutationId,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -7406,8 +7928,44 @@ class $$TodoRemindersTableAnnotationComposer
   GeneratedColumn<DateTime> get remindAt =>
       $composableBuilder(column: $table.remindAt, builder: (column) => column);
 
+  GeneratedColumn<String> get anchorType => $composableBuilder(
+    column: $table.anchorType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get offsetMinutes => $composableBuilder(
+    column: $table.offsetMinutes,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get status =>
       $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get firedAt =>
+      $composableBuilder(column: $table.firedAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get persistent => $composableBuilder(
+    column: $table.persistent,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get intervalMinutes => $composableBuilder(
+    column: $table.intervalMinutes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get timeZone =>
+      $composableBuilder(column: $table.timeZone, builder: (column) => column);
+
+  GeneratedColumn<bool> get fixedTimezone => $composableBuilder(
+    column: $table.fixedTimezone,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get clientMutationId => $composableBuilder(
+    column: $table.clientMutationId,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
@@ -7451,7 +8009,15 @@ class $$TodoRemindersTableTableManager
                 Value<int?> serverId = const Value.absent(),
                 Value<String> taskId = const Value.absent(),
                 Value<DateTime> remindAt = const Value.absent(),
+                Value<String> anchorType = const Value.absent(),
+                Value<int?> offsetMinutes = const Value.absent(),
                 Value<String> status = const Value.absent(),
+                Value<DateTime?> firedAt = const Value.absent(),
+                Value<bool> persistent = const Value.absent(),
+                Value<int?> intervalMinutes = const Value.absent(),
+                Value<String?> timeZone = const Value.absent(),
+                Value<bool> fixedTimezone = const Value.absent(),
+                Value<String?> clientMutationId = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -7460,7 +8026,15 @@ class $$TodoRemindersTableTableManager
                 serverId: serverId,
                 taskId: taskId,
                 remindAt: remindAt,
+                anchorType: anchorType,
+                offsetMinutes: offsetMinutes,
                 status: status,
+                firedAt: firedAt,
+                persistent: persistent,
+                intervalMinutes: intervalMinutes,
+                timeZone: timeZone,
+                fixedTimezone: fixedTimezone,
+                clientMutationId: clientMutationId,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
                 rowid: rowid,
@@ -7471,7 +8045,15 @@ class $$TodoRemindersTableTableManager
                 Value<int?> serverId = const Value.absent(),
                 required String taskId,
                 required DateTime remindAt,
+                Value<String> anchorType = const Value.absent(),
+                Value<int?> offsetMinutes = const Value.absent(),
                 Value<String> status = const Value.absent(),
+                Value<DateTime?> firedAt = const Value.absent(),
+                Value<bool> persistent = const Value.absent(),
+                Value<int?> intervalMinutes = const Value.absent(),
+                Value<String?> timeZone = const Value.absent(),
+                Value<bool> fixedTimezone = const Value.absent(),
+                Value<String?> clientMutationId = const Value.absent(),
                 required DateTime updatedAt,
                 required DateTime createdAt,
                 Value<int> rowid = const Value.absent(),
@@ -7480,7 +8062,15 @@ class $$TodoRemindersTableTableManager
                 serverId: serverId,
                 taskId: taskId,
                 remindAt: remindAt,
+                anchorType: anchorType,
+                offsetMinutes: offsetMinutes,
                 status: status,
+                firedAt: firedAt,
+                persistent: persistent,
+                intervalMinutes: intervalMinutes,
+                timeZone: timeZone,
+                fixedTimezone: fixedTimezone,
+                clientMutationId: clientMutationId,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
                 rowid: rowid,

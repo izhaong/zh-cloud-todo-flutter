@@ -587,7 +587,14 @@ class SyncCoordinator {
       remindAt: Value(
         _parseDate(payload['remindAt'] ?? payload['fireAt']) ?? now,
       ),
+      anchorType: Value(payload['anchorType']?.toString() ?? 'ABSOLUTE'),
+      offsetMinutes: Value((payload['offsetMinutes'] as num?)?.toInt()),
       status: Value(payload['status']?.toString() ?? 'PENDING'),
+      firedAt: Value(_parseDate(payload['firedAt'])),
+      persistent: Value(payload['persistent'] == true),
+      intervalMinutes: Value((payload['intervalMinutes'] as num?)?.toInt()),
+      timeZone: Value(payload['timeZone']?.toString()),
+      fixedTimezone: Value(payload['fixedTimezone'] == true),
       updatedAt: Value(now),
       createdAt: Value(existing?.createdAt ?? now),
     );

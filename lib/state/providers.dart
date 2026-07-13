@@ -9,6 +9,7 @@ import '../core/sync/sync_coordinator.dart';
 import '../state/session_state.dart';
 import 'repositories/folder_repository.dart';
 import 'repositories/list_repository.dart';
+import 'repositories/reminder_repository.dart';
 import 'repositories/tag_repository.dart';
 import 'repositories/task_repository.dart';
 
@@ -97,6 +98,13 @@ final taskRepositoryProvider = Provider<TaskRepository?>((ref) {
   final queue = ref.watch(syncChangeQueueProvider);
   if (db == null || queue == null) return null;
   return TaskRepository(db, queue);
+});
+
+final reminderRepositoryProvider = Provider<ReminderRepository?>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  final queue = ref.watch(syncChangeQueueProvider);
+  if (db == null || queue == null) return null;
+  return ReminderRepository(db, queue);
 });
 
 // --- 同步 ---------------------------------------------------------------
