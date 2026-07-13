@@ -30,12 +30,12 @@
 - **FR-001**: `TaskRepository` 的时间写入必须在同一 Drift 事务更新任务的 `dueAt`、`startAt`、`endAt`、`allDay`、`timeZone` 和 `fixedTimezone`，然后 enqueue 一个 `task` 变更；Widget 不得直接调用时间 API。
 - **FR-002**: 全天任务只表达日期范围；有 `startAt` 与 `endAt` 的非全天任务必须满足 `endAt` 晚于 `startAt`；跨午夜以次日 `endAt` 表达，禁止隐式截断为同一天。
 - **FR-003**: 固定时区任务保留 IANA 时区标识与墙上时间；非固定时区任务保留创建时区但允许显示层按设备时区转换，转换不得修改 Drift 原值。
-- **FR-004**: 每个提醒都有本地 UUID、可空 `serverId`、任务本地 UUID、`fireAt`、`anchorType`、`offsetMinutes`、`status`、`firedAt` 与 `clientMutationId`；创建、修改、删除、稍后和持续提醒确认均先落库再进入 outbox。
+- **FR-004**: 每个提醒规则都有本地 UUID、可空 `serverId`、任务本地 UUID、`fireAt`、`anchorType`、`offsetMinutes`、`status`、`firedAt` 与 `clientMutationId`；创建、修改、删除和持续提醒确认均先落库再进入 `reminder` outbox。收件箱的完成、忽略和稍后是派发动作，必须使用独立的本地 UUID、派发 serverId、动作类型、可选 minutes 与 `clientMutationId`，不得把派发 ID 写入提醒规则实体。
 - **FR-005**: 一个任务可有多个提醒；同一任务的同一 `clientMutationId` 只对应一个本地提醒，失败、等待、同步成功和删除状态必须在详情与提醒收件箱显示一致。
 - **FR-006**: 重复规则支持 `DAILY`、`WEEKLY`、`MONTHLY`、`YEARLY`、`WEEKDAY` 与 `CUSTOM`，并保存 interval、weekdays、monthDay、startAt、untilAt、countLimit、repeatMode 与时区；未知频率不得写入 outbox。
 - **FR-007**: 跳过和补做记录以规则 UUID 与 occurrence 时间为键；跳过不生成补做，补做不删除原 occurrence，重复执行同一动作必须幂等。
 - **FR-008**: `SyncCoordinator` 必须在任务 serverId 已映射后推送提醒和重复规则，在重复规则 serverId 已映射后推送跳过/补做；拉取顺序必须先任务、再规则、再 occurrence 动作。
-- **FR-009**: 详情与提醒收件箱只能经 Repository/use-case 读取和写入；保留 `specs/002-todo-visual-fidelity/` 的工作区与九张批准 golden，不重新设计视觉结构。
+- **FR-009**: 详情与提醒收件箱只能经 Repository/use-case 读取和写入；派发 ID 用于完成、忽略和稍后，提醒规则 ID 只用于持续提醒配置。保留 `specs/002-todo-visual-fidelity/` 的工作区与九张批准 golden，不重新设计视觉结构。
 
 ## Success Criteria
 

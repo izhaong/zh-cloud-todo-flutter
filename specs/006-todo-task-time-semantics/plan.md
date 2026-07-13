@@ -19,7 +19,8 @@ Flutter/Dart、Drift、Riverpod、dio 与 `SyncCoordinator`。现有时间字段
 | --- | --- |
 | `lib/core/db/app_database.dart` | 时间、提醒、重复与 occurrence 动作的 Drift 表与迁移。 |
 | `lib/state/repositories/task_repository.dart` | 任务时间字段的原子更新和 task outbox。 |
-| `lib/state/repositories/reminder_repository.dart` | 提醒创建、修改、删除、稍后和持续提醒确认。 |
+| `lib/state/repositories/reminder_repository.dart` | 提醒规则创建、修改、删除和持续提醒确认。 |
+| `lib/state/repositories/reminder_dispatch_action_repository.dart` | 完成、忽略和稍后派发动作的本地状态与 action outbox；不复用提醒规则 ID。 |
 | `lib/state/repositories/repeat_rule_repository.dart` | 重复规则、跳过和补做的原子写入。 |
 | `lib/core/sync/sync_coordinator.dart` | task → reminder/repeatRule → repeatSkip 的推拉依赖与 ID 回填。 |
 | `lib/features/task/task_detail_pane.dart` | 详情时间、提醒和重复编辑入口。 |

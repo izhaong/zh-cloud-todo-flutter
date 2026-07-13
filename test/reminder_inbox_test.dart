@@ -37,6 +37,21 @@ void main() {
       expect(items.first.taskId, 20);
     });
 
+    test('保留派发 ID 与提醒规则 ID', () {
+      final items = ReminderActionApi.normalize([
+        {
+          'reminderDispatchId': 71,
+          'reminderId': 72,
+          'taskId': 20,
+          'taskTitle': '提醒动作',
+          'fireAt': '2026-07-13T09:00:00',
+        },
+      ]);
+
+      expect(items.single.id, 71);
+      expect(items.single.reminderId, 72);
+    });
+
     test('解析信封 {code,data:{list:[…]}}', () {
       final body = {
         'code': 0,

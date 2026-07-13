@@ -311,7 +311,8 @@ class _ReminderTile extends StatelessWidget {
                 IconButton(
                   tooltip: '持续响铃（信息态）',
                   icon: const Icon(Icons.campaign_outlined, size: 18),
-                  onPressed: () => onAct(() => api.persistent(entry.id)),
+                  onPressed: () =>
+                      onAct(() => api.persistent(entry.item.reminderId)),
                 ),
                 IconButton(
                   tooltip: '完成',

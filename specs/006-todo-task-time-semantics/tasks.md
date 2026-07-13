@@ -4,8 +4,8 @@
 
 - [ ] T001 在 `test/task_time_semantics_repository_test.dart` 写跨午夜、全天、固定时区和非法结束时间的失败测试。
 - [ ] T002 在 `lib/core/db/app_database.dart` 与 `lib/state/repositories/task_repository.dart` 实现时间字段事务更新和 task outbox；运行 T001 至通过。
-- [ ] T003 在 `test/task_time_semantics_repository_test.dart` 写单提醒、多提醒、结束提醒、稍后和持续提醒的失败测试。
-- [ ] T004 新建 `lib/state/repositories/reminder_repository.dart`，使每个提醒动作先写 Drift 再 enqueue；运行 T003 至通过。
+- [ ] T003 在 `test/task_time_semantics_repository_test.dart` 写单提醒、多提醒、结束提醒、持续提醒，以及派发 ID 与提醒规则 ID 分离的稍后/完成/忽略失败测试。
+- [ ] T004 新建 `lib/state/repositories/reminder_repository.dart` 与 `lib/state/repositories/reminder_dispatch_action_repository.dart`，使提醒规则和派发动作分别先写 Drift 再 enqueue；运行 T003 至通过。
 - [ ] T005 在 `test/task_time_semantics_repository_test.dart` 写六类频率、跳过、补做和无效规则的失败测试。
 - [ ] T006 新建 `lib/state/repositories/repeat_rule_repository.dart`，实现规则与 occurrence 动作的原子写入；运行 T005 至通过。
 
