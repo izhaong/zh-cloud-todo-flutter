@@ -60,6 +60,9 @@ class TaskRepository {
     String? parentTaskId,
     bool isPinned = false,
   }) async {
+    if (startAt != null && endAt != null && !endAt.isAfter(startAt)) {
+      throw ArgumentError.value(endAt, 'endAt', '结束时间必须晚于开始时间');
+    }
     final now = DateTime.now();
     final id = _uuid.v4();
     await _db
