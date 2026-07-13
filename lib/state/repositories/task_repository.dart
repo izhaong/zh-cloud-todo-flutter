@@ -57,6 +57,7 @@ class TaskRepository {
     DateTime? startAt,
     DateTime? endAt,
     DateTime? dueAt,
+    bool allDay = false,
     String? parentTaskId,
     bool isPinned = false,
   }) async {
@@ -79,6 +80,7 @@ class TaskRepository {
             startAt: Value(startAt),
             endAt: Value(endAt),
             dueAt: Value(dueAt),
+            allDay: Value(allDay),
             updatedAt: now,
             createdAt: now,
           ),
@@ -103,6 +105,7 @@ class TaskRepository {
     DateTime? startAt,
     DateTime? endAt,
     DateTime? dueAt,
+    bool? allDay,
     String? listId,
     bool? isPinned,
   }) async {
@@ -128,6 +131,7 @@ class TaskRepository {
         startAt: startAt == null ? const Value.absent() : Value(startAt),
         endAt: endAt == null ? const Value.absent() : Value(endAt),
         dueAt: dueAt == null ? const Value.absent() : Value(dueAt),
+        allDay: allDay == null ? const Value.absent() : Value(allDay),
         listId: listId == null ? const Value.absent() : Value(listId),
         updatedAt: Value(now),
       ),

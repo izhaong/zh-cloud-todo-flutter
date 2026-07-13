@@ -614,6 +614,19 @@ class $TodoTasksTable extends TodoTasks
     type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _allDayMeta = const VerificationMeta('allDay');
+  @override
+  late final GeneratedColumn<bool> allDay = GeneratedColumn<bool>(
+    'all_day',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("all_day" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _updatedAtMeta = const VerificationMeta(
     'updatedAt',
   );
@@ -651,6 +664,7 @@ class $TodoTasksTable extends TodoTasks
     startAt,
     endAt,
     dueAt,
+    allDay,
     updatedAt,
     createdAt,
   ];
@@ -753,6 +767,12 @@ class $TodoTasksTable extends TodoTasks
         dueAt.isAcceptableOrUnknown(data['due_at']!, _dueAtMeta),
       );
     }
+    if (data.containsKey('all_day')) {
+      context.handle(
+        _allDayMeta,
+        allDay.isAcceptableOrUnknown(data['all_day']!, _allDayMeta),
+      );
+    }
     if (data.containsKey('updated_at')) {
       context.handle(
         _updatedAtMeta,
@@ -830,6 +850,10 @@ class $TodoTasksTable extends TodoTasks
         DriftSqlType.dateTime,
         data['${effectivePrefix}due_at'],
       ),
+      allDay: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}all_day'],
+      )!,
       updatedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}updated_at'],
@@ -861,6 +885,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
   final DateTime? startAt;
   final DateTime? endAt;
   final DateTime? dueAt;
+  final bool allDay;
   final DateTime updatedAt;
   final DateTime createdAt;
   const TodoTask({
@@ -877,6 +902,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     this.startAt,
     this.endAt,
     this.dueAt,
+    required this.allDay,
     required this.updatedAt,
     required this.createdAt,
   });
@@ -908,6 +934,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     if (!nullToAbsent || dueAt != null) {
       map['due_at'] = Variable<DateTime>(dueAt);
     }
+    map['all_day'] = Variable<bool>(allDay);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
@@ -940,6 +967,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       dueAt: dueAt == null && nullToAbsent
           ? const Value.absent()
           : Value(dueAt),
+      allDay: Value(allDay),
       updatedAt: Value(updatedAt),
       createdAt: Value(createdAt),
     );
@@ -964,6 +992,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       startAt: serializer.fromJson<DateTime?>(json['startAt']),
       endAt: serializer.fromJson<DateTime?>(json['endAt']),
       dueAt: serializer.fromJson<DateTime?>(json['dueAt']),
+      allDay: serializer.fromJson<bool>(json['allDay']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
@@ -985,6 +1014,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       'startAt': serializer.toJson<DateTime?>(startAt),
       'endAt': serializer.toJson<DateTime?>(endAt),
       'dueAt': serializer.toJson<DateTime?>(dueAt),
+      'allDay': serializer.toJson<bool>(allDay),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
@@ -1004,6 +1034,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     Value<DateTime?> startAt = const Value.absent(),
     Value<DateTime?> endAt = const Value.absent(),
     Value<DateTime?> dueAt = const Value.absent(),
+    bool? allDay,
     DateTime? updatedAt,
     DateTime? createdAt,
   }) => TodoTask(
@@ -1020,6 +1051,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     startAt: startAt.present ? startAt.value : this.startAt,
     endAt: endAt.present ? endAt.value : this.endAt,
     dueAt: dueAt.present ? dueAt.value : this.dueAt,
+    allDay: allDay ?? this.allDay,
     updatedAt: updatedAt ?? this.updatedAt,
     createdAt: createdAt ?? this.createdAt,
   );
@@ -1042,6 +1074,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       startAt: data.startAt.present ? data.startAt.value : this.startAt,
       endAt: data.endAt.present ? data.endAt.value : this.endAt,
       dueAt: data.dueAt.present ? data.dueAt.value : this.dueAt,
+      allDay: data.allDay.present ? data.allDay.value : this.allDay,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
@@ -1063,6 +1096,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           ..write('startAt: $startAt, ')
           ..write('endAt: $endAt, ')
           ..write('dueAt: $dueAt, ')
+          ..write('allDay: $allDay, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -1084,6 +1118,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     startAt,
     endAt,
     dueAt,
+    allDay,
     updatedAt,
     createdAt,
   );
@@ -1104,6 +1139,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           other.startAt == this.startAt &&
           other.endAt == this.endAt &&
           other.dueAt == this.dueAt &&
+          other.allDay == this.allDay &&
           other.updatedAt == this.updatedAt &&
           other.createdAt == this.createdAt);
 }
@@ -1122,6 +1158,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
   final Value<DateTime?> startAt;
   final Value<DateTime?> endAt;
   final Value<DateTime?> dueAt;
+  final Value<bool> allDay;
   final Value<DateTime> updatedAt;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
@@ -1139,6 +1176,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     this.startAt = const Value.absent(),
     this.endAt = const Value.absent(),
     this.dueAt = const Value.absent(),
+    this.allDay = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -1157,6 +1195,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     this.startAt = const Value.absent(),
     this.endAt = const Value.absent(),
     this.dueAt = const Value.absent(),
+    this.allDay = const Value.absent(),
     required DateTime updatedAt,
     required DateTime createdAt,
     this.rowid = const Value.absent(),
@@ -1179,6 +1218,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     Expression<DateTime>? startAt,
     Expression<DateTime>? endAt,
     Expression<DateTime>? dueAt,
+    Expression<bool>? allDay,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
@@ -1197,6 +1237,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
       if (startAt != null) 'start_at': startAt,
       if (endAt != null) 'end_at': endAt,
       if (dueAt != null) 'due_at': dueAt,
+      if (allDay != null) 'all_day': allDay,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
@@ -1217,6 +1258,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     Value<DateTime?>? startAt,
     Value<DateTime?>? endAt,
     Value<DateTime?>? dueAt,
+    Value<bool>? allDay,
     Value<DateTime>? updatedAt,
     Value<DateTime>? createdAt,
     Value<int>? rowid,
@@ -1235,6 +1277,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
       startAt: startAt ?? this.startAt,
       endAt: endAt ?? this.endAt,
       dueAt: dueAt ?? this.dueAt,
+      allDay: allDay ?? this.allDay,
       updatedAt: updatedAt ?? this.updatedAt,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
@@ -1283,6 +1326,9 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     if (dueAt.present) {
       map['due_at'] = Variable<DateTime>(dueAt.value);
     }
+    if (allDay.present) {
+      map['all_day'] = Variable<bool>(allDay.value);
+    }
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
@@ -1311,6 +1357,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
           ..write('startAt: $startAt, ')
           ..write('endAt: $endAt, ')
           ..write('dueAt: $dueAt, ')
+          ..write('allDay: $allDay, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
@@ -6239,6 +6286,7 @@ typedef $$TodoTasksTableCreateCompanionBuilder =
       Value<DateTime?> startAt,
       Value<DateTime?> endAt,
       Value<DateTime?> dueAt,
+      Value<bool> allDay,
       required DateTime updatedAt,
       required DateTime createdAt,
       Value<int> rowid,
@@ -6258,6 +6306,7 @@ typedef $$TodoTasksTableUpdateCompanionBuilder =
       Value<DateTime?> startAt,
       Value<DateTime?> endAt,
       Value<DateTime?> dueAt,
+      Value<bool> allDay,
       Value<DateTime> updatedAt,
       Value<DateTime> createdAt,
       Value<int> rowid,
@@ -6334,6 +6383,11 @@ class $$TodoTasksTableFilterComposer
 
   ColumnFilters<DateTime> get dueAt => $composableBuilder(
     column: $table.dueAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get allDay => $composableBuilder(
+    column: $table.allDay,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6422,6 +6476,11 @@ class $$TodoTasksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get allDay => $composableBuilder(
+    column: $table.allDay,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
@@ -6485,6 +6544,9 @@ class $$TodoTasksTableAnnotationComposer
   GeneratedColumn<DateTime> get dueAt =>
       $composableBuilder(column: $table.dueAt, builder: (column) => column);
 
+  GeneratedColumn<bool> get allDay =>
+      $composableBuilder(column: $table.allDay, builder: (column) => column);
+
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 
@@ -6533,6 +6595,7 @@ class $$TodoTasksTableTableManager
                 Value<DateTime?> startAt = const Value.absent(),
                 Value<DateTime?> endAt = const Value.absent(),
                 Value<DateTime?> dueAt = const Value.absent(),
+                Value<bool> allDay = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -6550,6 +6613,7 @@ class $$TodoTasksTableTableManager
                 startAt: startAt,
                 endAt: endAt,
                 dueAt: dueAt,
+                allDay: allDay,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
                 rowid: rowid,
@@ -6569,6 +6633,7 @@ class $$TodoTasksTableTableManager
                 Value<DateTime?> startAt = const Value.absent(),
                 Value<DateTime?> endAt = const Value.absent(),
                 Value<DateTime?> dueAt = const Value.absent(),
+                Value<bool> allDay = const Value.absent(),
                 required DateTime updatedAt,
                 required DateTime createdAt,
                 Value<int> rowid = const Value.absent(),
@@ -6586,6 +6651,7 @@ class $$TodoTasksTableTableManager
                 startAt: startAt,
                 endAt: endAt,
                 dueAt: dueAt,
+                allDay: allDay,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
                 rowid: rowid,

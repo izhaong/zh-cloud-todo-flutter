@@ -51,6 +51,7 @@ class TodoTasks extends Table {
   DateTimeColumn get startAt => dateTime().nullable()();
   DateTimeColumn get endAt => dateTime().nullable()();
   DateTimeColumn get dueAt => dateTime().nullable()();
+  BoolColumn get allDay => boolean().withDefault(const Constant(false))();
   DateTimeColumn get updatedAt => dateTime()();
   DateTimeColumn get createdAt => dateTime()();
 
@@ -238,7 +239,7 @@ class AppDatabase extends _$AppDatabase {
     : super(_open('todo_t${tenantId}_u$userId'));
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -253,6 +254,8 @@ class AppDatabase extends _$AppDatabase {
           await m.deleteTable(table.actualTableName);
         }
         await m.createAll();
+      } else if (from < 5) {
+        await m.addColumn(todoTasks, todoTasks.allDay);
       }
     },
   );
