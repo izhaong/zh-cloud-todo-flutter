@@ -69,6 +69,16 @@ final syncChangeQueueProvider = Provider<SyncChangeQueue?>((ref) {
   return SyncChangeQueue(db);
 });
 
+/// 需要用户显式恢复的同步变更。网络失败的 queued 项会按退避自动重试；
+/// failed 项保留在本地，供 UI 展示并在用户确认后重新入队。
+final failedSyncChangesProvider = StreamProvider<List<TodoSyncChange>>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  if (db == null) return const Stream<List<TodoSyncChange>>.empty();
+  return (db.select(db.todoSyncChanges)
+        ..where((row) => row.status.equals('failed')))
+      .watch();
+});
+
 /// ----- 各领域仓库 ---------------------------------------------------------
 
 final listRepositoryProvider = Provider<ListRepository?>((ref) {

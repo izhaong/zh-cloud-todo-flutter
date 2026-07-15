@@ -17,6 +17,7 @@ import '../task/task_detail_pane.dart';
 import '../task/tasks_by_list_page.dart';
 import '../task/views/calendar_view.dart';
 import '../tag/tag_page.dart';
+import 'sync_recovery_banner.dart';
 import 'todo_workspace.dart';
 
 /// Todo 主壳：只负责状态与内容分发，布局交给 [TodoWorkspace]。
@@ -115,6 +116,15 @@ class _HomeShellState extends ConsumerState<HomeShell>
     } finally {
       _syncing = false;
     }
+  }
+
+  Future<void> _retryFailedSyncChanges(List<TodoSyncChange> changes) async {
+    final queue = ref.read(syncChangeQueueProvider);
+    if (queue == null) return;
+    for (final change in changes) {
+      await queue.retryNow(change.id);
+    }
+    await _triggerSync();
   }
 
   void _selectSection(Section section) {
@@ -287,6 +297,9 @@ class _HomeShellState extends ConsumerState<HomeShell>
 
   @override
   Widget build(BuildContext context) {
+    final failedChanges =
+        ref.watch(failedSyncChangesProvider).valueOrNull ??
+        const <TodoSyncChange>[];
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
@@ -297,7 +310,21 @@ class _HomeShellState extends ConsumerState<HomeShell>
           section: _section,
           smart: _smart,
           listId: _listId,
-          content: _buildContent(),
+          content: Stack(
+            children: [
+              _buildContent(),
+              if (failedChanges.isNotEmpty)
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  left: 12,
+                  child: SyncRecoveryBanner(
+                    failedCount: failedChanges.length,
+                    onRetry: () => _retryFailedSyncChanges(failedChanges),
+                  ),
+                ),
+            ],
+          ),
           detail: TaskDetailPane(
             taskId: _selectedTaskId,
             embedded: true,
