@@ -47,4 +47,36 @@ class TaskViewActionRepository {
       );
     });
   }
+
+  Future<void> moveKanbanTask(
+    String taskId, {
+    required int priority,
+    required bool completed,
+  }) async {
+    if (priority < 0 || priority > 3) {
+      throw ArgumentError.value(priority, 'priority', '必须介于 0 和 3');
+    }
+
+    await _db.transaction(() async {
+      await (_db.update(
+        _db.todoTasks,
+      )..where((row) => row.id.equals(taskId))).write(
+        TodoTasksCompanion(
+          priority: Value(priority),
+          completed: Value(completed),
+          updatedAt: Value(DateTime.now()),
+        ),
+      );
+      final task = await (_db.select(
+        _db.todoTasks,
+      )..where((row) => row.id.equals(taskId))).getSingle();
+      await _queue.enqueue(
+        entity: SyncEntities.task,
+        op: SyncOps.upsert,
+        localId: task.id,
+        serverId: task.serverId,
+        payload: task.toJson(),
+      );
+    });
+  }
 }

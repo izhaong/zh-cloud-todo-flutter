@@ -57,4 +57,45 @@ void main() {
     expect(queued.single.op, SyncOps.upsert);
     expect(queued.single.entityLocalId, 'task-1');
   });
+
+  test('看板跨列写入明确状态字段并入队', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final now = DateTime.utc(2026, 7, 15, 9);
+    await db
+        .into(db.todoLists)
+        .insert(
+          TodoListsCompanion.insert(
+            id: 'list-inbox',
+            name: '收集箱',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    await db
+        .into(db.todoTasks)
+        .insert(
+          TodoTasksCompanion.insert(
+            id: 'task-1',
+            listId: 'list-inbox',
+            title: '跨列任务',
+            priority: const Value(0),
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    final repository = TaskViewActionRepository(db, SyncChangeQueue(db));
+
+    await repository.moveKanbanTask('task-1', priority: 3, completed: true);
+
+    final task = await (db.select(
+      db.todoTasks,
+    )..where((row) => row.id.equals('task-1'))).getSingle();
+    final queued = await db.select(db.todoSyncChanges).get();
+    expect(task.priority, 3);
+    expect(task.completed, isTrue);
+    expect(queued, hasLength(1));
+    expect(queued.single.entity, SyncEntities.task);
+    expect(queued.single.op, SyncOps.upsert);
+  });
 }
