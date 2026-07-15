@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
+import 'package:zh_cloud_todo_flutter/core/sync/sync_entities.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/task_batch_edit_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_query_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_repository.dart';
 
@@ -183,5 +185,45 @@ void main() {
       'task-ordered-b',
       'task-ordered-unpinned',
     ]);
+  });
+
+  test('批量编辑为每个任务返回结果，成功项原子入队', () async {
+    final batchRepository = TaskBatchEditRepository(db, SyncChangeQueue(db));
+
+    final results = await batchRepository.apply(
+      const TaskBatchEditCommand(
+        taskIds: ['task-1', 'task-missing', 'task-2'],
+        priority: 3,
+        completed: true,
+        isPinned: true,
+      ),
+    );
+
+    expect(results.map((result) => result.status), [
+      TaskBatchEditStatus.success,
+      TaskBatchEditStatus.failed,
+      TaskBatchEditStatus.success,
+    ]);
+    expect(results[1].reason, '任务不存在');
+
+    final changed = await (db.select(
+      db.todoTasks,
+    )..where((row) => row.id.isIn(['task-1', 'task-2']))).get();
+    expect(changed, hasLength(2));
+    expect(changed.every((task) => task.priority == 3), isTrue);
+    expect(changed.every((task) => task.completed), isTrue);
+    expect(changed.every((task) => task.isPinned), isTrue);
+
+    final queued = await db.select(db.todoSyncChanges).get();
+    expect(queued, hasLength(2));
+    expect(
+      queued.every((change) => change.entity == SyncEntities.task),
+      isTrue,
+    );
+    expect(queued.every((change) => change.op == SyncOps.upsert), isTrue);
+    expect(queued.map((change) => change.entityLocalId).toSet(), {
+      'task-1',
+      'task-2',
+    });
   });
 }
