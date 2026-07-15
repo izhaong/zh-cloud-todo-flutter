@@ -8,6 +8,7 @@ import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/reminder_dispatch_action_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/reminder_repository.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/repeat_rule_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_repository.dart';
 
 void main() {
@@ -216,4 +217,88 @@ void main() {
       expect(payload['intervalMinutes'], 30);
     },
   );
+
+  test('stores a custom repeat rule and its skip through the outbox', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final repeats = RepeatRuleRepository(db, SyncChangeQueue(db));
+
+    final rule = await repeats.save(
+      taskId: 'task-1',
+      frequency: 'CUSTOM',
+      intervalValue: 2,
+      weekdays: const [1, 3, 5],
+      startAt: DateTime(2026, 7, 13, 9),
+      repeatMode: 'ON_DUE',
+      timeZone: 'Asia/Shanghai',
+    );
+    final skip = await repeats.skip(
+      repeatRuleId: rule.id,
+      taskId: 'task-1',
+      occurrenceAt: DateTime(2026, 7, 15, 9),
+    );
+
+    final rules = await db.select(db.todoRepeatRules).get();
+    final skips = await db.select(db.todoRepeatSkips).get();
+    final changes = await db.select(db.todoSyncChanges).get();
+    final rulePayload =
+        jsonDecode(changes.first.payloadJson) as Map<String, dynamic>;
+    final skipPayload =
+        jsonDecode(changes.last.payloadJson) as Map<String, dynamic>;
+
+    expect(rules, hasLength(1));
+    expect(rule.repeatMode, 'ON_DUE');
+    expect(rule.timeZone, 'Asia/Shanghai');
+    expect(skips.single.id, skip.id);
+    expect(changes.map((change) => change.entity), [
+      'repeat_rule',
+      'repeat_skip',
+    ]);
+    expect(rulePayload['frequency'], 'custom');
+    expect(rulePayload['weekdays'], '1,3,5');
+    expect(skipPayload['repeatRuleId'], rule.id);
+  });
+
+  test('rejects a custom repeat rule without explicit weekdays', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final repeats = RepeatRuleRepository(db, SyncChangeQueue(db));
+
+    await expectLater(
+      repeats.save(
+        taskId: 'task-1',
+        frequency: 'CUSTOM',
+        startAt: DateTime(2026, 7, 13, 9),
+        repeatMode: 'ON_DUE',
+      ),
+      throwsArgumentError,
+    );
+  });
+
+  test('stores all six supported repeat frequencies locally', () async {
+    const frequencies = [
+      'DAILY',
+      'WEEKLY',
+      'MONTHLY',
+      'YEARLY',
+      'WEEKDAY',
+      'CUSTOM',
+    ];
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final repeats = RepeatRuleRepository(db, SyncChangeQueue(db));
+    for (final frequency in frequencies) {
+      final rule = await repeats.save(
+        taskId: 'task-$frequency',
+        frequency: frequency,
+        weekdays: frequency == 'CUSTOM' ? const [1, 3, 5] : null,
+        startAt: DateTime(2026, 7, 13, 9),
+      );
+
+      expect(rule.freq, frequency);
+      if (frequency == 'WEEKDAY') {
+        expect(rule.byDay, '1,2,3,4,5');
+      }
+    }
+  });
 }

@@ -127,7 +127,13 @@ class TodoRepeatRules extends Table {
   TextColumn get freq => text()(); // DAILY/WEEKLY/MONTHLY/YEARLY/CUSTOM
   IntColumn get interval => integer().withDefault(const Constant(1))();
   TextColumn get byDay => text().nullable()(); // 逗号分隔，如 MO,WE,FR
+  IntColumn get monthDay => integer().nullable()();
+  DateTimeColumn get startAt => dateTime().nullable()();
   DateTimeColumn get until => dateTime().nullable()();
+  IntColumn get countLimit => integer().nullable()();
+  BoolColumn get enabled => boolean().withDefault(const Constant(true))();
+  TextColumn get repeatMode => text().withDefault(const Constant('ON_DUE'))();
+  TextColumn get timeZone => text().nullable()();
   DateTimeColumn get updatedAt => dateTime()();
   DateTimeColumn get createdAt => dateTime()();
 
@@ -248,7 +254,7 @@ class AppDatabase extends _$AppDatabase {
     : super(_open('todo_t${tenantId}_u$userId'));
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -276,6 +282,14 @@ class AppDatabase extends _$AppDatabase {
         await m.addColumn(todoReminders, todoReminders.timeZone);
         await m.addColumn(todoReminders, todoReminders.fixedTimezone);
         await m.addColumn(todoReminders, todoReminders.clientMutationId);
+      }
+      if (from < 7) {
+        await m.addColumn(todoRepeatRules, todoRepeatRules.monthDay);
+        await m.addColumn(todoRepeatRules, todoRepeatRules.startAt);
+        await m.addColumn(todoRepeatRules, todoRepeatRules.countLimit);
+        await m.addColumn(todoRepeatRules, todoRepeatRules.enabled);
+        await m.addColumn(todoRepeatRules, todoRepeatRules.repeatMode);
+        await m.addColumn(todoRepeatRules, todoRepeatRules.timeZone);
       }
     },
   );

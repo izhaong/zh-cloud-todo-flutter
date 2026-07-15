@@ -624,9 +624,10 @@ class SyncCoordinator {
       serverId: Value(serverId),
       taskId: Value(localTaskId),
       freq: Value(
-        payload['frequency']?.toString() ??
-            payload['freq']?.toString() ??
-            'DAILY',
+        (payload['frequency']?.toString() ??
+                payload['freq']?.toString() ??
+                'DAILY')
+            .toUpperCase(),
       ),
       interval: Value(
         (payload['intervalValue'] as num?)?.toInt() ??
@@ -636,7 +637,13 @@ class SyncCoordinator {
       byDay: Value(
         payload['weekdays']?.toString() ?? payload['byDay']?.toString(),
       ),
+      monthDay: Value((payload['monthDay'] as num?)?.toInt()),
+      startAt: Value(_parseDate(payload['startAt'])),
       until: Value(_parseDate(payload['untilAt'] ?? payload['until'])),
+      countLimit: Value((payload['countLimit'] as num?)?.toInt()),
+      enabled: Value(payload['enabled'] as bool? ?? true),
+      repeatMode: Value(payload['repeatMode']?.toString() ?? 'ON_DUE'),
+      timeZone: Value(payload['timeZone']?.toString()),
       updatedAt: Value(now),
       createdAt: Value(existing?.createdAt ?? now),
     );

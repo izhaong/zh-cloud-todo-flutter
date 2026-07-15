@@ -12,6 +12,7 @@ import 'repositories/list_repository.dart';
 import 'repositories/reminder_dispatch_action_repository.dart';
 import 'repositories/reminder_inbox_repository.dart';
 import 'repositories/reminder_repository.dart';
+import 'repositories/repeat_rule_repository.dart';
 import 'repositories/tag_repository.dart';
 import 'repositories/task_repository.dart';
 
@@ -107,6 +108,13 @@ final reminderRepositoryProvider = Provider<ReminderRepository?>((ref) {
   final queue = ref.watch(syncChangeQueueProvider);
   if (db == null || queue == null) return null;
   return ReminderRepository(db, queue);
+});
+
+final repeatRuleRepositoryProvider = Provider<RepeatRuleRepository?>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  final queue = ref.watch(syncChangeQueueProvider);
+  if (db == null || queue == null) return null;
+  return RepeatRuleRepository(db, queue);
 });
 
 final reminderDispatchActionRepositoryProvider =

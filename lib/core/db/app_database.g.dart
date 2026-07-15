@@ -3385,6 +3385,28 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _monthDayMeta = const VerificationMeta(
+    'monthDay',
+  );
+  @override
+  late final GeneratedColumn<int> monthDay = GeneratedColumn<int>(
+    'month_day',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _startAtMeta = const VerificationMeta(
+    'startAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> startAt = GeneratedColumn<DateTime>(
+    'start_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _untilMeta = const VerificationMeta('until');
   @override
   late final GeneratedColumn<DateTime> until = GeneratedColumn<DateTime>(
@@ -3392,6 +3414,55 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
     aliasedName,
     true,
     type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _countLimitMeta = const VerificationMeta(
+    'countLimit',
+  );
+  @override
+  late final GeneratedColumn<int> countLimit = GeneratedColumn<int>(
+    'count_limit',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _enabledMeta = const VerificationMeta(
+    'enabled',
+  );
+  @override
+  late final GeneratedColumn<bool> enabled = GeneratedColumn<bool>(
+    'enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _repeatModeMeta = const VerificationMeta(
+    'repeatMode',
+  );
+  @override
+  late final GeneratedColumn<String> repeatMode = GeneratedColumn<String>(
+    'repeat_mode',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('ON_DUE'),
+  );
+  static const VerificationMeta _timeZoneMeta = const VerificationMeta(
+    'timeZone',
+  );
+  @override
+  late final GeneratedColumn<String> timeZone = GeneratedColumn<String>(
+    'time_zone',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
   static const VerificationMeta _updatedAtMeta = const VerificationMeta(
@@ -3424,7 +3495,13 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
     freq,
     interval,
     byDay,
+    monthDay,
+    startAt,
     until,
+    countLimit,
+    enabled,
+    repeatMode,
+    timeZone,
     updatedAt,
     createdAt,
   ];
@@ -3479,10 +3556,46 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
         byDay.isAcceptableOrUnknown(data['by_day']!, _byDayMeta),
       );
     }
+    if (data.containsKey('month_day')) {
+      context.handle(
+        _monthDayMeta,
+        monthDay.isAcceptableOrUnknown(data['month_day']!, _monthDayMeta),
+      );
+    }
+    if (data.containsKey('start_at')) {
+      context.handle(
+        _startAtMeta,
+        startAt.isAcceptableOrUnknown(data['start_at']!, _startAtMeta),
+      );
+    }
     if (data.containsKey('until')) {
       context.handle(
         _untilMeta,
         until.isAcceptableOrUnknown(data['until']!, _untilMeta),
+      );
+    }
+    if (data.containsKey('count_limit')) {
+      context.handle(
+        _countLimitMeta,
+        countLimit.isAcceptableOrUnknown(data['count_limit']!, _countLimitMeta),
+      );
+    }
+    if (data.containsKey('enabled')) {
+      context.handle(
+        _enabledMeta,
+        enabled.isAcceptableOrUnknown(data['enabled']!, _enabledMeta),
+      );
+    }
+    if (data.containsKey('repeat_mode')) {
+      context.handle(
+        _repeatModeMeta,
+        repeatMode.isAcceptableOrUnknown(data['repeat_mode']!, _repeatModeMeta),
+      );
+    }
+    if (data.containsKey('time_zone')) {
+      context.handle(
+        _timeZoneMeta,
+        timeZone.isAcceptableOrUnknown(data['time_zone']!, _timeZoneMeta),
       );
     }
     if (data.containsKey('updated_at')) {
@@ -3534,9 +3647,33 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
         DriftSqlType.string,
         data['${effectivePrefix}by_day'],
       ),
+      monthDay: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}month_day'],
+      ),
+      startAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}start_at'],
+      ),
       until: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}until'],
+      ),
+      countLimit: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}count_limit'],
+      ),
+      enabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}enabled'],
+      )!,
+      repeatMode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}repeat_mode'],
+      )!,
+      timeZone: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}time_zone'],
       ),
       updatedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
@@ -3562,7 +3699,13 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
   final String freq;
   final int interval;
   final String? byDay;
+  final int? monthDay;
+  final DateTime? startAt;
   final DateTime? until;
+  final int? countLimit;
+  final bool enabled;
+  final String repeatMode;
+  final String? timeZone;
   final DateTime updatedAt;
   final DateTime createdAt;
   const TodoRepeatRule({
@@ -3572,7 +3715,13 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
     required this.freq,
     required this.interval,
     this.byDay,
+    this.monthDay,
+    this.startAt,
     this.until,
+    this.countLimit,
+    required this.enabled,
+    required this.repeatMode,
+    this.timeZone,
     required this.updatedAt,
     required this.createdAt,
   });
@@ -3589,8 +3738,22 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
     if (!nullToAbsent || byDay != null) {
       map['by_day'] = Variable<String>(byDay);
     }
+    if (!nullToAbsent || monthDay != null) {
+      map['month_day'] = Variable<int>(monthDay);
+    }
+    if (!nullToAbsent || startAt != null) {
+      map['start_at'] = Variable<DateTime>(startAt);
+    }
     if (!nullToAbsent || until != null) {
       map['until'] = Variable<DateTime>(until);
+    }
+    if (!nullToAbsent || countLimit != null) {
+      map['count_limit'] = Variable<int>(countLimit);
+    }
+    map['enabled'] = Variable<bool>(enabled);
+    map['repeat_mode'] = Variable<String>(repeatMode);
+    if (!nullToAbsent || timeZone != null) {
+      map['time_zone'] = Variable<String>(timeZone);
     }
     map['updated_at'] = Variable<DateTime>(updatedAt);
     map['created_at'] = Variable<DateTime>(createdAt);
@@ -3609,9 +3772,23 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
       byDay: byDay == null && nullToAbsent
           ? const Value.absent()
           : Value(byDay),
+      monthDay: monthDay == null && nullToAbsent
+          ? const Value.absent()
+          : Value(monthDay),
+      startAt: startAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(startAt),
       until: until == null && nullToAbsent
           ? const Value.absent()
           : Value(until),
+      countLimit: countLimit == null && nullToAbsent
+          ? const Value.absent()
+          : Value(countLimit),
+      enabled: Value(enabled),
+      repeatMode: Value(repeatMode),
+      timeZone: timeZone == null && nullToAbsent
+          ? const Value.absent()
+          : Value(timeZone),
       updatedAt: Value(updatedAt),
       createdAt: Value(createdAt),
     );
@@ -3629,7 +3806,13 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
       freq: serializer.fromJson<String>(json['freq']),
       interval: serializer.fromJson<int>(json['interval']),
       byDay: serializer.fromJson<String?>(json['byDay']),
+      monthDay: serializer.fromJson<int?>(json['monthDay']),
+      startAt: serializer.fromJson<DateTime?>(json['startAt']),
       until: serializer.fromJson<DateTime?>(json['until']),
+      countLimit: serializer.fromJson<int?>(json['countLimit']),
+      enabled: serializer.fromJson<bool>(json['enabled']),
+      repeatMode: serializer.fromJson<String>(json['repeatMode']),
+      timeZone: serializer.fromJson<String?>(json['timeZone']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
@@ -3644,7 +3827,13 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
       'freq': serializer.toJson<String>(freq),
       'interval': serializer.toJson<int>(interval),
       'byDay': serializer.toJson<String?>(byDay),
+      'monthDay': serializer.toJson<int?>(monthDay),
+      'startAt': serializer.toJson<DateTime?>(startAt),
       'until': serializer.toJson<DateTime?>(until),
+      'countLimit': serializer.toJson<int?>(countLimit),
+      'enabled': serializer.toJson<bool>(enabled),
+      'repeatMode': serializer.toJson<String>(repeatMode),
+      'timeZone': serializer.toJson<String?>(timeZone),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
@@ -3657,7 +3846,13 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
     String? freq,
     int? interval,
     Value<String?> byDay = const Value.absent(),
+    Value<int?> monthDay = const Value.absent(),
+    Value<DateTime?> startAt = const Value.absent(),
     Value<DateTime?> until = const Value.absent(),
+    Value<int?> countLimit = const Value.absent(),
+    bool? enabled,
+    String? repeatMode,
+    Value<String?> timeZone = const Value.absent(),
     DateTime? updatedAt,
     DateTime? createdAt,
   }) => TodoRepeatRule(
@@ -3667,7 +3862,13 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
     freq: freq ?? this.freq,
     interval: interval ?? this.interval,
     byDay: byDay.present ? byDay.value : this.byDay,
+    monthDay: monthDay.present ? monthDay.value : this.monthDay,
+    startAt: startAt.present ? startAt.value : this.startAt,
     until: until.present ? until.value : this.until,
+    countLimit: countLimit.present ? countLimit.value : this.countLimit,
+    enabled: enabled ?? this.enabled,
+    repeatMode: repeatMode ?? this.repeatMode,
+    timeZone: timeZone.present ? timeZone.value : this.timeZone,
     updatedAt: updatedAt ?? this.updatedAt,
     createdAt: createdAt ?? this.createdAt,
   );
@@ -3679,7 +3880,17 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
       freq: data.freq.present ? data.freq.value : this.freq,
       interval: data.interval.present ? data.interval.value : this.interval,
       byDay: data.byDay.present ? data.byDay.value : this.byDay,
+      monthDay: data.monthDay.present ? data.monthDay.value : this.monthDay,
+      startAt: data.startAt.present ? data.startAt.value : this.startAt,
       until: data.until.present ? data.until.value : this.until,
+      countLimit: data.countLimit.present
+          ? data.countLimit.value
+          : this.countLimit,
+      enabled: data.enabled.present ? data.enabled.value : this.enabled,
+      repeatMode: data.repeatMode.present
+          ? data.repeatMode.value
+          : this.repeatMode,
+      timeZone: data.timeZone.present ? data.timeZone.value : this.timeZone,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
@@ -3694,7 +3905,13 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
           ..write('freq: $freq, ')
           ..write('interval: $interval, ')
           ..write('byDay: $byDay, ')
+          ..write('monthDay: $monthDay, ')
+          ..write('startAt: $startAt, ')
           ..write('until: $until, ')
+          ..write('countLimit: $countLimit, ')
+          ..write('enabled: $enabled, ')
+          ..write('repeatMode: $repeatMode, ')
+          ..write('timeZone: $timeZone, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -3709,7 +3926,13 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
     freq,
     interval,
     byDay,
+    monthDay,
+    startAt,
     until,
+    countLimit,
+    enabled,
+    repeatMode,
+    timeZone,
     updatedAt,
     createdAt,
   );
@@ -3723,7 +3946,13 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
           other.freq == this.freq &&
           other.interval == this.interval &&
           other.byDay == this.byDay &&
+          other.monthDay == this.monthDay &&
+          other.startAt == this.startAt &&
           other.until == this.until &&
+          other.countLimit == this.countLimit &&
+          other.enabled == this.enabled &&
+          other.repeatMode == this.repeatMode &&
+          other.timeZone == this.timeZone &&
           other.updatedAt == this.updatedAt &&
           other.createdAt == this.createdAt);
 }
@@ -3735,7 +3964,13 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
   final Value<String> freq;
   final Value<int> interval;
   final Value<String?> byDay;
+  final Value<int?> monthDay;
+  final Value<DateTime?> startAt;
   final Value<DateTime?> until;
+  final Value<int?> countLimit;
+  final Value<bool> enabled;
+  final Value<String> repeatMode;
+  final Value<String?> timeZone;
   final Value<DateTime> updatedAt;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
@@ -3746,7 +3981,13 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
     this.freq = const Value.absent(),
     this.interval = const Value.absent(),
     this.byDay = const Value.absent(),
+    this.monthDay = const Value.absent(),
+    this.startAt = const Value.absent(),
     this.until = const Value.absent(),
+    this.countLimit = const Value.absent(),
+    this.enabled = const Value.absent(),
+    this.repeatMode = const Value.absent(),
+    this.timeZone = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -3758,7 +3999,13 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
     required String freq,
     this.interval = const Value.absent(),
     this.byDay = const Value.absent(),
+    this.monthDay = const Value.absent(),
+    this.startAt = const Value.absent(),
     this.until = const Value.absent(),
+    this.countLimit = const Value.absent(),
+    this.enabled = const Value.absent(),
+    this.repeatMode = const Value.absent(),
+    this.timeZone = const Value.absent(),
     required DateTime updatedAt,
     required DateTime createdAt,
     this.rowid = const Value.absent(),
@@ -3774,7 +4021,13 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
     Expression<String>? freq,
     Expression<int>? interval,
     Expression<String>? byDay,
+    Expression<int>? monthDay,
+    Expression<DateTime>? startAt,
     Expression<DateTime>? until,
+    Expression<int>? countLimit,
+    Expression<bool>? enabled,
+    Expression<String>? repeatMode,
+    Expression<String>? timeZone,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
@@ -3786,7 +4039,13 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
       if (freq != null) 'freq': freq,
       if (interval != null) 'interval': interval,
       if (byDay != null) 'by_day': byDay,
+      if (monthDay != null) 'month_day': monthDay,
+      if (startAt != null) 'start_at': startAt,
       if (until != null) 'until': until,
+      if (countLimit != null) 'count_limit': countLimit,
+      if (enabled != null) 'enabled': enabled,
+      if (repeatMode != null) 'repeat_mode': repeatMode,
+      if (timeZone != null) 'time_zone': timeZone,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
@@ -3800,7 +4059,13 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
     Value<String>? freq,
     Value<int>? interval,
     Value<String?>? byDay,
+    Value<int?>? monthDay,
+    Value<DateTime?>? startAt,
     Value<DateTime?>? until,
+    Value<int?>? countLimit,
+    Value<bool>? enabled,
+    Value<String>? repeatMode,
+    Value<String?>? timeZone,
     Value<DateTime>? updatedAt,
     Value<DateTime>? createdAt,
     Value<int>? rowid,
@@ -3812,7 +4077,13 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
       freq: freq ?? this.freq,
       interval: interval ?? this.interval,
       byDay: byDay ?? this.byDay,
+      monthDay: monthDay ?? this.monthDay,
+      startAt: startAt ?? this.startAt,
       until: until ?? this.until,
+      countLimit: countLimit ?? this.countLimit,
+      enabled: enabled ?? this.enabled,
+      repeatMode: repeatMode ?? this.repeatMode,
+      timeZone: timeZone ?? this.timeZone,
       updatedAt: updatedAt ?? this.updatedAt,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
@@ -3840,8 +4111,26 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
     if (byDay.present) {
       map['by_day'] = Variable<String>(byDay.value);
     }
+    if (monthDay.present) {
+      map['month_day'] = Variable<int>(monthDay.value);
+    }
+    if (startAt.present) {
+      map['start_at'] = Variable<DateTime>(startAt.value);
+    }
     if (until.present) {
       map['until'] = Variable<DateTime>(until.value);
+    }
+    if (countLimit.present) {
+      map['count_limit'] = Variable<int>(countLimit.value);
+    }
+    if (enabled.present) {
+      map['enabled'] = Variable<bool>(enabled.value);
+    }
+    if (repeatMode.present) {
+      map['repeat_mode'] = Variable<String>(repeatMode.value);
+    }
+    if (timeZone.present) {
+      map['time_zone'] = Variable<String>(timeZone.value);
     }
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
@@ -3864,7 +4153,13 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
           ..write('freq: $freq, ')
           ..write('interval: $interval, ')
           ..write('byDay: $byDay, ')
+          ..write('monthDay: $monthDay, ')
+          ..write('startAt: $startAt, ')
           ..write('until: $until, ')
+          ..write('countLimit: $countLimit, ')
+          ..write('enabled: $enabled, ')
+          ..write('repeatMode: $repeatMode, ')
+          ..write('timeZone: $timeZone, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
@@ -8108,7 +8403,13 @@ typedef $$TodoRepeatRulesTableCreateCompanionBuilder =
       required String freq,
       Value<int> interval,
       Value<String?> byDay,
+      Value<int?> monthDay,
+      Value<DateTime?> startAt,
       Value<DateTime?> until,
+      Value<int?> countLimit,
+      Value<bool> enabled,
+      Value<String> repeatMode,
+      Value<String?> timeZone,
       required DateTime updatedAt,
       required DateTime createdAt,
       Value<int> rowid,
@@ -8121,7 +8422,13 @@ typedef $$TodoRepeatRulesTableUpdateCompanionBuilder =
       Value<String> freq,
       Value<int> interval,
       Value<String?> byDay,
+      Value<int?> monthDay,
+      Value<DateTime?> startAt,
       Value<DateTime?> until,
+      Value<int?> countLimit,
+      Value<bool> enabled,
+      Value<String> repeatMode,
+      Value<String?> timeZone,
       Value<DateTime> updatedAt,
       Value<DateTime> createdAt,
       Value<int> rowid,
@@ -8166,8 +8473,38 @@ class $$TodoRepeatRulesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<int> get monthDay => $composableBuilder(
+    column: $table.monthDay,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get startAt => $composableBuilder(
+    column: $table.startAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<DateTime> get until => $composableBuilder(
     column: $table.until,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get countLimit => $composableBuilder(
+    column: $table.countLimit,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get repeatMode => $composableBuilder(
+    column: $table.repeatMode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get timeZone => $composableBuilder(
+    column: $table.timeZone,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8221,8 +8558,38 @@ class $$TodoRepeatRulesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get monthDay => $composableBuilder(
+    column: $table.monthDay,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get startAt => $composableBuilder(
+    column: $table.startAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get until => $composableBuilder(
     column: $table.until,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get countLimit => $composableBuilder(
+    column: $table.countLimit,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get repeatMode => $composableBuilder(
+    column: $table.repeatMode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get timeZone => $composableBuilder(
+    column: $table.timeZone,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -8264,8 +8631,30 @@ class $$TodoRepeatRulesTableAnnotationComposer
   GeneratedColumn<String> get byDay =>
       $composableBuilder(column: $table.byDay, builder: (column) => column);
 
+  GeneratedColumn<int> get monthDay =>
+      $composableBuilder(column: $table.monthDay, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get startAt =>
+      $composableBuilder(column: $table.startAt, builder: (column) => column);
+
   GeneratedColumn<DateTime> get until =>
       $composableBuilder(column: $table.until, builder: (column) => column);
+
+  GeneratedColumn<int> get countLimit => $composableBuilder(
+    column: $table.countLimit,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get enabled =>
+      $composableBuilder(column: $table.enabled, builder: (column) => column);
+
+  GeneratedColumn<String> get repeatMode => $composableBuilder(
+    column: $table.repeatMode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get timeZone =>
+      $composableBuilder(column: $table.timeZone, builder: (column) => column);
 
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
@@ -8317,7 +8706,13 @@ class $$TodoRepeatRulesTableTableManager
                 Value<String> freq = const Value.absent(),
                 Value<int> interval = const Value.absent(),
                 Value<String?> byDay = const Value.absent(),
+                Value<int?> monthDay = const Value.absent(),
+                Value<DateTime?> startAt = const Value.absent(),
                 Value<DateTime?> until = const Value.absent(),
+                Value<int?> countLimit = const Value.absent(),
+                Value<bool> enabled = const Value.absent(),
+                Value<String> repeatMode = const Value.absent(),
+                Value<String?> timeZone = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -8328,7 +8723,13 @@ class $$TodoRepeatRulesTableTableManager
                 freq: freq,
                 interval: interval,
                 byDay: byDay,
+                monthDay: monthDay,
+                startAt: startAt,
                 until: until,
+                countLimit: countLimit,
+                enabled: enabled,
+                repeatMode: repeatMode,
+                timeZone: timeZone,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
                 rowid: rowid,
@@ -8341,7 +8742,13 @@ class $$TodoRepeatRulesTableTableManager
                 required String freq,
                 Value<int> interval = const Value.absent(),
                 Value<String?> byDay = const Value.absent(),
+                Value<int?> monthDay = const Value.absent(),
+                Value<DateTime?> startAt = const Value.absent(),
                 Value<DateTime?> until = const Value.absent(),
+                Value<int?> countLimit = const Value.absent(),
+                Value<bool> enabled = const Value.absent(),
+                Value<String> repeatMode = const Value.absent(),
+                Value<String?> timeZone = const Value.absent(),
                 required DateTime updatedAt,
                 required DateTime createdAt,
                 Value<int> rowid = const Value.absent(),
@@ -8352,7 +8759,13 @@ class $$TodoRepeatRulesTableTableManager
                 freq: freq,
                 interval: interval,
                 byDay: byDay,
+                monthDay: monthDay,
+                startAt: startAt,
                 until: until,
+                countLimit: countLimit,
+                enabled: enabled,
+                repeatMode: repeatMode,
+                timeZone: timeZone,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
                 rowid: rowid,
