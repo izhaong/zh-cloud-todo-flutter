@@ -45,4 +45,15 @@ class SyncChangeQueue {
           ),
         );
   }
+
+  Future<void> retryNow(int changeId) {
+    return (_db.update(
+      _db.todoSyncChanges,
+    )..where((row) => row.id.equals(changeId))).write(
+      const TodoSyncChangesCompanion(
+        status: Value('queued'),
+        nextAttemptAt: Value(null),
+      ),
+    );
+  }
 }
