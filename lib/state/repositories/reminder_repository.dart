@@ -137,6 +137,28 @@ class ReminderRepository {
     });
   }
 
+  Future<TodoReminder> enablePersistentByServerId({
+    required int reminderServerId,
+    required int intervalMinutes,
+  }) async {
+    final row = await (_db.select(
+      _db.todoReminders,
+    )..where((t) => t.serverId.equals(reminderServerId))).getSingleOrNull();
+    if (row == null) {
+      throw StateError('本地提醒规则不存在：$reminderServerId');
+    }
+    return update(
+      id: row.id,
+      fireAt: row.remindAt,
+      anchorType: row.anchorType,
+      offsetMinutes: row.offsetMinutes,
+      persistent: true,
+      intervalMinutes: intervalMinutes,
+      timeZone: row.timeZone,
+      fixedTimezone: row.fixedTimezone,
+    );
+  }
+
   void _validatePersistentInterval(bool persistent, int? intervalMinutes) {
     if (!persistent) return;
     if (intervalMinutes != null && intervalMinutes > 0) return;

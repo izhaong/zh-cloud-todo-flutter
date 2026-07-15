@@ -417,7 +417,7 @@ class ReminderActionApi {
     '/reminder-action/$reminderId/persistent',
     data: {
       'intervalMinutes': intervalMinutes,
-      if (timeZone != null) 'timeZone': timeZone,
+      'timeZone': ?timeZone,
       'fixedTimezone': fixedTimezone,
     },
   );

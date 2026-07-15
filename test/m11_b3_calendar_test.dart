@@ -13,6 +13,7 @@ void main() {
       return TodoTask(
         id: '1',
         listId: '1',
+        allDay: false,
         title: 't',
         completed: false,
         priority: 0,
@@ -93,6 +94,7 @@ void main() {
       TodoTask(
         id: '1',
         listId: '1',
+        allDay: false,
         title: '本月任务',
         completed: false,
         priority: 0,
@@ -130,6 +132,7 @@ void main() {
       TodoTask(
         id: '1',
         listId: '1',
+        allDay: false,
         title: '晚一点',
         completed: false,
         priority: 0,
@@ -144,6 +147,7 @@ void main() {
       TodoTask(
         id: '2',
         listId: '1',
+        allDay: false,
         title: '早一点',
         completed: false,
         priority: 0,
@@ -192,6 +196,7 @@ void main() {
         TodoTask(
           id: 'compact-calendar-task',
           listId: '1',
+          allDay: false,
           title: '窄屏日历任务',
           completed: false,
           priority: 0,

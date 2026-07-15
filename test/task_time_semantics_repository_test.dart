@@ -1,10 +1,12 @@
 import 'dart:convert';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/reminder_dispatch_action_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/reminder_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_repository.dart';
 
@@ -162,4 +164,56 @@ void main() {
     expect(changes[3].op, 'delete');
     expect(changes[3].entityLocalId, second.id);
   });
+
+  test('queues reminder dispatch actions by dispatch ID', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final actions = ReminderDispatchActionRepository(SyncChangeQueue(db));
+
+    final mutationId = await actions.snooze(
+      reminderDispatchId: 400,
+      minutes: 10,
+    );
+
+    final change = await db.select(db.todoSyncChanges).getSingle();
+    final payload = jsonDecode(change.payloadJson) as Map<String, dynamic>;
+    expect(change.entity, 'reminder_dispatch_action');
+    expect(change.entityServerId, 400);
+    expect(change.clientMutationId, mutationId);
+    expect(payload, {
+      'reminderDispatchId': 400,
+      'action': 'snooze',
+      'minutes': 10,
+    });
+  });
+
+  test(
+    'enables persistent reminder by the server rule ID through outbox',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final reminders = ReminderRepository(db, SyncChangeQueue(db));
+      final reminder = await reminders.create(
+        taskId: 'task-1',
+        fireAt: DateTime(2026, 7, 13, 9),
+      );
+      await (db.update(db.todoReminders)
+            ..where((t) => t.id.equals(reminder.id)))
+          .write(const TodoRemindersCompanion(serverId: Value(600)));
+
+      final updated = await reminders.enablePersistentByServerId(
+        reminderServerId: 600,
+        intervalMinutes: 30,
+      );
+
+      final changes = await db.select(db.todoSyncChanges).get();
+      final payload =
+          jsonDecode(changes.last.payloadJson) as Map<String, dynamic>;
+      expect(updated.persistent, isTrue);
+      expect(updated.intervalMinutes, 30);
+      expect(changes.last.entityServerId, 600);
+      expect(payload['persistent'], isTrue);
+      expect(payload['intervalMinutes'], 30);
+    },
+  );
 }

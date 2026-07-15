@@ -21,6 +21,7 @@ void main() {
       return TodoTask(
         id: '1',
         listId: '1',
+        allDay: false,
         title: 't',
         completed: completed,
         priority: priority,
@@ -110,6 +111,7 @@ void main() {
       TodoTask(
         id: '1',
         listId: '1',
+        allDay: false,
         title: '紧急且重要',
         priority: 2,
         isPinned: false,
@@ -122,6 +124,7 @@ void main() {
       TodoTask(
         id: '2',
         listId: '1',
+        allDay: false,
         title: '重要不紧急',
         priority: 3,
         isPinned: false,
@@ -134,6 +137,7 @@ void main() {
       TodoTask(
         id: '3',
         listId: '1',
+        allDay: false,
         title: '紧急不重要',
         priority: 0,
         isPinned: false,
@@ -146,6 +150,7 @@ void main() {
       TodoTask(
         id: '4',
         listId: '1',
+        allDay: false,
         title: '不重要不紧急',
         priority: 0,
         isPinned: false,
@@ -242,6 +247,7 @@ List<TodoTask> _quadrantTasks(DateTime now) {
     TodoTask(
       id: 'dark-q1',
       listId: '1',
+      allDay: false,
       title: '紧急且重要',
       priority: 2,
       isPinned: false,
@@ -254,6 +260,7 @@ List<TodoTask> _quadrantTasks(DateTime now) {
     TodoTask(
       id: 'dark-q2',
       listId: '1',
+      allDay: false,
       title: '重要不紧急',
       priority: 3,
       isPinned: false,
@@ -266,6 +273,7 @@ List<TodoTask> _quadrantTasks(DateTime now) {
     TodoTask(
       id: 'dark-q3',
       listId: '1',
+      allDay: false,
       title: '紧急不重要',
       priority: 0,
       isPinned: false,
@@ -278,6 +286,7 @@ List<TodoTask> _quadrantTasks(DateTime now) {
     TodoTask(
       id: 'dark-q4',
       listId: '1',
+      allDay: false,
       title: '不重要不紧急',
       priority: 0,
       isPinned: false,

@@ -9,6 +9,8 @@ import '../core/sync/sync_coordinator.dart';
 import '../state/session_state.dart';
 import 'repositories/folder_repository.dart';
 import 'repositories/list_repository.dart';
+import 'repositories/reminder_dispatch_action_repository.dart';
+import 'repositories/reminder_inbox_repository.dart';
 import 'repositories/reminder_repository.dart';
 import 'repositories/tag_repository.dart';
 import 'repositories/task_repository.dart';
@@ -105,6 +107,19 @@ final reminderRepositoryProvider = Provider<ReminderRepository?>((ref) {
   final queue = ref.watch(syncChangeQueueProvider);
   if (db == null || queue == null) return null;
   return ReminderRepository(db, queue);
+});
+
+final reminderDispatchActionRepositoryProvider =
+    Provider<ReminderDispatchActionRepository?>((ref) {
+      final queue = ref.watch(syncChangeQueueProvider);
+      if (queue == null) return null;
+      return ReminderDispatchActionRepository(queue);
+    });
+
+final reminderInboxRepositoryProvider = Provider<ReminderInboxRepository>((
+  ref,
+) {
+  return ReminderInboxRepository(ref.watch(todoApiProvider).reminder);
 });
 
 // --- 同步 ---------------------------------------------------------------
