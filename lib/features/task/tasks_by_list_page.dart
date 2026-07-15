@@ -209,6 +209,16 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         return TimelineView(
           tasks: items,
           onTaskSelected: widget.onTaskSelected,
+          onTaskTimeChange: (task, {required startAt, required endAt, required dueAt}) async {
+            final repository = ref.read(taskViewActionRepositoryProvider);
+            if (repository == null) return;
+            await repository.moveTimelineTask(
+              task.id,
+              startAt: startAt,
+              endAt: endAt,
+              dueAt: dueAt,
+            );
+          },
         );
       case TaskViewMode.eisenhower:
         return EisenhowerView(

@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/features/task/views/kanban_view.dart';
+import 'package:zh_cloud_todo_flutter/features/task/views/timeline_view.dart';
 
 void main() {
   testWidgets('看板拖到进行中列会请求共享任务写操作', (tester) async {
@@ -42,5 +43,49 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(request, ('task-1', 1, false));
+  });
+
+  testWidgets('时间线顺延一天会请求共享任务时间 mutation', (tester) async {
+    final now = DateTime.utc(2026, 7, 15, 9);
+    final startAt = DateTime.utc(2026, 7, 16, 9);
+    final endAt = DateTime.utc(2026, 7, 16, 10);
+    final task = TodoTask(
+      id: 'task-timeline-1',
+      listId: 'list-inbox',
+      title: '时间线任务',
+      completed: false,
+      priority: 0,
+      isPinned: false,
+      sortOrder: 0,
+      startAt: startAt,
+      endAt: endAt,
+      dueAt: endAt,
+      updatedAt: now,
+      createdAt: now,
+    );
+    (String, DateTime, DateTime, DateTime)? request;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TimelineView(
+            tasks: [task],
+            now: now,
+            onTaskTimeChange: (moved, {required startAt, required endAt, required dueAt}) async {
+              request = (moved.id, startAt, endAt, dueAt);
+            },
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('顺延一天'));
+    await tester.pumpAndSettle();
+
+    expect(request, (
+      'task-timeline-1',
+      DateTime.utc(2026, 7, 17, 9),
+      DateTime.utc(2026, 7, 17, 10),
+      DateTime.utc(2026, 7, 17, 10),
+    ));
   });
 }
