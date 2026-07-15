@@ -236,6 +236,7 @@ class TaskRepository {
     if (taskId == newParentId) {
       throw ArgumentError.value(newParentId, 'newParentId', '任务不能引用自身');
     }
+    await _assertParentChainDoesNotContain(taskId, newParentId);
     await _db.reparentTask(taskId, newParentId);
     final row = await (_db.select(
       _db.todoTasks,
@@ -247,5 +248,23 @@ class TaskRepository {
       serverId: row.serverId,
       payload: row.toJson(),
     );
+  }
+
+  Future<void> _assertParentChainDoesNotContain(
+    String taskId,
+    String? newParentId,
+  ) async {
+    var currentId = newParentId;
+    final visited = <String>{};
+    while (currentId != null) {
+      final parentId = currentId;
+      if (parentId == taskId || !visited.add(parentId)) {
+        throw StateError('任务父子关系形成循环');
+      }
+      final current = await (_db.select(
+        _db.todoTasks,
+      )..where((task) => task.id.equals(parentId))).getSingleOrNull();
+      currentId = current?.parentTaskId;
+    }
   }
 }

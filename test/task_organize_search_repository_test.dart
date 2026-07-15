@@ -78,4 +78,13 @@ void main() {
       throwsA(isA<ArgumentError>()),
     );
   });
+
+  test('重设父任务拒绝形成循环', () async {
+    await taskRepository.reparent('task-2', 'task-1');
+
+    await expectLater(
+      taskRepository.reparent('task-1', 'task-2'),
+      throwsA(isA<StateError>()),
+    );
+  });
 }
