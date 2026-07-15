@@ -185,6 +185,7 @@ class TodoSyncChanges extends Table {
   TextColumn get payloadJson => text()();
   DateTimeColumn get createdAt => dateTime()();
   IntColumn get attemptCount => integer().withDefault(const Constant(0))();
+  DateTimeColumn get nextAttemptAt => dateTime().nullable()();
   TextColumn get status =>
       text().withDefault(const Constant('queued'))(); // queued/synced/failed
 }
@@ -238,7 +239,7 @@ class AppDatabase extends _$AppDatabase {
     : super(_open('todo_t${tenantId}_u$userId'));
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -253,6 +254,8 @@ class AppDatabase extends _$AppDatabase {
           await m.deleteTable(table.actualTableName);
         }
         await m.createAll();
+      } else if (from < 5) {
+        await m.addColumn(todoSyncChanges, todoSyncChanges.nextAttemptAt);
       }
     },
   );

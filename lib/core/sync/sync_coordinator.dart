@@ -7,6 +7,7 @@ import '../api/api_client.dart';
 import '../api/sync_api.dart';
 import '../db/app_database.dart';
 import 'sync_entities.dart';
+import 'sync_retry_policy.dart';
 
 /// 离线优先双向同步协调器。
 ///
@@ -49,9 +50,15 @@ class SyncCoordinator {
   // --- Push ------------------------------------------------------------
 
   Future<int> push() async {
-    final pending = await (db.select(
-      db.todoSyncChanges,
-    )..where((t) => t.status.equals('queued'))).get();
+    final now = DateTime.now();
+    final pending =
+        await (db.select(db.todoSyncChanges)..where(
+              (t) =>
+                  t.status.equals('queued') &
+                  (t.nextAttemptAt.isNull() |
+                      t.nextAttemptAt.isSmallerOrEqualValue(now)),
+            ))
+            .get();
     if (pending.isEmpty) return 0;
 
     final folderChanges = pending
@@ -111,8 +118,11 @@ class SyncCoordinator {
           db.todoSyncChanges,
         )..where((t) => t.id.equals(change.id))).write(
           TodoSyncChangesCompanion(
-            status: const Value('failed'),
+            status: const Value('queued'),
             attemptCount: Value(change.attemptCount + 1),
+            nextAttemptAt: Value(
+              DateTime.now().add(syncRetryDelay(change.attemptCount + 1)),
+            ),
           ),
         );
       }
@@ -156,8 +166,11 @@ class SyncCoordinator {
           db.todoSyncChanges,
         )..where((t) => t.id.equals(change.id))).write(
           TodoSyncChangesCompanion(
-            status: const Value('failed'),
+            status: const Value('queued'),
             attemptCount: Value(change.attemptCount + 1),
+            nextAttemptAt: Value(
+              DateTime.now().add(syncRetryDelay(change.attemptCount + 1)),
+            ),
           ),
         );
       }

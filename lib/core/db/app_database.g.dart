@@ -4917,6 +4917,18 @@ class $TodoSyncChangesTable extends TodoSyncChanges
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _nextAttemptAtMeta = const VerificationMeta(
+    'nextAttemptAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> nextAttemptAt =
+      GeneratedColumn<DateTime>(
+        'next_attempt_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _statusMeta = const VerificationMeta('status');
   @override
   late final GeneratedColumn<String> status = GeneratedColumn<String>(
@@ -4938,6 +4950,7 @@ class $TodoSyncChangesTable extends TodoSyncChanges
     payloadJson,
     createdAt,
     attemptCount,
+    nextAttemptAt,
     status,
   ];
   @override
@@ -5025,6 +5038,15 @@ class $TodoSyncChangesTable extends TodoSyncChanges
         ),
       );
     }
+    if (data.containsKey('next_attempt_at')) {
+      context.handle(
+        _nextAttemptAtMeta,
+        nextAttemptAt.isAcceptableOrUnknown(
+          data['next_attempt_at']!,
+          _nextAttemptAtMeta,
+        ),
+      );
+    }
     if (data.containsKey('status')) {
       context.handle(
         _statusMeta,
@@ -5076,6 +5098,10 @@ class $TodoSyncChangesTable extends TodoSyncChanges
         DriftSqlType.int,
         data['${effectivePrefix}attempt_count'],
       )!,
+      nextAttemptAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}next_attempt_at'],
+      ),
       status: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}status'],
@@ -5099,6 +5125,7 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
   final String payloadJson;
   final DateTime createdAt;
   final int attemptCount;
+  final DateTime? nextAttemptAt;
   final String status;
   const TodoSyncChange({
     required this.id,
@@ -5110,6 +5137,7 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
     required this.payloadJson,
     required this.createdAt,
     required this.attemptCount,
+    this.nextAttemptAt,
     required this.status,
   });
   @override
@@ -5128,6 +5156,9 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
     map['payload_json'] = Variable<String>(payloadJson);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['attempt_count'] = Variable<int>(attemptCount);
+    if (!nullToAbsent || nextAttemptAt != null) {
+      map['next_attempt_at'] = Variable<DateTime>(nextAttemptAt);
+    }
     map['status'] = Variable<String>(status);
     return map;
   }
@@ -5147,6 +5178,9 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
       payloadJson: Value(payloadJson),
       createdAt: Value(createdAt),
       attemptCount: Value(attemptCount),
+      nextAttemptAt: nextAttemptAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(nextAttemptAt),
       status: Value(status),
     );
   }
@@ -5166,6 +5200,7 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
       payloadJson: serializer.fromJson<String>(json['payloadJson']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       attemptCount: serializer.fromJson<int>(json['attemptCount']),
+      nextAttemptAt: serializer.fromJson<DateTime?>(json['nextAttemptAt']),
       status: serializer.fromJson<String>(json['status']),
     );
   }
@@ -5182,6 +5217,7 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
       'payloadJson': serializer.toJson<String>(payloadJson),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'attemptCount': serializer.toJson<int>(attemptCount),
+      'nextAttemptAt': serializer.toJson<DateTime?>(nextAttemptAt),
       'status': serializer.toJson<String>(status),
     };
   }
@@ -5196,6 +5232,7 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
     String? payloadJson,
     DateTime? createdAt,
     int? attemptCount,
+    Value<DateTime?> nextAttemptAt = const Value.absent(),
     String? status,
   }) => TodoSyncChange(
     id: id ?? this.id,
@@ -5211,6 +5248,9 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
     payloadJson: payloadJson ?? this.payloadJson,
     createdAt: createdAt ?? this.createdAt,
     attemptCount: attemptCount ?? this.attemptCount,
+    nextAttemptAt: nextAttemptAt.present
+        ? nextAttemptAt.value
+        : this.nextAttemptAt,
     status: status ?? this.status,
   );
   TodoSyncChange copyWithCompanion(TodoSyncChangesCompanion data) {
@@ -5234,6 +5274,9 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
       attemptCount: data.attemptCount.present
           ? data.attemptCount.value
           : this.attemptCount,
+      nextAttemptAt: data.nextAttemptAt.present
+          ? data.nextAttemptAt.value
+          : this.nextAttemptAt,
       status: data.status.present ? data.status.value : this.status,
     );
   }
@@ -5250,6 +5293,7 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
           ..write('payloadJson: $payloadJson, ')
           ..write('createdAt: $createdAt, ')
           ..write('attemptCount: $attemptCount, ')
+          ..write('nextAttemptAt: $nextAttemptAt, ')
           ..write('status: $status')
           ..write(')'))
         .toString();
@@ -5266,6 +5310,7 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
     payloadJson,
     createdAt,
     attemptCount,
+    nextAttemptAt,
     status,
   );
   @override
@@ -5281,6 +5326,7 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
           other.payloadJson == this.payloadJson &&
           other.createdAt == this.createdAt &&
           other.attemptCount == this.attemptCount &&
+          other.nextAttemptAt == this.nextAttemptAt &&
           other.status == this.status);
 }
 
@@ -5294,6 +5340,7 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
   final Value<String> payloadJson;
   final Value<DateTime> createdAt;
   final Value<int> attemptCount;
+  final Value<DateTime?> nextAttemptAt;
   final Value<String> status;
   const TodoSyncChangesCompanion({
     this.id = const Value.absent(),
@@ -5305,6 +5352,7 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
     this.payloadJson = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.attemptCount = const Value.absent(),
+    this.nextAttemptAt = const Value.absent(),
     this.status = const Value.absent(),
   });
   TodoSyncChangesCompanion.insert({
@@ -5317,6 +5365,7 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
     required String payloadJson,
     required DateTime createdAt,
     this.attemptCount = const Value.absent(),
+    this.nextAttemptAt = const Value.absent(),
     this.status = const Value.absent(),
   }) : clientMutationId = Value(clientMutationId),
        entity = Value(entity),
@@ -5333,6 +5382,7 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
     Expression<String>? payloadJson,
     Expression<DateTime>? createdAt,
     Expression<int>? attemptCount,
+    Expression<DateTime>? nextAttemptAt,
     Expression<String>? status,
   }) {
     return RawValuesInsertable({
@@ -5345,6 +5395,7 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
       if (payloadJson != null) 'payload_json': payloadJson,
       if (createdAt != null) 'created_at': createdAt,
       if (attemptCount != null) 'attempt_count': attemptCount,
+      if (nextAttemptAt != null) 'next_attempt_at': nextAttemptAt,
       if (status != null) 'status': status,
     });
   }
@@ -5359,6 +5410,7 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
     Value<String>? payloadJson,
     Value<DateTime>? createdAt,
     Value<int>? attemptCount,
+    Value<DateTime?>? nextAttemptAt,
     Value<String>? status,
   }) {
     return TodoSyncChangesCompanion(
@@ -5371,6 +5423,7 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
       payloadJson: payloadJson ?? this.payloadJson,
       createdAt: createdAt ?? this.createdAt,
       attemptCount: attemptCount ?? this.attemptCount,
+      nextAttemptAt: nextAttemptAt ?? this.nextAttemptAt,
       status: status ?? this.status,
     );
   }
@@ -5405,6 +5458,9 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
     if (attemptCount.present) {
       map['attempt_count'] = Variable<int>(attemptCount.value);
     }
+    if (nextAttemptAt.present) {
+      map['next_attempt_at'] = Variable<DateTime>(nextAttemptAt.value);
+    }
     if (status.present) {
       map['status'] = Variable<String>(status.value);
     }
@@ -5423,6 +5479,7 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
           ..write('payloadJson: $payloadJson, ')
           ..write('createdAt: $createdAt, ')
           ..write('attemptCount: $attemptCount, ')
+          ..write('nextAttemptAt: $nextAttemptAt, ')
           ..write('status: $status')
           ..write(')'))
         .toString();
@@ -8481,6 +8538,7 @@ typedef $$TodoSyncChangesTableCreateCompanionBuilder =
       required String payloadJson,
       required DateTime createdAt,
       Value<int> attemptCount,
+      Value<DateTime?> nextAttemptAt,
       Value<String> status,
     });
 typedef $$TodoSyncChangesTableUpdateCompanionBuilder =
@@ -8494,6 +8552,7 @@ typedef $$TodoSyncChangesTableUpdateCompanionBuilder =
       Value<String> payloadJson,
       Value<DateTime> createdAt,
       Value<int> attemptCount,
+      Value<DateTime?> nextAttemptAt,
       Value<String> status,
     });
 
@@ -8548,6 +8607,11 @@ class $$TodoSyncChangesTableFilterComposer
 
   ColumnFilters<int> get attemptCount => $composableBuilder(
     column: $table.attemptCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get nextAttemptAt => $composableBuilder(
+    column: $table.nextAttemptAt,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8611,6 +8675,11 @@ class $$TodoSyncChangesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get nextAttemptAt => $composableBuilder(
+    column: $table.nextAttemptAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get status => $composableBuilder(
     column: $table.status,
     builder: (column) => ColumnOrderings(column),
@@ -8660,6 +8729,11 @@ class $$TodoSyncChangesTableAnnotationComposer
 
   GeneratedColumn<int> get attemptCount => $composableBuilder(
     column: $table.attemptCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get nextAttemptAt => $composableBuilder(
+    column: $table.nextAttemptAt,
     builder: (column) => column,
   );
 
@@ -8713,6 +8787,7 @@ class $$TodoSyncChangesTableTableManager
                 Value<String> payloadJson = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> attemptCount = const Value.absent(),
+                Value<DateTime?> nextAttemptAt = const Value.absent(),
                 Value<String> status = const Value.absent(),
               }) => TodoSyncChangesCompanion(
                 id: id,
@@ -8724,6 +8799,7 @@ class $$TodoSyncChangesTableTableManager
                 payloadJson: payloadJson,
                 createdAt: createdAt,
                 attemptCount: attemptCount,
+                nextAttemptAt: nextAttemptAt,
                 status: status,
               ),
           createCompanionCallback:
@@ -8737,6 +8813,7 @@ class $$TodoSyncChangesTableTableManager
                 required String payloadJson,
                 required DateTime createdAt,
                 Value<int> attemptCount = const Value.absent(),
+                Value<DateTime?> nextAttemptAt = const Value.absent(),
                 Value<String> status = const Value.absent(),
               }) => TodoSyncChangesCompanion.insert(
                 id: id,
@@ -8748,6 +8825,7 @@ class $$TodoSyncChangesTableTableManager
                 payloadJson: payloadJson,
                 createdAt: createdAt,
                 attemptCount: attemptCount,
+                nextAttemptAt: nextAttemptAt,
                 status: status,
               ),
           withReferenceMapper: (p0) => p0
