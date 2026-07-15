@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 
 import 'api_client.dart';
@@ -27,15 +29,83 @@ class DioAttachmentUploadApi implements AttachmentUploadApi {
     required String localPath,
     required String name,
   }) async {
-    final response = await _client.raw.post<Map<String, dynamic>>(
-      '/app-api/infra/file/upload',
-      data: FormData.fromMap({
-        'file': await MultipartFile.fromFile(localPath, filename: name),
-        'directory': 'todo/attachments',
-      }),
+    try {
+      final response = await _client.raw.post<Map<String, dynamic>>(
+        '/app-api/infra/file/upload',
+        data: FormData.fromMap({
+          'file': await MultipartFile.fromFile(localPath, filename: name),
+          'directory': 'todo/attachments',
+        }),
+      );
+      if (_isServerFailure(response.data)) {
+        return _uploadWithPresignedUrl(localPath: localPath, name: name);
+      }
+      return _requiredUrl(_unwrap(response.data));
+    } on DioException catch (error) {
+      if (error.response?.statusCode != null &&
+          error.response!.statusCode! < HttpStatus.internalServerError) {
+        rethrow;
+      }
+      return _uploadWithPresignedUrl(localPath: localPath, name: name);
+    }
+  }
+
+  Future<String> _uploadWithPresignedUrl({
+    required String localPath,
+    required String name,
+  }) async {
+    final response = await _client.raw.get<Map<String, dynamic>>(
+      '/app-api/infra/file/presigned-url',
+      queryParameters: {'name': name, 'directory': 'todo/attachments'},
     );
     final data = _unwrap(response.data);
-    final url = data.toString();
+    if (data is! Map) throw StateError('文件预签名响应格式错误');
+    final configId = data['configId'];
+    final path = data['path']?.toString();
+    final uploadUrl = data['uploadUrl']?.toString();
+    final url = data['url']?.toString();
+    if (configId is! num ||
+        path == null ||
+        path.isEmpty ||
+        uploadUrl == null ||
+        uploadUrl.isEmpty ||
+        url == null ||
+        url.isEmpty) {
+      throw StateError('文件预签名响应缺少必要字段');
+    }
+
+    final file = File(localPath);
+    final size = await file.length();
+    await _client.raw.put<void>(
+      uploadUrl,
+      data: file.openRead(),
+      options: Options(
+        contentType: 'application/octet-stream',
+        headers: {'Content-Length': size},
+      ),
+    );
+    final createResponse = await _client.raw.post<Map<String, dynamic>>(
+      '/app-api/infra/file/create',
+      data: {
+        'configId': configId.toInt(),
+        'path': path,
+        'name': name,
+        'url': url,
+        'type': 'application/octet-stream',
+        'size': size,
+      },
+    );
+    _unwrap(createResponse.data);
+    return url;
+  }
+
+  bool _isServerFailure(Map<String, dynamic>? body) {
+    final code = body?['code'];
+    return code is num && code >= HttpStatus.internalServerError;
+  }
+
+  String _requiredUrl(Object? value) {
+    final url = value?.toString() ?? '';
     if (url.isEmpty) throw StateError('文件上传未返回 URL');
     return url;
   }
