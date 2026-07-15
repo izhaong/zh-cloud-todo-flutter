@@ -24,12 +24,15 @@ class KanbanView extends ConsumerWidget {
     required this.tasks,
     this.listId,
     this.onTaskSelected,
+    this.onTaskMove,
   });
 
   /// 渲染用的任务列表（已应用 list/filter 的客户端过滤结果）。
   final List<TodoTask> tasks;
   final String? listId;
   final ValueChanged<String>? onTaskSelected;
+  final Future<void> Function(TodoTask task, int priority, bool completed)?
+  onTaskMove;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -38,24 +41,32 @@ class KanbanView extends ConsumerWidget {
         key: const ValueKey('col-todo'),
         title: '未开始',
         color: Colors.blueGrey,
+        priority: 0,
+        completed: false,
         tasks: tasks.where((t) => t.priority == 0 && !t.completed).toList(),
       ),
       _KanbanColumnData(
         key: const ValueKey('col-doing'),
         title: '进行中',
         color: Colors.blue,
+        priority: 1,
+        completed: false,
         tasks: tasks.where((t) => t.priority == 1 && !t.completed).toList(),
       ),
       _KanbanColumnData(
         key: const ValueKey('col-urgent'),
         title: '紧急',
         color: Colors.deepOrange,
+        priority: 2,
+        completed: false,
         tasks: tasks.where((t) => t.priority == 2 && !t.completed).toList(),
       ),
       _KanbanColumnData(
         key: const ValueKey('col-archive'),
         title: '归档',
         color: Colors.grey,
+        priority: 3,
+        completed: true,
         tasks: tasks.where((t) => t.completed || t.priority >= 3).toList(),
       ),
     ];
@@ -72,6 +83,9 @@ class KanbanView extends ConsumerWidget {
               child: _KanbanColumn(
                 data: col,
                 onCardTap: (t) => _openDetail(context, t),
+                onCardMove: onTaskMove == null
+                    ? null
+                    : (task) => onTaskMove!(task, col.priority, col.completed),
                 onAdd: col.key == const ValueKey('col-todo') && listId != null
                     ? () => _quickAdd(context, ref, listId!)
                     : null,
@@ -109,11 +123,15 @@ class _KanbanColumnData {
     required this.key,
     required this.title,
     required this.color,
+    required this.priority,
+    required this.completed,
     required this.tasks,
   });
   final Key key;
   final String title;
   final Color color;
+  final int priority;
+  final bool completed;
   final List<TodoTask> tasks;
 }
 
@@ -121,11 +139,13 @@ class _KanbanColumn extends StatelessWidget {
   const _KanbanColumn({
     required this.data,
     required this.onCardTap,
+    this.onCardMove,
     this.onAdd,
   });
 
   final _KanbanColumnData data;
   final ValueChanged<TodoTask> onCardTap;
+  final Future<void> Function(TodoTask task)? onCardMove;
   final VoidCallback? onAdd;
 
   @override
@@ -189,27 +209,30 @@ class _KanbanColumn extends StatelessWidget {
             ),
             const Divider(height: 1),
             Expanded(
-              child: data.tasks.isEmpty
-                  ? Center(
-                      child: Text(
-                        '空',
-                        style: TextStyle(
-                          color: Theme.of(context).disabledColor,
+              child: DragTarget<TodoTask>(
+                onWillAcceptWithDetails: (details) => onCardMove != null,
+                onAcceptWithDetails: (details) => onCardMove!(details.data),
+                builder: (context, candidateData, rejectedData) =>
+                    data.tasks.isEmpty
+                    ? Center(
+                        child: Text(
+                          '空',
+                          style: TextStyle(
+                            color: Theme.of(context).disabledColor,
+                          ),
                         ),
-                      ),
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.all(8),
-                      itemCount: data.tasks.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 8),
-                      itemBuilder: (_, i) {
-                        return _KanbanCard(
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.all(8),
+                        itemCount: data.tasks.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
+                        itemBuilder: (_, i) => _KanbanCard(
                           task: data.tasks[i],
                           accent: data.color,
                           onTap: () => onCardTap(data.tasks[i]),
-                        );
-                      },
-                    ),
+                        ),
+                      ),
+              ),
             ),
           ],
         ),
@@ -233,7 +256,7 @@ class _KanbanCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = brandColors(context);
     final df = DateFormat('MM-dd');
-    return AppCard(
+    final card = AppCard(
       padding: const EdgeInsets.all(10),
       onTap: onTap,
       child: Column(
@@ -266,6 +289,17 @@ class _KanbanCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+    return LongPressDraggable<TodoTask>(
+      data: task,
+      feedback: Material(
+        color: Colors.transparent,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 220),
+          child: Text(task.title, style: const TextStyle(fontSize: 14)),
+        ),
+      ),
+      child: card,
     );
   }
 }

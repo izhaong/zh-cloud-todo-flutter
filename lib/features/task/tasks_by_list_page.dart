@@ -190,6 +190,15 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           tasks: items,
           listId: _selectedListId,
           onTaskSelected: widget.onTaskSelected,
+          onTaskMove: (task, priority, completed) async {
+            final repository = ref.read(taskViewActionRepositoryProvider);
+            if (repository == null) return;
+            await repository.moveKanbanTask(
+              task.id,
+              priority: priority,
+              completed: completed,
+            );
+          },
         );
       case TaskViewMode.timeline:
         return TimelineView(

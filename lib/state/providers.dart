@@ -11,6 +11,7 @@ import 'repositories/folder_repository.dart';
 import 'repositories/list_repository.dart';
 import 'repositories/tag_repository.dart';
 import 'repositories/task_repository.dart';
+import 'repositories/task_view_action_repository.dart';
 
 /// UI-facing clock. Production reads the current instant on each rebuild;
 /// deterministic widget/golden fixtures override the callback explicitly.
@@ -97,6 +98,15 @@ final taskRepositoryProvider = Provider<TaskRepository?>((ref) {
   final queue = ref.watch(syncChangeQueueProvider);
   if (db == null || queue == null) return null;
   return TaskRepository(db, queue);
+});
+
+final taskViewActionRepositoryProvider = Provider<TaskViewActionRepository?>((
+  ref,
+) {
+  final db = ref.watch(appDatabaseProvider);
+  final queue = ref.watch(syncChangeQueueProvider);
+  if (db == null || queue == null) return null;
+  return TaskViewActionRepository(db, queue);
 });
 
 // --- 同步 ---------------------------------------------------------------
