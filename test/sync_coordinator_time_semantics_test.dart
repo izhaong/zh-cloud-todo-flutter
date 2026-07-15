@@ -11,6 +11,70 @@ import 'package:zh_cloud_todo_flutter/core/sync/sync_coordinator.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/repeat_rule_repository.dart';
 
 void main() {
+  test('pull preserves a task fixed timezone', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final now = DateTime.utc(2026, 7, 15, 9);
+    await db
+        .into(db.todoLists)
+        .insert(
+          TodoListsCompanion.insert(
+            id: 'list-1',
+            serverId: const Value(101),
+            name: '收集箱',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    final dio = Dio();
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          handler.resolve(
+            Response(
+              requestOptions: options,
+              data: {
+                'code': 0,
+                'data': {
+                  'changes': [
+                    {
+                      'entityType': 'task',
+                      'entityId': 201,
+                      'operation': 'upsert',
+                      'payload': {
+                        'listId': 101,
+                        'title': '跨时区会议',
+                        'startAt': '2026-07-15T16:30:00.000Z',
+                        'endAt': '2026-07-15T18:00:00.000Z',
+                        'dueAt': '2026-07-15T18:00:00.000Z',
+                        'allDay': false,
+                        'timeZone': 'America/Los_Angeles',
+                        'fixedTimezone': true,
+                      },
+                    },
+                  ],
+                  'tombstones': const [],
+                  'hasMore': false,
+                },
+              },
+            ),
+          );
+        },
+      ),
+    );
+    final client = ApiClient(dio: dio);
+    final coordinator = SyncCoordinator(
+      db: db,
+      api: SyncApi(client, clientId: 'test', deviceId: 'device-1'),
+      todoApi: client,
+    );
+
+    expect(await coordinator.pull(), 1);
+    final task = await db.taskByServerId(201);
+    expect(task?.timeZone, 'America/Los_Angeles');
+    expect(task?.fixedTimezone, isTrue);
+  });
+
   test('pushes a repeat skip with the same temporary rule ID', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);

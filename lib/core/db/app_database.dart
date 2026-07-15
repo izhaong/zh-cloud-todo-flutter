@@ -52,6 +52,11 @@ class TodoTasks extends Table {
   DateTimeColumn get endAt => dateTime().nullable()();
   DateTimeColumn get dueAt => dateTime().nullable()();
   BoolColumn get allDay => boolean().withDefault(const Constant(false))();
+
+  /// IANA 时区；固定时区任务必须保留墙上时间所属的时区，不能只依赖设备时区。
+  TextColumn get timeZone => text().nullable()();
+  BoolColumn get fixedTimezone =>
+      boolean().withDefault(const Constant(false))();
   DateTimeColumn get updatedAt => dateTime()();
   DateTimeColumn get createdAt => dateTime()();
 
@@ -254,7 +259,7 @@ class AppDatabase extends _$AppDatabase {
     : super(_open('todo_t${tenantId}_u$userId'));
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -290,6 +295,10 @@ class AppDatabase extends _$AppDatabase {
         await m.addColumn(todoRepeatRules, todoRepeatRules.enabled);
         await m.addColumn(todoRepeatRules, todoRepeatRules.repeatMode);
         await m.addColumn(todoRepeatRules, todoRepeatRules.timeZone);
+      }
+      if (from < 8) {
+        await m.addColumn(todoTasks, todoTasks.timeZone);
+        await m.addColumn(todoTasks, todoTasks.fixedTimezone);
       }
     },
   );

@@ -569,6 +569,9 @@ class SyncCoordinator {
       startAt: Value(_parseDate(payload['startAt'])),
       endAt: Value(_parseDate(payload['endAt'])),
       dueAt: Value(_parseDate(payload['dueAt'])),
+      allDay: Value(payload['allDay'] == true),
+      timeZone: Value(payload['timeZone']?.toString()),
+      fixedTimezone: Value(payload['fixedTimezone'] == true),
       updatedAt: Value(now),
       createdAt: Value(existing?.createdAt ?? now),
     );

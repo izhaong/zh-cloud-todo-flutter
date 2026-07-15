@@ -84,6 +84,32 @@ void main() {
     expect(payload['allDay'], isFalse);
   });
 
+  test('preserves a fixed task timezone in Drift and task outbox', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final repository = TaskRepository(db, SyncChangeQueue(db));
+
+    final task = await repository.create(
+      listId: 'inbox',
+      title: '固定时区任务',
+      startAt: DateTime.utc(2026, 7, 13, 16, 30),
+      endAt: DateTime.utc(2026, 7, 13, 18),
+      dueAt: DateTime.utc(2026, 7, 13, 18),
+      timeZone: 'America/Los_Angeles',
+      fixedTimezone: true,
+    );
+    final payload =
+        jsonDecode(
+              (await db.select(db.todoSyncChanges).getSingle()).payloadJson,
+            )
+            as Map<String, dynamic>;
+
+    expect(task.timeZone, 'America/Los_Angeles');
+    expect(task.fixedTimezone, isTrue);
+    expect(payload['timeZone'], 'America/Los_Angeles');
+    expect(payload['fixedTimezone'], isTrue);
+  });
+
   test(
     'stores multiple reminder rules and their outbox mutations locally',
     () async {

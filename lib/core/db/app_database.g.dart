@@ -627,6 +627,32 @@ class $TodoTasksTable extends TodoTasks
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _timeZoneMeta = const VerificationMeta(
+    'timeZone',
+  );
+  @override
+  late final GeneratedColumn<String> timeZone = GeneratedColumn<String>(
+    'time_zone',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _fixedTimezoneMeta = const VerificationMeta(
+    'fixedTimezone',
+  );
+  @override
+  late final GeneratedColumn<bool> fixedTimezone = GeneratedColumn<bool>(
+    'fixed_timezone',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("fixed_timezone" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _updatedAtMeta = const VerificationMeta(
     'updatedAt',
   );
@@ -665,6 +691,8 @@ class $TodoTasksTable extends TodoTasks
     endAt,
     dueAt,
     allDay,
+    timeZone,
+    fixedTimezone,
     updatedAt,
     createdAt,
   ];
@@ -773,6 +801,21 @@ class $TodoTasksTable extends TodoTasks
         allDay.isAcceptableOrUnknown(data['all_day']!, _allDayMeta),
       );
     }
+    if (data.containsKey('time_zone')) {
+      context.handle(
+        _timeZoneMeta,
+        timeZone.isAcceptableOrUnknown(data['time_zone']!, _timeZoneMeta),
+      );
+    }
+    if (data.containsKey('fixed_timezone')) {
+      context.handle(
+        _fixedTimezoneMeta,
+        fixedTimezone.isAcceptableOrUnknown(
+          data['fixed_timezone']!,
+          _fixedTimezoneMeta,
+        ),
+      );
+    }
     if (data.containsKey('updated_at')) {
       context.handle(
         _updatedAtMeta,
@@ -854,6 +897,14 @@ class $TodoTasksTable extends TodoTasks
         DriftSqlType.bool,
         data['${effectivePrefix}all_day'],
       )!,
+      timeZone: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}time_zone'],
+      ),
+      fixedTimezone: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}fixed_timezone'],
+      )!,
       updatedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}updated_at'],
@@ -886,6 +937,10 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
   final DateTime? endAt;
   final DateTime? dueAt;
   final bool allDay;
+
+  /// IANA 时区；固定时区任务必须保留墙上时间所属的时区，不能只依赖设备时区。
+  final String? timeZone;
+  final bool fixedTimezone;
   final DateTime updatedAt;
   final DateTime createdAt;
   const TodoTask({
@@ -903,6 +958,8 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     this.endAt,
     this.dueAt,
     required this.allDay,
+    this.timeZone,
+    required this.fixedTimezone,
     required this.updatedAt,
     required this.createdAt,
   });
@@ -935,6 +992,10 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       map['due_at'] = Variable<DateTime>(dueAt);
     }
     map['all_day'] = Variable<bool>(allDay);
+    if (!nullToAbsent || timeZone != null) {
+      map['time_zone'] = Variable<String>(timeZone);
+    }
+    map['fixed_timezone'] = Variable<bool>(fixedTimezone);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
@@ -968,6 +1029,10 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           ? const Value.absent()
           : Value(dueAt),
       allDay: Value(allDay),
+      timeZone: timeZone == null && nullToAbsent
+          ? const Value.absent()
+          : Value(timeZone),
+      fixedTimezone: Value(fixedTimezone),
       updatedAt: Value(updatedAt),
       createdAt: Value(createdAt),
     );
@@ -993,6 +1058,8 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       endAt: serializer.fromJson<DateTime?>(json['endAt']),
       dueAt: serializer.fromJson<DateTime?>(json['dueAt']),
       allDay: serializer.fromJson<bool>(json['allDay']),
+      timeZone: serializer.fromJson<String?>(json['timeZone']),
+      fixedTimezone: serializer.fromJson<bool>(json['fixedTimezone']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
@@ -1015,6 +1082,8 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       'endAt': serializer.toJson<DateTime?>(endAt),
       'dueAt': serializer.toJson<DateTime?>(dueAt),
       'allDay': serializer.toJson<bool>(allDay),
+      'timeZone': serializer.toJson<String?>(timeZone),
+      'fixedTimezone': serializer.toJson<bool>(fixedTimezone),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
@@ -1035,6 +1104,8 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     Value<DateTime?> endAt = const Value.absent(),
     Value<DateTime?> dueAt = const Value.absent(),
     bool? allDay,
+    Value<String?> timeZone = const Value.absent(),
+    bool? fixedTimezone,
     DateTime? updatedAt,
     DateTime? createdAt,
   }) => TodoTask(
@@ -1052,6 +1123,8 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     endAt: endAt.present ? endAt.value : this.endAt,
     dueAt: dueAt.present ? dueAt.value : this.dueAt,
     allDay: allDay ?? this.allDay,
+    timeZone: timeZone.present ? timeZone.value : this.timeZone,
+    fixedTimezone: fixedTimezone ?? this.fixedTimezone,
     updatedAt: updatedAt ?? this.updatedAt,
     createdAt: createdAt ?? this.createdAt,
   );
@@ -1075,6 +1148,10 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       endAt: data.endAt.present ? data.endAt.value : this.endAt,
       dueAt: data.dueAt.present ? data.dueAt.value : this.dueAt,
       allDay: data.allDay.present ? data.allDay.value : this.allDay,
+      timeZone: data.timeZone.present ? data.timeZone.value : this.timeZone,
+      fixedTimezone: data.fixedTimezone.present
+          ? data.fixedTimezone.value
+          : this.fixedTimezone,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
@@ -1097,6 +1174,8 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           ..write('endAt: $endAt, ')
           ..write('dueAt: $dueAt, ')
           ..write('allDay: $allDay, ')
+          ..write('timeZone: $timeZone, ')
+          ..write('fixedTimezone: $fixedTimezone, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -1119,6 +1198,8 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     endAt,
     dueAt,
     allDay,
+    timeZone,
+    fixedTimezone,
     updatedAt,
     createdAt,
   );
@@ -1140,6 +1221,8 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           other.endAt == this.endAt &&
           other.dueAt == this.dueAt &&
           other.allDay == this.allDay &&
+          other.timeZone == this.timeZone &&
+          other.fixedTimezone == this.fixedTimezone &&
           other.updatedAt == this.updatedAt &&
           other.createdAt == this.createdAt);
 }
@@ -1159,6 +1242,8 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
   final Value<DateTime?> endAt;
   final Value<DateTime?> dueAt;
   final Value<bool> allDay;
+  final Value<String?> timeZone;
+  final Value<bool> fixedTimezone;
   final Value<DateTime> updatedAt;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
@@ -1177,6 +1262,8 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     this.endAt = const Value.absent(),
     this.dueAt = const Value.absent(),
     this.allDay = const Value.absent(),
+    this.timeZone = const Value.absent(),
+    this.fixedTimezone = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -1196,6 +1283,8 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     this.endAt = const Value.absent(),
     this.dueAt = const Value.absent(),
     this.allDay = const Value.absent(),
+    this.timeZone = const Value.absent(),
+    this.fixedTimezone = const Value.absent(),
     required DateTime updatedAt,
     required DateTime createdAt,
     this.rowid = const Value.absent(),
@@ -1219,6 +1308,8 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     Expression<DateTime>? endAt,
     Expression<DateTime>? dueAt,
     Expression<bool>? allDay,
+    Expression<String>? timeZone,
+    Expression<bool>? fixedTimezone,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
@@ -1238,6 +1329,8 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
       if (endAt != null) 'end_at': endAt,
       if (dueAt != null) 'due_at': dueAt,
       if (allDay != null) 'all_day': allDay,
+      if (timeZone != null) 'time_zone': timeZone,
+      if (fixedTimezone != null) 'fixed_timezone': fixedTimezone,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
@@ -1259,6 +1352,8 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     Value<DateTime?>? endAt,
     Value<DateTime?>? dueAt,
     Value<bool>? allDay,
+    Value<String?>? timeZone,
+    Value<bool>? fixedTimezone,
     Value<DateTime>? updatedAt,
     Value<DateTime>? createdAt,
     Value<int>? rowid,
@@ -1278,6 +1373,8 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
       endAt: endAt ?? this.endAt,
       dueAt: dueAt ?? this.dueAt,
       allDay: allDay ?? this.allDay,
+      timeZone: timeZone ?? this.timeZone,
+      fixedTimezone: fixedTimezone ?? this.fixedTimezone,
       updatedAt: updatedAt ?? this.updatedAt,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
@@ -1329,6 +1426,12 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     if (allDay.present) {
       map['all_day'] = Variable<bool>(allDay.value);
     }
+    if (timeZone.present) {
+      map['time_zone'] = Variable<String>(timeZone.value);
+    }
+    if (fixedTimezone.present) {
+      map['fixed_timezone'] = Variable<bool>(fixedTimezone.value);
+    }
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
@@ -1358,6 +1461,8 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
           ..write('endAt: $endAt, ')
           ..write('dueAt: $dueAt, ')
           ..write('allDay: $allDay, ')
+          ..write('timeZone: $timeZone, ')
+          ..write('fixedTimezone: $fixedTimezone, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
@@ -7008,6 +7113,8 @@ typedef $$TodoTasksTableCreateCompanionBuilder =
       Value<DateTime?> endAt,
       Value<DateTime?> dueAt,
       Value<bool> allDay,
+      Value<String?> timeZone,
+      Value<bool> fixedTimezone,
       required DateTime updatedAt,
       required DateTime createdAt,
       Value<int> rowid,
@@ -7028,6 +7135,8 @@ typedef $$TodoTasksTableUpdateCompanionBuilder =
       Value<DateTime?> endAt,
       Value<DateTime?> dueAt,
       Value<bool> allDay,
+      Value<String?> timeZone,
+      Value<bool> fixedTimezone,
       Value<DateTime> updatedAt,
       Value<DateTime> createdAt,
       Value<int> rowid,
@@ -7109,6 +7218,16 @@ class $$TodoTasksTableFilterComposer
 
   ColumnFilters<bool> get allDay => $composableBuilder(
     column: $table.allDay,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get timeZone => $composableBuilder(
+    column: $table.timeZone,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get fixedTimezone => $composableBuilder(
+    column: $table.fixedTimezone,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7202,6 +7321,16 @@ class $$TodoTasksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get timeZone => $composableBuilder(
+    column: $table.timeZone,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get fixedTimezone => $composableBuilder(
+    column: $table.fixedTimezone,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
@@ -7268,6 +7397,14 @@ class $$TodoTasksTableAnnotationComposer
   GeneratedColumn<bool> get allDay =>
       $composableBuilder(column: $table.allDay, builder: (column) => column);
 
+  GeneratedColumn<String> get timeZone =>
+      $composableBuilder(column: $table.timeZone, builder: (column) => column);
+
+  GeneratedColumn<bool> get fixedTimezone => $composableBuilder(
+    column: $table.fixedTimezone,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 
@@ -7317,6 +7454,8 @@ class $$TodoTasksTableTableManager
                 Value<DateTime?> endAt = const Value.absent(),
                 Value<DateTime?> dueAt = const Value.absent(),
                 Value<bool> allDay = const Value.absent(),
+                Value<String?> timeZone = const Value.absent(),
+                Value<bool> fixedTimezone = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -7335,6 +7474,8 @@ class $$TodoTasksTableTableManager
                 endAt: endAt,
                 dueAt: dueAt,
                 allDay: allDay,
+                timeZone: timeZone,
+                fixedTimezone: fixedTimezone,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
                 rowid: rowid,
@@ -7355,6 +7496,8 @@ class $$TodoTasksTableTableManager
                 Value<DateTime?> endAt = const Value.absent(),
                 Value<DateTime?> dueAt = const Value.absent(),
                 Value<bool> allDay = const Value.absent(),
+                Value<String?> timeZone = const Value.absent(),
+                Value<bool> fixedTimezone = const Value.absent(),
                 required DateTime updatedAt,
                 required DateTime createdAt,
                 Value<int> rowid = const Value.absent(),
@@ -7373,6 +7516,8 @@ class $$TodoTasksTableTableManager
                 endAt: endAt,
                 dueAt: dueAt,
                 allDay: allDay,
+                timeZone: timeZone,
+                fixedTimezone: fixedTimezone,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
                 rowid: rowid,

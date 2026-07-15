@@ -58,6 +58,8 @@ class TaskRepository {
     DateTime? endAt,
     DateTime? dueAt,
     bool allDay = false,
+    String? timeZone,
+    bool fixedTimezone = false,
     String? parentTaskId,
     bool isPinned = false,
   }) async {
@@ -81,6 +83,8 @@ class TaskRepository {
             endAt: Value(endAt),
             dueAt: Value(dueAt),
             allDay: Value(allDay),
+            timeZone: Value(timeZone),
+            fixedTimezone: Value(fixedTimezone),
             updatedAt: now,
             createdAt: now,
           ),
@@ -106,6 +110,8 @@ class TaskRepository {
     DateTime? endAt,
     DateTime? dueAt,
     bool? allDay,
+    String? timeZone,
+    bool? fixedTimezone,
     String? listId,
     bool? isPinned,
   }) async {
@@ -132,6 +138,10 @@ class TaskRepository {
         endAt: endAt == null ? const Value.absent() : Value(endAt),
         dueAt: dueAt == null ? const Value.absent() : Value(dueAt),
         allDay: allDay == null ? const Value.absent() : Value(allDay),
+        timeZone: timeZone == null ? const Value.absent() : Value(timeZone),
+        fixedTimezone: fixedTimezone == null
+            ? const Value.absent()
+            : Value(fixedTimezone),
         listId: listId == null ? const Value.absent() : Value(listId),
         updatedAt: Value(now),
       ),
