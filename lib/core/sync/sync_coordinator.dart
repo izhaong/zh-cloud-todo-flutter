@@ -411,7 +411,13 @@ class SyncCoordinator {
     var hasMore = true;
     while (hasMore) {
       final result = await api.pull(cursor: cursor, limit: limit);
-      for (final change in result.changes) {
+      final orderedChanges = List<SyncChangeDto>.of(result.changes)
+        ..sort(
+          (left, right) => _pullPriority(
+            left.entityType,
+          ).compareTo(_pullPriority(right.entityType)),
+        );
+      for (final change in orderedChanges) {
         await _applyPulledChange(change);
         applied++;
       }
@@ -426,6 +432,16 @@ class SyncCoordinator {
     }
     return applied;
   }
+
+  int _pullPriority(String entity) => switch (entity) {
+    SyncEntities.list || SyncEntities.tag => 0,
+    SyncEntities.task => 1,
+    SyncEntities.taskTag ||
+    SyncEntities.reminder ||
+    SyncEntities.repeatRule => 2,
+    SyncEntities.repeatSkip => 3,
+    _ => 4,
+  };
 
   Future<void> _applyPulledChange(SyncChangeDto change) async {
     final entityId = change.entityId;

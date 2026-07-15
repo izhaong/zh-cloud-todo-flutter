@@ -94,4 +94,80 @@ void main() {
     expect((await db.select(db.todoRepeatRules).getSingle()).serverId, 701);
     expect((await db.select(db.todoRepeatSkips).getSingle()).serverId, 702);
   });
+
+  test(
+    'pulls repeat rules before their skips when the response is unordered',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final now = DateTime(2026, 7, 15, 9);
+      await db
+          .into(db.todoTasks)
+          .insert(
+            TodoTasksCompanion.insert(
+              id: 'task-1',
+              serverId: const Value(101),
+              listId: 'list-1',
+              title: '模板任务',
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      final dio = Dio();
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                data: {
+                  'code': 0,
+                  'data': {
+                    'changes': [
+                      {
+                        'entityType': 'repeat_skip',
+                        'entityId': 702,
+                        'operation': 'upsert',
+                        'payload': {
+                          'taskId': 101,
+                          'repeatRuleId': 701,
+                          'occurrenceAt': now
+                              .add(const Duration(days: 2))
+                              .toIso8601String(),
+                        },
+                      },
+                      {
+                        'entityType': 'repeat_rule',
+                        'entityId': 701,
+                        'operation': 'upsert',
+                        'payload': {
+                          'taskId': 101,
+                          'frequency': 'custom',
+                          'intervalValue': 1,
+                          'weekdays': '1,3,5',
+                          'startAt': now.toIso8601String(),
+                        },
+                      },
+                    ],
+                    'tombstones': const [],
+                    'hasMore': false,
+                  },
+                },
+              ),
+            );
+          },
+        ),
+      );
+      final client = ApiClient(dio: dio);
+      final coordinator = SyncCoordinator(
+        db: db,
+        api: SyncApi(client, clientId: 'test', deviceId: 'device-1'),
+        todoApi: client,
+      );
+
+      expect(await coordinator.pull(), 2);
+      expect(await db.select(db.todoRepeatRules).get(), hasLength(1));
+      expect(await db.select(db.todoRepeatSkips).get(), hasLength(1));
+    },
+  );
 }
