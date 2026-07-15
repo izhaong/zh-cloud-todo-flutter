@@ -256,15 +256,20 @@ class TaskRepository {
   ) async {
     var currentId = newParentId;
     final visited = <String>{};
+    var parentChainLength = 0;
     while (currentId != null) {
       final parentId = currentId;
       if (parentId == taskId || !visited.add(parentId)) {
         throw StateError('任务父子关系形成循环');
       }
+      if (parentChainLength >= 5) {
+        throw StateError('任务层级不能超过五级');
+      }
       final current = await (_db.select(
         _db.todoTasks,
       )..where((task) => task.id.equals(parentId))).getSingleOrNull();
       currentId = current?.parentTaskId;
+      parentChainLength += 1;
     }
   }
 }

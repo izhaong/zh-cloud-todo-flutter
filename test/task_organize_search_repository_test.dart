@@ -87,4 +87,15 @@ void main() {
       throwsA(isA<StateError>()),
     );
   });
+
+  test('重设父任务拒绝超过五级', () async {
+    for (var index = 2; index <= 6; index++) {
+      await taskRepository.reparent('task-$index', 'task-${index - 1}');
+    }
+
+    await expectLater(
+      taskRepository.reparent('task-7', 'task-6'),
+      throwsA(isA<StateError>()),
+    );
+  });
 }
