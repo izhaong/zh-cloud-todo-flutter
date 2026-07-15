@@ -76,14 +76,7 @@ class DioAttachmentUploadApi implements AttachmentUploadApi {
 
     final file = File(localPath);
     final size = await file.length();
-    await _client.raw.put<void>(
-      uploadUrl,
-      data: file.openRead(),
-      options: Options(
-        contentType: 'application/octet-stream',
-        headers: {'Content-Length': size},
-      ),
-    );
+    await _putPresignedFile(uploadUrl: uploadUrl, file: file, size: size);
     final createResponse = await _client.raw.post<Map<String, dynamic>>(
       '/app-api/infra/file/create',
       data: {
@@ -97,6 +90,37 @@ class DioAttachmentUploadApi implements AttachmentUploadApi {
     );
     _unwrap(createResponse.data);
     return url;
+  }
+
+  Future<void> _putPresignedFile({
+    required String uploadUrl,
+    required File file,
+    required int size,
+  }) async {
+    final response = await _client.raw.put<void>(
+      uploadUrl,
+      data: file.openRead(),
+      options: Options(
+        contentType: 'application/octet-stream',
+        headers: {'Content-Length': size},
+        followRedirects: false,
+        validateStatus: (status) => status != null && status < 400,
+      ),
+    );
+    final status = response.statusCode;
+    if (status == null || status < 300) return;
+    final location = response.headers.value(HttpHeaders.locationHeader);
+    if (location == null || location.isEmpty) {
+      throw StateError('预签名上传重定向缺少目标地址');
+    }
+    await _client.raw.put<void>(
+      Uri.parse(uploadUrl).resolve(location).toString(),
+      data: file.openRead(),
+      options: Options(
+        contentType: 'application/octet-stream',
+        headers: {'Content-Length': size},
+      ),
+    );
   }
 
   bool _isServerFailure(Map<String, dynamic>? body) {
