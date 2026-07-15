@@ -184,6 +184,11 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           now: now,
           selectedTaskId: widget.selectedTaskId,
           onTaskSelected: widget.onTaskSelected,
+          onTasksReordered: (taskIds) async {
+            final repository = ref.read(taskViewActionRepositoryProvider);
+            if (repository == null) return;
+            await repository.reorderListTasks(taskIds);
+          },
         );
       case TaskViewMode.kanban:
         return KanbanView(
@@ -357,6 +362,7 @@ class _ListBody extends StatefulWidget {
     required this.now,
     required this.selectedTaskId,
     required this.onTaskSelected,
+    this.onTasksReordered,
   });
 
   final List<TodoTask> items;
@@ -365,6 +371,7 @@ class _ListBody extends StatefulWidget {
   final DateTime now;
   final String? selectedTaskId;
   final ValueChanged<String>? onTaskSelected;
+  final Future<void> Function(List<String> taskIds)? onTasksReordered;
 
   @override
   State<_ListBody> createState() => _ListBodyState();
@@ -423,7 +430,7 @@ class _ListBodyState extends State<_ListBody> {
           bottom: TodoLayoutTokens.mainHorizontalInset,
         ),
         itemCount: entries.length,
-        onReorder: (oldIndex, newIndex) {
+        onReorder: (oldIndex, newIndex) async {
           final entry = entries[oldIndex];
           if (entry is! TodoTask) return;
           final visibleTaskIds = entries
@@ -447,6 +454,7 @@ class _ListBodyState extends State<_ListBody> {
             _orderedIds = reordered;
             _hasCustomOrder = true;
           });
+          await widget.onTasksReordered?.call(reordered);
         },
         itemBuilder: (context, index) {
           final entry = entries[index];
