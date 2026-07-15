@@ -3,15 +3,19 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
+import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_query_repository.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/task_repository.dart';
 
 void main() {
   late AppDatabase db;
   late TaskQueryRepository repository;
+  late TaskRepository taskRepository;
 
   setUp(() async {
     db = AppDatabase.forTesting(NativeDatabase.memory());
     repository = TaskQueryRepository(db);
+    taskRepository = TaskRepository(db, SyncChangeQueue(db));
     final now = DateTime.utc(2026, 7, 15, 9);
 
     await db.batch((batch) {
@@ -65,6 +69,13 @@ void main() {
     expect(
       secondQuery.map((result) => result.identity).toList(),
       first.map((result) => result.identity).toList(),
+    );
+  });
+
+  test('重设父任务拒绝自引用', () async {
+    await expectLater(
+      taskRepository.reparent('task-1', 'task-1'),
+      throwsA(isA<ArgumentError>()),
     );
   });
 }

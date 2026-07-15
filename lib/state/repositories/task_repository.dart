@@ -233,6 +233,9 @@ class TaskRepository {
   }
 
   Future<void> reparent(String taskId, String? newParentId) async {
+    if (taskId == newParentId) {
+      throw ArgumentError.value(newParentId, 'newParentId', '任务不能引用自身');
+    }
     await _db.reparentTask(taskId, newParentId);
     final row = await (_db.select(
       _db.todoTasks,
