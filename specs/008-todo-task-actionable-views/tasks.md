@@ -2,7 +2,7 @@
 
 ## Phase 1: 审计与共享写链路
 
-- [ ] T001 审计现有列表、看板、时间线、拖拽和偏好代码，记录真实字段、直连调用和 B2/B3 依赖到 Docs #53。
+- [x] T001 审计现有列表、看板、时间线、拖拽和偏好代码，记录真实字段、直连调用和 B2/B3 依赖到 Docs #53。
 - [ ] T002 在 `test/task_view_action_repository_test.dart` 写列表重排、跨列移动、时间调整、只读/非法输入和偏好隔离的失败测试。
 - [ ] T003 实现共享 Repository/use-case 的 Drift transaction、outbox 与逐项失败语义，使 T002 通过。
 - [ ] T004 为 view preference 与 task mutation 增加 SyncCoordinator 顺序、重试和冲突测试并实现回放。
