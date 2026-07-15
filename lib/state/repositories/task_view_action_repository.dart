@@ -79,4 +79,34 @@ class TaskViewActionRepository {
       );
     });
   }
+
+  Future<void> reorderListTasks(List<String> taskIds) async {
+    if (taskIds.toSet().length != taskIds.length) {
+      throw ArgumentError.value(taskIds, 'taskIds', '不能包含重复任务');
+    }
+
+    await _db.transaction(() async {
+      for (final entry in taskIds.indexed) {
+        final taskId = entry.$2;
+        await (_db.update(
+          _db.todoTasks,
+        )..where((row) => row.id.equals(taskId))).write(
+          TodoTasksCompanion(
+            sortOrder: Value(entry.$1),
+            updatedAt: Value(DateTime.now()),
+          ),
+        );
+        final task = await (_db.select(
+          _db.todoTasks,
+        )..where((row) => row.id.equals(taskId))).getSingle();
+        await _queue.enqueue(
+          entity: SyncEntities.task,
+          op: SyncOps.upsert,
+          localId: task.id,
+          serverId: task.serverId,
+          payload: task.toJson(),
+        );
+      }
+    });
+  }
 }

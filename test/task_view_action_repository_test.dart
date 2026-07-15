@@ -98,4 +98,48 @@ void main() {
     expect(queued.single.entity, SyncEntities.task);
     expect(queued.single.op, SyncOps.upsert);
   });
+
+  test('列表重排按任务 UUID 持久化顺序并逐项入队', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final now = DateTime.utc(2026, 7, 15, 9);
+    await db
+        .into(db.todoLists)
+        .insert(
+          TodoListsCompanion.insert(
+            id: 'list-inbox',
+            name: '收集箱',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    for (final task in [('task-1', 0), ('task-2', 1)]) {
+      await db
+          .into(db.todoTasks)
+          .insert(
+            TodoTasksCompanion.insert(
+              id: task.$1,
+              listId: 'list-inbox',
+              title: task.$1,
+              sortOrder: Value(task.$2),
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+    }
+    final repository = TaskViewActionRepository(db, SyncChangeQueue(db));
+
+    await repository.reorderListTasks(['task-2', 'task-1']);
+
+    final tasks = await (db.select(
+      db.todoTasks,
+    )..orderBy([(row) => OrderingTerm(expression: row.sortOrder)])).get();
+    final queued = await db.select(db.todoSyncChanges).get();
+    expect(tasks.map((task) => task.id), ['task-2', 'task-1']);
+    expect(queued, hasLength(2));
+    expect(
+      queued.every((change) => change.entity == SyncEntities.task),
+      isTrue,
+    );
+  });
 }
