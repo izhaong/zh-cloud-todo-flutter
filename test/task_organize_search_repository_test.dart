@@ -98,4 +98,90 @@ void main() {
       throwsA(isA<StateError>()),
     );
   });
+
+  test('过滤组合状态、清单、优先级和标签', () async {
+    await db
+        .into(db.todoTaskTags)
+        .insert(
+          TodoTaskTagsCompanion.insert(
+            taskId: 'task-700',
+            tagId: 'tag-collection',
+          ),
+        );
+    await db
+        .into(db.todoTasks)
+        .insert(
+          TodoTasksCompanion.insert(
+            id: 'task-matching',
+            listId: 'list-inbox',
+            title: '待处理收集项',
+            priority: const Value(3),
+            isPinned: const Value(true),
+            sortOrder: const Value(1),
+            updatedAt: DateTime.utc(2026, 7, 15, 9),
+            createdAt: DateTime.utc(2026, 7, 15, 9),
+          ),
+        );
+    await db
+        .into(db.todoTaskTags)
+        .insert(
+          TodoTaskTagsCompanion.insert(
+            taskId: 'task-matching',
+            tagId: 'tag-collection',
+          ),
+        );
+
+    final results = await repository.filter(
+      const TaskQueryFilter(
+        listId: 'list-inbox',
+        priority: 3,
+        completed: false,
+        tagIds: ['tag-collection'],
+      ),
+    );
+
+    expect(results.map((task) => task.id), ['task-matching']);
+  });
+
+  test('过滤结果按置顶、手工顺序和 ID 稳定排序', () async {
+    final now = DateTime.utc(2026, 7, 15, 9);
+    for (final task in [
+      ('task-ordered-b', true, 7),
+      ('task-ordered-a', true, 7),
+      ('task-ordered-unpinned', false, 0),
+    ]) {
+      await db
+          .into(db.todoTasks)
+          .insert(
+            TodoTasksCompanion.insert(
+              id: task.$1,
+              listId: 'list-inbox',
+              title: task.$1,
+              priority: const Value(2),
+              isPinned: Value(task.$2),
+              sortOrder: Value(task.$3),
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      await db
+          .into(db.todoTaskTags)
+          .insert(
+            TodoTaskTagsCompanion.insert(
+              taskId: task.$1,
+              tagId: 'tag-collection',
+            ),
+          );
+    }
+
+    final results = await repository.filter(
+      const TaskQueryFilter(priority: 2, tagIds: ['tag-collection']),
+    );
+
+    expect(results.map((task) => task.id), [
+      'task-ordered-a',
+      'task-ordered-b',
+      'task-ordered-unpinned',
+    ]);
+  });
 }
