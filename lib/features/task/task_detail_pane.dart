@@ -438,6 +438,29 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     });
   }
 
+  Future<void> _addEndReminder(TodoTask t) async {
+    final fireAt = _dueAt ?? t.dueAt;
+    final messenger = ScaffoldMessenger.of(context);
+    if (fireAt == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('请先设置截止时间')));
+      return;
+    }
+    final reminders = ref.read(reminderRepositoryProvider);
+    if (reminders == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('提醒存储未就绪')));
+      return;
+    }
+    await reminders.create(
+      taskId: t.id,
+      fireAt: fireAt,
+      anchorType: 'END',
+      timeZone: _timeZone,
+      fixedTimezone: _fixedTimezone,
+    );
+    if (!_isCurrentTask(t.id)) return;
+    messenger.showSnackBar(const SnackBar(content: Text('已添加截止时提醒')));
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.taskId == null) {
@@ -576,6 +599,14 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
             onChanged: (value) => setState(() => _timeZone = value),
           ),
         ],
+        const Divider(height: 32),
+        sh('提醒'),
+        OutlinedButton.icon(
+          key: const Key('task-add-end-reminder'),
+          onPressed: () => _addEndReminder(t),
+          icon: const Icon(Icons.alarm_add_outlined),
+          label: const Text('在截止时提醒'),
+        ),
         const Divider(height: 32),
         sh('清单'),
         const SizedBox(height: 8),

@@ -68,4 +68,46 @@ void main() {
       expect(payload['timeZone'], 'Asia/Shanghai');
     },
   );
+
+  testWidgets('detail creates an end reminder through reminder repository', (
+    tester,
+  ) async {
+    final fixture = await TodoVisualFixture.create();
+    addTearDown(fixture.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: fixture.container,
+        child: MaterialApp(
+          theme: ThemeData.light().copyWith(
+            extensions: const [AppThemeExtension(AppColors.light)],
+          ),
+          home: const Scaffold(
+            body: TaskDetailPane(taskId: _taskId, embedded: true),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final createReminder = find.byKey(const Key('task-add-end-reminder'));
+    await tester.scrollUntilVisible(
+      createReminder,
+      160,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(createReminder);
+    await tester.pumpAndSettle();
+
+    final reminders = await fixture.database
+        .select(fixture.database.todoReminders)
+        .get();
+    expect(reminders, hasLength(1));
+    expect(reminders.single.taskId, _taskId);
+    expect(reminders.single.anchorType, 'END');
+    final change =
+        (await fixture.database.select(fixture.database.todoSyncChanges).get())
+            .last;
+    expect(change.entity, 'reminder');
+  });
 }
