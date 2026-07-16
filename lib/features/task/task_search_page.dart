@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/providers.dart';
 import '../../state/repositories/task_query_repository.dart';
-import 'task_detail_page.dart';
 
 /// 离线全局搜索：只查询 Drift 本地聚合，不上传用户检索词。
 class TaskSearchPage extends ConsumerStatefulWidget {
@@ -96,14 +95,6 @@ class _TaskSearchPageState extends ConsumerState<TaskSearchPage> {
   };
 
   void _openResult(BuildContext context, TaskSearchResult result) {
-    if (result.type == TaskSearchResultType.task) {
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => TaskDetailPage(taskId: result.id)),
-      );
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已定位${_labelFor(result.type)}：${result.title}')),
-    );
+    Navigator.of(context).pop<TaskSearchResult>(result);
   }
 }

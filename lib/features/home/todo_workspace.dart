@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/brand_colors.dart';
 import '../../core/theme/todo_layout_tokens.dart';
+import '../../state/repositories/task_query_repository.dart';
 import '../shell/section.dart';
 import '../shell/sidebar.dart';
 import '../task/task_search_page.dart';
@@ -41,6 +42,7 @@ class TodoWorkspace extends StatelessWidget {
     required this.onOpenTags,
     required this.onOpenFilters,
     required this.onOpenSettings,
+    this.onSearchResultSelected,
     this.scaffoldKey,
     this.onDetailDrawerChanged,
   });
@@ -57,6 +59,7 @@ class TodoWorkspace extends StatelessWidget {
   final VoidCallback onOpenTags;
   final VoidCallback onOpenFilters;
   final VoidCallback onOpenSettings;
+  final ValueChanged<TaskSearchResult>? onSearchResultSelected;
   final GlobalKey<ScaffoldState>? scaffoldKey;
   final TodoDetailDrawerChanged? onDetailDrawerChanged;
 
@@ -238,9 +241,12 @@ class TodoWorkspace extends StatelessWidget {
         IconButton(
           tooltip: '搜索',
           icon: Icon(Icons.search, color: colors.mutedForeground),
-          onPressed: () => Navigator.of(
-            context,
-          ).push(MaterialPageRoute(builder: (_) => const TaskSearchPage())),
+          onPressed: () async {
+            final result = await Navigator.of(context).push<TaskSearchResult>(
+              MaterialPageRoute(builder: (_) => const TaskSearchPage()),
+            );
+            if (result != null) onSearchResultSelected?.call(result);
+          },
         ),
         const SizedBox(width: 8),
       ],

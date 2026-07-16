@@ -8,7 +8,9 @@ import 'tag_color.dart';
 
 /// M11-B2 标签管理页（独立页面）。
 class TagPage extends ConsumerWidget {
-  const TagPage({super.key});
+  const TagPage({super.key, this.initialTagId});
+
+  final String? initialTagId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -32,9 +34,13 @@ class TagPage extends ConsumerWidget {
                 itemCount: tags.length,
                 itemBuilder: (_, i) {
                   final t = tags[i];
+                  final selected = t.id == initialTagId;
                   return ListTile(
+                    key: Key('tag-search-result-${t.id}'),
                     leading: _ColorDot(colorHex: t.color),
                     title: Text(t.name),
+                    subtitle: selected ? const Text('搜索定位的标签') : null,
+                    selected: selected,
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
