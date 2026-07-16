@@ -194,6 +194,13 @@ void main() {
         taskId: 'task-1',
         occurrenceAt: now,
       );
+      final localSkip = await db.select(db.todoRepeatSkips).getSingle();
+      await (db.update(db.todoRepeatSkips)
+            ..where((row) => row.id.equals(localSkip.id)))
+          .write(const TodoRepeatSkipsCompanion(serverId: Value(702)));
+      await (db.update(db.todoSyncChanges)
+            ..where((row) => row.entity.equals('repeat_skip')))
+          .write(const TodoSyncChangesCompanion(status: Value('synced')));
       await repeats.catchup(
         repeatRuleId: rule.id,
         taskId: 'task-1',
@@ -240,14 +247,10 @@ void main() {
         todoApi: client,
       );
 
-      expect(await coordinator.push(), 2);
-      final skipChange = sentChanges.singleWhere(
-        (change) => change['entityType'] == 'repeat_skip',
-      );
+      expect(await coordinator.push(), 1);
       final catchupChange = sentChanges.singleWhere(
         (change) => change['entityType'] == 'repeat_occurrence_action',
       );
-      expect(skipChange['payload']?['taskId'], 101);
       expect(catchupChange['payload']?['taskId'], 101);
       expect(catchupChange['payload']?['repeatRuleId'], 701);
       expect(catchupChange['payload']?['action'], 'CATCHUP');

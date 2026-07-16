@@ -317,7 +317,7 @@ void main() {
   });
 
   test(
-    'catches up a skipped repeat locally and queues the durable action',
+    'collapses an unsynced skip followed by catchup to no local action',
     () async {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(db.close);
@@ -333,6 +333,43 @@ void main() {
         taskId: 'task-1',
         occurrenceAt: occurrenceAt,
       );
+
+      await repeats.catchup(
+        repeatRuleId: rule.id,
+        taskId: 'task-1',
+        occurrenceAt: occurrenceAt,
+      );
+
+      final skips = await db.select(db.todoRepeatSkips).get();
+      final changes = await db.select(db.todoSyncChanges).get();
+      expect(skips, isEmpty);
+      expect(changes.map((change) => change.entity), ['repeat_rule']);
+    },
+  );
+
+  test(
+    'catches up a synced skip locally and queues the durable action',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final repeats = RepeatRuleRepository(db, SyncChangeQueue(db));
+      final occurrenceAt = DateTime(2026, 7, 15, 9);
+      final rule = await repeats.save(
+        taskId: 'task-1',
+        frequency: 'DAILY',
+        startAt: occurrenceAt,
+      );
+      final skip = await repeats.skip(
+        repeatRuleId: rule.id,
+        taskId: 'task-1',
+        occurrenceAt: occurrenceAt,
+      );
+      await (db.update(db.todoRepeatSkips)
+            ..where((row) => row.id.equals(skip.id)))
+          .write(const TodoRepeatSkipsCompanion(serverId: Value(702)));
+      await (db.update(db.todoSyncChanges)
+            ..where((row) => row.entity.equals('repeat_skip')))
+          .write(const TodoSyncChangesCompanion(status: Value('synced')));
 
       await repeats.catchup(
         repeatRuleId: rule.id,

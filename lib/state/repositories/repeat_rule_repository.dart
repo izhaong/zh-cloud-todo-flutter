@@ -178,6 +178,28 @@ class RepeatRuleRepository {
       await (_db.delete(
         _db.todoRepeatSkips,
       )..where((entry) => entry.id.equals(existing.id))).go();
+      // 尚未上推的“跳过→补做”在本机折叠为无操作。此时服务端不存在
+      // skip，发送 CATCHUP 反而会制造 occurrence-not-found 失败。
+      if (existing.serverId == null) {
+        final queuedSkipChanges =
+            await (_db.select(_db.todoSyncChanges)
+                  ..where(
+                    (change) => change.entity.equals(SyncEntities.repeatSkip),
+                  )
+                  ..where((change) => change.entityLocalId.equals(existing.id))
+                  ..where((change) => change.status.equals('queued')))
+                .get();
+        if (queuedSkipChanges.isNotEmpty) {
+          await (_db.delete(_db.todoSyncChanges)
+                ..where(
+                  (change) => change.entity.equals(SyncEntities.repeatSkip),
+                )
+                ..where((change) => change.entityLocalId.equals(existing.id))
+                ..where((change) => change.status.equals('queued')))
+              .go();
+          return;
+        }
+      }
       await _queue.enqueue(
         entity: SyncEntities.repeatOccurrenceAction,
         op: SyncOps.upsert,

@@ -402,6 +402,16 @@ void main() {
               .last;
       expect(change.entity, 'repeat_skip');
 
+      final localSkip = await fixture.database
+          .select(fixture.database.todoRepeatSkips)
+          .getSingle();
+      await (fixture.database.update(fixture.database.todoRepeatSkips)
+            ..where((row) => row.id.equals(localSkip.id)))
+          .write(const TodoRepeatSkipsCompanion(serverId: Value(702)));
+      await (fixture.database.update(fixture.database.todoSyncChanges)
+            ..where((row) => row.entity.equals('repeat_skip')))
+          .write(const TodoSyncChangesCompanion(status: Value('synced')));
+
       final catchup = find.byKey(const Key('task-repeat-catchup'));
       await tester.ensureVisible(catchup);
       await tester.tap(catchup);
