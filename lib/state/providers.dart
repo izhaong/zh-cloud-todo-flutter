@@ -7,6 +7,7 @@ import '../core/db/app_database.dart';
 import '../core/sync/sync_change_queue.dart';
 import '../core/sync/sync_coordinator.dart';
 import '../state/session_state.dart';
+import 'repositories/board_preference_repository.dart';
 import 'repositories/folder_repository.dart';
 import 'repositories/list_repository.dart';
 import 'repositories/tag_repository.dart';
@@ -108,6 +109,15 @@ final taskViewActionRepositoryProvider = Provider<TaskViewActionRepository?>((
   if (db == null || queue == null) return null;
   return TaskViewActionRepository(db, queue);
 });
+
+final boardPreferenceRepositoryProvider = Provider<BoardPreferenceRepository?>(
+  (ref) {
+    final db = ref.watch(appDatabaseProvider);
+    final queue = ref.watch(syncChangeQueueProvider);
+    if (db == null || queue == null) return null;
+    return BoardPreferenceRepository(db, queue);
+  },
+);
 
 // --- 同步 ---------------------------------------------------------------
 
