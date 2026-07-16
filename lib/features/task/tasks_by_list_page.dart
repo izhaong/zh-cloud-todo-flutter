@@ -276,6 +276,15 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   }
 
   Future<void> _applyBatchAction(TaskBatchAction action) async {
+    if (action == TaskBatchAction.moveToList) {
+      final listId = await _selectBatchDestinationList();
+      if (listId == null || !mounted) return;
+      await _applyBatchEdit(
+        TaskBatchEditCommand(taskIds: [], listId: listId),
+        successVerb: '已更新',
+      );
+      return;
+    }
     final command = switch (action) {
       TaskBatchAction.priorityNone => const TaskBatchEditCommand(
         taskIds: [],
@@ -305,6 +314,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         taskIds: [],
         listId: kInboxListId,
       ),
+      TaskBatchAction.moveToList => throw StateError('指定清单需要先选择目标'),
       TaskBatchAction.clearDueAt => const TaskBatchEditCommand(
         taskIds: [],
         clearDueAt: true,
@@ -315,6 +325,48 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       ),
     };
     await _applyBatchEdit(command, successVerb: '已更新');
+  }
+
+  Future<String?> _selectBatchDestinationList() async {
+    final repository = ref.read(listRepositoryProvider);
+    if (repository == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('清单暂不可用，请稍后重试')));
+      return null;
+    }
+    final lists = await repository.getAll();
+    if (!mounted) return null;
+    if (lists.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('暂无可移动的清单')));
+      return null;
+    }
+    return showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(
+                '移至清单',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+            ),
+            for (final list in lists)
+              ListTile(
+                key: Key('todo-batch-list-${list.id}'),
+                title: Text(list.name),
+                onTap: () => Navigator.of(sheetContext).pop(list.id),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _applyBatchEdit(
