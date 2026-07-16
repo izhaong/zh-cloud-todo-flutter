@@ -152,14 +152,14 @@ void main() {
       addTearDown(fixture.dispose);
       final repository = fixture.container.read(taskRepositoryProvider)!;
 
-      await (fixture.database.update(fixture.database.todoTasks)
-            ..where((task) => task.id.equals(_taskId)))
-          .write(
-            TodoTasksCompanion(
-              startAt: Value(DateTime(2026, 7, 11, 9)),
-              endAt: Value(DateTime(2026, 7, 11, 10)),
-            ),
-          );
+      await (fixture.database.update(
+        fixture.database.todoTasks,
+      )..where((task) => task.id.equals(_taskId))).write(
+        TodoTasksCompanion(
+          startAt: Value(DateTime(2026, 7, 11, 9)),
+          endAt: Value(DateTime(2026, 7, 11, 10)),
+        ),
+      );
 
       await tester.pumpWidget(
         UncontrolledProviderScope(
@@ -198,11 +198,68 @@ void main() {
       expect(task?.startAt, isNull);
       expect(task?.endAt, isNull);
       final change =
-          (await fixture.database.select(fixture.database.todoSyncChanges).get())
+          (await fixture.database
+                  .select(fixture.database.todoSyncChanges)
+                  .get())
               .last;
       final payload = jsonDecode(change.payloadJson) as Map<String, dynamic>;
       expect(payload['startAt'], isNull);
       expect(payload['endAt'], isNull);
+    },
+  );
+
+  testWidgets(
+    'detail saves a weekly repeat rule through the repeat repository',
+    (tester) async {
+      final fixture = await TodoVisualFixture.create();
+      addTearDown(fixture.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: fixture.container,
+          child: MaterialApp(
+            theme: ThemeData.light().copyWith(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            home: const Scaffold(
+              body: TaskDetailPane(taskId: _taskId, embedded: true),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final detailScroll = find.byType(Scrollable).first;
+      final repeatRule = find.byKey(const Key('task-repeat-rule'));
+      await tester.scrollUntilVisible(
+        repeatRule,
+        160,
+        scrollable: detailScroll,
+      );
+      await tester.ensureVisible(repeatRule);
+      await tester.pumpAndSettle();
+      await tester.tap(repeatRule);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('task-repeat-frequency-weekly')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('task-repeat-save')));
+      await tester.pumpAndSettle();
+
+      final rules = await fixture.database
+          .select(fixture.database.todoRepeatRules)
+          .get();
+      expect(rules, hasLength(1));
+      expect(rules.single.taskId, _taskId);
+      expect(rules.single.freq, 'WEEKLY');
+      final change =
+          (await fixture.database
+                  .select(fixture.database.todoSyncChanges)
+                  .get())
+              .last;
+      expect(change.entity, 'repeat_rule');
+      final payload = jsonDecode(change.payloadJson) as Map<String, dynamic>;
+      expect(payload['frequency'], 'weekly');
+      expect(payload['repeatMode'], 'ON_DUE');
     },
   );
 }

@@ -19,6 +19,20 @@ const String kInboxListId = 'inbox';
 
 enum _TaskDetailAction { togglePin, moveToInbox, collaboration, delete }
 
+class _RepeatRuleDraft {
+  const _RepeatRuleDraft({
+    required this.frequency,
+    required this.interval,
+    required this.weekdays,
+    required this.repeatMode,
+  });
+
+  final String frequency;
+  final int interval;
+  final Set<int> weekdays;
+  final String repeatMode;
+}
+
 /// 可复用的真实任务详情内容：
 /// - 标题 / 描述 / 优先级 / 起止 / due / list / folder / 标签 chips
 /// - 子任务（多级，通过 parentTaskId）
@@ -58,6 +72,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
   bool _allDay = false;
   String? _timeZone;
   bool _fixedTimezone = false;
+  TodoRepeatRule? _repeatRule;
   String? _listName;
   StreamSubscription<TodoTask?>? _taskSubscription;
   int _loadGeneration = 0;
@@ -102,6 +117,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       _allDay = false;
       _timeZone = null;
       _fixedTimezone = false;
+      _repeatRule = null;
       _listName = null;
       _loading = taskId != null;
       _unavailableNotifiedFor = null;
@@ -118,6 +134,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
 
     final t = await repo.getById(taskId);
     final listName = t == null ? null : await _resolveListName(t.listId);
+    final repeatRule = t == null ? null : await _repeatRuleForTask(t.id);
     if (!mounted || generation != _loadGeneration || widget.taskId != taskId) {
       return;
     }
@@ -132,6 +149,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       _allDay = t?.allDay ?? false;
       _timeZone = t?.timeZone;
       _fixedTimezone = t?.fixedTimezone ?? false;
+      _repeatRule = repeatRule;
       _listName = listName;
       _loading = false;
     });
@@ -435,6 +453,14 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     return db.listByLocalId(localListId);
   }
 
+  Future<TodoRepeatRule?> _repeatRuleForTask(String taskId) {
+    final db = ref.read(appDatabaseProvider);
+    if (db == null) return Future.value(null);
+    return (db.select(
+      db.todoRepeatRules,
+    )..where((rule) => rule.taskId.equals(taskId))).getSingleOrNull();
+  }
+
   Future<void> _pickDue(TodoTask t) async {
     final now = _dueAt ?? t.dueAt ?? DateTime.now();
     final picked = await _pickDateTime(t, now);
@@ -507,6 +533,220 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     );
     if (!_isCurrentTask(t.id)) return;
     messenger.showSnackBar(const SnackBar(content: Text('已添加截止时提醒')));
+  }
+
+  Future<void> _editRepeatRule(TodoTask t) async {
+    final repository = ref.read(repeatRuleRepositoryProvider);
+    final messenger = ScaffoldMessenger.of(context);
+    if (repository == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('重复规则存储未就绪')));
+      return;
+    }
+
+    final existing = _repeatRule;
+    final draft = await _showRepeatRuleEditor(existing);
+    if (draft == null || !_isCurrentTask(t.id)) return;
+    try {
+      final rule = await repository.save(
+        taskId: t.id,
+        frequency: draft.frequency,
+        intervalValue: draft.interval,
+        weekdays: draft.frequency == 'CUSTOM' ? draft.weekdays : null,
+        startAt: existing?.startAt ?? _startAt ?? _dueAt ?? DateTime.now(),
+        repeatMode: draft.repeatMode,
+        timeZone: _timeZone,
+        enabled: true,
+      );
+      if (!_isCurrentTask(t.id)) return;
+      setState(() => _repeatRule = rule);
+      messenger.showSnackBar(const SnackBar(content: Text('重复规则已保存')));
+    } on ArgumentError catch (error) {
+      if (_isCurrentTask(t.id)) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(error.message.toString())),
+        );
+      }
+    }
+  }
+
+  Future<void> _disableRepeatRule(TodoTask t) async {
+    final existing = _repeatRule;
+    final repository = ref.read(repeatRuleRepositoryProvider);
+    if (existing == null || repository == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final weekdays = _weekdaysFromText(existing.byDay);
+    final rule = await repository.save(
+      taskId: t.id,
+      frequency: existing.freq,
+      intervalValue: existing.interval,
+      weekdays: existing.freq == 'CUSTOM' ? weekdays : null,
+      monthDay: existing.monthDay,
+      startAt: existing.startAt ?? _startAt ?? _dueAt ?? DateTime.now(),
+      untilAt: existing.until,
+      countLimit: existing.countLimit,
+      repeatMode: existing.repeatMode,
+      timeZone: existing.timeZone,
+      enabled: false,
+    );
+    if (!_isCurrentTask(t.id)) return;
+    setState(() => _repeatRule = rule);
+    messenger.showSnackBar(const SnackBar(content: Text('已停止重复')));
+  }
+
+  Future<_RepeatRuleDraft?> _showRepeatRuleEditor(TodoRepeatRule? existing) {
+    var frequency = existing?.freq ?? 'DAILY';
+    var repeatMode = existing?.repeatMode ?? 'ON_DUE';
+    final intervalController = TextEditingController(
+      text: '${existing?.interval ?? 1}',
+    );
+    final weekdays = _weekdaysFromText(existing?.byDay);
+    if (frequency == 'CUSTOM' && weekdays.isEmpty) {
+      weekdays.add(DateTime.now().weekday);
+    }
+    return showDialog<_RepeatRuleDraft>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('重复规则'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('频率'),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children:
+                      const [
+                            ('DAILY', '每天'),
+                            ('WEEKLY', '每周'),
+                            ('MONTHLY', '每月'),
+                            ('YEARLY', '每年'),
+                            ('WEEKDAY', '工作日'),
+                            ('CUSTOM', '自定义'),
+                          ]
+                          .map(
+                            (option) => ChoiceChip(
+                              key: Key(
+                                'task-repeat-frequency-${option.$1.toLowerCase()}',
+                              ),
+                              label: Text(option.$2),
+                              selected: frequency == option.$1,
+                              onSelected: (_) => setDialogState(() {
+                                frequency = option.$1;
+                                if (frequency == 'CUSTOM' && weekdays.isEmpty) {
+                                  weekdays.add(DateTime.now().weekday);
+                                }
+                              }),
+                            ),
+                          )
+                          .toList(),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  key: const Key('task-repeat-interval'),
+                  controller: intervalController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: '每隔几次',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text('触发方式'),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  children:
+                      const [('ON_DUE', '到期后重复'), ('ON_COMPLETE', '完成后重复')]
+                          .map(
+                            (option) => ChoiceChip(
+                              key: Key(
+                                'task-repeat-mode-${option.$1.toLowerCase()}',
+                              ),
+                              label: Text(option.$2),
+                              selected: repeatMode == option.$1,
+                              onSelected: (_) =>
+                                  setDialogState(() => repeatMode = option.$1),
+                            ),
+                          )
+                          .toList(),
+                ),
+                if (frequency == 'CUSTOM') ...[
+                  const SizedBox(height: 16),
+                  const Text('重复星期'),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    children: List.generate(7, (index) {
+                      final weekday = index + 1;
+                      const labels = ['一', '二', '三', '四', '五', '六', '日'];
+                      return FilterChip(
+                        key: Key('task-repeat-weekday-$weekday'),
+                        label: Text(labels[index]),
+                        selected: weekdays.contains(weekday),
+                        onSelected: (selected) => setDialogState(() {
+                          if (selected) {
+                            weekdays.add(weekday);
+                          } else {
+                            weekdays.remove(weekday);
+                          }
+                        }),
+                      );
+                    }),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              key: const Key('task-repeat-save'),
+              onPressed: () {
+                final interval = int.tryParse(intervalController.text.trim());
+                if (interval == null || interval < 1) return;
+                Navigator.pop(
+                  dialogContext,
+                  _RepeatRuleDraft(
+                    frequency: frequency,
+                    interval: interval,
+                    weekdays: weekdays,
+                    repeatMode: repeatMode,
+                  ),
+                );
+              },
+              child: const Text('保存'),
+            ),
+          ],
+        ),
+      ),
+    ).whenComplete(intervalController.dispose);
+  }
+
+  Set<int> _weekdaysFromText(String? value) => (value ?? '')
+      .split(',')
+      .map(int.tryParse)
+      .whereType<int>()
+      .where((weekday) => weekday >= 1 && weekday <= 7)
+      .toSet();
+
+  String _repeatRuleLabel(TodoRepeatRule rule) {
+    const labels = {
+      'DAILY': '每天',
+      'WEEKLY': '每周',
+      'MONTHLY': '每月',
+      'YEARLY': '每年',
+      'WEEKDAY': '工作日',
+      'CUSTOM': '自定义',
+    };
+    final label = labels[rule.freq] ?? rule.freq;
+    return rule.enabled ? '$label（每隔 ${rule.interval} 次）' : '已停止：$label';
   }
 
   @override
@@ -705,6 +945,28 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
           icon: const Icon(Icons.alarm_add_outlined),
           label: const Text('在截止时提醒'),
         ),
+        const Divider(height: 32),
+        sh('重复'),
+        OutlinedButton.icon(
+          key: const Key('task-repeat-rule'),
+          onPressed: () => _editRepeatRule(t),
+          icon: const Icon(Icons.repeat_outlined),
+          label: Text(
+            _repeatRule == null ? '不重复' : _repeatRuleLabel(_repeatRule!),
+          ),
+        ),
+        if (_repeatRule?.enabled == true) ...[
+          const SizedBox(height: 4),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const Key('task-repeat-disable'),
+              onPressed: () => _disableRepeatRule(t),
+              icon: const Icon(Icons.pause_circle_outline, size: 16),
+              label: const Text('停止重复'),
+            ),
+          ),
+        ],
         const Divider(height: 32),
         sh('清单'),
         const SizedBox(height: 8),
