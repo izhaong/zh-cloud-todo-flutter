@@ -1,4 +1,4 @@
-import 'package:drift/drift.dart';
+import 'package:drift/drift.dart' hide isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -106,6 +106,19 @@ void main() {
       taskRepository.reparent('task-1', 'task-2'),
       throwsA(isA<StateError>()),
     );
+  });
+
+  test('重设父任务拒绝不存在的本地父任务且不写 outbox', () async {
+    await expectLater(
+      taskRepository.reparent('task-1', 'task-missing'),
+      throwsA(isA<StateError>()),
+    );
+
+    final task = await (db.select(
+      db.todoTasks,
+    )..where((row) => row.id.equals('task-1'))).getSingle();
+    expect(task.parentTaskId, isNull);
+    expect(await db.select(db.todoSyncChanges).get(), isEmpty);
   });
 
   test('重设父任务拒绝超过五级', () async {

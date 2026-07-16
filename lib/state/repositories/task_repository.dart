@@ -268,7 +268,10 @@ class TaskRepository {
       final current = await (_db.select(
         _db.todoTasks,
       )..where((task) => task.id.equals(parentId))).getSingleOrNull();
-      currentId = current?.parentTaskId;
+      if (current == null) {
+        throw StateError('父任务不存在');
+      }
+      currentId = current.parentTaskId;
       parentChainLength += 1;
     }
   }
