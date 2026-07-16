@@ -288,6 +288,25 @@ void main() {
     });
   });
 
+  test('批量移动拒绝不存在的本地清单且不写 outbox', () async {
+    final batchRepository = TaskBatchEditRepository(db, SyncChangeQueue(db));
+
+    final results = await batchRepository.apply(
+      const TaskBatchEditCommand(
+        taskIds: ['task-1'],
+        listId: 'list-missing',
+      ),
+    );
+
+    expect(results.single.status, TaskBatchEditStatus.failed);
+    expect(results.single.reason, '清单不存在');
+    final task = await (db.select(
+      db.todoTasks,
+    )..where((row) => row.id.equals('task-1'))).getSingle();
+    expect(task.listId, 'list-inbox');
+    expect(await db.select(db.todoSyncChanges).get(), isEmpty);
+  });
+
   test('批量编辑清空截止时间后逐项入队', () async {
     final batchRepository = TaskBatchEditRepository(db, SyncChangeQueue(db));
     await (db.update(db.todoTasks)

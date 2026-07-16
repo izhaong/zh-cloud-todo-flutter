@@ -108,6 +108,19 @@ class TaskBatchEditRepository {
           );
         }
 
+        if (command.listId != null) {
+          final list = await (_db.select(
+            _db.todoLists,
+          )..where((row) => row.id.equals(command.listId!))).getSingleOrNull();
+          if (list == null) {
+            return TaskBatchEditResult(
+              taskId: taskId,
+              status: TaskBatchEditStatus.failed,
+              reason: '清单不存在',
+            );
+          }
+        }
+
         final tagIds = command.tagIds?.toSet().toList(growable: false);
         if (tagIds != null) {
           final tags = await (_db.select(
