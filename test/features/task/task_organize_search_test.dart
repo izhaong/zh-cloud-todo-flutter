@@ -143,4 +143,54 @@ void main() {
       expect(changes.where((change) => change.entity == 'task'), hasLength(2));
     },
   );
+
+  testWidgets(
+    'batch pin action updates selected tasks through the local use-case',
+    (tester) async {
+      final fixture = await TodoVisualFixture.create();
+      addTearDown(fixture.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: fixture.container,
+          child: MaterialApp(
+            theme: ThemeData.light().copyWith(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            home: const Scaffold(body: TasksByListPage(hideAppBar: true)),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('todo-batch-edit')));
+      await tester.pumpAndSettle();
+      for (final taskId in [
+        TodoVisualFixture.todayTaskId,
+        TodoVisualFixture.secondaryTodayTaskId,
+      ]) {
+        await tester.tap(find.byKey(Key('task-batch-select-$taskId')));
+      }
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('todo-batch-more')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('置顶所选'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('已更新 2 项；失败 0 项'), findsOneWidget);
+      final tasks = await fixture.database
+          .select(fixture.database.todoTasks)
+          .get();
+      expect(
+        tasks
+            .where(
+              (task) =>
+                  task.id == TodoVisualFixture.todayTaskId ||
+                  task.id == TodoVisualFixture.secondaryTodayTaskId,
+            )
+            .map((task) => task.isPinned),
+        everyElement(isTrue),
+      );
+    },
+  );
 }
