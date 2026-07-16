@@ -256,19 +256,18 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     }
   }
 
-  void _changeMode(TaskViewMode mode) {
+  Future<void> _changeMode(TaskViewMode mode) async {
     setState(() => _mode = mode);
-    ref
-        .read(syncChangeQueueProvider)
-        ?.enqueue(
-          entity: 'view_preference',
-          op: 'upsert',
-          payload: {
-            'sourceType': 'task_view',
-            'sourceKey': 'tasks_by_list',
-            'viewType': mode.name,
-          },
-        );
+    final repository = ref.read(taskViewActionRepositoryProvider);
+    if (repository == null) return;
+    try {
+      await repository.saveTaskWorkspaceViewMode(mode.name);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('视图设置保存失败，请重试')));
+    }
   }
 
   Stream<List<TodoTask>> _resolveTasksStream(TaskRepository repository) {
@@ -492,7 +491,7 @@ class _ListBodyState extends State<_ListBody> {
           try {
             await widget.onTasksReordered?.call(reordered);
           } catch (_) {
-            if (!mounted) return;
+            if (!context.mounted) return;
             setState(() {
               _orderedIds = previousOrder;
               _hasCustomOrder = previousHasCustomOrder;

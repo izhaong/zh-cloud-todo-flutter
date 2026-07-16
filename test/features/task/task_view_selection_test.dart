@@ -25,6 +25,34 @@ void main() {
     expect(_detailTextContaining('选择任务'), findsNothing);
   });
 
+  testWidgets(
+    'changing workspace mode persists the preference before queuing sync',
+    (tester) async {
+      final fixture = await _pumpWorkspace(tester);
+
+      await _switchWorkspaceMode(tester, TaskViewMode.kanban);
+
+      final preferences = await fixture.database
+          .select(fixture.database.todoViewPreferences)
+          .get();
+      final preference = preferences
+          .where(
+            (row) =>
+                row.sourceType == 'task_view' &&
+                row.sourceKey == 'tasks_by_list',
+          )
+          .firstOrNull;
+      final queued = await (fixture.database.select(
+        fixture.database.todoSyncChanges,
+      )..where((row) => row.entity.equals('view_preference'))).get();
+
+      expect(preference, isNotNull);
+      expect(preference!.valueJson, contains('"viewType":"kanban"'));
+      expect(queued, hasLength(1));
+      expect(queued.single.entityLocalId, preference.id);
+    },
+  );
+
   for (final mode in const [
     TaskViewMode.kanban,
     TaskViewMode.timeline,
