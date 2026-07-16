@@ -50,6 +50,11 @@ void main() {
           localPath: file.path,
           name: 'b1-live-attachment.md',
         );
+        expect(
+          await _readRemoteBytes(url),
+          orderedEquals(await file.readAsBytes()),
+          reason: '上传完成后，返回的访问 URL 必须读取到原始附件字节',
+        );
         attachmentId = await attachmentApi.registerTaskAttachment(
           taskServerId: taskId,
           name: 'b1-live-attachment.md',
@@ -81,6 +86,17 @@ void main() {
         expect(
           (afterDelete as List).any((value) => (value as Map)['id'] != null),
           isFalse,
+        );
+        await expectLater(
+          _readRemoteBytes(url),
+          throwsA(
+            isA<DioException>().having(
+              (error) => error.response?.statusCode,
+              'HTTP status',
+              HttpStatus.notFound,
+            ),
+          ),
+          reason: '删除附件后，同一预签名访问 URL 必须不能再读取对象二进制',
         );
       } finally {
         if (attachmentId != null) {
@@ -137,6 +153,14 @@ Future<Object?> _getData(
 Future<void> _delete(ApiClient client, String path) async {
   final response = await client.raw.delete<Map<String, dynamic>>(path);
   _unwrap(response.data);
+}
+
+Future<List<int>> _readRemoteBytes(String url) async {
+  final response = await Dio().get<List<int>>(
+    url,
+    options: Options(responseType: ResponseType.bytes),
+  );
+  return response.data ?? const <int>[];
 }
 
 Object? _unwrap(Map<String, dynamic>? body) {
