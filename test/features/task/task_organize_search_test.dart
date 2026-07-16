@@ -193,4 +193,78 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'batch inbox and clear-tag actions write through the local use-case',
+    (tester) async {
+      final fixture = await TodoVisualFixture.create();
+      addTearDown(fixture.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: fixture.container,
+          child: MaterialApp(
+            theme: ThemeData.light().copyWith(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            home: const Scaffold(body: TasksByListPage(hideAppBar: true)),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('todo-batch-edit')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(
+          Key('task-batch-select-${TodoVisualFixture.metadataTaskId}'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<PopupMenuButton>(find.byKey(const Key('todo-batch-more')))
+            .enabled,
+        isTrue,
+      );
+      await tester.tap(find.byKey(const Key('todo-batch-more')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('todo-batch-action-moveToInbox')));
+      await tester.pumpAndSettle();
+
+      var task =
+          await (fixture.database.select(fixture.database.todoTasks)..where(
+                (row) => row.id.equals(TodoVisualFixture.metadataTaskId),
+              ))
+              .getSingle();
+      expect(task.listId, TodoVisualFixture.inboxListId);
+
+      await tester.tap(find.byKey(const Key('todo-batch-edit')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(
+          Key('task-batch-select-${TodoVisualFixture.metadataTaskId}'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('todo-batch-more')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('todo-batch-action-clearTags')));
+      await tester.pumpAndSettle();
+
+      final tagRows =
+          await (fixture.database.select(fixture.database.todoTaskTags)..where(
+                (row) => row.taskId.equals(TodoVisualFixture.metadataTaskId),
+              ))
+              .get();
+      expect(tagRows, isEmpty);
+      final changes = await fixture.database
+          .select(fixture.database.todoSyncChanges)
+          .get();
+      expect(
+        changes.where((change) => change.entity == 'task_tag'),
+        hasLength(1),
+      );
+    },
+  );
 }

@@ -12,6 +12,8 @@ enum TaskSort { smart, priorityDesc, dueDate, title, createdAt }
 /// The header only emits an intent; task writes remain in the page-level
 /// use-case flow and never call an API from the widget tree.
 enum TaskBatchAction {
+  moveToInbox,
+  clearTags,
   priorityNone,
   priorityLow,
   priorityMedium,
@@ -22,6 +24,8 @@ enum TaskBatchAction {
 
 extension TaskBatchActionX on TaskBatchAction {
   String get label => switch (this) {
+    TaskBatchAction.moveToInbox => '移至收集箱',
+    TaskBatchAction.clearTags => '清空所选标签',
     TaskBatchAction.priorityNone => '设为无优先级',
     TaskBatchAction.priorityLow => '设为低优先级',
     TaskBatchAction.priorityMedium => '设为中优先级',
@@ -191,7 +195,11 @@ class TaskWorkspaceHeader extends StatelessWidget {
                   onSelected: onBatchActionSelected,
                   itemBuilder: (context) => [
                     for (final action in TaskBatchAction.values)
-                      PopupMenuItem(value: action, child: Text(action.label)),
+                      PopupMenuItem(
+                        key: Key('todo-batch-action-${action.name}'),
+                        value: action,
+                        child: Text(action.label),
+                      ),
                   ],
                 ),
               if (onBatchPressed != null)

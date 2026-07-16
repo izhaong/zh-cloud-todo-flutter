@@ -301,6 +301,14 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         taskIds: [],
         isPinned: false,
       ),
+      TaskBatchAction.moveToInbox => const TaskBatchEditCommand(
+        taskIds: [],
+        listId: kInboxListId,
+      ),
+      TaskBatchAction.clearTags => const TaskBatchEditCommand(
+        taskIds: [],
+        tagIds: [],
+      ),
     };
     await _applyBatchEdit(command, successVerb: '已更新');
   }
@@ -321,6 +329,9 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     final results = await repository.apply(
       TaskBatchEditCommand(
         taskIds: selectedIds,
+        listId: baseCommand.listId,
+        dueAt: baseCommand.dueAt,
+        tagIds: baseCommand.tagIds,
         priority: baseCommand.priority,
         completed: baseCommand.completed,
         isPinned: baseCommand.isPinned,
