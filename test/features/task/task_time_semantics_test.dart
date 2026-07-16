@@ -262,4 +262,39 @@ void main() {
       expect(payload['repeatMode'], 'ON_DUE');
     },
   );
+
+  testWidgets('detail shows a recoverable error for an invalid time range', (
+    tester,
+  ) async {
+    final fixture = await TodoVisualFixture.create();
+    addTearDown(fixture.dispose);
+    await (fixture.database.update(
+      fixture.database.todoTasks,
+    )..where((task) => task.id.equals(_taskId))).write(
+      TodoTasksCompanion(
+        startAt: Value(DateTime(2026, 7, 11, 10)),
+        endAt: Value(DateTime(2026, 7, 11, 9)),
+      ),
+    );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: fixture.container,
+        child: MaterialApp(
+          theme: ThemeData.light().copyWith(
+            extensions: const [AppThemeExtension(AppColors.light)],
+          ),
+          home: const Scaffold(
+            body: TaskDetailPane(taskId: _taskId, embedded: true),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('结束时间必须晚于开始时间'), findsOneWidget);
+  });
 }

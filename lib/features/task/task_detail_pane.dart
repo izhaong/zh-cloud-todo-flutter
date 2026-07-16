@@ -261,29 +261,38 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     if (t == null) return;
     final repo = ref.read(taskRepositoryProvider);
     if (repo == null) return;
-    final updated = await repo.update(
-      t.id,
-      title: _title.text.trim(),
-      description: _desc.text.trim(),
-      priority: _priority,
-      startAt: _startAt,
-      endAt: _endAt,
-      clearStartAt: _clearStartAt,
-      clearEndAt: _clearEndAt,
-      dueAt: _dueAt,
-      allDay: _allDay,
-      timeZone: _fixedTimezone ? (_timeZone ?? 'Asia/Shanghai') : _timeZone,
-      fixedTimezone: _fixedTimezone,
-    );
+    final messenger = ScaffoldMessenger.of(context);
+    TodoTask updated;
+    try {
+      updated = await repo.update(
+        t.id,
+        title: _title.text.trim(),
+        description: _desc.text.trim(),
+        priority: _priority,
+        startAt: _startAt,
+        endAt: _endAt,
+        clearStartAt: _clearStartAt,
+        clearEndAt: _clearEndAt,
+        dueAt: _dueAt,
+        allDay: _allDay,
+        timeZone: _fixedTimezone ? (_timeZone ?? 'Asia/Shanghai') : _timeZone,
+        fixedTimezone: _fixedTimezone,
+      );
+    } on ArgumentError catch (error) {
+      if (_isCurrentTask(t.id)) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(error.message?.toString() ?? '任务时间无效')),
+        );
+      }
+      return;
+    }
     if (mounted && widget.taskId == updated.id) {
       setState(() {
         _task = updated;
         _clearStartAt = false;
         _clearEndAt = false;
       });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('已保存')));
+      messenger.showSnackBar(const SnackBar(content: Text('已保存')));
     }
   }
 
