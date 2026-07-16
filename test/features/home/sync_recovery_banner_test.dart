@@ -3,7 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zh_cloud_todo_flutter/features/home/sync_recovery_banner.dart';
 
 void main() {
-  testWidgets('shows failed count and retries all failed changes', (tester) async {
+  testWidgets('shows failed count and retries all failed changes', (
+    tester,
+  ) async {
     var retryCalls = 0;
 
     await tester.pumpWidget(
@@ -25,4 +27,24 @@ void main() {
 
     expect(retryCalls, 1);
   });
+
+  testWidgets('explains when a failed change used the server version', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SyncRecoveryBanner(
+            failedCount: 2,
+            conflictCount: 1,
+            onRetry: _noOp,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('其中 1 项与其他设备冲突，已采用服务器版本'), findsOneWidget);
+  });
 }
+
+Future<void> _noOp() async {}

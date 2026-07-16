@@ -188,6 +188,7 @@ class TodoSyncChanges extends Table {
   DateTimeColumn get nextAttemptAt => dateTime().nullable()();
   TextColumn get status =>
       text().withDefault(const Constant('queued'))(); // queued/synced/failed
+  TextColumn get failureReason => text().nullable()();
 }
 
 /// 全局同步游标（单行，id 固定为 1）。
@@ -239,7 +240,7 @@ class AppDatabase extends _$AppDatabase {
     : super(_open('todo_t${tenantId}_u$userId'));
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -254,8 +255,13 @@ class AppDatabase extends _$AppDatabase {
           await m.deleteTable(table.actualTableName);
         }
         await m.createAll();
-      } else if (from < 5) {
-        await m.addColumn(todoSyncChanges, todoSyncChanges.nextAttemptAt);
+      } else {
+        if (from < 5) {
+          await m.addColumn(todoSyncChanges, todoSyncChanges.nextAttemptAt);
+        }
+        if (from < 6) {
+          await m.addColumn(todoSyncChanges, todoSyncChanges.failureReason);
+        }
       }
     },
   );

@@ -300,6 +300,9 @@ class _HomeShellState extends ConsumerState<HomeShell>
     final failedChanges =
         ref.watch(failedSyncChangesProvider).valueOrNull ??
         const <TodoSyncChange>[];
+    final conflictCount = failedChanges
+        .where((change) => change.failureReason != null)
+        .length;
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
@@ -320,6 +323,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
                   left: 12,
                   child: SyncRecoveryBanner(
                     failedCount: failedChanges.length,
+                    conflictCount: conflictCount,
                     onRetry: () => _retryFailedSyncChanges(failedChanges),
                   ),
                 ),

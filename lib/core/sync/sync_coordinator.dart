@@ -95,20 +95,24 @@ class SyncCoordinator {
         for (final a in result.accepted) a.clientMutationId,
         for (final c in result.conflicts) c.clientMutationId,
       };
+      final conflictsByMutationId = {
+        for (final conflict in result.conflicts)
+          if (conflict.clientMutationId != null)
+            conflict.clientMutationId!: conflict,
+      };
       var count = 0;
       for (final change in changes) {
         if (acceptedIds.contains(change.clientMutationId)) {
-          final isConflict = result.conflicts.any(
-            (c) => c.clientMutationId == change.clientMutationId,
-          );
+          final conflict = conflictsByMutationId[change.clientMutationId];
           await (db.update(
             db.todoSyncChanges,
           )..where((t) => t.id.equals(change.id))).write(
             TodoSyncChangesCompanion(
-              status: Value(isConflict ? 'failed' : 'synced'),
+              status: Value(conflict == null ? 'synced' : 'failed'),
+              failureReason: Value(conflict?.reason),
             ),
           );
-          if (!isConflict) count++;
+          if (conflict == null) count++;
         }
       }
       return count;

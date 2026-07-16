@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 class SyncRecoveryBanner extends StatefulWidget {
   const SyncRecoveryBanner({
     required this.failedCount,
+    this.conflictCount = 0,
     required this.onRetry,
     super.key,
   });
 
   final int failedCount;
+  final int conflictCount;
   final Future<void> Function() onRetry;
 
   @override
@@ -40,9 +42,20 @@ class _SyncRecoveryBannerState extends State<SyncRecoveryBanner> {
             Icon(Icons.sync_problem_outlined, color: colors.onErrorContainer),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(
-                '${widget.failedCount} 项同步需要处理',
-                style: TextStyle(color: colors.onErrorContainer),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${widget.failedCount} 项同步需要处理',
+                    style: TextStyle(color: colors.onErrorContainer),
+                  ),
+                  if (widget.conflictCount > 0)
+                    Text(
+                      '其中 ${widget.conflictCount} 项与其他设备冲突，已采用服务器版本',
+                      style: TextStyle(color: colors.onErrorContainer),
+                    ),
+                ],
               ),
             ),
             Semantics(

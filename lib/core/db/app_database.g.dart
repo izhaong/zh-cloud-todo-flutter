@@ -4939,6 +4939,17 @@ class $TodoSyncChangesTable extends TodoSyncChanges
     requiredDuringInsert: false,
     defaultValue: const Constant('queued'),
   );
+  static const VerificationMeta _failureReasonMeta = const VerificationMeta(
+    'failureReason',
+  );
+  @override
+  late final GeneratedColumn<String> failureReason = GeneratedColumn<String>(
+    'failure_reason',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -4952,6 +4963,7 @@ class $TodoSyncChangesTable extends TodoSyncChanges
     attemptCount,
     nextAttemptAt,
     status,
+    failureReason,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -5053,6 +5065,15 @@ class $TodoSyncChangesTable extends TodoSyncChanges
         status.isAcceptableOrUnknown(data['status']!, _statusMeta),
       );
     }
+    if (data.containsKey('failure_reason')) {
+      context.handle(
+        _failureReasonMeta,
+        failureReason.isAcceptableOrUnknown(
+          data['failure_reason']!,
+          _failureReasonMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -5106,6 +5127,10 @@ class $TodoSyncChangesTable extends TodoSyncChanges
         DriftSqlType.string,
         data['${effectivePrefix}status'],
       )!,
+      failureReason: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}failure_reason'],
+      ),
     );
   }
 
@@ -5127,6 +5152,7 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
   final int attemptCount;
   final DateTime? nextAttemptAt;
   final String status;
+  final String? failureReason;
   const TodoSyncChange({
     required this.id,
     required this.clientMutationId,
@@ -5139,6 +5165,7 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
     required this.attemptCount,
     this.nextAttemptAt,
     required this.status,
+    this.failureReason,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -5160,6 +5187,9 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
       map['next_attempt_at'] = Variable<DateTime>(nextAttemptAt);
     }
     map['status'] = Variable<String>(status);
+    if (!nullToAbsent || failureReason != null) {
+      map['failure_reason'] = Variable<String>(failureReason);
+    }
     return map;
   }
 
@@ -5182,6 +5212,9 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
           ? const Value.absent()
           : Value(nextAttemptAt),
       status: Value(status),
+      failureReason: failureReason == null && nullToAbsent
+          ? const Value.absent()
+          : Value(failureReason),
     );
   }
 
@@ -5202,6 +5235,7 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
       attemptCount: serializer.fromJson<int>(json['attemptCount']),
       nextAttemptAt: serializer.fromJson<DateTime?>(json['nextAttemptAt']),
       status: serializer.fromJson<String>(json['status']),
+      failureReason: serializer.fromJson<String?>(json['failureReason']),
     );
   }
   @override
@@ -5219,6 +5253,7 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
       'attemptCount': serializer.toJson<int>(attemptCount),
       'nextAttemptAt': serializer.toJson<DateTime?>(nextAttemptAt),
       'status': serializer.toJson<String>(status),
+      'failureReason': serializer.toJson<String?>(failureReason),
     };
   }
 
@@ -5234,6 +5269,7 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
     int? attemptCount,
     Value<DateTime?> nextAttemptAt = const Value.absent(),
     String? status,
+    Value<String?> failureReason = const Value.absent(),
   }) => TodoSyncChange(
     id: id ?? this.id,
     clientMutationId: clientMutationId ?? this.clientMutationId,
@@ -5252,6 +5288,9 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
         ? nextAttemptAt.value
         : this.nextAttemptAt,
     status: status ?? this.status,
+    failureReason: failureReason.present
+        ? failureReason.value
+        : this.failureReason,
   );
   TodoSyncChange copyWithCompanion(TodoSyncChangesCompanion data) {
     return TodoSyncChange(
@@ -5278,6 +5317,9 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
           ? data.nextAttemptAt.value
           : this.nextAttemptAt,
       status: data.status.present ? data.status.value : this.status,
+      failureReason: data.failureReason.present
+          ? data.failureReason.value
+          : this.failureReason,
     );
   }
 
@@ -5294,7 +5336,8 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
           ..write('createdAt: $createdAt, ')
           ..write('attemptCount: $attemptCount, ')
           ..write('nextAttemptAt: $nextAttemptAt, ')
-          ..write('status: $status')
+          ..write('status: $status, ')
+          ..write('failureReason: $failureReason')
           ..write(')'))
         .toString();
   }
@@ -5312,6 +5355,7 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
     attemptCount,
     nextAttemptAt,
     status,
+    failureReason,
   );
   @override
   bool operator ==(Object other) =>
@@ -5327,7 +5371,8 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
           other.createdAt == this.createdAt &&
           other.attemptCount == this.attemptCount &&
           other.nextAttemptAt == this.nextAttemptAt &&
-          other.status == this.status);
+          other.status == this.status &&
+          other.failureReason == this.failureReason);
 }
 
 class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
@@ -5342,6 +5387,7 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
   final Value<int> attemptCount;
   final Value<DateTime?> nextAttemptAt;
   final Value<String> status;
+  final Value<String?> failureReason;
   const TodoSyncChangesCompanion({
     this.id = const Value.absent(),
     this.clientMutationId = const Value.absent(),
@@ -5354,6 +5400,7 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
     this.attemptCount = const Value.absent(),
     this.nextAttemptAt = const Value.absent(),
     this.status = const Value.absent(),
+    this.failureReason = const Value.absent(),
   });
   TodoSyncChangesCompanion.insert({
     this.id = const Value.absent(),
@@ -5367,6 +5414,7 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
     this.attemptCount = const Value.absent(),
     this.nextAttemptAt = const Value.absent(),
     this.status = const Value.absent(),
+    this.failureReason = const Value.absent(),
   }) : clientMutationId = Value(clientMutationId),
        entity = Value(entity),
        op = Value(op),
@@ -5384,6 +5432,7 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
     Expression<int>? attemptCount,
     Expression<DateTime>? nextAttemptAt,
     Expression<String>? status,
+    Expression<String>? failureReason,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -5397,6 +5446,7 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
       if (attemptCount != null) 'attempt_count': attemptCount,
       if (nextAttemptAt != null) 'next_attempt_at': nextAttemptAt,
       if (status != null) 'status': status,
+      if (failureReason != null) 'failure_reason': failureReason,
     });
   }
 
@@ -5412,6 +5462,7 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
     Value<int>? attemptCount,
     Value<DateTime?>? nextAttemptAt,
     Value<String>? status,
+    Value<String?>? failureReason,
   }) {
     return TodoSyncChangesCompanion(
       id: id ?? this.id,
@@ -5425,6 +5476,7 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
       attemptCount: attemptCount ?? this.attemptCount,
       nextAttemptAt: nextAttemptAt ?? this.nextAttemptAt,
       status: status ?? this.status,
+      failureReason: failureReason ?? this.failureReason,
     );
   }
 
@@ -5464,6 +5516,9 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
     if (status.present) {
       map['status'] = Variable<String>(status.value);
     }
+    if (failureReason.present) {
+      map['failure_reason'] = Variable<String>(failureReason.value);
+    }
     return map;
   }
 
@@ -5480,7 +5535,8 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
           ..write('createdAt: $createdAt, ')
           ..write('attemptCount: $attemptCount, ')
           ..write('nextAttemptAt: $nextAttemptAt, ')
-          ..write('status: $status')
+          ..write('status: $status, ')
+          ..write('failureReason: $failureReason')
           ..write(')'))
         .toString();
   }
@@ -8540,6 +8596,7 @@ typedef $$TodoSyncChangesTableCreateCompanionBuilder =
       Value<int> attemptCount,
       Value<DateTime?> nextAttemptAt,
       Value<String> status,
+      Value<String?> failureReason,
     });
 typedef $$TodoSyncChangesTableUpdateCompanionBuilder =
     TodoSyncChangesCompanion Function({
@@ -8554,6 +8611,7 @@ typedef $$TodoSyncChangesTableUpdateCompanionBuilder =
       Value<int> attemptCount,
       Value<DateTime?> nextAttemptAt,
       Value<String> status,
+      Value<String?> failureReason,
     });
 
 class $$TodoSyncChangesTableFilterComposer
@@ -8617,6 +8675,11 @@ class $$TodoSyncChangesTableFilterComposer
 
   ColumnFilters<String> get status => $composableBuilder(
     column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get failureReason => $composableBuilder(
+    column: $table.failureReason,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -8684,6 +8747,11 @@ class $$TodoSyncChangesTableOrderingComposer
     column: $table.status,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get failureReason => $composableBuilder(
+    column: $table.failureReason,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$TodoSyncChangesTableAnnotationComposer
@@ -8739,6 +8807,11 @@ class $$TodoSyncChangesTableAnnotationComposer
 
   GeneratedColumn<String> get status =>
       $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<String> get failureReason => $composableBuilder(
+    column: $table.failureReason,
+    builder: (column) => column,
+  );
 }
 
 class $$TodoSyncChangesTableTableManager
@@ -8789,6 +8862,7 @@ class $$TodoSyncChangesTableTableManager
                 Value<int> attemptCount = const Value.absent(),
                 Value<DateTime?> nextAttemptAt = const Value.absent(),
                 Value<String> status = const Value.absent(),
+                Value<String?> failureReason = const Value.absent(),
               }) => TodoSyncChangesCompanion(
                 id: id,
                 clientMutationId: clientMutationId,
@@ -8801,6 +8875,7 @@ class $$TodoSyncChangesTableTableManager
                 attemptCount: attemptCount,
                 nextAttemptAt: nextAttemptAt,
                 status: status,
+                failureReason: failureReason,
               ),
           createCompanionCallback:
               ({
@@ -8815,6 +8890,7 @@ class $$TodoSyncChangesTableTableManager
                 Value<int> attemptCount = const Value.absent(),
                 Value<DateTime?> nextAttemptAt = const Value.absent(),
                 Value<String> status = const Value.absent(),
+                Value<String?> failureReason = const Value.absent(),
               }) => TodoSyncChangesCompanion.insert(
                 id: id,
                 clientMutationId: clientMutationId,
@@ -8827,6 +8903,7 @@ class $$TodoSyncChangesTableTableManager
                 attemptCount: attemptCount,
                 nextAttemptAt: nextAttemptAt,
                 status: status,
+                failureReason: failureReason,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))

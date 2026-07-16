@@ -53,6 +53,7 @@ class SyncChangeQueue {
       const TodoSyncChangesCompanion(
         status: Value('queued'),
         nextAttemptAt: Value(null),
+        failureReason: Value(null),
       ),
     );
   }
