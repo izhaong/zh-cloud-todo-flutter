@@ -205,6 +205,18 @@ void main() {
     expect(results.map((task) => task.id), ['task-1']);
   });
 
+  test('高级过滤拒绝倒置的截止日期区间', () async {
+    await expectLater(
+      repository.filter(
+        TaskQueryFilter(
+          dueAtFrom: DateTime.utc(2026, 7, 21),
+          dueAtTo: DateTime.utc(2026, 7, 20),
+        ),
+      ),
+      throwsA(isA<ArgumentError>()),
+    );
+  });
+
   test('过滤结果按置顶、手工顺序和 ID 稳定排序', () async {
     final now = DateTime.utc(2026, 7, 15, 9);
     for (final task in [
