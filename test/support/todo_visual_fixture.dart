@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:zh_cloud_todo_flutter/core/api/api_client.dart';
@@ -71,6 +72,9 @@ class TodoVisualFixture {
           appDatabaseProvider.overrideWithValue(database),
           apiClientProvider.overrideWithValue(_NoNetworkApiClient()),
           currentDateTimeProvider.overrideWithValue(() => fixedNow),
+          connectivityChangesProvider.overrideWithValue(
+            const Stream<List<ConnectivityResult>>.empty(),
+          ),
           deviceIdProvider.overrideWith((ref) async => _fixedDeviceId),
           syncApiProvider.overrideWith((ref) => null),
           syncCoordinatorProvider.overrideWith((ref) => null),

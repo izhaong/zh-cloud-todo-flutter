@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/app_database.dart';
 import '../../core/notification/local_notification_service.dart';
+import '../../core/sync/connectivity_recovery_trigger.dart';
 import '../../core/sync/sync_entities.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_widgets.dart';
@@ -45,6 +46,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
 
   bool _syncing = false;
   Timer? _periodicSync;
+  ConnectivityRecoveryTrigger? _connectivityRecoveryTrigger;
 
   @override
   void initState() {
@@ -53,6 +55,10 @@ class _HomeShellState extends ConsumerState<HomeShell>
     _triggerSync();
     _initNotifications();
     if (!const bool.fromEnvironment('FLUTTER_TEST')) {
+      _connectivityRecoveryTrigger = ConnectivityRecoveryTrigger(
+        ref.read(connectivityChangesProvider),
+        onOnlineRecovered: _recoverAfterNetworkRestored,
+      )..start();
       _periodicSync = Timer.periodic(const Duration(seconds: 30), (_) {
         _triggerSync();
         _pollUpcomingReminders();
@@ -63,6 +69,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
   @override
   void dispose() {
     _periodicSync?.cancel();
+    unawaited(_connectivityRecoveryTrigger?.dispose() ?? Future.value());
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -117,6 +124,15 @@ class _HomeShellState extends ConsumerState<HomeShell>
       // 同步失败静默重试。
     } finally {
       _syncing = false;
+    }
+  }
+
+  Future<void> _recoverAfterNetworkRestored() async {
+    await _triggerSync();
+    try {
+      await ref.read(recommendationRepositoryProvider)?.refresh();
+    } catch (_) {
+      // 推荐读取失败时保留上一次成功的 Drift 缓存。
     }
   }
 
