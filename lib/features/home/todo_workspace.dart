@@ -5,6 +5,7 @@ import '../../core/theme/brand_colors.dart';
 import '../../core/theme/todo_layout_tokens.dart';
 import '../shell/section.dart';
 import '../shell/sidebar.dart';
+import '../task/task_search_page.dart';
 
 enum TodoWorkspaceProfile { wide, compact, tablet, mobile }
 
@@ -237,7 +238,9 @@ class TodoWorkspace extends StatelessWidget {
         IconButton(
           tooltip: '搜索',
           icon: Icon(Icons.search, color: colors.mutedForeground),
-          onPressed: () {},
+          onPressed: () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const TaskSearchPage())),
         ),
         const SizedBox(width: 8),
       ],

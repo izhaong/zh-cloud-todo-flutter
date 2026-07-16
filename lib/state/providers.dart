@@ -10,6 +10,7 @@ import '../state/session_state.dart';
 import 'repositories/folder_repository.dart';
 import 'repositories/list_repository.dart';
 import 'repositories/tag_repository.dart';
+import 'repositories/task_query_repository.dart';
 import 'repositories/task_repository.dart';
 
 /// UI-facing clock. Production reads the current instant on each rebuild;
@@ -97,6 +98,12 @@ final taskRepositoryProvider = Provider<TaskRepository?>((ref) {
   final queue = ref.watch(syncChangeQueueProvider);
   if (db == null || queue == null) return null;
   return TaskRepository(db, queue);
+});
+
+final taskQueryRepositoryProvider = Provider<TaskQueryRepository?>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  if (db == null) return null;
+  return TaskQueryRepository(db);
 });
 
 // --- 同步 ---------------------------------------------------------------

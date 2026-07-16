@@ -1,0 +1,42 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:zh_cloud_todo_flutter/core/theme/app_theme.dart';
+import 'package:zh_cloud_todo_flutter/features/task/task_search_page.dart';
+
+import '../../support/todo_visual_fixture.dart';
+
+void main() {
+  testWidgets(
+    'global search reads task, list and tag results from local query repository',
+    (tester) async {
+      final fixture = await TodoVisualFixture.create();
+      addTearDown(fixture.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: fixture.container,
+          child: MaterialApp(
+            theme: ThemeData.light().copyWith(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            home: const TaskSearchPage(),
+          ),
+        ),
+      );
+      await tester.enterText(find.byKey(const Key('global-task-search')), '设计');
+      await tester.pumpAndSettle();
+
+      expect(find.text('任务 · 回复设计反馈并确认下一步'), findsOneWidget);
+
+      await tester.enterText(find.byKey(const Key('global-task-search')), '工作');
+      await tester.pumpAndSettle();
+      expect(find.text('清单 · 工作'), findsOneWidget);
+
+      await tester.enterText(find.byKey(const Key('global-task-search')), '专注');
+      await tester.pumpAndSettle();
+      expect(find.text('标签 · 专注'), findsOneWidget);
+    },
+  );
+}
