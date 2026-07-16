@@ -227,6 +227,96 @@ void main() {
     )..where((row) => row.status.equals('queued'))).getSingle();
     expect(secondMutation.payloadJson, contains('"listId":101'));
   });
+
+  test('看板偏好冲突以服务端值覆盖本地并保留失败 outbox', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final now = DateTime.utc(2026, 7, 16, 9);
+    await db
+        .into(db.todoLists)
+        .insert(
+          TodoListsCompanion.insert(
+            id: 'list-local',
+            serverId: const Value(101),
+            name: '项目',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    await db
+        .into(db.todoBoardPreferences)
+        .insert(
+          TodoBoardPreferencesCompanion.insert(
+            id: 'preference-local',
+            serverId: const Value(401),
+            listId: 'list-local',
+            groupDimension: 'LOCAL',
+            columnsJson: const Value('["LOCAL"]'),
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    final queue = SyncChangeQueue(db);
+    await queue.enqueue(
+      entity: 'board_preference',
+      op: 'upsert',
+      localId: 'preference-local',
+      serverId: 401,
+      payload: {
+        'listId': 101,
+        'groupDimension': 'LOCAL',
+        'columnsJson': '["LOCAL"]',
+      },
+    );
+
+    final dio = Dio()
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            final change =
+                ((options.data as Map)['changes'] as List).single as Map;
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                data: {
+                  'code': 0,
+                  'data': {
+                    'ok': true,
+                    'accepted': const [],
+                    'conflicts': [
+                      {
+                        'entityType': 'board_preference',
+                        'entityId': 401,
+                        'operation': 'upsert',
+                        'clientMutationId': change['clientMutationId'],
+                        'serverValue': {
+                          'listId': 101,
+                          'groupDimension': 'SERVER',
+                          'columnsJson': '["TODO","DONE"]',
+                        },
+                      },
+                    ],
+                  },
+                },
+              ),
+            );
+          },
+        ),
+      );
+    final client = ApiClient(dio: dio);
+    final coordinator = SyncCoordinator(
+      db: db,
+      api: SyncApi(client, clientId: 'test', deviceId: 'device-1'),
+      todoApi: client,
+    );
+
+    expect(await coordinator.push(), 0);
+    final preference = await db.select(db.todoBoardPreferences).getSingle();
+    final mutation = await db.select(db.todoSyncChanges).getSingle();
+    expect(preference.groupDimension, 'SERVER');
+    expect(preference.columnsJson, '["TODO","DONE"]');
+    expect(mutation.status, 'failed');
+  });
 }
 
 Future<TodoList> _listById(AppDatabase db, String id) {
