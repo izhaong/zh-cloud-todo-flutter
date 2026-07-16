@@ -115,6 +115,48 @@ void main() {
     expect(payload['allDay'], isFalse);
   });
 
+  test(
+    'preserves cross-midnight and all-day date ranges in Drift and outbox',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final repository = TaskRepository(db, SyncChangeQueue(db));
+
+      final crossMidnight = await repository.create(
+        listId: 'inbox',
+        title: '跨午夜任务',
+        startAt: DateTime(2026, 7, 13, 23, 30),
+        endAt: DateTime(2026, 7, 14, 1),
+        dueAt: DateTime(2026, 7, 14, 1),
+      );
+      final allDay = await repository.create(
+        listId: 'inbox',
+        title: '全天日期范围',
+        startAt: DateTime(2026, 7, 13),
+        endAt: DateTime(2026, 7, 14),
+        dueAt: DateTime(2026, 7, 14),
+        allDay: true,
+      );
+      final changes = await db.select(db.todoSyncChanges).get();
+      final allDayPayload =
+          jsonDecode(changes.last.payloadJson) as Map<String, dynamic>;
+
+      expect(crossMidnight.endAt, DateTime(2026, 7, 14, 1));
+      expect(allDay.allDay, isTrue);
+      expect(allDay.startAt, DateTime(2026, 7, 13));
+      expect(allDay.endAt, DateTime(2026, 7, 14));
+      expect(allDayPayload['allDay'], isTrue);
+      expect(
+        DateTime.fromMillisecondsSinceEpoch(allDayPayload['startAt'] as int),
+        allDay.startAt,
+      );
+      expect(
+        DateTime.fromMillisecondsSinceEpoch(allDayPayload['endAt'] as int),
+        allDay.endAt,
+      );
+    },
+  );
+
   test('preserves a fixed task timezone in Drift and task outbox', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
