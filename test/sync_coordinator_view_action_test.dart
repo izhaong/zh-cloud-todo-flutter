@@ -212,5 +212,25 @@ void main() {
     );
     expect(listChange['entityId'], isNegative);
     expect(preferenceChange['payload']?['listId'], listChange['entityId']);
+
+    expect((await (_listById(db, list.id))).serverId, 101);
+    expect(
+      (await db.select(db.todoBoardPreferences).getSingle()).serverId,
+      401,
+    );
+    await BoardPreferenceRepository(
+      db,
+      queue,
+    ).save(listId: list.id, groupDimension: 'CUSTOM');
+    final secondMutation = await (db.select(
+      db.todoSyncChanges,
+    )..where((row) => row.status.equals('queued'))).getSingle();
+    expect(secondMutation.payloadJson, contains('"listId":101'));
   });
+}
+
+Future<TodoList> _listById(AppDatabase db, String id) {
+  return (db.select(
+    db.todoLists,
+  )..where((row) => row.id.equals(id))).getSingle();
 }
