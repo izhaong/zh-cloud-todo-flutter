@@ -465,4 +465,44 @@ void main() {
             .get();
     expect(tagRows.map((row) => row.tagId), [TodoVisualFixture.reviewTagId]);
   });
+
+  testWidgets('batch set-due-date selects a local calendar date', (
+    tester,
+  ) async {
+    final fixture = await TodoVisualFixture.create();
+    addTearDown(fixture.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: fixture.container,
+        child: MaterialApp(
+          theme: ThemeData.light().copyWith(
+            extensions: const [AppThemeExtension(AppColors.light)],
+          ),
+          home: const Scaffold(body: TasksByListPage(hideAppBar: true)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('todo-batch-edit')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(Key('task-batch-select-${TodoVisualFixture.todayTaskId}')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('todo-batch-more')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('todo-batch-action-setDueAt')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('20').last);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
+    final task =
+        await (fixture.database.select(fixture.database.todoTasks)
+              ..where((row) => row.id.equals(TodoVisualFixture.todayTaskId)))
+            .getSingle();
+    expect(task.dueAt, DateTime(2026, 7, 20));
+  });
 }

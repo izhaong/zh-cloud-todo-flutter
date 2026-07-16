@@ -294,6 +294,15 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       );
       return;
     }
+    if (action == TaskBatchAction.setDueAt) {
+      final dueAt = await _selectBatchDueAt();
+      if (dueAt == null || !mounted) return;
+      await _applyBatchEdit(
+        TaskBatchEditCommand(taskIds: [], dueAt: dueAt),
+        successVerb: '已更新',
+      );
+      return;
+    }
     final command = switch (action) {
       TaskBatchAction.priorityNone => const TaskBatchEditCommand(
         taskIds: [],
@@ -325,6 +334,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       ),
       TaskBatchAction.moveToList => throw StateError('指定清单需要先选择目标'),
       TaskBatchAction.setTags => throw StateError('标签需要先选择目标'),
+      TaskBatchAction.setDueAt => throw StateError('截止日期需要先选择目标'),
       TaskBatchAction.clearDueAt => const TaskBatchEditCommand(
         taskIds: [],
         clearDueAt: true,
@@ -376,6 +386,17 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           ],
         ),
       ),
+    );
+  }
+
+  Future<DateTime?> _selectBatchDueAt() {
+    final now = ref.read(currentDateTimeProvider)();
+    return showDatePicker(
+      context: context,
+      initialDate: DateTime(now.year, now.month, now.day),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      helpText: '设置截止日期',
     );
   }
 
