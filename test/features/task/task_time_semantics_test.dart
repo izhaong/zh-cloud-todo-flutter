@@ -1,9 +1,11 @@
 import 'dart:convert';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/core/theme/app_theme.dart';
 import 'package:zh_cloud_todo_flutter/features/task/task_detail_pane.dart';
 import 'package:zh_cloud_todo_flutter/state/providers.dart';
@@ -140,6 +142,67 @@ void main() {
       expect(start, findsOneWidget);
       await tester.scrollUntilVisible(end, 160, scrollable: detailScroll);
       expect(end, findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'detail clears a persisted time range and records a local outbox update',
+    (tester) async {
+      final fixture = await TodoVisualFixture.create();
+      addTearDown(fixture.dispose);
+      final repository = fixture.container.read(taskRepositoryProvider)!;
+
+      await (fixture.database.update(fixture.database.todoTasks)
+            ..where((task) => task.id.equals(_taskId)))
+          .write(
+            TodoTasksCompanion(
+              startAt: Value(DateTime(2026, 7, 11, 9)),
+              endAt: Value(DateTime(2026, 7, 11, 10)),
+            ),
+          );
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: fixture.container,
+          child: MaterialApp(
+            theme: ThemeData.light().copyWith(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            home: const Scaffold(
+              body: TaskDetailPane(taskId: _taskId, embedded: true),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final detailScroll = find.byType(Scrollable).first;
+      final clearStart = find.byKey(const Key('task-clear-start-at'));
+      final clearEnd = find.byKey(const Key('task-clear-end-at'));
+      await tester.scrollUntilVisible(
+        clearStart,
+        160,
+        scrollable: detailScroll,
+      );
+      await tester.tap(clearStart);
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(clearEnd, 160, scrollable: detailScroll);
+      await tester.tap(clearEnd);
+      await tester.pumpAndSettle();
+      await tester.drag(detailScroll, const Offset(0, 1000));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('保存'));
+      await tester.pumpAndSettle();
+
+      final task = await repository.getById(_taskId);
+      expect(task?.startAt, isNull);
+      expect(task?.endAt, isNull);
+      final change =
+          (await fixture.database.select(fixture.database.todoSyncChanges).get())
+              .last;
+      final payload = jsonDecode(change.payloadJson) as Map<String, dynamic>;
+      expect(payload['startAt'], isNull);
+      expect(payload['endAt'], isNull);
     },
   );
 }
