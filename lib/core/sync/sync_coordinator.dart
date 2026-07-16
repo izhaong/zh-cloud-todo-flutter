@@ -69,9 +69,6 @@ class SyncCoordinator {
     final attachmentChanges = pending
         .where((c) => c.entity == SyncEntities.attachment)
         .toList();
-    final templateChanges = pending
-        .where((c) => c.entity == SyncEntities.template)
-        .toList();
     final syncableChanges =
         pending.where((c) => SyncEntities.syncable.contains(c.entity)).toList()
           ..sort(_compareSyncChanges);
@@ -82,7 +79,6 @@ class SyncCoordinator {
     // 成功映射后执行，避免网络恢复后的首轮同步遗留 queued 附件。
     succeeded += await _pushSyncableChanges(syncableChanges);
     succeeded += await _pushAttachmentChanges(attachmentChanges);
-    succeeded += await _pushTemplateChanges(templateChanges);
     return succeeded;
   }
 
@@ -268,58 +264,6 @@ class SyncCoordinator {
             updatedAt: Value(DateTime.now()),
           ),
         );
-        await (db.update(
-          db.todoSyncChanges,
-        )..where((row) => row.id.equals(change.id))).write(
-          TodoSyncChangesCompanion(
-            status: const Value('failed'),
-            attemptCount: Value(change.attemptCount + 1),
-          ),
-        );
-      }
-    }
-    return succeeded;
-  }
-
-  Future<int> _pushTemplateChanges(List<TodoSyncChange> changes) async {
-    var succeeded = 0;
-    for (final change in changes) {
-      if (change.op == SyncOps.delete || change.entityLocalId == null) continue;
-      final localId = change.entityLocalId!;
-      final template = await (db.select(
-        db.todoTemplates,
-      )..where((row) => row.id.equals(localId))).getSingleOrNull();
-      if (template == null || template.serverId != null) continue;
-      try {
-        final response = await todoApi.post<Map<String, dynamic>>(
-          '/template/create',
-          data: {
-            'name': template.name,
-            'templateType': 1,
-            'content': template.contentJson,
-            'clientMutationId': change.clientMutationId,
-          },
-        );
-        final body = response.data ?? const <String, dynamic>{};
-        if (body['code'] != null && body['code'] != 0) {
-          throw StateError(body['msg']?.toString() ?? '模板登记失败');
-        }
-        final serverId = (body['data'] as num?)?.toInt();
-        if (serverId == null) throw StateError('模板登记未返回 ID');
-        await (db.update(
-          db.todoTemplates,
-        )..where((row) => row.id.equals(localId))).write(
-          TodoTemplatesCompanion(
-            serverId: Value(serverId),
-            status: const Value('synced'),
-            updatedAt: Value(DateTime.now()),
-          ),
-        );
-        await (db.update(db.todoSyncChanges)
-              ..where((row) => row.id.equals(change.id)))
-            .write(const TodoSyncChangesCompanion(status: Value('synced')));
-        succeeded++;
-      } catch (_) {
         await (db.update(
           db.todoSyncChanges,
         )..where((row) => row.id.equals(change.id))).write(
@@ -654,7 +598,34 @@ class SyncCoordinator {
           accepted.clientMutationId,
           accepted.entityId!,
         );
+      case SyncEntities.template:
+        await _bindTemplateServerIdAndMarkSynced(
+          accepted.clientMutationId,
+          accepted.entityId!,
+        );
     }
+  }
+
+  Future<void> _bindTemplateServerIdAndMarkSynced(
+    String? clientMutationId,
+    int serverId,
+  ) async {
+    if (clientMutationId == null) return;
+    final change =
+        await (db.select(db.todoSyncChanges)
+              ..where((row) => row.clientMutationId.equals(clientMutationId)))
+            .getSingleOrNull();
+    final localId = change?.entityLocalId;
+    if (localId == null || change?.op == SyncOps.delete) return;
+    await (db.update(
+      db.todoTemplates,
+    )..where((row) => row.id.equals(localId))).write(
+      TodoTemplatesCompanion(
+        serverId: Value(serverId),
+        status: const Value('synced'),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
   }
 
   Future<void> _bindServerId<T extends Table, D>(
@@ -783,6 +754,8 @@ class SyncCoordinator {
         await _upsertLocalViewPreference(entityId, payload);
       case SyncEntities.filter:
         await _upsertLocalFilter(entityId, payload);
+      case SyncEntities.template:
+        await _upsertLocalTemplate(entityId, payload);
       case SyncEntities.taskTag:
         // task_tag 不允许客户端 push；pull 时按 serverId 级联 upsert。
         await _upsertLocalTaskTag(entityId, payload);
@@ -826,6 +799,10 @@ class SyncCoordinator {
         await (db.delete(
           db.todoFilters,
         )..where((t) => t.serverId.equals(tombstone.entityId))).go();
+      case SyncEntities.template:
+        await (db.delete(
+          db.todoTemplates,
+        )..where((t) => t.serverId.equals(tombstone.entityId))).go();
       case SyncEntities.taskTag:
         await (db.delete(
           db.todoTaskTags,
@@ -834,6 +811,35 @@ class SyncCoordinator {
   }
 
   // --- 本地 upsert（按 serverId 查行；命中则更新，否则新建本地 UUID 行）-----
+
+  Future<void> _upsertLocalTemplate(
+    int serverId,
+    Map<String, dynamic> payload,
+  ) async {
+    final name = payload['name']?.toString().trim();
+    final content = payload['content']?.toString();
+    if (name == null || name.isEmpty || content == null) return;
+    final existing = await (db.select(
+      db.todoTemplates,
+    )..where((row) => row.serverId.equals(serverId))).getSingleOrNull();
+    final now = DateTime.now();
+    final companion = TodoTemplatesCompanion(
+      id: Value(existing?.id ?? _uuid.v4()),
+      serverId: Value(serverId),
+      name: Value(name),
+      contentJson: Value(content),
+      status: const Value('synced'),
+      updatedAt: Value(now),
+      createdAt: Value(existing?.createdAt ?? now),
+    );
+    if (existing == null) {
+      await db.into(db.todoTemplates).insert(companion);
+    } else {
+      await (db.update(
+        db.todoTemplates,
+      )..where((row) => row.id.equals(existing.id))).write(companion);
+    }
+  }
 
   Future<void> _upsertLocalList(
     int serverId,

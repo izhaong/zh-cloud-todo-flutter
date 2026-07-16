@@ -120,7 +120,7 @@ final templateRepositoryProvider = Provider<TemplateRepository?>((ref) {
   final db = ref.watch(appDatabaseProvider);
   final queue = ref.watch(syncChangeQueueProvider);
   if (db == null || queue == null) return null;
-  return TemplateRepository(db, queue, api: ref.watch(apiClientProvider));
+  return TemplateRepository(db, queue);
 });
 
 // --- 同步 ---------------------------------------------------------------

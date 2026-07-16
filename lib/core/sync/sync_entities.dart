@@ -27,6 +27,7 @@ class SyncEntities {
     tag,
     taskTag,
     filter,
+    template,
   };
 }
 

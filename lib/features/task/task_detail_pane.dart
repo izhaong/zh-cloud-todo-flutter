@@ -1647,19 +1647,21 @@ class _TemplateSection extends ConsumerWidget {
   }
 
   Future<void> _refresh(BuildContext context, WidgetRef ref) async {
-    final templates = ref.read(templateRepositoryProvider);
-    if (templates == null) return;
+    final coordinator = ref.read(syncCoordinatorProvider);
+    if (coordinator == null) return;
     try {
-      final count = await templates.refreshMy();
+      final outcome = await coordinator.syncOnce();
       if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('已刷新 $count 个模板')));
+      ).showSnackBar(
+        SnackBar(content: Text('同步完成：推送 ${outcome.pushed} 项，拉取 ${outcome.pulled} 项')),
+      );
     } catch (_) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('模板刷新失败，将继续显示本地缓存')));
+      ).showSnackBar(const SnackBar(content: Text('模板同步失败，将继续显示本地缓存')));
     }
   }
 
