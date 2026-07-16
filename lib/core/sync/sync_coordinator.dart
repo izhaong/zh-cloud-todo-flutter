@@ -38,6 +38,7 @@ class SyncCoordinator {
   final Uuid _uuid;
 
   int _tempIdSeq = 0;
+  final Map<String, int> _temporaryEntityIds = {};
 
   /// 单轮同步：先 push 本地变更，再 pull 远端增量。
   Future<SyncOutcome> syncOnce() async {
@@ -69,6 +70,7 @@ class SyncCoordinator {
 
   Future<int> _pushSyncableChanges(List<TodoSyncChange> changes) async {
     if (changes.isEmpty) return 0;
+    _prepareTemporaryEntityIds(changes);
     final dtos = <SyncChangeDto>[];
     for (final change in changes) {
       final dto = await _toChangeDto(change);
@@ -175,7 +177,7 @@ class SyncCoordinator {
     if (change.entityServerId != null) {
       entityId = change.entityServerId!;
     } else {
-      entityId = -(++_tempIdSeq);
+      entityId = _temporaryEntityId(change.entity, change.entityLocalId);
     }
 
     int? baseRevision;
@@ -217,13 +219,17 @@ class SyncCoordinator {
       resolved['status'] = resolved['completed'] == true ? 'done' : 'todo';
       resolved.remove('completed');
     }
-    if (entity == SyncEntities.task && resolved.containsKey('listId')) {
+    if ((entity == SyncEntities.task ||
+            entity == SyncEntities.boardPreference) &&
+        resolved.containsKey('listId')) {
       final localListId = resolved['listId']?.toString();
       if (localListId != null && localListId.isNotEmpty) {
         final list = await (db.select(
           db.todoLists,
         )..where((t) => t.id.equals(localListId))).getSingleOrNull();
-        resolved['listId'] = list?.serverId ?? -(++_tempIdSeq);
+        resolved['listId'] =
+            list?.serverId ??
+            _temporaryEntityId(SyncEntities.list, localListId);
       }
     }
     if (entity == SyncEntities.task && resolved.containsKey('parentTaskId')) {
@@ -232,7 +238,9 @@ class SyncCoordinator {
         final parent = await (db.select(
           db.todoTasks,
         )..where((t) => t.id.equals(localParentId))).getSingleOrNull();
-        resolved['parentTaskId'] = parent?.serverId ?? -(++_tempIdSeq);
+        resolved['parentTaskId'] =
+            parent?.serverId ??
+            _temporaryEntityId(SyncEntities.task, localParentId);
       }
     }
     if (entity == SyncEntities.taskTag) {
@@ -241,14 +249,17 @@ class SyncCoordinator {
         final task = await (db.select(
           db.todoTasks,
         )..where((t) => t.id.equals(localTaskId))).getSingleOrNull();
-        resolved['taskId'] = task?.serverId ?? -(++_tempIdSeq);
+        resolved['taskId'] =
+            task?.serverId ??
+            _temporaryEntityId(SyncEntities.task, localTaskId);
       }
       final localTagId = resolved['tagId']?.toString();
       if (localTagId != null && localTagId.isNotEmpty) {
         final tag = await (db.select(
           db.todoTags,
         )..where((t) => t.id.equals(localTagId))).getSingleOrNull();
-        resolved['tagId'] = tag?.serverId ?? -(++_tempIdSeq);
+        resolved['tagId'] =
+            tag?.serverId ?? _temporaryEntityId(SyncEntities.tag, localTagId);
       }
     }
     if (entity == SyncEntities.reminder ||
@@ -259,7 +270,9 @@ class SyncCoordinator {
         final task = await (db.select(
           db.todoTasks,
         )..where((t) => t.id.equals(localTaskId))).getSingleOrNull();
-        resolved['taskId'] = task?.serverId ?? -(++_tempIdSeq);
+        resolved['taskId'] =
+            task?.serverId ??
+            _temporaryEntityId(SyncEntities.task, localTaskId);
       }
     }
     if (entity == SyncEntities.repeatSkip &&
@@ -269,7 +282,9 @@ class SyncCoordinator {
         final rule = await (db.select(
           db.todoRepeatRules,
         )..where((t) => t.id.equals(localRuleId))).getSingleOrNull();
-        resolved['repeatRuleId'] = rule?.serverId ?? -(++_tempIdSeq);
+        resolved['repeatRuleId'] =
+            rule?.serverId ??
+            _temporaryEntityId(SyncEntities.repeatRule, localRuleId);
       }
     }
     // 移除仅本地使用的字段，避免污染服务端 payload。
@@ -277,6 +292,32 @@ class SyncCoordinator {
     resolved.remove('serverId');
     return resolved;
   }
+
+  void _prepareTemporaryEntityIds(List<TodoSyncChange> changes) {
+    _tempIdSeq = 0;
+    _temporaryEntityIds.clear();
+    for (final change in changes) {
+      if (change.entityServerId == null &&
+          change.entityLocalId != null &&
+          change.entityLocalId!.isNotEmpty) {
+        _temporaryEntityIds.putIfAbsent(
+          _temporaryEntityKey(change.entity, change.entityLocalId!),
+          () => -(++_tempIdSeq),
+        );
+      }
+    }
+  }
+
+  int _temporaryEntityId(String entity, String? localId) {
+    if (localId == null || localId.isEmpty) return -(++_tempIdSeq);
+    return _temporaryEntityIds.putIfAbsent(
+      _temporaryEntityKey(entity, localId),
+      () => -(++_tempIdSeq),
+    );
+  }
+
+  String _temporaryEntityKey(String entity, String localId) =>
+      '$entity:$localId';
 
   Future<void> _applyAccepted(SyncChangeDto accepted) async {
     if (accepted.entityId == null) return;

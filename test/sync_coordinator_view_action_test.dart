@@ -8,6 +8,8 @@ import 'package:zh_cloud_todo_flutter/core/api/sync_api.dart';
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_coordinator.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/board_preference_repository.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/list_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_view_action_repository.dart';
 
 void main() {
@@ -109,10 +111,7 @@ void main() {
                         'entityId': 101,
                         'operation': 'upsert',
                         'revision': 1,
-                        'payload': {
-                          'name': '项目',
-                          'sortOrder': 0,
-                        },
+                        'payload': {'name': '项目', 'sortOrder': 0},
                       },
                       {
                         'entityType': 'board_preference',
@@ -150,5 +149,68 @@ void main() {
     expect(preference.listId, list!.id);
     expect(preference.groupDimension, 'CUSTOM');
     expect(preference.columnsJson, '["TODO","DONE"]');
+  });
+
+  test('新建清单与看板偏好共批上推时复用清单临时 ID', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final queue = SyncChangeQueue(db);
+    final list = await ListRepository(db, queue).create(name: '离线项目');
+    await BoardPreferenceRepository(
+      db,
+      queue,
+    ).save(listId: list.id, groupDimension: 'PRIORITY');
+
+    List<Map<String, dynamic>> sentChanges = const [];
+    final dio = Dio()
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            sentChanges = ((options.data as Map)['changes'] as List)
+                .cast<Map>()
+                .map((entry) => entry.cast<String, dynamic>())
+                .toList();
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                data: {
+                  'code': 0,
+                  'data': {
+                    'ok': true,
+                    'accepted': [
+                      for (final change in sentChanges)
+                        {
+                          'entityType': change['entityType'],
+                          'entityId': change['entityType'] == 'list'
+                              ? 101
+                              : 401,
+                          'operation': change['operation'],
+                          'clientMutationId': change['clientMutationId'],
+                        },
+                    ],
+                    'conflicts': const [],
+                  },
+                },
+              ),
+            );
+          },
+        ),
+      );
+    final client = ApiClient(dio: dio);
+    final coordinator = SyncCoordinator(
+      db: db,
+      api: SyncApi(client, clientId: 'test', deviceId: 'device-1'),
+      todoApi: client,
+    );
+
+    expect(await coordinator.push(), 2);
+    final listChange = sentChanges.singleWhere(
+      (change) => change['entityType'] == 'list',
+    );
+    final preferenceChange = sentChanges.singleWhere(
+      (change) => change['entityType'] == 'board_preference',
+    );
+    expect(listChange['entityId'], isNegative);
+    expect(preferenceChange['payload']?['listId'], listChange['entityId']);
   });
 }
