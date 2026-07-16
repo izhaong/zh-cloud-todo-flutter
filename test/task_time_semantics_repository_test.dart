@@ -189,6 +189,7 @@ void main() {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(db.close);
       final reminders = ReminderRepository(db, SyncChangeQueue(db));
+      await _seedTask(db);
 
       final first = await reminders.create(
         taskId: 'task-1',
@@ -221,10 +222,31 @@ void main() {
     },
   );
 
+  test(
+    'rejects an orphan reminder before writing Drift or the outbox',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final reminders = ReminderRepository(db, SyncChangeQueue(db));
+
+      await expectLater(
+        reminders.create(
+          taskId: 'missing-task',
+          fireAt: DateTime(2026, 7, 16, 9),
+        ),
+        throwsStateError,
+      );
+
+      expect(await db.select(db.todoReminders).get(), isEmpty);
+      expect(await db.select(db.todoSyncChanges).get(), isEmpty);
+    },
+  );
+
   test('updates and deletes reminder rules through the outbox', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
     final reminders = ReminderRepository(db, SyncChangeQueue(db));
+    await _seedTask(db);
 
     final first = await reminders.create(
       taskId: 'task-1',
@@ -293,6 +315,7 @@ void main() {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(db.close);
       final reminders = ReminderRepository(db, SyncChangeQueue(db));
+      await _seedTask(db);
       final reminder = await reminders.create(
         taskId: 'task-1',
         fireAt: DateTime(2026, 7, 13, 9),
@@ -476,4 +499,19 @@ void main() {
       }
     }
   });
+}
+
+Future<void> _seedTask(AppDatabase db, {String id = 'task-1'}) {
+  final now = DateTime(2026, 7, 13, 8);
+  return db
+      .into(db.todoTasks)
+      .insert(
+        TodoTasksCompanion.insert(
+          id: id,
+          listId: 'inbox',
+          title: '提醒所属任务',
+          updatedAt: now,
+          createdAt: now,
+        ),
+      );
 }

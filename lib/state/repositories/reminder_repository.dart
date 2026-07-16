@@ -33,6 +33,12 @@ class ReminderRepository {
     final mutationId = _uuid.v4();
     late TodoReminder row;
     await _db.transaction(() async {
+      final task = await (_db.select(
+        _db.todoTasks,
+      )..where((row) => row.id.equals(taskId))).getSingleOrNull();
+      if (task == null) {
+        throw StateError('提醒所属任务不存在：$taskId');
+      }
       await _db
           .into(_db.todoReminders)
           .insert(
