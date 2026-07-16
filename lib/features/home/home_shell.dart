@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/app_database.dart';
 import '../../core/notification/local_notification_service.dart';
+import '../../core/sync/sync_entities.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../state/providers.dart';
@@ -125,6 +126,25 @@ class _HomeShellState extends ConsumerState<HomeShell>
       await queue.retryNow(change.id);
     }
     await _triggerSync();
+  }
+
+  Future<void> _preserveConflictCopies(List<TodoSyncChange> changes) async {
+    final repository = ref.read(taskRepositoryProvider);
+    if (repository == null) return;
+    try {
+      final restored = await repository.createConflictCopies(changes);
+      if (restored == 0) return;
+      await _triggerSync();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('已保留 $restored 项本地副本')));
+    } on FormatException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('本地副本无法恢复，请保留同步记录后重试')));
+    }
   }
 
   void _selectSection(Section section) {
@@ -303,6 +323,14 @@ class _HomeShellState extends ConsumerState<HomeShell>
     final conflictCount = failedChanges
         .where((change) => change.failureReason != null)
         .length;
+    final recoverableTaskConflicts = failedChanges
+        .where(
+          (change) =>
+              change.entity == SyncEntities.task &&
+              change.op == SyncOps.upsert &&
+              change.failureReason != null,
+        )
+        .toList(growable: false);
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
@@ -324,7 +352,13 @@ class _HomeShellState extends ConsumerState<HomeShell>
                   child: SyncRecoveryBanner(
                     failedCount: failedChanges.length,
                     conflictCount: conflictCount,
+                    recoverableTaskConflictCount:
+                        recoverableTaskConflicts.length,
                     onRetry: () => _retryFailedSyncChanges(failedChanges),
+                    onPreserveLocalCopies: recoverableTaskConflicts.isEmpty
+                        ? null
+                        : () =>
+                              _preserveConflictCopies(recoverableTaskConflicts),
                   ),
                 ),
             ],

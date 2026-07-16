@@ -45,6 +45,30 @@ void main() {
 
     expect(find.text('其中 1 项与其他设备冲突，已采用服务器版本'), findsOneWidget);
   });
+
+  testWidgets('offers an explicit action to preserve conflicted task copies', (
+    tester,
+  ) async {
+    var preserveCalls = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SyncRecoveryBanner(
+            failedCount: 1,
+            conflictCount: 1,
+            recoverableTaskConflictCount: 1,
+            onRetry: _noOp,
+            onPreserveLocalCopies: () async => preserveCalls++,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('保留本地副本'), findsOneWidget);
+    await tester.tap(find.text('保留本地副本'));
+    await tester.pump();
+    expect(preserveCalls, 1);
+  });
 }
 
 Future<void> _noOp() async {}
