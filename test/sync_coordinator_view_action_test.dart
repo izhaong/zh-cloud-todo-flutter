@@ -89,4 +89,66 @@ void main() {
     expect(change['payload']?['priority'], 3);
     expect(change['payload']?['status'], 'done');
   });
+
+  test('拉取看板偏好会映射服务端清单并落入本地表', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final dio = Dio()
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                data: {
+                  'code': 0,
+                  'data': {
+                    'changes': [
+                      {
+                        'entityType': 'list',
+                        'entityId': 101,
+                        'operation': 'upsert',
+                        'revision': 1,
+                        'payload': {
+                          'name': '项目',
+                          'sortOrder': 0,
+                        },
+                      },
+                      {
+                        'entityType': 'board_preference',
+                        'entityId': 401,
+                        'operation': 'upsert',
+                        'revision': 2,
+                        'payload': {
+                          'listId': 101,
+                          'groupDimension': 'CUSTOM',
+                          'columnsJson': '["TODO","DONE"]',
+                        },
+                      },
+                    ],
+                    'tombstones': const [],
+                    'nextCursor': '2',
+                    'hasMore': false,
+                  },
+                },
+              ),
+            );
+          },
+        ),
+      );
+    final client = ApiClient(dio: dio);
+    final coordinator = SyncCoordinator(
+      db: db,
+      api: SyncApi(client, clientId: 'test', deviceId: 'device-1'),
+      todoApi: client,
+    );
+
+    expect(await coordinator.pull(), 2);
+    final list = await db.listByServerId(101);
+    final preference = await db.select(db.todoBoardPreferences).getSingle();
+    expect(preference.serverId, 401);
+    expect(preference.listId, list!.id);
+    expect(preference.groupDimension, 'CUSTOM');
+    expect(preference.columnsJson, '["TODO","DONE"]');
+  });
 }
