@@ -50,6 +50,8 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
   late final TextEditingController _desc;
   int _priority = 0;
   bool _loading = true;
+  DateTime? _startAt;
+  DateTime? _endAt;
   DateTime? _dueAt;
   bool _allDay = false;
   String? _timeZone;
@@ -90,6 +92,8 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       _title.clear();
       _desc.clear();
       _priority = 0;
+      _startAt = null;
+      _endAt = null;
       _dueAt = null;
       _allDay = false;
       _timeZone = null;
@@ -118,6 +122,8 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       _title.text = t?.title ?? '';
       _desc.text = t?.description ?? '';
       _priority = t?.priority ?? 0;
+      _startAt = t?.startAt;
+      _endAt = t?.endAt;
       _dueAt = t?.dueAt;
       _allDay = t?.allDay ?? false;
       _timeZone = t?.timeZone;
@@ -156,6 +162,8 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     final descriptionDirty =
         previous != null && _desc.text != (previous.description ?? '');
     final priorityDirty = previous != null && _priority != previous.priority;
+    final startDirty = previous != null && _startAt != previous.startAt;
+    final endDirty = previous != null && _endAt != previous.endAt;
     final dueDirty = previous != null && _dueAt != previous.dueAt;
     final allDayDirty = previous != null && _allDay != previous.allDay;
     final timeZoneDirty = previous != null && _timeZone != previous.timeZone;
@@ -166,6 +174,8 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       if (!titleDirty) _title.text = latest.title;
       if (!descriptionDirty) _desc.text = latest.description ?? '';
       if (!priorityDirty) _priority = latest.priority;
+      if (!startDirty) _startAt = latest.startAt;
+      if (!endDirty) _endAt = latest.endAt;
       if (!dueDirty) _dueAt = latest.dueAt;
       if (!allDayDirty) _allDay = latest.allDay;
       if (!timeZoneDirty) _timeZone = latest.timeZone;
@@ -232,6 +242,8 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       title: _title.text.trim(),
       description: _desc.text.trim(),
       priority: _priority,
+      startAt: _startAt,
+      endAt: _endAt,
       dueAt: _dueAt,
       allDay: _allDay,
       timeZone: _fixedTimezone ? (_timeZone ?? 'Asia/Shanghai') : _timeZone,
@@ -412,30 +424,48 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
   }
 
   Future<void> _pickDue(TodoTask t) async {
-    final repo = ref.read(taskRepositoryProvider);
-    if (repo == null) return;
     final now = _dueAt ?? t.dueAt ?? DateTime.now();
+    final picked = await _pickDateTime(t, now);
+    if (picked == null) return;
+    setState(() => _dueAt = picked);
+  }
+
+  Future<void> _pickStartAt(TodoTask t) async {
+    final now = _startAt ?? _dueAt ?? t.startAt ?? t.dueAt ?? DateTime.now();
+    final picked = await _pickDateTime(t, now);
+    if (picked == null) return;
+    setState(() => _startAt = picked);
+  }
+
+  Future<void> _pickEndAt(TodoTask t) async {
+    final fallback =
+        _startAt ?? t.startAt ?? _dueAt ?? t.dueAt ?? DateTime.now();
+    final now = _endAt ?? t.endAt ?? fallback.add(const Duration(hours: 1));
+    final picked = await _pickDateTime(t, now);
+    if (picked == null) return;
+    setState(() => _endAt = picked);
+  }
+
+  Future<DateTime?> _pickDateTime(TodoTask t, DateTime now) async {
     final date = await showDatePicker(
       context: context,
       initialDate: now,
       firstDate: DateTime(now.year - 1),
       lastDate: DateTime(now.year + 5),
     );
-    if (date == null || !mounted || widget.taskId != t.id) return;
+    if (date == null || !mounted || widget.taskId != t.id) return null;
     final timeOfDay = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(now),
     );
-    if (!_isCurrentTask(t.id)) return;
-    setState(() {
-      _dueAt = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        timeOfDay?.hour ?? now.hour,
-        timeOfDay?.minute ?? now.minute,
-      );
-    });
+    if (!_isCurrentTask(t.id)) return null;
+    return DateTime(
+      date.year,
+      date.month,
+      date.day,
+      timeOfDay?.hour ?? now.hour,
+      timeOfDay?.minute ?? now.minute,
+    );
   }
 
   Future<void> _addEndReminder(TodoTask t) async {
@@ -560,6 +590,28 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
         ],
         const Divider(height: 32),
         sh('时间语义'),
+        OutlinedButton.icon(
+          key: const Key('task-start-at'),
+          onPressed: () => _pickStartAt(t),
+          icon: const Icon(Icons.play_arrow_outlined),
+          label: Text(
+            _startAt == null
+                ? '开始时间未设置'
+                : '开始：${_startAt!.toLocal().toString().substring(0, 16)}',
+          ),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          key: const Key('task-end-at'),
+          onPressed: () => _pickEndAt(t),
+          icon: const Icon(Icons.stop_outlined),
+          label: Text(
+            _endAt == null
+                ? '结束时间未设置'
+                : '结束：${_endAt!.toLocal().toString().substring(0, 16)}',
+          ),
+        ),
+        const SizedBox(height: 8),
         SwitchListTile(
           key: const Key('task-all-day'),
           contentPadding: EdgeInsets.zero,

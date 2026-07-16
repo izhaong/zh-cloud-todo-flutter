@@ -39,18 +39,19 @@ void main() {
       final fixedTimezone = find.byKey(const Key('task-fixed-timezone'));
       final detailScroll = find.byType(Scrollable).first;
       await tester.scrollUntilVisible(allDay, 160, scrollable: detailScroll);
+      await tester.ensureVisible(allDay);
+      await tester.pumpAndSettle();
       await tester.tap(allDay);
       await tester.scrollUntilVisible(
         fixedTimezone,
         160,
         scrollable: detailScroll,
       );
+      await tester.ensureVisible(fixedTimezone);
+      await tester.pumpAndSettle();
       await tester.tap(fixedTimezone);
-      await tester.scrollUntilVisible(
-        find.text('保存'),
-        160,
-        scrollable: detailScroll,
-      );
+      await tester.drag(detailScroll, const Offset(0, 1000));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('保存'));
       await tester.pumpAndSettle();
 
@@ -110,4 +111,35 @@ void main() {
             .last;
     expect(change.entity, 'reminder');
   });
+
+  testWidgets(
+    'detail exposes start and end time editing through task repository',
+    (tester) async {
+      final fixture = await TodoVisualFixture.create();
+      addTearDown(fixture.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: fixture.container,
+          child: MaterialApp(
+            theme: ThemeData.light().copyWith(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            home: const Scaffold(
+              body: TaskDetailPane(taskId: _taskId, embedded: true),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final detailScroll = find.byType(Scrollable).first;
+      final start = find.byKey(const Key('task-start-at'));
+      final end = find.byKey(const Key('task-end-at'));
+      await tester.scrollUntilVisible(start, 160, scrollable: detailScroll);
+      expect(start, findsOneWidget);
+      await tester.scrollUntilVisible(end, 160, scrollable: detailScroll);
+      expect(end, findsOneWidget);
+    },
+  );
 }
