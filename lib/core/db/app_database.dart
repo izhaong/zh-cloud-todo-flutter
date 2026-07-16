@@ -171,6 +171,21 @@ class TodoFilters extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+/// 推荐任务读取模型。它是服务端基于当前用户可见任务计算出的只读投影，
+/// 不进入 outbox；网络不可用时继续展示最近一次成功拉取的缓存。
+class TodoRecommendations extends Table {
+  IntColumn get taskServerId => integer()();
+  TextColumn get title => text()();
+  DateTimeColumn get dueAt => dateTime().nullable()();
+  TextColumn get reasonCode => text()();
+  TextColumn get reason => text()();
+  IntColumn get score => integer()();
+  DateTimeColumn get refreshedAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {taskServerId};
+}
+
 // --- sync 协调表 -----------------------------------------------------------
 
 /// 本地变更队列（outbox）。
@@ -224,6 +239,7 @@ class TodoEntityRevisions extends Table {
     TodoRepeatSkips,
     TodoViewPreferences,
     TodoFilters,
+    TodoRecommendations,
     TodoSyncChanges,
     TodoSyncCursor,
     TodoEntityRevisions,
@@ -240,7 +256,7 @@ class AppDatabase extends _$AppDatabase {
     : super(_open('todo_t${tenantId}_u$userId'));
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -261,6 +277,9 @@ class AppDatabase extends _$AppDatabase {
         }
         if (from < 6) {
           await m.addColumn(todoSyncChanges, todoSyncChanges.failureReason);
+        }
+        if (from < 7) {
+          await m.createTable(todoRecommendations);
         }
       }
     },

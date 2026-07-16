@@ -19,6 +19,7 @@ import '../task/tasks_by_list_page.dart';
 import '../task/views/calendar_view.dart';
 import '../tag/tag_page.dart';
 import 'sync_recovery_banner.dart';
+import 'recommendation_panel.dart';
 import 'todo_workspace.dart';
 
 /// Todo 主壳：只负责状态与内容分发，布局交给 [TodoWorkspace]。
@@ -427,18 +428,31 @@ class _HomeShellState extends ConsumerState<HomeShell>
         child: AppEmptyState(title: '垃圾桶', subtitle: '回收站内容将显示在这里。'),
       );
     }
-    return TasksByListPage(
-      title: _taskPaneTitle,
-      hideAppBar: true,
-      lockedListId: true,
-      initialListId: _effectiveListId,
-      initialDueRange: _dueRange,
-      initialCompleted: _smart == SmartList.completed ? true : null,
-      selectedTaskId: _selectedTaskId,
-      onTaskSelected: _selectTask,
-      onSelectionInvalidated: _invalidateTaskSelection,
-      onQuickAdd: _quickAdd,
+    return Column(
+      children: [
+        RecommendationPanel(onTaskSelected: _selectRecommendedTask),
+        Expanded(
+          child: TasksByListPage(
+            title: _taskPaneTitle,
+            hideAppBar: true,
+            lockedListId: true,
+            initialListId: _effectiveListId,
+            initialDueRange: _dueRange,
+            initialCompleted: _smart == SmartList.completed ? true : null,
+            selectedTaskId: _selectedTaskId,
+            onTaskSelected: _selectTask,
+            onSelectionInvalidated: _invalidateTaskSelection,
+            onQuickAdd: _quickAdd,
+          ),
+        ),
+      ],
     );
+  }
+
+  Future<void> _selectRecommendedTask(int serverTaskId) async {
+    final db = ref.read(appDatabaseProvider);
+    final task = await db?.taskByServerId(serverTaskId);
+    if (task != null && mounted) _selectTask(task.id);
   }
 
   String get _taskPaneTitle {

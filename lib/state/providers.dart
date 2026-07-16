@@ -9,6 +9,7 @@ import '../core/sync/sync_coordinator.dart';
 import '../state/session_state.dart';
 import 'repositories/folder_repository.dart';
 import 'repositories/list_repository.dart';
+import 'repositories/recommendation_repository.dart';
 import 'repositories/tag_repository.dart';
 import 'repositories/task_repository.dart';
 
@@ -74,9 +75,9 @@ final syncChangeQueueProvider = Provider<SyncChangeQueue?>((ref) {
 final failedSyncChangesProvider = StreamProvider<List<TodoSyncChange>>((ref) {
   final db = ref.watch(appDatabaseProvider);
   if (db == null) return const Stream<List<TodoSyncChange>>.empty();
-  return (db.select(db.todoSyncChanges)
-        ..where((row) => row.status.equals('failed')))
-      .watch();
+  return (db.select(
+    db.todoSyncChanges,
+  )..where((row) => row.status.equals('failed'))).watch();
 });
 
 /// ----- 各领域仓库 ---------------------------------------------------------
@@ -107,6 +108,18 @@ final taskRepositoryProvider = Provider<TaskRepository?>((ref) {
   final queue = ref.watch(syncChangeQueueProvider);
   if (db == null || queue == null) return null;
   return TaskRepository(db, queue);
+});
+
+/// 推荐为只读服务端投影，成功拉取后落入 Drift；不使用 outbox。
+final recommendationRepositoryProvider = Provider<RecommendationRepository?>((
+  ref,
+) {
+  final db = ref.watch(appDatabaseProvider);
+  if (db == null) return null;
+  return RecommendationRepository(
+    db,
+    ref.watch(todoApiProvider).recommendation,
+  );
 });
 
 // --- 同步 ---------------------------------------------------------------

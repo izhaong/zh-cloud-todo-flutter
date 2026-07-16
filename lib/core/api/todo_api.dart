@@ -174,6 +174,64 @@ class NlpApi {
   }
 }
 
+/// 服务端按当前用户可见任务实时计算的推荐项。
+class RecommendationTask {
+  const RecommendationTask({
+    required this.taskServerId,
+    required this.title,
+    this.dueAt,
+    required this.reasonCode,
+    required this.reason,
+    required this.score,
+  });
+
+  final int taskServerId;
+  final String title;
+  final DateTime? dueAt;
+  final String reasonCode;
+  final String reason;
+  final int score;
+
+  factory RecommendationTask.fromJson(Map<String, dynamic> json) {
+    final dueRaw = json['dueAt'];
+    return RecommendationTask(
+      taskServerId: (json['taskId'] as num?)?.toInt() ?? 0,
+      title: json['title']?.toString() ?? '',
+      dueAt: dueRaw is String ? DateTime.tryParse(dueRaw) : null,
+      reasonCode: json['reasonCode']?.toString() ?? '',
+      reason: json['reason']?.toString() ?? '',
+      score: (json['score'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+/// 推荐任务只读接口；不参与任务写入的 outbox 协议。
+class RecommendationApi {
+  RecommendationApi(this._client);
+
+  final ApiClient _client;
+
+  /// `GET /help/recommend-tasks?limit=10`。
+  Future<List<RecommendationTask>> list({int limit = 10}) async {
+    final response = await _client.get<dynamic>(
+      '/help/recommend-tasks',
+      query: {'limit': limit.clamp(1, 50)},
+    );
+    final body = response.data;
+    final data = body is Map<String, dynamic> && body.containsKey('code')
+        ? body['data']
+        : body;
+    final rows = data is List ? data : const <dynamic>[];
+    return rows
+        .whereType<Map>()
+        .map(
+          (row) => RecommendationTask.fromJson(Map<String, dynamic>.from(row)),
+        )
+        .where((item) => item.taskServerId > 0 && item.reasonCode.isNotEmpty)
+        .toList(growable: false);
+  }
+}
+
 /// 标签 - 任务绑定（直接 REST；本地同步写仍由 TagRepository 负责 offline 安全）。
 class TagApi {
   TagApi(this._client);
@@ -291,6 +349,7 @@ class TodoRestApi {
       checklist = ChecklistApi(client),
       folder = FolderApi(client),
       nlp = NlpApi(client),
+      recommendation = RecommendationApi(client),
       tag = TagApi(client),
       reminder = ReminderActionApi(client),
       repeatOccurrence = RepeatOccurrenceApi(client),
@@ -304,6 +363,7 @@ class TodoRestApi {
   final ChecklistApi checklist;
   final FolderApi folder;
   final NlpApi nlp;
+  final RecommendationApi recommendation;
   final TagApi tag;
   final ReminderActionApi reminder;
   final RepeatOccurrenceApi repeatOccurrence;

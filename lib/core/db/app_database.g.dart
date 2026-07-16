@@ -4812,6 +4812,467 @@ class TodoFiltersCompanion extends UpdateCompanion<TodoFilter> {
   }
 }
 
+class $TodoRecommendationsTable extends TodoRecommendations
+    with TableInfo<$TodoRecommendationsTable, TodoRecommendation> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TodoRecommendationsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _taskServerIdMeta = const VerificationMeta(
+    'taskServerId',
+  );
+  @override
+  late final GeneratedColumn<int> taskServerId = GeneratedColumn<int>(
+    'task_server_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dueAtMeta = const VerificationMeta('dueAt');
+  @override
+  late final GeneratedColumn<DateTime> dueAt = GeneratedColumn<DateTime>(
+    'due_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _reasonCodeMeta = const VerificationMeta(
+    'reasonCode',
+  );
+  @override
+  late final GeneratedColumn<String> reasonCode = GeneratedColumn<String>(
+    'reason_code',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _reasonMeta = const VerificationMeta('reason');
+  @override
+  late final GeneratedColumn<String> reason = GeneratedColumn<String>(
+    'reason',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _scoreMeta = const VerificationMeta('score');
+  @override
+  late final GeneratedColumn<int> score = GeneratedColumn<int>(
+    'score',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _refreshedAtMeta = const VerificationMeta(
+    'refreshedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> refreshedAt = GeneratedColumn<DateTime>(
+    'refreshed_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    taskServerId,
+    title,
+    dueAt,
+    reasonCode,
+    reason,
+    score,
+    refreshedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'todo_recommendations';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<TodoRecommendation> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('task_server_id')) {
+      context.handle(
+        _taskServerIdMeta,
+        taskServerId.isAcceptableOrUnknown(
+          data['task_server_id']!,
+          _taskServerIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('due_at')) {
+      context.handle(
+        _dueAtMeta,
+        dueAt.isAcceptableOrUnknown(data['due_at']!, _dueAtMeta),
+      );
+    }
+    if (data.containsKey('reason_code')) {
+      context.handle(
+        _reasonCodeMeta,
+        reasonCode.isAcceptableOrUnknown(data['reason_code']!, _reasonCodeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_reasonCodeMeta);
+    }
+    if (data.containsKey('reason')) {
+      context.handle(
+        _reasonMeta,
+        reason.isAcceptableOrUnknown(data['reason']!, _reasonMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_reasonMeta);
+    }
+    if (data.containsKey('score')) {
+      context.handle(
+        _scoreMeta,
+        score.isAcceptableOrUnknown(data['score']!, _scoreMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_scoreMeta);
+    }
+    if (data.containsKey('refreshed_at')) {
+      context.handle(
+        _refreshedAtMeta,
+        refreshedAt.isAcceptableOrUnknown(
+          data['refreshed_at']!,
+          _refreshedAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_refreshedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {taskServerId};
+  @override
+  TodoRecommendation map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TodoRecommendation(
+      taskServerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}task_server_id'],
+      )!,
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      )!,
+      dueAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}due_at'],
+      ),
+      reasonCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}reason_code'],
+      )!,
+      reason: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}reason'],
+      )!,
+      score: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}score'],
+      )!,
+      refreshedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}refreshed_at'],
+      )!,
+    );
+  }
+
+  @override
+  $TodoRecommendationsTable createAlias(String alias) {
+    return $TodoRecommendationsTable(attachedDatabase, alias);
+  }
+}
+
+class TodoRecommendation extends DataClass
+    implements Insertable<TodoRecommendation> {
+  final int taskServerId;
+  final String title;
+  final DateTime? dueAt;
+  final String reasonCode;
+  final String reason;
+  final int score;
+  final DateTime refreshedAt;
+  const TodoRecommendation({
+    required this.taskServerId,
+    required this.title,
+    this.dueAt,
+    required this.reasonCode,
+    required this.reason,
+    required this.score,
+    required this.refreshedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['task_server_id'] = Variable<int>(taskServerId);
+    map['title'] = Variable<String>(title);
+    if (!nullToAbsent || dueAt != null) {
+      map['due_at'] = Variable<DateTime>(dueAt);
+    }
+    map['reason_code'] = Variable<String>(reasonCode);
+    map['reason'] = Variable<String>(reason);
+    map['score'] = Variable<int>(score);
+    map['refreshed_at'] = Variable<DateTime>(refreshedAt);
+    return map;
+  }
+
+  TodoRecommendationsCompanion toCompanion(bool nullToAbsent) {
+    return TodoRecommendationsCompanion(
+      taskServerId: Value(taskServerId),
+      title: Value(title),
+      dueAt: dueAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dueAt),
+      reasonCode: Value(reasonCode),
+      reason: Value(reason),
+      score: Value(score),
+      refreshedAt: Value(refreshedAt),
+    );
+  }
+
+  factory TodoRecommendation.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TodoRecommendation(
+      taskServerId: serializer.fromJson<int>(json['taskServerId']),
+      title: serializer.fromJson<String>(json['title']),
+      dueAt: serializer.fromJson<DateTime?>(json['dueAt']),
+      reasonCode: serializer.fromJson<String>(json['reasonCode']),
+      reason: serializer.fromJson<String>(json['reason']),
+      score: serializer.fromJson<int>(json['score']),
+      refreshedAt: serializer.fromJson<DateTime>(json['refreshedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'taskServerId': serializer.toJson<int>(taskServerId),
+      'title': serializer.toJson<String>(title),
+      'dueAt': serializer.toJson<DateTime?>(dueAt),
+      'reasonCode': serializer.toJson<String>(reasonCode),
+      'reason': serializer.toJson<String>(reason),
+      'score': serializer.toJson<int>(score),
+      'refreshedAt': serializer.toJson<DateTime>(refreshedAt),
+    };
+  }
+
+  TodoRecommendation copyWith({
+    int? taskServerId,
+    String? title,
+    Value<DateTime?> dueAt = const Value.absent(),
+    String? reasonCode,
+    String? reason,
+    int? score,
+    DateTime? refreshedAt,
+  }) => TodoRecommendation(
+    taskServerId: taskServerId ?? this.taskServerId,
+    title: title ?? this.title,
+    dueAt: dueAt.present ? dueAt.value : this.dueAt,
+    reasonCode: reasonCode ?? this.reasonCode,
+    reason: reason ?? this.reason,
+    score: score ?? this.score,
+    refreshedAt: refreshedAt ?? this.refreshedAt,
+  );
+  TodoRecommendation copyWithCompanion(TodoRecommendationsCompanion data) {
+    return TodoRecommendation(
+      taskServerId: data.taskServerId.present
+          ? data.taskServerId.value
+          : this.taskServerId,
+      title: data.title.present ? data.title.value : this.title,
+      dueAt: data.dueAt.present ? data.dueAt.value : this.dueAt,
+      reasonCode: data.reasonCode.present
+          ? data.reasonCode.value
+          : this.reasonCode,
+      reason: data.reason.present ? data.reason.value : this.reason,
+      score: data.score.present ? data.score.value : this.score,
+      refreshedAt: data.refreshedAt.present
+          ? data.refreshedAt.value
+          : this.refreshedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TodoRecommendation(')
+          ..write('taskServerId: $taskServerId, ')
+          ..write('title: $title, ')
+          ..write('dueAt: $dueAt, ')
+          ..write('reasonCode: $reasonCode, ')
+          ..write('reason: $reason, ')
+          ..write('score: $score, ')
+          ..write('refreshedAt: $refreshedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    taskServerId,
+    title,
+    dueAt,
+    reasonCode,
+    reason,
+    score,
+    refreshedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TodoRecommendation &&
+          other.taskServerId == this.taskServerId &&
+          other.title == this.title &&
+          other.dueAt == this.dueAt &&
+          other.reasonCode == this.reasonCode &&
+          other.reason == this.reason &&
+          other.score == this.score &&
+          other.refreshedAt == this.refreshedAt);
+}
+
+class TodoRecommendationsCompanion extends UpdateCompanion<TodoRecommendation> {
+  final Value<int> taskServerId;
+  final Value<String> title;
+  final Value<DateTime?> dueAt;
+  final Value<String> reasonCode;
+  final Value<String> reason;
+  final Value<int> score;
+  final Value<DateTime> refreshedAt;
+  const TodoRecommendationsCompanion({
+    this.taskServerId = const Value.absent(),
+    this.title = const Value.absent(),
+    this.dueAt = const Value.absent(),
+    this.reasonCode = const Value.absent(),
+    this.reason = const Value.absent(),
+    this.score = const Value.absent(),
+    this.refreshedAt = const Value.absent(),
+  });
+  TodoRecommendationsCompanion.insert({
+    this.taskServerId = const Value.absent(),
+    required String title,
+    this.dueAt = const Value.absent(),
+    required String reasonCode,
+    required String reason,
+    required int score,
+    required DateTime refreshedAt,
+  }) : title = Value(title),
+       reasonCode = Value(reasonCode),
+       reason = Value(reason),
+       score = Value(score),
+       refreshedAt = Value(refreshedAt);
+  static Insertable<TodoRecommendation> custom({
+    Expression<int>? taskServerId,
+    Expression<String>? title,
+    Expression<DateTime>? dueAt,
+    Expression<String>? reasonCode,
+    Expression<String>? reason,
+    Expression<int>? score,
+    Expression<DateTime>? refreshedAt,
+  }) {
+    return RawValuesInsertable({
+      if (taskServerId != null) 'task_server_id': taskServerId,
+      if (title != null) 'title': title,
+      if (dueAt != null) 'due_at': dueAt,
+      if (reasonCode != null) 'reason_code': reasonCode,
+      if (reason != null) 'reason': reason,
+      if (score != null) 'score': score,
+      if (refreshedAt != null) 'refreshed_at': refreshedAt,
+    });
+  }
+
+  TodoRecommendationsCompanion copyWith({
+    Value<int>? taskServerId,
+    Value<String>? title,
+    Value<DateTime?>? dueAt,
+    Value<String>? reasonCode,
+    Value<String>? reason,
+    Value<int>? score,
+    Value<DateTime>? refreshedAt,
+  }) {
+    return TodoRecommendationsCompanion(
+      taskServerId: taskServerId ?? this.taskServerId,
+      title: title ?? this.title,
+      dueAt: dueAt ?? this.dueAt,
+      reasonCode: reasonCode ?? this.reasonCode,
+      reason: reason ?? this.reason,
+      score: score ?? this.score,
+      refreshedAt: refreshedAt ?? this.refreshedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (taskServerId.present) {
+      map['task_server_id'] = Variable<int>(taskServerId.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (dueAt.present) {
+      map['due_at'] = Variable<DateTime>(dueAt.value);
+    }
+    if (reasonCode.present) {
+      map['reason_code'] = Variable<String>(reasonCode.value);
+    }
+    if (reason.present) {
+      map['reason'] = Variable<String>(reason.value);
+    }
+    if (score.present) {
+      map['score'] = Variable<int>(score.value);
+    }
+    if (refreshedAt.present) {
+      map['refreshed_at'] = Variable<DateTime>(refreshedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TodoRecommendationsCompanion(')
+          ..write('taskServerId: $taskServerId, ')
+          ..write('title: $title, ')
+          ..write('dueAt: $dueAt, ')
+          ..write('reasonCode: $reasonCode, ')
+          ..write('reason: $reason, ')
+          ..write('score: $score, ')
+          ..write('refreshedAt: $refreshedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $TodoSyncChangesTable extends TodoSyncChanges
     with TableInfo<$TodoSyncChangesTable, TodoSyncChange> {
   @override
@@ -6078,6 +6539,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $TodoViewPreferencesTable todoViewPreferences =
       $TodoViewPreferencesTable(this);
   late final $TodoFiltersTable todoFilters = $TodoFiltersTable(this);
+  late final $TodoRecommendationsTable todoRecommendations =
+      $TodoRecommendationsTable(this);
   late final $TodoSyncChangesTable todoSyncChanges = $TodoSyncChangesTable(
     this,
   );
@@ -6099,6 +6562,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     todoRepeatSkips,
     todoViewPreferences,
     todoFilters,
+    todoRecommendations,
     todoSyncChanges,
     todoSyncCursor,
     todoEntityRevisions,
@@ -8583,6 +9047,260 @@ typedef $$TodoFiltersTableProcessedTableManager =
       TodoFilter,
       PrefetchHooks Function()
     >;
+typedef $$TodoRecommendationsTableCreateCompanionBuilder =
+    TodoRecommendationsCompanion Function({
+      Value<int> taskServerId,
+      required String title,
+      Value<DateTime?> dueAt,
+      required String reasonCode,
+      required String reason,
+      required int score,
+      required DateTime refreshedAt,
+    });
+typedef $$TodoRecommendationsTableUpdateCompanionBuilder =
+    TodoRecommendationsCompanion Function({
+      Value<int> taskServerId,
+      Value<String> title,
+      Value<DateTime?> dueAt,
+      Value<String> reasonCode,
+      Value<String> reason,
+      Value<int> score,
+      Value<DateTime> refreshedAt,
+    });
+
+class $$TodoRecommendationsTableFilterComposer
+    extends Composer<_$AppDatabase, $TodoRecommendationsTable> {
+  $$TodoRecommendationsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get taskServerId => $composableBuilder(
+    column: $table.taskServerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get dueAt => $composableBuilder(
+    column: $table.dueAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get reasonCode => $composableBuilder(
+    column: $table.reasonCode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get reason => $composableBuilder(
+    column: $table.reason,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get score => $composableBuilder(
+    column: $table.score,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get refreshedAt => $composableBuilder(
+    column: $table.refreshedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$TodoRecommendationsTableOrderingComposer
+    extends Composer<_$AppDatabase, $TodoRecommendationsTable> {
+  $$TodoRecommendationsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get taskServerId => $composableBuilder(
+    column: $table.taskServerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get dueAt => $composableBuilder(
+    column: $table.dueAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get reasonCode => $composableBuilder(
+    column: $table.reasonCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get reason => $composableBuilder(
+    column: $table.reason,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get score => $composableBuilder(
+    column: $table.score,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get refreshedAt => $composableBuilder(
+    column: $table.refreshedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$TodoRecommendationsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $TodoRecommendationsTable> {
+  $$TodoRecommendationsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get taskServerId => $composableBuilder(
+    column: $table.taskServerId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get dueAt =>
+      $composableBuilder(column: $table.dueAt, builder: (column) => column);
+
+  GeneratedColumn<String> get reasonCode => $composableBuilder(
+    column: $table.reasonCode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get reason =>
+      $composableBuilder(column: $table.reason, builder: (column) => column);
+
+  GeneratedColumn<int> get score =>
+      $composableBuilder(column: $table.score, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get refreshedAt => $composableBuilder(
+    column: $table.refreshedAt,
+    builder: (column) => column,
+  );
+}
+
+class $$TodoRecommendationsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $TodoRecommendationsTable,
+          TodoRecommendation,
+          $$TodoRecommendationsTableFilterComposer,
+          $$TodoRecommendationsTableOrderingComposer,
+          $$TodoRecommendationsTableAnnotationComposer,
+          $$TodoRecommendationsTableCreateCompanionBuilder,
+          $$TodoRecommendationsTableUpdateCompanionBuilder,
+          (
+            TodoRecommendation,
+            BaseReferences<
+              _$AppDatabase,
+              $TodoRecommendationsTable,
+              TodoRecommendation
+            >,
+          ),
+          TodoRecommendation,
+          PrefetchHooks Function()
+        > {
+  $$TodoRecommendationsTableTableManager(
+    _$AppDatabase db,
+    $TodoRecommendationsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$TodoRecommendationsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$TodoRecommendationsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$TodoRecommendationsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> taskServerId = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<DateTime?> dueAt = const Value.absent(),
+                Value<String> reasonCode = const Value.absent(),
+                Value<String> reason = const Value.absent(),
+                Value<int> score = const Value.absent(),
+                Value<DateTime> refreshedAt = const Value.absent(),
+              }) => TodoRecommendationsCompanion(
+                taskServerId: taskServerId,
+                title: title,
+                dueAt: dueAt,
+                reasonCode: reasonCode,
+                reason: reason,
+                score: score,
+                refreshedAt: refreshedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> taskServerId = const Value.absent(),
+                required String title,
+                Value<DateTime?> dueAt = const Value.absent(),
+                required String reasonCode,
+                required String reason,
+                required int score,
+                required DateTime refreshedAt,
+              }) => TodoRecommendationsCompanion.insert(
+                taskServerId: taskServerId,
+                title: title,
+                dueAt: dueAt,
+                reasonCode: reasonCode,
+                reason: reason,
+                score: score,
+                refreshedAt: refreshedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$TodoRecommendationsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $TodoRecommendationsTable,
+      TodoRecommendation,
+      $$TodoRecommendationsTableFilterComposer,
+      $$TodoRecommendationsTableOrderingComposer,
+      $$TodoRecommendationsTableAnnotationComposer,
+      $$TodoRecommendationsTableCreateCompanionBuilder,
+      $$TodoRecommendationsTableUpdateCompanionBuilder,
+      (
+        TodoRecommendation,
+        BaseReferences<
+          _$AppDatabase,
+          $TodoRecommendationsTable,
+          TodoRecommendation
+        >,
+      ),
+      TodoRecommendation,
+      PrefetchHooks Function()
+    >;
 typedef $$TodoSyncChangesTableCreateCompanionBuilder =
     TodoSyncChangesCompanion Function({
       Value<int> id,
@@ -9296,6 +10014,8 @@ class $AppDatabaseManager {
       $$TodoViewPreferencesTableTableManager(_db, _db.todoViewPreferences);
   $$TodoFiltersTableTableManager get todoFilters =>
       $$TodoFiltersTableTableManager(_db, _db.todoFilters);
+  $$TodoRecommendationsTableTableManager get todoRecommendations =>
+      $$TodoRecommendationsTableTableManager(_db, _db.todoRecommendations);
   $$TodoSyncChangesTableTableManager get todoSyncChanges =>
       $$TodoSyncChangesTableTableManager(_db, _db.todoSyncChanges);
   $$TodoSyncCursorTableTableManager get todoSyncCursor =>
