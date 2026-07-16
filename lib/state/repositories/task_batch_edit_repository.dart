@@ -28,6 +28,7 @@ class TaskBatchEditCommand {
     required this.taskIds,
     this.listId,
     this.dueAt,
+    this.tagIds,
     this.priority,
     this.completed,
     this.isPinned,
@@ -36,6 +37,7 @@ class TaskBatchEditCommand {
   final List<String> taskIds;
   final String? listId;
   final DateTime? dueAt;
+  final List<String>? tagIds;
   final int? priority;
   final bool? completed;
   final bool? isPinned;
@@ -43,6 +45,7 @@ class TaskBatchEditCommand {
   bool get hasChanges =>
       listId != null ||
       dueAt != null ||
+      tagIds != null ||
       priority != null ||
       completed != null ||
       isPinned != null;
@@ -99,6 +102,20 @@ class TaskBatchEditRepository {
           );
         }
 
+        final tagIds = command.tagIds?.toSet().toList(growable: false);
+        if (tagIds != null) {
+          final tags = await (_db.select(
+            _db.todoTags,
+          )..where((row) => row.id.isIn(tagIds))).get();
+          if (tags.length != tagIds.length) {
+            return TaskBatchEditResult(
+              taskId: taskId,
+              status: TaskBatchEditStatus.failed,
+              reason: '标签不存在',
+            );
+          }
+        }
+
         await (_db.update(
           _db.todoTasks,
         )..where((row) => row.id.equals(taskId))).write(
@@ -131,6 +148,25 @@ class TaskBatchEditRepository {
           serverId: updated.serverId,
           payload: updated.toJson(),
         );
+        if (tagIds != null) {
+          await (_db.delete(
+            _db.todoTaskTags,
+          )..where((row) => row.taskId.equals(taskId))).go();
+          for (final tagId in tagIds) {
+            await _db
+                .into(_db.todoTaskTags)
+                .insert(
+                  TodoTaskTagsCompanion.insert(taskId: taskId, tagId: tagId),
+                );
+          }
+          await _queue.enqueue(
+            entity: SyncEntities.taskTag,
+            op: SyncOps.upsert,
+            localId: updated.id,
+            serverId: updated.serverId,
+            payload: {'taskId': updated.id, 'tagIds': tagIds},
+          );
+        }
         return TaskBatchEditResult(
           taskId: taskId,
           status: TaskBatchEditStatus.success,

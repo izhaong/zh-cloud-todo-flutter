@@ -48,6 +48,15 @@ void main() {
           createdAt: now,
         ),
       );
+      batch.insert(
+        db.todoTags,
+        TodoTagsCompanion.insert(
+          id: 'tag-target',
+          name: '本周',
+          updatedAt: now,
+          createdAt: now,
+        ),
+      );
       for (var index = 0; index < 1000; index++) {
         batch.insert(
           db.todoTasks,
@@ -264,5 +273,43 @@ void main() {
       'task-1',
       'task-2',
     });
+  });
+
+  test('批量编辑替换标签并为每个任务写 task_tag outbox', () async {
+    final batchRepository = TaskBatchEditRepository(db, SyncChangeQueue(db));
+    await db
+        .into(db.todoTaskTags)
+        .insert(
+          TodoTaskTagsCompanion.insert(
+            taskId: 'task-1',
+            tagId: 'tag-collection',
+          ),
+        );
+
+    final results = await batchRepository.apply(
+      const TaskBatchEditCommand(
+        taskIds: ['task-1', 'task-2'],
+        tagIds: ['tag-target'],
+      ),
+    );
+
+    expect(results.map((result) => result.status), [
+      TaskBatchEditStatus.success,
+      TaskBatchEditStatus.success,
+    ]);
+    final taskTags = await db.select(db.todoTaskTags).get();
+    expect(taskTags.map((row) => '${row.taskId}:${row.tagId}').toSet(), {
+      'task-1:tag-target',
+      'task-2:tag-target',
+    });
+
+    final queued = await db.select(db.todoSyncChanges).get();
+    expect(queued, hasLength(4));
+    expect(
+      queued
+          .where((change) => change.entity == SyncEntities.taskTag)
+          .map((change) => change.entityLocalId),
+      containsAll(<String>['task-1', 'task-2']),
+    );
   });
 }
