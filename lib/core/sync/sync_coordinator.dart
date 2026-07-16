@@ -210,6 +210,13 @@ class SyncCoordinator {
     Map<String, dynamic> payload,
   ) async {
     final resolved = Map<String, dynamic>.from(payload);
+    // Drift 的任务聚合用 completed 表示完成态；服务端任务契约以 status
+    // （todo / done）为准。出站时在唯一的协议适配层转换，避免视图层直接
+    // 拼接服务端字段，也避免服务端收到无法识别的本地 completed 字段。
+    if (entity == SyncEntities.task && resolved.containsKey('completed')) {
+      resolved['status'] = resolved['completed'] == true ? 'done' : 'todo';
+      resolved.remove('completed');
+    }
     if (entity == SyncEntities.task && resolved.containsKey('listId')) {
       final localListId = resolved['listId']?.toString();
       if (localListId != null && localListId.isNotEmpty) {
@@ -518,7 +525,7 @@ class SyncCoordinator {
       (payload['parentTaskId'] as num?)?.toInt(),
     );
     final now = DateTime.now();
-    final status = payload['status']?.toString();
+    final status = payload['status']?.toString().toLowerCase();
     final companion = TodoTasksCompanion(
       id: Value(existing?.id ?? _uuid.v4()),
       serverId: Value(serverId),
@@ -526,7 +533,7 @@ class SyncCoordinator {
       parentTaskId: Value(localParentId ?? existing?.parentTaskId),
       title: Value(payload['title']?.toString() ?? existing?.title ?? ''),
       description: Value(payload['description']?.toString()),
-      completed: Value(status == 'DONE' || status == 'COMPLETED'),
+      completed: Value(status == 'done' || status == 'completed'),
       priority: Value((payload['priority'] as num?)?.toInt() ?? 0),
       isPinned: Value(payload['isPinned'] as bool? ?? false),
       sortOrder: Value((payload['sortOrder'] as num?)?.toInt() ?? 0),
