@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/brand_colors.dart';
@@ -65,12 +68,33 @@ class TodoWorkspace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return switch (todoWorkspaceProfileForWidth(width)) {
-      TodoWorkspaceProfile.wide => _desktopWide(context),
-      TodoWorkspaceProfile.compact => _desktopCompact(context),
-      TodoWorkspaceProfile.tablet => _tablet(context),
-      TodoWorkspaceProfile.mobile => _mobile(context),
-    };
+    return Shortcuts(
+      shortcuts: const {
+        SingleActivator(LogicalKeyboardKey.keyK, control: true):
+            _OpenGlobalSearchIntent(),
+        SingleActivator(LogicalKeyboardKey.keyK, meta: true):
+            _OpenGlobalSearchIntent(),
+      },
+      child: Actions(
+        actions: {
+          _OpenGlobalSearchIntent: CallbackAction<_OpenGlobalSearchIntent>(
+            onInvoke: (_) {
+              unawaited(_openSearch(context));
+              return null;
+            },
+          ),
+        },
+        child: Focus(
+          autofocus: true,
+          child: switch (todoWorkspaceProfileForWidth(width)) {
+            TodoWorkspaceProfile.wide => _desktopWide(context),
+            TodoWorkspaceProfile.compact => _desktopCompact(context),
+            TodoWorkspaceProfile.tablet => _tablet(context),
+            TodoWorkspaceProfile.mobile => _mobile(context),
+          },
+        ),
+      ),
+    );
   }
 
   Widget _desktopWide(BuildContext context) {
@@ -241,16 +265,18 @@ class TodoWorkspace extends StatelessWidget {
         IconButton(
           tooltip: '搜索',
           icon: Icon(Icons.search, color: colors.mutedForeground),
-          onPressed: () async {
-            final result = await Navigator.of(context).push<TaskSearchResult>(
-              MaterialPageRoute(builder: (_) => const TaskSearchPage()),
-            );
-            if (result != null) onSearchResultSelected?.call(result);
-          },
+          onPressed: () => unawaited(_openSearch(context)),
         ),
         const SizedBox(width: 8),
       ],
     );
+  }
+
+  Future<void> _openSearch(BuildContext context) async {
+    final result = await Navigator.of(context).push<TaskSearchResult>(
+      MaterialPageRoute(builder: (_) => const TaskSearchPage()),
+    );
+    if (result != null) onSearchResultSelected?.call(result);
   }
 }
 
@@ -323,6 +349,10 @@ class TodoRail extends StatelessWidget {
       ),
     );
   }
+}
+
+class _OpenGlobalSearchIntent extends Intent {
+  const _OpenGlobalSearchIntent();
 }
 
 class _RailButton extends StatefulWidget {

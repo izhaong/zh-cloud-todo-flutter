@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zh_cloud_todo_flutter/core/theme/app_theme.dart';
@@ -111,6 +112,25 @@ void main() {
 
     expect(find.byType(TaskSearchPage), findsNothing);
     expect(find.text('回复设计反馈并确认下一步'), findsOneWidget);
+  });
+
+  testWidgets('wide workspace opens local search with control K', (
+    tester,
+  ) async {
+    await pumpTodoVisualScenario(
+      tester,
+      viewport: TodoVisualViewports.wide,
+      fixtureSet: TodoVisualFixtureSet.populated,
+      child: const HomeShell(),
+    );
+
+    expect(find.byType(TaskSearchPage), findsNothing);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TaskSearchPage), findsOneWidget);
   });
 
   testWidgets(
