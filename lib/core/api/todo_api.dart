@@ -293,7 +293,6 @@ class TodoRestApi {
       nlp = NlpApi(client),
       tag = TagApi(client),
       reminder = ReminderActionApi(client),
-      repeatOccurrence = RepeatOccurrenceApi(client),
       listCollaboration = ListCollaborationApi(client),
       taskAssign = TaskAssignApi(client),
       comment = TaskCommentApi(client),
@@ -306,7 +305,6 @@ class TodoRestApi {
   final NlpApi nlp;
   final TagApi tag;
   final ReminderActionApi reminder;
-  final RepeatOccurrenceApi repeatOccurrence;
   final ListCollaborationApi listCollaboration;
   final TaskAssignApi taskAssign;
   final TaskCommentApi comment;
@@ -454,21 +452,6 @@ class ReminderInboxItem {
   final String status;
 
   bool get pending => status == 'PENDING';
-}
-
-/// 重复周期（repeat-occurrence）的跳过 / 追补动作（直达 REST，不走 sync 协议）。
-class RepeatOccurrenceApi {
-  RepeatOccurrenceApi(this._client);
-
-  final ApiClient _client;
-
-  /// `POST /repeat-occurrence/{id}/skip` — 跳过该周期一次发生。
-  Future<void> skip(int id) =>
-      _client.post<Map<String, dynamic>>('/repeat-occurrence/$id/skip');
-
-  /// `POST /repeat-occurrence/{id}/catchup` — 追补该周期一次发生。
-  Future<void> catchup(int id) =>
-      _client.post<Map<String, dynamic>>('/repeat-occurrence/$id/catchup');
 }
 
 /// 清单成员：后端 `members.int` 响应单项。
