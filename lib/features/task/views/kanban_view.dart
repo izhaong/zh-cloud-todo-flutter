@@ -120,9 +120,22 @@ class KanbanView extends ConsumerWidget {
       await onTaskMove!(task, priority, completed);
     } catch (_) {
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('移动任务失败，请重试')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('移动任务失败，请重试'),
+            action: SnackBarAction(
+              label: '重试',
+              onPressed: () {
+                _moveTask(
+                  context,
+                  task,
+                  priority: priority,
+                  completed: completed,
+                );
+              },
+            ),
+          ),
+        );
       }
     }
   }

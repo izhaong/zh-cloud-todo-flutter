@@ -58,12 +58,16 @@ void main() {
       updatedAt: now,
       createdAt: now,
     );
+    var attempts = 0;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: KanbanView(
             tasks: [task],
-            onTaskMove: (_, _, _) async => throw StateError('write failed'),
+            onTaskMove: (_, _, _) async {
+              attempts++;
+              if (attempts == 1) throw StateError('write failed');
+            },
           ),
         ),
       ),
@@ -78,6 +82,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('移动任务失败，请重试'), findsOneWidget);
+    await tester.tap(find.text('重试'));
+    await tester.pumpAndSettle();
+    expect(attempts, 2);
   });
 
   testWidgets('时间线顺延一天会请求共享任务时间 mutation', (tester) async {
