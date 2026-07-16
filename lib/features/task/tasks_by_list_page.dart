@@ -305,6 +305,10 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         taskIds: [],
         listId: kInboxListId,
       ),
+      TaskBatchAction.clearDueAt => const TaskBatchEditCommand(
+        taskIds: [],
+        clearDueAt: true,
+      ),
       TaskBatchAction.clearTags => const TaskBatchEditCommand(
         taskIds: [],
         tagIds: [],
@@ -331,6 +335,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         taskIds: selectedIds,
         listId: baseCommand.listId,
         dueAt: baseCommand.dueAt,
+        clearDueAt: baseCommand.clearDueAt,
         tagIds: baseCommand.tagIds,
         priority: baseCommand.priority,
         completed: baseCommand.completed,

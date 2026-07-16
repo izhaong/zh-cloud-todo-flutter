@@ -267,4 +267,45 @@ void main() {
       );
     },
   );
+
+  testWidgets('batch clear-due action writes through the local use-case', (
+    tester,
+  ) async {
+    final fixture = await TodoVisualFixture.create();
+    addTearDown(fixture.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: fixture.container,
+        child: MaterialApp(
+          theme: ThemeData.light().copyWith(
+            extensions: const [AppThemeExtension(AppColors.light)],
+          ),
+          home: const Scaffold(body: TasksByListPage(hideAppBar: true)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('todo-batch-edit')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(Key('task-batch-select-${TodoVisualFixture.todayTaskId}')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('todo-batch-more')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('todo-batch-action-clearDueAt')));
+    await tester.pumpAndSettle();
+
+    final task =
+        await (fixture.database.select(fixture.database.todoTasks)
+              ..where((row) => row.id.equals(TodoVisualFixture.todayTaskId)))
+            .getSingle();
+    expect(task.dueAt, isNull);
+    final changes = await fixture.database
+        .select(fixture.database.todoSyncChanges)
+        .get();
+    expect(changes.where((change) => change.entity == 'task'), hasLength(1));
+  });
 }

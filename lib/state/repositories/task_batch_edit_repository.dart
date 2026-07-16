@@ -28,6 +28,7 @@ class TaskBatchEditCommand {
     required this.taskIds,
     this.listId,
     this.dueAt,
+    this.clearDueAt = false,
     this.tagIds,
     this.priority,
     this.completed,
@@ -37,6 +38,7 @@ class TaskBatchEditCommand {
   final List<String> taskIds;
   final String? listId;
   final DateTime? dueAt;
+  final bool clearDueAt;
   final List<String>? tagIds;
   final int? priority;
   final bool? completed;
@@ -45,6 +47,7 @@ class TaskBatchEditCommand {
   bool get hasChanges =>
       listId != null ||
       dueAt != null ||
+      clearDueAt ||
       tagIds != null ||
       priority != null ||
       completed != null ||
@@ -64,6 +67,9 @@ class TaskBatchEditRepository {
     if (command.priority != null &&
         (command.priority! < 0 || command.priority! > 3)) {
       throw ArgumentError.value(command.priority, 'priority', '必须介于 0 和 3');
+    }
+    if (command.clearDueAt && command.dueAt != null) {
+      throw ArgumentError.value(command, 'command', '不能同时设置和清空截止时间');
     }
 
     final seenIds = <String>{};
@@ -123,7 +129,9 @@ class TaskBatchEditRepository {
             listId: command.listId == null
                 ? const Value.absent()
                 : Value(command.listId!),
-            dueAt: command.dueAt == null
+            dueAt: command.clearDueAt
+                ? const Value<DateTime?>(null)
+                : command.dueAt == null
                 ? const Value.absent()
                 : Value(command.dueAt!),
             priority: command.priority == null

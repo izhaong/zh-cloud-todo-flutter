@@ -275,6 +275,36 @@ void main() {
     });
   });
 
+  test('批量编辑清空截止时间后逐项入队', () async {
+    final batchRepository = TaskBatchEditRepository(db, SyncChangeQueue(db));
+    await (db.update(db.todoTasks)
+          ..where((row) => row.id.isIn(['task-1', 'task-2'])))
+        .write(TodoTasksCompanion(dueAt: Value(DateTime.utc(2026, 7, 20, 18))));
+
+    final results = await batchRepository.apply(
+      const TaskBatchEditCommand(
+        taskIds: ['task-1', 'task-2'],
+        clearDueAt: true,
+      ),
+    );
+
+    expect(results.map((result) => result.status), [
+      TaskBatchEditStatus.success,
+      TaskBatchEditStatus.success,
+    ]);
+    final changed = await (db.select(
+      db.todoTasks,
+    )..where((row) => row.id.isIn(['task-1', 'task-2']))).get();
+    expect(changed.every((task) => task.dueAt == null), isTrue);
+
+    final queued = await db.select(db.todoSyncChanges).get();
+    expect(queued, hasLength(2));
+    expect(queued.map((change) => change.entityLocalId).toSet(), {
+      'task-1',
+      'task-2',
+    });
+  });
+
   test('批量编辑替换标签并为每个任务写 task_tag outbox', () async {
     final batchRepository = TaskBatchEditRepository(db, SyncChangeQueue(db));
     await db

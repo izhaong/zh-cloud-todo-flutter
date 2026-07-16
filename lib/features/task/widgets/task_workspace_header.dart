@@ -13,6 +13,7 @@ enum TaskSort { smart, priorityDesc, dueDate, title, createdAt }
 /// use-case flow and never call an API from the widget tree.
 enum TaskBatchAction {
   moveToInbox,
+  clearDueAt,
   clearTags,
   priorityNone,
   priorityLow,
@@ -25,6 +26,7 @@ enum TaskBatchAction {
 extension TaskBatchActionX on TaskBatchAction {
   String get label => switch (this) {
     TaskBatchAction.moveToInbox => '移至收集箱',
+    TaskBatchAction.clearDueAt => '清空截止日期',
     TaskBatchAction.clearTags => '清空所选标签',
     TaskBatchAction.priorityNone => '设为无优先级',
     TaskBatchAction.priorityLow => '设为低优先级',
