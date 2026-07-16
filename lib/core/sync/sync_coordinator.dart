@@ -1102,17 +1102,28 @@ class SyncCoordinator {
       }
     }
     final now = DateTime.now();
+    final existingByServerId = await (db.select(
+      db.todoViewPreferences,
+    )..where((row) => row.serverId.equals(serverId))).getSingleOrNull();
+    final existing =
+        existingByServerId ??
+        await (db.select(db.todoViewPreferences)..where(
+              (row) =>
+                  row.sourceType.equals(sourceType) &
+                  row.sourceKey.equals(sourceKey),
+            ))
+            .getSingleOrNull();
     await db
         .into(db.todoViewPreferences)
         .insertOnConflictUpdate(
           TodoViewPreferencesCompanion.insert(
-            id: _uuid.v4(),
+            id: existing?.id ?? _uuid.v4(),
             serverId: Value(serverId),
             sourceType: sourceType,
             sourceKey: sourceKey,
             valueJson: jsonEncode(localPayload),
             updatedAt: now,
-            createdAt: now,
+            createdAt: existing?.createdAt ?? now,
           ),
         );
   }

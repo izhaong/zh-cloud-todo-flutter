@@ -11,6 +11,7 @@ import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_coordinator.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/list_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_repository.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/task_capture_defaults_repository.dart';
 
 const _enabled = bool.fromEnvironment('TODO_B1_LIVE');
 const _baseUrl = String.fromEnvironment(
@@ -40,30 +41,43 @@ void main() {
       final coordinatorB = _coordinator(dbB, apiB, 'b1-live-device-b');
       final listsA = ListRepository(dbA, SyncChangeQueue(dbA));
       final tasksA = TaskRepository(dbA, SyncChangeQueue(dbA));
+      final defaultsA = TaskCaptureDefaultsRepository(
+        dbA,
+        SyncChangeQueue(dbA),
+      );
       final suffix = DateTime.now().microsecondsSinceEpoch;
       final list = await listsA.create(name: 'B1 live sync $suffix');
-      final task = await tasksA.create(
-        listId: list.id,
-        title: 'B1 live sync task $suffix',
-        description: '## Markdown\n\n来自设备 A 的正文。',
-        priority: 2,
-      );
-      final checklist = await tasksA.createChecklistItem(
-        taskId: task.id,
-        title: '在设备 B 回显检查事项',
-      );
+      String? taskLocalId;
 
       try {
+        // 默认清单跨端引用的是服务端 list ID；先提交清单，避免把设备 A 的
+        // 本地 UUID 带到设备 B。
+        await coordinatorA.push();
+        final syncedListA = await dbA.listByLocalId(list.id);
+        expect(syncedListA?.serverId, isPositive);
+
+        final task = await tasksA.create(
+          listId: list.id,
+          title: 'B1 live sync task $suffix',
+          description: '## Markdown\n\n来自设备 A 的正文。',
+          priority: 2,
+        );
+        taskLocalId = task.id;
+        final checklist = await tasksA.createChecklistItem(
+          taskId: task.id,
+          title: '在设备 B 回显检查事项',
+        );
+        await defaultsA.save(
+          TaskCaptureDefaults(defaultListId: list.id, defaultPriority: 2),
+        );
         await coordinatorA.push();
 
-        final syncedListA = await dbA.listByLocalId(list.id);
         final syncedTaskByLocalId = await (dbA.select(
           dbA.todoTasks,
         )..where((row) => row.id.equals(task.id))).getSingle();
         final syncedChecklistA = await (dbA.select(
           dbA.todoChecklistItems,
         )..where((row) => row.id.equals(checklist.id))).getSingle();
-        expect(syncedListA?.serverId, isPositive);
         expect(syncedTaskByLocalId.serverId, isPositive);
         expect(syncedChecklistA.serverId, isPositive);
         expect(await _pendingOrFailedCount(dbA), 0);
@@ -77,6 +91,13 @@ void main() {
         final listB = await dbB.listByServerId(syncedListA!.serverId!);
         expect(listB, isNotNull);
         expect(listB!.id, isNot(list.id));
+        final defaultsB = TaskCaptureDefaultsRepository(
+          dbB,
+          SyncChangeQueue(dbB),
+        );
+        final syncedDefaultsB = await defaultsB.get();
+        expect(syncedDefaultsB.defaultPriority, 2);
+        expect(syncedDefaultsB.defaultListId, listB.id);
         final checklistB =
             await (dbB.select(dbB.todoChecklistItems)..where(
                   (row) => row.serverId.equals(syncedChecklistA.serverId!),
@@ -101,7 +122,14 @@ void main() {
         await coordinatorB.pull();
         expect(await dbB.taskByServerId(syncedTaskByLocalId.serverId!), isNull);
       } finally {
-        await _deleteIfPresent(apiA, '/app-api/todo/task/delete', task.id, dbA);
+        if (taskLocalId != null) {
+          await _deleteIfPresent(
+            apiA,
+            '/app-api/todo/task/delete',
+            taskLocalId,
+            dbA,
+          );
+        }
         await _deleteIfPresent(apiA, '/app-api/todo/list/delete', list.id, dbA);
         await dbA.close();
         await dbB.close();
