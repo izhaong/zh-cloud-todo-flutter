@@ -14,6 +14,7 @@ enum TaskSort { smart, priorityDesc, dueDate, title, createdAt }
 enum TaskBatchAction {
   moveToInbox,
   moveToList,
+  setTags,
   clearDueAt,
   clearTags,
   priorityNone,
@@ -28,6 +29,7 @@ extension TaskBatchActionX on TaskBatchAction {
   String get label => switch (this) {
     TaskBatchAction.moveToInbox => '移至收集箱',
     TaskBatchAction.moveToList => '移至清单…',
+    TaskBatchAction.setTags => '设置标签…',
     TaskBatchAction.clearDueAt => '清空截止日期',
     TaskBatchAction.clearTags => '清空所选标签',
     TaskBatchAction.priorityNone => '设为无优先级',

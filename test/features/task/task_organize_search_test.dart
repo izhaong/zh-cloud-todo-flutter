@@ -421,4 +421,48 @@ void main() {
         .get();
     expect(changes.where((change) => change.entity == 'task'), hasLength(1));
   });
+
+  testWidgets('batch set-tags selects local tags through the use-case', (
+    tester,
+  ) async {
+    final fixture = await TodoVisualFixture.create();
+    addTearDown(fixture.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: fixture.container,
+        child: MaterialApp(
+          theme: ThemeData.light().copyWith(
+            extensions: const [AppThemeExtension(AppColors.light)],
+          ),
+          home: const Scaffold(body: TasksByListPage(hideAppBar: true)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('todo-batch-edit')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(Key('task-batch-select-${TodoVisualFixture.metadataTaskId}')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('todo-batch-more')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('todo-batch-action-setTags')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(Key('todo-batch-tag-${TodoVisualFixture.reviewTagId}')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('todo-batch-apply-tags')));
+    await tester.pumpAndSettle();
+
+    final tagRows =
+        await (fixture.database.select(fixture.database.todoTaskTags)..where(
+              (row) => row.taskId.equals(TodoVisualFixture.metadataTaskId),
+            ))
+            .get();
+    expect(tagRows.map((row) => row.tagId), [TodoVisualFixture.reviewTagId]);
+  });
 }

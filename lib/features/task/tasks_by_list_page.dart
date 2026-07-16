@@ -285,6 +285,15 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       );
       return;
     }
+    if (action == TaskBatchAction.setTags) {
+      final tagIds = await _selectBatchTagIds();
+      if (tagIds == null || !mounted) return;
+      await _applyBatchEdit(
+        TaskBatchEditCommand(taskIds: [], tagIds: tagIds),
+        successVerb: '已更新',
+      );
+      return;
+    }
     final command = switch (action) {
       TaskBatchAction.priorityNone => const TaskBatchEditCommand(
         taskIds: [],
@@ -315,6 +324,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         listId: kInboxListId,
       ),
       TaskBatchAction.moveToList => throw StateError('指定清单需要先选择目标'),
+      TaskBatchAction.setTags => throw StateError('标签需要先选择目标'),
       TaskBatchAction.clearDueAt => const TaskBatchEditCommand(
         taskIds: [],
         clearDueAt: true,
@@ -364,6 +374,87 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 onTap: () => Navigator.of(sheetContext).pop(list.id),
               ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Future<List<String>?> _selectBatchTagIds() async {
+    final repository = ref.read(tagRepositoryProvider);
+    if (repository == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('标签暂不可用，请稍后重试')));
+      return null;
+    }
+    final tags = await repository.getAll();
+    if (!mounted) return null;
+    if (tags.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('暂无可选择的标签')));
+      return null;
+    }
+    final selectedIds = <String>{};
+    return showModalBottomSheet<List<String>>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => SafeArea(
+          child: SizedBox(
+            height: MediaQuery.sizeOf(context).height * 0.55,
+            child: Column(
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '设置标签',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: ListView(
+                    children: [
+                      for (final tag in tags)
+                        CheckboxListTile(
+                          key: Key('todo-batch-tag-${tag.id}'),
+                          title: Text(tag.name),
+                          value: selectedIds.contains(tag.id),
+                          onChanged: (checked) {
+                            setSheetState(() {
+                              if (checked ?? false) {
+                                selectedIds.add(tag.id);
+                              } else {
+                                selectedIds.remove(tag.id);
+                              }
+                            });
+                          },
+                        ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      key: const Key('todo-batch-apply-tags'),
+                      onPressed: () => Navigator.of(
+                        sheetContext,
+                      ).pop(selectedIds.toList(growable: false)),
+                      child: const Text('应用标签'),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
