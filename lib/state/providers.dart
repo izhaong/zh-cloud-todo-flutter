@@ -10,6 +10,7 @@ import '../state/session_state.dart';
 import 'repositories/folder_repository.dart';
 import 'repositories/list_repository.dart';
 import 'repositories/tag_repository.dart';
+import 'repositories/task_batch_edit_repository.dart';
 import 'repositories/task_query_repository.dart';
 import 'repositories/task_repository.dart';
 
@@ -104,6 +105,15 @@ final taskQueryRepositoryProvider = Provider<TaskQueryRepository?>((ref) {
   final db = ref.watch(appDatabaseProvider);
   if (db == null) return null;
   return TaskQueryRepository(db);
+});
+
+final taskBatchEditRepositoryProvider = Provider<TaskBatchEditRepository?>((
+  ref,
+) {
+  final db = ref.watch(appDatabaseProvider);
+  final queue = ref.watch(syncChangeQueueProvider);
+  if (db == null || queue == null) return null;
+  return TaskBatchEditRepository(db, queue);
 });
 
 // --- 同步 ---------------------------------------------------------------

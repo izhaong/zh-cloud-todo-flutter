@@ -29,6 +29,10 @@ class TaskWorkspaceHeader extends StatelessWidget {
     required this.onModeChanged,
     required this.onSortChanged,
     required this.onFilterPressed,
+    this.batchSelectionActive = false,
+    this.batchSelectedCount = 0,
+    this.onBatchPressed,
+    this.onBatchCompletePressed,
   });
 
   final String title;
@@ -39,6 +43,10 @@ class TaskWorkspaceHeader extends StatelessWidget {
   final ValueChanged<TaskViewMode> onModeChanged;
   final ValueChanged<TaskSort> onSortChanged;
   final VoidCallback onFilterPressed;
+  final bool batchSelectionActive;
+  final int batchSelectedCount;
+  final VoidCallback? onBatchPressed;
+  final VoidCallback? onBatchCompletePressed;
 
   @override
   Widget build(BuildContext context) {
@@ -136,6 +144,30 @@ class TaskWorkspaceHeader extends StatelessWidget {
                   ],
                 ),
               ),
+              if (batchSelectionActive)
+                Text(
+                  '$batchSelectedCount 已选',
+                  style: TextStyle(color: colors.mutedForeground, fontSize: 12),
+                ),
+              if (batchSelectionActive)
+                IconButton(
+                  key: const Key('todo-batch-complete'),
+                  tooltip: '完成所选',
+                  onPressed: onBatchCompletePressed,
+                  icon: const Icon(Icons.done_all_outlined, size: 20),
+                ),
+              if (onBatchPressed != null)
+                IconButton(
+                  key: const Key('todo-batch-edit'),
+                  tooltip: batchSelectionActive ? '退出批量编辑' : '批量编辑',
+                  onPressed: onBatchPressed,
+                  icon: Icon(
+                    batchSelectionActive
+                        ? Icons.close_outlined
+                        : Icons.checklist_outlined,
+                    size: 20,
+                  ),
+                ),
             ],
           ),
         ),

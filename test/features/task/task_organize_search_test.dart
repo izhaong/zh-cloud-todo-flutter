@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zh_cloud_todo_flutter/core/theme/app_theme.dart';
+import 'package:zh_cloud_todo_flutter/features/task/tasks_by_list_page.dart';
 import 'package:zh_cloud_todo_flutter/features/task/task_search_page.dart';
 
 import '../../support/todo_visual_fixture.dart';
@@ -37,6 +38,55 @@ void main() {
       await tester.enterText(find.byKey(const Key('global-task-search')), '专注');
       await tester.pumpAndSettle();
       expect(find.text('标签 · 专注'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'batch completion reports per-task results from the local use-case',
+    (tester) async {
+      final fixture = await TodoVisualFixture.create();
+      addTearDown(fixture.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: fixture.container,
+          child: MaterialApp(
+            theme: ThemeData.light().copyWith(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            home: const Scaffold(body: TasksByListPage(hideAppBar: true)),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('todo-batch-edit')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(Key('task-batch-select-${TodoVisualFixture.pinnedTaskId}')),
+      );
+      await tester.tap(
+        find.byKey(Key('task-batch-select-${TodoVisualFixture.todayTaskId}')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('todo-batch-complete')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('已完成 2 项；失败 0 项'), findsOneWidget);
+      final tasks = await fixture.database
+          .select(fixture.database.todoTasks)
+          .get();
+      expect(
+        tasks.where((task) => task.completed).map((task) => task.id),
+        containsAll([
+          TodoVisualFixture.pinnedTaskId,
+          TodoVisualFixture.todayTaskId,
+        ]),
+      );
+      final changes = await fixture.database
+          .select(fixture.database.todoSyncChanges)
+          .get();
+      expect(changes.where((change) => change.entity == 'task'), hasLength(2));
     },
   );
 }

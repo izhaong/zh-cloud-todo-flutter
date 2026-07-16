@@ -17,6 +17,9 @@ class TaskRowHost extends ConsumerStatefulWidget {
     this.reorderIndex,
     this.selected = false,
     this.onTap,
+    this.batchSelectionActive = false,
+    this.batchSelected = false,
+    this.onBatchSelectionChanged,
   });
 
   final TodoTask task;
@@ -26,6 +29,9 @@ class TaskRowHost extends ConsumerStatefulWidget {
   final int? reorderIndex;
   final bool selected;
   final ValueChanged<String>? onTap;
+  final bool batchSelectionActive;
+  final bool batchSelected;
+  final ValueChanged<bool>? onBatchSelectionChanged;
 
   @override
   ConsumerState<TaskRowHost> createState() => _TaskRowHostState();
@@ -116,6 +122,9 @@ class _TaskRowHostState extends ConsumerState<TaskRowHost> {
                   hovered: _hovered,
                   focused: _focused,
                   selected: widget.selected,
+                  batchSelectionActive: widget.batchSelectionActive,
+                  batchSelected: widget.batchSelected,
+                  onBatchSelectionChanged: widget.onBatchSelectionChanged,
                   now: now,
                   dragHandle: dragHandle,
                   onMore: widget.desktopMode

@@ -6,6 +6,7 @@ import '../../core/theme/brand_colors.dart';
 import '../../core/theme/todo_layout_tokens.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../state/providers.dart';
+import '../../state/repositories/task_batch_edit_repository.dart';
 import '../../state/repositories/task_repository.dart';
 import '../filter/filter_bar.dart';
 import '../shell/quick_add_bar.dart';
@@ -66,6 +67,9 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   bool? _selectedTaskLastCompleted;
   String? _completionInvalidationTaskId;
   String? _reportedInvalidSelectionId;
+  bool _batchSelectionActive = false;
+  bool _batchApplying = false;
+  final Set<String> _batchSelectedTaskIds = <String>{};
 
   @override
   void initState() {
@@ -135,6 +139,15 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 onModeChanged: _changeMode,
                 onSortChanged: (sort) => setState(() => _sort = sort),
                 onFilterPressed: _openFilterPanel,
+                batchSelectionActive: _batchSelectionActive,
+                batchSelectedCount: _batchSelectedTaskIds.length,
+                onBatchPressed: _toggleBatchSelection,
+                onBatchCompletePressed:
+                    _batchSelectionActive &&
+                        _batchSelectedTaskIds.isNotEmpty &&
+                        !_batchApplying
+                    ? _completeBatchSelection
+                    : null,
               ),
             if (showQuickAdd) QuickAddBar(onSubmit: _submitQuickAdd),
             Expanded(
@@ -184,6 +197,9 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           now: now,
           selectedTaskId: widget.selectedTaskId,
           onTaskSelected: widget.onTaskSelected,
+          batchSelectionActive: _batchSelectionActive,
+          batchSelectedTaskIds: _batchSelectedTaskIds,
+          onBatchSelectionChanged: _updateBatchSelection,
         );
       case TaskViewMode.kanban:
         return KanbanView(
@@ -210,7 +226,11 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   }
 
   void _changeMode(TaskViewMode mode) {
-    setState(() => _mode = mode);
+    setState(() {
+      _mode = mode;
+      _batchSelectionActive = false;
+      _batchSelectedTaskIds.clear();
+    });
     ref
         .read(syncChangeQueueProvider)
         ?.enqueue(
@@ -222,6 +242,54 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
             'viewType': mode.name,
           },
         );
+  }
+
+  void _toggleBatchSelection() {
+    setState(() {
+      _mode = TaskViewMode.list;
+      _batchSelectionActive = !_batchSelectionActive;
+      _batchSelectedTaskIds.clear();
+    });
+  }
+
+  void _updateBatchSelection(String taskId, bool selected) {
+    setState(() {
+      if (selected) {
+        _batchSelectedTaskIds.add(taskId);
+      } else {
+        _batchSelectedTaskIds.remove(taskId);
+      }
+    });
+  }
+
+  Future<void> _completeBatchSelection() async {
+    final repository = ref.read(taskBatchEditRepositoryProvider);
+    if (repository == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('批量编辑暂不可用，请稍后重试')));
+      return;
+    }
+    final selectedIds = _batchSelectedTaskIds.toList(growable: false);
+    setState(() => _batchApplying = true);
+    final results = await repository.apply(
+      TaskBatchEditCommand(taskIds: selectedIds, completed: true),
+    );
+    if (!mounted) return;
+    final succeeded = results
+        .where((result) => result.status == TaskBatchEditStatus.success)
+        .length;
+    final failed = results
+        .where((result) => result.status == TaskBatchEditStatus.failed)
+        .length;
+    setState(() {
+      _batchApplying = false;
+      _batchSelectionActive = false;
+      _batchSelectedTaskIds.clear();
+    });
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('已完成 $succeeded 项；失败 $failed 项')));
   }
 
   Stream<List<TodoTask>> _resolveTasksStream(TaskRepository repository) {
@@ -348,6 +416,9 @@ class _ListBody extends StatefulWidget {
     required this.now,
     required this.selectedTaskId,
     required this.onTaskSelected,
+    required this.batchSelectionActive,
+    required this.batchSelectedTaskIds,
+    required this.onBatchSelectionChanged,
   });
 
   final List<TodoTask> items;
@@ -356,6 +427,9 @@ class _ListBody extends StatefulWidget {
   final DateTime now;
   final String? selectedTaskId;
   final ValueChanged<String>? onTaskSelected;
+  final bool batchSelectionActive;
+  final Set<String> batchSelectedTaskIds;
+  final void Function(String taskId, bool selected) onBatchSelectionChanged;
 
   @override
   State<_ListBody> createState() => _ListBodyState();
@@ -458,6 +532,10 @@ class _ListBodyState extends State<_ListBody> {
               reorderIndex: index,
               selected: widget.selectedTaskId == task.id,
               onTap: widget.onTaskSelected,
+              batchSelectionActive: widget.batchSelectionActive,
+              batchSelected: widget.batchSelectedTaskIds.contains(task.id),
+              onBatchSelectionChanged: (selected) =>
+                  widget.onBatchSelectionChanged(task.id, selected),
             ),
           );
         },
@@ -483,6 +561,10 @@ class _ListBodyState extends State<_ListBody> {
           task: task,
           selected: widget.selectedTaskId == task.id,
           onTap: widget.onTaskSelected,
+          batchSelectionActive: widget.batchSelectionActive,
+          batchSelected: widget.batchSelectedTaskIds.contains(task.id),
+          onBatchSelectionChanged: (selected) =>
+              widget.onBatchSelectionChanged(task.id, selected),
         );
       },
     );
