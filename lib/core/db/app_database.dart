@@ -157,6 +157,24 @@ class TodoViewPreferences extends Table {
   ];
 }
 
+/// 看板偏好与通用视图偏好分表保存，保留服务端的分组和列配置语义。
+class TodoBoardPreferences extends Table {
+  TextColumn get id => text()();
+  IntColumn get serverId => integer().nullable()();
+  TextColumn get listId => text()(); // → todo_list.id
+  TextColumn get groupDimension => text()();
+  TextColumn get columnsJson => text().nullable()();
+  DateTimeColumn get updatedAt => dateTime()();
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+  @override
+  List<Set<Column>> get uniqueKeys => [
+    {listId},
+  ];
+}
+
 /// 过滤器 / 智能清单条件。
 class TodoFilters extends Table {
   TextColumn get id => text()();
@@ -221,6 +239,7 @@ class TodoEntityRevisions extends Table {
     TodoRepeatRules,
     TodoRepeatSkips,
     TodoViewPreferences,
+    TodoBoardPreferences,
     TodoFilters,
     TodoSyncChanges,
     TodoSyncCursor,
@@ -238,7 +257,7 @@ class AppDatabase extends _$AppDatabase {
     : super(_open('todo_t${tenantId}_u$userId'));
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -253,6 +272,8 @@ class AppDatabase extends _$AppDatabase {
           await m.deleteTable(table.actualTableName);
         }
         await m.createAll();
+      } else if (from < 5) {
+        await m.createTable(todoBoardPreferences);
       }
     },
   );

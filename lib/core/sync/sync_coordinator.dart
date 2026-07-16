@@ -338,6 +338,13 @@ class SyncCoordinator {
           accepted.clientMutationId,
           accepted.entityId!,
         );
+      case SyncEntities.boardPreference:
+        await _bindServerId(
+          db.todoBoardPreferences,
+          db.todoBoardPreferences.serverId,
+          accepted.clientMutationId,
+          accepted.entityId!,
+        );
       case SyncEntities.filter:
         await _bindServerId(
           db.todoFilters,
@@ -385,6 +392,8 @@ class SyncCoordinator {
         await _upsertLocalRepeatSkip(conflict.entityId!, serverValue);
       case SyncEntities.viewPreference:
         await _upsertLocalViewPreference(conflict.entityId!, serverValue);
+      case SyncEntities.boardPreference:
+        await _upsertLocalBoardPreference(conflict.entityId!, serverValue);
       case SyncEntities.filter:
         await _upsertLocalFilter(conflict.entityId!, serverValue);
     }
@@ -436,6 +445,8 @@ class SyncCoordinator {
         await _upsertLocalRepeatSkip(entityId, payload);
       case SyncEntities.viewPreference:
         await _upsertLocalViewPreference(entityId, payload);
+      case SyncEntities.boardPreference:
+        await _upsertLocalBoardPreference(entityId, payload);
       case SyncEntities.filter:
         await _upsertLocalFilter(entityId, payload);
       case SyncEntities.taskTag:
@@ -473,6 +484,10 @@ class SyncCoordinator {
       case SyncEntities.viewPreference:
         await (db.delete(
           db.todoViewPreferences,
+        )..where((t) => t.serverId.equals(tombstone.entityId))).go();
+      case SyncEntities.boardPreference:
+        await (db.delete(
+          db.todoBoardPreferences,
         )..where((t) => t.serverId.equals(tombstone.entityId))).go();
       case SyncEntities.filter:
         await (db.delete(
@@ -702,6 +717,45 @@ class SyncCoordinator {
             createdAt: now,
           ),
         );
+  }
+
+  Future<void> _upsertLocalBoardPreference(
+    int serverId,
+    Map<String, dynamic> payload,
+  ) async {
+    final existing = await (db.select(
+      db.todoBoardPreferences,
+    )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
+    final localListId = await _localListIdForServerId(
+      (payload['listId'] as num?)?.toInt(),
+    );
+    if (localListId == null && existing == null) return;
+    final now = DateTime.now();
+    final companion = TodoBoardPreferencesCompanion(
+      id: Value(existing?.id ?? _uuid.v4()),
+      serverId: Value(serverId),
+      listId: Value(localListId ?? existing!.listId),
+      groupDimension: Value(
+        payload['groupDimension']?.toString() ??
+            payload['group_dimension']?.toString() ??
+            existing?.groupDimension ??
+            'LIST',
+      ),
+      columnsJson: Value(
+        payload['columnsJson']?.toString() ??
+            payload['columns_json']?.toString() ??
+            existing?.columnsJson,
+      ),
+      updatedAt: Value(now),
+      createdAt: Value(existing?.createdAt ?? now),
+    );
+    if (existing == null) {
+      await db.into(db.todoBoardPreferences).insert(companion);
+    } else {
+      await (db.update(
+        db.todoBoardPreferences,
+      )..where((t) => t.id.equals(existing.id))).write(companion);
+    }
   }
 
   Future<void> _upsertLocalFilter(

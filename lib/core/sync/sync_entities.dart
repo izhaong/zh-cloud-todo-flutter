@@ -7,6 +7,7 @@ class SyncEntities {
   static const repeatRule = 'repeat_rule';
   static const repeatSkip = 'repeat_skip';
   static const viewPreference = 'view_preference';
+  static const boardPreference = 'board_preference';
   static const tag = 'tag';
   static const taskTag = 'task_tag';
   static const filter = 'filter';
@@ -22,6 +23,7 @@ class SyncEntities {
     repeatRule,
     repeatSkip,
     viewPreference,
+    boardPreference,
     tag,
     taskTag,
     filter,
