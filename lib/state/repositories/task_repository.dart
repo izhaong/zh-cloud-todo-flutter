@@ -532,7 +532,7 @@ class TaskRepository {
   }
 
   /// 切换置顶状态 + sync_queue。
-  Future<TodoTask> togglePin(String taskId) async {
+  Future<TodoTask> togglePin(String taskId) => _db.transaction(() async {
     final current = await (_db.select(
       _db.todoTasks,
     )..where((t) => t.id.equals(taskId))).getSingle();
@@ -551,10 +551,10 @@ class TaskRepository {
       payload: _taskPayload(next),
     );
     return next;
-  }
+  });
 
   /// 切换完成状态 + sync_queue。
-  Future<TodoTask> toggleComplete(String taskId) async {
+  Future<TodoTask> toggleComplete(String taskId) => _db.transaction(() async {
     final next = await _db.toggleTaskComplete(taskId);
     await _queue.enqueue(
       entity: SyncEntities.task,
@@ -564,10 +564,12 @@ class TaskRepository {
       payload: _taskPayload(next),
     );
     return next;
-  }
+  });
 
-  Future<TodoTask> abandon(String taskId) async {
-    final current = await getById(taskId);
+  Future<TodoTask> abandon(String taskId) => _db.transaction(() async {
+    final current = await (_db.select(
+      _db.todoTasks,
+    )..where((task) => task.id.equals(taskId))).getSingleOrNull();
     if (current == null) throw StateError('任务不存在');
     final next = current.copyWith(
       cancelled: true,
@@ -585,9 +587,9 @@ class TaskRepository {
       payload: _taskPayload(next),
     );
     return next;
-  }
+  });
 
-  Future<void> delete(String taskId) async {
+  Future<void> delete(String taskId) => _db.transaction(() async {
     final row = await (_db.select(
       _db.todoTasks,
     )..where((t) => t.id.equals(taskId))).getSingleOrNull();
@@ -618,7 +620,7 @@ class TaskRepository {
       serverId: row?.serverId,
       payload: {'id': taskId, 'serverId': row?.serverId},
     );
-  }
+  });
 
   /// 计算任务在父子链中的深度（自身为 0，即顶层任务 = 0）。
   ///
@@ -652,19 +654,20 @@ class TaskRepository {
     return result;
   }
 
-  Future<void> reparent(String taskId, String? newParentId) async {
-    await _db.reparentTask(taskId, newParentId);
-    final row = await (_db.select(
-      _db.todoTasks,
-    )..where((t) => t.id.equals(taskId))).getSingle();
-    await _queue.enqueue(
-      entity: SyncEntities.task,
-      op: SyncOps.upsert,
-      localId: taskId,
-      serverId: row.serverId,
-      payload: _taskPayload(row),
-    );
-  }
+  Future<void> reparent(String taskId, String? newParentId) =>
+      _db.transaction(() async {
+        await _db.reparentTask(taskId, newParentId);
+        final row = await (_db.select(
+          _db.todoTasks,
+        )..where((t) => t.id.equals(taskId))).getSingle();
+        await _queue.enqueue(
+          entity: SyncEntities.task,
+          op: SyncOps.upsert,
+          localId: taskId,
+          serverId: row.serverId,
+          payload: _taskPayload(row),
+        );
+      });
 
   Map<String, dynamic> _taskPayload(TodoTask task) => {
     ...task.toJson(),

@@ -1,10 +1,12 @@
 import 'dart:convert';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
+import 'package:zh_cloud_todo_flutter/core/sync/sync_entities.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_repository.dart';
 
 void main() {
@@ -146,6 +148,69 @@ void main() {
       final change = (await db.select(db.todoSyncChanges).get()).last;
       final payload = jsonDecode(change.payloadJson) as Map<String, dynamic>;
       expect(payload['status'], 'cancelled');
+    },
+  );
+
+  test(
+    'core task mutations persist locally and enqueue their aggregate payloads',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final repository = TaskRepository(db, SyncChangeQueue(db));
+      final parent = await repository.create(listId: 'inbox', title: '父任务');
+      final task = await repository.create(listId: 'inbox', title: '待处理任务');
+
+      final pinned = await repository.togglePin(task.id);
+      expect(pinned.isPinned, isTrue);
+
+      final completed = await repository.toggleComplete(task.id);
+      expect(completed.completed, isTrue);
+
+      await repository.reparent(task.id, parent.id);
+      final reparented = await repository.getById(task.id);
+      expect(reparented?.parentTaskId, parent.id);
+
+      final abandoned = await repository.abandon(task.id);
+      expect(abandoned.cancelled, isTrue);
+      expect(abandoned.completed, isFalse);
+
+      final taskChanges = (await db.select(db.todoSyncChanges).get())
+          .where((change) => change.entityLocalId == task.id)
+          .toList();
+      expect(taskChanges, isNotEmpty);
+      final latestPayload =
+          jsonDecode(taskChanges.last.payloadJson) as Map<String, dynamic>;
+      expect(latestPayload['parentTaskId'], parent.id);
+      expect(latestPayload['status'], 'cancelled');
+    },
+  );
+
+  test(
+    'deleting a task tree removes local rows and queues server deletes',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final repository = TaskRepository(db, SyncChangeQueue(db));
+      final parent = await repository.create(listId: 'inbox', title: '父任务');
+      final child = await repository.create(
+        listId: 'inbox',
+        title: '子任务',
+        parentTaskId: parent.id,
+      );
+      await (db.update(db.todoTasks)..where((row) => row.id.equals(parent.id)))
+          .write(const TodoTasksCompanion(serverId: Value(11)));
+      await (db.update(db.todoTasks)..where((row) => row.id.equals(child.id)))
+          .write(const TodoTasksCompanion(serverId: Value(12)));
+
+      await repository.delete(parent.id);
+
+      expect(await repository.getById(parent.id), isNull);
+      expect(await repository.getById(child.id), isNull);
+      final deletedIds = (await db.select(db.todoSyncChanges).get())
+          .where((change) => change.op == SyncOps.delete)
+          .map((change) => change.entityLocalId)
+          .toSet();
+      expect(deletedIds, containsAll(<String>{parent.id, child.id}));
     },
   );
 
