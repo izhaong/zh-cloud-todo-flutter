@@ -107,6 +107,7 @@ class ReminderInboxPage extends ConsumerWidget {
     final host = ScaffoldMessenger.maybeOf(ref.context);
     try {
       await op();
+      host?.showSnackBar(const SnackBar(content: Text('提醒操作已加入同步队列')));
       ref.invalidate(inboxProvider);
     } catch (e) {
       host?.showSnackBar(SnackBar(content: Text('操作失败: $e')));
