@@ -51,6 +51,9 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
   int _priority = 0;
   bool _loading = true;
   DateTime? _dueAt;
+  bool _allDay = false;
+  String? _timeZone;
+  bool _fixedTimezone = false;
   String? _listName;
   StreamSubscription<TodoTask?>? _taskSubscription;
   int _loadGeneration = 0;
@@ -88,6 +91,9 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       _desc.clear();
       _priority = 0;
       _dueAt = null;
+      _allDay = false;
+      _timeZone = null;
+      _fixedTimezone = false;
       _listName = null;
       _loading = taskId != null;
       _unavailableNotifiedFor = null;
@@ -113,6 +119,9 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       _desc.text = t?.description ?? '';
       _priority = t?.priority ?? 0;
       _dueAt = t?.dueAt;
+      _allDay = t?.allDay ?? false;
+      _timeZone = t?.timeZone;
+      _fixedTimezone = t?.fixedTimezone ?? false;
       _listName = listName;
       _loading = false;
     });
@@ -148,12 +157,19 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
         previous != null && _desc.text != (previous.description ?? '');
     final priorityDirty = previous != null && _priority != previous.priority;
     final dueDirty = previous != null && _dueAt != previous.dueAt;
+    final allDayDirty = previous != null && _allDay != previous.allDay;
+    final timeZoneDirty = previous != null && _timeZone != previous.timeZone;
+    final fixedTimezoneDirty =
+        previous != null && _fixedTimezone != previous.fixedTimezone;
     setState(() {
       _task = latest;
       if (!titleDirty) _title.text = latest.title;
       if (!descriptionDirty) _desc.text = latest.description ?? '';
       if (!priorityDirty) _priority = latest.priority;
       if (!dueDirty) _dueAt = latest.dueAt;
+      if (!allDayDirty) _allDay = latest.allDay;
+      if (!timeZoneDirty) _timeZone = latest.timeZone;
+      if (!fixedTimezoneDirty) _fixedTimezone = latest.fixedTimezone;
       _listName = listName;
       _loading = false;
       _unavailableNotifiedFor = null;
@@ -217,6 +233,9 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       description: _desc.text.trim(),
       priority: _priority,
       dueAt: _dueAt,
+      allDay: _allDay,
+      timeZone: _fixedTimezone ? (_timeZone ?? 'Asia/Shanghai') : _timeZone,
+      fixedTimezone: _fixedTimezone,
     );
     if (mounted && widget.taskId == updated.id) {
       setState(() => _task = updated);
@@ -514,6 +533,47 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
               icon: const Icon(Icons.clear, size: 16),
               label: const Text('清除'),
             ),
+          ),
+        ],
+        const Divider(height: 32),
+        sh('时间语义'),
+        SwitchListTile(
+          key: const Key('task-all-day'),
+          contentPadding: EdgeInsets.zero,
+          title: const Text('全天'),
+          subtitle: const Text('全天任务按日期范围保存，不绑定具体时分'),
+          value: _allDay,
+          onChanged: (value) => setState(() => _allDay = value),
+        ),
+        SwitchListTile(
+          key: const Key('task-fixed-timezone'),
+          contentPadding: EdgeInsets.zero,
+          title: const Text('固定时区'),
+          subtitle: const Text('固定后按所选时区保留墙上时间'),
+          value: _fixedTimezone,
+          onChanged: (value) => setState(() {
+            _fixedTimezone = value;
+            if (value) _timeZone ??= 'Asia/Shanghai';
+          }),
+        ),
+        if (_fixedTimezone) ...[
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            key: const Key('task-timezone'),
+            initialValue: _timeZone ?? 'Asia/Shanghai',
+            decoration: const InputDecoration(
+              labelText: '时区',
+              border: OutlineInputBorder(),
+            ),
+            items: const [
+              DropdownMenuItem(value: 'Asia/Shanghai', child: Text('中国标准时间')),
+              DropdownMenuItem(
+                value: 'America/Los_Angeles',
+                child: Text('美国太平洋时间'),
+              ),
+              DropdownMenuItem(value: 'UTC', child: Text('协调世界时')),
+            ],
+            onChanged: (value) => setState(() => _timeZone = value),
           ),
         ],
         const Divider(height: 32),
