@@ -45,6 +45,41 @@ void main() {
     expect(request, ('task-1', 1, false));
   });
 
+  testWidgets('看板跨列写入失败时显示可见反馈', (tester) async {
+    final now = DateTime.utc(2026, 7, 15, 9);
+    final task = TodoTask(
+      id: 'task-failed',
+      listId: 'list-inbox',
+      title: '失败任务',
+      completed: false,
+      priority: 0,
+      isPinned: false,
+      sortOrder: 0,
+      updatedAt: now,
+      createdAt: now,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: KanbanView(
+            tasks: [task],
+            onTaskMove: (_, _, _) async => throw StateError('write failed'),
+          ),
+        ),
+      ),
+    );
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('失败任务')),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    await gesture.moveTo(tester.getCenter(find.text('空').first));
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(find.text('移动任务失败，请重试'), findsOneWidget);
+  });
+
   testWidgets('时间线顺延一天会请求共享任务时间 mutation', (tester) async {
     final now = DateTime.utc(2026, 7, 15, 9);
     final startAt = DateTime.utc(2026, 7, 16, 9);
@@ -70,9 +105,15 @@ void main() {
           body: TimelineView(
             tasks: [task],
             now: now,
-            onTaskTimeChange: (moved, {required startAt, required endAt, required dueAt}) async {
-              request = (moved.id, startAt, endAt, dueAt);
-            },
+            onTaskTimeChange:
+                (
+                  moved, {
+                  required startAt,
+                  required endAt,
+                  required dueAt,
+                }) async {
+                  request = (moved.id, startAt, endAt, dueAt);
+                },
           ),
         ),
       ),

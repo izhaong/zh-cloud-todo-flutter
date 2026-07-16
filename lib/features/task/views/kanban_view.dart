@@ -85,7 +85,12 @@ class KanbanView extends ConsumerWidget {
                 onCardTap: (t) => _openDetail(context, t),
                 onCardMove: onTaskMove == null
                     ? null
-                    : (task) => onTaskMove!(task, col.priority, col.completed),
+                    : (task) => _moveTask(
+                        context,
+                        task,
+                        priority: col.priority,
+                        completed: col.completed,
+                      ),
                 onAdd: col.key == const ValueKey('col-todo') && listId != null
                     ? () => _quickAdd(context, ref, listId!)
                     : null,
@@ -103,6 +108,23 @@ class KanbanView extends ConsumerWidget {
       return;
     }
     showTaskDetailSheet(context, t.id);
+  }
+
+  Future<void> _moveTask(
+    BuildContext context,
+    TodoTask task, {
+    required int priority,
+    required bool completed,
+  }) async {
+    try {
+      await onTaskMove!(task, priority, completed);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('移动任务失败，请重试')));
+      }
+    }
   }
 
   static Future<void> _quickAdd(
