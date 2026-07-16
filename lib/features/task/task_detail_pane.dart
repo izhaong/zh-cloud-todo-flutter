@@ -561,6 +561,254 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     setState(() => _dueAt = picked);
   }
 
+  Future<void> _showScheduleSheet(TodoTask t) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          void update(VoidCallback change) {
+            setState(change);
+            setSheetState(() {});
+          }
+
+          Widget heading(String value) => Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 6),
+            child: Text(value, style: Theme.of(context).textTheme.labelLarge),
+          );
+
+          return SafeArea(
+            child: FractionallySizedBox(
+              heightFactor: 0.9,
+              child: Column(
+                children: [
+                  ListTile(
+                    title: const Text('日期、提醒与重复'),
+                    subtitle: const Text('保存任务提交时间语义；提醒和重复会离线排队同步'),
+                    trailing: IconButton(
+                      key: const Key('task-schedule-close'),
+                      tooltip: '关闭时间设置',
+                      onPressed: () => Navigator.pop(sheetContext),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        heading('截止时间'),
+                        OutlinedButton.icon(
+                          key: const Key('task-due-at'),
+                          onPressed: () async {
+                            await _pickDue(t);
+                            if (sheetContext.mounted) setSheetState(() {});
+                          },
+                          icon: const Icon(Icons.event_outlined),
+                          label: Text(
+                            _dueAt == null
+                                ? '未设置'
+                                : '${_dueAt!.toLocal().toString().substring(0, 16)} (本地时区)',
+                          ),
+                        ),
+                        if (_dueAt != null)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              onPressed: () => update(() => _dueAt = null),
+                              icon: const Icon(Icons.clear, size: 16),
+                              label: const Text('清除截止时间'),
+                            ),
+                          ),
+                        const Divider(height: 32),
+                        heading('时间语义'),
+                        OutlinedButton.icon(
+                          key: const Key('task-start-at'),
+                          onPressed: () async {
+                            await _pickStartAt(t);
+                            if (sheetContext.mounted) setSheetState(() {});
+                          },
+                          icon: const Icon(Icons.play_arrow_outlined),
+                          label: Text(
+                            _startAt == null
+                                ? '开始时间未设置'
+                                : '开始：${_startAt!.toLocal().toString().substring(0, 16)}',
+                          ),
+                        ),
+                        if (_startAt != null)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              key: const Key('task-clear-start-at'),
+                              onPressed: () => update(() {
+                                _startAt = null;
+                                _clearStartAt = true;
+                              }),
+                              icon: const Icon(Icons.clear, size: 16),
+                              label: const Text('清除开始时间'),
+                            ),
+                          ),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          key: const Key('task-end-at'),
+                          onPressed: () async {
+                            await _pickEndAt(t);
+                            if (sheetContext.mounted) setSheetState(() {});
+                          },
+                          icon: const Icon(Icons.stop_outlined),
+                          label: Text(
+                            _endAt == null
+                                ? '结束时间未设置'
+                                : '结束：${_endAt!.toLocal().toString().substring(0, 16)}',
+                          ),
+                        ),
+                        if (_endAt != null)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              key: const Key('task-clear-end-at'),
+                              onPressed: () => update(() {
+                                _endAt = null;
+                                _clearEndAt = true;
+                              }),
+                              icon: const Icon(Icons.clear, size: 16),
+                              label: const Text('清除结束时间'),
+                            ),
+                          ),
+                        SwitchListTile(
+                          key: const Key('task-all-day'),
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('全天'),
+                          subtitle: const Text('全天任务按日期范围保存，不绑定具体时分'),
+                          value: _allDay,
+                          onChanged: (value) => update(() => _allDay = value),
+                        ),
+                        SwitchListTile(
+                          key: const Key('task-fixed-timezone'),
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('固定时区'),
+                          subtitle: const Text('固定后按所选时区保留墙上时间'),
+                          value: _fixedTimezone,
+                          onChanged: (value) => update(() {
+                            _fixedTimezone = value;
+                            if (value) _timeZone ??= 'Asia/Shanghai';
+                          }),
+                        ),
+                        if (_fixedTimezone)
+                          DropdownButtonFormField<String>(
+                            key: const Key('task-timezone'),
+                            initialValue: _timeZone ?? 'Asia/Shanghai',
+                            decoration: const InputDecoration(
+                              labelText: '时区',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'Asia/Shanghai',
+                                child: Text('中国标准时间'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'America/Los_Angeles',
+                                child: Text('美国太平洋时间'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'UTC',
+                                child: Text('协调世界时'),
+                              ),
+                            ],
+                            onChanged: (value) =>
+                                update(() => _timeZone = value),
+                          ),
+                        const Divider(height: 32),
+                        heading('提醒'),
+                        OutlinedButton.icon(
+                          key: const Key('task-add-end-reminder'),
+                          onPressed: () => _addEndReminder(t),
+                          icon: const Icon(Icons.alarm_add_outlined),
+                          label: const Text('在截止时提醒'),
+                        ),
+                        const SizedBox(height: 8),
+                        _TaskReminderSection(taskId: t.id),
+                        const Divider(height: 32),
+                        heading('重复'),
+                        OutlinedButton.icon(
+                          key: const Key('task-repeat-rule'),
+                          onPressed: () async {
+                            await _editRepeatRule(t);
+                            if (sheetContext.mounted) setSheetState(() {});
+                          },
+                          icon: const Icon(Icons.repeat_outlined),
+                          label: Text(
+                            _repeatRule == null
+                                ? '不重复'
+                                : _repeatRuleLabel(_repeatRule!),
+                          ),
+                        ),
+                        if (_repeatRule?.enabled == true)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Wrap(
+                              spacing: 4,
+                              children: [
+                                if (_repeatOccurrenceSkipped)
+                                  TextButton.icon(
+                                    key: const Key('task-repeat-catchup'),
+                                    onPressed: () async {
+                                      await _catchupRepeatOccurrence(t);
+                                      if (sheetContext.mounted) {
+                                        setSheetState(() {});
+                                      }
+                                    },
+                                    icon: const Icon(
+                                      Icons.playlist_add_outlined,
+                                      size: 16,
+                                    ),
+                                    label: const Text('补做本次'),
+                                  )
+                                else
+                                  TextButton.icon(
+                                    key: const Key('task-repeat-skip'),
+                                    onPressed: () async {
+                                      await _skipRepeatOccurrence(t);
+                                      if (sheetContext.mounted) {
+                                        setSheetState(() {});
+                                      }
+                                    },
+                                    icon: const Icon(
+                                      Icons.skip_next_outlined,
+                                      size: 16,
+                                    ),
+                                    label: const Text('跳过本次'),
+                                  ),
+                                TextButton.icon(
+                                  key: const Key('task-repeat-disable'),
+                                  onPressed: () async {
+                                    await _disableRepeatRule(t);
+                                    if (sheetContext.mounted) {
+                                      setSheetState(() {});
+                                    }
+                                  },
+                                  icon: const Icon(
+                                    Icons.pause_circle_outline,
+                                    size: 16,
+                                  ),
+                                  label: const Text('停止重复'),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _pickStartAt(TodoTask t) async {
     final now = _startAt ?? _dueAt ?? t.startAt ?? t.dueAt ?? DateTime.now();
     final picked = await _pickDateTime(t, now);
@@ -968,7 +1216,8 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
         sh('截止时间'),
         const SizedBox(height: 8),
         OutlinedButton.icon(
-          onPressed: () => _pickDue(t),
+          key: const Key('task-schedule-options'),
+          onPressed: () => _showScheduleSheet(t),
           icon: const Icon(Icons.event_outlined),
           label: Text(
             _dueAt == null
@@ -984,148 +1233,6 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
               onPressed: () => setState(() => _dueAt = null),
               icon: const Icon(Icons.clear, size: 16),
               label: const Text('清除'),
-            ),
-          ),
-        ],
-        const Divider(height: 32),
-        sh('时间语义'),
-        OutlinedButton.icon(
-          key: const Key('task-start-at'),
-          onPressed: () => _pickStartAt(t),
-          icon: const Icon(Icons.play_arrow_outlined),
-          label: Text(
-            _startAt == null
-                ? '开始时间未设置'
-                : '开始：${_startAt!.toLocal().toString().substring(0, 16)}',
-          ),
-        ),
-        if (_startAt != null) ...[
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              key: const Key('task-clear-start-at'),
-              onPressed: () => setState(() {
-                _startAt = null;
-                _clearStartAt = true;
-              }),
-              icon: const Icon(Icons.clear, size: 16),
-              label: const Text('清除开始时间'),
-            ),
-          ),
-        ],
-        const SizedBox(height: 8),
-        OutlinedButton.icon(
-          key: const Key('task-end-at'),
-          onPressed: () => _pickEndAt(t),
-          icon: const Icon(Icons.stop_outlined),
-          label: Text(
-            _endAt == null
-                ? '结束时间未设置'
-                : '结束：${_endAt!.toLocal().toString().substring(0, 16)}',
-          ),
-        ),
-        if (_endAt != null) ...[
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              key: const Key('task-clear-end-at'),
-              onPressed: () => setState(() {
-                _endAt = null;
-                _clearEndAt = true;
-              }),
-              icon: const Icon(Icons.clear, size: 16),
-              label: const Text('清除结束时间'),
-            ),
-          ),
-        ],
-        const SizedBox(height: 8),
-        SwitchListTile(
-          key: const Key('task-all-day'),
-          contentPadding: EdgeInsets.zero,
-          title: const Text('全天'),
-          subtitle: const Text('全天任务按日期范围保存，不绑定具体时分'),
-          value: _allDay,
-          onChanged: (value) => setState(() => _allDay = value),
-        ),
-        SwitchListTile(
-          key: const Key('task-fixed-timezone'),
-          contentPadding: EdgeInsets.zero,
-          title: const Text('固定时区'),
-          subtitle: const Text('固定后按所选时区保留墙上时间'),
-          value: _fixedTimezone,
-          onChanged: (value) => setState(() {
-            _fixedTimezone = value;
-            if (value) _timeZone ??= 'Asia/Shanghai';
-          }),
-        ),
-        if (_fixedTimezone) ...[
-          const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            key: const Key('task-timezone'),
-            initialValue: _timeZone ?? 'Asia/Shanghai',
-            decoration: const InputDecoration(
-              labelText: '时区',
-              border: OutlineInputBorder(),
-            ),
-            items: const [
-              DropdownMenuItem(value: 'Asia/Shanghai', child: Text('中国标准时间')),
-              DropdownMenuItem(
-                value: 'America/Los_Angeles',
-                child: Text('美国太平洋时间'),
-              ),
-              DropdownMenuItem(value: 'UTC', child: Text('协调世界时')),
-            ],
-            onChanged: (value) => setState(() => _timeZone = value),
-          ),
-        ],
-        const Divider(height: 32),
-        sh('提醒'),
-        OutlinedButton.icon(
-          key: const Key('task-add-end-reminder'),
-          onPressed: () => _addEndReminder(t),
-          icon: const Icon(Icons.alarm_add_outlined),
-          label: const Text('在截止时提醒'),
-        ),
-        const SizedBox(height: 8),
-        _TaskReminderSection(taskId: t.id),
-        const Divider(height: 32),
-        sh('重复'),
-        OutlinedButton.icon(
-          key: const Key('task-repeat-rule'),
-          onPressed: () => _editRepeatRule(t),
-          icon: const Icon(Icons.repeat_outlined),
-          label: Text(
-            _repeatRule == null ? '不重复' : _repeatRuleLabel(_repeatRule!),
-          ),
-        ),
-        if (_repeatRule?.enabled == true) ...[
-          const SizedBox(height: 4),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Wrap(
-              spacing: 4,
-              children: [
-                if (_repeatOccurrenceSkipped)
-                  TextButton.icon(
-                    key: const Key('task-repeat-catchup'),
-                    onPressed: () => _catchupRepeatOccurrence(t),
-                    icon: const Icon(Icons.playlist_add_outlined, size: 16),
-                    label: const Text('补做本次'),
-                  )
-                else
-                  TextButton.icon(
-                    key: const Key('task-repeat-skip'),
-                    onPressed: () => _skipRepeatOccurrence(t),
-                    icon: const Icon(Icons.skip_next_outlined, size: 16),
-                    label: const Text('跳过本次'),
-                  ),
-                TextButton.icon(
-                  key: const Key('task-repeat-disable'),
-                  onPressed: () => _disableRepeatRule(t),
-                  icon: const Icon(Icons.pause_circle_outline, size: 16),
-                  label: const Text('停止重复'),
-                ),
-              ],
             ),
           ),
         ],

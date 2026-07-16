@@ -14,6 +14,16 @@ import '../../support/todo_visual_fixture.dart';
 
 const _taskId = TodoVisualFixture.pinnedTaskId;
 
+Future<void> _openScheduleOptions(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('task-schedule-options')));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _closeScheduleOptions(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('task-schedule-close')));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets(
     'detail saves all-day and fixed timezone through task repository',
@@ -37,9 +47,11 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await _openScheduleOptions(tester);
+
       final allDay = find.byKey(const Key('task-all-day'));
       final fixedTimezone = find.byKey(const Key('task-fixed-timezone'));
-      final detailScroll = find.byType(Scrollable).first;
+      final detailScroll = find.byType(Scrollable).last;
       await tester.scrollUntilVisible(allDay, 160, scrollable: detailScroll);
       await tester.ensureVisible(allDay);
       await tester.pumpAndSettle();
@@ -52,6 +64,7 @@ void main() {
       await tester.ensureVisible(fixedTimezone);
       await tester.pumpAndSettle();
       await tester.tap(fixedTimezone);
+      await _closeScheduleOptions(tester);
       await tester.drag(detailScroll, const Offset(0, 1000));
       await tester.pumpAndSettle();
       await tester.tap(find.text('保存'));
@@ -93,11 +106,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await _openScheduleOptions(tester);
+
     final createReminder = find.byKey(const Key('task-add-end-reminder'));
     await tester.scrollUntilVisible(
       createReminder,
       160,
-      scrollable: find.byType(Scrollable).first,
+      scrollable: find.byType(Scrollable).last,
     );
     await tester.tap(createReminder);
     await tester.pumpAndSettle();
@@ -135,7 +150,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final detailScroll = find.byType(Scrollable).first;
+      await _openScheduleOptions(tester);
+
+      final detailScroll = find.byType(Scrollable).last;
       final start = find.byKey(const Key('task-start-at'));
       final end = find.byKey(const Key('task-end-at'));
       await tester.scrollUntilVisible(start, 160, scrollable: detailScroll);
@@ -176,7 +193,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final detailScroll = find.byType(Scrollable).first;
+      await _openScheduleOptions(tester);
+
+      final detailScroll = find.byType(Scrollable).last;
       final clearStart = find.byKey(const Key('task-clear-start-at'));
       final clearEnd = find.byKey(const Key('task-clear-end-at'));
       await tester.scrollUntilVisible(
@@ -189,6 +208,7 @@ void main() {
       await tester.scrollUntilVisible(clearEnd, 160, scrollable: detailScroll);
       await tester.tap(clearEnd);
       await tester.pumpAndSettle();
+      await _closeScheduleOptions(tester);
       await tester.drag(detailScroll, const Offset(0, 1000));
       await tester.pumpAndSettle();
       await tester.tap(find.text('保存'));
@@ -229,7 +249,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final detailScroll = find.byType(Scrollable).first;
+      await _openScheduleOptions(tester);
+
+      final detailScroll = find.byType(Scrollable).last;
       final repeatRule = find.byKey(const Key('task-repeat-rule'));
       await tester.scrollUntilVisible(
         repeatRule,
@@ -328,12 +350,13 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final detailScroll = find.byType(Scrollable).first;
+      await _openScheduleOptions(tester);
+
       final reminderList = find.byKey(const Key('task-reminders'));
       await tester.scrollUntilVisible(
         reminderList,
         160,
-        scrollable: detailScroll,
+        scrollable: find.byType(Scrollable).last,
       );
       await tester.ensureVisible(reminderList);
       await tester.pumpAndSettle();
@@ -384,7 +407,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final detailScroll = find.byType(Scrollable).first;
+      await _openScheduleOptions(tester);
+
+      final detailScroll = find.byType(Scrollable).last;
       final skip = find.byKey(const Key('task-repeat-skip'));
       await tester.scrollUntilVisible(skip, 160, scrollable: detailScroll);
       await tester.ensureVisible(skip);
