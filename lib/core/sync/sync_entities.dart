@@ -7,6 +7,7 @@ class SyncEntities {
   static const reminderDispatchAction = 'reminder_dispatch_action';
   static const repeatRule = 'repeat_rule';
   static const repeatSkip = 'repeat_skip';
+  static const repeatOccurrenceAction = 'repeat_occurrence_action';
   static const viewPreference = 'view_preference';
   static const tag = 'tag';
   static const taskTag = 'task_tag';
@@ -23,6 +24,7 @@ class SyncEntities {
     reminderDispatchAction,
     repeatRule,
     repeatSkip,
+    repeatOccurrenceAction,
     viewPreference,
     tag,
     taskTag,

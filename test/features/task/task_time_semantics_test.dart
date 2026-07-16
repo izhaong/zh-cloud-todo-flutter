@@ -401,6 +401,22 @@ void main() {
                   .get())
               .last;
       expect(change.entity, 'repeat_skip');
+
+      final catchup = find.byKey(const Key('task-repeat-catchup'));
+      await tester.ensureVisible(catchup);
+      await tester.tap(catchup);
+      await tester.pumpAndSettle();
+
+      expect(
+        await fixture.database.select(fixture.database.todoRepeatSkips).get(),
+        isEmpty,
+      );
+      final catchupChange =
+          (await fixture.database
+                  .select(fixture.database.todoSyncChanges)
+                  .get())
+              .last;
+      expect(catchupChange.entity, 'repeat_occurrence_action');
     },
   );
 }

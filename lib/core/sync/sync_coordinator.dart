@@ -256,7 +256,8 @@ class SyncCoordinator {
     }
     if (entity == SyncEntities.reminder ||
         entity == SyncEntities.repeatRule ||
-        entity == SyncEntities.repeatSkip) {
+        entity == SyncEntities.repeatSkip ||
+        entity == SyncEntities.repeatOccurrenceAction) {
       final localTaskId = resolved['taskId']?.toString();
       if (localTaskId != null && localTaskId.isNotEmpty) {
         final task = await (db.select(
@@ -267,7 +268,8 @@ class SyncCoordinator {
             _temporaryEntityId(SyncEntities.task, localTaskId);
       }
     }
-    if (entity == SyncEntities.repeatSkip &&
+    if ((entity == SyncEntities.repeatSkip ||
+            entity == SyncEntities.repeatOccurrenceAction) &&
         resolved.containsKey('repeatRuleId')) {
       final localRuleId = resolved['repeatRuleId']?.toString();
       if (localRuleId != null && localRuleId.isNotEmpty) {
@@ -440,6 +442,7 @@ class SyncCoordinator {
     SyncEntities.reminder ||
     SyncEntities.repeatRule => 2,
     SyncEntities.repeatSkip => 3,
+    SyncEntities.repeatOccurrenceAction => 4,
     _ => 4,
   };
 
@@ -463,6 +466,10 @@ class SyncCoordinator {
         await _upsertLocalRepeatRule(entityId, payload);
       case SyncEntities.repeatSkip:
         await _upsertLocalRepeatSkip(entityId, payload);
+      case SyncEntities.repeatOccurrenceAction:
+        // action 只表示服务端已处理的补做决议；真实任务与 skip tombstone
+        // 会以各自的 change feed 返回，本地无需建立第二份状态。
+        break;
       case SyncEntities.viewPreference:
         await _upsertLocalViewPreference(entityId, payload);
       case SyncEntities.filter:

@@ -8,6 +8,7 @@ import '../db/app_database.dart';
 /// sync_queue 写入辅助（outbox 模式）。
 ///
 /// 任何对 sync 白名单实体（list/task/reminder/repeat_rule/repeat_skip/
+/// repeat_occurrence_action/
 /// view_preference/tag/task_tag/filter）的本地写操作，都应通过
 /// [SyncChangeQueue] 记录一条 [TodoSyncChange]，由 [SyncCoordinator.push]
 /// 批量上推到 `/app-api/todo/sync/push`。

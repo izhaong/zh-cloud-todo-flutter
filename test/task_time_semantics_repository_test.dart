@@ -316,6 +316,45 @@ void main() {
     expect(skipPayload['repeatRuleId'], rule.id);
   });
 
+  test(
+    'catches up a skipped repeat locally and queues the durable action',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final repeats = RepeatRuleRepository(db, SyncChangeQueue(db));
+      final occurrenceAt = DateTime(2026, 7, 15, 9);
+      final rule = await repeats.save(
+        taskId: 'task-1',
+        frequency: 'DAILY',
+        startAt: occurrenceAt,
+      );
+      await repeats.skip(
+        repeatRuleId: rule.id,
+        taskId: 'task-1',
+        occurrenceAt: occurrenceAt,
+      );
+
+      await repeats.catchup(
+        repeatRuleId: rule.id,
+        taskId: 'task-1',
+        occurrenceAt: occurrenceAt,
+      );
+
+      final skips = await db.select(db.todoRepeatSkips).get();
+      final changes = await db.select(db.todoSyncChanges).get();
+      final payload =
+          jsonDecode(changes.last.payloadJson) as Map<String, dynamic>;
+      expect(skips, isEmpty);
+      expect(changes.map((change) => change.entity), [
+        'repeat_rule',
+        'repeat_skip',
+        'repeat_occurrence_action',
+      ]);
+      expect(payload, containsPair('action', 'CATCHUP'));
+      expect(payload, containsPair('repeatRuleId', rule.id));
+    },
+  );
+
   test('rejects a custom repeat rule without explicit weekdays', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);

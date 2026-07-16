@@ -133,6 +133,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
   String? _timeZone;
   bool _fixedTimezone = false;
   TodoRepeatRule? _repeatRule;
+  bool _repeatOccurrenceSkipped = false;
   String? _listName;
   StreamSubscription<TodoTask?>? _taskSubscription;
   int _loadGeneration = 0;
@@ -178,6 +179,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       _timeZone = null;
       _fixedTimezone = false;
       _repeatRule = null;
+      _repeatOccurrenceSkipped = false;
       _listName = null;
       _loading = taskId != null;
       _unavailableNotifiedFor = null;
@@ -195,6 +197,9 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     final t = await repo.getById(taskId);
     final listName = t == null ? null : await _resolveListName(t.listId);
     final repeatRule = t == null ? null : await _repeatRuleForTask(t.id);
+    final repeatSkipped = t == null || repeatRule == null
+        ? false
+        : await _repeatSkipExists(repeatRule.id, t.id, _repeatOccurrenceAt(t));
     if (!mounted || generation != _loadGeneration || widget.taskId != taskId) {
       return;
     }
@@ -210,6 +215,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       _timeZone = t?.timeZone;
       _fixedTimezone = t?.fixedTimezone ?? false;
       _repeatRule = repeatRule;
+      _repeatOccurrenceSkipped = repeatSkipped;
       _listName = listName;
       _loading = false;
     });
@@ -530,6 +536,24 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     )..where((rule) => rule.taskId.equals(taskId))).getSingleOrNull();
   }
 
+  DateTime _repeatOccurrenceAt(TodoTask task) =>
+      _dueAt ?? _startAt ?? task.dueAt ?? task.startAt ?? DateTime.now();
+
+  Future<bool> _repeatSkipExists(
+    String repeatRuleId,
+    String taskId,
+    DateTime occurrenceAt,
+  ) async {
+    final db = ref.read(appDatabaseProvider);
+    if (db == null) return false;
+    return (await (db.select(db.todoRepeatSkips)
+              ..where((entry) => entry.repeatRuleId.equals(repeatRuleId))
+              ..where((entry) => entry.taskId.equals(taskId))
+              ..where((entry) => entry.occurrenceDate.equals(occurrenceAt)))
+            .getSingleOrNull()) !=
+        null;
+  }
+
   Future<void> _pickDue(TodoTask t) async {
     final now = _dueAt ?? t.dueAt ?? DateTime.now();
     final picked = await _pickDateTime(t, now);
@@ -671,10 +695,35 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       await repository.skip(
         repeatRuleId: rule.id,
         taskId: t.id,
-        occurrenceAt: _dueAt ?? _startAt ?? DateTime.now(),
+        occurrenceAt: _repeatOccurrenceAt(t),
       );
       if (_isCurrentTask(t.id)) {
+        setState(() => _repeatOccurrenceSkipped = true);
         messenger.showSnackBar(const SnackBar(content: Text('已跳过本次重复')));
+      }
+    } on ArgumentError catch (error) {
+      if (_isCurrentTask(t.id)) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(error.message.toString())),
+        );
+      }
+    }
+  }
+
+  Future<void> _catchupRepeatOccurrence(TodoTask t) async {
+    final rule = _repeatRule;
+    final repository = ref.read(repeatRuleRepositoryProvider);
+    if (rule == null || !rule.enabled || repository == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await repository.catchup(
+        repeatRuleId: rule.id,
+        taskId: t.id,
+        occurrenceAt: _repeatOccurrenceAt(t),
+      );
+      if (_isCurrentTask(t.id)) {
+        setState(() => _repeatOccurrenceSkipped = false);
+        messenger.showSnackBar(const SnackBar(content: Text('已安排补做本次重复')));
       }
     } on ArgumentError catch (error) {
       if (_isCurrentTask(t.id)) {
@@ -1056,12 +1105,20 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
             child: Wrap(
               spacing: 4,
               children: [
-                TextButton.icon(
-                  key: const Key('task-repeat-skip'),
-                  onPressed: () => _skipRepeatOccurrence(t),
-                  icon: const Icon(Icons.skip_next_outlined, size: 16),
-                  label: const Text('跳过本次'),
-                ),
+                if (_repeatOccurrenceSkipped)
+                  TextButton.icon(
+                    key: const Key('task-repeat-catchup'),
+                    onPressed: () => _catchupRepeatOccurrence(t),
+                    icon: const Icon(Icons.playlist_add_outlined, size: 16),
+                    label: const Text('补做本次'),
+                  )
+                else
+                  TextButton.icon(
+                    key: const Key('task-repeat-skip'),
+                    onPressed: () => _skipRepeatOccurrence(t),
+                    icon: const Icon(Icons.skip_next_outlined, size: 16),
+                    label: const Text('跳过本次'),
+                  ),
                 TextButton.icon(
                   key: const Key('task-repeat-disable'),
                   onPressed: () => _disableRepeatRule(t),

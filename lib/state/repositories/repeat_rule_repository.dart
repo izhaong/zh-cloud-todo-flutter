@@ -148,6 +148,51 @@ class RepeatRuleRepository {
     return row;
   }
 
+  /// 撤回本地跳过，并以持久化 action 交给同步层补做对应 occurrence。
+  ///
+  /// 与 [skip] 一样，删除本地 skip 和写入 outbox 在同一个 Drift transaction
+  /// 内完成。服务端收到 action 后校验所属关系、撤销 skip，并物化真实任务；
+  /// 因此 UI 不会直接调用 occurrence REST API。
+  Future<void> catchup({
+    required String repeatRuleId,
+    required String taskId,
+    required DateTime occurrenceAt,
+  }) async {
+    final rule = await (_db.select(
+      _db.todoRepeatRules,
+    )..where((entry) => entry.id.equals(repeatRuleId))).getSingleOrNull();
+    if (rule == null || rule.taskId != taskId) {
+      throw ArgumentError.value(repeatRuleId, 'repeatRuleId', '重复规则不属于任务');
+    }
+    final existing =
+        await (_db.select(_db.todoRepeatSkips)
+              ..where((entry) => entry.repeatRuleId.equals(repeatRuleId))
+              ..where((entry) => entry.taskId.equals(taskId))
+              ..where((entry) => entry.occurrenceDate.equals(occurrenceAt)))
+            .getSingleOrNull();
+    if (existing == null) {
+      throw ArgumentError.value(occurrenceAt, 'occurrenceAt', '该次重复尚未跳过');
+    }
+
+    await _db.transaction(() async {
+      await (_db.delete(
+        _db.todoRepeatSkips,
+      )..where((entry) => entry.id.equals(existing.id))).go();
+      await _queue.enqueue(
+        entity: SyncEntities.repeatOccurrenceAction,
+        op: SyncOps.upsert,
+        localId: _uuid.v4(),
+        clientMutationId: _uuid.v4(),
+        payload: {
+          'action': 'CATCHUP',
+          'taskId': taskId,
+          'repeatRuleId': repeatRuleId,
+          'occurrenceAt': occurrenceAt.toIso8601String(),
+        },
+      );
+    });
+  }
+
   List<int>? _validate({
     required String frequency,
     required int intervalValue,

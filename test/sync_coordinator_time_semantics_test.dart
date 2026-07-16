@@ -160,6 +160,101 @@ void main() {
   });
 
   test(
+    'pushes a repeat catchup action after resolving task and rule IDs',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final now = DateTime(2026, 7, 15, 9);
+      await db
+          .into(db.todoTasks)
+          .insert(
+            TodoTasksCompanion.insert(
+              id: 'task-1',
+              serverId: const Value(101),
+              listId: 'list-1',
+              title: '模板任务',
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      final repeats = RepeatRuleRepository(db, SyncChangeQueue(db));
+      final rule = await repeats.save(
+        taskId: 'task-1',
+        frequency: 'DAILY',
+        startAt: now,
+      );
+      await (db.update(db.todoRepeatRules)
+            ..where((row) => row.id.equals(rule.id)))
+          .write(const TodoRepeatRulesCompanion(serverId: Value(701)));
+      await (db.update(db.todoSyncChanges)
+            ..where((row) => row.entity.equals('repeat_rule')))
+          .write(const TodoSyncChangesCompanion(status: Value('synced')));
+      await repeats.skip(
+        repeatRuleId: rule.id,
+        taskId: 'task-1',
+        occurrenceAt: now,
+      );
+      await repeats.catchup(
+        repeatRuleId: rule.id,
+        taskId: 'task-1',
+        occurrenceAt: now,
+      );
+
+      List<Map<String, dynamic>> sentChanges = const [];
+      final dio = Dio();
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            sentChanges = ((options.data as Map)['changes'] as List)
+                .cast<Map>()
+                .map((entry) => entry.cast<String, dynamic>())
+                .toList();
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                data: {
+                  'code': 0,
+                  'data': {
+                    'ok': true,
+                    'accepted': [
+                      for (final change in sentChanges)
+                        {
+                          'entityType': change['entityType'],
+                          'entityId': 800,
+                          'operation': change['operation'],
+                          'clientMutationId': change['clientMutationId'],
+                        },
+                    ],
+                    'conflicts': const [],
+                  },
+                },
+              ),
+            );
+          },
+        ),
+      );
+      final client = ApiClient(dio: dio);
+      final coordinator = SyncCoordinator(
+        db: db,
+        api: SyncApi(client, clientId: 'test', deviceId: 'device-1'),
+        todoApi: client,
+      );
+
+      expect(await coordinator.push(), 2);
+      final skipChange = sentChanges.singleWhere(
+        (change) => change['entityType'] == 'repeat_skip',
+      );
+      final catchupChange = sentChanges.singleWhere(
+        (change) => change['entityType'] == 'repeat_occurrence_action',
+      );
+      expect(skipChange['payload']?['taskId'], 101);
+      expect(catchupChange['payload']?['taskId'], 101);
+      expect(catchupChange['payload']?['repeatRuleId'], 701);
+      expect(catchupChange['payload']?['action'], 'CATCHUP');
+    },
+  );
+
+  test(
     'pulls repeat rules before their skips when the response is unordered',
     () async {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
