@@ -176,6 +176,35 @@ void main() {
     expect(results.map((task) => task.id), ['task-matching']);
   });
 
+  test('高级过滤按关键词和截止日期 UTC 闭区间返回稳定结果', () async {
+    await (db.update(db.todoTasks)
+          ..where((row) => row.id.equals('task-1')))
+        .write(
+          TodoTasksCompanion(
+            title: const Value('规划发布'),
+            dueAt: Value(DateTime.utc(2026, 7, 20, 0)),
+          ),
+        );
+    await (db.update(db.todoTasks)
+          ..where((row) => row.id.equals('task-2')))
+        .write(
+          TodoTasksCompanion(
+            title: const Value('规划复盘'),
+            dueAt: Value(DateTime.utc(2026, 7, 21, 0)),
+          ),
+        );
+
+    final results = await repository.filter(
+      TaskQueryFilter(
+        keyword: '规划',
+        dueAtFrom: DateTime.utc(2026, 7, 20, 0),
+        dueAtTo: DateTime.utc(2026, 7, 20, 0),
+      ),
+    );
+
+    expect(results.map((task) => task.id), ['task-1']);
+  });
+
   test('过滤结果按置顶、手工顺序和 ID 稳定排序', () async {
     final now = DateTime.utc(2026, 7, 15, 9);
     for (final task in [
