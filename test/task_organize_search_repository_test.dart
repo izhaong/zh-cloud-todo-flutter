@@ -121,6 +121,25 @@ void main() {
     expect(await db.select(db.todoSyncChanges).get(), isEmpty);
   });
 
+  test('重设不存在的任务在写入前拒绝且不写 outbox', () async {
+    await expectLater(
+      taskRepository.reparent('task-missing', 'task-1'),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          '任务不存在',
+        ),
+      ),
+    );
+
+    final parent = await (db.select(
+      db.todoTasks,
+    )..where((row) => row.id.equals('task-1'))).getSingle();
+    expect(parent.parentTaskId, isNull);
+    expect(await db.select(db.todoSyncChanges).get(), isEmpty);
+  });
+
   test('重设父任务拒绝超过五级', () async {
     for (var index = 2; index <= 6; index++) {
       await taskRepository.reparent('task-$index', 'task-${index - 1}');

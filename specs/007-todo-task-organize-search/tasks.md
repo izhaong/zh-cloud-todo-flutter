@@ -21,3 +21,7 @@
 - [ ] T011 修改 `lib/features/task/tasks_by_list_page.dart`、`lib/features/filter/filter_bar.dart`、`lib/features/tag/tag_page.dart` 与 `lib/state/providers.dart` 接入 query/batch use-case，使 T010 通过且 Widget 不直接调用 API。
 - [ ] T012 运行 `plan.md` 的低资源命令，把实际命令、fixture 规模、性能测量、失败恢复与未运行的双端旅程写入 Docs #51；未验证条目保持 `partial`。
 - [ ] T013 与 Service #183 对齐请求/响应、分页、排序键、层级错误、批量逐项结果和 mutation 幂等键，并在 Docs #51 链接双方 PR。
+
+## 执行证据
+
+- 2026-07-16：T004 的一个可独立回滚增量已验证——对不存在的子任务执行 `reparent` 会在任何 Drift 写入或 task outbox 入队前以 `StateError('任务不存在')` 拒绝。`nice -n 19 flutter test --concurrency=1 test/task_organize_search_repository_test.dart` 通过 15 项，`nice -n 19 flutter analyze` 无问题。T004 仍保持未勾选：跨账户/只读任务、智能清单结构重排和交互反馈尚未验证。

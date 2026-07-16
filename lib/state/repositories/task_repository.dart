@@ -236,6 +236,12 @@ class TaskRepository {
     if (taskId == newParentId) {
       throw ArgumentError.value(newParentId, 'newParentId', '任务不能引用自身');
     }
+    final task = await (_db.select(
+      _db.todoTasks,
+    )..where((row) => row.id.equals(taskId))).getSingleOrNull();
+    if (task == null) {
+      throw StateError('任务不存在');
+    }
     await _assertParentChainDoesNotContain(taskId, newParentId);
     await _db.reparentTask(taskId, newParentId);
     final row = await (_db.select(
