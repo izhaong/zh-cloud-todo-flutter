@@ -12,6 +12,7 @@ class TaskFilter {
     this.priority,
     this.dueRange,
     this.completed,
+    this.keyword,
   });
 
   final String? listId;
@@ -20,6 +21,7 @@ class TaskFilter {
   final int? priority;
   final String? dueRange; // today / overdue / future
   final bool? completed;
+  final String? keyword;
 
   TaskFilter copyWith({
     String? listId,
@@ -28,6 +30,8 @@ class TaskFilter {
     int? priority,
     String? dueRange,
     bool? completed,
+    String? keyword,
+    bool clearKeyword = false,
   }) {
     return TaskFilter(
       listId: listId ?? this.listId,
@@ -36,6 +40,7 @@ class TaskFilter {
       priority: priority ?? this.priority,
       dueRange: dueRange ?? this.dueRange,
       completed: completed ?? this.completed,
+      keyword: clearKeyword ? null : keyword ?? this.keyword,
     );
   }
 
@@ -45,7 +50,8 @@ class TaskFilter {
       tagIds.isEmpty &&
       priority == null &&
       dueRange == null &&
-      completed == null;
+      completed == null &&
+      (keyword == null || keyword!.trim().isEmpty);
 
   /// 把当前 filter 物化为智能清单的入参 map。
   Map<String, dynamic> toJson() => {
@@ -55,6 +61,7 @@ class TaskFilter {
     'priority': priority,
     'dueRange': dueRange,
     'completed': completed,
+    'keyword': keyword,
   };
 }
 
@@ -102,6 +109,21 @@ class FilterBar extends ConsumerWidget {
               if (next != filter.priority) {
                 onChanged(filter.copyWith(priority: next));
               }
+            },
+          ),
+          _Choice(
+            key: const Key('todo-filter-advanced'),
+            label: filter.keyword?.trim().isNotEmpty == true ? '关键词' : '高级',
+            selected: filter.keyword?.trim().isNotEmpty == true,
+            onTap: () async {
+              final keyword = await _pickKeyword(context, filter.keyword);
+              if (keyword == null) return;
+              onChanged(
+                filter.copyWith(
+                  keyword: keyword.isEmpty ? null : keyword,
+                  clearKeyword: keyword.isEmpty,
+                ),
+              );
             },
           ),
           const SizedBox(width: 4),
@@ -228,6 +250,38 @@ class FilterBar extends ConsumerWidget {
     ).then((v) => v == -1 ? null : v);
   }
 
+  static Future<String?> _pickKeyword(
+    BuildContext context,
+    String? current,
+  ) async {
+    final controller = TextEditingController(text: current ?? '');
+    return showDialog<String?>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('高级筛选'),
+        content: TextField(
+          key: const Key('task-filter-keyword'),
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: '关键词（标题或正文）',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('应用高级筛选'),
+          ),
+        ],
+      ),
+    );
+  }
+
   static Future<String?> _promptSmartName(BuildContext context) async {
     final ctrl = TextEditingController();
     return showDialog<String?>(
@@ -282,6 +336,7 @@ String priorityChipLabel(int? v) {
 
 class _Choice extends StatelessWidget {
   const _Choice({
+    super.key,
     required this.label,
     required this.selected,
     required this.onTap,

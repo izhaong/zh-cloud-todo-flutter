@@ -893,6 +893,7 @@ List<TodoTask> _applyFilter(
   if (filter.isEmpty && selectedListId == null) return source;
   final startOfDay = DateTime(now.year, now.month, now.day);
   final todayEnd = startOfDay.add(const Duration(days: 1));
+  final keyword = filter.keyword?.trim().toLowerCase();
 
   return source.where((task) {
     if (selectedListId != null && task.listId != selectedListId) return false;
@@ -902,6 +903,12 @@ List<TodoTask> _applyFilter(
     }
     if (filter.completed != null && task.completed != filter.completed) {
       return false;
+    }
+    if (keyword != null && keyword.isNotEmpty) {
+      final titleMatches = task.title.toLowerCase().contains(keyword);
+      final descriptionMatches =
+          task.description?.toLowerCase().contains(keyword) ?? false;
+      if (!titleMatches && !descriptionMatches) return false;
     }
     if (filter.dueRange != null) {
       final due = task.dueAt;

@@ -149,6 +149,28 @@ void main() {
     },
   );
 
+  testWidgets('advanced keyword filter narrows workspace tasks locally', (
+    tester,
+  ) async {
+    await _pumpWorkspace(tester);
+
+    await tester.tap(find.byKey(const Key('todo-filter-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('todo-filter-advanced')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('task-filter-keyword')),
+      '设计反馈',
+    );
+    await tester.tap(find.text('应用高级筛选'));
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(1000, 100));
+    await tester.pumpAndSettle();
+
+    expect(find.text('回复设计反馈并确认下一步'), findsOneWidget);
+    expect(find.text('确定今天最重要的三件事'), findsNothing);
+  });
+
   testWidgets('repository reorder preserves selection by task ID', (
     tester,
   ) async {
