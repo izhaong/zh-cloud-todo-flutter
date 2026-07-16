@@ -70,9 +70,14 @@ class _SyncRecoveryBannerState extends State<SyncRecoveryBanner> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        '${widget.failedCount} 项同步需要处理',
-                        style: TextStyle(color: colors.onErrorContainer),
+                      Semantics(
+                        label: '${widget.failedCount} 项同步需要处理',
+                        liveRegion: true,
+                        excludeSemantics: true,
+                        child: Text(
+                          '${widget.failedCount} 项同步需要处理',
+                          style: TextStyle(color: colors.onErrorContainer),
+                        ),
                       ),
                       if (widget.conflictCount > 0)
                         Text(

@@ -28,6 +28,28 @@ void main() {
     expect(retryCalls, 1);
   });
 
+  testWidgets('announces failed sync recovery state as a live region', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    try {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SyncRecoveryBanner(failedCount: 2, onRetry: _noOp),
+          ),
+        ),
+      );
+
+      expect(
+        tester.getSemantics(find.text('2 项同步需要处理')),
+        matchesSemantics(label: '2 项同步需要处理', isLiveRegion: true),
+      );
+    } finally {
+      semantics.dispose();
+    }
+  });
+
   testWidgets('explains when a failed change used the server version', (
     tester,
   ) async {
