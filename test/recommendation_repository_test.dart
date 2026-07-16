@@ -65,6 +65,31 @@ void main() {
 
     expect(cached.single.title, '已缓存任务');
   });
+
+  test('成功返回空推荐时会替换并清空过期 Drift 缓存', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final repository = RecommendationRepository(
+      db,
+      _FakeRecommendationApi(const []),
+    );
+    await db
+        .into(db.todoRecommendations)
+        .insert(
+          TodoRecommendationsCompanion.insert(
+            taskServerId: const Value(7),
+            title: '已过期推荐',
+            reasonCode: 'DUE_SOON',
+            reason: '即将到期',
+            score: 900,
+            refreshedAt: DateTime.utc(2026, 7, 16),
+          ),
+        );
+
+    await repository.refresh();
+
+    expect(await repository.watchAll().first, isEmpty);
+  });
 }
 
 class _FakeRecommendationApi extends RecommendationApi {
