@@ -356,4 +356,51 @@ void main() {
       expect(jsonDecode(change.payloadJson), containsPair('id', first.id));
     },
   );
+
+  testWidgets(
+    'detail skips the current repeat occurrence through its repository',
+    (tester) async {
+      final fixture = await TodoVisualFixture.create();
+      addTearDown(fixture.dispose);
+      final repository = fixture.container.read(repeatRuleRepositoryProvider)!;
+      await repository.save(
+        taskId: _taskId,
+        frequency: 'WEEKLY',
+        startAt: DateTime(2026, 7, 11, 9),
+      );
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: fixture.container,
+          child: MaterialApp(
+            theme: ThemeData.light().copyWith(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            home: const Scaffold(
+              body: TaskDetailPane(taskId: _taskId, embedded: true),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final detailScroll = find.byType(Scrollable).first;
+      final skip = find.byKey(const Key('task-repeat-skip'));
+      await tester.scrollUntilVisible(skip, 160, scrollable: detailScroll);
+      await tester.ensureVisible(skip);
+      await tester.tap(skip);
+      await tester.pumpAndSettle();
+
+      final skips = await fixture.database
+          .select(fixture.database.todoRepeatSkips)
+          .get();
+      expect(skips, hasLength(1));
+      final change =
+          (await fixture.database
+                  .select(fixture.database.todoSyncChanges)
+                  .get())
+              .last;
+      expect(change.entity, 'repeat_skip');
+    },
+  );
 }

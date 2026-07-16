@@ -662,6 +662,29 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     messenger.showSnackBar(const SnackBar(content: Text('已停止重复')));
   }
 
+  Future<void> _skipRepeatOccurrence(TodoTask t) async {
+    final rule = _repeatRule;
+    final repository = ref.read(repeatRuleRepositoryProvider);
+    if (rule == null || !rule.enabled || repository == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await repository.skip(
+        repeatRuleId: rule.id,
+        taskId: t.id,
+        occurrenceAt: _dueAt ?? _startAt ?? DateTime.now(),
+      );
+      if (_isCurrentTask(t.id)) {
+        messenger.showSnackBar(const SnackBar(content: Text('已跳过本次重复')));
+      }
+    } on ArgumentError catch (error) {
+      if (_isCurrentTask(t.id)) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(error.message.toString())),
+        );
+      }
+    }
+  }
+
   Future<_RepeatRuleDraft?> _showRepeatRuleEditor(TodoRepeatRule? existing) {
     var frequency = existing?.freq ?? 'DAILY';
     var repeatMode = existing?.repeatMode ?? 'ON_DUE';
@@ -1030,11 +1053,22 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
           const SizedBox(height: 4),
           Align(
             alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              key: const Key('task-repeat-disable'),
-              onPressed: () => _disableRepeatRule(t),
-              icon: const Icon(Icons.pause_circle_outline, size: 16),
-              label: const Text('停止重复'),
+            child: Wrap(
+              spacing: 4,
+              children: [
+                TextButton.icon(
+                  key: const Key('task-repeat-skip'),
+                  onPressed: () => _skipRepeatOccurrence(t),
+                  icon: const Icon(Icons.skip_next_outlined, size: 16),
+                  label: const Text('跳过本次'),
+                ),
+                TextButton.icon(
+                  key: const Key('task-repeat-disable'),
+                  onPressed: () => _disableRepeatRule(t),
+                  icon: const Icon(Icons.pause_circle_outline, size: 16),
+                  label: const Text('停止重复'),
+                ),
+              ],
             ),
           ),
         ],
