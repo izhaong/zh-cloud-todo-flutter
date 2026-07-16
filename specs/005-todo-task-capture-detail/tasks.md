@@ -19,6 +19,7 @@
 ## Phase 4: US3 附件与活动
 
 - [ ] T008 [US3] 为附件四态、重试、删除和活动顺序写测试，目标 `test/task_capture_detail_repository_test.dart`。
+- [ ] T008a [US3] 仅接收同账号私有任务的服务端 activity pull：任务先于活动应用，按 activity server ID 幂等写入现有 Drift 缓存；活动不得进入 outbox、push、冲突写回或 tombstone 删除。Mock pull 证据落在 `test/sync_coordinator_activity_test.dart`，真实 Service A/B 与设备旅程完成前保持未勾选。
 - [ ] T009 [US3] 实现附件队列与详情状态 UI，保持 002 结构不变。
 
 ## Phase 5: 跨层验收

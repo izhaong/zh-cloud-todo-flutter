@@ -725,6 +725,9 @@ class SyncCoordinator {
       if (change.payload?['isChecklistItem'] == true) return 5;
       return change.payload?['parentTaskId'] == null ? 1 : 2;
     }
+    // 任务动态依赖服务端任务 ID；即使服务端返回时动态在前，也要让任务
+    // 先成为本地聚合的一部分，再通知订阅该任务活动的 UI。
+    if (change.entityType == SyncEntities.activity) return 3;
     if (change.entityType == SyncEntities.tag) return 3;
     if (change.entityType == SyncEntities.taskTag) return 6;
     return 4;
@@ -756,6 +759,8 @@ class SyncCoordinator {
         await _upsertLocalFilter(entityId, payload);
       case SyncEntities.template:
         await _upsertLocalTemplate(entityId, payload);
+      case SyncEntities.activity:
+        await _upsertPulledActivity(entityId, payload);
       case SyncEntities.taskTag:
         // task_tag 不允许客户端 push；pull 时按 serverId 级联 upsert。
         await _upsertLocalTaskTag(entityId, payload);
@@ -811,6 +816,36 @@ class SyncCoordinator {
   }
 
   // --- 本地 upsert（按 serverId 查行；命中则更新，否则新建本地 UUID 行）-----
+
+  /// 服务端任务动态只读：pull 缓存到 Drift，绝不加入 outbox 或回推服务端。
+  ///
+  /// [TodoActivities.serverId] 是主键，insert-on-conflict-update 可处理重复
+  /// pull，保证同一动态不会在离线缓存中重复。活动表按 task server ID 保存，
+  /// 使它在已排序的同一批任务变更后立即可被对应任务的本地流读取。
+  Future<void> _upsertPulledActivity(
+    int serverId,
+    Map<String, dynamic> payload,
+  ) async {
+    final taskServerId = (payload['taskId'] as num?)?.toInt();
+    if (taskServerId == null || taskServerId <= 0) return;
+    final occurredAt = _parseDate(
+      payload['occurredAt'] ?? payload['createTime'],
+    );
+    if (occurredAt == null) return;
+    await db
+        .into(db.todoActivities)
+        .insertOnConflictUpdate(
+          TodoActivitiesCompanion.insert(
+            serverId: Value(serverId),
+            taskServerId: taskServerId,
+            actorUserId: Value((payload['actorUserId'] as num?)?.toInt()),
+            actorUserName: Value(payload['actorUserName']?.toString()),
+            action: payload['action']?.toString() ?? 'unknown',
+            detail: Value(payload['detail']?.toString()),
+            occurredAt: occurredAt,
+          ),
+        );
+  }
 
   Future<void> _upsertLocalTemplate(
     int serverId,

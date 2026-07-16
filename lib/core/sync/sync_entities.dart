@@ -13,6 +13,11 @@ class SyncEntities {
   static const attachment = 'attachment';
   static const template = 'template';
 
+  /// 任务动态由服务端产生，只允许 pull 落本地只读缓存。
+  ///
+  /// 不得加入 [syncable]，也不能由 Repository 写入 outbox。
+  static const activity = 'activity';
+
   /// 不在后端 `/sync` 白名单内、由 [SyncCoordinator] 路由到普通 REST 的实体。
   static const folder = 'folder';
 
