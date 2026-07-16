@@ -26,18 +26,26 @@ class TaskBatchEditResult {
 class TaskBatchEditCommand {
   const TaskBatchEditCommand({
     required this.taskIds,
+    this.listId,
+    this.dueAt,
     this.priority,
     this.completed,
     this.isPinned,
   });
 
   final List<String> taskIds;
+  final String? listId;
+  final DateTime? dueAt;
   final int? priority;
   final bool? completed;
   final bool? isPinned;
 
   bool get hasChanges =>
-      priority != null || completed != null || isPinned != null;
+      listId != null ||
+      dueAt != null ||
+      priority != null ||
+      completed != null ||
+      isPinned != null;
 }
 
 class TaskBatchEditRepository {
@@ -95,6 +103,12 @@ class TaskBatchEditRepository {
           _db.todoTasks,
         )..where((row) => row.id.equals(taskId))).write(
           TodoTasksCompanion(
+            listId: command.listId == null
+                ? const Value.absent()
+                : Value(command.listId!),
+            dueAt: command.dueAt == null
+                ? const Value.absent()
+                : Value(command.dueAt!),
             priority: command.priority == null
                 ? const Value.absent()
                 : Value(command.priority!),

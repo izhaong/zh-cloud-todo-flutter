@@ -31,6 +31,15 @@ void main() {
         ),
       );
       batch.insert(
+        db.todoLists,
+        TodoListsCompanion.insert(
+          id: 'list-target',
+          name: '本周计划',
+          updatedAt: now,
+          createdAt: now,
+        ),
+      );
+      batch.insert(
         db.todoTags,
         TodoTagsCompanion.insert(
           id: 'tag-collection',
@@ -221,6 +230,36 @@ void main() {
       isTrue,
     );
     expect(queued.every((change) => change.op == SyncOps.upsert), isTrue);
+    expect(queued.map((change) => change.entityLocalId).toSet(), {
+      'task-1',
+      'task-2',
+    });
+  });
+
+  test('批量编辑在本地移动清单并更新截止时间后逐项入队', () async {
+    final batchRepository = TaskBatchEditRepository(db, SyncChangeQueue(db));
+    final dueAt = DateTime.utc(2026, 7, 20, 18);
+
+    final results = await batchRepository.apply(
+      TaskBatchEditCommand(
+        taskIds: const ['task-1', 'task-2'],
+        listId: 'list-target',
+        dueAt: dueAt,
+      ),
+    );
+
+    expect(results.map((result) => result.status), [
+      TaskBatchEditStatus.success,
+      TaskBatchEditStatus.success,
+    ]);
+    final changed = await (db.select(
+      db.todoTasks,
+    )..where((row) => row.id.isIn(['task-1', 'task-2']))).get();
+    expect(changed.every((task) => task.listId == 'list-target'), isTrue);
+    expect(changed.map((task) => task.dueAt?.toUtc()).toList(), [dueAt, dueAt]);
+
+    final queued = await db.select(db.todoSyncChanges).get();
+    expect(queued, hasLength(2));
     expect(queued.map((change) => change.entityLocalId).toSet(), {
       'task-1',
       'task-2',
