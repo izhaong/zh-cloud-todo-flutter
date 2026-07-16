@@ -243,6 +243,19 @@ class SyncCoordinator {
         )..where((t) => t.id.equals(localTagId))).getSingleOrNull();
         resolved['tagId'] = tag?.serverId ?? -(++_tempIdSeq);
       }
+      final localTagIds = (resolved['tagIds'] as List? ?? const [])
+          .map((tagId) => tagId.toString())
+          .toList(growable: false);
+      if (localTagIds.isNotEmpty) {
+        final resolvedTagIds = <int>[];
+        for (final localTagId in localTagIds) {
+          final tag = await (db.select(
+            db.todoTags,
+          )..where((t) => t.id.equals(localTagId))).getSingleOrNull();
+          resolvedTagIds.add(tag?.serverId ?? -(++_tempIdSeq));
+        }
+        resolved['tagIds'] = resolvedTagIds;
+      }
     }
     if (entity == SyncEntities.reminder ||
         entity == SyncEntities.repeatRule ||
