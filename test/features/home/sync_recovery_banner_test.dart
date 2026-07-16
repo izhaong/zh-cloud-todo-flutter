@@ -68,6 +68,37 @@ void main() {
     expect(find.text('其中 1 项与其他设备冲突，已采用服务器版本'), findsOneWidget);
   });
 
+  testWidgets('announces conflict recovery reason as a live region', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    try {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SyncRecoveryBanner(
+              failedCount: 2,
+              conflictCount: 1,
+              onRetry: _noOp,
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        tester.getSemantics(
+          find.text('其中 1 项与其他设备冲突，已采用服务器版本'),
+        ),
+        matchesSemantics(
+          label: '其中 1 项与其他设备冲突，已采用服务器版本',
+          isLiveRegion: true,
+        ),
+      );
+    } finally {
+      semantics.dispose();
+    }
+  });
+
   testWidgets('offers an explicit action to preserve conflicted task copies', (
     tester,
   ) async {

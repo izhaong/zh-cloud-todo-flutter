@@ -80,9 +80,15 @@ class _SyncRecoveryBannerState extends State<SyncRecoveryBanner> {
                         ),
                       ),
                       if (widget.conflictCount > 0)
-                        Text(
-                          '其中 ${widget.conflictCount} 项与其他设备冲突，已采用服务器版本',
-                          style: TextStyle(color: colors.onErrorContainer),
+                        Semantics(
+                          label:
+                              '其中 ${widget.conflictCount} 项与其他设备冲突，已采用服务器版本',
+                          liveRegion: true,
+                          excludeSemantics: true,
+                          child: Text(
+                            '其中 ${widget.conflictCount} 项与其他设备冲突，已采用服务器版本',
+                            style: TextStyle(color: colors.onErrorContainer),
+                          ),
                         ),
                     ],
                   ),
