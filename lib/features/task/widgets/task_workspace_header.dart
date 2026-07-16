@@ -7,6 +7,30 @@ import '../view_mode.dart';
 /// List sorting choices exposed through the compact workspace menu.
 enum TaskSort { smart, priorityDesc, dueDate, title, createdAt }
 
+/// Batch mutations exposed from the compact workspace command menu.
+///
+/// The header only emits an intent; task writes remain in the page-level
+/// use-case flow and never call an API from the widget tree.
+enum TaskBatchAction {
+  priorityNone,
+  priorityLow,
+  priorityMedium,
+  priorityHigh,
+  pin,
+  unpin,
+}
+
+extension TaskBatchActionX on TaskBatchAction {
+  String get label => switch (this) {
+    TaskBatchAction.priorityNone => '设为无优先级',
+    TaskBatchAction.priorityLow => '设为低优先级',
+    TaskBatchAction.priorityMedium => '设为中优先级',
+    TaskBatchAction.priorityHigh => '设为高优先级',
+    TaskBatchAction.pin => '置顶所选',
+    TaskBatchAction.unpin => '取消置顶',
+  };
+}
+
 extension TaskSortX on TaskSort {
   String get label => switch (this) {
     TaskSort.smart => '智能（置顶优先）',
@@ -33,6 +57,7 @@ class TaskWorkspaceHeader extends StatelessWidget {
     this.batchSelectedCount = 0,
     this.onBatchPressed,
     this.onBatchCompletePressed,
+    this.onBatchActionSelected,
   });
 
   final String title;
@@ -47,6 +72,7 @@ class TaskWorkspaceHeader extends StatelessWidget {
   final int batchSelectedCount;
   final VoidCallback? onBatchPressed;
   final VoidCallback? onBatchCompletePressed;
+  final ValueChanged<TaskBatchAction>? onBatchActionSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -155,6 +181,18 @@ class TaskWorkspaceHeader extends StatelessWidget {
                   tooltip: '完成所选',
                   onPressed: onBatchCompletePressed,
                   icon: const Icon(Icons.done_all_outlined, size: 20),
+                ),
+              if (batchSelectionActive)
+                PopupMenuButton<TaskBatchAction>(
+                  key: const Key('todo-batch-more'),
+                  tooltip: '批量操作',
+                  enabled: onBatchActionSelected != null,
+                  icon: const Icon(Icons.more_horiz_outlined, size: 20),
+                  onSelected: onBatchActionSelected,
+                  itemBuilder: (context) => [
+                    for (final action in TaskBatchAction.values)
+                      PopupMenuItem(value: action, child: Text(action.label)),
+                  ],
                 ),
               if (onBatchPressed != null)
                 IconButton(

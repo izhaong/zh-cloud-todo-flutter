@@ -148,6 +148,12 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                         !_batchApplying
                     ? _completeBatchSelection
                     : null,
+                onBatchActionSelected:
+                    _batchSelectionActive &&
+                        _batchSelectedTaskIds.isNotEmpty &&
+                        !_batchApplying
+                    ? _applyBatchAction
+                    : null,
               ),
             if (showQuickAdd) QuickAddBar(onSubmit: _submitQuickAdd),
             Expanded(
@@ -263,6 +269,46 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   }
 
   Future<void> _completeBatchSelection() async {
+    await _applyBatchEdit(
+      const TaskBatchEditCommand(taskIds: [], completed: true),
+      successVerb: '已完成',
+    );
+  }
+
+  Future<void> _applyBatchAction(TaskBatchAction action) async {
+    final command = switch (action) {
+      TaskBatchAction.priorityNone => const TaskBatchEditCommand(
+        taskIds: [],
+        priority: 0,
+      ),
+      TaskBatchAction.priorityLow => const TaskBatchEditCommand(
+        taskIds: [],
+        priority: 1,
+      ),
+      TaskBatchAction.priorityMedium => const TaskBatchEditCommand(
+        taskIds: [],
+        priority: 2,
+      ),
+      TaskBatchAction.priorityHigh => const TaskBatchEditCommand(
+        taskIds: [],
+        priority: 3,
+      ),
+      TaskBatchAction.pin => const TaskBatchEditCommand(
+        taskIds: [],
+        isPinned: true,
+      ),
+      TaskBatchAction.unpin => const TaskBatchEditCommand(
+        taskIds: [],
+        isPinned: false,
+      ),
+    };
+    await _applyBatchEdit(command, successVerb: '已更新');
+  }
+
+  Future<void> _applyBatchEdit(
+    TaskBatchEditCommand baseCommand, {
+    required String successVerb,
+  }) async {
     final repository = ref.read(taskBatchEditRepositoryProvider);
     if (repository == null) {
       ScaffoldMessenger.of(
@@ -273,7 +319,12 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     final selectedIds = _batchSelectedTaskIds.toList(growable: false);
     setState(() => _batchApplying = true);
     final results = await repository.apply(
-      TaskBatchEditCommand(taskIds: selectedIds, completed: true),
+      TaskBatchEditCommand(
+        taskIds: selectedIds,
+        priority: baseCommand.priority,
+        completed: baseCommand.completed,
+        isPinned: baseCommand.isPinned,
+      ),
     );
     if (!mounted) return;
     final succeeded = results
@@ -287,9 +338,9 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       _batchSelectionActive = false;
       _batchSelectedTaskIds.clear();
     });
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('已完成 $succeeded 项；失败 $failed 项')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$successVerb $succeeded 项；失败 $failed 项')),
+    );
   }
 
   Stream<List<TodoTask>> _resolveTasksStream(TaskRepository repository) {

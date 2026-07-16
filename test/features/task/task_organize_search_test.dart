@@ -89,4 +89,58 @@ void main() {
       expect(changes.where((change) => change.entity == 'task'), hasLength(2));
     },
   );
+
+  testWidgets(
+    'batch priority action updates selected tasks through the local use-case',
+    (tester) async {
+      final fixture = await TodoVisualFixture.create();
+      addTearDown(fixture.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: fixture.container,
+          child: MaterialApp(
+            theme: ThemeData.light().copyWith(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            home: const Scaffold(body: TasksByListPage(hideAppBar: true)),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('todo-batch-edit')));
+      await tester.pumpAndSettle();
+      for (final taskId in [
+        TodoVisualFixture.pinnedTaskId,
+        TodoVisualFixture.todayTaskId,
+      ]) {
+        await tester.tap(find.byKey(Key('task-batch-select-$taskId')));
+      }
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('todo-batch-more')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('设为高优先级'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('已更新 2 项；失败 0 项'), findsOneWidget);
+      final tasks = await fixture.database
+          .select(fixture.database.todoTasks)
+          .get();
+      expect(
+        tasks
+            .where(
+              (task) =>
+                  task.id == TodoVisualFixture.pinnedTaskId ||
+                  task.id == TodoVisualFixture.todayTaskId,
+            )
+            .map((task) => task.priority),
+        everyElement(3),
+      );
+      final changes = await fixture.database
+          .select(fixture.database.todoSyncChanges)
+          .get();
+      expect(changes.where((change) => change.entity == 'task'), hasLength(2));
+    },
+  );
 }
