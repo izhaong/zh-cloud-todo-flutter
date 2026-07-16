@@ -209,16 +209,17 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         return TimelineView(
           tasks: items,
           onTaskSelected: widget.onTaskSelected,
-          onTaskTimeChange: (task, {required startAt, required endAt, required dueAt}) async {
-            final repository = ref.read(taskViewActionRepositoryProvider);
-            if (repository == null) return;
-            await repository.moveTimelineTask(
-              task.id,
-              startAt: startAt,
-              endAt: endAt,
-              dueAt: dueAt,
-            );
-          },
+          onTaskTimeChange:
+              (task, {required startAt, required endAt, required dueAt}) async {
+                final repository = ref.read(taskViewActionRepositoryProvider);
+                if (repository == null) return;
+                await repository.moveTimelineTask(
+                  task.id,
+                  startAt: startAt,
+                  endAt: endAt,
+                  dueAt: dueAt,
+                );
+              },
         );
       case TaskViewMode.eisenhower:
         return EisenhowerView(
@@ -460,11 +461,24 @@ class _ListBodyState extends State<_ListBody> {
           final reordered = [...visibleTaskIds]..remove(entry.id);
           insertionIndex = insertionIndex.clamp(0, reordered.length);
           reordered.insert(insertionIndex, entry.id);
+          final previousOrder = _orderedIds;
+          final previousHasCustomOrder = _hasCustomOrder;
           setState(() {
             _orderedIds = reordered;
             _hasCustomOrder = true;
           });
-          await widget.onTasksReordered?.call(reordered);
+          try {
+            await widget.onTasksReordered?.call(reordered);
+          } catch (_) {
+            if (!mounted) return;
+            setState(() {
+              _orderedIds = previousOrder;
+              _hasCustomOrder = previousHasCustomOrder;
+            });
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('排序保存失败，请重试')));
+          }
         },
         itemBuilder: (context, index) {
           final entry = entries[index];
