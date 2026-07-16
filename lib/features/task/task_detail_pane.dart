@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:drift/drift.dart' show OrderingTerm;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -31,6 +32,65 @@ class _RepeatRuleDraft {
   final int interval;
   final Set<int> weekdays;
   final String repeatMode;
+}
+
+class _TaskReminderSection extends ConsumerWidget {
+  const _TaskReminderSection({required this.taskId});
+
+  final String taskId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final db = ref.watch(appDatabaseProvider);
+    final repository = ref.read(reminderRepositoryProvider);
+    if (db == null) return const SizedBox.shrink();
+    final reminders = db.select(db.todoReminders)
+      ..where((reminder) => reminder.taskId.equals(taskId))
+      ..orderBy([(reminder) => OrderingTerm.asc(reminder.remindAt)]);
+    return StreamBuilder<List<TodoReminder>>(
+      stream: reminders.watch(),
+      builder: (context, snapshot) {
+        final rows = snapshot.data ?? const <TodoReminder>[];
+        return Column(
+          key: const Key('task-reminders'),
+          children: [
+            if (rows.isEmpty)
+              const Align(alignment: Alignment.centerLeft, child: Text('尚无提醒')),
+            for (final reminder in rows)
+              ListTile(
+                key: ValueKey('task-reminder-${reminder.id}'),
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.alarm_outlined),
+                title: Text(
+                  reminder.remindAt.toLocal().toString().substring(0, 16),
+                ),
+                subtitle: Text(
+                  reminder.persistent
+                      ? '持续提醒，每 ${reminder.intervalMinutes ?? 0} 分钟'
+                      : (reminder.anchorType == 'END' ? '截止时提醒' : '单次提醒'),
+                ),
+                trailing: IconButton(
+                  key: ValueKey('task-reminder-remove-${reminder.id}'),
+                  tooltip: '删除提醒',
+                  onPressed: repository == null
+                      ? null
+                      : () async {
+                          final messenger = ScaffoldMessenger.of(context);
+                          await repository.remove(reminder.id);
+                          if (context.mounted) {
+                            messenger.showSnackBar(
+                              const SnackBar(content: Text('已删除提醒')),
+                            );
+                          }
+                        },
+                  icon: const Icon(Icons.delete_outline),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
 }
 
 /// 可复用的真实任务详情内容：
@@ -954,6 +1014,8 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
           icon: const Icon(Icons.alarm_add_outlined),
           label: const Text('在截止时提醒'),
         ),
+        const SizedBox(height: 8),
+        _TaskReminderSection(taskId: t.id),
         const Divider(height: 32),
         sh('重复'),
         OutlinedButton.icon(

@@ -297,4 +297,63 @@ void main() {
 
     expect(find.text('结束时间必须晚于开始时间'), findsOneWidget);
   });
+
+  testWidgets(
+    'detail lists and removes a local reminder through its repository',
+    (tester) async {
+      final fixture = await TodoVisualFixture.create();
+      addTearDown(fixture.dispose);
+      final repository = fixture.container.read(reminderRepositoryProvider)!;
+      final first = await repository.create(
+        taskId: _taskId,
+        fireAt: DateTime(2026, 7, 11, 9, 10),
+      );
+      await repository.create(
+        taskId: _taskId,
+        fireAt: DateTime(2026, 7, 11, 9, 20),
+      );
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: fixture.container,
+          child: MaterialApp(
+            theme: ThemeData.light().copyWith(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            home: const Scaffold(
+              body: TaskDetailPane(taskId: _taskId, embedded: true),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final detailScroll = find.byType(Scrollable).first;
+      final reminderList = find.byKey(const Key('task-reminders'));
+      await tester.scrollUntilVisible(
+        reminderList,
+        160,
+        scrollable: detailScroll,
+      );
+      await tester.ensureVisible(reminderList);
+      await tester.pumpAndSettle();
+      expect(find.byKey(ValueKey('task-reminder-${first.id}')), findsOneWidget);
+      await tester.tap(
+        find.byKey(ValueKey('task-reminder-remove-${first.id}')),
+      );
+      await tester.pumpAndSettle();
+
+      final reminders = await fixture.database
+          .select(fixture.database.todoReminders)
+          .get();
+      expect(reminders, hasLength(1));
+      final change =
+          (await fixture.database
+                  .select(fixture.database.todoSyncChanges)
+                  .get())
+              .last;
+      expect(change.entity, 'reminder');
+      expect(jsonDecode(change.payloadJson), containsPair('id', first.id));
+    },
+  );
 }
