@@ -14,15 +14,17 @@ void main() {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
     final now = DateTime.utc(2026, 7, 16, 9);
-    await db.into(db.todoLists).insert(
-      TodoListsCompanion.insert(
-        id: 'list-local',
-        serverId: const Value(101),
-        name: '项目',
-        updatedAt: now,
-        createdAt: now,
-      ),
-    );
+    await db
+        .into(db.todoLists)
+        .insert(
+          TodoListsCompanion.insert(
+            id: 'list-local',
+            serverId: const Value(101),
+            name: '项目',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
     await BoardPreferenceRepository(db, SyncChangeQueue(db)).save(
       listId: 'list-local',
       groupDimension: 'CUSTOM',
@@ -39,6 +41,71 @@ void main() {
       'listId': 101,
       'groupDimension': 'CUSTOM',
       'columnsJson': '["TODO","DONE"]',
+    });
+  });
+
+  test('恢复当前清单失败偏好会重新入队并保留旧记录', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final now = DateTime.utc(2026, 7, 16, 9);
+    await db
+        .into(db.todoLists)
+        .insert(
+          TodoListsCompanion.insert(
+            id: 'list-local',
+            serverId: const Value(101),
+            name: '项目',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    await db
+        .into(db.todoBoardPreferences)
+        .insert(
+          TodoBoardPreferencesCompanion.insert(
+            id: 'preference-local',
+            serverId: const Value(401),
+            listId: 'list-local',
+            groupDimension: 'SERVER',
+            columnsJson: const Value('["SERVER"]'),
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    await db
+        .into(db.todoSyncChanges)
+        .insert(
+          TodoSyncChangesCompanion.insert(
+            clientMutationId: 'failed-board-preference',
+            entity: SyncEntities.boardPreference,
+            op: SyncOps.upsert,
+            entityLocalId: const Value('preference-local'),
+            entityServerId: const Value(401),
+            payloadJson: jsonEncode({
+              'listId': 101,
+              'groupDimension': 'LOCAL',
+              'columnsJson': '["LOCAL"]',
+            }),
+            createdAt: now,
+            status: const Value('failed'),
+          ),
+        );
+
+    final repository = BoardPreferenceRepository(db, SyncChangeQueue(db));
+    expect(await repository.recoverLatestFailed(listId: 'list-local'), isTrue);
+
+    final preference = await db.select(db.todoBoardPreferences).getSingle();
+    final changes = await db.select(db.todoSyncChanges).get();
+    final old = changes.singleWhere(
+      (change) => change.clientMutationId == 'failed-board-preference',
+    );
+    final retry = changes.singleWhere((change) => change.status == 'queued');
+    expect(preference.groupDimension, 'LOCAL');
+    expect(old.status, 'resolved');
+    expect(jsonDecode(retry.payloadJson), {
+      'listId': 101,
+      'groupDimension': 'LOCAL',
+      'columnsJson': '["LOCAL"]',
     });
   });
 }
