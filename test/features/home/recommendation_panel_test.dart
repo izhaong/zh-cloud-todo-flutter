@@ -12,6 +12,7 @@ import 'package:zh_cloud_todo_flutter/state/repositories/recommendation_reposito
 
 void main() {
   testWidgets('推荐任务展示原因并通过本地 serverId 交给选择回调', (tester) async {
+    final semantics = tester.ensureSemantics();
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
     await db
@@ -49,12 +50,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('推荐任务'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('推荐任务')), findsOneWidget);
     expect(find.text('即将到期的任务'), findsOneWidget);
     expect(find.text('即将到期'), findsOneWidget);
     await tester.tap(find.text('即将到期的任务'));
     expect(selected, 7);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
+    semantics.dispose();
   });
 }
 
