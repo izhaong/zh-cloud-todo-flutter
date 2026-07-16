@@ -171,6 +171,33 @@ void main() {
     expect(find.text('确定今天最重要的三件事'), findsNothing);
   });
 
+  testWidgets('advanced date interval narrows workspace tasks locally', (
+    tester,
+  ) async {
+    await _pumpWorkspace(tester);
+
+    await tester.tap(find.byKey(const Key('todo-filter-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('todo-filter-advanced')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('task-filter-due-at-from')),
+      '2026-07-12',
+    );
+    await tester.enterText(
+      find.byKey(const Key('task-filter-due-at-to')),
+      '2026-07-12',
+    );
+    await tester.tap(find.text('应用高级筛选'));
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(1000, 100));
+    await tester.pumpAndSettle();
+
+    expect(find.text('提交本月报销单'), findsOneWidget);
+    expect(find.text('给家人打电话'), findsOneWidget);
+    expect(find.text('确定今天最重要的三件事'), findsNothing);
+  });
+
   testWidgets('repository reorder preserves selection by task ID', (
     tester,
   ) async {

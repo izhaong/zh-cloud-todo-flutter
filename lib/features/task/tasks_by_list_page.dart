@@ -910,6 +910,17 @@ List<TodoTask> _applyFilter(
           task.description?.toLowerCase().contains(keyword) ?? false;
       if (!titleMatches && !descriptionMatches) return false;
     }
+    if (filter.dueAtFrom != null || filter.dueAtTo != null) {
+      final due = task.dueAt;
+      if (due == null) return false;
+      final dueDay = DateTime(due.year, due.month, due.day);
+      if (filter.dueAtFrom != null && dueDay.isBefore(filter.dueAtFrom!)) {
+        return false;
+      }
+      if (filter.dueAtTo != null && dueDay.isAfter(filter.dueAtTo!)) {
+        return false;
+      }
+    }
     if (filter.dueRange != null) {
       final due = task.dueAt;
       if (due == null) return false;

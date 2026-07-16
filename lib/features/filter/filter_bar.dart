@@ -13,6 +13,8 @@ class TaskFilter {
     this.dueRange,
     this.completed,
     this.keyword,
+    this.dueAtFrom,
+    this.dueAtTo,
   });
 
   final String? listId;
@@ -23,6 +25,12 @@ class TaskFilter {
   final bool? completed;
   final String? keyword;
 
+  /// Local calendar-day lower bound chosen in the advanced filter.
+  final DateTime? dueAtFrom;
+
+  /// Local calendar-day upper bound chosen in the advanced filter.
+  final DateTime? dueAtTo;
+
   TaskFilter copyWith({
     String? listId,
     int? folderId,
@@ -32,6 +40,10 @@ class TaskFilter {
     bool? completed,
     String? keyword,
     bool clearKeyword = false,
+    DateTime? dueAtFrom,
+    bool clearDueAtFrom = false,
+    DateTime? dueAtTo,
+    bool clearDueAtTo = false,
   }) {
     return TaskFilter(
       listId: listId ?? this.listId,
@@ -41,6 +53,8 @@ class TaskFilter {
       dueRange: dueRange ?? this.dueRange,
       completed: completed ?? this.completed,
       keyword: clearKeyword ? null : keyword ?? this.keyword,
+      dueAtFrom: clearDueAtFrom ? null : dueAtFrom ?? this.dueAtFrom,
+      dueAtTo: clearDueAtTo ? null : dueAtTo ?? this.dueAtTo,
     );
   }
 
@@ -51,7 +65,9 @@ class TaskFilter {
       priority == null &&
       dueRange == null &&
       completed == null &&
-      (keyword == null || keyword!.trim().isEmpty);
+      (keyword == null || keyword!.trim().isEmpty) &&
+      dueAtFrom == null &&
+      dueAtTo == null;
 
   /// 把当前 filter 物化为智能清单的入参 map。
   Map<String, dynamic> toJson() => {
@@ -62,6 +78,8 @@ class TaskFilter {
     'dueRange': dueRange,
     'completed': completed,
     'keyword': keyword,
+    'dueAtFrom': dueAtFrom?.toIso8601String(),
+    'dueAtTo': dueAtTo?.toIso8601String(),
   };
 }
 
@@ -113,15 +131,19 @@ class FilterBar extends ConsumerWidget {
           ),
           _Choice(
             key: const Key('todo-filter-advanced'),
-            label: filter.keyword?.trim().isNotEmpty == true ? '关键词' : '高级',
-            selected: filter.keyword?.trim().isNotEmpty == true,
+            label: _advancedFilterLabel(filter),
+            selected: _hasAdvancedFilter(filter),
             onTap: () async {
-              final keyword = await _pickKeyword(context, filter.keyword);
-              if (keyword == null) return;
+              final next = await _pickAdvancedFilter(context, filter);
+              if (next == null) return;
               onChanged(
                 filter.copyWith(
-                  keyword: keyword.isEmpty ? null : keyword,
-                  clearKeyword: keyword.isEmpty,
+                  keyword: next.keyword,
+                  clearKeyword: next.keyword == null,
+                  dueAtFrom: next.dueAtFrom,
+                  clearDueAtFrom: next.dueAtFrom == null,
+                  dueAtTo: next.dueAtTo,
+                  clearDueAtTo: next.dueAtTo == null,
                 ),
               );
             },
@@ -250,34 +272,103 @@ class FilterBar extends ConsumerWidget {
     ).then((v) => v == -1 ? null : v);
   }
 
-  static Future<String?> _pickKeyword(
+  static Future<_AdvancedFilter?> _pickAdvancedFilter(
     BuildContext context,
-    String? current,
+    TaskFilter current,
   ) async {
-    final controller = TextEditingController(text: current ?? '');
-    return showDialog<String?>(
+    final keywordController = TextEditingController(
+      text: current.keyword ?? '',
+    );
+    final dueAtFromController = TextEditingController(
+      text: _formatDate(current.dueAtFrom),
+    );
+    final dueAtToController = TextEditingController(
+      text: _formatDate(current.dueAtTo),
+    );
+    String? validationMessage;
+    return showDialog<_AdvancedFilter?>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('高级筛选'),
-        content: TextField(
-          key: const Key('task-filter-keyword'),
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: '关键词（标题或正文）',
-            border: OutlineInputBorder(),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('高级筛选'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  key: const Key('task-filter-keyword'),
+                  controller: keywordController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: '关键词（标题或正文）',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  key: const Key('task-filter-due-at-from'),
+                  controller: dueAtFromController,
+                  keyboardType: TextInputType.datetime,
+                  decoration: const InputDecoration(
+                    labelText: '截止日期起（YYYY-MM-DD）',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  key: const Key('task-filter-due-at-to'),
+                  controller: dueAtToController,
+                  keyboardType: TextInputType.datetime,
+                  decoration: InputDecoration(
+                    labelText: '截止日期止（YYYY-MM-DD）',
+                    border: const OutlineInputBorder(),
+                    errorText: validationMessage,
+                  ),
+                ),
+              ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final dueAtFrom = _parseLocalDate(dueAtFromController.text);
+                final dueAtTo = _parseLocalDate(dueAtToController.text);
+                final fromInvalid =
+                    dueAtFromController.text.trim().isNotEmpty &&
+                    dueAtFrom == null;
+                final toInvalid =
+                    dueAtToController.text.trim().isNotEmpty && dueAtTo == null;
+                if (fromInvalid || toInvalid) {
+                  setDialogState(
+                    () => validationMessage = '请输入有效日期，例如 2026-07-12',
+                  );
+                  return;
+                }
+                if (dueAtFrom != null &&
+                    dueAtTo != null &&
+                    dueAtFrom.isAfter(dueAtTo)) {
+                  setDialogState(() => validationMessage = '截止日期起不能晚于截止日期止');
+                  return;
+                }
+                Navigator.pop(
+                  ctx,
+                  _AdvancedFilter(
+                    keyword: keywordController.text.trim().isEmpty
+                        ? null
+                        : keywordController.text.trim(),
+                    dueAtFrom: dueAtFrom,
+                    dueAtTo: dueAtTo,
+                  ),
+                );
+              },
+              child: const Text('应用高级筛选'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('应用高级筛选'),
-          ),
-        ],
       ),
     );
   }
@@ -309,6 +400,49 @@ class FilterBar extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _AdvancedFilter {
+  const _AdvancedFilter({
+    required this.keyword,
+    required this.dueAtFrom,
+    required this.dueAtTo,
+  });
+
+  final String? keyword;
+  final DateTime? dueAtFrom;
+  final DateTime? dueAtTo;
+}
+
+bool _hasAdvancedFilter(TaskFilter filter) =>
+    filter.keyword?.trim().isNotEmpty == true ||
+    filter.dueAtFrom != null ||
+    filter.dueAtTo != null;
+
+String _advancedFilterLabel(TaskFilter filter) {
+  if (filter.keyword?.trim().isNotEmpty == true) return '关键词';
+  if (filter.dueAtFrom != null || filter.dueAtTo != null) return '日期';
+  return '高级';
+}
+
+String _formatDate(DateTime? value) {
+  if (value == null) return '';
+  final month = value.month.toString().padLeft(2, '0');
+  final day = value.day.toString().padLeft(2, '0');
+  return '${value.year}-$month-$day';
+}
+
+DateTime? _parseLocalDate(String value) {
+  final match = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(value.trim());
+  if (match == null) return null;
+  final year = int.parse(match.group(1)!);
+  final month = int.parse(match.group(2)!);
+  final day = int.parse(match.group(3)!);
+  final parsed = DateTime(year, month, day);
+  if (parsed.year != year || parsed.month != month || parsed.day != day) {
+    return null;
+  }
+  return parsed;
 }
 
 String dueRangeChipLabel(String? v) {
