@@ -108,6 +108,8 @@ class TaskRepository {
     int? priority,
     DateTime? startAt,
     DateTime? endAt,
+    bool clearStartAt = false,
+    bool clearEndAt = false,
     DateTime? dueAt,
     bool? allDay,
     String? timeZone,
@@ -118,8 +120,8 @@ class TaskRepository {
     final current = await (_db.select(
       _db.todoTasks,
     )..where((t) => t.id.equals(taskId))).getSingle();
-    final nextStartAt = startAt ?? current.startAt;
-    final nextEndAt = endAt ?? current.endAt;
+    final nextStartAt = clearStartAt ? null : startAt ?? current.startAt;
+    final nextEndAt = clearEndAt ? null : endAt ?? current.endAt;
     if (nextStartAt != null &&
         nextEndAt != null &&
         !nextEndAt.isAfter(nextStartAt)) {
@@ -134,8 +136,16 @@ class TaskRepository {
             : Value(description),
         priority: priority == null ? const Value.absent() : Value(priority),
         isPinned: isPinned == null ? const Value.absent() : Value(isPinned),
-        startAt: startAt == null ? const Value.absent() : Value(startAt),
-        endAt: endAt == null ? const Value.absent() : Value(endAt),
+        startAt: clearStartAt
+            ? const Value(null)
+            : startAt == null
+            ? const Value.absent()
+            : Value(startAt),
+        endAt: clearEndAt
+            ? const Value(null)
+            : endAt == null
+            ? const Value.absent()
+            : Value(endAt),
         dueAt: dueAt == null ? const Value.absent() : Value(dueAt),
         allDay: allDay == null ? const Value.absent() : Value(allDay),
         timeZone: timeZone == null ? const Value.absent() : Value(timeZone),

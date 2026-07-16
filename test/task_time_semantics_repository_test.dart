@@ -44,6 +44,37 @@ void main() {
     );
   });
 
+  test(
+    'clears a task time range and records nulls in the task outbox',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final repository = TaskRepository(db, SyncChangeQueue(db));
+      final task = await repository.create(
+        listId: 'inbox',
+        title: '可清除时段',
+        startAt: DateTime(2026, 7, 13, 9),
+        endAt: DateTime(2026, 7, 13, 10),
+      );
+
+      final cleared = await repository.update(
+        task.id,
+        clearStartAt: true,
+        clearEndAt: true,
+      );
+      final payload =
+          jsonDecode(
+                (await db.select(db.todoSyncChanges).get()).last.payloadJson,
+              )
+              as Map<String, dynamic>;
+
+      expect(cleared.startAt, isNull);
+      expect(cleared.endAt, isNull);
+      expect(payload['startAt'], isNull);
+      expect(payload['endAt'], isNull);
+    },
+  );
+
   test('persists an explicit non-all-day default in the task outbox', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);

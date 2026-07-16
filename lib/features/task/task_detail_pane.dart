@@ -52,6 +52,8 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
   bool _loading = true;
   DateTime? _startAt;
   DateTime? _endAt;
+  bool _clearStartAt = false;
+  bool _clearEndAt = false;
   DateTime? _dueAt;
   bool _allDay = false;
   String? _timeZone;
@@ -94,6 +96,8 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       _priority = 0;
       _startAt = null;
       _endAt = null;
+      _clearStartAt = false;
+      _clearEndAt = false;
       _dueAt = null;
       _allDay = false;
       _timeZone = null;
@@ -162,8 +166,10 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     final descriptionDirty =
         previous != null && _desc.text != (previous.description ?? '');
     final priorityDirty = previous != null && _priority != previous.priority;
-    final startDirty = previous != null && _startAt != previous.startAt;
-    final endDirty = previous != null && _endAt != previous.endAt;
+    final startDirty =
+        previous != null && (_clearStartAt || _startAt != previous.startAt);
+    final endDirty =
+        previous != null && (_clearEndAt || _endAt != previous.endAt);
     final dueDirty = previous != null && _dueAt != previous.dueAt;
     final allDayDirty = previous != null && _allDay != previous.allDay;
     final timeZoneDirty = previous != null && _timeZone != previous.timeZone;
@@ -244,13 +250,19 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       priority: _priority,
       startAt: _startAt,
       endAt: _endAt,
+      clearStartAt: _clearStartAt,
+      clearEndAt: _clearEndAt,
       dueAt: _dueAt,
       allDay: _allDay,
       timeZone: _fixedTimezone ? (_timeZone ?? 'Asia/Shanghai') : _timeZone,
       fixedTimezone: _fixedTimezone,
     );
     if (mounted && widget.taskId == updated.id) {
-      setState(() => _task = updated);
+      setState(() {
+        _task = updated;
+        _clearStartAt = false;
+        _clearEndAt = false;
+      });
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('已保存')));
@@ -434,7 +446,10 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     final now = _startAt ?? _dueAt ?? t.startAt ?? t.dueAt ?? DateTime.now();
     final picked = await _pickDateTime(t, now);
     if (picked == null) return;
-    setState(() => _startAt = picked);
+    setState(() {
+      _startAt = picked;
+      _clearStartAt = false;
+    });
   }
 
   Future<void> _pickEndAt(TodoTask t) async {
@@ -443,7 +458,10 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     final now = _endAt ?? t.endAt ?? fallback.add(const Duration(hours: 1));
     final picked = await _pickDateTime(t, now);
     if (picked == null) return;
-    setState(() => _endAt = picked);
+    setState(() {
+      _endAt = picked;
+      _clearEndAt = false;
+    });
   }
 
   Future<DateTime?> _pickDateTime(TodoTask t, DateTime now) async {
@@ -600,6 +618,20 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                 : '开始：${_startAt!.toLocal().toString().substring(0, 16)}',
           ),
         ),
+        if (_startAt != null) ...[
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const Key('task-clear-start-at'),
+              onPressed: () => setState(() {
+                _startAt = null;
+                _clearStartAt = true;
+              }),
+              icon: const Icon(Icons.clear, size: 16),
+              label: const Text('清除开始时间'),
+            ),
+          ),
+        ],
         const SizedBox(height: 8),
         OutlinedButton.icon(
           key: const Key('task-end-at'),
@@ -611,6 +643,20 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                 : '结束：${_endAt!.toLocal().toString().substring(0, 16)}',
           ),
         ),
+        if (_endAt != null) ...[
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const Key('task-clear-end-at'),
+              onPressed: () => setState(() {
+                _endAt = null;
+                _clearEndAt = true;
+              }),
+              icon: const Icon(Icons.clear, size: 16),
+              label: const Text('清除结束时间'),
+            ),
+          ),
+        ],
         const SizedBox(height: 8),
         SwitchListTile(
           key: const Key('task-all-day'),
