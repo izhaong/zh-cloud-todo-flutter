@@ -416,6 +416,13 @@ class SyncCoordinator {
   Future<void> _applyConflict(SyncConflictDto conflict) async {
     // 服务端优先：以 serverValue 覆盖本地对应行（若已知本地映射）。
     if (conflict.entityType == null || conflict.entityId == null) return;
+    if (conflict.serverRevision != null) {
+      await db.writeRevision(
+        conflict.entityType!,
+        conflict.entityId!,
+        conflict.serverRevision!,
+      );
+    }
     final serverValue = conflict.serverValue;
     if (serverValue == null) return;
     switch (conflict.entityType) {

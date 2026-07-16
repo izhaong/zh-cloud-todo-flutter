@@ -269,12 +269,39 @@ void main() {
       },
     );
 
+    var pushCount = 0;
+    List<Map<String, dynamic>> resentChanges = const [];
     final dio = Dio()
       ..interceptors.add(
         InterceptorsWrapper(
           onRequest: (options, handler) {
             final change =
                 ((options.data as Map)['changes'] as List).single as Map;
+            pushCount++;
+            if (pushCount > 1) {
+              resentChanges = [change.cast<String, dynamic>()];
+              handler.resolve(
+                Response(
+                  requestOptions: options,
+                  data: {
+                    'code': 0,
+                    'data': {
+                      'ok': true,
+                      'accepted': [
+                        {
+                          'entityType': 'board_preference',
+                          'entityId': 401,
+                          'operation': 'upsert',
+                          'clientMutationId': change['clientMutationId'],
+                        },
+                      ],
+                      'conflicts': const [],
+                    },
+                  },
+                ),
+              );
+              return;
+            }
             handler.resolve(
               Response(
                 requestOptions: options,
@@ -289,6 +316,7 @@ void main() {
                         'entityId': 401,
                         'operation': 'upsert',
                         'clientMutationId': change['clientMutationId'],
+                        'serverRevision': 7,
                         'serverValue': {
                           'listId': 101,
                           'groupDimension': 'SERVER',
@@ -316,6 +344,14 @@ void main() {
     expect(preference.groupDimension, 'SERVER');
     expect(preference.columnsJson, '["TODO","DONE"]');
     expect(mutation.status, 'failed');
+    expect(await db.readRevision('board_preference', 401), 7);
+
+    await BoardPreferenceRepository(
+      db,
+      queue,
+    ).save(listId: 'list-local', groupDimension: 'RETRY');
+    expect(await coordinator.push(), 1);
+    expect(resentChanges.single['baseRevision'], 7);
   });
 }
 
