@@ -191,9 +191,31 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           },
         );
       case TaskViewMode.kanban:
+        final listId = _selectedListId;
+        final hasRecoverablePreference =
+            listId != null &&
+            (ref
+                    .watch(boardPreferenceRecoveryAvailableProvider(listId))
+                    .valueOrNull ??
+                false);
         return KanbanView(
           tasks: items,
-          listId: _selectedListId,
+          listId: listId,
+          hasRecoverablePreference: hasRecoverablePreference,
+          onRecoverPreference: !hasRecoverablePreference
+              ? null
+              : () async {
+                  final repository = ref.read(
+                    boardPreferenceRepositoryProvider,
+                  );
+                  final recovered =
+                      await repository?.recoverLatestFailed(listId: listId) ??
+                      false;
+                  ref.invalidate(
+                    boardPreferenceRecoveryAvailableProvider(listId),
+                  );
+                  return recovered;
+                },
           onTaskSelected: widget.onTaskSelected,
           onTaskMove: (task, priority, completed) async {
             final repository = ref.read(taskViewActionRepositoryProvider);

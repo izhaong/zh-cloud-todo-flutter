@@ -25,6 +25,8 @@ class KanbanView extends ConsumerWidget {
     this.listId,
     this.onTaskSelected,
     this.onTaskMove,
+    this.hasRecoverablePreference = false,
+    this.onRecoverPreference,
   });
 
   /// 渲染用的任务列表（已应用 list/filter 的客户端过滤结果）。
@@ -33,6 +35,8 @@ class KanbanView extends ConsumerWidget {
   final ValueChanged<String>? onTaskSelected;
   final Future<void> Function(TodoTask task, int priority, bool completed)?
   onTaskMove;
+  final bool hasRecoverablePreference;
+  final Future<bool> Function()? onRecoverPreference;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -71,33 +75,59 @@ class KanbanView extends ConsumerWidget {
       ),
     ];
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (final col in columns)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: _KanbanColumn(
-                data: col,
-                onCardTap: (t) => _openDetail(context, t),
-                onCardMove: onTaskMove == null
-                    ? null
-                    : (task) => _moveTask(
-                        context,
-                        task,
-                        priority: col.priority,
-                        completed: col.completed,
-                      ),
-                onAdd: col.key == const ValueKey('col-todo') && listId != null
-                    ? () => _quickAdd(context, ref, listId!)
-                    : null,
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        if (hasRecoverablePreference && onRecoverPreference != null)
+          Padding(
+            padding: const EdgeInsets.only(right: 8, top: 4),
+            child: TextButton.icon(
+              onPressed: () => _recoverPreference(context),
+              icon: const Icon(Icons.restore, size: 18),
+              label: const Text('恢复看板设置'),
             ),
-        ],
-      ),
+          ),
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final col in columns)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: _KanbanColumn(
+                      data: col,
+                      onCardTap: (t) => _openDetail(context, t),
+                      onCardMove: onTaskMove == null
+                          ? null
+                          : (task) => _moveTask(
+                              context,
+                              task,
+                              priority: col.priority,
+                              completed: col.completed,
+                            ),
+                      onAdd:
+                          col.key == const ValueKey('col-todo') &&
+                              listId != null
+                          ? () => _quickAdd(context, ref, listId!)
+                          : null,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _recoverPreference(BuildContext context) async {
+    final recovered = await onRecoverPreference!();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(recovered ? '已恢复上次看板设置，等待同步' : '没有可恢复的看板设置')),
     );
   }
 

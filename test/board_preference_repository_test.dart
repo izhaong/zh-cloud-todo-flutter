@@ -89,10 +89,12 @@ void main() {
             createdAt: now,
             status: const Value('failed'),
           ),
-        );
+    );
 
     final repository = BoardPreferenceRepository(db, SyncChangeQueue(db));
+    expect(await repository.hasRecoverableFailed(listId: 'list-local'), isTrue);
     expect(await repository.recoverLatestFailed(listId: 'list-local'), isTrue);
+    expect(await repository.hasRecoverableFailed(listId: 'list-local'), isFalse);
 
     final preference = await db.select(db.todoBoardPreferences).getSingle();
     final changes = await db.select(db.todoSyncChanges).get();

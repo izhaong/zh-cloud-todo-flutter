@@ -110,14 +110,21 @@ final taskViewActionRepositoryProvider = Provider<TaskViewActionRepository?>((
   return TaskViewActionRepository(db, queue);
 });
 
-final boardPreferenceRepositoryProvider = Provider<BoardPreferenceRepository?>(
-  (ref) {
-    final db = ref.watch(appDatabaseProvider);
-    final queue = ref.watch(syncChangeQueueProvider);
-    if (db == null || queue == null) return null;
-    return BoardPreferenceRepository(db, queue);
-  },
-);
+final boardPreferenceRepositoryProvider = Provider<BoardPreferenceRepository?>((
+  ref,
+) {
+  final db = ref.watch(appDatabaseProvider);
+  final queue = ref.watch(syncChangeQueueProvider);
+  if (db == null || queue == null) return null;
+  return BoardPreferenceRepository(db, queue);
+});
+
+final boardPreferenceRecoveryAvailableProvider =
+    FutureProvider.family<bool, String>((ref, listId) {
+      final repository = ref.watch(boardPreferenceRepositoryProvider);
+      if (repository == null) return false;
+      return repository.hasRecoverableFailed(listId: listId);
+    });
 
 // --- 同步 ---------------------------------------------------------------
 

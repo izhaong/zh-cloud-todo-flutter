@@ -77,6 +77,43 @@ class BoardPreferenceRepository {
     });
   }
 
+  /// 当前清单是否存在可恢复的失败偏好变更。
+  ///
+  /// 仅用于决定是否显示恢复入口；具体恢复仍由 [recoverLatestFailed] 统一完成。
+  Future<bool> hasRecoverableFailed({required String listId}) async {
+    final list = await (_db.select(
+      _db.todoLists,
+    )..where((row) => row.id.equals(listId))).getSingleOrNull();
+    if (list == null) return false;
+    final changes =
+        await (_db.select(_db.todoSyncChanges)
+              ..where(
+                (row) =>
+                    row.entity.equals(SyncEntities.boardPreference) &
+                    row.status.equals('failed'),
+              )
+              ..orderBy([(row) => OrderingTerm.desc(row.createdAt)]))
+            .get();
+    for (final change in changes) {
+      try {
+        final payload = jsonDecode(change.payloadJson) as Map<String, dynamic>;
+        final payloadListId = payload['listId']?.toString();
+        final groupDimension = payload['groupDimension']?.toString();
+        if ((payloadListId == listId ||
+                payloadListId == list.serverId?.toString()) &&
+            groupDimension != null &&
+            groupDimension.trim().isNotEmpty) {
+          return true;
+        }
+      } on FormatException {
+        // 忽略损坏的历史 outbox 记录，继续检查更早的可恢复变更。
+      } on TypeError {
+        // payload 不是对象时也不应阻断看板加载。
+      }
+    }
+    return false;
+  }
+
   Future<void> _save({
     required String listId,
     required String groupDimension,

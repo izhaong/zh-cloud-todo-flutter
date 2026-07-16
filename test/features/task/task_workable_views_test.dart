@@ -87,6 +87,30 @@ void main() {
     expect(attempts, 2);
   });
 
+  testWidgets('看板显示当前清单失败偏好的恢复入口', (tester) async {
+    var recoveries = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: KanbanView(
+            tasks: const [],
+            hasRecoverablePreference: true,
+            onRecoverPreference: () async {
+              recoveries++;
+              return true;
+            },
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('恢复看板设置'));
+    await tester.pumpAndSettle();
+
+    expect(recoveries, 1);
+    expect(find.text('已恢复上次看板设置，等待同步'), findsOneWidget);
+  });
+
   testWidgets('时间线顺延一天会请求共享任务时间 mutation', (tester) async {
     final now = DateTime.utc(2026, 7, 15, 9);
     final startAt = DateTime.utc(2026, 7, 16, 9);
