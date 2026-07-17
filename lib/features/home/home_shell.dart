@@ -43,6 +43,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
   bool _preserveSelectionWhenMobileRouteCloses = false;
 
   bool _syncing = false;
+  String _syncStatus = '同步尚未执行';
   Timer? _periodicSync;
 
   @override
@@ -110,10 +111,17 @@ class _HomeShellState extends ConsumerState<HomeShell>
     final coordinator = ref.read(syncCoordinatorProvider);
     if (coordinator == null || _syncing) return;
     _syncing = true;
+    if (mounted) setState(() => _syncStatus = '正在同步');
     try {
-      await coordinator.syncOnce();
+      final outcome = await coordinator.syncOnce();
+      if (mounted) {
+        setState(
+          () => _syncStatus =
+              '同步完成：推送 ${outcome.pushed} 项，拉取 ${outcome.pulled} 项',
+        );
+      }
     } catch (_) {
-      // 同步失败静默重试。
+      if (mounted) setState(() => _syncStatus = '同步失败，将在稍后重试');
     } finally {
       _syncing = false;
     }
@@ -342,6 +350,8 @@ class _HomeShellState extends ConsumerState<HomeShell>
             onUnavailable: _invalidateTaskSelection,
           ),
           onSelectSection: _selectSection,
+          onSync: () => unawaited(_triggerSync()),
+          syncStatus: _syncStatus,
           onSelectSmart: _selectSmart,
           onSelectList: _selectList,
           onOpenTags: _openTags,

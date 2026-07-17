@@ -10,7 +10,7 @@ Flutter/Dart、Drift、Riverpod、dio 与现有 `SyncChangeQueue`。任务聚合
 
 1. 先与 Service #179 固定任务详情、checklist、attachment（含二进制文件资产引用与删除）与 activity 的请求、响应、幂等键和错误契约。私有任务活动以服务端为权威：Flutter 仅消费 `/sync/pull` 的 `activity` 变更，按服务端动态 ID 幂等缓存到既有 Drift 表；不得把 activity 加入 outbox、`syncable`、push、冲突写回或 tombstone 删除链路。既有 Activity REST 刷新只作为补充缓存入口。
 2. 添加 Drift 子实体和迁移，令 TaskRepository 的聚合写入在同一事务完成并 enqueue；默认收集箱的物理清单变更必须与引用它的新任务保持同批、先清单后任务的顺序。
-3. 用 Repository/use-case 替换详情/快速添加的直连调用，再接入既有视觉组件。
+3. 用 Repository/use-case 替换详情/快速添加的直连调用，再接入既有视觉组件；工作区同步入口只能触发既有协调器，并以不占用布局的辅助技术状态锚点暴露进度与失败，供固定设备验收复现。
 4. 以 Service、Repository、Widget、契约和离线重启旅程逐层验收；仅凭页面存在不关闭任务。
 
 ## Constitution Check
