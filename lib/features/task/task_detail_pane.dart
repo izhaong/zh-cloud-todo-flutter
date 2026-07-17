@@ -574,6 +574,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
 
     final body = ListView(
       padding: const EdgeInsets.all(16),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       children: [
         Semantics(
           identifier: 'todo_task_detail_title',
@@ -622,6 +623,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
               identifier: 'todo_task_detail_save',
               button: true,
               child: AppButton(
+                key: const Key('todo_task_detail_save_button'),
                 onPressed: _save,
                 icon: Icons.save_outlined,
                 child: const Text('保存'),
@@ -849,6 +851,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
   Widget _buildPage(BuildContext context, TodoTask t, Widget body) {
     final narrow = MediaQuery.sizeOf(context).width < 600;
     return Scaffold(
+      key: const Key('todo_task_detail_page'),
       appBar: AppBar(
         title: const Text('任务详情'),
         actions: narrow

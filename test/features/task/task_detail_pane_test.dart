@@ -143,6 +143,34 @@ void main() {
   });
 
   testWidgets(
+    'mobile detail saves multiline content through its visible action',
+    (tester) async {
+      final fixture = await _pumpPagePane(tester, taskId: _taskId);
+      const updatedDescription = '第一行\n第二行\n第三行\n第四行\n第五行\n第六行';
+
+      await tester.enterText(_directTextField('描述'), updatedDescription);
+      await tester.pump();
+
+      final detailPage = find.byKey(const Key('todo_task_detail_page'));
+      expect(detailPage, findsOneWidget);
+      final saveAction = find.descendant(
+        of: detailPage,
+        matching: find.byKey(const Key('todo_task_detail_save_button')),
+      );
+      expect(saveAction, findsOneWidget);
+      await tester.ensureVisible(saveAction);
+      await tester.pumpAndSettle();
+      await tester.tap(saveAction);
+      await tester.pumpAndSettle();
+
+      final task = await fixture.container
+          .read(taskRepositoryProvider)!
+          .getById(_taskId);
+      expect(task?.description, updatedDescription);
+    },
+  );
+
+  testWidgets(
     'detail long press edits a checklist item through the repository',
     (tester) async {
       final fixture = await _pumpDirectPane(tester, taskId: _taskId);
