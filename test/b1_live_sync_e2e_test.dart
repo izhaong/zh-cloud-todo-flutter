@@ -12,6 +12,7 @@ import 'package:zh_cloud_todo_flutter/core/sync/sync_coordinator.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/list_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_capture_defaults_repository.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/template_repository.dart';
 
 const _enabled = bool.fromEnvironment('TODO_B1_LIVE');
 const _baseUrl = String.fromEnvironment(
@@ -45,9 +46,11 @@ void main() {
         dbA,
         SyncChangeQueue(dbA),
       );
+      final templatesA = TemplateRepository(dbA, SyncChangeQueue(dbA));
       final suffix = DateTime.now().microsecondsSinceEpoch;
       final list = await listsA.create(name: 'B1 live sync $suffix');
       String? taskLocalId;
+      String? templateLocalId;
 
       try {
         // 默认清单跨端引用的是服务端 list ID；先提交清单，避免把设备 A 的
@@ -82,6 +85,19 @@ void main() {
         expect(syncedChecklistA.serverId, isPositive);
         expect(await _pendingOrFailedCount(dbA), 0);
 
+        final template = await templatesA.saveTask(
+          task: syncedTaskByLocalId,
+          name: 'B1 private template $suffix',
+        );
+        templateLocalId = template.id;
+        await coordinatorA.push();
+        final syncedTemplateA = await (dbA.select(
+          dbA.todoTemplates,
+        )..where((row) => row.id.equals(template.id))).getSingle();
+        expect(syncedTemplateA.serverId, isPositive);
+        expect(syncedTemplateA.status, 'synced');
+        expect(await _pendingOrFailedCount(dbA), 0);
+
         await coordinatorB.pull();
 
         final taskB = await dbB.taskByServerId(syncedTaskByLocalId.serverId!);
@@ -106,6 +122,66 @@ void main() {
         expect(checklistB.taskId, taskB.id);
         expect(checklistB.title, '在设备 B 回显检查事项');
 
+        final templateB =
+            await (dbB.select(dbB.todoTemplates)..where(
+                  (row) => row.serverId.equals(syncedTemplateA.serverId!),
+                ))
+                .getSingle();
+        expect(templateB.id, isNot(syncedTemplateA.id));
+        expect(templateB.name, 'B1 private template $suffix');
+        expect(templateB.contentJson, syncedTemplateA.contentJson);
+        expect(templateB.status, 'synced');
+
+        final activitiesBeforeRepeatPull =
+            await (dbB.select(dbB.todoActivities)..where(
+                  (row) =>
+                      row.taskServerId.equals(syncedTaskByLocalId.serverId!),
+                ))
+                .get();
+        expect(activitiesBeforeRepeatPull, isNotEmpty);
+        expect(
+          activitiesBeforeRepeatPull.map((activity) => activity.action),
+          contains('task_created'),
+        );
+        expect(
+          (await dbB.select(dbB.todoSyncChanges).get()).where(
+            (change) => change.entity == 'activity',
+          ),
+          isEmpty,
+        );
+        final activityServerIds = activitiesBeforeRepeatPull
+            .map((activity) => activity.serverId)
+            .toSet();
+        await coordinatorB.pull();
+        final activitiesAfterRepeatPull =
+            await (dbB.select(dbB.todoActivities)..where(
+                  (row) =>
+                      row.taskServerId.equals(syncedTaskByLocalId.serverId!),
+                ))
+                .get();
+        expect(
+          activitiesAfterRepeatPull,
+          hasLength(activitiesBeforeRepeatPull.length),
+        );
+        expect(
+          activitiesAfterRepeatPull
+              .map((activity) => activity.serverId)
+              .toSet(),
+          activityServerIds,
+        );
+
+        await templatesA.delete(template.id);
+        await coordinatorA.push();
+        await coordinatorB.pull();
+        expect(
+          await (dbB.select(
+                dbB.todoTemplates,
+              )..where((row) => row.serverId.equals(syncedTemplateA.serverId!)))
+              .getSingleOrNull(),
+          isNull,
+        );
+        templateLocalId = null;
+
         await tasksA.deleteChecklistItem(checklist.id);
         await coordinatorA.push();
         await coordinatorB.pull();
@@ -122,6 +198,10 @@ void main() {
         await coordinatorB.pull();
         expect(await dbB.taskByServerId(syncedTaskByLocalId.serverId!), isNull);
       } finally {
+        if (templateLocalId != null) {
+          await templatesA.delete(templateLocalId);
+          await coordinatorA.push();
+        }
         if (taskLocalId != null) {
           await _deleteIfPresent(
             apiA,
