@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -31,6 +33,12 @@ final sessionProvider = NotifierProvider<SessionController, TodoAuthSession?>(
 /// 会话初次校验是否完成（避免登录页在校验期间闪现）。
 final sessionBootstrappedProvider = StateProvider<bool>((ref) => false);
 
+/// 已持久化会话在离线或弱网启动时最多等待一次短校验；超时仅代表网络
+/// 不可确认，必须保留本地会话与 Drift 数据，不能当成令牌被服务端拒绝。
+final sessionValidationTimeoutProvider = Provider<Duration>(
+  (ref) => const Duration(seconds: 1),
+);
+
 class SessionController extends Notifier<TodoAuthSession?> {
   @override
   TodoAuthSession? build() => null;
@@ -50,8 +58,13 @@ class SessionController extends Notifier<TodoAuthSession?> {
       final gateway = ref.read(authGatewayProvider);
       final bool valid;
       try {
-        valid = await gateway.validateSession(session.accessToken);
+        valid = await gateway
+            .validateSession(session.accessToken)
+            .timeout(ref.read(sessionValidationTimeoutProvider));
       } on DioException {
+        state = session;
+        return;
+      } on TimeoutException {
         state = session;
         return;
       }

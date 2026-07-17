@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -42,6 +44,29 @@ void main() {
     },
   );
 
+  test(
+    'a stalled validation releases the persisted session for offline boot',
+    () async {
+      final store = _MemorySessionStore(persistedSession);
+      final container = ProviderContainer(
+        overrides: [
+          sessionStoreProvider.overrideWithValue(store),
+          sessionValidationTimeoutProvider.overrideWithValue(Duration.zero),
+          authGatewayProvider.overrideWithValue(
+            _FakeAuthGateway(validationNeverCompletes: true),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(sessionProvider.notifier).bootstrap();
+
+      expect(container.read(sessionProvider), persistedSession);
+      expect(store.cleared, isFalse);
+      expect(container.read(sessionBootstrappedProvider), isTrue);
+    },
+  );
+
   test('a confirmed invalid session is removed on bootstrap', () async {
     final store = _MemorySessionStore(persistedSession);
     final container = ProviderContainer(
@@ -61,9 +86,13 @@ void main() {
 }
 
 class _FakeAuthGateway implements AuthGateway {
-  _FakeAuthGateway({this.validationError});
+  _FakeAuthGateway({
+    this.validationError,
+    this.validationNeverCompletes = false,
+  });
 
   final Object? validationError;
+  final bool validationNeverCompletes;
 
   @override
   Future<TodoAuthSession> passwordLogin({
@@ -95,6 +124,7 @@ class _FakeAuthGateway implements AuthGateway {
 
   @override
   Future<bool> validateSession(String accessToken) async {
+    if (validationNeverCompletes) return Completer<bool>().future;
     final error = validationError;
     if (error != null) throw error;
     return false;
