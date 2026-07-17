@@ -40,6 +40,31 @@ void main() {
     expect(find.text('写周报'), findsNothing);
   });
 
+  testWidgets('mobile QuickAdd exposes fixed-device semantic identifiers', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: MobileQuickAddButton(onSubmit: (_) {})),
+      ),
+    );
+
+    expect(find.bySemanticsIdentifier('todo_mobile_quick_add'), findsOneWidget);
+    await tester.tap(find.bySemanticsIdentifier('todo_mobile_quick_add'));
+    await tester.pumpAndSettle();
+    expect(
+      find.bySemanticsIdentifier('todo_mobile_quick_add_title'),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsIdentifier('todo_mobile_quick_add_submit'),
+      findsOneWidget,
+    );
+
+    semantics.dispose();
+  });
+
   testWidgets('desktop QuickAdd occupies the fixed 44px workspace row', (
     tester,
   ) async {

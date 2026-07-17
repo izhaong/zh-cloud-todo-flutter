@@ -62,18 +62,22 @@ class MobileQuickAddButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FloatingActionButton.small(
-      key: const Key('todo-mobile-add'),
-      heroTag: 'todo-mobile-add',
-      tooltip: '添加任务',
-      onPressed: () => showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        builder: (_) =>
-            _MobileQuickAddSheet(onSubmit: onSubmit, tagOptions: tagOptions),
+    return Semantics(
+      identifier: 'todo_mobile_quick_add',
+      button: true,
+      child: FloatingActionButton.small(
+        key: const Key('todo-mobile-add'),
+        heroTag: 'todo-mobile-add',
+        tooltip: '添加任务',
+        onPressed: () => showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          builder: (_) =>
+              _MobileQuickAddSheet(onSubmit: onSubmit, tagOptions: tagOptions),
+        ),
+        child: const Icon(Icons.add),
       ),
-      child: const Icon(Icons.add),
     );
   }
 }
@@ -198,30 +202,37 @@ class _MobileQuickAddSheetState extends State<_MobileQuickAddSheet> {
           Row(
             children: [
               Expanded(
-                child: TextField(
-                  key: const Key('todo-mobile-add-field'),
-                  controller: _controller,
-                  autofocus: true,
-                  enabled: !_submitting,
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => _submit(),
-                  decoration: const InputDecoration(
-                    labelText: '任务标题',
-                    hintText: '输入后按回车创建',
-                    border: OutlineInputBorder(),
+                child: Semantics(
+                  identifier: 'todo_mobile_quick_add_title',
+                  child: TextField(
+                    key: const Key('todo-mobile-add-field'),
+                    controller: _controller,
+                    autofocus: true,
+                    enabled: !_submitting,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => _submit(),
+                    decoration: const InputDecoration(
+                      labelText: '任务标题',
+                      hintText: '输入后按回车创建',
+                      border: OutlineInputBorder(),
+                    ),
                   ),
                 ),
               ),
               const SizedBox(width: 8),
-              IconButton.filled(
-                tooltip: '创建任务',
-                onPressed: _submitting ? null : _submit,
-                icon: _submitting
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.arrow_upward),
+              Semantics(
+                identifier: 'todo_mobile_quick_add_submit',
+                button: true,
+                child: IconButton.filled(
+                  tooltip: '创建任务',
+                  onPressed: _submitting ? null : _submit,
+                  icon: _submitting
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.arrow_upward),
+                ),
               ),
             ],
           ),

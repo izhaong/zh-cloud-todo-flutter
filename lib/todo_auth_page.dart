@@ -190,52 +190,58 @@ class _TodoAuthPageState extends ConsumerState<TodoAuthPage> {
                   _buildModeSwitch(),
                 ],
                 const SizedBox(height: AppSpacing.xl),
-                TextFormField(
-                  controller: _mobileController,
-                  keyboardType: TextInputType.phone,
-                  textInputAction: TextInputAction.next,
-                  autofillHints: const [AutofillHints.telephoneNumber],
-                  decoration: const InputDecoration(
-                    labelText: '手机号',
-                    hintText: '请输入 11 位手机号',
-                    prefixIcon: Icon(Icons.phone_iphone_rounded),
+                Semantics(
+                  identifier: 'todo_auth_mobile',
+                  child: TextFormField(
+                    controller: _mobileController,
+                    keyboardType: TextInputType.phone,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const [AutofillHints.telephoneNumber],
+                    decoration: const InputDecoration(
+                      labelText: '手机号',
+                      hintText: '请输入 11 位手机号',
+                      prefixIcon: Icon(Icons.phone_iphone_rounded),
+                    ),
+                    validator: _validateMobile,
                   ),
-                  validator: _validateMobile,
                 ),
                 const SizedBox(height: _fieldGap),
                 if (_isPasswordMode || _isForgotMode) ...[
-                  TextFormField(
-                    controller: _passwordController,
-                    obscureText: _obscurePassword,
-                    enableSuggestions: false,
-                    autocorrect: false,
-                    autofillHints: [
-                      _isForgotMode
-                          ? AutofillHints.newPassword
-                          : AutofillHints.password,
-                    ],
-                    textInputAction: _isForgotMode
-                        ? TextInputAction.next
-                        : TextInputAction.done,
-                    decoration: InputDecoration(
-                      labelText: _isForgotMode ? '新密码' : '密码',
-                      prefixIcon: const Icon(Icons.lock_outline_rounded),
-                      suffixIcon: IconButton(
-                        key: const ValueKey('todo-auth-password-visibility'),
-                        tooltip: _obscurePassword ? '显示密码' : '隐藏密码',
-                        onPressed: () {
-                          setState(() {
-                            _obscurePassword = !_obscurePassword;
-                          });
-                        },
-                        icon: Icon(
-                          _obscurePassword
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined,
+                  Semantics(
+                    identifier: 'todo_auth_password',
+                    child: TextFormField(
+                      controller: _passwordController,
+                      obscureText: _obscurePassword,
+                      enableSuggestions: false,
+                      autocorrect: false,
+                      autofillHints: [
+                        _isForgotMode
+                            ? AutofillHints.newPassword
+                            : AutofillHints.password,
+                      ],
+                      textInputAction: _isForgotMode
+                          ? TextInputAction.next
+                          : TextInputAction.done,
+                      decoration: InputDecoration(
+                        labelText: _isForgotMode ? '新密码' : '密码',
+                        prefixIcon: const Icon(Icons.lock_outline_rounded),
+                        suffixIcon: IconButton(
+                          key: const ValueKey('todo-auth-password-visibility'),
+                          tooltip: _obscurePassword ? '显示密码' : '隐藏密码',
+                          onPressed: () {
+                            setState(() {
+                              _obscurePassword = !_obscurePassword;
+                            });
+                          },
+                          icon: Icon(
+                            _obscurePassword
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                          ),
                         ),
                       ),
+                      validator: _validatePassword,
                     ),
-                    validator: _validatePassword,
                   ),
                   const SizedBox(height: _fieldGap),
                 ],
@@ -249,18 +255,22 @@ class _TodoAuthPageState extends ConsumerState<TodoAuthPage> {
                 ],
                 SizedBox(
                   height: 48,
-                  child: FilledButton(
-                    key: const ValueKey('todo-auth-submit'),
-                    onPressed: _isBusy ? null : _submit,
-                    child: _submitting
-                        ? SizedBox.square(
-                            dimension: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: colorScheme.onPrimary,
-                            ),
-                          )
-                        : Text(_submitLabel),
+                  child: Semantics(
+                    identifier: 'todo_auth_submit',
+                    button: true,
+                    child: FilledButton(
+                      key: const ValueKey('todo-auth-submit'),
+                      onPressed: _isBusy ? null : _submit,
+                      child: _submitting
+                          ? SizedBox.square(
+                              dimension: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: colorScheme.onPrimary,
+                              ),
+                            )
+                          : Text(_submitLabel),
+                    ),
                   ),
                 ),
                 if (_isPasswordMode) ...[

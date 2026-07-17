@@ -575,21 +575,27 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     final body = ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        TextField(
-          controller: _title,
-          decoration: const InputDecoration(
-            labelText: '标题',
-            border: OutlineInputBorder(),
+        Semantics(
+          identifier: 'todo_task_detail_title',
+          child: TextField(
+            controller: _title,
+            decoration: const InputDecoration(
+              labelText: '标题',
+              border: OutlineInputBorder(),
+            ),
           ),
         ),
         const SizedBox(height: 12),
-        TextField(
-          controller: _desc,
-          minLines: 3,
-          maxLines: 6,
-          decoration: const InputDecoration(
-            labelText: '描述',
-            border: OutlineInputBorder(),
+        Semantics(
+          identifier: 'todo_task_detail_description',
+          child: TextField(
+            controller: _desc,
+            minLines: 3,
+            maxLines: 6,
+            decoration: const InputDecoration(
+              labelText: '描述',
+              border: OutlineInputBorder(),
+            ),
           ),
         ),
         const SizedBox(height: 12),
@@ -612,10 +618,14 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            AppButton(
-              onPressed: _save,
-              icon: Icons.save_outlined,
-              child: const Text('保存'),
+            Semantics(
+              identifier: 'todo_task_detail_save',
+              button: true,
+              child: AppButton(
+                onPressed: _save,
+                icon: Icons.save_outlined,
+                child: const Text('保存'),
+              ),
             ),
           ],
         ),
@@ -1652,10 +1662,10 @@ class _TemplateSection extends ConsumerWidget {
     try {
       final outcome = await coordinator.syncOnce();
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(
-        SnackBar(content: Text('同步完成：推送 ${outcome.pushed} 项，拉取 ${outcome.pulled} 项')),
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('同步完成：推送 ${outcome.pushed} 项，拉取 ${outcome.pulled} 项'),
+        ),
       );
     } catch (_) {
       if (!context.mounted) return;

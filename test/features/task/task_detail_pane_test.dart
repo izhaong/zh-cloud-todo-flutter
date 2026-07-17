@@ -122,6 +122,26 @@ void main() {
     expect(afterSave?.description, updatedDescription);
   });
 
+  testWidgets('detail editor exposes fixed-device semantic identifiers', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await _pumpWideHome(tester);
+    await _selectFixtureTask(tester);
+
+    expect(
+      find.bySemanticsIdentifier('todo_task_detail_title'),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsIdentifier('todo_task_detail_description'),
+      findsOneWidget,
+    );
+    expect(find.bySemanticsIdentifier('todo_task_detail_save'), findsOneWidget);
+
+    semantics.dispose();
+  });
+
   testWidgets(
     'detail long press edits a checklist item through the repository',
     (tester) async {
