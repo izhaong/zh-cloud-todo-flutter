@@ -2,7 +2,7 @@
 
 ## Phase 1: 契约与基础
 
-- [ ] T001 对齐 Service #179 的 B1 契约并更新 `specs/005-todo-task-capture-detail/contracts/capture-detail-contract.md`。
+- [x] T001 对齐 Service #179 的 B1 契约并更新 `specs/005-todo-task-capture-detail/contracts/capture-detail-contract.md`。
 - [x] T002 为 checklist、attachment、activity、template 的 Drift 表、迁移和 outbox 载荷写失败测试，目标 `test/task_capture_detail_repository_test.dart`。
 - [x] T003 实现本地聚合 Repository/use-case，修改 `lib/state/repositories/task_repository.dart` 与新增子聚合 Repository；每个核心写均在事务后 enqueue。
 
