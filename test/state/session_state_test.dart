@@ -44,6 +44,23 @@ void main() {
     },
   );
 
+  test('bootstrap can construct the production auth gateway without a cycle',
+      () async {
+    final store = _MemorySessionStore(persistedSession);
+    final container = ProviderContainer(
+      overrides: [
+        sessionStoreProvider.overrideWithValue(store),
+        sessionValidationTimeoutProvider.overrideWithValue(Duration.zero),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await container.read(sessionProvider.notifier).bootstrap();
+
+    expect(container.read(sessionProvider), persistedSession);
+    expect(store.cleared, isFalse);
+  });
+
   test(
     'a stalled validation releases the persisted session for offline boot',
     () async {
