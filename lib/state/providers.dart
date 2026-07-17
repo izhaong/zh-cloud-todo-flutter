@@ -27,6 +27,12 @@ final connectivityChangesProvider = Provider<Stream<List<ConnectivityResult>>>(
   (ref) => Connectivity().onConnectivityChanged,
 );
 
+/// 当前连接状态读取，与变化流分开注入，以覆盖离线冷启动后的首次联网恢复。
+final connectivityInitialStateProvider =
+    Provider<Future<List<ConnectivityResult>> Function()>(
+      (ref) => Connectivity().checkConnectivity,
+    );
+
 /// ----- API 客户端 --------------------------------------------------------
 
 /// 业务 API 客户端：随 [sessionProvider] 变化重建，始终携带最新 token。

@@ -57,8 +57,10 @@ class _HomeShellState extends ConsumerState<HomeShell>
     if (!const bool.fromEnvironment('FLUTTER_TEST')) {
       _connectivityRecoveryTrigger = ConnectivityRecoveryTrigger(
         ref.read(connectivityChangesProvider),
+        initialState: ref.read(connectivityInitialStateProvider),
         onOnlineRecovered: _triggerSync,
-      )..start();
+      );
+      unawaited(_connectivityRecoveryTrigger!.start());
       _periodicSync = Timer.periodic(const Duration(seconds: 30), (_) {
         _triggerSync();
         _pollUpcomingReminders();

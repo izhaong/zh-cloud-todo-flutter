@@ -759,6 +759,8 @@ class SyncCoordinator {
         await _upsertLocalFilter(entityId, payload);
       case SyncEntities.template:
         await _upsertLocalTemplate(entityId, payload);
+      case SyncEntities.attachment:
+        await _upsertLocalAttachment(entityId, payload);
       case SyncEntities.activity:
         await _upsertPulledActivity(entityId, payload);
       case SyncEntities.taskTag:
@@ -807,6 +809,10 @@ class SyncCoordinator {
       case SyncEntities.template:
         await (db.delete(
           db.todoTemplates,
+        )..where((t) => t.serverId.equals(tombstone.entityId))).go();
+      case SyncEntities.attachment:
+        await (db.delete(
+          db.todoAttachments,
         )..where((t) => t.serverId.equals(tombstone.entityId))).go();
       case SyncEntities.taskTag:
         await (db.delete(
@@ -872,6 +878,53 @@ class SyncCoordinator {
     } else {
       await (db.update(
         db.todoTemplates,
+      )..where((row) => row.id.equals(existing.id))).write(companion);
+    }
+  }
+
+  /// 附件二进制由原设备的上传队列或远端 URL 读取；pull 只落服务端已
+  /// 登记的元数据，不生成 attachment outbox，也不假装拥有本地文件。
+  Future<void> _upsertLocalAttachment(
+    int serverId,
+    Map<String, dynamic> payload,
+  ) async {
+    final localTaskId = await _localTaskIdForServerId(
+      (payload['taskId'] as num?)?.toInt(),
+    );
+    if (localTaskId == null) return;
+    final existing = await (db.select(
+      db.todoAttachments,
+    )..where((row) => row.serverId.equals(serverId))).getSingleOrNull();
+    final name = payload['name']?.toString().trim();
+    final remoteUrl = payload['url']?.toString().trim();
+    if (name == null ||
+        name.isEmpty ||
+        remoteUrl == null ||
+        remoteUrl.isEmpty) {
+      return;
+    }
+    final now = DateTime.now();
+    final companion = TodoAttachmentsCompanion(
+      id: Value(existing?.id ?? _uuid.v4()),
+      serverId: Value(serverId),
+      taskId: Value(localTaskId),
+      name: Value(name),
+      localPath: Value(existing?.localPath),
+      remoteUrl: Value(remoteUrl),
+      mimeType: Value(
+        payload['mimeType']?.toString() ?? 'application/octet-stream',
+      ),
+      size: Value((payload['size'] as num?)?.toInt() ?? 0),
+      status: const Value('uploaded'),
+      error: const Value(null),
+      updatedAt: Value(now),
+      createdAt: Value(existing?.createdAt ?? now),
+    );
+    if (existing == null) {
+      await db.into(db.todoAttachments).insert(companion);
+    } else {
+      await (db.update(
+        db.todoAttachments,
       )..where((row) => row.id.equals(existing.id))).write(companion);
     }
   }

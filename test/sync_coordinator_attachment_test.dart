@@ -9,6 +9,7 @@ import 'package:zh_cloud_todo_flutter/core/api/sync_api.dart';
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_coordinator.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
+import 'package:zh_cloud_todo_flutter/core/sync/sync_entities.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_repository.dart';
 
 void main() {
@@ -193,6 +194,123 @@ void main() {
       );
     },
   );
+
+  test(
+    'pull maps attachment metadata to its local task and applies its tombstone',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final server = _AttachmentPullServer();
+      final client = server.client();
+      final coordinator = SyncCoordinator(
+        db: db,
+        api: SyncApi(client, clientId: 'attachment-pull', deviceId: 'device-b'),
+        todoApi: client,
+      );
+
+      expect(await coordinator.pull(), 3);
+      final task = await db.taskByServerId(101);
+      final attachment = await (db.select(
+        db.todoAttachments,
+      )..where((row) => row.serverId.equals(501))).getSingle();
+      expect(task, isNot(equals(null)));
+      expect(attachment.taskId, task!.id);
+      expect(attachment.name, 'plan.pdf');
+      expect(attachment.remoteUrl, 'https://files.example/plan.pdf');
+      expect(attachment.localPath, isNull);
+      expect(attachment.mimeType, 'application/pdf');
+      expect(attachment.size, 2048);
+      expect(attachment.status, 'uploaded');
+      expect(await db.select(db.todoSyncChanges).get(), isEmpty);
+
+      expect(await coordinator.pull(), 1);
+      expect(await db.select(db.todoAttachments).get(), isEmpty);
+    },
+  );
+}
+
+class _AttachmentPullServer {
+  var pullCount = 0;
+
+  ApiClient client() {
+    final dio = Dio(BaseOptions(baseUrl: 'https://todo.test'))
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            if (!options.path.endsWith('/sync/pull')) {
+              handler.reject(
+                DioException(
+                  requestOptions: options,
+                  error: 'unexpected request: ${options.path}',
+                ),
+              );
+              return;
+            }
+            pullCount++;
+            final first = pullCount == 1;
+            handler.resolve(
+              Response<Map<String, dynamic>>(
+                requestOptions: options,
+                data: {
+                  'code': 0,
+                  'data': {
+                    'changes': first
+                        ? [
+                            // The service can return attachments before their
+                            // parent task; the coordinator must order them.
+                            {
+                              'entityType': SyncEntities.attachment,
+                              'entityId': 501,
+                              'operation': 'upsert',
+                              'revision': 3,
+                              'payload': {
+                                'taskId': 101,
+                                'name': 'plan.pdf',
+                                'url': 'https://files.example/plan.pdf',
+                                'size': 2048,
+                                'mimeType': 'application/pdf',
+                              },
+                            },
+                            {
+                              'entityType': SyncEntities.task,
+                              'entityId': 101,
+                              'operation': 'upsert',
+                              'revision': 2,
+                              'payload': {
+                                'listId': 10,
+                                'title': '服务器任务',
+                                'status': 'TODO',
+                              },
+                            },
+                            {
+                              'entityType': SyncEntities.list,
+                              'entityId': 10,
+                              'operation': 'upsert',
+                              'revision': 1,
+                              'payload': {'name': '收集箱'},
+                            },
+                          ]
+                        : const <Map<String, dynamic>>[],
+                    'tombstones': first
+                        ? const <Map<String, dynamic>>[]
+                        : [
+                            {
+                              'entityType': SyncEntities.attachment,
+                              'entityId': 501,
+                              'revision': 4,
+                            },
+                          ],
+                    'nextCursor': 'attachment-$pullCount',
+                    'hasMore': false,
+                  },
+                },
+              ),
+            );
+          },
+        ),
+      );
+    return ApiClient(dio: dio);
+  }
 }
 
 Future<void> _seedAttachment(AppDatabase db) async {

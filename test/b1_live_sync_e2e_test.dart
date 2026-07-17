@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
@@ -51,6 +53,8 @@ void main() {
       final list = await listsA.create(name: 'B1 live sync $suffix');
       String? taskLocalId;
       String? templateLocalId;
+      int? attachmentServerId;
+      File? attachmentFile;
 
       try {
         // 默认清单跨端引用的是服务端 list ID；先提交清单，避免把设备 A 的
@@ -83,6 +87,27 @@ void main() {
         )..where((row) => row.id.equals(checklist.id))).getSingle();
         expect(syncedTaskByLocalId.serverId, isPositive);
         expect(syncedChecklistA.serverId, isPositive);
+        expect(await _pendingOrFailedCount(dbA), 0);
+
+        attachmentFile = File(
+          '${Directory.systemTemp.path}/todo-b1-live-$suffix.txt',
+        );
+        await attachmentFile.writeAsString('B1 attachment $suffix');
+        final attachment = await tasksA.queueAttachment(
+          taskId: task.id,
+          name: 'todo-b1-live-$suffix.txt',
+          localPath: attachmentFile.path,
+          mimeType: 'text/plain',
+          size: await attachmentFile.length(),
+        );
+        await coordinatorA.push();
+        final syncedAttachmentA = await (dbA.select(
+          dbA.todoAttachments,
+        )..where((row) => row.id.equals(attachment.id))).getSingle();
+        expect(syncedAttachmentA.serverId, isPositive);
+        expect(syncedAttachmentA.status, 'uploaded');
+        expect(syncedAttachmentA.remoteUrl, isNotEmpty);
+        attachmentServerId = syncedAttachmentA.serverId;
         expect(await _pendingOrFailedCount(dbA), 0);
 
         final template = await templatesA.saveTask(
@@ -121,6 +146,16 @@ void main() {
                 .getSingle();
         expect(checklistB.taskId, taskB.id);
         expect(checklistB.title, '在设备 B 回显检查事项');
+        final attachmentB =
+            await (dbB.select(dbB.todoAttachments)..where(
+                  (row) => row.serverId.equals(syncedAttachmentA.serverId!),
+                ))
+                .getSingle();
+        expect(attachmentB.taskId, taskB.id);
+        expect(attachmentB.name, syncedAttachmentA.name);
+        expect(attachmentB.remoteUrl, syncedAttachmentA.remoteUrl);
+        expect(attachmentB.localPath, isNull);
+        expect(attachmentB.status, 'uploaded');
 
         final templateB =
             await (dbB.select(dbB.todoTemplates)..where(
@@ -193,11 +228,26 @@ void main() {
           isNull,
         );
 
+        await tasksA.deleteAttachment(syncedAttachmentA.id);
+        await coordinatorA.push();
+        await coordinatorB.pull();
+        expect(
+          await (dbB.select(dbB.todoAttachments)..where(
+                (row) => row.serverId.equals(syncedAttachmentA.serverId!),
+              ))
+              .getSingleOrNull(),
+          isNull,
+        );
+        attachmentServerId = null;
+
         await tasksA.delete(task.id);
         await coordinatorA.push();
         await coordinatorB.pull();
         expect(await dbB.taskByServerId(syncedTaskByLocalId.serverId!), isNull);
       } finally {
+        if (attachmentServerId != null) {
+          await _deleteAttachmentIfPresent(apiA, attachmentServerId);
+        }
         if (templateLocalId != null) {
           await templatesA.delete(templateLocalId);
           await coordinatorA.push();
@@ -211,12 +261,29 @@ void main() {
           );
         }
         await _deleteIfPresent(apiA, '/app-api/todo/list/delete', list.id, dbA);
+        if (attachmentFile != null && await attachmentFile.exists()) {
+          await attachmentFile.delete();
+        }
         await dbA.close();
         await dbB.close();
       }
     },
     skip: _enabled ? false : 'set --dart-define=TODO_B1_LIVE=true to run',
   );
+}
+
+Future<void> _deleteAttachmentIfPresent(ApiClient client, int serverId) async {
+  try {
+    final response = await client.raw.delete<Map<String, dynamic>>(
+      '/app-api/todo/attachment/delete?id=$serverId',
+    );
+    final body = response.data;
+    if (body?['code'] != 0) {
+      throw StateError(body?['msg']?.toString() ?? 'attachment cleanup failed');
+    }
+  } on DioException catch (error) {
+    if (error.response?.statusCode != 404) rethrow;
+  }
 }
 
 Future<TodoAuthSession> _login() => AuthGatewayImpl(

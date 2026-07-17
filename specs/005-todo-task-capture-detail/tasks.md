@@ -20,6 +20,7 @@
 
 - [ ] T008 [US3] 为附件四态、重试、删除和活动顺序写测试，目标 `test/task_capture_detail_repository_test.dart`。
 - [ ] T008a [US3] 仅接收同账号私有任务的服务端 activity pull：任务先于活动应用，按 activity server ID 幂等写入现有 Drift 缓存；活动不得进入 outbox、push、冲突写回或 tombstone 删除。Mock pull 证据落在 `test/sync_coordinator_activity_test.dart`，真实 Service A/B 与设备旅程完成前保持未勾选。
+- [x] T008b [US3] 服务端 attachment pull 必须在父任务已映射后按 server ID 写入本地元数据，attachment tombstone 仅删除本地元数据且不创建 outbox；验证 `test/sync_coordinator_attachment_test.dart` 与完整 `flutter test`。真实 Service A/B 运行结果仍须单独记录。
 - [ ] T009 [US3] 实现附件队列与详情状态 UI，保持 002 结构不变。
 
 ## Phase 5: 跨层验收
@@ -28,4 +29,4 @@
 - [x] T011 运行 `flutter analyze`、完整 `flutter test` 和批准 golden；仅将有实际输出的条目标记完成。
 - [ ] T012 为固定移动验收增加稳定的登录、快速添加、详情保存和同步状态语义锚点，并跑通不影响宿主网络的离线恢复旅程。
 - [x] T012a [US1] 区分会话启动时的网络验证错误与明确令牌失效：离线时保留安全会话和本地 Drift 访问，明确拒绝仍清除会话；验证 `test/core/auth/auth_gateway_test.dart`、`test/state/session_state_test.dart`、`flutter analyze` 与完整 `flutter test`。
-- [x] T012b [US1] 用可注入连接状态流仅在 `none → online` 时触发既有同步协调器；验证 `test/core/sync/connectivity_recovery_trigger_test.dart`、`flutter analyze` 与完整 `flutter test`，但不把该单测替代真实设备网络恢复验收。
+- [x] T012b [US1] 读取可注入的初始连接状态并用变化流仅在 `none → online` 时触发既有同步协调器；验证 `test/core/sync/connectivity_recovery_trigger_test.dart`、`flutter analyze` 与完整 `flutter test`，但不把该单测替代真实设备网络恢复验收。

@@ -32,4 +32,22 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     expect(recovered, 1);
   });
+
+  test('primes an offline cold start before the first online event', () async {
+    final changes = StreamController<List<ConnectivityResult>>();
+    addTearDown(changes.close);
+    var recovered = 0;
+    final trigger = ConnectivityRecoveryTrigger(
+      changes.stream,
+      initialState: () async => const [ConnectivityResult.none],
+      onOnlineRecovered: () async => recovered++,
+    );
+    addTearDown(trigger.dispose);
+
+    await trigger.start();
+    changes.add(const [ConnectivityResult.wifi]);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(recovered, 1);
+  });
 }
