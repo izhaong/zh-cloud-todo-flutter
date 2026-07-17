@@ -1,3 +1,4 @@
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
@@ -19,6 +20,11 @@ import 'repositories/task_repository.dart';
 /// deterministic widget/golden fixtures override the callback explicitly.
 final currentDateTimeProvider = Provider<DateTime Function()>(
   (ref) => DateTime.now,
+);
+
+/// 网络状态变化流。测试和预览夹具可覆盖为空流，避免订阅真实平台通道。
+final connectivityChangesProvider = Provider<Stream<List<ConnectivityResult>>>(
+  (ref) => Connectivity().onConnectivityChanged,
 );
 
 /// ----- API 客户端 --------------------------------------------------------

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/app_database.dart';
 import '../../core/notification/local_notification_service.dart';
+import '../../core/sync/connectivity_recovery_trigger.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../state/nlp_date.dart';
@@ -45,6 +46,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
   bool _syncing = false;
   String _syncStatus = '同步尚未执行';
   Timer? _periodicSync;
+  ConnectivityRecoveryTrigger? _connectivityRecoveryTrigger;
 
   @override
   void initState() {
@@ -53,6 +55,10 @@ class _HomeShellState extends ConsumerState<HomeShell>
     _triggerSync();
     _initNotifications();
     if (!const bool.fromEnvironment('FLUTTER_TEST')) {
+      _connectivityRecoveryTrigger = ConnectivityRecoveryTrigger(
+        ref.read(connectivityChangesProvider),
+        onOnlineRecovered: _triggerSync,
+      )..start();
       _periodicSync = Timer.periodic(const Duration(seconds: 30), (_) {
         _triggerSync();
         _pollUpcomingReminders();
@@ -63,6 +69,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
   @override
   void dispose() {
     _periodicSync?.cancel();
+    unawaited(_connectivityRecoveryTrigger?.dispose() ?? Future.value());
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }

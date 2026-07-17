@@ -28,3 +28,4 @@
 - [x] T011 运行 `flutter analyze`、完整 `flutter test` 和批准 golden；仅将有实际输出的条目标记完成。
 - [ ] T012 为固定移动验收增加稳定的登录、快速添加、详情保存和同步状态语义锚点，并跑通不影响宿主网络的离线恢复旅程。
 - [x] T012a [US1] 区分会话启动时的网络验证错误与明确令牌失效：离线时保留安全会话和本地 Drift 访问，明确拒绝仍清除会话；验证 `test/core/auth/auth_gateway_test.dart`、`test/state/session_state_test.dart`、`flutter analyze` 与完整 `flutter test`。
+- [x] T012b [US1] 用可注入连接状态流仅在 `none → online` 时触发既有同步协调器；验证 `test/core/sync/connectivity_recovery_trigger_test.dart`、`flutter analyze` 与完整 `flutter test`，但不把该单测替代真实设备网络恢复验收。
