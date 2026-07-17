@@ -27,7 +27,7 @@ abstract class AuthGateway {
 
   Future<void> logout(String accessToken);
 
-  /// 校验 accessToken 是否仍被后端认可；网络失败时返回 false。
+  /// 校验 accessToken 是否仍被后端认可；网络异常向调用方抛出以保留离线会话。
   Future<bool> validateSession(String accessToken);
 
   void close();
@@ -138,8 +138,6 @@ class AuthGatewayImpl implements AuthGateway {
       _unwrap(resp);
       return true;
     } on TodoAuthException {
-      return false;
-    } on DioException {
       return false;
     }
   }

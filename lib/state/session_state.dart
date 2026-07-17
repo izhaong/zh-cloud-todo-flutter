@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/api/api_config.dart';
@@ -35,6 +36,9 @@ class SessionController extends Notifier<TodoAuthSession?> {
   TodoAuthSession? build() => null;
 
   /// 应用启动时读取本地 secure 会话，并向后端校验是否仍然有效。
+  ///
+  /// 网络不可用时，已持久化的会话仍可访问本地 Drift 数据；只有服务端明确
+  /// 拒绝时才移除它，避免离线重启把用户误导回登录页。
   Future<void> bootstrap() async {
     final store = ref.read(sessionStoreProvider);
     try {
@@ -44,7 +48,13 @@ class SessionController extends Notifier<TodoAuthSession?> {
         return;
       }
       final gateway = ref.read(authGatewayProvider);
-      final valid = await gateway.validateSession(session.accessToken);
+      final bool valid;
+      try {
+        valid = await gateway.validateSession(session.accessToken);
+      } on DioException {
+        state = session;
+        return;
+      }
       if (valid) {
         state = session;
       } else {
