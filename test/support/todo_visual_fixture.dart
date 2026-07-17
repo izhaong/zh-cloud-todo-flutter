@@ -481,6 +481,7 @@ class _NoNetworkApiClient extends ApiClient {
   Future<Response<T>> memberGet<T>(
     String path, {
     Map<String, dynamic>? query,
+    Options? options,
   }) => _blocked('MEMBER GET', path);
 
   @override

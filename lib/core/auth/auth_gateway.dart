@@ -134,7 +134,12 @@ class AuthGatewayImpl implements AuthGateway {
   Future<bool> validateSession(String accessToken) async {
     if (accessToken.isEmpty) return false;
     try {
-      final resp = await _client.memberGet<Map<String, dynamic>>('/user/get');
+      // bootstrap 尚未把持久化会话写回 sessionProvider；此时必须显式携带
+      // 读取到的 token，不能依赖 ApiClient 的 provider（它仍会返回空串）。
+      final resp = await _client.memberGet<Map<String, dynamic>>(
+        '/user/get',
+        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+      );
       _unwrap(resp);
       return true;
     } on TodoAuthException {
