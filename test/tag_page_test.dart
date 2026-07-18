@@ -1,0 +1,52 @@
+import 'package:drift/drift.dart' show Value;
+import 'package:drift/native.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
+import 'package:zh_cloud_todo_flutter/features/tag/tag_page.dart';
+import 'package:zh_cloud_todo_flutter/state/providers.dart';
+
+void main() {
+  testWidgets('renders a child tag with its parent path', (tester) async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final now = DateTime.utc(2026, 7, 19);
+    await db
+        .into(db.todoTags)
+        .insert(
+          TodoTagsCompanion.insert(
+            id: 'project',
+            name: '项目',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    await db
+        .into(db.todoTags)
+        .insert(
+          TodoTagsCompanion.insert(
+            id: 'client',
+            parentId: const Value('project'),
+            name: '客户端',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    final container = ProviderContainer(
+      overrides: [appDatabaseProvider.overrideWithValue(db)],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: TagPage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('项目 / 客户端'), findsOneWidget);
+  });
+}

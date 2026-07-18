@@ -38,7 +38,7 @@ class TagPage extends ConsumerWidget {
                   return ListTile(
                     key: Key('tag-search-result-${t.id}'),
                     leading: _ColorDot(colorHex: t.color),
-                    title: Text(t.name),
+                    title: Text(_tagPath(t, tags)),
                     subtitle: selected ? const Text('搜索定位的标签') : null,
                     selected: selected,
                     trailing: Row(
@@ -176,6 +176,18 @@ class TagPage extends ConsumerWidget {
       ),
     );
   }
+}
+
+String _tagPath(TodoTag tag, List<TodoTag> tags, {Set<String>? visiting}) {
+  final parentId = tag.parentId;
+  if (parentId == null) return tag.name;
+  final seen = {...?visiting, tag.id};
+  if (seen.contains(parentId)) return tag.name;
+  final parent = tags
+      .where((candidate) => candidate.id == parentId)
+      .firstOrNull;
+  if (parent == null) return tag.name;
+  return '${_tagPath(parent, tags, visiting: seen)} / ${tag.name}';
 }
 
 class _ColorDot extends StatelessWidget {
