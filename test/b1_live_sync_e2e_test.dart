@@ -367,6 +367,98 @@ void main() {
   );
 
   test(
+    'B2 live cross-midnight fixed timezone task converges on a second device',
+    () async {
+      expect(_mobile, isNotEmpty, reason: 'TODO_B1_E2E_MOBILE is required');
+      expect(_password, isNotEmpty, reason: 'TODO_B1_E2E_PASSWORD is required');
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+
+      final sessionA = await _login();
+      final sessionB = await _login();
+      final dbA = AppDatabase.forTesting(NativeDatabase.memory());
+      final dbB = AppDatabase.forTesting(NativeDatabase.memory());
+      final coordinatorA = _coordinator(
+        dbA,
+        _client(sessionA.accessToken),
+        'b2-cross-midnight-live-a',
+      );
+      final coordinatorB = _coordinator(
+        dbB,
+        _client(sessionB.accessToken),
+        'b2-cross-midnight-live-b',
+      );
+      final listsA = ListRepository(dbA, SyncChangeQueue(dbA));
+      final tasksA = TaskRepository(dbA, SyncChangeQueue(dbA));
+      final suffix = DateTime.now().microsecondsSinceEpoch;
+      // 2031-04-03 23:30 → 2031-04-04 01:00 in Asia/Shanghai.
+      final startAt = DateTime.utc(2031, 4, 3, 15, 30);
+      final endAt = DateTime.utc(2031, 4, 3, 17);
+      final list = await listsA.create(name: 'B2 cross midnight $suffix');
+      String? taskId;
+      var stage = 'push list';
+
+      try {
+        await coordinatorA.push();
+        final task = await tasksA.create(
+          listId: list.id,
+          title: 'B2 cross midnight $suffix',
+          startAt: startAt,
+          endAt: endAt,
+          dueAt: endAt,
+          allDay: false,
+          timeZone: 'Asia/Shanghai',
+          fixedTimezone: true,
+        );
+        taskId = task.id;
+
+        stage = 'push cross-midnight task';
+        await coordinatorA.push();
+        final taskA = await tasksA.getById(task.id);
+        expect(taskA?.serverId, isPositive);
+
+        stage = 'pull second device';
+        await coordinatorB.pull();
+        final taskB = await dbB.taskByServerId(taskA!.serverId!);
+        expect(taskB, isNotNull);
+        final synced = taskB!;
+
+        expect(synced.allDay, isFalse);
+        expect(synced.timeZone, 'Asia/Shanghai');
+        expect(synced.fixedTimezone, isTrue);
+        expect(
+          synced.startAt?.toUtc().difference(startAt).abs(),
+          lessThan(const Duration(seconds: 1)),
+        );
+        expect(
+          synced.endAt?.toUtc().difference(endAt).abs(),
+          lessThan(const Duration(seconds: 1)),
+        );
+        expect(
+          synced.dueAt?.toUtc().difference(endAt).abs(),
+          lessThan(const Duration(seconds: 1)),
+        );
+        expect(synced.endAt!.toUtc().isAfter(synced.startAt!.toUtc()), isTrue);
+      } catch (error, stackTrace) {
+        Error.throwWithStackTrace(
+          StateError('B2 cross-midnight live sync failed at stage: $stage; $error'),
+          stackTrace,
+        );
+      } finally {
+        if (taskId != null) {
+          await tasksA.delete(taskId);
+          await coordinatorA.push();
+        }
+        await listsA.delete(list.id);
+        await coordinatorA.push();
+        await dbA.close();
+        await dbB.close();
+      }
+    },
+    skip: _b2Enabled ? false : 'set --dart-define=TODO_B2_LIVE=true to run',
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+
+  test(
     'B2 live sync preserves time, persistent reminder and ON_COMPLETE linkage',
     () async {
       expect(_mobile, isNotEmpty, reason: 'TODO_B1_E2E_MOBILE is required');
