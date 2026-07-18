@@ -482,6 +482,17 @@ class SyncCoordinator {
             _temporaryEntityId(SyncEntities.task, localParentId);
       }
     }
+    if (entity == SyncEntities.tag && resolved.containsKey('parentId')) {
+      final localParentId = resolved['parentId']?.toString();
+      if (localParentId != null && localParentId.isNotEmpty) {
+        final parent = await (db.select(
+          db.todoTags,
+        )..where((tag) => tag.id.equals(localParentId))).getSingleOrNull();
+        resolved['parentId'] =
+            parent?.serverId ??
+            _temporaryEntityId(SyncEntities.tag, localParentId);
+      }
+    }
     if (entity == SyncEntities.taskTag) {
       final localTaskId = resolved['taskId']?.toString();
       if (localTaskId != null && localTaskId.isNotEmpty) {
@@ -835,7 +846,55 @@ class SyncCoordinator {
         ).compareTo(_pulledChangePriority(right.$2));
         return byPriority != 0 ? byPriority : left.$1.compareTo(right.$1);
       });
-    return indexed.map((entry) => entry.$2).toList();
+    return _orderTagParentsFirst(indexed.map((entry) => entry.$2).toList());
+  }
+
+  /// tag 的 sync feed 不保证父节点先于子节点。把同一页中的父链先落到
+  /// Drift，才能把服务端整数 parentId 映射为子标签的本地 UUID。
+  List<SyncChangeDto> _orderTagParentsFirst(List<SyncChangeDto> changes) {
+    final indexedTags = changes.indexed
+        .where((entry) => entry.$2.entityType == SyncEntities.tag)
+        .toList();
+    if (indexedTags.length < 2) return changes;
+    final byServerId = <int, SyncChangeDto>{
+      for (final entry in indexedTags)
+        if (entry.$2.entityId != null) entry.$2.entityId!: entry.$2,
+    };
+    final depthByServerId = <int, int>{};
+
+    int tagDepth(SyncChangeDto change, Set<int> visiting) {
+      final serverId = change.entityId;
+      if (serverId == null) return 0;
+      final cached = depthByServerId[serverId];
+      if (cached != null) return cached;
+      if (!visiting.add(serverId)) return 0;
+      final rawParentId =
+          change.payload?['parentId'] ?? change.payload?['parent_id'];
+      final parentId = rawParentId is num
+          ? rawParentId.toInt()
+          : int.tryParse(rawParentId?.toString() ?? '');
+      final parent = parentId == null ? null : byServerId[parentId];
+      final depth = parent == null ? 0 : 1 + tagDepth(parent, visiting);
+      visiting.remove(serverId);
+      depthByServerId[serverId] = depth;
+      return depth;
+    }
+
+    indexedTags.sort((left, right) {
+      final byDepth = tagDepth(
+        left.$2,
+        <int>{},
+      ).compareTo(tagDepth(right.$2, <int>{}));
+      return byDepth != 0 ? byDepth : left.$1.compareTo(right.$1);
+    });
+    var nextTag = 0;
+    return changes
+        .map(
+          (change) => change.entityType == SyncEntities.tag
+              ? indexedTags[nextTag++].$2
+              : change,
+        )
+        .toList(growable: false);
   }
 
   int _pulledChangePriority(SyncChangeDto change) {
@@ -1222,10 +1281,19 @@ class SyncCoordinator {
     Map<String, dynamic> payload,
   ) async {
     final existing = await db.tagByServerId(serverId);
+    String? parentId = existing?.parentId;
+    if (payload.containsKey('parentId') || payload.containsKey('parent_id')) {
+      final parentServerId =
+          (payload['parentId'] ?? payload['parent_id'] as num?)?.toInt();
+      parentId = parentServerId == null
+          ? null
+          : (await db.tagByServerId(parentServerId))?.id;
+    }
     final now = DateTime.now();
     final companion = TodoTagsCompanion(
       id: Value(existing?.id ?? _uuid.v4()),
       serverId: Value(serverId),
+      parentId: Value(parentId),
       name: Value(payload['name']?.toString() ?? existing?.name ?? ''),
       color: Value(payload['color']?.toString()),
       updatedAt: Value(now),

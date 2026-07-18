@@ -37,4 +37,21 @@ void main() {
       });
     },
   );
+
+  test(
+    'creating a child tag persists its parent and tag outbox payload',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final tags = TagRepository(db, SyncChangeQueue(db));
+      final parent = await tags.create(name: '项目');
+
+      final child = await tags.create(name: '客户端', parentId: parent.id);
+
+      expect(child.parentId, parent.id);
+      final change = (await db.select(db.todoSyncChanges).get()).last;
+      expect(change.entity, 'tag');
+      expect(jsonDecode(change.payloadJson)['parentId'], parent.id);
+    },
+  );
 }

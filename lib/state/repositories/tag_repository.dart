@@ -37,7 +37,11 @@ class TagRepository {
     )..orderBy([(t) => OrderingTerm(expression: t.createdAt)])).get();
   }
 
-  Future<TodoTag> create({required String name, String? color}) async {
+  Future<TodoTag> create({
+    required String name,
+    String? color,
+    String? parentId,
+  }) async {
     final now = DateTime.now();
     final id = _uuid.v4();
     await _db
@@ -45,6 +49,7 @@ class TagRepository {
         .insert(
           TodoTagsCompanion.insert(
             id: id,
+            parentId: Value(parentId),
             name: name,
             color: Value(color),
             updatedAt: now,
