@@ -38,7 +38,7 @@ void main() {
     expect(mobileAdd.hitTestable(), findsOneWidget);
   });
 
-  testWidgets('mobile add submits one task to the current inbox', (
+  testWidgets('移动端快速添加写入当前收集箱', (
     tester,
   ) async {
     final fixture = await _pumpMobile(
@@ -64,6 +64,29 @@ void main() {
     final created = tasks.singleWhere((task) => task.title == title);
     expect(created.listId, TodoVisualFixture.inboxListId);
   });
+
+  testWidgets(
+    '360 mobile quick add exposes date priority and tag overrides without overflow',
+    (tester) async {
+      await _pumpMobile(
+        tester,
+        viewport: TodoVisualViewports.mobileMin,
+        fixtureSet: TodoVisualFixtureSet.populated,
+      );
+
+      await tester.tap(find.byKey(const Key('todo-mobile-add')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('日期'), findsOneWidget);
+      expect(find.text('无优先级'), findsOneWidget);
+      expect(find.text('标签'), findsOneWidget);
+      expect(
+        _drainRenderingErrors(tester),
+        isEmpty,
+        reason: 'mobile quick add fields must remain usable at 360px width',
+      );
+    },
+  );
 
   testWidgets('mobile sidebar selection closes the drawer after navigation', (
     tester,
@@ -199,7 +222,7 @@ void main() {
       await tester.tap(more);
       await tester.pumpAndSettle();
       expect(find.text('置顶'), findsOneWidget);
-      expect(find.text('移至收件箱'), findsOneWidget);
+      expect(find.text('移至收集箱'), findsOneWidget);
       expect(find.text('协作'), findsOneWidget);
       expect(find.text('删除'), findsOneWidget);
 

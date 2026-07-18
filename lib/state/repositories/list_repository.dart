@@ -20,7 +20,9 @@ class ListRepository {
   /// 顶层非智能清单（不解析 smart 前缀），按 folderId / sortOrder 排序。
   Stream<List<TodoList>> watchAll() {
     return (_db.select(_db.todoLists)
-          ..where((t) => t.name.like('smart:%').not())
+          ..where(
+            (t) => t.name.like('smart:%').not() & t.id.equals('inbox').not(),
+          )
           ..orderBy([
             (t) => OrderingTerm(expression: t.folderId),
             (t) => OrderingTerm(expression: t.sortOrder),
@@ -31,7 +33,9 @@ class ListRepository {
 
   Future<List<TodoList>> getAll() {
     return (_db.select(_db.todoLists)
-          ..where((t) => t.name.like('smart:%').not())
+          ..where(
+            (t) => t.name.like('smart:%').not() & t.id.equals('inbox').not(),
+          )
           ..orderBy([
             (t) => OrderingTerm(expression: t.folderId),
             (t) => OrderingTerm(expression: t.sortOrder),

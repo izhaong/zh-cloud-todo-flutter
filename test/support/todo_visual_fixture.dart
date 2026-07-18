@@ -351,7 +351,7 @@ class TodoVisualFixture {
       ),
       _task(
         id: 'visual-task-completed',
-        title: '清理收件箱中的旧任务',
+        title: '清理收集箱中的旧任务',
         listId: inboxListId,
         completed: true,
         dueAt: at(-1, 17),
@@ -481,6 +481,7 @@ class _NoNetworkApiClient extends ApiClient {
   Future<Response<T>> memberGet<T>(
     String path, {
     Map<String, dynamic>? query,
+    Options? options,
   }) => _blocked('MEMBER GET', path);
 
   @override

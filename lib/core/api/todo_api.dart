@@ -195,6 +195,64 @@ class TagApi {
       );
 }
 
+class TaskActivityRecord {
+  const TaskActivityRecord({
+    required this.id,
+    required this.taskId,
+    required this.action,
+    required this.occurredAt,
+    this.actorUserId,
+    this.actorUserName,
+    this.detail,
+  });
+
+  final int id;
+  final int taskId;
+  final int? actorUserId;
+  final String? actorUserName;
+  final String action;
+  final String? detail;
+  final DateTime occurredAt;
+
+  factory TaskActivityRecord.fromJson(Map<String, dynamic> json) =>
+      TaskActivityRecord(
+        id: (json['id'] as num?)?.toInt() ?? 0,
+        taskId: (json['taskId'] as num?)?.toInt() ?? 0,
+        actorUserId: (json['actorUserId'] as num?)?.toInt(),
+        actorUserName: json['actorUserName']?.toString(),
+        action: json['action']?.toString() ?? 'unknown',
+        detail: json['detail']?.toString(),
+        occurredAt: ReminderActionApi.parseTime(json['createTime']),
+      );
+}
+
+class ActivityApi {
+  ActivityApi(this._client);
+
+  final ApiClient _client;
+
+  Future<List<TaskActivityRecord>> listTask(int taskServerId) async {
+    final response = await _client.get<Map<String, dynamic>>(
+      '/task/$taskServerId/activities',
+      query: {'limit': 100},
+    );
+    final body = response.data ?? const <String, dynamic>{};
+    if (body['code'] != null && body['code'] != 0) {
+      throw DioException(
+        requestOptions: RequestOptions(path: '/task/$taskServerId/activities'),
+        error: body['msg'] ?? '动态加载失败',
+      );
+    }
+    final raw = body['data'] as List? ?? const [];
+    return raw
+        .whereType<Map>()
+        .map(
+          (item) => TaskActivityRecord.fromJson(item.cast<String, dynamic>()),
+        )
+        .toList();
+  }
+}
+
 /// 单个数据导出记录（`/security/export/list` 返回行）。
 class DataExportItem {
   DataExportItem({
@@ -292,6 +350,7 @@ class TodoRestApi {
       folder = FolderApi(client),
       nlp = NlpApi(client),
       tag = TagApi(client),
+      activity = ActivityApi(client),
       reminder = ReminderActionApi(client),
       repeatOccurrence = RepeatOccurrenceApi(client),
       listCollaboration = ListCollaborationApi(client),
@@ -305,6 +364,7 @@ class TodoRestApi {
   final FolderApi folder;
   final NlpApi nlp;
   final TagApi tag;
+  final ActivityApi activity;
   final ReminderActionApi reminder;
   final RepeatOccurrenceApi repeatOccurrence;
   final ListCollaborationApi listCollaboration;

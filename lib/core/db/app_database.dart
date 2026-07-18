@@ -45,6 +45,7 @@ class TodoTasks extends Table {
   TextColumn get title => text()();
   TextColumn get description => text().nullable()();
   BoolColumn get completed => boolean().withDefault(const Constant(false))();
+  BoolColumn get cancelled => boolean().withDefault(const Constant(false))();
   IntColumn get priority => integer().withDefault(const Constant(0))();
   BoolColumn get isPinned => boolean().withDefault(const Constant(false))();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
@@ -92,6 +93,68 @@ class TodoTaskTags extends Table {
 
   @override
   Set<Column> get primaryKey => {taskId, tagId};
+}
+
+/// 任务检查事项：本地 UUID 保证任务尚未同步时也能离线编辑。
+class TodoChecklistItems extends Table {
+  TextColumn get id => text()();
+  IntColumn get serverId => integer().nullable()();
+  TextColumn get taskId => text()();
+  TextColumn get title => text()();
+  BoolColumn get completed => boolean().withDefault(const Constant(false))();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+  DateTimeColumn get updatedAt => dateTime()();
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// 任务附件元数据及本地上传状态。二进制由本地路径和上传队列管理。
+class TodoAttachments extends Table {
+  TextColumn get id => text()();
+  IntColumn get serverId => integer().nullable()();
+  TextColumn get taskId => text()();
+  TextColumn get name => text()();
+  TextColumn get localPath => text().nullable()();
+  TextColumn get remoteUrl => text().nullable()();
+  TextColumn get mimeType => text()();
+  IntColumn get size => integer()();
+  TextColumn get status => text().withDefault(const Constant('queued'))();
+  TextColumn get error => text().nullable()();
+  DateTimeColumn get updatedAt => dateTime()();
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// 服务端任务动态的本地只读缓存；联网刷新后离线仍可展示最近活动。
+class TodoActivities extends Table {
+  IntColumn get serverId => integer()();
+  IntColumn get taskServerId => integer()();
+  IntColumn get actorUserId => integer().nullable()();
+  TextColumn get actorUserName => text().nullable()();
+  TextColumn get action => text()();
+  TextColumn get detail => text().nullable()();
+  DateTimeColumn get occurredAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {serverId};
+}
+
+/// 任务模板的本地真相源；服务端登记通过 outbox 异步完成。
+class TodoTemplates extends Table {
+  TextColumn get id => text()();
+  IntColumn get serverId => integer().nullable()();
+  TextColumn get name => text()();
+  TextColumn get contentJson => text()();
+  TextColumn get status => text().withDefault(const Constant('queued'))();
+  DateTimeColumn get updatedAt => dateTime()();
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
 }
 
 /// 提醒（任务维度，单任务可有多条提醒规则）。
@@ -217,6 +280,10 @@ class TodoEntityRevisions extends Table {
     TodoFolders,
     TodoTags,
     TodoTaskTags,
+    TodoChecklistItems,
+    TodoAttachments,
+    TodoActivities,
+    TodoTemplates,
     TodoReminders,
     TodoRepeatRules,
     TodoRepeatSkips,
@@ -238,7 +305,7 @@ class AppDatabase extends _$AppDatabase {
     : super(_open('todo_t${tenantId}_u$userId'));
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -253,6 +320,20 @@ class AppDatabase extends _$AppDatabase {
           await m.deleteTable(table.actualTableName);
         }
         await m.createAll();
+      } else if (from < 5) {
+        await m.createTable(todoChecklistItems);
+      }
+      if (from < 6) {
+        await m.createTable(todoAttachments);
+      }
+      if (from < 7) {
+        await m.addColumn(todoTasks, todoTasks.cancelled);
+      }
+      if (from < 8) {
+        await m.createTable(todoActivities);
+      }
+      if (from < 9) {
+        await m.createTable(todoTemplates);
       }
     },
   );
@@ -272,6 +353,7 @@ class AppDatabase extends _$AppDatabase {
     )..where((t) => t.id.equals(taskId))).getSingle();
     final next = row.copyWith(
       completed: !row.completed,
+      cancelled: false,
       updatedAt: DateTime.now(),
     );
     await (update(todoTasks)..where((t) => t.id.equals(taskId))).write(next);
