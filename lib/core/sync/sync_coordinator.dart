@@ -179,7 +179,9 @@ class SyncCoordinator {
     final byEntity = (priority[left.entity] ?? 9).compareTo(
       priority[right.entity] ?? 9,
     );
-    return byEntity != 0 ? byEntity : left.createdAt.compareTo(right.createdAt);
+    if (byEntity != 0) return byEntity;
+    final byCreatedAt = left.createdAt.compareTo(right.createdAt);
+    return byCreatedAt != 0 ? byCreatedAt : left.id.compareTo(right.id);
   }
 
   Future<int> _pushAttachmentChanges(List<TodoSyncChange> changes) async {

@@ -83,4 +83,31 @@ void main() {
       );
     },
   );
+
+  test(
+    'deleting a parent tag reparents its children before the delete outbox',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final tags = TagRepository(db, SyncChangeQueue(db));
+      final parent = await tags.create(name: '项目');
+      final child = await tags.create(name: '客户端', parentId: parent.id);
+
+      await tags.delete(parent.id);
+
+      final restoredChild = await (db.select(
+        db.todoTags,
+      )..where((tag) => tag.id.equals(child.id))).getSingle();
+      expect(restoredChild.parentId, isNull);
+      final changes = await db.select(db.todoSyncChanges).get();
+      final deletion = changes.last;
+      final childUpdate = changes[changes.length - 2];
+      expect(childUpdate.entity, 'tag');
+      expect(childUpdate.op, 'upsert');
+      expect(jsonDecode(childUpdate.payloadJson)['parentId'], isNull);
+      expect(deletion.entity, 'tag');
+      expect(deletion.op, 'delete');
+      expect(deletion.entityLocalId, parent.id);
+    },
+  );
 }

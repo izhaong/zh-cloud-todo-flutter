@@ -97,6 +97,72 @@ void main() {
     },
   );
 
+  test('pushes child reparent before deleting its former parent tag', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final tags = TagRepository(db, SyncChangeQueue(db));
+    final parent = await tags.create(name: '项目');
+    final child = await tags.create(name: '客户端', parentId: parent.id);
+    await (db.update(db.todoTags)..where((tag) => tag.id.equals(parent.id)))
+        .write(const TodoTagsCompanion(serverId: Value(101)));
+    await (db.update(db.todoTags)..where((tag) => tag.id.equals(child.id)))
+        .write(const TodoTagsCompanion(serverId: Value(102)));
+    await (db.update(
+      db.todoSyncChanges,
+    )).write(const TodoSyncChangesCompanion(status: Value('synced')));
+    await tags.delete(parent.id);
+
+    List<Map<String, dynamic>> sentChanges = const [];
+    final dio = Dio()
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            sentChanges = ((options.data as Map)['changes'] as List)
+                .cast<Map>()
+                .map((entry) => entry.cast<String, dynamic>())
+                .toList();
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                data: {
+                  'code': 0,
+                  'data': {
+                    'ok': true,
+                    'accepted': [
+                      for (final change in sentChanges)
+                        {
+                          'entityType': change['entityType'],
+                          'entityId': change['entityId'],
+                          'operation': change['operation'],
+                          'clientMutationId': change['clientMutationId'],
+                        },
+                    ],
+                    'conflicts': const [],
+                  },
+                },
+              ),
+            );
+          },
+        ),
+      );
+    final client = ApiClient(dio: dio);
+    final coordinator = SyncCoordinator(
+      db: db,
+      api: SyncApi(client, clientId: 'test', deviceId: 'device-1'),
+      todoApi: client,
+    );
+
+    expect(await coordinator.push(), 2);
+    expect(sentChanges, hasLength(2));
+    expect(sentChanges[0]['entityType'], 'tag');
+    expect(sentChanges[0]['operation'], 'upsert');
+    expect(sentChanges[0]['entityId'], 102);
+    expect(sentChanges[0]['payload']['parentId'], isNull);
+    expect(sentChanges[1]['entityType'], 'tag');
+    expect(sentChanges[1]['operation'], 'delete');
+    expect(sentChanges[1]['entityId'], 101);
+  });
+
   test(
     'sort preference pushes from A and B restores it from the sync feed',
     () async {

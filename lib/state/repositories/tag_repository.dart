@@ -97,20 +97,43 @@ class TagRepository {
   }
 
   Future<void> delete(String tagId) async {
-    final row = await (_db.select(
-      _db.todoTags,
-    )..where((t) => t.id.equals(tagId))).getSingleOrNull();
-    await (_db.delete(
-      _db.todoTaskTags,
-    )..where((t) => t.tagId.equals(tagId))).go();
-    await (_db.delete(_db.todoTags)..where((t) => t.id.equals(tagId))).go();
-    await _queue.enqueue(
-      entity: SyncEntities.tag,
-      op: SyncOps.delete,
-      localId: tagId,
-      serverId: row?.serverId,
-      payload: {'id': tagId, 'serverId': row?.serverId},
-    );
+    await _db.transaction(() async {
+      final row = await (_db.select(
+        _db.todoTags,
+      )..where((t) => t.id.equals(tagId))).getSingleOrNull();
+      final children = await (_db.select(
+        _db.todoTags,
+      )..where((tag) => tag.parentId.equals(tagId))).get();
+      final now = DateTime.now();
+      for (final child in children) {
+        await (_db.update(
+          _db.todoTags,
+        )..where((tag) => tag.id.equals(child.id))).write(
+          TodoTagsCompanion(parentId: const Value(null), updatedAt: Value(now)),
+        );
+        final reparented = await (_db.select(
+          _db.todoTags,
+        )..where((tag) => tag.id.equals(child.id))).getSingle();
+        await _queue.enqueue(
+          entity: SyncEntities.tag,
+          op: SyncOps.upsert,
+          localId: child.id,
+          serverId: child.serverId,
+          payload: reparented.toJson(),
+        );
+      }
+      await (_db.delete(
+        _db.todoTaskTags,
+      )..where((t) => t.tagId.equals(tagId))).go();
+      await (_db.delete(_db.todoTags)..where((t) => t.id.equals(tagId))).go();
+      await _queue.enqueue(
+        entity: SyncEntities.tag,
+        op: SyncOps.delete,
+        localId: tagId,
+        serverId: row?.serverId,
+        payload: {'id': tagId, 'serverId': row?.serverId},
+      );
+    });
   }
 
   // --- 任务-标签关联 --------------------------------------------------
