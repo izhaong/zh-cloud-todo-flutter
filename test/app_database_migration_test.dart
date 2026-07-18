@@ -9,6 +9,88 @@ import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 
 void main() {
   test(
+    'upgrades the released B1 schema 9 without losing its aggregate tables',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'zh_cloud_todo_b1_schema9_',
+      );
+      final databaseFile = File('${directory.path}/todo.sqlite');
+      addTearDown(() async {
+        if (await directory.exists()) {
+          await directory.delete(recursive: true);
+        }
+      });
+
+      _createB1Schema9(databaseFile);
+
+      final upgraded = AppDatabase.forTesting(NativeDatabase(databaseFile));
+      addTearDown(upgraded.close);
+      final version = await upgraded
+          .customSelect('PRAGMA user_version')
+          .getSingle();
+      expect(version.data['user_version'], 10);
+
+      final taskColumns = await upgraded
+          .customSelect('PRAGMA table_info(todo_tasks)')
+          .get();
+      final columnNames = taskColumns.map((row) => row.data['name']).toSet();
+      expect(
+        columnNames,
+        containsAll(<String>{
+          'cancelled',
+          'all_day',
+          'time_zone',
+          'fixed_timezone',
+          'completed_at',
+          'repeat_parent_task_id',
+          'repeat_rule_id',
+          'repeat_occurrence_at',
+        }),
+      );
+
+      final reminderColumns = await upgraded
+          .customSelect('PRAGMA table_info(todo_reminders)')
+          .get();
+      expect(
+        reminderColumns.map((row) => row.data['name']),
+        containsAll(<String>{
+          'anchor_type',
+          'offset_minutes',
+          'fired_at',
+          'persistent',
+          'interval_minutes',
+          'time_zone',
+          'fixed_timezone',
+          'client_mutation_id',
+        }),
+      );
+      final repeatRuleColumns = await upgraded
+          .customSelect('PRAGMA table_info(todo_repeat_rules)')
+          .get();
+      expect(
+        repeatRuleColumns.map((row) => row.data['name']),
+        containsAll(<String>{
+          'month_day',
+          'start_at',
+          'count_limit',
+          'enabled',
+          'repeat_mode',
+          'time_zone',
+        }),
+      );
+
+      final preservedTables = await upgraded
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN "
+            "('todo_checklist_items', 'todo_attachments', 'todo_activities', "
+            "'todo_templates')",
+          )
+          .get();
+      expect(preservedTables.map((row) => row.data['name']), hasLength(4));
+    },
+  );
+
+  test(
     'upgrades schema 4 scheduling and completion records across restart',
     () async {
       final directory = await Directory.systemTemp.createTemp(
@@ -133,6 +215,79 @@ void main() {
       expect(repeatRule.timeZone, isNull);
     },
   );
+}
+
+void _createB1Schema9(File databaseFile) {
+  final database = sqlite.sqlite3.open(databaseFile.path);
+  try {
+    database.execute('''
+      CREATE TABLE todo_tasks (
+        id TEXT NOT NULL PRIMARY KEY,
+        server_id INTEGER NULL,
+        list_id TEXT NOT NULL,
+        parent_task_id TEXT NULL,
+        title TEXT NOT NULL,
+        description TEXT NULL,
+        completed INTEGER NOT NULL DEFAULT 0,
+        cancelled INTEGER NOT NULL DEFAULT 0,
+        priority INTEGER NOT NULL DEFAULT 0,
+        is_pinned INTEGER NOT NULL DEFAULT 0,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        start_at INTEGER NULL,
+        end_at INTEGER NULL,
+        due_at INTEGER NULL,
+        updated_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      )
+    ''');
+    database.execute('''
+      CREATE TABLE todo_checklist_items (
+        id TEXT NOT NULL PRIMARY KEY, server_id INTEGER NULL, task_id TEXT NOT NULL,
+        title TEXT NOT NULL, completed INTEGER NOT NULL DEFAULT 0,
+        sort_order INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      )
+    ''');
+    database.execute('''
+      CREATE TABLE todo_reminders (
+        id TEXT NOT NULL PRIMARY KEY, server_id INTEGER NULL, task_id TEXT NOT NULL,
+        remind_at INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'PENDING',
+        updated_at INTEGER NOT NULL, created_at INTEGER NOT NULL
+      )
+    ''');
+    database.execute('''
+      CREATE TABLE todo_repeat_rules (
+        id TEXT NOT NULL PRIMARY KEY, server_id INTEGER NULL, task_id TEXT NOT NULL,
+        freq TEXT NOT NULL, interval INTEGER NOT NULL DEFAULT 1, by_day TEXT NULL,
+        until INTEGER NULL, updated_at INTEGER NOT NULL, created_at INTEGER NOT NULL
+      )
+    ''');
+    database.execute('''
+      CREATE TABLE todo_attachments (
+        id TEXT NOT NULL PRIMARY KEY, server_id INTEGER NULL, task_id TEXT NOT NULL,
+        name TEXT NOT NULL, local_path TEXT NULL, remote_url TEXT NULL,
+        mime_type TEXT NOT NULL, size INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'queued',
+        error TEXT NULL, updated_at INTEGER NOT NULL, created_at INTEGER NOT NULL
+      )
+    ''');
+    database.execute('''
+      CREATE TABLE todo_activities (
+        server_id INTEGER NOT NULL PRIMARY KEY, task_server_id INTEGER NOT NULL,
+        actor_user_id INTEGER NULL, actor_user_name TEXT NULL, action TEXT NOT NULL,
+        detail TEXT NULL, occurred_at INTEGER NOT NULL
+      )
+    ''');
+    database.execute('''
+      CREATE TABLE todo_templates (
+        id TEXT NOT NULL PRIMARY KEY, server_id INTEGER NULL, name TEXT NOT NULL,
+        content_json TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'queued',
+        updated_at INTEGER NOT NULL, created_at INTEGER NOT NULL
+      )
+    ''');
+    database.execute('PRAGMA user_version = 9');
+  } finally {
+    database.dispose();
+  }
 }
 
 void _downgradeToSchema4(File databaseFile) {

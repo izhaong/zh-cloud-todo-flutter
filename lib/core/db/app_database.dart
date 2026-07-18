@@ -386,14 +386,113 @@ class AppDatabase extends _$AppDatabase {
       // B1 与 B2 曾各自占用 5–9 号 schema。B2 已有 5–9 的时间语义
       // 迁移，故将 B1 的新增表和放弃状态收敛到新的 10 号迁移。
       if (from < 10) {
-        await m.createTable(todoChecklistItems);
-        await m.createTable(todoAttachments);
-        await m.addColumn(todoTasks, todoTasks.cancelled);
-        await m.createTable(todoActivities);
-        await m.createTable(todoTemplates);
+        // develop 上的 B1 已发布过 schema 9；B2 也曾使用 schema 9。
+        // 两条线的物理表结构不同，不能仅凭 user_version 判断哪个分支曾
+        // 升级过。按实际 sqlite schema 补齐，避免 B1 v9 因重复建表而无法
+        // 启动，同时也让 B2 v9 获得 B1 的聚合表。
+        if (!await _columnExists(m, 'todo_tasks', 'all_day')) {
+          await m.addColumn(todoTasks, todoTasks.allDay);
+        }
+        if (!await _columnExists(m, 'todo_tasks', 'time_zone')) {
+          await m.addColumn(todoTasks, todoTasks.timeZone);
+        }
+        if (!await _columnExists(m, 'todo_tasks', 'fixed_timezone')) {
+          await m.addColumn(todoTasks, todoTasks.fixedTimezone);
+        }
+        if (!await _columnExists(m, 'todo_tasks', 'completed_at')) {
+          await m.addColumn(todoTasks, todoTasks.completedAt);
+        }
+        if (!await _columnExists(m, 'todo_tasks', 'repeat_parent_task_id')) {
+          await m.addColumn(todoTasks, todoTasks.repeatParentTaskId);
+        }
+        if (!await _columnExists(m, 'todo_tasks', 'repeat_rule_id')) {
+          await m.addColumn(todoTasks, todoTasks.repeatRuleId);
+        }
+        if (!await _columnExists(m, 'todo_tasks', 'repeat_occurrence_at')) {
+          await m.addColumn(todoTasks, todoTasks.repeatOccurrenceAt);
+        }
+        if (!await _columnExists(m, 'todo_reminders', 'anchor_type')) {
+          await m.addColumn(todoReminders, todoReminders.anchorType);
+        }
+        if (!await _columnExists(m, 'todo_reminders', 'offset_minutes')) {
+          await m.addColumn(todoReminders, todoReminders.offsetMinutes);
+        }
+        if (!await _columnExists(m, 'todo_reminders', 'fired_at')) {
+          await m.addColumn(todoReminders, todoReminders.firedAt);
+        }
+        if (!await _columnExists(m, 'todo_reminders', 'persistent')) {
+          await m.addColumn(todoReminders, todoReminders.persistent);
+        }
+        if (!await _columnExists(m, 'todo_reminders', 'interval_minutes')) {
+          await m.addColumn(todoReminders, todoReminders.intervalMinutes);
+        }
+        if (!await _columnExists(m, 'todo_reminders', 'time_zone')) {
+          await m.addColumn(todoReminders, todoReminders.timeZone);
+        }
+        if (!await _columnExists(m, 'todo_reminders', 'fixed_timezone')) {
+          await m.addColumn(todoReminders, todoReminders.fixedTimezone);
+        }
+        if (!await _columnExists(m, 'todo_reminders', 'client_mutation_id')) {
+          await m.addColumn(todoReminders, todoReminders.clientMutationId);
+        }
+        if (!await _columnExists(m, 'todo_repeat_rules', 'month_day')) {
+          await m.addColumn(todoRepeatRules, todoRepeatRules.monthDay);
+        }
+        if (!await _columnExists(m, 'todo_repeat_rules', 'start_at')) {
+          await m.addColumn(todoRepeatRules, todoRepeatRules.startAt);
+        }
+        if (!await _columnExists(m, 'todo_repeat_rules', 'count_limit')) {
+          await m.addColumn(todoRepeatRules, todoRepeatRules.countLimit);
+        }
+        if (!await _columnExists(m, 'todo_repeat_rules', 'enabled')) {
+          await m.addColumn(todoRepeatRules, todoRepeatRules.enabled);
+        }
+        if (!await _columnExists(m, 'todo_repeat_rules', 'repeat_mode')) {
+          await m.addColumn(todoRepeatRules, todoRepeatRules.repeatMode);
+        }
+        if (!await _columnExists(m, 'todo_repeat_rules', 'time_zone')) {
+          await m.addColumn(todoRepeatRules, todoRepeatRules.timeZone);
+        }
+        if (!await _columnExists(m, 'todo_tasks', 'cancelled')) {
+          await m.addColumn(todoTasks, todoTasks.cancelled);
+        }
+        if (!await _tableExists(m, 'todo_checklist_items')) {
+          await m.createTable(todoChecklistItems);
+        }
+        if (!await _tableExists(m, 'todo_attachments')) {
+          await m.createTable(todoAttachments);
+        }
+        if (!await _tableExists(m, 'todo_activities')) {
+          await m.createTable(todoActivities);
+        }
+        if (!await _tableExists(m, 'todo_templates')) {
+          await m.createTable(todoTemplates);
+        }
       }
     },
   );
+
+  Future<bool> _tableExists(Migrator migrator, String tableName) async {
+    final row = await migrator.database
+        .customSelect(
+          'SELECT 1 AS present FROM sqlite_master '
+          "WHERE type = 'table' AND name = ? LIMIT 1",
+          variables: [Variable.withString(tableName)],
+        )
+        .getSingleOrNull();
+    return row != null;
+  }
+
+  Future<bool> _columnExists(
+    Migrator migrator,
+    String tableName,
+    String columnName,
+  ) async {
+    final rows = await migrator.database
+        .customSelect('PRAGMA table_info($tableName)')
+        .get();
+    return rows.any((row) => row.data['name'] == columnName);
+  }
 
   static QueryExecutor _open(String? fileName) {
     // 测试环境（forTesting 注入 NativeDatabase.memory）或无文件名时用默认。
