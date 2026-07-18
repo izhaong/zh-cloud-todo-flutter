@@ -97,7 +97,15 @@ class TaskSortPreferenceRepository {
     if (valueJson == null) return TaskSort.smart;
     try {
       final raw = jsonDecode(valueJson);
-      final value = raw is Map<String, dynamic> ? raw['sort'] : null;
+      if (raw is! Map<String, dynamic>) return TaskSort.smart;
+      // 本地 save 直接存储 `{sort}`；sync pull 则保留服务端实体包装，
+      // 排序实际位于其字符串化的 `valueJson` 字段内。两种格式必须同样可读，
+      // 否则第二设备会静默退回智能排序。
+      final nested = raw['valueJson'];
+      final nestedValue = nested is String ? jsonDecode(nested) : null;
+      final value = nestedValue is Map<String, dynamic>
+          ? nestedValue['sort']
+          : raw['sort'];
       return TaskSort.values.firstWhere(
         (candidate) => candidate.name == value,
         orElse: () => TaskSort.smart,
