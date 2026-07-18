@@ -722,6 +722,13 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                         const Divider(height: 32),
                         heading('提醒'),
                         OutlinedButton.icon(
+                          key: const Key('task-add-absolute-reminder'),
+                          onPressed: () => _addAbsoluteReminder(t),
+                          icon: const Icon(Icons.add_alarm_outlined),
+                          label: const Text('添加指定时间提醒'),
+                        ),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
                           key: const Key('task-add-end-reminder'),
                           onPressed: () => _addEndReminder(t),
                           icon: const Icon(Icons.alarm_add_outlined),
@@ -911,6 +918,28 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
         ),
       ),
     );
+  }
+
+  Future<void> _addAbsoluteReminder(TodoTask t) async {
+    final initial =
+        _dueAt ?? t.dueAt ?? DateTime.now().add(const Duration(hours: 1));
+    final fireAt = await _pickDateTime(t, initial);
+    if (fireAt == null || !mounted || !_isCurrentTask(t.id)) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final reminders = ref.read(reminderRepositoryProvider);
+    if (reminders == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('提醒存储未就绪')));
+      return;
+    }
+    await reminders.create(
+      taskId: t.id,
+      fireAt: fireAt,
+      timeZone: _timeZone,
+      fixedTimezone: _fixedTimezone,
+    );
+    if (!_isCurrentTask(t.id)) return;
+    messenger.showSnackBar(const SnackBar(content: Text('已添加指定时间提醒')));
   }
 
   Future<void> _editRepeatRule(TodoTask t) async {

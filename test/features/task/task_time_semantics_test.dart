@@ -171,6 +171,58 @@ void main() {
   });
 
   testWidgets(
+    'detail creates an absolute reminder through reminder repository',
+    (tester) async {
+      final fixture = await TodoVisualFixture.create();
+      addTearDown(fixture.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: fixture.container,
+          child: MaterialApp(
+            theme: ThemeData.light().copyWith(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            home: const Scaffold(
+              body: TaskDetailPane(taskId: _taskId, embedded: true),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _openScheduleOptions(tester);
+
+      final addReminder = find.byKey(const Key('task-add-absolute-reminder'));
+      await tester.scrollUntilVisible(
+        addReminder,
+        160,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.tap(addReminder);
+      await tester.pumpAndSettle();
+      expect(find.byType(DatePickerDialog), findsOneWidget);
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TimePickerDialog), findsOneWidget);
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+
+      final reminder = await fixture.database
+          .select(fixture.database.todoReminders)
+          .getSingle();
+      expect(reminder.taskId, _taskId);
+      expect(reminder.anchorType, 'ABSOLUTE');
+      expect(reminder.offsetMinutes, isNull);
+      final change =
+          (await fixture.database
+                  .select(fixture.database.todoSyncChanges)
+                  .get())
+              .single;
+      expect(change.entity, 'reminder');
+    },
+  );
+
+  testWidgets(
     'detail queues an end-offset reminder and a persistent end reminder',
     (tester) async {
       final fixture = await TodoVisualFixture.create();
@@ -523,6 +575,8 @@ void main() {
       final skip = find.byKey(const Key('task-repeat-skip'));
       await tester.scrollUntilVisible(skip, 160, scrollable: detailScroll);
       await tester.ensureVisible(skip);
+      await tester.drag(detailScroll, const Offset(0, -120));
+      await tester.pumpAndSettle();
       await tester.tap(skip);
       await tester.pumpAndSettle();
 
