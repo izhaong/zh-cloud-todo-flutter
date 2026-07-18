@@ -106,18 +106,6 @@ void main() {
               createdAt: now,
             ),
           );
-      await db
-          .into(db.todoRepeatRules)
-          .insert(
-            TodoRepeatRulesCompanion.insert(
-              id: 'repeat-rule',
-              serverId: const Value(301),
-              taskId: 'parent-task',
-              freq: 'DAILY',
-              updatedAt: now,
-              createdAt: now,
-            ),
-          );
       final dio = Dio();
       dio.interceptors.add(
         InterceptorsWrapper(
@@ -138,6 +126,19 @@ void main() {
                           'title': '重复模板',
                           'status': 'DONE',
                           'completedAt': '2026-07-15T09:00:00.000Z',
+                        },
+                      },
+                      {
+                        'entityType': 'repeat_rule',
+                        'entityId': 301,
+                        'operation': 'upsert',
+                        'payload': {
+                          'taskId': 201,
+                          'frequency': 'daily',
+                          'intervalValue': 1,
+                          'startAt': '2026-07-15T09:00:00.000Z',
+                          'enabled': true,
+                          'repeatMode': 'ON_COMPLETE',
                         },
                       },
                       {
@@ -170,13 +171,16 @@ void main() {
         todoApi: client,
       );
 
-      expect(await coordinator.pull(), 2);
+      expect(await coordinator.pull(), 3);
       final parent = await db.taskByServerId(201);
       final generated = await db.taskByServerId(202);
+      final pulledRule = await (db.select(
+        db.todoRepeatRules,
+      )..where((rule) => rule.serverId.equals(301))).getSingle();
       expect(parent?.completed, isTrue);
       expect(parent?.completedAt?.toUtc(), DateTime.utc(2026, 7, 15, 9));
       expect(generated?.repeatParentTaskId, 'parent-task');
-      expect(generated?.repeatRuleId, 'repeat-rule');
+      expect(generated?.repeatRuleId, pulledRule.id);
       expect(
         generated?.repeatOccurrenceAt?.toUtc(),
         DateTime.utc(2026, 7, 16, 9),
