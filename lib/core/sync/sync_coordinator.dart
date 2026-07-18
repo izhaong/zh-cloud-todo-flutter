@@ -52,7 +52,9 @@ class SyncCoordinator {
   Future<int> push() async {
     final pending = await (db.select(
       db.todoSyncChanges,
-    )..where((t) => t.status.equals('queued'))).get();
+    )..where(
+      (t) => t.status.equals('queued') | t.status.equals('retryable'),
+    )).get();
     if (pending.isEmpty) return 0;
 
     final folderChanges = pending
@@ -114,7 +116,7 @@ class SyncCoordinator {
           db.todoSyncChanges,
         )..where((t) => t.id.equals(change.id))).write(
           TodoSyncChangesCompanion(
-            status: const Value('failed'),
+            status: const Value('retryable'),
             attemptCount: Value(change.attemptCount + 1),
           ),
         );

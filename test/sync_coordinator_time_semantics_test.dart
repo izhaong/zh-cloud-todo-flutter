@@ -8,6 +8,7 @@ import 'package:zh_cloud_todo_flutter/core/api/sync_api.dart';
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_coordinator.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/reminder_dispatch_action_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/repeat_rule_repository.dart';
 
 void main() {
@@ -330,6 +331,80 @@ void main() {
       expect(await coordinator.pull(), 2);
       expect(await db.select(db.todoRepeatRules).get(), hasLength(1));
       expect(await db.select(db.todoRepeatSkips).get(), hasLength(1));
+    },
+  );
+
+  test(
+    'retries a transient reminder dispatch action with its original mutation',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final actions = ReminderDispatchActionRepository(SyncChangeQueue(db));
+      await actions.snooze(reminderDispatchId: 400, minutes: 10);
+
+      var pushes = 0;
+      final sentMutationIds = <String?>[];
+      final dio = Dio();
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            pushes++;
+            final changes = ((options.data as Map)['changes'] as List)
+                .cast<Map>()
+                .map((entry) => entry.cast<String, dynamic>())
+                .toList();
+            final mutationId = changes.single['clientMutationId'] as String?;
+            sentMutationIds.add(mutationId);
+            if (pushes == 1) {
+              handler.reject(
+                DioException(
+                  requestOptions: options,
+                  type: DioExceptionType.connectionError,
+                ),
+              );
+              return;
+            }
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                data: {
+                  'code': 0,
+                  'data': {
+                    'ok': true,
+                    'accepted': [
+                      {
+                        'entityType': 'reminder_dispatch_action',
+                        'entityId': 400,
+                        'operation': 'upsert',
+                        'clientMutationId': mutationId,
+                      },
+                    ],
+                    'conflicts': const [],
+                  },
+                },
+              ),
+            );
+          },
+        ),
+      );
+      final client = ApiClient(dio: dio);
+      final coordinator = SyncCoordinator(
+        db: db,
+        api: SyncApi(client, clientId: 'test', deviceId: 'device-1'),
+        todoApi: client,
+      );
+
+      expect(await coordinator.push(), 0);
+      var change = await db.select(db.todoSyncChanges).getSingle();
+      expect(change.status, 'retryable');
+      expect(change.attemptCount, 1);
+
+      expect(await coordinator.push(), 1);
+      change = await db.select(db.todoSyncChanges).getSingle();
+      expect(change.status, 'synced');
+      expect(pushes, 2);
+      expect(sentMutationIds, hasLength(2));
+      expect(sentMutationIds[1], sentMutationIds[0]);
     },
   );
 }

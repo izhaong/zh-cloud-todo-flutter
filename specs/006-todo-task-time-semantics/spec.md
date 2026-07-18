@@ -34,7 +34,7 @@
 - **FR-005**: 一个任务可有多个提醒；同一任务的同一 `clientMutationId` 只对应一个本地提醒，失败、等待、同步成功和删除状态必须在详情与提醒收件箱显示一致。
 - **FR-006**: 重复规则支持 `DAILY`、`WEEKLY`、`MONTHLY`、`YEARLY`、`WEEKDAY` 与 `CUSTOM`，并保存 interval、weekdays、monthDay、startAt、untilAt、countLimit、repeatMode 与时区；未知频率不得写入 outbox。
 - **FR-007**: 跳过和补做记录以规则 UUID 与 occurrence 时间为键；跳过不生成补做，补做不删除原 occurrence，重复执行同一动作必须幂等。
-- **FR-008**: `SyncCoordinator` 必须在任务 serverId 已映射后推送提醒和重复规则，在重复规则 serverId 已映射后推送跳过/补做；拉取顺序必须先任务、再规则、再 occurrence 动作。
+- **FR-008**: `SyncCoordinator` 必须在任务 serverId 已映射后推送提醒和重复规则，在重复规则 serverId 已映射后推送跳过/补做；提醒派发动作以服务端派发 ID 推送；拉取顺序必须先任务、再规则、再 occurrence 动作。临时网络失败必须保留原 `clientMutationId`、增加 `attemptCount` 并标记为 `retryable` 以便下一轮 push；服务端冲突保持 `failed`，不得自动重放。
 - **FR-009**: 详情与提醒收件箱只能经 Repository/use-case 读取和写入；派发 ID 用于完成、忽略和稍后，提醒规则 ID 只用于持续提醒配置。保留 `specs/002-todo-visual-fidelity/` 的工作区与九张批准 golden，不重新设计视觉结构。
 
 ## Success Criteria

@@ -207,7 +207,7 @@ class TodoSyncChanges extends Table {
   DateTimeColumn get createdAt => dateTime()();
   IntColumn get attemptCount => integer().withDefault(const Constant(0))();
   TextColumn get status =>
-      text().withDefault(const Constant('queued'))(); // queued/synced/failed
+      text().withDefault(const Constant('queued'))(); // queued/retryable/synced/failed
 }
 
 /// 全局同步游标（单行，id 固定为 1）。
