@@ -353,7 +353,11 @@ class SyncCoordinator {
         final payload = jsonDecode(change.payloadJson) as Map<String, dynamic>;
         if (change.op == SyncOps.delete) {
           if (change.entityServerId != null) {
-            await todoApi.delete('/folder/${change.entityServerId}');
+            final response = await todoApi.raw.delete<Map<String, dynamic>>(
+              '/app-api/todo/folder/delete',
+              queryParameters: {'id': change.entityServerId},
+            );
+            _throwIfFolderRestFailed(response, '文件夹删除失败');
           }
         } else if (change.entityServerId == null) {
           final resp = await todoApi.post<Map<String, dynamic>>(
@@ -385,10 +389,11 @@ class SyncCoordinator {
                 .write(TodoFoldersCompanion(serverId: Value(serverId)));
           }
         } else {
-          await todoApi.put(
+          final response = await todoApi.put<Map<String, dynamic>>(
             '/folder/update',
             data: {'id': change.entityServerId, 'name': payload['name']},
           );
+          _throwIfFolderRestFailed(response, '文件夹更新失败');
         }
         await (db.update(db.todoSyncChanges)
               ..where((t) => t.id.equals(change.id)))
@@ -777,18 +782,45 @@ class SyncCoordinator {
           ? body['data']
           : body['data'] ?? body['list'];
       if (raw is! List) return 0;
+      final serverFolderIds = <int>{};
       var hydrated = 0;
       for (final item in raw.whereType<Map>()) {
         final payload = Map<String, dynamic>.from(item);
         final serverId = (payload['id'] as num?)?.toInt();
         if (serverId == null) continue;
+        serverFolderIds.add(serverId);
         await _upsertLocalFolder(serverId, payload);
         hydrated++;
+      }
+      final localSyncedFolders = await (db.select(
+        db.todoFolders,
+      )..where((row) => row.serverId.isNotNull())).get();
+      for (final folder in localSyncedFolders) {
+        final serverId = folder.serverId;
+        if (serverId == null || serverFolderIds.contains(serverId)) continue;
+        await (db.update(db.todoLists)
+              ..where((row) => row.folderId.equals(serverId)))
+            .write(const TodoListsCompanion(folderId: Value(null)));
+        await (db.delete(
+          db.todoFolders,
+        )..where((row) => row.id.equals(folder.id))).go();
       }
       return hydrated;
     } on DioException {
       // folder REST 不可用不能阻断同步白名单实体；对应 outbox 项会保持可重试。
       return 0;
+    }
+  }
+
+  void _throwIfFolderRestFailed(
+    Response<Map<String, dynamic>> response,
+    String fallbackMessage,
+  ) {
+    if (response.data?['code'] != null && response.data?['code'] != 0) {
+      throw DioException(
+        requestOptions: response.requestOptions,
+        error: response.data?['msg'] ?? fallbackMessage,
+      );
     }
   }
 

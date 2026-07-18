@@ -34,6 +34,7 @@ void main() {
     await _deletePriorB3Folders(apiA);
     final suffix = DateTime.now().microsecondsSinceEpoch;
     int? folderServerId;
+    var deletedOnServer = false;
     try {
       final folder = await FolderRepository(
         dbA,
@@ -68,8 +69,32 @@ void main() {
         fail('clean Drift must contain folder $serverId after pull');
       }
       expect(restored.name, 'B3 folder $suffix');
+
+      await FolderRepository(
+        dbA,
+        SyncChangeQueue(dbA),
+      ).rename(folder.id, 'B3 folder renamed $suffix');
+      await _coordinator(dbA, apiA, 'b3-folder-a-$suffix').push();
+      expect(await _pendingOrFailedCount(dbA), 0);
+      await _coordinator(dbB, apiB, 'b3-folder-b-$suffix').pull();
+      final renamed = await (dbB.select(
+        dbB.todoFolders,
+      )..where((row) => row.serverId.equals(serverId))).getSingleOrNull();
+      expect(renamed?.name, 'B3 folder renamed $suffix');
+
+      await FolderRepository(dbA, SyncChangeQueue(dbA)).delete(folder.id);
+      await _coordinator(dbA, apiA, 'b3-folder-a-$suffix').push();
+      expect(await _pendingOrFailedCount(dbA), 0);
+      deletedOnServer = true;
+      await _coordinator(dbB, apiB, 'b3-folder-b-$suffix').pull();
+      expect(
+        await (dbB.select(
+          dbB.todoFolders,
+        )..where((row) => row.serverId.equals(serverId))).getSingleOrNull(),
+        isNull,
+      );
     } finally {
-      if (folderServerId != null) {
+      if (folderServerId != null && !deletedOnServer) {
         try {
           final response = await apiA.raw.delete<Map<String, dynamic>>(
             '/app-api/todo/folder/delete',

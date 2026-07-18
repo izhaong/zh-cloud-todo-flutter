@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -62,6 +63,67 @@ void main() {
       expect(folders.single.serverId, 71);
       expect(folders.single.name, 'B3 恢复文件夹');
       expect(folders.single.sortOrder, 4);
+    },
+  );
+
+  test(
+    'pull removes a synced folder no longer returned by REST list',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      await db
+          .into(db.todoFolders)
+          .insert(
+            TodoFoldersCompanion.insert(
+              id: 'deleted-on-server',
+              serverId: const Value(72),
+              name: '已删除文件夹',
+              updatedAt: DateTime.now(),
+              createdAt: DateTime.now(),
+            ),
+          );
+      final dio = Dio(BaseOptions(baseUrl: 'https://todo.test'))
+        ..interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (options, handler) {
+              if (options.path.endsWith('/folder/list')) {
+                handler.resolve(
+                  Response<Map<String, dynamic>>(
+                    requestOptions: options,
+                    data: {'code': 0, 'data': []},
+                  ),
+                );
+                return;
+              }
+              handler.resolve(
+                Response<Map<String, dynamic>>(
+                  requestOptions: options,
+                  data: {
+                    'code': 0,
+                    'data': {
+                      'changes': [],
+                      'tombstones': [],
+                      'nextCursor': 'todo-core:0',
+                      'hasMore': false,
+                    },
+                  },
+                ),
+              );
+            },
+          ),
+        );
+      final client = ApiClient(dio: dio);
+      await SyncCoordinator(
+        db: db,
+        api: SyncApi(
+          client,
+          clientId: 'folder-delete',
+          deviceId: 'folder-delete',
+        ),
+        todoApi: client,
+      ).pull();
+
+      expect(await db.select(db.todoFolders).get(), isEmpty);
     },
   );
 }
