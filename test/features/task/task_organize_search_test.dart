@@ -133,6 +133,42 @@ void main() {
     expect(find.byType(TaskSearchPage), findsOneWidget);
   });
 
+  testWidgets('workspace sort selection persists an isolated view preference', (
+    tester,
+  ) async {
+    final fixture = await TodoVisualFixture.create();
+    addTearDown(fixture.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: fixture.container,
+        child: MaterialApp(
+          theme: ThemeData.light().copyWith(
+            extensions: const [AppThemeExtension(AppColors.light)],
+          ),
+          home: const Scaffold(body: TasksByListPage(hideAppBar: true)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('todo-sort-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('标题'));
+    await tester.pumpAndSettle();
+
+    final preference = await fixture.database
+        .select(fixture.database.todoViewPreferences)
+        .getSingle();
+    expect(preference.sourceType, 'TASK_SORT');
+    expect(preference.sourceKey, 'inbox');
+    expect(preference.valueJson, contains('title'));
+    final change = await fixture.database
+        .select(fixture.database.todoSyncChanges)
+        .getSingle();
+    expect(change.entity, 'view_preference');
+  });
+
   testWidgets(
     'batch completion reports per-task results from the local use-case',
     (tester) async {

@@ -252,9 +252,16 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
 
   Future<void> _changeSort(TaskSort sort) async {
     setState(() => _sort = sort);
-    await ref
-        .read(taskSortPreferenceRepositoryProvider)
-        ?.save(_selectedListId, sort);
+    try {
+      await ref
+          .read(taskSortPreferenceRepositoryProvider)
+          ?.save(_selectedListId, sort);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('排序偏好保存失败，请稍后重试')));
+    }
   }
 
   void _changeMode(TaskViewMode mode) {
