@@ -66,39 +66,41 @@ class TaskRepository {
     if (startAt != null && endAt != null && !endAt.isAfter(startAt)) {
       throw ArgumentError.value(endAt, 'endAt', '结束时间必须晚于开始时间');
     }
-    final now = DateTime.now();
-    final id = _uuid.v4();
-    await _db
-        .into(_db.todoTasks)
-        .insert(
-          TodoTasksCompanion.insert(
-            id: id,
-            listId: listId,
-            parentTaskId: Value(parentTaskId),
-            title: title,
-            description: Value(description),
-            priority: Value(priority),
-            isPinned: Value(isPinned),
-            startAt: Value(startAt),
-            endAt: Value(endAt),
-            dueAt: Value(dueAt),
-            allDay: Value(allDay),
-            timeZone: Value(timeZone),
-            fixedTimezone: Value(fixedTimezone),
-            updatedAt: now,
-            createdAt: now,
-          ),
-        );
-    final row = await (_db.select(
-      _db.todoTasks,
-    )..where((t) => t.id.equals(id))).getSingle();
-    await _queue.enqueue(
-      entity: SyncEntities.task,
-      op: SyncOps.upsert,
-      localId: id,
-      payload: _syncPayload(row),
-    );
-    return row;
+    return _db.transaction(() async {
+      final now = DateTime.now();
+      final id = _uuid.v4();
+      await _db
+          .into(_db.todoTasks)
+          .insert(
+            TodoTasksCompanion.insert(
+              id: id,
+              listId: listId,
+              parentTaskId: Value(parentTaskId),
+              title: title,
+              description: Value(description),
+              priority: Value(priority),
+              isPinned: Value(isPinned),
+              startAt: Value(startAt),
+              endAt: Value(endAt),
+              dueAt: Value(dueAt),
+              allDay: Value(allDay),
+              timeZone: Value(timeZone),
+              fixedTimezone: Value(fixedTimezone),
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      final row = await (_db.select(
+        _db.todoTasks,
+      )..where((t) => t.id.equals(id))).getSingle();
+      await _queue.enqueue(
+        entity: SyncEntities.task,
+        op: SyncOps.upsert,
+        localId: id,
+        payload: _syncPayload(row),
+      );
+      return row;
+    });
   }
 
   Future<TodoTask> update(
@@ -117,78 +119,84 @@ class TaskRepository {
     String? listId,
     bool? isPinned,
   }) async {
-    final current = await (_db.select(
-      _db.todoTasks,
-    )..where((t) => t.id.equals(taskId))).getSingle();
-    final nextStartAt = clearStartAt ? null : startAt ?? current.startAt;
-    final nextEndAt = clearEndAt ? null : endAt ?? current.endAt;
-    if (nextStartAt != null &&
-        nextEndAt != null &&
-        !nextEndAt.isAfter(nextStartAt)) {
-      throw ArgumentError.value(nextEndAt, 'endAt', '结束时间必须晚于开始时间');
-    }
-    final now = DateTime.now();
-    await (_db.update(_db.todoTasks)..where((t) => t.id.equals(taskId))).write(
-      TodoTasksCompanion(
-        title: title == null ? const Value.absent() : Value(title),
-        description: description == null
-            ? const Value.absent()
-            : Value(description),
-        priority: priority == null ? const Value.absent() : Value(priority),
-        isPinned: isPinned == null ? const Value.absent() : Value(isPinned),
-        startAt: clearStartAt
-            ? const Value(null)
-            : startAt == null
-            ? const Value.absent()
-            : Value(startAt),
-        endAt: clearEndAt
-            ? const Value(null)
-            : endAt == null
-            ? const Value.absent()
-            : Value(endAt),
-        dueAt: dueAt == null ? const Value.absent() : Value(dueAt),
-        allDay: allDay == null ? const Value.absent() : Value(allDay),
-        timeZone: timeZone == null ? const Value.absent() : Value(timeZone),
-        fixedTimezone: fixedTimezone == null
-            ? const Value.absent()
-            : Value(fixedTimezone),
-        listId: listId == null ? const Value.absent() : Value(listId),
-        updatedAt: Value(now),
-      ),
-    );
-    final row = await (_db.select(
-      _db.todoTasks,
-    )..where((t) => t.id.equals(taskId))).getSingle();
-    await _queue.enqueue(
-      entity: SyncEntities.task,
-      op: SyncOps.upsert,
-      localId: taskId,
-      serverId: row.serverId,
-      payload: _syncPayload(row),
-    );
-    return row;
+    return _db.transaction(() async {
+      final current = await (_db.select(
+        _db.todoTasks,
+      )..where((t) => t.id.equals(taskId))).getSingle();
+      final nextStartAt = clearStartAt ? null : startAt ?? current.startAt;
+      final nextEndAt = clearEndAt ? null : endAt ?? current.endAt;
+      if (nextStartAt != null &&
+          nextEndAt != null &&
+          !nextEndAt.isAfter(nextStartAt)) {
+        throw ArgumentError.value(nextEndAt, 'endAt', '结束时间必须晚于开始时间');
+      }
+      final now = DateTime.now();
+      await (_db.update(
+        _db.todoTasks,
+      )..where((t) => t.id.equals(taskId))).write(
+        TodoTasksCompanion(
+          title: title == null ? const Value.absent() : Value(title),
+          description: description == null
+              ? const Value.absent()
+              : Value(description),
+          priority: priority == null ? const Value.absent() : Value(priority),
+          isPinned: isPinned == null ? const Value.absent() : Value(isPinned),
+          startAt: clearStartAt
+              ? const Value(null)
+              : startAt == null
+              ? const Value.absent()
+              : Value(startAt),
+          endAt: clearEndAt
+              ? const Value(null)
+              : endAt == null
+              ? const Value.absent()
+              : Value(endAt),
+          dueAt: dueAt == null ? const Value.absent() : Value(dueAt),
+          allDay: allDay == null ? const Value.absent() : Value(allDay),
+          timeZone: timeZone == null ? const Value.absent() : Value(timeZone),
+          fixedTimezone: fixedTimezone == null
+              ? const Value.absent()
+              : Value(fixedTimezone),
+          listId: listId == null ? const Value.absent() : Value(listId),
+          updatedAt: Value(now),
+        ),
+      );
+      final row = await (_db.select(
+        _db.todoTasks,
+      )..where((t) => t.id.equals(taskId))).getSingle();
+      await _queue.enqueue(
+        entity: SyncEntities.task,
+        op: SyncOps.upsert,
+        localId: taskId,
+        serverId: row.serverId,
+        payload: _syncPayload(row),
+      );
+      return row;
+    });
   }
 
   /// 切换置顶状态 + sync_queue。
   Future<TodoTask> togglePin(String taskId) async {
-    final current = await (_db.select(
-      _db.todoTasks,
-    )..where((t) => t.id.equals(taskId))).getSingle();
-    final next = current.copyWith(
-      isPinned: !current.isPinned,
-      updatedAt: DateTime.now(),
-    );
-    await (_db.update(
-      _db.todoTasks,
-    )..where((t) => t.id.equals(taskId))).write(next);
-    await _queue.enqueue(
-      entity: SyncEntities.task,
-      op: SyncOps.upsert,
-      localId: taskId,
-      serverId: next.serverId,
-      payload: _syncPayload(next),
-    );
-    return next;
+    return _db.transaction(() async {
+      final current = await (_db.select(
+        _db.todoTasks,
+      )..where((t) => t.id.equals(taskId))).getSingle();
+      final next = current.copyWith(
+        isPinned: !current.isPinned,
+        updatedAt: DateTime.now(),
+      );
+      await (_db.update(
+        _db.todoTasks,
+      )..where((t) => t.id.equals(taskId))).write(next);
+      await _queue.enqueue(
+        entity: SyncEntities.task,
+        op: SyncOps.upsert,
+        localId: taskId,
+        serverId: next.serverId,
+        payload: _syncPayload(next),
+      );
+      return next;
+    });
   }
 
   /// 切换完成状态 + sync_queue。

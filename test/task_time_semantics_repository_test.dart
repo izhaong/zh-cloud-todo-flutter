@@ -92,6 +92,43 @@ void main() {
   });
 
   test(
+    'rolls back task creation when its outbox mutation cannot be enqueued',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final repository = TaskRepository(db, _FailingSyncChangeQueue(db));
+
+      await expectLater(
+        repository.create(listId: 'inbox', title: '不能留下孤儿任务'),
+        throwsStateError,
+      );
+
+      expect(await db.select(db.todoTasks).get(), isEmpty);
+      expect(await db.select(db.todoSyncChanges).get(), isEmpty);
+    },
+  );
+
+  test(
+    'rolls back task update when its outbox mutation cannot be enqueued',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final working = TaskRepository(db, SyncChangeQueue(db));
+      final task = await working.create(listId: 'inbox', title: '原始标题');
+      await db.delete(db.todoSyncChanges).go();
+      final repository = TaskRepository(db, _FailingSyncChangeQueue(db));
+
+      await expectLater(
+        repository.update(task.id, title: '不应落库的标题'),
+        throwsStateError,
+      );
+
+      expect((await repository.getById(task.id))?.title, '原始标题');
+      expect(await db.select(db.todoSyncChanges).get(), isEmpty);
+    },
+  );
+
+  test(
     'completes and reopens a task with the service time-semantics payload',
     () async {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
@@ -548,4 +585,18 @@ Future<void> _seedTask(AppDatabase db, {String id = 'task-1'}) {
           createdAt: now,
         ),
       );
+}
+
+class _FailingSyncChangeQueue extends SyncChangeQueue {
+  _FailingSyncChangeQueue(super.db);
+
+  @override
+  Future<void> enqueue({
+    required String entity,
+    required String op,
+    String? localId,
+    int? serverId,
+    String? clientMutationId,
+    required Map<String, dynamic> payload,
+  }) => throw StateError('模拟 outbox 写入失败');
 }
