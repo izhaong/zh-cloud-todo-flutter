@@ -838,6 +838,113 @@ void main() {
     },
     skip: _b2Enabled ? false : 'set --dart-define=TODO_B2_LIVE=true to run',
   );
+
+  test(
+    'B2 live persistent reminder redispatches after its configured interval',
+    () async {
+      expect(_mobile, isNotEmpty, reason: 'TODO_B1_E2E_MOBILE is required');
+      expect(_password, isNotEmpty, reason: 'TODO_B1_E2E_PASSWORD is required');
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+
+      final sessionA = await _login();
+      final sessionB = await _login();
+      final dbA = AppDatabase.forTesting(NativeDatabase.memory());
+      final dbB = AppDatabase.forTesting(NativeDatabase.memory());
+      final apiA = _client(sessionA.accessToken);
+      final coordinatorA = _coordinator(
+        dbA,
+        apiA,
+        'b2-persistent-reminder-live-device-a',
+      );
+      final coordinatorB = _coordinator(
+        dbB,
+        _client(sessionB.accessToken),
+        'b2-persistent-reminder-live-device-b',
+      );
+      final listsA = ListRepository(dbA, SyncChangeQueue(dbA));
+      final tasksA = TaskRepository(dbA, SyncChangeQueue(dbA));
+      final remindersA = ReminderRepository(dbA, SyncChangeQueue(dbA));
+      final inboxA = ReminderInboxRepository(TodoRestApi(apiA).reminder);
+      final suffix = DateTime.now().microsecondsSinceEpoch;
+      final list = await listsA.create(name: 'B2 persistent live $suffix');
+      String? taskId;
+      var stage = 'push list';
+
+      try {
+        await coordinatorA.push();
+        final syncedList = await dbA.listByLocalId(list.id);
+        expect(syncedList?.serverId, isPositive);
+
+        final task = await tasksA.create(
+          listId: list.id,
+          title: 'B2 persistent redispatch $suffix',
+        );
+        taskId = task.id;
+        stage = 'push task';
+        await coordinatorA.push();
+        final syncedTask = await tasksA.getById(task.id);
+        expect(syncedTask?.serverId, isPositive);
+
+        // 该提醒已到期；一分钟间隔可在服务端 30 秒扫描周期内观察到首次和
+        // 第二次 IN_APP dispatch，而无需客户端直连或人工触发 Job。
+        final reminder = await remindersA.create(
+          taskId: task.id,
+          fireAt: DateTime.now().toUtc().subtract(const Duration(minutes: 2)),
+          persistent: true,
+          intervalMinutes: 1,
+          timeZone: 'Asia/Shanghai',
+          fixedTimezone: true,
+        );
+        stage = 'push persistent reminder';
+        await coordinatorA.push();
+        final syncedReminder = await (dbA.select(
+          dbA.todoReminders,
+        )..where((row) => row.id.equals(reminder.id))).getSingle();
+        expect(syncedReminder.serverId, isPositive);
+        expect(syncedReminder.persistent, isTrue);
+        expect(syncedReminder.intervalMinutes, 1);
+
+        stage = 'pull reminder on second device';
+        await coordinatorB.pull();
+        final taskB = await dbB.taskByServerId(syncedTask!.serverId!);
+        expect(taskB, isNotNull);
+        final reminderB =
+            await (dbB.select(dbB.todoReminders)..where(
+                  (row) => row.serverId.equals(syncedReminder.serverId!),
+                ))
+                .getSingle();
+        expect(reminderB.taskId, taskB!.id);
+        expect(reminderB.persistent, isTrue);
+        expect(reminderB.intervalMinutes, 1);
+
+        stage = 'wait for two server dispatches';
+        final dispatches = await _waitForReminderDispatches(
+          inboxA,
+          syncedReminder.serverId!,
+          minimumCount: 2,
+        );
+        expect(dispatches.map((dispatch) => dispatch.id).toSet(), hasLength(2));
+      } catch (error, stackTrace) {
+        Error.throwWithStackTrace(
+          StateError(
+            'B2 persistent reminder live sync failed at stage: $stage; $error',
+          ),
+          stackTrace,
+        );
+      } finally {
+        if (taskId != null) {
+          await tasksA.delete(taskId);
+          await coordinatorA.push();
+        }
+        await listsA.delete(list.id);
+        await coordinatorA.push();
+        await dbA.close();
+        await dbB.close();
+      }
+    },
+    skip: _b2Enabled ? false : 'set --dart-define=TODO_B2_LIVE=true to run',
+    timeout: const Timeout(Duration(minutes: 3)),
+  );
 }
 
 Future<ReminderInboxItem> _waitForReminderDispatch(
@@ -865,6 +972,23 @@ Future<void> _waitForReminderDispatchRemoval(
     await Future<void>.delayed(const Duration(seconds: 1));
   }
   throw StateError('snoozed reminder dispatch remained in the inbox');
+}
+
+Future<List<ReminderInboxItem>> _waitForReminderDispatches(
+  ReminderInboxRepository inbox,
+  int reminderId, {
+  required int minimumCount,
+}) async {
+  for (var attempt = 0; attempt < 42; attempt++) {
+    final matches = (await inbox.list())
+        .where((item) => item.reminderId == reminderId)
+        .toList(growable: false);
+    if (matches.length >= minimumCount) return matches;
+    await Future<void>.delayed(const Duration(seconds: 3));
+  }
+  throw StateError(
+    'persistent reminder did not produce $minimumCount dispatches before timeout',
+  );
 }
 
 Future<void> _deleteAttachmentIfPresent(ApiClient client, int serverId) async {

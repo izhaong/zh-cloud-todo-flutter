@@ -700,6 +700,14 @@ class SyncCoordinator {
       case SyncEntities.filter:
         await _upsertLocalFilter(conflict.entityId!, serverValue);
     }
+    final serverRevision = conflict.serverRevision;
+    if (serverRevision != null && serverRevision > 0) {
+      await db.writeRevision(
+        conflict.entityType!,
+        conflict.entityId!,
+        serverRevision,
+      );
+    }
   }
 
   // --- Pull ------------------------------------------------------------
