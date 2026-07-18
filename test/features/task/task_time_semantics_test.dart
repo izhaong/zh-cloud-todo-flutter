@@ -170,6 +170,55 @@ void main() {
     expect(change.entity, 'reminder');
   });
 
+  testWidgets('detail displays a retryable reminder sync state', (
+    tester,
+  ) async {
+    final fixture = await TodoVisualFixture.create();
+    addTearDown(fixture.dispose);
+    final reminder = await fixture.container
+        .read(reminderRepositoryProvider)!
+        .create(taskId: _taskId, fireAt: DateTime(2026, 7, 11, 10));
+    await (fixture.database.update(
+      fixture.database.todoSyncChanges,
+    )..where((change) => change.entityLocalId.equals(reminder.id))).write(
+      const TodoSyncChangesCompanion(
+        status: Value('retryable'),
+        attemptCount: Value(2),
+      ),
+    );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: fixture.container,
+        child: MaterialApp(
+          theme: ThemeData.light().copyWith(
+            extensions: const [AppThemeExtension(AppColors.light)],
+          ),
+          home: const Scaffold(
+            body: TaskDetailPane(taskId: _taskId, embedded: true),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _openScheduleOptions(tester);
+
+    final reminderList = find.byKey(const Key('task-reminders'));
+    await tester.scrollUntilVisible(
+      reminderList,
+      160,
+      scrollable: find.byType(Scrollable).last,
+    );
+    final reminderTile = find.byKey(ValueKey('task-reminder-${reminder.id}'));
+    await tester.ensureVisible(reminderTile);
+    await tester.pumpAndSettle();
+    expect(find.text('同步失败，等待重试（已尝试 2 次）'), findsOneWidget);
+    expect(
+      find.byKey(ValueKey('task-reminder-retry-${reminder.id}')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets(
     'detail creates an absolute reminder through reminder repository',
     (tester) async {

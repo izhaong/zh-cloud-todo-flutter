@@ -9,6 +9,7 @@ import '../../core/api/todo_api.dart';
 import '../../core/theme/brand_colors.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../state/providers.dart';
+import '../../state/repositories/reminder_repository.dart';
 import '../shell/app_dialog.dart';
 import 'task_quick_add_sheet.dart';
 import '../collaboration/task_comments_page.dart';
@@ -57,39 +58,115 @@ class _TaskReminderSection extends ConsumerWidget {
             if (rows.isEmpty)
               const Align(alignment: Alignment.centerLeft, child: Text('尚无提醒')),
             for (final reminder in rows)
-              ListTile(
-                key: ValueKey('task-reminder-${reminder.id}'),
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.alarm_outlined),
-                title: Text(
-                  reminder.remindAt.toLocal().toString().substring(0, 16),
-                ),
-                subtitle: Text(
-                  reminder.persistent
-                      ? '持续提醒，每 ${reminder.intervalMinutes ?? 0} 分钟'
-                      : (reminder.anchorType == 'END' ? '截止时提醒' : '单次提醒'),
-                ),
-                trailing: IconButton(
-                  key: ValueKey('task-reminder-remove-${reminder.id}'),
-                  tooltip: '删除提醒',
-                  onPressed: repository == null
-                      ? null
-                      : () async {
-                          final messenger = ScaffoldMessenger.of(context);
-                          await repository.remove(reminder.id);
-                          if (context.mounted) {
-                            messenger.showSnackBar(
-                              const SnackBar(content: Text('已删除提醒')),
-                            );
-                          }
-                        },
-                  icon: const Icon(Icons.delete_outline),
-                ),
-              ),
+              _TaskReminderTile(reminder: reminder, repository: repository),
           ],
         );
       },
     );
+  }
+}
+
+class _TaskReminderTile extends ConsumerWidget {
+  const _TaskReminderTile({required this.reminder, required this.repository});
+
+  final TodoReminder reminder;
+  final ReminderRepository? repository;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final db = ref.watch(appDatabaseProvider);
+    if (db == null) return const SizedBox.shrink();
+    final changes = db.select(db.todoSyncChanges)
+      ..where((change) => change.entity.equals('reminder'))
+      ..where((change) => change.entityLocalId.equals(reminder.id))
+      ..orderBy([(change) => OrderingTerm.desc(change.id)])
+      ..limit(1);
+    return StreamBuilder<List<TodoSyncChange>>(
+      stream: changes.watch(),
+      builder: (context, snapshot) {
+        final rows = snapshot.data ?? const <TodoSyncChange>[];
+        final change = rows.isEmpty ? null : rows.first;
+        final syncMessage = _reminderSyncMessage(change);
+        return ListTile(
+          key: ValueKey('task-reminder-${reminder.id}'),
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.alarm_outlined),
+          title: Text(reminder.remindAt.toLocal().toString().substring(0, 16)),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                reminder.persistent
+                    ? '持续提醒，每 ${reminder.intervalMinutes ?? 0} 分钟'
+                    : (reminder.anchorType == 'END' ? '截止时提醒' : '单次提醒'),
+              ),
+              if (syncMessage != null)
+                Text(
+                  syncMessage,
+                  key: ValueKey('task-reminder-sync-${reminder.id}'),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+            ],
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (change?.status == 'retryable')
+                IconButton(
+                  key: ValueKey('task-reminder-retry-${reminder.id}'),
+                  tooltip: '立即重试同步',
+                  onPressed: ref.read(syncCoordinatorProvider) == null
+                      ? null
+                      : () => _retrySync(context, ref),
+                  icon: const Icon(Icons.refresh),
+                ),
+              IconButton(
+                key: ValueKey('task-reminder-remove-${reminder.id}'),
+                tooltip: '删除提醒',
+                onPressed: repository == null
+                    ? null
+                    : () async {
+                        final messenger = ScaffoldMessenger.of(context);
+                        await repository!.remove(reminder.id);
+                        if (context.mounted) {
+                          messenger.showSnackBar(
+                            const SnackBar(content: Text('已删除提醒')),
+                          );
+                        }
+                      },
+                icon: const Icon(Icons.delete_outline),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _retrySync(BuildContext context, WidgetRef ref) async {
+    final coordinator = ref.read(syncCoordinatorProvider);
+    if (coordinator == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final outcome = await coordinator.syncOnce();
+      if (!context.mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('已同步 ${outcome.pushed} 项本地变更')),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      messenger.showSnackBar(const SnackBar(content: Text('同步暂时不可用，请稍后重试')));
+    }
+  }
+
+  String? _reminderSyncMessage(TodoSyncChange? change) {
+    if (change == null || change.status == 'synced') return null;
+    if (change.status == 'queued') return '等待同步';
+    if (change.status == 'retryable') {
+      return '同步失败，等待重试（已尝试 ${change.attemptCount} 次）';
+    }
+    if (change.status == 'failed') return '同步冲突，保留本地版本待处理';
+    return null;
   }
 }
 
