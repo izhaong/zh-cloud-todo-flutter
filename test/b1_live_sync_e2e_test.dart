@@ -278,6 +278,95 @@ void main() {
   );
 
   test(
+    'B2 live sync restores a real revision conflict before a new edit replays',
+    () async {
+      expect(_mobile, isNotEmpty, reason: 'TODO_B1_E2E_MOBILE is required');
+      expect(_password, isNotEmpty, reason: 'TODO_B1_E2E_PASSWORD is required');
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+
+      final sessionA = await _login();
+      final sessionB = await _login();
+      final dbA = AppDatabase.forTesting(NativeDatabase.memory());
+      final dbB = AppDatabase.forTesting(NativeDatabase.memory());
+      final coordinatorA = _coordinator(
+        dbA,
+        _client(sessionA.accessToken),
+        'b2-live-conflict-device-a',
+      );
+      final coordinatorB = _coordinator(
+        dbB,
+        _client(sessionB.accessToken),
+        'b2-live-conflict-device-b',
+      );
+      final listsA = ListRepository(dbA, SyncChangeQueue(dbA));
+      final tasksA = TaskRepository(dbA, SyncChangeQueue(dbA));
+      final tasksB = TaskRepository(dbB, SyncChangeQueue(dbB));
+      final suffix = DateTime.now().microsecondsSinceEpoch;
+      final list = await listsA.create(name: 'B2 conflict live $suffix');
+      String? taskId;
+      var stage = 'push list';
+
+      try {
+        expect(await coordinatorA.push(), 1);
+        final syncedList = await dbA.listByLocalId(list.id);
+        expect(syncedList?.serverId, isPositive);
+
+        final task = await tasksA.create(
+          listId: list.id,
+          title: 'B2 conflict origin $suffix',
+        );
+        taskId = task.id;
+        stage = 'push task';
+        expect(await coordinatorA.push(), 1);
+        final taskA = await tasksA.getById(task.id);
+        expect(taskA?.serverId, isPositive);
+
+        stage = 'pull stale task on device B';
+        await coordinatorB.pull();
+        final taskB = await dbB.taskByServerId(taskA!.serverId!);
+        expect(taskB, isNotNull);
+
+        stage = 'commit newer title on device A';
+        await tasksA.update(task.id, title: 'B2 conflict server $suffix');
+        expect(await coordinatorA.push(), 1);
+
+        stage = 'push stale title from device B';
+        await tasksB.update(taskB!.id, title: 'B2 conflict stale $suffix');
+        expect(await coordinatorB.push(), 0);
+        final restoredB = await tasksB.getById(taskB.id);
+        expect(restoredB?.title, 'B2 conflict server $suffix');
+        final failed = await (dbB.select(dbB.todoSyncChanges)
+              ..where((row) => row.status.equals('failed')))
+            .get();
+        expect(failed, hasLength(1));
+
+        stage = 'replay a new edit from restored revision';
+        await tasksB.update(taskB.id, title: 'B2 conflict recovered $suffix');
+        expect(await coordinatorB.push(), 1);
+        await coordinatorA.pull();
+        final convergedA = await dbA.taskByServerId(taskA.serverId!);
+        expect(convergedA?.title, 'B2 conflict recovered $suffix');
+      } catch (error, stackTrace) {
+        Error.throwWithStackTrace(
+          StateError('B2 live conflict recovery failed at stage: $stage; $error'),
+          stackTrace,
+        );
+      } finally {
+        if (taskId != null) {
+          await tasksA.delete(taskId);
+          await coordinatorA.push();
+        }
+        await listsA.delete(list.id);
+        await coordinatorA.push();
+        await dbA.close();
+        await dbB.close();
+      }
+    },
+    skip: _b2Enabled ? false : 'set --dart-define=TODO_B2_LIVE=true to run',
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+
+  test(
     'B2 live sync preserves time, persistent reminder and ON_COMPLETE linkage',
     () async {
       expect(_mobile, isNotEmpty, reason: 'TODO_B1_E2E_MOBILE is required');
