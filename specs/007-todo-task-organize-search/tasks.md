@@ -25,3 +25,4 @@
 ## 执行证据
 
 - 2026-07-16：T004 的一个可独立回滚增量已验证——对不存在的子任务执行 `reparent` 会在任何 Drift 写入或 task outbox 入队前以 `StateError('任务不存在')` 拒绝。`nice -n 19 flutter test --concurrency=1 test/task_organize_search_repository_test.dart` 通过 15 项，`nice -n 19 flutter analyze` 无问题。T004 仍保持未勾选：跨账户/只读任务、智能清单结构重排和交互反馈尚未验证。
+- 2026-07-19：T008/T009 的 folder REST 特例新增可回滚增量：`pull()` 在同步白名单实体后用 `/folder/list` 补水 Drift；create 遇业务错误或缺少 server ID 时不再把 outbox 误记为 synced。`test/sync_coordinator_folder_pull_test.dart` 通过，`flutter analyze` 无问题；受 `TODO_B3_LIVE` 保护的 A/B 用例在测试环境证明 A 创建+push、REST list 可见、B 空 Drift pull 后按 server ID/名称恢复。T008/T009 仍未勾选：folder 更新/删除、权限、离线重启、失败恢复及与 list 移动的完整回放尚未验证。
