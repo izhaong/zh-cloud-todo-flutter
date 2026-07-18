@@ -609,6 +609,101 @@ void main() {
     },
     skip: _b2Enabled ? false : 'set --dart-define=TODO_B2_LIVE=true to run',
   );
+
+  test(
+    'B2 live sync materializes a new ON_DUE rule immediately on both devices',
+    () async {
+      expect(_mobile, isNotEmpty, reason: 'TODO_B1_E2E_MOBILE is required');
+      expect(_password, isNotEmpty, reason: 'TODO_B1_E2E_PASSWORD is required');
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+
+      final sessionA = await _login();
+      final sessionB = await _login();
+      final dbA = AppDatabase.forTesting(NativeDatabase.memory());
+      final dbB = AppDatabase.forTesting(NativeDatabase.memory());
+      final apiA = _client(sessionA.accessToken);
+      final coordinatorA = _coordinator(dbA, apiA, 'b2-ondue-live-device-a');
+      final coordinatorB = _coordinator(
+        dbB,
+        _client(sessionB.accessToken),
+        'b2-ondue-live-device-b',
+      );
+      final listsA = ListRepository(dbA, SyncChangeQueue(dbA));
+      final tasksA = TaskRepository(dbA, SyncChangeQueue(dbA));
+      final repeatsA = RepeatRuleRepository(dbA, SyncChangeQueue(dbA));
+      final suffix = DateTime.now().microsecondsSinceEpoch;
+      final list = await listsA.create(name: 'B2 ON_DUE live $suffix');
+      String? taskId;
+      String? generatedTaskId;
+      var stage = 'push list';
+
+      try {
+        await coordinatorA.push();
+        final task = await tasksA.create(
+          listId: list.id,
+          title: 'B2 ON_DUE $suffix',
+          dueAt: DateTime.now().toUtc(),
+          timeZone: 'Asia/Shanghai',
+          fixedTimezone: true,
+        );
+        taskId = task.id;
+        stage = 'push template task';
+        await coordinatorA.push();
+        final syncedTask = await tasksA.getById(task.id);
+        expect(syncedTask?.serverId, isPositive);
+
+        final rule = await repeatsA.save(
+          taskId: task.id,
+          frequency: 'DAILY',
+          startAt: DateTime.now().toUtc(),
+          countLimit: 1,
+          repeatMode: 'ON_DUE',
+          timeZone: 'Asia/Shanghai',
+        );
+        stage = 'push ON_DUE rule with immediate materialization';
+        await coordinatorA.push();
+        stage = 'pull materialized instance on first device';
+        await coordinatorA.pull();
+        final generatedA = await (dbA.select(
+          dbA.todoTasks,
+        )..where((row) => row.repeatParentTaskId.equals(task.id))).getSingle();
+        generatedTaskId = generatedA.id;
+        expect(generatedA.serverId, isPositive);
+        expect(generatedA.repeatRuleId, rule.id);
+        expect(generatedA.repeatOccurrenceAt, isNotNull);
+
+        stage = 'pull materialized instance on second device';
+        await coordinatorB.pull();
+        final parentB = await dbB.taskByServerId(syncedTask!.serverId!);
+        expect(parentB, isNotNull);
+        final generatedB =
+            await (dbB.select(dbB.todoTasks)
+                  ..where((row) => row.repeatParentTaskId.equals(parentB!.id)))
+                .getSingle();
+        expect(generatedB.serverId, generatedA.serverId);
+        expect(generatedB.repeatOccurrenceAt, generatedA.repeatOccurrenceAt);
+      } catch (error, stackTrace) {
+        Error.throwWithStackTrace(
+          StateError('B2 ON_DUE live sync failed at stage: $stage; $error'),
+          stackTrace,
+        );
+      } finally {
+        if (generatedTaskId != null) {
+          await tasksA.delete(generatedTaskId);
+          await coordinatorA.push();
+        }
+        if (taskId != null) {
+          await tasksA.delete(taskId);
+          await coordinatorA.push();
+        }
+        await listsA.delete(list.id);
+        await coordinatorA.push();
+        await dbA.close();
+        await dbB.close();
+      }
+    },
+    skip: _b2Enabled ? false : 'set --dart-define=TODO_B2_LIVE=true to run',
+  );
 }
 
 Future<ReminderInboxItem> _waitForReminderDispatch(
