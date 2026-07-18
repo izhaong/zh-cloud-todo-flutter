@@ -28,7 +28,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 10);
+      expect(version.data['user_version'], 11);
 
       final taskColumns = await upgraded
           .customSelect('PRAGMA table_info(todo_tasks)')
@@ -87,6 +87,20 @@ void main() {
           )
           .get();
       expect(preservedTables.map((row) => row.data['name']), hasLength(4));
+      final b3Dependencies = await upgraded
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN "
+            "('todo_lists', 'todo_tags', 'todo_task_tags')",
+          )
+          .get();
+      expect(b3Dependencies.map((row) => row.data['name']), hasLength(3));
+      final indexTable = await upgraded
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type = 'table' "
+            "AND name = 'todo_search_index'",
+          )
+          .getSingle();
+      expect(indexTable.data['name'], 'todo_search_index');
     },
   );
 
@@ -169,7 +183,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 10);
+      expect(version.data['user_version'], 11);
       await upgraded.close();
 
       final reopened = AppDatabase.forTesting(NativeDatabase(databaseFile));

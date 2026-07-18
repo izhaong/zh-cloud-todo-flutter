@@ -42,52 +42,21 @@ class TaskQueryRepository {
   final AppDatabase _db;
 
   Future<List<TaskSearchResult>> search(String keyword) async {
-    final normalized = keyword.trim().toLowerCase();
-    if (normalized.isEmpty) return const [];
-
-    final tasks = await _db.select(_db.todoTasks).get();
-    final lists = await _db.select(_db.todoLists).get();
-    final tags = await _db.select(_db.todoTags).get();
-    final results = <TaskSearchResult>[
-      ...tasks
-          .where(
-            (task) =>
-                task.title.toLowerCase().contains(normalized) ||
-                (task.description?.toLowerCase().contains(normalized) ?? false),
-          )
-          .map(
-            (task) => TaskSearchResult(
-              type: TaskSearchResultType.task,
-              id: task.id,
-              title: task.title,
-            ),
+    final entries = await _db.searchIndex(keyword);
+    return entries
+        .map(
+          (entry) => TaskSearchResult(
+            type: switch (entry.entityType) {
+              'task' => TaskSearchResultType.task,
+              'list' => TaskSearchResultType.list,
+              'tag' => TaskSearchResultType.tag,
+              _ => throw StateError('未知搜索索引实体：${entry.entityType}'),
+            },
+            id: entry.entityId,
+            title: entry.title,
           ),
-      ...lists
-          .where((list) => list.name.toLowerCase().contains(normalized))
-          .map(
-            (list) => TaskSearchResult(
-              type: TaskSearchResultType.list,
-              id: list.id,
-              title: list.name,
-            ),
-          ),
-      ...tags
-          .where((tag) => tag.name.toLowerCase().contains(normalized))
-          .map(
-            (tag) => TaskSearchResult(
-              type: TaskSearchResultType.tag,
-              id: tag.id,
-              title: tag.name,
-            ),
-          ),
-    ];
-    results.sort((left, right) {
-      final byType = left.type.index.compareTo(right.type.index);
-      if (byType != 0) return byType;
-      final byTitle = left.title.compareTo(right.title);
-      return byTitle != 0 ? byTitle : left.id.compareTo(right.id);
-    });
-    return results;
+        )
+        .toList(growable: false);
   }
 
   Future<List<TodoTask>> filter(TaskQueryFilter filter) async {
@@ -112,9 +81,12 @@ class TaskQueryRepository {
         return false;
       }
       if (normalizedKeyword != null && normalizedKeyword.isNotEmpty) {
-        final matchesTitle = task.title.toLowerCase().contains(normalizedKeyword);
+        final matchesTitle = task.title.toLowerCase().contains(
+          normalizedKeyword,
+        );
         final matchesDescription =
-            task.description?.toLowerCase().contains(normalizedKeyword) ?? false;
+            task.description?.toLowerCase().contains(normalizedKeyword) ??
+            false;
         if (!matchesTitle && !matchesDescription) return false;
       }
       final dueAt = task.dueAt;

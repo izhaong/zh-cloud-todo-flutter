@@ -92,6 +92,17 @@ void main() {
     );
   });
 
+  test('本地搜索索引覆盖任务、清单和标签，并保持可用的标题', () async {
+    final entries = await db.searchIndex('收集');
+
+    expect(entries.map((entry) => entry.identity).toList(), [
+      'task:task-700',
+      'list:list-inbox',
+      'tag:tag-collection',
+    ]);
+    expect(entries.map((entry) => entry.title).toList(), ['收集周报', '收集箱', '收集']);
+  });
+
   test('重设父任务拒绝自引用', () async {
     await expectLater(
       taskRepository.reparent('task-1', 'task-1'),
@@ -125,11 +136,7 @@ void main() {
     await expectLater(
       taskRepository.reparent('task-missing', 'task-1'),
       throwsA(
-        isA<StateError>().having(
-          (error) => error.message,
-          'message',
-          '任务不存在',
-        ),
+        isA<StateError>().having((error) => error.message, 'message', '任务不存在'),
       ),
     );
 
@@ -196,22 +203,22 @@ void main() {
   });
 
   test('高级过滤按关键词和截止日期 UTC 闭区间返回稳定结果', () async {
-    await (db.update(db.todoTasks)
-          ..where((row) => row.id.equals('task-1')))
-        .write(
-          TodoTasksCompanion(
-            title: const Value('规划发布'),
-            dueAt: Value(DateTime.utc(2026, 7, 20, 0)),
-          ),
-        );
-    await (db.update(db.todoTasks)
-          ..where((row) => row.id.equals('task-2')))
-        .write(
-          TodoTasksCompanion(
-            title: const Value('规划复盘'),
-            dueAt: Value(DateTime.utc(2026, 7, 21, 0)),
-          ),
-        );
+    await (db.update(
+      db.todoTasks,
+    )..where((row) => row.id.equals('task-1'))).write(
+      TodoTasksCompanion(
+        title: const Value('规划发布'),
+        dueAt: Value(DateTime.utc(2026, 7, 20, 0)),
+      ),
+    );
+    await (db.update(
+      db.todoTasks,
+    )..where((row) => row.id.equals('task-2'))).write(
+      TodoTasksCompanion(
+        title: const Value('规划复盘'),
+        dueAt: Value(DateTime.utc(2026, 7, 21, 0)),
+      ),
+    );
 
     final results = await repository.filter(
       TaskQueryFilter(
@@ -275,6 +282,36 @@ void main() {
       'task-ordered-a',
       'task-ordered-b',
       'task-ordered-unpinned',
+    ]);
+  });
+
+  test('本地搜索索引随任务更新和删除保持一致', () async {
+    await (db.update(
+      db.todoTasks,
+    )..where((row) => row.id.equals('task-700'))).write(
+      const TodoTasksCompanion(title: Value('已改名任务'), description: Value(null)),
+    );
+
+    final afterRename = await db.searchIndex('收集');
+    expect(afterRename, [
+      isA<TodoSearchIndexEntry>().having(
+        (entry) => entry.identity,
+        'identity',
+        'list:list-inbox',
+      ),
+      isA<TodoSearchIndexEntry>().having(
+        (entry) => entry.identity,
+        'identity',
+        'tag:tag-collection',
+      ),
+    ]);
+    expect((await db.searchIndex('改名')).single.identity, 'task:task-700');
+
+    await (db.delete(
+      db.todoTags,
+    )..where((row) => row.id.equals('tag-collection'))).go();
+    expect((await db.searchIndex('收集')).map((entry) => entry.identity), [
+      'list:list-inbox',
     ]);
   });
 
@@ -352,10 +389,7 @@ void main() {
     final batchRepository = TaskBatchEditRepository(db, SyncChangeQueue(db));
 
     final results = await batchRepository.apply(
-      const TaskBatchEditCommand(
-        taskIds: ['task-1'],
-        listId: 'list-missing',
-      ),
+      const TaskBatchEditCommand(taskIds: ['task-1'], listId: 'list-missing'),
     );
 
     expect(results.single.status, TaskBatchEditStatus.failed);
