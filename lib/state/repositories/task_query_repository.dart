@@ -1,5 +1,31 @@
 import '../../core/db/app_database.dart';
 
+/// 用户在任务工作区中选择的主排序字段。
+///
+/// 所有排序仍固定以置顶、手工顺序与任务 UUID 作为额外键，确保
+/// Drift 查询与 Widget 渲染在同值场景也拥有相同的确定性顺序。
+enum TaskSort { smart, priorityDesc, dueDate, title, createdAt }
+
+int compareTodoTasks(TodoTask left, TodoTask right, TaskSort sort) {
+  if (left.isPinned != right.isPinned) return left.isPinned ? -1 : 1;
+
+  final bySelectedField = switch (sort) {
+    TaskSort.smart => 0,
+    TaskSort.priorityDesc => right.priority.compareTo(left.priority),
+    TaskSort.dueDate => (left.dueAt ?? DateTime(9999)).compareTo(
+      right.dueAt ?? DateTime(9999),
+    ),
+    TaskSort.title => left.title.toLowerCase().compareTo(
+      right.title.toLowerCase(),
+    ),
+    TaskSort.createdAt => right.createdAt.compareTo(left.createdAt),
+  };
+  if (bySelectedField != 0) return bySelectedField;
+
+  final byManualOrder = left.sortOrder.compareTo(right.sortOrder);
+  return byManualOrder != 0 ? byManualOrder : left.id.compareTo(right.id);
+}
+
 enum TaskSearchResultType { task, list, tag }
 
 class TaskSearchResult {
@@ -25,6 +51,7 @@ class TaskQueryFilter {
     this.keyword,
     this.dueAtFrom,
     this.dueAtTo,
+    this.sort = TaskSort.smart,
   });
 
   final String? listId;
@@ -34,6 +61,7 @@ class TaskQueryFilter {
   final String? keyword;
   final DateTime? dueAtFrom;
   final DateTime? dueAtTo;
+  final TaskSort sort;
 }
 
 class TaskQueryRepository {
@@ -102,13 +130,7 @@ class TaskQueryRepository {
         (tagId) => tagIdsByTask[task.id]?.contains(tagId) ?? false,
       );
     }).toList();
-    results.sort((left, right) {
-      if (left.isPinned != right.isPinned) {
-        return left.isPinned ? -1 : 1;
-      }
-      final bySortOrder = left.sortOrder.compareTo(right.sortOrder);
-      return bySortOrder != 0 ? bySortOrder : left.id.compareTo(right.id);
-    });
+    results.sort((left, right) => compareTodoTasks(left, right, filter.sort));
     return results;
   }
 }

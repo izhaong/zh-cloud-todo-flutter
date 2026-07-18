@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,6 +10,7 @@ import '../../core/widgets/app_widgets.dart';
 import '../../state/nlp_date.dart';
 import '../../state/providers.dart';
 import '../../state/repositories/task_batch_edit_repository.dart';
+import '../../state/repositories/task_query_repository.dart';
 import '../../state/repositories/task_repository.dart';
 import '../filter/filter_bar.dart';
 import '../shell/quick_add_bar.dart';
@@ -80,6 +83,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       dueRange: widget.initialDueRange,
       completed: widget.initialCompleted,
     );
+    Future<void>.microtask(_restoreSortPreference);
   }
 
   @override
@@ -88,6 +92,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     if (widget.lockedListId &&
         widget.initialListId != oldWidget.initialListId) {
       setState(() => _selectedListId = widget.initialListId);
+      Future<void>.microtask(_restoreSortPreference);
     }
     if (widget.initialDueRange != oldWidget.initialDueRange ||
         widget.initialCompleted != oldWidget.initialCompleted) {
@@ -141,7 +146,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 sort: _sort,
                 filterActive: !_filter.isEmpty,
                 onModeChanged: _changeMode,
-                onSortChanged: (sort) => setState(() => _sort = sort),
+                onSortChanged: _changeSort,
                 onFilterPressed: _openFilterPanel,
                 batchSelectionActive: _batchSelectionActive,
                 batchSelectedCount: _batchSelectedTaskIds.length,
@@ -237,6 +242,19 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           onTaskSelected: widget.onTaskSelected,
         );
     }
+  }
+
+  Future<void> _restoreSortPreference() async {
+    final repository = ref.read(taskSortPreferenceRepositoryProvider);
+    final sort = await repository?.get(_selectedListId);
+    if (mounted && sort != null) setState(() => _sort = sort);
+  }
+
+  Future<void> _changeSort(TaskSort sort) async {
+    setState(() => _sort = sort);
+    await ref
+        .read(taskSortPreferenceRepositoryProvider)
+        ?.save(_selectedListId, sort);
   }
 
   void _changeMode(TaskViewMode mode) {
@@ -833,23 +851,7 @@ class _ListBodyState extends State<_ListBody> {
 
   List<TodoTask> _sortedItems(List<TodoTask> items) {
     final sorted = [...items];
-    sorted.sort((a, b) {
-      if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
-      switch (widget.sort) {
-        case TaskSort.smart:
-          return b.updatedAt.compareTo(a.updatedAt);
-        case TaskSort.priorityDesc:
-          return b.priority.compareTo(a.priority);
-        case TaskSort.dueDate:
-          return (a.dueAt ?? DateTime(9999)).compareTo(
-            b.dueAt ?? DateTime(9999),
-          );
-        case TaskSort.title:
-          return a.title.toLowerCase().compareTo(b.title.toLowerCase());
-        case TaskSort.createdAt:
-          return b.createdAt.compareTo(a.createdAt);
-      }
-    });
+    sorted.sort((a, b) => compareTodoTasks(a, b, widget.sort));
     return sorted;
   }
 }

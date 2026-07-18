@@ -21,6 +21,7 @@ import 'repositories/task_query_repository.dart';
 import 'repositories/template_repository.dart';
 import 'repositories/task_capture_defaults_repository.dart';
 import 'repositories/task_repository.dart';
+import 'repositories/task_sort_preference_repository.dart';
 
 /// UI-facing clock. Production reads the current instant on each rebuild;
 /// deterministic widget/golden fixtures override the callback explicitly.
@@ -168,6 +169,14 @@ final taskCaptureDefaultsRepositoryProvider =
       final queue = ref.watch(syncChangeQueueProvider);
       if (db == null || queue == null) return null;
       return TaskCaptureDefaultsRepository(db, queue);
+    });
+
+final taskSortPreferenceRepositoryProvider =
+    Provider<TaskSortPreferenceRepository?>((ref) {
+      final db = ref.watch(appDatabaseProvider);
+      final queue = ref.watch(syncChangeQueueProvider);
+      if (db == null || queue == null) return null;
+      return TaskSortPreferenceRepository(db, queue);
     });
 
 final activityRepositoryProvider = Provider<ActivityRepository?>((ref) {

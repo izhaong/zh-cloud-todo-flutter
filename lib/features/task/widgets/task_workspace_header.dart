@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/brand_colors.dart';
 import '../../../core/theme/todo_layout_tokens.dart';
+import '../../../state/repositories/task_query_repository.dart';
 import '../view_mode.dart';
-
-/// List sorting choices exposed through the compact workspace menu.
-enum TaskSort { smart, priorityDesc, dueDate, title, createdAt }
 
 /// Batch mutations exposed from the compact workspace command menu.
 ///
