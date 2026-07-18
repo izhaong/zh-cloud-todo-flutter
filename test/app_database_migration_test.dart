@@ -28,7 +28,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 11);
+      expect(version.data['user_version'], 12);
 
       final taskColumns = await upgraded
           .customSelect('PRAGMA table_info(todo_tasks)')
@@ -94,6 +94,13 @@ void main() {
           )
           .get();
       expect(b3Dependencies.map((row) => row.data['name']), hasLength(3));
+      final tagColumns = await upgraded
+          .customSelect('PRAGMA table_info(todo_tags)')
+          .get();
+      expect(
+        tagColumns.map((row) => row.data['name']),
+        contains('parent_id'),
+      );
       final indexTable = await upgraded
           .customSelect(
             "SELECT name FROM sqlite_master WHERE type = 'table' "
@@ -183,7 +190,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 11);
+      expect(version.data['user_version'], 12);
       await upgraded.close();
 
       final reopened = AppDatabase.forTesting(NativeDatabase(databaseFile));

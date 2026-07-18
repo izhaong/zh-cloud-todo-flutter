@@ -2184,6 +2184,17 @@ class $TodoTagsTable extends TodoTags with TableInfo<$TodoTagsTable, TodoTag> {
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _parentIdMeta = const VerificationMeta(
+    'parentId',
+  );
+  @override
+  late final GeneratedColumn<String> parentId = GeneratedColumn<String>(
+    'parent_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _nameMeta = const VerificationMeta('name');
   @override
   late final GeneratedColumn<String> name = GeneratedColumn<String>(
@@ -2228,6 +2239,7 @@ class $TodoTagsTable extends TodoTags with TableInfo<$TodoTagsTable, TodoTag> {
   List<GeneratedColumn> get $columns => [
     id,
     serverId,
+    parentId,
     name,
     color,
     updatedAt,
@@ -2254,6 +2266,12 @@ class $TodoTagsTable extends TodoTags with TableInfo<$TodoTagsTable, TodoTag> {
       context.handle(
         _serverIdMeta,
         serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
+      );
+    }
+    if (data.containsKey('parent_id')) {
+      context.handle(
+        _parentIdMeta,
+        parentId.isAcceptableOrUnknown(data['parent_id']!, _parentIdMeta),
       );
     }
     if (data.containsKey('name')) {
@@ -2303,6 +2321,10 @@ class $TodoTagsTable extends TodoTags with TableInfo<$TodoTagsTable, TodoTag> {
         DriftSqlType.int,
         data['${effectivePrefix}server_id'],
       ),
+      parentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}parent_id'],
+      ),
       name: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}name'],
@@ -2331,6 +2353,9 @@ class $TodoTagsTable extends TodoTags with TableInfo<$TodoTagsTable, TodoTag> {
 class TodoTag extends DataClass implements Insertable<TodoTag> {
   final String id;
   final int? serverId;
+
+  /// 本地 UUID，指向上级标签；同步时转换为服务端整数 ID。
+  final String? parentId;
   final String name;
   final String? color;
   final DateTime updatedAt;
@@ -2338,6 +2363,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
   const TodoTag({
     required this.id,
     this.serverId,
+    this.parentId,
     required this.name,
     this.color,
     required this.updatedAt,
@@ -2349,6 +2375,9 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
     map['id'] = Variable<String>(id);
     if (!nullToAbsent || serverId != null) {
       map['server_id'] = Variable<int>(serverId);
+    }
+    if (!nullToAbsent || parentId != null) {
+      map['parent_id'] = Variable<String>(parentId);
     }
     map['name'] = Variable<String>(name);
     if (!nullToAbsent || color != null) {
@@ -2365,6 +2394,9 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
       serverId: serverId == null && nullToAbsent
           ? const Value.absent()
           : Value(serverId),
+      parentId: parentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parentId),
       name: Value(name),
       color: color == null && nullToAbsent
           ? const Value.absent()
@@ -2382,6 +2414,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
     return TodoTag(
       id: serializer.fromJson<String>(json['id']),
       serverId: serializer.fromJson<int?>(json['serverId']),
+      parentId: serializer.fromJson<String?>(json['parentId']),
       name: serializer.fromJson<String>(json['name']),
       color: serializer.fromJson<String?>(json['color']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
@@ -2394,6 +2427,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
       'serverId': serializer.toJson<int?>(serverId),
+      'parentId': serializer.toJson<String?>(parentId),
       'name': serializer.toJson<String>(name),
       'color': serializer.toJson<String?>(color),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
@@ -2404,6 +2438,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
   TodoTag copyWith({
     String? id,
     Value<int?> serverId = const Value.absent(),
+    Value<String?> parentId = const Value.absent(),
     String? name,
     Value<String?> color = const Value.absent(),
     DateTime? updatedAt,
@@ -2411,6 +2446,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
   }) => TodoTag(
     id: id ?? this.id,
     serverId: serverId.present ? serverId.value : this.serverId,
+    parentId: parentId.present ? parentId.value : this.parentId,
     name: name ?? this.name,
     color: color.present ? color.value : this.color,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -2420,6 +2456,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
     return TodoTag(
       id: data.id.present ? data.id.value : this.id,
       serverId: data.serverId.present ? data.serverId.value : this.serverId,
+      parentId: data.parentId.present ? data.parentId.value : this.parentId,
       name: data.name.present ? data.name.value : this.name,
       color: data.color.present ? data.color.value : this.color,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
@@ -2432,6 +2469,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
     return (StringBuffer('TodoTag(')
           ..write('id: $id, ')
           ..write('serverId: $serverId, ')
+          ..write('parentId: $parentId, ')
           ..write('name: $name, ')
           ..write('color: $color, ')
           ..write('updatedAt: $updatedAt, ')
@@ -2442,13 +2480,14 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
 
   @override
   int get hashCode =>
-      Object.hash(id, serverId, name, color, updatedAt, createdAt);
+      Object.hash(id, serverId, parentId, name, color, updatedAt, createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is TodoTag &&
           other.id == this.id &&
           other.serverId == this.serverId &&
+          other.parentId == this.parentId &&
           other.name == this.name &&
           other.color == this.color &&
           other.updatedAt == this.updatedAt &&
@@ -2458,6 +2497,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
 class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
   final Value<String> id;
   final Value<int?> serverId;
+  final Value<String?> parentId;
   final Value<String> name;
   final Value<String?> color;
   final Value<DateTime> updatedAt;
@@ -2466,6 +2506,7 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
   const TodoTagsCompanion({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
+    this.parentId = const Value.absent(),
     this.name = const Value.absent(),
     this.color = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -2475,6 +2516,7 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
   TodoTagsCompanion.insert({
     required String id,
     this.serverId = const Value.absent(),
+    this.parentId = const Value.absent(),
     required String name,
     this.color = const Value.absent(),
     required DateTime updatedAt,
@@ -2487,6 +2529,7 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
   static Insertable<TodoTag> custom({
     Expression<String>? id,
     Expression<int>? serverId,
+    Expression<String>? parentId,
     Expression<String>? name,
     Expression<String>? color,
     Expression<DateTime>? updatedAt,
@@ -2496,6 +2539,7 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (serverId != null) 'server_id': serverId,
+      if (parentId != null) 'parent_id': parentId,
       if (name != null) 'name': name,
       if (color != null) 'color': color,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -2507,6 +2551,7 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
   TodoTagsCompanion copyWith({
     Value<String>? id,
     Value<int?>? serverId,
+    Value<String?>? parentId,
     Value<String>? name,
     Value<String?>? color,
     Value<DateTime>? updatedAt,
@@ -2516,6 +2561,7 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
     return TodoTagsCompanion(
       id: id ?? this.id,
       serverId: serverId ?? this.serverId,
+      parentId: parentId ?? this.parentId,
       name: name ?? this.name,
       color: color ?? this.color,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -2532,6 +2578,9 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
     }
     if (serverId.present) {
       map['server_id'] = Variable<int>(serverId.value);
+    }
+    if (parentId.present) {
+      map['parent_id'] = Variable<String>(parentId.value);
     }
     if (name.present) {
       map['name'] = Variable<String>(name.value);
@@ -2556,6 +2605,7 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
     return (StringBuffer('TodoTagsCompanion(')
           ..write('id: $id, ')
           ..write('serverId: $serverId, ')
+          ..write('parentId: $parentId, ')
           ..write('name: $name, ')
           ..write('color: $color, ')
           ..write('updatedAt: $updatedAt, ')
@@ -10304,6 +10354,7 @@ typedef $$TodoTagsTableCreateCompanionBuilder =
     TodoTagsCompanion Function({
       required String id,
       Value<int?> serverId,
+      Value<String?> parentId,
       required String name,
       Value<String?> color,
       required DateTime updatedAt,
@@ -10314,6 +10365,7 @@ typedef $$TodoTagsTableUpdateCompanionBuilder =
     TodoTagsCompanion Function({
       Value<String> id,
       Value<int?> serverId,
+      Value<String?> parentId,
       Value<String> name,
       Value<String?> color,
       Value<DateTime> updatedAt,
@@ -10337,6 +10389,11 @@ class $$TodoTagsTableFilterComposer
 
   ColumnFilters<int> get serverId => $composableBuilder(
     column: $table.serverId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get parentId => $composableBuilder(
+    column: $table.parentId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10380,6 +10437,11 @@ class $$TodoTagsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get parentId => $composableBuilder(
+    column: $table.parentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get name => $composableBuilder(
     column: $table.name,
     builder: (column) => ColumnOrderings(column),
@@ -10415,6 +10477,9 @@ class $$TodoTagsTableAnnotationComposer
 
   GeneratedColumn<int> get serverId =>
       $composableBuilder(column: $table.serverId, builder: (column) => column);
+
+  GeneratedColumn<String> get parentId =>
+      $composableBuilder(column: $table.parentId, builder: (column) => column);
 
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
@@ -10459,6 +10524,7 @@ class $$TodoTagsTableTableManager
               ({
                 Value<String> id = const Value.absent(),
                 Value<int?> serverId = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String?> color = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -10467,6 +10533,7 @@ class $$TodoTagsTableTableManager
               }) => TodoTagsCompanion(
                 id: id,
                 serverId: serverId,
+                parentId: parentId,
                 name: name,
                 color: color,
                 updatedAt: updatedAt,
@@ -10477,6 +10544,7 @@ class $$TodoTagsTableTableManager
               ({
                 required String id,
                 Value<int?> serverId = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
                 required String name,
                 Value<String?> color = const Value.absent(),
                 required DateTime updatedAt,
@@ -10485,6 +10553,7 @@ class $$TodoTagsTableTableManager
               }) => TodoTagsCompanion.insert(
                 id: id,
                 serverId: serverId,
+                parentId: parentId,
                 name: name,
                 color: color,
                 updatedAt: updatedAt,

@@ -90,6 +90,8 @@ class TodoFolders extends Table {
 class TodoTags extends Table {
   TextColumn get id => text()();
   IntColumn get serverId => integer().nullable()();
+  /// 本地 UUID，指向上级标签；同步时转换为服务端整数 ID。
+  TextColumn get parentId => text().nullable()();
   TextColumn get name => text()();
   TextColumn get color => text().nullable()();
   DateTimeColumn get updatedAt => dateTime()();
@@ -353,7 +355,7 @@ class AppDatabase extends _$AppDatabase {
     : super(_open('todo_t${tenantId}_u$userId'));
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -486,6 +488,13 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 11) {
         await _createSearchIndex(m.database);
+      }
+      if (from < 12) {
+        // schema 9 会在 10 号迁移按当前定义创建缺失的聚合表，
+        // 因而不能只凭 user_version 重复 add；按实际表结构收敛。
+        if (!await _columnExists(m, 'todo_tags', 'parent_id')) {
+          await m.addColumn(todoTags, todoTags.parentId);
+        }
       }
     },
   );
