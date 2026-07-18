@@ -432,7 +432,17 @@ class ReminderActionApi {
     final resp = await _client.get('/reminder-action/inbox');
     final body = resp.data;
     if (body is Map<String, dynamic> && body.containsKey('code')) {
-      return normalize(_unwrapBody(body));
+      final code = body['code'];
+      if (code != 0) {
+        throw DioException(
+          requestOptions: RequestOptions(
+            path: '/app-api/todo/reminder-action/inbox',
+          ),
+          error: body['msg'] ?? '请求失败',
+        );
+      }
+      // 收件箱成功信封的 data 是列表而非通用 REST helper 所假定的 Map。
+      return normalize(body['data']);
     }
     return normalize(body);
   }
