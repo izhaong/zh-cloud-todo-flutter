@@ -91,7 +91,11 @@ void main() {
         final coordinatorB = _coordinator(dbB, apiB, 'b3-search-b-$suffix');
         await coordinatorB.pull();
         final local = await TaskQueryRepository(dbB).search(keyword);
-        expect(local.map((item) => item.type), ['task', 'list', 'tag']);
+        expect(local.map((item) => item.type), [
+          TaskSearchResultType.task,
+          TaskSearchResultType.list,
+          TaskSearchResultType.tag,
+        ]);
         expect(local.map((item) => item.title), [
           '$keyword 任务',
           '$keyword 清单',
