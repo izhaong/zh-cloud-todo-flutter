@@ -132,6 +132,102 @@ void main() {
     expect(await db.select(db.todoSyncChanges).get(), isEmpty);
   });
 
+  test('重设父任务拒绝跨清单关系且不写 outbox', () async {
+    await db
+        .into(db.todoTasks)
+        .insert(
+          TodoTasksCompanion.insert(
+            id: 'task-other-list',
+            listId: 'list-target',
+            title: '另一清单任务',
+            updatedAt: DateTime.utc(2026, 7, 15, 9),
+            createdAt: DateTime.utc(2026, 7, 15, 9),
+          ),
+        );
+
+    await expectLater(
+      taskRepository.reparent('task-1', 'task-other-list'),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          '父任务必须属于同一清单',
+        ),
+      ),
+    );
+
+    final task = await (db.select(
+      db.todoTasks,
+    )..where((row) => row.id.equals('task-1'))).getSingle();
+    expect(task.parentTaskId, isNull);
+    expect(await db.select(db.todoSyncChanges).get(), isEmpty);
+  });
+
+  test('新建子任务拒绝跨清单父任务且不写数据', () async {
+    await db
+        .into(db.todoTasks)
+        .insert(
+          TodoTasksCompanion.insert(
+            id: 'task-other-list',
+            listId: 'list-target',
+            title: '另一清单任务',
+            updatedAt: DateTime.utc(2026, 7, 15, 9),
+            createdAt: DateTime.utc(2026, 7, 15, 9),
+          ),
+        );
+
+    await expectLater(
+      taskRepository.create(
+        listId: 'list-inbox',
+        title: '错误子任务',
+        parentTaskId: 'task-other-list',
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          '父任务必须属于同一清单',
+        ),
+      ),
+    );
+
+    expect(
+      await (db.select(
+        db.todoTasks,
+      )..where((row) => row.title.equals('错误子任务'))).get(),
+      isEmpty,
+    );
+    expect(await db.select(db.todoSyncChanges).get(), isEmpty);
+  });
+
+  test('新建子任务拒绝超过五级且不写数据', () async {
+    for (var index = 2; index <= 6; index++) {
+      await taskRepository.reparent('task-$index', 'task-${index - 1}');
+    }
+
+    await expectLater(
+      taskRepository.create(
+        listId: 'list-inbox',
+        title: '第六级子任务',
+        parentTaskId: 'task-6',
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          '任务层级不能超过五级',
+        ),
+      ),
+    );
+
+    expect(
+      await (db.select(
+        db.todoTasks,
+      )..where((row) => row.title.equals('第六级子任务'))).get(),
+      isEmpty,
+    );
+  });
+
   test('重设不存在的任务在写入前拒绝且不写 outbox', () async {
     await expectLater(
       taskRepository.reparent('task-missing', 'task-1'),
