@@ -728,6 +728,25 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                           label: const Text('在截止时提醒'),
                         ),
                         const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          key: const Key('task-add-before-due-reminder'),
+                          onPressed: () =>
+                              _addEndReminder(t, offsetMinutes: 10),
+                          icon: const Icon(Icons.alarm_on_outlined),
+                          label: const Text('截止前 10 分钟提醒'),
+                        ),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          key: const Key('task-add-persistent-end-reminder'),
+                          onPressed: () => _addEndReminder(
+                            t,
+                            persistent: true,
+                            intervalMinutes: 30,
+                          ),
+                          icon: const Icon(Icons.notifications_active_outlined),
+                          label: const Text('截止时持续提醒（每 30 分钟）'),
+                        ),
+                        const SizedBox(height: 8),
                         _TaskReminderSection(taskId: t.id),
                         const Divider(height: 32),
                         heading('重复'),
@@ -853,10 +872,15 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     );
   }
 
-  Future<void> _addEndReminder(TodoTask t) async {
-    final fireAt = _dueAt ?? t.dueAt;
+  Future<void> _addEndReminder(
+    TodoTask t, {
+    int? offsetMinutes,
+    bool persistent = false,
+    int? intervalMinutes,
+  }) async {
+    final dueAt = _dueAt ?? t.dueAt;
     final messenger = ScaffoldMessenger.of(context);
-    if (fireAt == null) {
+    if (dueAt == null) {
       messenger.showSnackBar(const SnackBar(content: Text('请先设置截止时间')));
       return;
     }
@@ -867,13 +891,26 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     }
     await reminders.create(
       taskId: t.id,
-      fireAt: fireAt,
+      fireAt: dueAt.subtract(Duration(minutes: offsetMinutes ?? 0)),
       anchorType: 'END',
+      offsetMinutes: offsetMinutes,
+      persistent: persistent,
+      intervalMinutes: intervalMinutes,
       timeZone: _timeZone,
       fixedTimezone: _fixedTimezone,
     );
     if (!_isCurrentTask(t.id)) return;
-    messenger.showSnackBar(const SnackBar(content: Text('已添加截止时提醒')));
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          persistent
+              ? '已添加截止时持续提醒'
+              : offsetMinutes == null
+              ? '已添加截止时提醒'
+              : '已添加截止前 $offsetMinutes 分钟提醒',
+        ),
+      ),
+    );
   }
 
   Future<void> _editRepeatRule(TodoTask t) async {

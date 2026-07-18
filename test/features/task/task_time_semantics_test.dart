@@ -171,6 +171,75 @@ void main() {
   });
 
   testWidgets(
+    'detail queues an end-offset reminder and a persistent end reminder',
+    (tester) async {
+      final fixture = await TodoVisualFixture.create();
+      addTearDown(fixture.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: fixture.container,
+          child: MaterialApp(
+            theme: ThemeData.light().copyWith(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            home: const Scaffold(
+              body: TaskDetailPane(taskId: _taskId, embedded: true),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _openScheduleOptions(tester);
+
+      final detailScroll = find.byType(Scrollable).last;
+      final beforeDue = find.byKey(const Key('task-add-before-due-reminder'));
+      await tester.scrollUntilVisible(beforeDue, 160, scrollable: detailScroll);
+      await tester.tap(beforeDue);
+      await tester.pumpAndSettle();
+
+      final persistent = find.byKey(
+        const Key('task-add-persistent-end-reminder'),
+      );
+      await tester.scrollUntilVisible(
+        persistent,
+        160,
+        scrollable: detailScroll,
+      );
+      await tester.tap(persistent);
+      await tester.pumpAndSettle();
+
+      final reminders = await fixture.database
+          .select(fixture.database.todoReminders)
+          .get();
+      expect(reminders, hasLength(2));
+      expect(
+        reminders.any(
+          (reminder) =>
+              reminder.anchorType == 'END' && reminder.offsetMinutes == 10,
+        ),
+        isTrue,
+      );
+      expect(
+        reminders.any(
+          (reminder) =>
+              reminder.anchorType == 'END' &&
+              reminder.persistent &&
+              reminder.intervalMinutes == 30,
+        ),
+        isTrue,
+      );
+      final changes = await fixture.database
+          .select(fixture.database.todoSyncChanges)
+          .get();
+      expect(
+        changes.where((change) => change.entity == 'reminder'),
+        hasLength(2),
+      );
+    },
+  );
+
+  testWidgets(
     'detail exposes start and end time editing through task repository',
     (tester) async {
       final fixture = await TodoVisualFixture.create();
