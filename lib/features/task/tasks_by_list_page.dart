@@ -546,13 +546,35 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     final failed = results
         .where((result) => result.status == TaskBatchEditStatus.failed)
         .length;
+    final skipped = results
+        .where((result) => result.status == TaskBatchEditStatus.skipped)
+        .length;
+    final failedReasons = results
+        .where((result) => result.status == TaskBatchEditStatus.failed)
+        .map((result) => result.reason)
+        .whereType<String>()
+        .toSet()
+        .join('、');
+    final skippedReasons = results
+        .where((result) => result.status == TaskBatchEditStatus.skipped)
+        .map((result) => result.reason)
+        .whereType<String>()
+        .toSet()
+        .join('、');
     setState(() {
       _batchApplying = false;
       _batchSelectionActive = false;
       _batchSelectedTaskIds.clear();
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$successVerb $succeeded 项；失败 $failed 项')),
+      SnackBar(
+        content: Text(
+          '$successVerb $succeeded 项；失败 $failed 项'
+          '${failedReasons.isEmpty ? '' : '：$failedReasons'}'
+          '${skipped == 0 ? '' : '；跳过 $skipped 项'}'
+          '${skippedReasons.isEmpty ? '' : '：$skippedReasons'}',
+        ),
+      ),
     );
   }
 

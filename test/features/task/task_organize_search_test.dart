@@ -272,6 +272,42 @@ void main() {
     },
   );
 
+  testWidgets('batch feedback includes each failed task reason', (
+    tester,
+  ) async {
+    final fixture = await TodoVisualFixture.create();
+    addTearDown(fixture.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: fixture.container,
+        child: MaterialApp(
+          theme: ThemeData.light().copyWith(
+            extensions: const [AppThemeExtension(AppColors.light)],
+          ),
+          home: const Scaffold(body: TasksByListPage(hideAppBar: true)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('todo-batch-edit')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(Key('task-batch-select-${TodoVisualFixture.todayTaskId}')),
+    );
+    await (fixture.database.delete(
+      fixture.database.todoTasks,
+    )..where((task) => task.id.equals(TodoVisualFixture.todayTaskId))).go();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('todo-batch-more')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('设为高优先级'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('已更新 0 项；失败 1 项：任务不存在'), findsOneWidget);
+  });
+
   testWidgets(
     'batch pin action updates selected tasks through the local use-case',
     (tester) async {
