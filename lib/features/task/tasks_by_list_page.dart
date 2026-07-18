@@ -745,6 +745,10 @@ class _ListBodyState extends State<_ListBody> {
           bottom: TodoLayoutTokens.mainHorizontalInset,
         ),
         itemCount: entries.length,
+        // Flutter 3.41 (the local baseline) does not expose `onReorderItem`
+        // yet. Keep the established callback until the project baseline moves
+        // forward; the adjustment below preserves its pre-3.44 index contract.
+        // ignore: deprecated_member_use
         onReorder: (oldIndex, newIndex) {
           final entry = entries[oldIndex];
           if (entry is! TodoTask) return;
