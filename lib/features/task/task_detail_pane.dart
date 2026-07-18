@@ -7,6 +7,7 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/app_database.dart';
+import '../../core/time/task_time_formatter.dart';
 import '../../core/theme/brand_colors.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../native/native_intents.dart';
@@ -102,7 +103,14 @@ class _TaskReminderTile extends ConsumerWidget {
           key: ValueKey('task-reminder-${reminder.id}'),
           contentPadding: EdgeInsets.zero,
           leading: const Icon(Icons.alarm_outlined),
-          title: Text(reminder.remindAt.toLocal().toString().substring(0, 16)),
+          title: Text(
+            formatTaskDateTime(
+              reminder.remindAt,
+              allDay: false,
+              fixedTimezone: reminder.fixedTimezone,
+              timeZone: reminder.timeZone,
+            ),
+          ),
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -220,6 +228,13 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
   bool _allDay = false;
   String? _timeZone;
   bool _fixedTimezone = false;
+
+  String _formatScheduleTime(DateTime value) => formatTaskDateTime(
+    value,
+    allDay: _allDay,
+    fixedTimezone: _fixedTimezone,
+    timeZone: _timeZone,
+  );
   TodoRepeatRule? _repeatRule;
   bool _repeatOccurrenceSkipped = false;
   String? _selectedListId;
@@ -550,7 +565,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       t.title,
       if ((t.description ?? '').trim().isNotEmpty) t.description!.trim(),
       if (t.dueAt != null)
-        '截止：${t.dueAt!.toLocal().toString().substring(0, 16)}',
+        '截止：${formatTaskDateTime(t.dueAt!, allDay: t.allDay, fixedTimezone: t.fixedTimezone, timeZone: t.timeZone)}',
     ].join('\n');
     final shared = await NativeIntents.shareText(body, subject: t.title);
     if (!mounted) return;
@@ -780,7 +795,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                           label: Text(
                             _dueAt == null
                                 ? '未设置'
-                                : '${_dueAt!.toLocal().toString().substring(0, 16)} (本地时区)',
+                                : _formatScheduleTime(_dueAt!),
                           ),
                         ),
                         if (_dueAt != null)
@@ -804,7 +819,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                           label: Text(
                             _startAt == null
                                 ? '开始时间未设置'
-                                : '开始：${_startAt!.toLocal().toString().substring(0, 16)}',
+                                : '开始：${_formatScheduleTime(_startAt!)}',
                           ),
                         ),
                         if (_startAt != null)
@@ -831,7 +846,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                           label: Text(
                             _endAt == null
                                 ? '结束时间未设置'
-                                : '结束：${_endAt!.toLocal().toString().substring(0, 16)}',
+                                : '结束：${_formatScheduleTime(_endAt!)}',
                           ),
                         ),
                         if (_endAt != null)
@@ -1501,11 +1516,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
           key: const Key('task-schedule-options'),
           onPressed: () => _showScheduleSheet(t),
           icon: const Icon(Icons.event_outlined),
-          label: Text(
-            _dueAt == null
-                ? '未设置'
-                : '${_dueAt!.toLocal().toString().substring(0, 16)} (本地时区)',
-          ),
+          label: Text(_dueAt == null ? '未设置' : _formatScheduleTime(_dueAt!)),
         ),
         if (_dueAt != null) ...[
           const SizedBox(height: 4),
@@ -1583,7 +1594,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
           label: Text(
             _startAt == null
                 ? '设置开始时间'
-                : '开始：${_startAt!.toLocal().toString().substring(0, 16)}',
+                : '开始：${_formatScheduleTime(_startAt!)}',
           ),
         ),
         if (_startAt != null)
@@ -1598,9 +1609,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
           onPressed: () => _pickSchedule(t, isStart: false),
           icon: const Icon(Icons.stop_circle_outlined),
           label: Text(
-            _endAt == null
-                ? '设置结束时间'
-                : '结束：${_endAt!.toLocal().toString().substring(0, 16)}',
+            _endAt == null ? '设置结束时间' : '结束：${_formatScheduleTime(_endAt!)}',
           ),
         ),
         if (_endAt != null)
