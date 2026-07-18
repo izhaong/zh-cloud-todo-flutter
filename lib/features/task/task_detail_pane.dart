@@ -1,13 +1,15 @@
 import 'dart:async';
 
 import 'package:drift/drift.dart' show OrderingTerm;
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/app_database.dart';
-import '../../core/api/todo_api.dart';
 import '../../core/theme/brand_colors.dart';
 import '../../core/widgets/app_widgets.dart';
+import '../../native/native_intents.dart';
 import '../../state/providers.dart';
 import '../../state/repositories/reminder_repository.dart';
 import '../shell/app_dialog.dart';
@@ -16,10 +18,19 @@ import '../collaboration/task_comments_page.dart';
 import '../collaboration/task_assign_page.dart';
 import '../collaboration/list_member_page.dart';
 
-/// 收件箱的本地清单 id（synthetic inbox）：listId 为该值的任务视为"未归清单"。
+/// 收集箱的本地清单 id（synthetic inbox）：listId 为该值的任务视为"未归清单"。
 const String kInboxListId = 'inbox';
 
-enum _TaskDetailAction { togglePin, moveToInbox, collaboration, delete }
+enum _TaskDetailAction {
+  previewMarkdown,
+  togglePin,
+  moveToInbox,
+  copy,
+  share,
+  abandon,
+  collaboration,
+  delete,
+}
 
 class _RepeatRuleDraft {
   const _RepeatRuleDraft({
@@ -200,9 +211,9 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
   late final TextEditingController _title;
   late final TextEditingController _desc;
   int _priority = 0;
-  bool _loading = true;
   DateTime? _startAt;
   DateTime? _endAt;
+  bool _loading = true;
   bool _clearStartAt = false;
   bool _clearEndAt = false;
   DateTime? _dueAt;
@@ -211,6 +222,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
   bool _fixedTimezone = false;
   TodoRepeatRule? _repeatRule;
   bool _repeatOccurrenceSkipped = false;
+  String? _selectedListId;
   String? _listName;
   StreamSubscription<TodoTask?>? _taskSubscription;
   int _loadGeneration = 0;
@@ -257,6 +269,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       _fixedTimezone = false;
       _repeatRule = null;
       _repeatOccurrenceSkipped = false;
+      _selectedListId = null;
       _listName = null;
       _loading = taskId != null;
       _unavailableNotifiedFor = null;
@@ -293,6 +306,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       _fixedTimezone = t?.fixedTimezone ?? false;
       _repeatRule = repeatRule;
       _repeatOccurrenceSkipped = repeatSkipped;
+      _selectedListId = t?.listId;
       _listName = listName;
       _loading = false;
     });
@@ -336,6 +350,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     final timeZoneDirty = previous != null && _timeZone != previous.timeZone;
     final fixedTimezoneDirty =
         previous != null && _fixedTimezone != previous.fixedTimezone;
+    final listDirty = previous != null && _selectedListId != previous.listId;
     setState(() {
       _task = latest;
       if (!titleDirty) _title.text = latest.title;
@@ -347,14 +362,17 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       if (!allDayDirty) _allDay = latest.allDay;
       if (!timeZoneDirty) _timeZone = latest.timeZone;
       if (!fixedTimezoneDirty) _fixedTimezone = latest.fixedTimezone;
-      _listName = listName;
+      if (!listDirty) {
+        _selectedListId = latest.listId;
+        _listName = listName;
+      }
       _loading = false;
       _unavailableNotifiedFor = null;
     });
   }
 
   Future<String> _resolveListName(String listId) async {
-    if (listId == kInboxListId) return '收件箱';
+    if (listId == kInboxListId) return '收集箱';
     final repository = ref.read(listRepositoryProvider);
     final lists = await repository?.getAll() ?? const <TodoList>[];
     for (final list in lists) {
@@ -414,12 +432,14 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
         priority: _priority,
         startAt: _startAt,
         endAt: _endAt,
-        clearStartAt: _clearStartAt,
-        clearEndAt: _clearEndAt,
+        clearStartAt: _clearStartAt || (_startAt == null && t.startAt != null),
+        clearEndAt: _clearEndAt || (_endAt == null && t.endAt != null),
         dueAt: _dueAt,
+        clearDueAt: _dueAt == null && t.dueAt != null,
         allDay: _allDay,
         timeZone: _fixedTimezone ? (_timeZone ?? 'Asia/Shanghai') : _timeZone,
         fixedTimezone: _fixedTimezone,
+        listId: _selectedListId == t.listId ? null : _selectedListId,
       );
     } on ArgumentError catch (error) {
       if (_isCurrentTask(t.id)) {
@@ -496,19 +516,80 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     );
   }
 
-  /// §2.3 收件箱迁移：把任务挪入 synthetic inbox (listId = 'inbox')。
+  /// §2.3 收集箱迁移：把任务挪入 synthetic inbox (listId = 'inbox')。
   Future<void> _moveToInbox(TodoTask t) async {
     final repo = ref.read(taskRepositoryProvider);
     if (repo == null) return;
     final messenger = ScaffoldMessenger.of(context);
     await repo.update(t.id, listId: kInboxListId);
     if (!_isCurrentTask(t.id)) return;
-    messenger.showSnackBar(const SnackBar(content: Text('已移至收件箱')));
+    messenger.showSnackBar(const SnackBar(content: Text('已移至收集箱')));
   }
 
   Future<void> _moveToInboxAndClose(TodoTask t) async {
     await _moveToInbox(t);
     if (_isCurrentTask(t.id)) _close();
+  }
+
+  Future<void> _copy(TodoTask t) async {
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    final copied = await repo.copy(t.id);
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('已创建“${copied.title}”')));
+  }
+
+  Future<void> _share(TodoTask t) async {
+    final body = [
+      t.title,
+      if ((t.description ?? '').trim().isNotEmpty) t.description!.trim(),
+      if (t.dueAt != null)
+        '截止：${t.dueAt!.toLocal().toString().substring(0, 16)}',
+    ].join('\n');
+    final shared = await NativeIntents.shareText(body, subject: t.title);
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(shared ? '已打开系统分享' : '当前设备不支持系统分享')));
+  }
+
+  Future<void> _previewMarkdown(TodoTask t) async {
+    final description = t.description?.trim();
+    if (description == null || description.isEmpty) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: SingleChildScrollView(
+          child: MarkdownBody(
+            data: description,
+            selectable: true,
+            softLineBreak: true,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _abandon(TodoTask t) async {
+    final confirmed = await AppDialog.confirm(
+      context,
+      title: '放弃任务',
+      content: '放弃后会保留记录，但不会再计入待办。',
+      confirmLabel: '放弃',
+      danger: true,
+    );
+    if (confirmed != true || !_isCurrentTask(t.id)) return;
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    await repo.abandon(t.id);
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('任务已放弃')));
   }
 
   /// P6 协作任务：底部 Sheet 选择（指派 / 评论 / 协作成员）。
@@ -1281,6 +1362,37 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     return rule.enabled ? '$label（每隔 ${rule.interval} 次）' : '已停止：$label';
   }
 
+  Future<void> _pickSchedule(TodoTask t, {required bool isStart}) async {
+    final current = isStart ? _startAt : _endAt;
+    final now = current ?? (isStart ? t.startAt : t.endAt) ?? DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: now,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 5),
+    );
+    if (date == null || !mounted || widget.taskId != t.id) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(now),
+    );
+    if (!_isCurrentTask(t.id)) return;
+    final selected = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time?.hour ?? now.hour,
+      time?.minute ?? now.minute,
+    );
+    setState(() {
+      if (isStart) {
+        _startAt = selected;
+      } else {
+        _endAt = selected;
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.taskId == null) {
@@ -1310,22 +1422,30 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
 
     final body = ListView(
       padding: const EdgeInsets.all(16),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       children: [
-        TextField(
-          controller: _title,
-          decoration: const InputDecoration(
-            labelText: '标题',
-            border: OutlineInputBorder(),
+        Semantics(
+          identifier: 'todo_task_detail_title',
+          child: TextField(
+            controller: _title,
+            decoration: const InputDecoration(
+              labelText: '标题',
+              border: OutlineInputBorder(),
+            ),
           ),
         ),
         const SizedBox(height: 12),
-        TextField(
-          controller: _desc,
-          minLines: 3,
-          maxLines: 6,
-          decoration: const InputDecoration(
-            labelText: '描述',
-            border: OutlineInputBorder(),
+        Semantics(
+          identifier: 'todo_task_detail_description',
+          child: TextField(
+            key: const Key('todo-task-detail-description-input'),
+            controller: _desc,
+            minLines: 3,
+            maxLines: 6,
+            decoration: const InputDecoration(
+              labelText: '描述',
+              border: OutlineInputBorder(),
+            ),
           ),
         ),
         const SizedBox(height: 12),
@@ -1348,10 +1468,15 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            AppButton(
-              onPressed: _save,
-              icon: Icons.save_outlined,
-              child: const Text('保存'),
+            Semantics(
+              identifier: 'todo_task_detail_save',
+              button: true,
+              child: AppButton(
+                key: const Key('todo_task_detail_save_button'),
+                onPressed: _save,
+                icon: Icons.save_outlined,
+                child: const Text('保存'),
+              ),
             ),
           ],
         ),
@@ -1382,19 +1507,14 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
         const Divider(height: 32),
         sh('清单'),
         const SizedBox(height: 8),
-        Row(
-          children: [
-            Icon(Icons.list_alt_outlined, color: colors.mutedForeground),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                _listName ?? '未知清单',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: colors.foreground),
-              ),
-            ),
-          ],
+        _TaskListPicker(
+          taskId: t.id,
+          selectedListId: _selectedListId ?? t.listId,
+          selectedListName: _listName,
+          onChanged: (listId, listName) => setState(() {
+            _selectedListId = listId;
+            _listName = listName;
+          }),
         ),
         const Divider(height: 32),
         sh('标签'),
@@ -1408,6 +1528,27 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
           taskId: t.id,
         ),
         const Divider(height: 32),
+        sh('附件'),
+        const SizedBox(height: 8),
+        _AttachmentSection(
+          key: ValueKey('task-attachments-${t.id}'),
+          taskId: t.id,
+        ),
+        const Divider(height: 32),
+        sh('任务动态'),
+        const SizedBox(height: 8),
+        if (t.serverId == null)
+          const Text('任务同步后可查看动态')
+        else
+          _ActivitySection(
+            key: ValueKey('task-activities-${t.id}'),
+            taskServerId: t.serverId!,
+          ),
+        const Divider(height: 32),
+        sh('模板'),
+        const SizedBox(height: 8),
+        _TemplateSection(key: ValueKey('task-templates-${t.id}'), task: t),
+        const Divider(height: 32),
         Row(
           children: [
             Expanded(child: sh('子任务')),
@@ -1419,6 +1560,43 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
           ],
         ),
         _SubtaskList(taskId: t.id, onAdd: () => _addSubtask(t)),
+        const Divider(height: 32),
+        sh('时间段（可选）'),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: () => _pickSchedule(t, isStart: true),
+          icon: const Icon(Icons.play_circle_outline),
+          label: Text(
+            _startAt == null
+                ? '设置开始时间'
+                : '开始：${_startAt!.toLocal().toString().substring(0, 16)}',
+          ),
+        ),
+        if (_startAt != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () => setState(() => _startAt = null),
+              child: const Text('清除开始时间'),
+            ),
+          ),
+        OutlinedButton.icon(
+          onPressed: () => _pickSchedule(t, isStart: false),
+          icon: const Icon(Icons.stop_circle_outlined),
+          label: Text(
+            _endAt == null
+                ? '设置结束时间'
+                : '结束：${_endAt!.toLocal().toString().substring(0, 16)}',
+          ),
+        ),
+        if (_endAt != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () => setState(() => _endAt = null),
+              child: const Text('清除结束时间'),
+            ),
+          ),
       ],
     );
 
@@ -1496,7 +1674,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                 ),
               ),
               IconButton(
-                tooltip: '移至收件箱',
+                tooltip: '移至收集箱',
                 onPressed: () => _moveToInboxAndClose(t),
                 icon: const Icon(Icons.move_to_inbox_outlined),
               ),
@@ -1523,6 +1701,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
   Widget _buildPage(BuildContext context, TodoTask t, Widget body) {
     final narrow = MediaQuery.sizeOf(context).width < 600;
     return Scaffold(
+      key: const Key('todo_task_detail_page'),
       appBar: AppBar(
         title: const Text('任务详情'),
         actions: narrow
@@ -1540,11 +1719,23 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                   tooltip: '更多任务操作',
                   onSelected: (action) {
                     switch (action) {
+                      case _TaskDetailAction.previewMarkdown:
+                        unawaited(_previewMarkdown(t));
+                        return;
                       case _TaskDetailAction.togglePin:
                         unawaited(_togglePin(t));
                         return;
                       case _TaskDetailAction.moveToInbox:
                         unawaited(_moveToInboxAndClose(t));
+                        return;
+                      case _TaskDetailAction.copy:
+                        unawaited(_copy(t));
+                        return;
+                      case _TaskDetailAction.share:
+                        unawaited(_share(t));
+                        return;
+                      case _TaskDetailAction.abandon:
+                        unawaited(_abandon(t));
                         return;
                       case _TaskDetailAction.collaboration:
                         unawaited(_openCollaborationHub(t));
@@ -1555,13 +1746,30 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                     }
                   },
                   itemBuilder: (context) => [
+                    if ((t.description ?? '').trim().isNotEmpty)
+                      const PopupMenuItem(
+                        value: _TaskDetailAction.previewMarkdown,
+                        child: Text('Markdown 预览'),
+                      ),
                     PopupMenuItem(
                       value: _TaskDetailAction.togglePin,
                       child: Text(t.isPinned ? '取消置顶' : '置顶'),
                     ),
                     const PopupMenuItem(
                       value: _TaskDetailAction.moveToInbox,
-                      child: Text('移至收件箱'),
+                      child: Text('移至收集箱'),
+                    ),
+                    const PopupMenuItem(
+                      value: _TaskDetailAction.copy,
+                      child: Text('复制任务'),
+                    ),
+                    const PopupMenuItem(
+                      value: _TaskDetailAction.share,
+                      child: Text('分享任务'),
+                    ),
+                    const PopupMenuItem(
+                      value: _TaskDetailAction.abandon,
+                      child: Text('放弃任务'),
                     ),
                     const PopupMenuItem(
                       value: _TaskDetailAction.collaboration,
@@ -1592,9 +1800,24 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                   ),
                 ),
                 IconButton(
-                  tooltip: '移至收件箱',
+                  tooltip: '移至收集箱',
                   onPressed: () => _moveToInboxAndClose(t),
                   icon: const Icon(Icons.move_to_inbox_outlined),
+                ),
+                IconButton(
+                  tooltip: '复制任务',
+                  onPressed: () => _copy(t),
+                  icon: const Icon(Icons.copy_outlined),
+                ),
+                IconButton(
+                  tooltip: '分享任务',
+                  onPressed: () => _share(t),
+                  icon: const Icon(Icons.share_outlined),
+                ),
+                IconButton(
+                  tooltip: '放弃任务',
+                  onPressed: t.cancelled ? null : () => _abandon(t),
+                  icon: const Icon(Icons.block_outlined),
                 ),
                 IconButton(
                   tooltip: '协作',
@@ -1636,6 +1859,85 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     return Scaffold(
       appBar: AppBar(title: const Text('任务不存在')),
       body: const Center(child: Text('任务不存在或已删除')),
+    );
+  }
+}
+
+class _TaskListPicker extends ConsumerWidget {
+  const _TaskListPicker({
+    required this.taskId,
+    required this.selectedListId,
+    required this.selectedListName,
+    required this.onChanged,
+  });
+
+  final String taskId;
+  final String selectedListId;
+  final String? selectedListName;
+  final void Function(String listId, String listName) onChanged;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final lists = ref.watch(listsStreamProvider).valueOrNull ?? const [];
+    final colors = brandColors(context);
+    return InkWell(
+      key: Key('task-list-$taskId'),
+      borderRadius: BorderRadius.circular(8),
+      onTap: () async {
+        final nextListId = await showModalBottomSheet<String>(
+          context: context,
+          showDragHandle: true,
+          builder: (context) => SafeArea(
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.inbox_outlined),
+                  title: const Text('收集箱'),
+                  trailing: selectedListId == kInboxListId
+                      ? const Icon(Icons.check)
+                      : null,
+                  onTap: () => Navigator.pop(context, kInboxListId),
+                ),
+                for (final list in lists)
+                  if (list.id != kInboxListId)
+                    ListTile(
+                      leading: const Icon(Icons.list_alt_outlined),
+                      title: Text(list.name),
+                      trailing: selectedListId == list.id
+                          ? const Icon(Icons.check)
+                          : null,
+                      onTap: () => Navigator.pop(context, list.id),
+                    ),
+              ],
+            ),
+          ),
+        );
+        if (nextListId == null) return;
+        final nextListName = nextListId == kInboxListId
+            ? '收集箱'
+            : lists
+                      .where((list) => list.id == nextListId)
+                      .map((list) => list.name)
+                      .firstOrNull ??
+                  selectedListName ??
+                  '未知清单';
+        onChanged(nextListId, nextListName);
+      },
+      child: Row(
+        children: [
+          Icon(Icons.list_alt_outlined, color: colors.mutedForeground),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              selectedListName ?? '未知清单',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: colors.foreground),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1766,7 +2068,7 @@ class _TagChipsState extends ConsumerState<_TagChips> {
   }
 }
 
-/// §2.1 内嵌检查事项（checklist）：直接走 [ChecklistApi] REST，实时与后端同步。
+/// §2.1 内嵌检查事项：通过本地 Repository 与 outbox 离线优先同步。
 class _ChecklistSection extends ConsumerStatefulWidget {
   const _ChecklistSection({super.key, required this.taskId});
 
@@ -1777,16 +2079,7 @@ class _ChecklistSection extends ConsumerStatefulWidget {
 }
 
 class _ChecklistSectionState extends ConsumerState<_ChecklistSection> {
-  List<ChecklistItem> _items = const [];
-  bool _loading = true;
-  String? _error;
   final _addCtrl = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
 
   @override
   void dispose() {
@@ -1794,49 +2087,43 @@ class _ChecklistSectionState extends ConsumerState<_ChecklistSection> {
     super.dispose();
   }
 
-  Future<void> _load() async {
-    try {
-      final api = ref.read(todoApiProvider).checklist;
-      final items = await api.list(widget.taskId);
-      if (!mounted) return;
-      setState(() {
-        _items = items;
-        _loading = false;
-        _error = null;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _items = const [];
-        _loading = false;
-        _error = '检查事项暂不可用';
-      });
-    }
-  }
-
   Future<void> _add() async {
     final text = _addCtrl.text.trim();
     if (text.isEmpty) return;
-    _addCtrl.clear();
-    final api = ref.read(todoApiProvider).checklist;
-    await api.create(taskId: widget.taskId, title: text);
-    await _load();
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    await repo.createChecklistItem(taskId: widget.taskId, title: text);
+    if (mounted) _addCtrl.clear();
   }
 
-  Future<void> _toggle(ChecklistItem it) async {
-    final api = ref.read(todoApiProvider).checklist;
-    await api.update(it.id, completed: !it.completed);
-    await _load();
+  Future<void> _toggle(TodoChecklistItem item) async {
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    await repo.toggleChecklistItem(item.id);
   }
 
-  Future<void> _delete(ChecklistItem it) async {
-    final api = ref.read(todoApiProvider).checklist;
-    await api.delete(it.id);
-    await _load();
+  Future<void> _delete(TodoChecklistItem item) async {
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    await repo.deleteChecklistItem(item.id);
+  }
+
+  Future<void> _edit(TodoChecklistItem item) async {
+    final title = await showDialog<String>(
+      context: context,
+      builder: (_) => _ChecklistEditDialog(initialTitle: item.title),
+    );
+    final normalized = title?.trim();
+    if (normalized == null || normalized.isEmpty) return;
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    await repo.updateChecklistItem(item.id, title: normalized);
   }
 
   @override
   Widget build(BuildContext context) {
+    final repo = ref.watch(taskRepositoryProvider);
+    if (repo == null) return const SizedBox(height: 32);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1860,33 +2147,433 @@ class _ChecklistSectionState extends ConsumerState<_ChecklistSection> {
           ],
         ),
         const SizedBox(height: 8),
-        if (_loading)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8),
-            child: LinearProgressIndicator(),
-          )
-        else if (_error != null)
-          Text('加载失败: $_error')
-        else if (_items.isEmpty)
-          const Text('暂无检查事项')
-        else
-          ..._items.map(
-            (it) => CheckboxListTile(
-              value: it.completed,
-              title: Text(
-                it.title,
-                style: TextStyle(
-                  decoration: it.completed ? TextDecoration.lineThrough : null,
-                ),
-              ),
-              onChanged: (_) => _toggle(it),
-              secondary: IconButton(
-                tooltip: '删除',
-                icon: const Icon(Icons.close),
-                onPressed: () => _delete(it),
-              ),
-            ),
+        StreamBuilder<List<TodoChecklistItem>>(
+          stream: repo.watchChecklistItems(widget.taskId),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: LinearProgressIndicator(),
+              );
+            }
+            final items = snapshot.data!;
+            if (items.isEmpty) return const Text('暂无检查事项');
+            return Column(
+              children: items
+                  .map(
+                    (item) => GestureDetector(
+                      onLongPress: () => _edit(item),
+                      child: CheckboxListTile(
+                        value: item.completed,
+                        title: Text(
+                          item.title,
+                          style: TextStyle(
+                            decoration: item.completed
+                                ? TextDecoration.lineThrough
+                                : null,
+                          ),
+                        ),
+                        onChanged: (_) => _toggle(item),
+                        secondary: IconButton(
+                          tooltip: '删除',
+                          icon: const Icon(Icons.close),
+                          onPressed: () => _delete(item),
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _ChecklistEditDialog extends StatefulWidget {
+  const _ChecklistEditDialog({required this.initialTitle});
+
+  final String initialTitle;
+
+  @override
+  State<_ChecklistEditDialog> createState() => _ChecklistEditDialogState();
+}
+
+class _ChecklistEditDialogState extends State<_ChecklistEditDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialTitle);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('编辑检查事项'),
+    content: TextField(
+      controller: _controller,
+      autofocus: true,
+      decoration: const InputDecoration(
+        labelText: '检查事项',
+        border: OutlineInputBorder(),
+      ),
+      onSubmitted: (value) => Navigator.pop(context, value),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('取消'),
+      ),
+      FilledButton(
+        onPressed: () => Navigator.pop(context, _controller.text),
+        child: const Text('保存'),
+      ),
+    ],
+  );
+}
+
+/// 任务附件始终先进入 Drift + outbox；这里不直接调用后端。
+class _AttachmentSection extends ConsumerStatefulWidget {
+  const _AttachmentSection({super.key, required this.taskId});
+
+  final String taskId;
+
+  @override
+  ConsumerState<_AttachmentSection> createState() => _AttachmentSectionState();
+}
+
+class _AttachmentSectionState extends ConsumerState<_AttachmentSection> {
+  Future<void> _pickAndQueue() async {
+    final result = await FilePicker.pickFiles(allowMultiple: true);
+    if (result == null) return;
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    var queued = 0;
+    for (final file in result.files) {
+      final path = file.path;
+      if (path == null || path.isEmpty) continue;
+      await repo.queueAttachment(
+        taskId: widget.taskId,
+        name: file.name,
+        localPath: path,
+        mimeType: _mimeTypeFor(file.name),
+        size: file.size,
+      );
+      queued++;
+    }
+    if (!mounted || queued == 0) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('已加入 $queued 个附件上传队列')));
+  }
+
+  Future<void> _retry(TodoAttachment attachment) async {
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    await repo.retryAttachment(attachment.id);
+  }
+
+  Future<void> _delete(TodoAttachment attachment) async {
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    await repo.deleteAttachment(attachment.id);
+  }
+
+  String _mimeTypeFor(String fileName) {
+    final normalized = fileName.toLowerCase();
+    if (normalized.endsWith('.pdf')) return 'application/pdf';
+    if (normalized.endsWith('.png')) return 'image/png';
+    if (normalized.endsWith('.jpg') || normalized.endsWith('.jpeg')) {
+      return 'image/jpeg';
+    }
+    if (normalized.endsWith('.txt') || normalized.endsWith('.md')) {
+      return 'text/plain';
+    }
+    return 'application/octet-stream';
+  }
+
+  ({String label, IconData icon, Color color}) _status(
+    BuildContext context,
+    TodoAttachment attachment,
+  ) {
+    final colors = brandColors(context);
+    return switch (attachment.status) {
+      'uploading' => (
+        label: '正在上传',
+        icon: Icons.cloud_upload_outlined,
+        color: colors.mutedForeground,
+      ),
+      'failed' => (
+        label: '上传失败',
+        icon: Icons.error_outline,
+        color: Theme.of(context).colorScheme.error,
+      ),
+      'uploaded' => (
+        label: '已完成',
+        icon: Icons.cloud_done_outlined,
+        color: colors.success,
+      ),
+      _ => (
+        label: '等待上传',
+        icon: Icons.schedule_outlined,
+        color: colors.mutedForeground,
+      ),
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final repo = ref.watch(taskRepositoryProvider);
+    if (repo == null) return const SizedBox(height: 32);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        OutlinedButton.icon(
+          onPressed: _pickAndQueue,
+          icon: const Icon(Icons.attach_file),
+          label: const Text('添加附件'),
+        ),
+        const SizedBox(height: 8),
+        StreamBuilder<List<TodoAttachment>>(
+          stream: repo.watchAttachments(widget.taskId),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const LinearProgressIndicator();
+            }
+            final attachments = snapshot.data!;
+            if (attachments.isEmpty) return const Text('暂无附件');
+            return Column(
+              children: attachments.map((attachment) {
+                final status = _status(context, attachment);
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(status.icon, color: status.color),
+                  title: Text(attachment.name),
+                  subtitle: Text(
+                    attachment.status == 'failed' && attachment.error != null
+                        ? '${status.label}：${attachment.error}'
+                        : status.label,
+                    style: TextStyle(color: status.color),
+                  ),
+                  trailing: Wrap(
+                    spacing: 0,
+                    children: [
+                      if (attachment.status == 'failed')
+                        IconButton(
+                          tooltip: '重试上传',
+                          onPressed: () => _retry(attachment),
+                          icon: const Icon(Icons.refresh),
+                        ),
+                      IconButton(
+                        tooltip: '删除附件',
+                        onPressed: () => _delete(attachment),
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _ActivitySection extends ConsumerStatefulWidget {
+  const _ActivitySection({super.key, required this.taskServerId});
+
+  final int taskServerId;
+
+  @override
+  ConsumerState<_ActivitySection> createState() => _ActivitySectionState();
+}
+
+class _ActivitySectionState extends ConsumerState<_ActivitySection> {
+  String? _refreshError;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_refresh());
+  }
+
+  Future<void> _refresh() async {
+    final repo = ref.read(activityRepositoryProvider);
+    if (repo == null) return;
+    try {
+      await repo.refreshTask(widget.taskServerId);
+      if (mounted) setState(() => _refreshError = null);
+    } catch (_) {
+      if (mounted) setState(() => _refreshError = '离线显示已缓存的动态');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final repo = ref.watch(activityRepositoryProvider);
+    if (repo == null) return const SizedBox(height: 32);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_refreshError != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(_refreshError!),
           ),
+        StreamBuilder<List<TodoActivity>>(
+          stream: repo.watchTask(widget.taskServerId),
+          builder: (context, snapshot) {
+            final activities = snapshot.data ?? const <TodoActivity>[];
+            if (activities.isEmpty) return const Text('暂无任务动态');
+            return Column(
+              children: activities
+                  .map(
+                    (activity) => ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.history_outlined),
+                      title: Text(_activityLabel(activity.action)),
+                      subtitle: Text(
+                        '${activity.actorUserName ?? '成员'} · ${activity.occurredAt.toLocal().toString().substring(0, 16)}',
+                      ),
+                    ),
+                  )
+                  .toList(),
+            );
+          },
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: _refresh,
+            icon: const Icon(Icons.refresh, size: 16),
+            label: const Text('刷新动态'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _activityLabel(String action) => switch (action) {
+    'task_created' => '创建了任务',
+    'task_updated' => '更新了任务',
+    'task_completed' => '完成了任务',
+    'task_uncompleted' => '取消完成任务',
+    'comment_created' => '添加了评论',
+    _ => action,
+  };
+}
+
+class _TemplateSection extends ConsumerWidget {
+  const _TemplateSection({super.key, required this.task});
+
+  final TodoTask task;
+
+  Future<void> _saveCurrent(BuildContext context, WidgetRef ref) async {
+    final templates = ref.read(templateRepositoryProvider);
+    if (templates == null) return;
+    await templates.saveTask(task: task, name: '${task.title} 模板');
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已保存为模板，等待同步')));
+  }
+
+  Future<void> _apply(
+    BuildContext context,
+    WidgetRef ref,
+    TodoTemplate template,
+  ) async {
+    final templates = ref.read(templateRepositoryProvider);
+    final tasks = ref.read(taskRepositoryProvider);
+    if (templates == null || tasks == null) return;
+    final seed = templates.taskSeed(template);
+    await tasks.create(
+      listId: task.listId,
+      title: seed.title,
+      description: seed.description,
+      priority: seed.priority,
+    );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('已应用模板“${template.name}”')));
+  }
+
+  Future<void> _refresh(BuildContext context, WidgetRef ref) async {
+    final coordinator = ref.read(syncCoordinatorProvider);
+    if (coordinator == null) return;
+    try {
+      final outcome = await coordinator.syncOnce();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('同步完成：推送 ${outcome.pushed} 项，拉取 ${outcome.pulled} 项'),
+        ),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('模板同步失败，将继续显示本地缓存')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final repo = ref.watch(templateRepositoryProvider);
+    if (repo == null) return const SizedBox(height: 32);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            OutlinedButton.icon(
+              onPressed: () => _saveCurrent(context, ref),
+              icon: const Icon(Icons.bookmark_add_outlined),
+              label: const Text('保存当前任务为模板'),
+            ),
+            const SizedBox(width: 4),
+            IconButton(
+              tooltip: '刷新模板',
+              onPressed: () => _refresh(context, ref),
+              icon: const Icon(Icons.refresh),
+            ),
+          ],
+        ),
+        StreamBuilder<List<TodoTemplate>>(
+          stream: repo.watchAll(),
+          builder: (context, snapshot) {
+            final templates = snapshot.data ?? const <TodoTemplate>[];
+            if (templates.isEmpty) return const Text('暂无本地模板');
+            return Column(
+              children: templates
+                  .map(
+                    (template) => ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(template.name),
+                      subtitle: Text(
+                        template.status == 'synced' ? '已同步' : '等待同步',
+                      ),
+                      trailing: TextButton(
+                        onPressed: () => _apply(context, ref, template),
+                        child: const Text('应用'),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            );
+          },
+        ),
       ],
     );
   }

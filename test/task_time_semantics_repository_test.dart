@@ -83,7 +83,13 @@ void main() {
     final task = await repository.create(listId: 'inbox', title: '默认日期任务');
     final payload =
         jsonDecode(
-              (await db.select(db.todoSyncChanges).getSingle()).payloadJson,
+              (await (db.select(db.todoSyncChanges)
+                        ..where((change) => change.entity.equals('task'))
+                        ..where(
+                          (change) => change.entityLocalId.equals(task.id),
+                        ))
+                      .getSingle())
+                  .payloadJson,
             )
             as Map<String, dynamic>;
 
@@ -244,7 +250,13 @@ void main() {
     );
     final payload =
         jsonDecode(
-              (await db.select(db.todoSyncChanges).getSingle()).payloadJson,
+              (await (db.select(db.todoSyncChanges)
+                        ..where((change) => change.entity.equals('task'))
+                        ..where(
+                          (change) => change.entityLocalId.equals(task.id),
+                        ))
+                      .getSingle())
+                  .payloadJson,
             )
             as Map<String, dynamic>;
 

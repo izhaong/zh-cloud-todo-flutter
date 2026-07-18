@@ -124,22 +124,25 @@ class TagRepository {
   }
 
   Future<void> setTaskTags(String taskId, List<String> tagIds) async {
-    await (_db.delete(
-      _db.todoTaskTags,
-    )..where((t) => t.taskId.equals(taskId))).go();
-    for (final tagId in tagIds.toSet()) {
-      await _db
-          .into(_db.todoTaskTags)
-          .insert(
-            TodoTaskTagsCompanion.insert(taskId: taskId, tagId: tagId),
-            mode: InsertMode.insertOrIgnore,
-          );
-    }
-    await _queue.enqueue(
-      entity: SyncEntities.taskTag,
-      op: SyncOps.upsert,
-      localId: taskId,
-      payload: {'taskId': taskId, 'tagIds': tagIds},
-    );
+    final normalizedTagIds = tagIds.toSet().toList();
+    await _db.transaction(() async {
+      await (_db.delete(
+        _db.todoTaskTags,
+      )..where((t) => t.taskId.equals(taskId))).go();
+      for (final tagId in normalizedTagIds) {
+        await _db
+            .into(_db.todoTaskTags)
+            .insert(
+              TodoTaskTagsCompanion.insert(taskId: taskId, tagId: tagId),
+              mode: InsertMode.insertOrIgnore,
+            );
+      }
+      await _queue.enqueue(
+        entity: SyncEntities.taskTag,
+        op: SyncOps.upsert,
+        localId: taskId,
+        payload: {'taskId': taskId, 'tagIds': normalizedTagIds},
+      );
+    });
   }
 }

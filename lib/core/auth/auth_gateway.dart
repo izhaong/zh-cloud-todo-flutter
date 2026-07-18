@@ -27,7 +27,7 @@ abstract class AuthGateway {
 
   Future<void> logout(String accessToken);
 
-  /// 校验 accessToken 是否仍被后端认可；网络失败时返回 false。
+  /// 校验 accessToken 是否仍被后端认可；网络异常向调用方抛出以保留离线会话。
   Future<bool> validateSession(String accessToken);
 
   void close();
@@ -134,12 +134,15 @@ class AuthGatewayImpl implements AuthGateway {
   Future<bool> validateSession(String accessToken) async {
     if (accessToken.isEmpty) return false;
     try {
-      final resp = await _client.memberGet<Map<String, dynamic>>('/user/get');
+      // bootstrap 尚未把持久化会话写回 sessionProvider；此时必须显式携带
+      // 读取到的 token，不能依赖 ApiClient 的 provider（它仍会返回空串）。
+      final resp = await _client.memberGet<Map<String, dynamic>>(
+        '/user/get',
+        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+      );
       _unwrap(resp);
       return true;
     } on TodoAuthException {
-      return false;
-    } on DioException {
       return false;
     }
   }

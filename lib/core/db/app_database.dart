@@ -46,6 +46,7 @@ class TodoTasks extends Table {
   TextColumn get description => text().nullable()();
   BoolColumn get completed => boolean().withDefault(const Constant(false))();
   DateTimeColumn get completedAt => dateTime().nullable()();
+  BoolColumn get cancelled => boolean().withDefault(const Constant(false))();
   IntColumn get priority => integer().withDefault(const Constant(0))();
   BoolColumn get isPinned => boolean().withDefault(const Constant(false))();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
@@ -106,6 +107,68 @@ class TodoTaskTags extends Table {
 
   @override
   Set<Column> get primaryKey => {taskId, tagId};
+}
+
+/// 任务检查事项：本地 UUID 保证任务尚未同步时也能离线编辑。
+class TodoChecklistItems extends Table {
+  TextColumn get id => text()();
+  IntColumn get serverId => integer().nullable()();
+  TextColumn get taskId => text()();
+  TextColumn get title => text()();
+  BoolColumn get completed => boolean().withDefault(const Constant(false))();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+  DateTimeColumn get updatedAt => dateTime()();
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// 任务附件元数据及本地上传状态。二进制由本地路径和上传队列管理。
+class TodoAttachments extends Table {
+  TextColumn get id => text()();
+  IntColumn get serverId => integer().nullable()();
+  TextColumn get taskId => text()();
+  TextColumn get name => text()();
+  TextColumn get localPath => text().nullable()();
+  TextColumn get remoteUrl => text().nullable()();
+  TextColumn get mimeType => text()();
+  IntColumn get size => integer()();
+  TextColumn get status => text().withDefault(const Constant('queued'))();
+  TextColumn get error => text().nullable()();
+  DateTimeColumn get updatedAt => dateTime()();
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// 服务端任务动态的本地只读缓存；联网刷新后离线仍可展示最近活动。
+class TodoActivities extends Table {
+  IntColumn get serverId => integer()();
+  IntColumn get taskServerId => integer()();
+  IntColumn get actorUserId => integer().nullable()();
+  TextColumn get actorUserName => text().nullable()();
+  TextColumn get action => text()();
+  TextColumn get detail => text().nullable()();
+  DateTimeColumn get occurredAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {serverId};
+}
+
+/// 任务模板的本地真相源；服务端登记通过 outbox 异步完成。
+class TodoTemplates extends Table {
+  TextColumn get id => text()();
+  IntColumn get serverId => integer().nullable()();
+  TextColumn get name => text()();
+  TextColumn get contentJson => text()();
+  TextColumn get status => text().withDefault(const Constant('queued'))();
+  DateTimeColumn get updatedAt => dateTime()();
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
 }
 
 /// 提醒（任务维度，单任务可有多条提醒规则）。
@@ -214,8 +277,9 @@ class TodoSyncChanges extends Table {
   TextColumn get payloadJson => text()();
   DateTimeColumn get createdAt => dateTime()();
   IntColumn get attemptCount => integer().withDefault(const Constant(0))();
-  TextColumn get status =>
-      text().withDefault(const Constant('queued'))(); // queued/retryable/synced/failed
+  TextColumn get status => text().withDefault(
+    const Constant('queued'),
+  )(); // queued/retryable/synced/failed
 }
 
 /// 全局同步游标（单行，id 固定为 1）。
@@ -246,6 +310,10 @@ class TodoEntityRevisions extends Table {
     TodoFolders,
     TodoTags,
     TodoTaskTags,
+    TodoChecklistItems,
+    TodoAttachments,
+    TodoActivities,
+    TodoTemplates,
     TodoReminders,
     TodoRepeatRules,
     TodoRepeatSkips,
@@ -267,7 +335,7 @@ class AppDatabase extends _$AppDatabase {
     : super(_open('todo_t${tenantId}_u$userId'));
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -283,7 +351,8 @@ class AppDatabase extends _$AppDatabase {
         }
         await m.createAll();
         return;
-      } else if (from < 5) {
+      }
+      if (from < 5) {
         await m.addColumn(todoTasks, todoTasks.allDay);
       }
       if (from < 6) {
@@ -314,6 +383,15 @@ class AppDatabase extends _$AppDatabase {
         await m.addColumn(todoTasks, todoTasks.repeatRuleId);
         await m.addColumn(todoTasks, todoTasks.repeatOccurrenceAt);
       }
+      // B1 与 B2 曾各自占用 5–9 号 schema。B2 已有 5–9 的时间语义
+      // 迁移，故将 B1 的新增表和放弃状态收敛到新的 10 号迁移。
+      if (from < 10) {
+        await m.createTable(todoChecklistItems);
+        await m.createTable(todoAttachments);
+        await m.addColumn(todoTasks, todoTasks.cancelled);
+        await m.createTable(todoActivities);
+        await m.createTable(todoTemplates);
+      }
     },
   );
 
@@ -333,6 +411,7 @@ class AppDatabase extends _$AppDatabase {
     final next = row.copyWith(
       completed: !row.completed,
       completedAt: Value(!row.completed ? DateTime.now() : null),
+      cancelled: false,
       updatedAt: DateTime.now(),
     );
     await (update(todoTasks)..where((t) => t.id.equals(taskId))).write(next);

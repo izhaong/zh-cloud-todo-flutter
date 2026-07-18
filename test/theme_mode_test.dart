@@ -128,7 +128,7 @@ void main() {
           tester,
           brightness: brightness,
           rows: [
-            _row(_taskData(id: 'normal-priority', title: '整理收件箱')),
+            _row(_taskData(id: 'normal-priority', title: '整理收集箱')),
             _row(_taskData(id: 'high-priority', title: '提交发布说明', priority: 3)),
           ],
         );

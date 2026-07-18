@@ -18,7 +18,7 @@ void main() {
 
     expect(find.text('任务清单'), findsOneWidget);
     expect(find.text('智能清单'), findsOneWidget);
-    expect(find.text('收件箱'), findsOneWidget);
+    expect(find.text('收集箱'), findsOneWidget);
     expect(find.text('今天'), findsOneWidget);
     expect(find.text('最近7天'), findsOneWidget);
     expect(find.text('全部'), findsOneWidget);
@@ -107,6 +107,44 @@ void main() {
       );
     });
   });
+
+  testWidgets('TodoRail sync entry invokes the supplied sync action', (
+    tester,
+  ) async {
+    var syncRequests = 0;
+    await pumpTodoVisualScenario(
+      tester,
+      viewport: TodoVisualViewports.wide,
+      fixtureSet: TodoVisualFixtureSet.populated,
+      child: Material(
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: TodoRail(
+            section: Section.tasks,
+            onSelect: _noopSection,
+            onSync: () => syncRequests++,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('同步'));
+
+    expect(syncRequests, 1);
+  });
+
+  testWidgets('sync status is exposed as a live accessibility announcement', (
+    tester,
+  ) async {
+    const status = '同步完成：推送 2 项，拉取 3 项';
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Material(child: TodoSyncStatusAnnouncement(status: status)),
+      ),
+    );
+
+    expect(find.bySemanticsLabel(status), findsOneWidget);
+  });
 }
 
 Future<TodoVisualFixture> _pumpSidebar(
@@ -133,11 +171,17 @@ Future<void> _pumpRail(WidgetTester tester) async {
     child: const Material(
       child: Align(
         alignment: Alignment.topLeft,
-        child: TodoRail(section: Section.tasks, onSelect: _noopSection),
+        child: TodoRail(
+          section: Section.tasks,
+          onSelect: _noopSection,
+          onSync: _noop,
+        ),
       ),
     ),
   );
 }
+
+void _noop() {}
 
 Future<void> _focusByKeyboard(WidgetTester tester, Finder target) async {
   for (var i = 0; i < 30; i++) {

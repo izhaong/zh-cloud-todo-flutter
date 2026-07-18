@@ -48,7 +48,7 @@ void main() {
       _withinDetail(find.textContaining(RegExp(r'(2026[-/]0?7[-/]11|7月11)'))),
       findsOneWidget,
     );
-    expect(_withinDetail(find.text('收件箱')), findsOneWidget);
+    expect(_withinDetail(find.text('收集箱')), findsOneWidget);
     _expectTodoDetailIdentity(selected: true);
   });
 
@@ -72,7 +72,7 @@ void main() {
 
     expect(_withinDetail(find.textContaining('选择任务')), findsOneWidget);
     expect(_withinDetail(find.text(_taskTitle)), findsNothing);
-    expect(find.text('收件箱'), findsWidgets);
+    expect(find.text('收集箱'), findsWidgets);
   });
 
   testWidgets('deleting the selected task returns detail to no selection', (
@@ -121,6 +121,111 @@ void main() {
     expect(afterSave?.title, updatedTitle);
     expect(afterSave?.description, updatedDescription);
   });
+
+  testWidgets('detail editor exposes fixed-device semantic identifiers', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await _pumpWideHome(tester);
+    await _selectFixtureTask(tester);
+
+    expect(
+      find.bySemanticsIdentifier('todo_task_detail_title'),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsIdentifier('todo_task_detail_description'),
+      findsOneWidget,
+    );
+    expect(find.bySemanticsIdentifier('todo_task_detail_save'), findsOneWidget);
+
+    semantics.dispose();
+  });
+
+  testWidgets(
+    'mobile detail saves multiline content through its visible action',
+    (tester) async {
+      final fixture = await _pumpPagePane(tester, taskId: _taskId);
+      const updatedDescription = '第一行\n第二行\n第三行\n第四行\n第五行\n第六行';
+
+      await tester.enterText(_directTextField('描述'), updatedDescription);
+      await tester.pump();
+
+      final detailPage = find.byKey(const Key('todo_task_detail_page'));
+      expect(detailPage, findsOneWidget);
+      final saveAction = find.descendant(
+        of: detailPage,
+        matching: find.byKey(const Key('todo_task_detail_save_button')),
+      );
+      expect(saveAction, findsOneWidget);
+      await tester.ensureVisible(saveAction);
+      await tester.pumpAndSettle();
+      await tester.tap(saveAction);
+      await tester.pumpAndSettle();
+
+      final task = await fixture.container
+          .read(taskRepositoryProvider)!
+          .getById(_taskId);
+      expect(task?.description, updatedDescription);
+    },
+  );
+
+  testWidgets(
+    'detail long press edits a checklist item through the repository',
+    (tester) async {
+      final fixture = await _pumpDirectPane(tester, taskId: _taskId);
+      final repository = fixture.container.read(taskRepositoryProvider)!;
+      final item = await repository.createChecklistItem(
+        taskId: _taskId,
+        title: '整理数据',
+      );
+      await tester.pumpAndSettle();
+
+      final checklistTitle = find.text('整理数据');
+      await tester.ensureVisible(checklistTitle);
+      await tester.pumpAndSettle();
+      await tester.longPress(checklistTitle);
+      await tester.pumpAndSettle();
+      expect(find.text('编辑检查事项'), findsOneWidget);
+      await tester.enterText(_directTextField('检查事项'), '复核数据');
+      await tester.tap(find.text('保存'));
+      await tester.pumpAndSettle();
+
+      final items = await (fixture.database.select(
+        fixture.database.todoChecklistItems,
+      )..where((entry) => entry.id.equals(item.id))).get();
+      expect(items.single.title, '复核数据');
+    },
+  );
+
+  testWidgets(
+    'detail moves a task to another list through the offline repository',
+    (tester) async {
+      final fixture = await _pumpDirectPane(tester, taskId: _taskId);
+      final listPicker = find.byKey(const Key('task-list-visual-task-pinned'));
+
+      expect(listPicker, findsOneWidget);
+      await tester.tap(listPicker);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('生活').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('保存'));
+      await tester.pumpAndSettle();
+
+      final task = await fixture.container
+          .read(taskRepositoryProvider)!
+          .getById(_taskId);
+      expect(task?.listId, TodoVisualFixture.personalListId);
+      final changes = await fixture.database
+          .select(fixture.database.todoSyncChanges)
+          .get();
+      expect(changes.last.entity, 'task');
+      expect(
+        changes.last.payloadJson,
+        contains(TodoVisualFixture.personalListId),
+      );
+    },
+  );
 
   testWidgets('late pin result from task A cannot overwrite selected task B', (
     tester,
@@ -261,6 +366,56 @@ void main() {
     expect(unavailable, [_taskId]);
     expect(find.text('任务不存在或已删除'), findsOneWidget);
   });
+
+  testWidgets(
+    'detail shows queued attachments with a retryable delivery state',
+    (tester) async {
+      final fixture = await _pumpDirectPane(tester, taskId: _taskId);
+      await fixture.container
+          .read(taskRepositoryProvider)!
+          .queueAttachment(
+            taskId: _taskId,
+            name: 'weekly-report.pdf',
+            localPath: '/tmp/weekly-report.pdf',
+            mimeType: 'application/pdf',
+            size: 1024,
+          );
+      await tester.pumpAndSettle();
+
+      await tester.drag(find.byType(ListView), const Offset(0, -900));
+      await tester.pumpAndSettle();
+      expect(find.text('附件'), findsOneWidget);
+      expect(find.text('weekly-report.pdf'), findsOneWidget);
+      expect(find.text('等待上传'), findsOneWidget);
+    },
+  );
+
+  testWidgets('mobile detail opens a local Markdown preview on demand', (
+    tester,
+  ) async {
+    final fixture = await _pumpPagePane(tester, taskId: _taskId);
+    const markdown = '## 本周目标\n\n完成 **B1 验收**';
+    await fixture.container
+        .read(taskRepositoryProvider)!
+        .update(_taskId, description: markdown);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('更多任务操作'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Markdown 预览'));
+    await tester.pumpAndSettle();
+    expect(find.text('本周目标'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is EditableText &&
+            widget.readOnly &&
+            widget.controller.text.contains('B1 验收'),
+        description: 'rendered Markdown content',
+      ),
+      findsOneWidget,
+    );
+  });
 }
 
 Finder get _detailRegion => find.byKey(const Key('todo-detail'));
@@ -356,6 +511,33 @@ Future<TodoVisualFixture> _pumpDirectPane(
           extensions: const [AppThemeExtension(AppColors.light)],
         ),
         home: Scaffold(body: pane),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  return fixture;
+}
+
+Future<TodoVisualFixture> _pumpPagePane(
+  WidgetTester tester, {
+  required String taskId,
+}) async {
+  final fixture = await TodoVisualFixture.create();
+  addTearDown(fixture.dispose);
+
+  tester.view.physicalSize = const Size(390, 844);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: fixture.container,
+      child: MaterialApp(
+        theme: ThemeData.light().copyWith(
+          extensions: const [AppThemeExtension(AppColors.light)],
+        ),
+        home: Scaffold(body: TaskDetailPane(taskId: taskId)),
       ),
     ),
   );

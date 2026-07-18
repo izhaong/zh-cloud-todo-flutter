@@ -87,7 +87,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 9);
+      expect(version.data['user_version'], 10);
       await upgraded.close();
 
       final reopened = AppDatabase.forTesting(NativeDatabase(databaseFile));

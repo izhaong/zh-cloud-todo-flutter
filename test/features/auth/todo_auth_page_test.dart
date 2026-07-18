@@ -69,6 +69,17 @@ void main() {
     expect(find.byTooltip('隐藏密码'), findsOneWidget);
   });
 
+  testWidgets('密码登录暴露固定设备验收语义标识', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await _pumpAuthPage(tester);
+
+    expect(find.bySemanticsIdentifier('todo_auth_mobile'), findsOneWidget);
+    expect(find.bySemanticsIdentifier('todo_auth_password'), findsOneWidget);
+    expect(find.bySemanticsIdentifier('todo_auth_submit'), findsOneWidget);
+
+    semantics.dispose();
+  });
+
   testWidgets('四种认证模式使用面向用户的文案', (tester) async {
     await _pumpAuthPage(tester);
 
