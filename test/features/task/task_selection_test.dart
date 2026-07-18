@@ -271,7 +271,7 @@ void main() {
   ) async {
     await _pumpWorkspace(tester);
     const taskId = 'visual-task-completed';
-    const selectedTitle = '清理收件箱中的旧任务';
+    const selectedTitle = '清理收集箱中的旧任务';
 
     await _tapTask(tester, taskId);
     await tester.pumpAndSettle();

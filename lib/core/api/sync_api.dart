@@ -87,6 +87,7 @@ class SyncConflictDto {
     this.entityType,
     this.entityId,
     this.reason,
+    this.serverRevision,
     this.serverValue,
   });
 
@@ -94,6 +95,7 @@ class SyncConflictDto {
   final String? entityType;
   final int? entityId;
   final String? reason;
+  final int? serverRevision;
   final Map<String, dynamic>? serverValue;
 
   factory SyncConflictDto.fromJson(Map<String, dynamic> json) =>
@@ -102,6 +104,7 @@ class SyncConflictDto {
         entityType: json['entityType']?.toString(),
         entityId: (json['entityId'] as num?)?.toInt(),
         reason: json['reason']?.toString(),
+        serverRevision: (json['serverRevision'] as num?)?.toInt(),
         serverValue: (json['serverValue'] as Map?)?.cast<String, dynamic>(),
       );
 }

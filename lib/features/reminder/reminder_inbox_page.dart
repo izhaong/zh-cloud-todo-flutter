@@ -3,8 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/api/todo_api.dart';
 import '../../state/providers.dart';
+import '../../state/repositories/reminder_inbox_repository.dart'
+    show ReminderInboxItem;
 import '../task/task_detail_page.dart' show TaskDetailPage;
 
 /// 当前收件箱条目（拉取后回写解析好的任务标题）。
@@ -74,8 +75,7 @@ List<InboxGroup> groupByTask(List<InboxEntry> entries) {
 /// 未登录（[appDatabaseProvider] 为 null）时跳过标题解析，UI 层单独提示登录。
 final inboxProvider = FutureProvider.autoDispose<InboxState>((ref) async {
   final db = ref.watch(appDatabaseProvider);
-  final api = ref.watch(todoApiProvider).reminder;
-  final items = await api.inbox();
+  final items = await ref.watch(reminderInboxRepositoryProvider).list();
   if (db == null) {
     return InboxState.data([for (final it in items) InboxEntry(it)]);
   }
@@ -107,6 +107,7 @@ class ReminderInboxPage extends ConsumerWidget {
     final host = ScaffoldMessenger.maybeOf(ref.context);
     try {
       await op();
+      host?.showSnackBar(const SnackBar(content: Text('提醒操作已加入同步队列')));
       ref.invalidate(inboxProvider);
     } catch (e) {
       host?.showSnackBar(SnackBar(content: Text('操作失败: $e')));
@@ -200,7 +201,8 @@ class _InboxGroupCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final api = ref.read(todoApiProvider).reminder;
+    final actions = ref.read(reminderDispatchActionRepositoryProvider);
+    final reminders = ref.read(reminderRepositoryProvider);
     final pending = group.reminders.where((e) => e.pending).toList();
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
@@ -237,16 +239,18 @@ class _InboxGroupCard extends ConsumerWidget {
                 children: [
                   FilledButton.tonal(
                     onPressed: () => onAct(() async {
+                      if (actions == null) throw StateError('同步队列未就绪');
                       for (final r in pending) {
-                        await api.complete(r.id);
+                        await actions.complete(reminderDispatchId: r.id);
                       }
                     }),
                     child: const Text('全部完成'),
                   ),
                   OutlinedButton(
                     onPressed: () => onAct(() async {
+                      if (actions == null) throw StateError('同步队列未就绪');
                       for (final r in pending) {
-                        await api.dismiss(r.id);
+                        await actions.dismiss(reminderDispatchId: r.id);
                       }
                     }),
                     child: const Text('全部忽略'),
@@ -256,7 +260,29 @@ class _InboxGroupCard extends ConsumerWidget {
               const SizedBox(height: 4),
             ],
             for (final r in group.reminders)
-              _ReminderTile(api: api, entry: r, onAct: onAct),
+              _ReminderTile(
+                entry: r,
+                onAct: onAct,
+                onSnooze: () {
+                  if (actions == null) throw StateError('同步队列未就绪');
+                  return actions.snooze(reminderDispatchId: r.id, minutes: 10);
+                },
+                onPersistent: () {
+                  if (reminders == null) throw StateError('提醒规则未就绪');
+                  return reminders.enablePersistentByServerId(
+                    reminderServerId: r.item.reminderId,
+                    intervalMinutes: 30,
+                  );
+                },
+                onComplete: () {
+                  if (actions == null) throw StateError('同步队列未就绪');
+                  return actions.complete(reminderDispatchId: r.id);
+                },
+                onDismiss: () {
+                  if (actions == null) throw StateError('同步队列未就绪');
+                  return actions.dismiss(reminderDispatchId: r.id);
+                },
+              ),
           ],
         ),
       ),
@@ -266,14 +292,20 @@ class _InboxGroupCard extends ConsumerWidget {
 
 class _ReminderTile extends StatelessWidget {
   const _ReminderTile({
-    required this.api,
     required this.entry,
     required this.onAct,
+    required this.onSnooze,
+    required this.onPersistent,
+    required this.onComplete,
+    required this.onDismiss,
   });
 
-  final ReminderActionApi api;
   final InboxEntry entry;
   final Future<void> Function(Future<void> Function() op) onAct;
+  final Future<void> Function() onSnooze;
+  final Future<void> Function() onPersistent;
+  final Future<void> Function() onComplete;
+  final Future<void> Function() onDismiss;
 
   String _fmtRemain(DateTime t) {
     final d = t.difference(DateTime.now());
@@ -306,22 +338,22 @@ class _ReminderTile extends StatelessWidget {
                 IconButton(
                   tooltip: '延后 10 分钟',
                   icon: const Icon(Icons.snooze, size: 18),
-                  onPressed: () => onAct(() => api.snooze(entry.id)),
+                  onPressed: () => onAct(onSnooze),
                 ),
                 IconButton(
                   tooltip: '持续响铃（信息态）',
                   icon: const Icon(Icons.campaign_outlined, size: 18),
-                  onPressed: () => onAct(() => api.persistent(entry.id)),
+                  onPressed: () => onAct(onPersistent),
                 ),
                 IconButton(
                   tooltip: '完成',
                   icon: const Icon(Icons.check, size: 18),
-                  onPressed: () => onAct(() => api.complete(entry.id)),
+                  onPressed: () => onAct(onComplete),
                 ),
                 IconButton(
                   tooltip: '忽略',
                   icon: const Icon(Icons.close, size: 18),
-                  onPressed: () => onAct(() => api.dismiss(entry.id)),
+                  onPressed: () => onAct(onDismiss),
                 ),
               ],
             )

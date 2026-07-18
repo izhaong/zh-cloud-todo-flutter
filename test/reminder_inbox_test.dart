@@ -1,11 +1,55 @@
+import 'package:dio/dio.dart';
+import 'package:drift/drift.dart' show DatabaseConnection;
+import 'package:drift/native.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zh_cloud_todo_flutter/core/api/api_client.dart';
 import 'package:zh_cloud_todo_flutter/core/api/todo_api.dart';
+import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/features/reminder/reminder_inbox_page.dart'
-    show groupByTask, InboxEntry;
+    show ReminderInboxPage, groupByTask, InboxEntry;
+import 'package:zh_cloud_todo_flutter/state/providers.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/reminder_inbox_repository.dart';
+
+class _FakeReminderInboxRepository extends ReminderInboxRepository {
+  _FakeReminderInboxRepository(this.items)
+    : super(ReminderActionApi(ApiClient(dio: Dio())));
+
+  final List<ReminderInboxItem> items;
+
+  @override
+  Future<List<ReminderInboxItem>> list() async => items;
+}
 
 void main() {
   group('ReminderActionApi.normalize', () {
+    test('收件箱读取统一数组信封', () async {
+      final dio = Dio();
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) => handler.resolve(
+            Response(
+              requestOptions: options,
+              data: {
+                'code': 0,
+                'data': [
+                  {'reminderDispatchId': 8, 'reminderId': 9, 'taskId': 60},
+                ],
+              },
+            ),
+          ),
+        ),
+      );
+
+      final items = await ReminderActionApi(ApiClient(dio: dio)).inbox();
+
+      expect(items, hasLength(1));
+      expect(items.single.id, 8);
+      expect(items.single.reminderId, 9);
+    });
+
     test('解析纯数组', () {
       final raw = [
         {
@@ -35,6 +79,21 @@ void main() {
       expect(items, hasLength(1));
       expect(items.first.id, 3);
       expect(items.first.taskId, 20);
+    });
+
+    test('保留派发 ID 与提醒规则 ID', () {
+      final items = ReminderActionApi.normalize([
+        {
+          'reminderDispatchId': 71,
+          'reminderId': 72,
+          'taskId': 20,
+          'taskTitle': '提醒动作',
+          'fireAt': '2026-07-13T09:00:00',
+        },
+      ]);
+
+      expect(items.single.id, 71);
+      expect(items.single.reminderId, 72);
     });
 
     test('解析信封 {code,data:{list:[…]}}', () {
@@ -116,5 +175,48 @@ void main() {
       expect(groups[1].taskId, 2);
       expect(groups[1].reminders, hasLength(2));
     });
+  });
+
+  testWidgets('延后提醒入 outbox 后提示等待同步', (tester) async {
+    final database = AppDatabase.forTesting(
+      DatabaseConnection(
+        NativeDatabase.memory(),
+        closeStreamsSynchronously: true,
+      ),
+    );
+    addTearDown(database.close);
+    final container = ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(database),
+        reminderInboxRepositoryProvider.overrideWithValue(
+          _FakeReminderInboxRepository([
+            ReminderInboxItem(
+              id: 71,
+              reminderId: 72,
+              taskId: 12,
+              taskTitle: '稍后处理',
+              remindAt: DateTime(2026, 7, 16, 9),
+            ),
+          ]),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: ReminderInboxPage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('延后 10 分钟'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('提醒操作已加入同步队列'), findsOneWidget);
+    final changes = await database.select(database.todoSyncChanges).get();
+    expect(changes, hasLength(1));
+    expect(changes.single.entity, 'reminder_dispatch_action');
   });
 }

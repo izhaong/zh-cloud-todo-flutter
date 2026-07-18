@@ -546,6 +546,32 @@ class $TodoTasksTable extends TodoTasks
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _completedAtMeta = const VerificationMeta(
+    'completedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> completedAt = GeneratedColumn<DateTime>(
+    'completed_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _cancelledMeta = const VerificationMeta(
+    'cancelled',
+  );
+  @override
+  late final GeneratedColumn<bool> cancelled = GeneratedColumn<bool>(
+    'cancelled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("cancelled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _priorityMeta = const VerificationMeta(
     'priority',
   );
@@ -614,6 +640,78 @@ class $TodoTasksTable extends TodoTasks
     type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _allDayMeta = const VerificationMeta('allDay');
+  @override
+  late final GeneratedColumn<bool> allDay = GeneratedColumn<bool>(
+    'all_day',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("all_day" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _timeZoneMeta = const VerificationMeta(
+    'timeZone',
+  );
+  @override
+  late final GeneratedColumn<String> timeZone = GeneratedColumn<String>(
+    'time_zone',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _fixedTimezoneMeta = const VerificationMeta(
+    'fixedTimezone',
+  );
+  @override
+  late final GeneratedColumn<bool> fixedTimezone = GeneratedColumn<bool>(
+    'fixed_timezone',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("fixed_timezone" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _repeatParentTaskIdMeta =
+      const VerificationMeta('repeatParentTaskId');
+  @override
+  late final GeneratedColumn<String> repeatParentTaskId =
+      GeneratedColumn<String>(
+        'repeat_parent_task_id',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _repeatRuleIdMeta = const VerificationMeta(
+    'repeatRuleId',
+  );
+  @override
+  late final GeneratedColumn<String> repeatRuleId = GeneratedColumn<String>(
+    'repeat_rule_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _repeatOccurrenceAtMeta =
+      const VerificationMeta('repeatOccurrenceAt');
+  @override
+  late final GeneratedColumn<DateTime> repeatOccurrenceAt =
+      GeneratedColumn<DateTime>(
+        'repeat_occurrence_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _updatedAtMeta = const VerificationMeta(
     'updatedAt',
   );
@@ -645,12 +743,20 @@ class $TodoTasksTable extends TodoTasks
     title,
     description,
     completed,
+    completedAt,
+    cancelled,
     priority,
     isPinned,
     sortOrder,
     startAt,
     endAt,
     dueAt,
+    allDay,
+    timeZone,
+    fixedTimezone,
+    repeatParentTaskId,
+    repeatRuleId,
+    repeatOccurrenceAt,
     updatedAt,
     createdAt,
   ];
@@ -717,6 +823,21 @@ class $TodoTasksTable extends TodoTasks
         completed.isAcceptableOrUnknown(data['completed']!, _completedMeta),
       );
     }
+    if (data.containsKey('completed_at')) {
+      context.handle(
+        _completedAtMeta,
+        completedAt.isAcceptableOrUnknown(
+          data['completed_at']!,
+          _completedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('cancelled')) {
+      context.handle(
+        _cancelledMeta,
+        cancelled.isAcceptableOrUnknown(data['cancelled']!, _cancelledMeta),
+      );
+    }
     if (data.containsKey('priority')) {
       context.handle(
         _priorityMeta,
@@ -751,6 +872,54 @@ class $TodoTasksTable extends TodoTasks
       context.handle(
         _dueAtMeta,
         dueAt.isAcceptableOrUnknown(data['due_at']!, _dueAtMeta),
+      );
+    }
+    if (data.containsKey('all_day')) {
+      context.handle(
+        _allDayMeta,
+        allDay.isAcceptableOrUnknown(data['all_day']!, _allDayMeta),
+      );
+    }
+    if (data.containsKey('time_zone')) {
+      context.handle(
+        _timeZoneMeta,
+        timeZone.isAcceptableOrUnknown(data['time_zone']!, _timeZoneMeta),
+      );
+    }
+    if (data.containsKey('fixed_timezone')) {
+      context.handle(
+        _fixedTimezoneMeta,
+        fixedTimezone.isAcceptableOrUnknown(
+          data['fixed_timezone']!,
+          _fixedTimezoneMeta,
+        ),
+      );
+    }
+    if (data.containsKey('repeat_parent_task_id')) {
+      context.handle(
+        _repeatParentTaskIdMeta,
+        repeatParentTaskId.isAcceptableOrUnknown(
+          data['repeat_parent_task_id']!,
+          _repeatParentTaskIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('repeat_rule_id')) {
+      context.handle(
+        _repeatRuleIdMeta,
+        repeatRuleId.isAcceptableOrUnknown(
+          data['repeat_rule_id']!,
+          _repeatRuleIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('repeat_occurrence_at')) {
+      context.handle(
+        _repeatOccurrenceAtMeta,
+        repeatOccurrenceAt.isAcceptableOrUnknown(
+          data['repeat_occurrence_at']!,
+          _repeatOccurrenceAtMeta,
+        ),
       );
     }
     if (data.containsKey('updated_at')) {
@@ -806,6 +975,14 @@ class $TodoTasksTable extends TodoTasks
         DriftSqlType.bool,
         data['${effectivePrefix}completed'],
       )!,
+      completedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}completed_at'],
+      ),
+      cancelled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}cancelled'],
+      )!,
       priority: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}priority'],
@@ -829,6 +1006,30 @@ class $TodoTasksTable extends TodoTasks
       dueAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}due_at'],
+      ),
+      allDay: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}all_day'],
+      )!,
+      timeZone: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}time_zone'],
+      ),
+      fixedTimezone: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}fixed_timezone'],
+      )!,
+      repeatParentTaskId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}repeat_parent_task_id'],
+      ),
+      repeatRuleId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}repeat_rule_id'],
+      ),
+      repeatOccurrenceAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}repeat_occurrence_at'],
       ),
       updatedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
@@ -855,12 +1056,26 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
   final String title;
   final String? description;
   final bool completed;
+  final DateTime? completedAt;
+  final bool cancelled;
   final int priority;
   final bool isPinned;
   final int sortOrder;
   final DateTime? startAt;
   final DateTime? endAt;
   final DateTime? dueAt;
+  final bool allDay;
+
+  /// IANA 时区；固定时区任务必须保留墙上时间所属的时区，不能只依赖设备时区。
+  final String? timeZone;
+  final bool fixedTimezone;
+
+  /// 本地 UUID，指向服务端物化实例的源任务。
+  final String? repeatParentTaskId;
+
+  /// 本地 UUID，指向触发本实例的重复规则。
+  final String? repeatRuleId;
+  final DateTime? repeatOccurrenceAt;
   final DateTime updatedAt;
   final DateTime createdAt;
   const TodoTask({
@@ -871,12 +1086,20 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     required this.title,
     this.description,
     required this.completed,
+    this.completedAt,
+    required this.cancelled,
     required this.priority,
     required this.isPinned,
     required this.sortOrder,
     this.startAt,
     this.endAt,
     this.dueAt,
+    required this.allDay,
+    this.timeZone,
+    required this.fixedTimezone,
+    this.repeatParentTaskId,
+    this.repeatRuleId,
+    this.repeatOccurrenceAt,
     required this.updatedAt,
     required this.createdAt,
   });
@@ -896,6 +1119,10 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       map['description'] = Variable<String>(description);
     }
     map['completed'] = Variable<bool>(completed);
+    if (!nullToAbsent || completedAt != null) {
+      map['completed_at'] = Variable<DateTime>(completedAt);
+    }
+    map['cancelled'] = Variable<bool>(cancelled);
     map['priority'] = Variable<int>(priority);
     map['is_pinned'] = Variable<bool>(isPinned);
     map['sort_order'] = Variable<int>(sortOrder);
@@ -907,6 +1134,20 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     }
     if (!nullToAbsent || dueAt != null) {
       map['due_at'] = Variable<DateTime>(dueAt);
+    }
+    map['all_day'] = Variable<bool>(allDay);
+    if (!nullToAbsent || timeZone != null) {
+      map['time_zone'] = Variable<String>(timeZone);
+    }
+    map['fixed_timezone'] = Variable<bool>(fixedTimezone);
+    if (!nullToAbsent || repeatParentTaskId != null) {
+      map['repeat_parent_task_id'] = Variable<String>(repeatParentTaskId);
+    }
+    if (!nullToAbsent || repeatRuleId != null) {
+      map['repeat_rule_id'] = Variable<String>(repeatRuleId);
+    }
+    if (!nullToAbsent || repeatOccurrenceAt != null) {
+      map['repeat_occurrence_at'] = Variable<DateTime>(repeatOccurrenceAt);
     }
     map['updated_at'] = Variable<DateTime>(updatedAt);
     map['created_at'] = Variable<DateTime>(createdAt);
@@ -928,6 +1169,10 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           ? const Value.absent()
           : Value(description),
       completed: Value(completed),
+      completedAt: completedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(completedAt),
+      cancelled: Value(cancelled),
       priority: Value(priority),
       isPinned: Value(isPinned),
       sortOrder: Value(sortOrder),
@@ -940,6 +1185,20 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       dueAt: dueAt == null && nullToAbsent
           ? const Value.absent()
           : Value(dueAt),
+      allDay: Value(allDay),
+      timeZone: timeZone == null && nullToAbsent
+          ? const Value.absent()
+          : Value(timeZone),
+      fixedTimezone: Value(fixedTimezone),
+      repeatParentTaskId: repeatParentTaskId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(repeatParentTaskId),
+      repeatRuleId: repeatRuleId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(repeatRuleId),
+      repeatOccurrenceAt: repeatOccurrenceAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(repeatOccurrenceAt),
       updatedAt: Value(updatedAt),
       createdAt: Value(createdAt),
     );
@@ -958,12 +1217,24 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       title: serializer.fromJson<String>(json['title']),
       description: serializer.fromJson<String?>(json['description']),
       completed: serializer.fromJson<bool>(json['completed']),
+      completedAt: serializer.fromJson<DateTime?>(json['completedAt']),
+      cancelled: serializer.fromJson<bool>(json['cancelled']),
       priority: serializer.fromJson<int>(json['priority']),
       isPinned: serializer.fromJson<bool>(json['isPinned']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
       startAt: serializer.fromJson<DateTime?>(json['startAt']),
       endAt: serializer.fromJson<DateTime?>(json['endAt']),
       dueAt: serializer.fromJson<DateTime?>(json['dueAt']),
+      allDay: serializer.fromJson<bool>(json['allDay']),
+      timeZone: serializer.fromJson<String?>(json['timeZone']),
+      fixedTimezone: serializer.fromJson<bool>(json['fixedTimezone']),
+      repeatParentTaskId: serializer.fromJson<String?>(
+        json['repeatParentTaskId'],
+      ),
+      repeatRuleId: serializer.fromJson<String?>(json['repeatRuleId']),
+      repeatOccurrenceAt: serializer.fromJson<DateTime?>(
+        json['repeatOccurrenceAt'],
+      ),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
@@ -979,12 +1250,20 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       'title': serializer.toJson<String>(title),
       'description': serializer.toJson<String?>(description),
       'completed': serializer.toJson<bool>(completed),
+      'completedAt': serializer.toJson<DateTime?>(completedAt),
+      'cancelled': serializer.toJson<bool>(cancelled),
       'priority': serializer.toJson<int>(priority),
       'isPinned': serializer.toJson<bool>(isPinned),
       'sortOrder': serializer.toJson<int>(sortOrder),
       'startAt': serializer.toJson<DateTime?>(startAt),
       'endAt': serializer.toJson<DateTime?>(endAt),
       'dueAt': serializer.toJson<DateTime?>(dueAt),
+      'allDay': serializer.toJson<bool>(allDay),
+      'timeZone': serializer.toJson<String?>(timeZone),
+      'fixedTimezone': serializer.toJson<bool>(fixedTimezone),
+      'repeatParentTaskId': serializer.toJson<String?>(repeatParentTaskId),
+      'repeatRuleId': serializer.toJson<String?>(repeatRuleId),
+      'repeatOccurrenceAt': serializer.toJson<DateTime?>(repeatOccurrenceAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
@@ -998,12 +1277,20 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     String? title,
     Value<String?> description = const Value.absent(),
     bool? completed,
+    Value<DateTime?> completedAt = const Value.absent(),
+    bool? cancelled,
     int? priority,
     bool? isPinned,
     int? sortOrder,
     Value<DateTime?> startAt = const Value.absent(),
     Value<DateTime?> endAt = const Value.absent(),
     Value<DateTime?> dueAt = const Value.absent(),
+    bool? allDay,
+    Value<String?> timeZone = const Value.absent(),
+    bool? fixedTimezone,
+    Value<String?> repeatParentTaskId = const Value.absent(),
+    Value<String?> repeatRuleId = const Value.absent(),
+    Value<DateTime?> repeatOccurrenceAt = const Value.absent(),
     DateTime? updatedAt,
     DateTime? createdAt,
   }) => TodoTask(
@@ -1014,12 +1301,24 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     title: title ?? this.title,
     description: description.present ? description.value : this.description,
     completed: completed ?? this.completed,
+    completedAt: completedAt.present ? completedAt.value : this.completedAt,
+    cancelled: cancelled ?? this.cancelled,
     priority: priority ?? this.priority,
     isPinned: isPinned ?? this.isPinned,
     sortOrder: sortOrder ?? this.sortOrder,
     startAt: startAt.present ? startAt.value : this.startAt,
     endAt: endAt.present ? endAt.value : this.endAt,
     dueAt: dueAt.present ? dueAt.value : this.dueAt,
+    allDay: allDay ?? this.allDay,
+    timeZone: timeZone.present ? timeZone.value : this.timeZone,
+    fixedTimezone: fixedTimezone ?? this.fixedTimezone,
+    repeatParentTaskId: repeatParentTaskId.present
+        ? repeatParentTaskId.value
+        : this.repeatParentTaskId,
+    repeatRuleId: repeatRuleId.present ? repeatRuleId.value : this.repeatRuleId,
+    repeatOccurrenceAt: repeatOccurrenceAt.present
+        ? repeatOccurrenceAt.value
+        : this.repeatOccurrenceAt,
     updatedAt: updatedAt ?? this.updatedAt,
     createdAt: createdAt ?? this.createdAt,
   );
@@ -1036,12 +1335,30 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           ? data.description.value
           : this.description,
       completed: data.completed.present ? data.completed.value : this.completed,
+      completedAt: data.completedAt.present
+          ? data.completedAt.value
+          : this.completedAt,
+      cancelled: data.cancelled.present ? data.cancelled.value : this.cancelled,
       priority: data.priority.present ? data.priority.value : this.priority,
       isPinned: data.isPinned.present ? data.isPinned.value : this.isPinned,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
       startAt: data.startAt.present ? data.startAt.value : this.startAt,
       endAt: data.endAt.present ? data.endAt.value : this.endAt,
       dueAt: data.dueAt.present ? data.dueAt.value : this.dueAt,
+      allDay: data.allDay.present ? data.allDay.value : this.allDay,
+      timeZone: data.timeZone.present ? data.timeZone.value : this.timeZone,
+      fixedTimezone: data.fixedTimezone.present
+          ? data.fixedTimezone.value
+          : this.fixedTimezone,
+      repeatParentTaskId: data.repeatParentTaskId.present
+          ? data.repeatParentTaskId.value
+          : this.repeatParentTaskId,
+      repeatRuleId: data.repeatRuleId.present
+          ? data.repeatRuleId.value
+          : this.repeatRuleId,
+      repeatOccurrenceAt: data.repeatOccurrenceAt.present
+          ? data.repeatOccurrenceAt.value
+          : this.repeatOccurrenceAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
@@ -1057,12 +1374,20 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           ..write('title: $title, ')
           ..write('description: $description, ')
           ..write('completed: $completed, ')
+          ..write('completedAt: $completedAt, ')
+          ..write('cancelled: $cancelled, ')
           ..write('priority: $priority, ')
           ..write('isPinned: $isPinned, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('startAt: $startAt, ')
           ..write('endAt: $endAt, ')
           ..write('dueAt: $dueAt, ')
+          ..write('allDay: $allDay, ')
+          ..write('timeZone: $timeZone, ')
+          ..write('fixedTimezone: $fixedTimezone, ')
+          ..write('repeatParentTaskId: $repeatParentTaskId, ')
+          ..write('repeatRuleId: $repeatRuleId, ')
+          ..write('repeatOccurrenceAt: $repeatOccurrenceAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -1070,7 +1395,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     serverId,
     listId,
@@ -1078,15 +1403,23 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     title,
     description,
     completed,
+    completedAt,
+    cancelled,
     priority,
     isPinned,
     sortOrder,
     startAt,
     endAt,
     dueAt,
+    allDay,
+    timeZone,
+    fixedTimezone,
+    repeatParentTaskId,
+    repeatRuleId,
+    repeatOccurrenceAt,
     updatedAt,
     createdAt,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1098,12 +1431,20 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           other.title == this.title &&
           other.description == this.description &&
           other.completed == this.completed &&
+          other.completedAt == this.completedAt &&
+          other.cancelled == this.cancelled &&
           other.priority == this.priority &&
           other.isPinned == this.isPinned &&
           other.sortOrder == this.sortOrder &&
           other.startAt == this.startAt &&
           other.endAt == this.endAt &&
           other.dueAt == this.dueAt &&
+          other.allDay == this.allDay &&
+          other.timeZone == this.timeZone &&
+          other.fixedTimezone == this.fixedTimezone &&
+          other.repeatParentTaskId == this.repeatParentTaskId &&
+          other.repeatRuleId == this.repeatRuleId &&
+          other.repeatOccurrenceAt == this.repeatOccurrenceAt &&
           other.updatedAt == this.updatedAt &&
           other.createdAt == this.createdAt);
 }
@@ -1116,12 +1457,20 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
   final Value<String> title;
   final Value<String?> description;
   final Value<bool> completed;
+  final Value<DateTime?> completedAt;
+  final Value<bool> cancelled;
   final Value<int> priority;
   final Value<bool> isPinned;
   final Value<int> sortOrder;
   final Value<DateTime?> startAt;
   final Value<DateTime?> endAt;
   final Value<DateTime?> dueAt;
+  final Value<bool> allDay;
+  final Value<String?> timeZone;
+  final Value<bool> fixedTimezone;
+  final Value<String?> repeatParentTaskId;
+  final Value<String?> repeatRuleId;
+  final Value<DateTime?> repeatOccurrenceAt;
   final Value<DateTime> updatedAt;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
@@ -1133,12 +1482,20 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     this.title = const Value.absent(),
     this.description = const Value.absent(),
     this.completed = const Value.absent(),
+    this.completedAt = const Value.absent(),
+    this.cancelled = const Value.absent(),
     this.priority = const Value.absent(),
     this.isPinned = const Value.absent(),
     this.sortOrder = const Value.absent(),
     this.startAt = const Value.absent(),
     this.endAt = const Value.absent(),
     this.dueAt = const Value.absent(),
+    this.allDay = const Value.absent(),
+    this.timeZone = const Value.absent(),
+    this.fixedTimezone = const Value.absent(),
+    this.repeatParentTaskId = const Value.absent(),
+    this.repeatRuleId = const Value.absent(),
+    this.repeatOccurrenceAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -1151,12 +1508,20 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     required String title,
     this.description = const Value.absent(),
     this.completed = const Value.absent(),
+    this.completedAt = const Value.absent(),
+    this.cancelled = const Value.absent(),
     this.priority = const Value.absent(),
     this.isPinned = const Value.absent(),
     this.sortOrder = const Value.absent(),
     this.startAt = const Value.absent(),
     this.endAt = const Value.absent(),
     this.dueAt = const Value.absent(),
+    this.allDay = const Value.absent(),
+    this.timeZone = const Value.absent(),
+    this.fixedTimezone = const Value.absent(),
+    this.repeatParentTaskId = const Value.absent(),
+    this.repeatRuleId = const Value.absent(),
+    this.repeatOccurrenceAt = const Value.absent(),
     required DateTime updatedAt,
     required DateTime createdAt,
     this.rowid = const Value.absent(),
@@ -1173,12 +1538,20 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     Expression<String>? title,
     Expression<String>? description,
     Expression<bool>? completed,
+    Expression<DateTime>? completedAt,
+    Expression<bool>? cancelled,
     Expression<int>? priority,
     Expression<bool>? isPinned,
     Expression<int>? sortOrder,
     Expression<DateTime>? startAt,
     Expression<DateTime>? endAt,
     Expression<DateTime>? dueAt,
+    Expression<bool>? allDay,
+    Expression<String>? timeZone,
+    Expression<bool>? fixedTimezone,
+    Expression<String>? repeatParentTaskId,
+    Expression<String>? repeatRuleId,
+    Expression<DateTime>? repeatOccurrenceAt,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
@@ -1191,12 +1564,22 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
       if (title != null) 'title': title,
       if (description != null) 'description': description,
       if (completed != null) 'completed': completed,
+      if (completedAt != null) 'completed_at': completedAt,
+      if (cancelled != null) 'cancelled': cancelled,
       if (priority != null) 'priority': priority,
       if (isPinned != null) 'is_pinned': isPinned,
       if (sortOrder != null) 'sort_order': sortOrder,
       if (startAt != null) 'start_at': startAt,
       if (endAt != null) 'end_at': endAt,
       if (dueAt != null) 'due_at': dueAt,
+      if (allDay != null) 'all_day': allDay,
+      if (timeZone != null) 'time_zone': timeZone,
+      if (fixedTimezone != null) 'fixed_timezone': fixedTimezone,
+      if (repeatParentTaskId != null)
+        'repeat_parent_task_id': repeatParentTaskId,
+      if (repeatRuleId != null) 'repeat_rule_id': repeatRuleId,
+      if (repeatOccurrenceAt != null)
+        'repeat_occurrence_at': repeatOccurrenceAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
@@ -1211,12 +1594,20 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     Value<String>? title,
     Value<String?>? description,
     Value<bool>? completed,
+    Value<DateTime?>? completedAt,
+    Value<bool>? cancelled,
     Value<int>? priority,
     Value<bool>? isPinned,
     Value<int>? sortOrder,
     Value<DateTime?>? startAt,
     Value<DateTime?>? endAt,
     Value<DateTime?>? dueAt,
+    Value<bool>? allDay,
+    Value<String?>? timeZone,
+    Value<bool>? fixedTimezone,
+    Value<String?>? repeatParentTaskId,
+    Value<String?>? repeatRuleId,
+    Value<DateTime?>? repeatOccurrenceAt,
     Value<DateTime>? updatedAt,
     Value<DateTime>? createdAt,
     Value<int>? rowid,
@@ -1229,12 +1620,20 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
       title: title ?? this.title,
       description: description ?? this.description,
       completed: completed ?? this.completed,
+      completedAt: completedAt ?? this.completedAt,
+      cancelled: cancelled ?? this.cancelled,
       priority: priority ?? this.priority,
       isPinned: isPinned ?? this.isPinned,
       sortOrder: sortOrder ?? this.sortOrder,
       startAt: startAt ?? this.startAt,
       endAt: endAt ?? this.endAt,
       dueAt: dueAt ?? this.dueAt,
+      allDay: allDay ?? this.allDay,
+      timeZone: timeZone ?? this.timeZone,
+      fixedTimezone: fixedTimezone ?? this.fixedTimezone,
+      repeatParentTaskId: repeatParentTaskId ?? this.repeatParentTaskId,
+      repeatRuleId: repeatRuleId ?? this.repeatRuleId,
+      repeatOccurrenceAt: repeatOccurrenceAt ?? this.repeatOccurrenceAt,
       updatedAt: updatedAt ?? this.updatedAt,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
@@ -1265,6 +1664,12 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     if (completed.present) {
       map['completed'] = Variable<bool>(completed.value);
     }
+    if (completedAt.present) {
+      map['completed_at'] = Variable<DateTime>(completedAt.value);
+    }
+    if (cancelled.present) {
+      map['cancelled'] = Variable<bool>(cancelled.value);
+    }
     if (priority.present) {
       map['priority'] = Variable<int>(priority.value);
     }
@@ -1282,6 +1687,26 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     }
     if (dueAt.present) {
       map['due_at'] = Variable<DateTime>(dueAt.value);
+    }
+    if (allDay.present) {
+      map['all_day'] = Variable<bool>(allDay.value);
+    }
+    if (timeZone.present) {
+      map['time_zone'] = Variable<String>(timeZone.value);
+    }
+    if (fixedTimezone.present) {
+      map['fixed_timezone'] = Variable<bool>(fixedTimezone.value);
+    }
+    if (repeatParentTaskId.present) {
+      map['repeat_parent_task_id'] = Variable<String>(repeatParentTaskId.value);
+    }
+    if (repeatRuleId.present) {
+      map['repeat_rule_id'] = Variable<String>(repeatRuleId.value);
+    }
+    if (repeatOccurrenceAt.present) {
+      map['repeat_occurrence_at'] = Variable<DateTime>(
+        repeatOccurrenceAt.value,
+      );
     }
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
@@ -1305,12 +1730,20 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
           ..write('title: $title, ')
           ..write('description: $description, ')
           ..write('completed: $completed, ')
+          ..write('completedAt: $completedAt, ')
+          ..write('cancelled: $cancelled, ')
           ..write('priority: $priority, ')
           ..write('isPinned: $isPinned, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('startAt: $startAt, ')
           ..write('endAt: $endAt, ')
           ..write('dueAt: $dueAt, ')
+          ..write('allDay: $allDay, ')
+          ..write('timeZone: $timeZone, ')
+          ..write('fixedTimezone: $fixedTimezone, ')
+          ..write('repeatParentTaskId: $repeatParentTaskId, ')
+          ..write('repeatRuleId: $repeatRuleId, ')
+          ..write('repeatOccurrenceAt: $repeatOccurrenceAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
@@ -2395,6 +2828,2148 @@ class TodoTaskTagsCompanion extends UpdateCompanion<TodoTaskTag> {
   }
 }
 
+class $TodoChecklistItemsTable extends TodoChecklistItems
+    with TableInfo<$TodoChecklistItemsTable, TodoChecklistItem> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TodoChecklistItemsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _serverIdMeta = const VerificationMeta(
+    'serverId',
+  );
+  @override
+  late final GeneratedColumn<int> serverId = GeneratedColumn<int>(
+    'server_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _taskIdMeta = const VerificationMeta('taskId');
+  @override
+  late final GeneratedColumn<String> taskId = GeneratedColumn<String>(
+    'task_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _completedMeta = const VerificationMeta(
+    'completed',
+  );
+  @override
+  late final GeneratedColumn<bool> completed = GeneratedColumn<bool>(
+    'completed',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("completed" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    serverId,
+    taskId,
+    title,
+    completed,
+    sortOrder,
+    updatedAt,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'todo_checklist_items';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<TodoChecklistItem> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('server_id')) {
+      context.handle(
+        _serverIdMeta,
+        serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
+      );
+    }
+    if (data.containsKey('task_id')) {
+      context.handle(
+        _taskIdMeta,
+        taskId.isAcceptableOrUnknown(data['task_id']!, _taskIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_taskIdMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('completed')) {
+      context.handle(
+        _completedMeta,
+        completed.isAcceptableOrUnknown(data['completed']!, _completedMeta),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  TodoChecklistItem map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TodoChecklistItem(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      serverId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}server_id'],
+      ),
+      taskId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}task_id'],
+      )!,
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      )!,
+      completed: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}completed'],
+      )!,
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $TodoChecklistItemsTable createAlias(String alias) {
+    return $TodoChecklistItemsTable(attachedDatabase, alias);
+  }
+}
+
+class TodoChecklistItem extends DataClass
+    implements Insertable<TodoChecklistItem> {
+  final String id;
+  final int? serverId;
+  final String taskId;
+  final String title;
+  final bool completed;
+  final int sortOrder;
+  final DateTime updatedAt;
+  final DateTime createdAt;
+  const TodoChecklistItem({
+    required this.id,
+    this.serverId,
+    required this.taskId,
+    required this.title,
+    required this.completed,
+    required this.sortOrder,
+    required this.updatedAt,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    if (!nullToAbsent || serverId != null) {
+      map['server_id'] = Variable<int>(serverId);
+    }
+    map['task_id'] = Variable<String>(taskId);
+    map['title'] = Variable<String>(title);
+    map['completed'] = Variable<bool>(completed);
+    map['sort_order'] = Variable<int>(sortOrder);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  TodoChecklistItemsCompanion toCompanion(bool nullToAbsent) {
+    return TodoChecklistItemsCompanion(
+      id: Value(id),
+      serverId: serverId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(serverId),
+      taskId: Value(taskId),
+      title: Value(title),
+      completed: Value(completed),
+      sortOrder: Value(sortOrder),
+      updatedAt: Value(updatedAt),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory TodoChecklistItem.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TodoChecklistItem(
+      id: serializer.fromJson<String>(json['id']),
+      serverId: serializer.fromJson<int?>(json['serverId']),
+      taskId: serializer.fromJson<String>(json['taskId']),
+      title: serializer.fromJson<String>(json['title']),
+      completed: serializer.fromJson<bool>(json['completed']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'serverId': serializer.toJson<int?>(serverId),
+      'taskId': serializer.toJson<String>(taskId),
+      'title': serializer.toJson<String>(title),
+      'completed': serializer.toJson<bool>(completed),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  TodoChecklistItem copyWith({
+    String? id,
+    Value<int?> serverId = const Value.absent(),
+    String? taskId,
+    String? title,
+    bool? completed,
+    int? sortOrder,
+    DateTime? updatedAt,
+    DateTime? createdAt,
+  }) => TodoChecklistItem(
+    id: id ?? this.id,
+    serverId: serverId.present ? serverId.value : this.serverId,
+    taskId: taskId ?? this.taskId,
+    title: title ?? this.title,
+    completed: completed ?? this.completed,
+    sortOrder: sortOrder ?? this.sortOrder,
+    updatedAt: updatedAt ?? this.updatedAt,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  TodoChecklistItem copyWithCompanion(TodoChecklistItemsCompanion data) {
+    return TodoChecklistItem(
+      id: data.id.present ? data.id.value : this.id,
+      serverId: data.serverId.present ? data.serverId.value : this.serverId,
+      taskId: data.taskId.present ? data.taskId.value : this.taskId,
+      title: data.title.present ? data.title.value : this.title,
+      completed: data.completed.present ? data.completed.value : this.completed,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TodoChecklistItem(')
+          ..write('id: $id, ')
+          ..write('serverId: $serverId, ')
+          ..write('taskId: $taskId, ')
+          ..write('title: $title, ')
+          ..write('completed: $completed, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    serverId,
+    taskId,
+    title,
+    completed,
+    sortOrder,
+    updatedAt,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TodoChecklistItem &&
+          other.id == this.id &&
+          other.serverId == this.serverId &&
+          other.taskId == this.taskId &&
+          other.title == this.title &&
+          other.completed == this.completed &&
+          other.sortOrder == this.sortOrder &&
+          other.updatedAt == this.updatedAt &&
+          other.createdAt == this.createdAt);
+}
+
+class TodoChecklistItemsCompanion extends UpdateCompanion<TodoChecklistItem> {
+  final Value<String> id;
+  final Value<int?> serverId;
+  final Value<String> taskId;
+  final Value<String> title;
+  final Value<bool> completed;
+  final Value<int> sortOrder;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const TodoChecklistItemsCompanion({
+    this.id = const Value.absent(),
+    this.serverId = const Value.absent(),
+    this.taskId = const Value.absent(),
+    this.title = const Value.absent(),
+    this.completed = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  TodoChecklistItemsCompanion.insert({
+    required String id,
+    this.serverId = const Value.absent(),
+    required String taskId,
+    required String title,
+    this.completed = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    required DateTime updatedAt,
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       taskId = Value(taskId),
+       title = Value(title),
+       updatedAt = Value(updatedAt),
+       createdAt = Value(createdAt);
+  static Insertable<TodoChecklistItem> custom({
+    Expression<String>? id,
+    Expression<int>? serverId,
+    Expression<String>? taskId,
+    Expression<String>? title,
+    Expression<bool>? completed,
+    Expression<int>? sortOrder,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (serverId != null) 'server_id': serverId,
+      if (taskId != null) 'task_id': taskId,
+      if (title != null) 'title': title,
+      if (completed != null) 'completed': completed,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  TodoChecklistItemsCompanion copyWith({
+    Value<String>? id,
+    Value<int?>? serverId,
+    Value<String>? taskId,
+    Value<String>? title,
+    Value<bool>? completed,
+    Value<int>? sortOrder,
+    Value<DateTime>? updatedAt,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return TodoChecklistItemsCompanion(
+      id: id ?? this.id,
+      serverId: serverId ?? this.serverId,
+      taskId: taskId ?? this.taskId,
+      title: title ?? this.title,
+      completed: completed ?? this.completed,
+      sortOrder: sortOrder ?? this.sortOrder,
+      updatedAt: updatedAt ?? this.updatedAt,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (serverId.present) {
+      map['server_id'] = Variable<int>(serverId.value);
+    }
+    if (taskId.present) {
+      map['task_id'] = Variable<String>(taskId.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (completed.present) {
+      map['completed'] = Variable<bool>(completed.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TodoChecklistItemsCompanion(')
+          ..write('id: $id, ')
+          ..write('serverId: $serverId, ')
+          ..write('taskId: $taskId, ')
+          ..write('title: $title, ')
+          ..write('completed: $completed, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $TodoAttachmentsTable extends TodoAttachments
+    with TableInfo<$TodoAttachmentsTable, TodoAttachment> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TodoAttachmentsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _serverIdMeta = const VerificationMeta(
+    'serverId',
+  );
+  @override
+  late final GeneratedColumn<int> serverId = GeneratedColumn<int>(
+    'server_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _taskIdMeta = const VerificationMeta('taskId');
+  @override
+  late final GeneratedColumn<String> taskId = GeneratedColumn<String>(
+    'task_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _localPathMeta = const VerificationMeta(
+    'localPath',
+  );
+  @override
+  late final GeneratedColumn<String> localPath = GeneratedColumn<String>(
+    'local_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _remoteUrlMeta = const VerificationMeta(
+    'remoteUrl',
+  );
+  @override
+  late final GeneratedColumn<String> remoteUrl = GeneratedColumn<String>(
+    'remote_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _mimeTypeMeta = const VerificationMeta(
+    'mimeType',
+  );
+  @override
+  late final GeneratedColumn<String> mimeType = GeneratedColumn<String>(
+    'mime_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sizeMeta = const VerificationMeta('size');
+  @override
+  late final GeneratedColumn<int> size = GeneratedColumn<int>(
+    'size',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('queued'),
+  );
+  static const VerificationMeta _errorMeta = const VerificationMeta('error');
+  @override
+  late final GeneratedColumn<String> error = GeneratedColumn<String>(
+    'error',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    serverId,
+    taskId,
+    name,
+    localPath,
+    remoteUrl,
+    mimeType,
+    size,
+    status,
+    error,
+    updatedAt,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'todo_attachments';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<TodoAttachment> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('server_id')) {
+      context.handle(
+        _serverIdMeta,
+        serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
+      );
+    }
+    if (data.containsKey('task_id')) {
+      context.handle(
+        _taskIdMeta,
+        taskId.isAcceptableOrUnknown(data['task_id']!, _taskIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_taskIdMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('local_path')) {
+      context.handle(
+        _localPathMeta,
+        localPath.isAcceptableOrUnknown(data['local_path']!, _localPathMeta),
+      );
+    }
+    if (data.containsKey('remote_url')) {
+      context.handle(
+        _remoteUrlMeta,
+        remoteUrl.isAcceptableOrUnknown(data['remote_url']!, _remoteUrlMeta),
+      );
+    }
+    if (data.containsKey('mime_type')) {
+      context.handle(
+        _mimeTypeMeta,
+        mimeType.isAcceptableOrUnknown(data['mime_type']!, _mimeTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_mimeTypeMeta);
+    }
+    if (data.containsKey('size')) {
+      context.handle(
+        _sizeMeta,
+        size.isAcceptableOrUnknown(data['size']!, _sizeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sizeMeta);
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    }
+    if (data.containsKey('error')) {
+      context.handle(
+        _errorMeta,
+        error.isAcceptableOrUnknown(data['error']!, _errorMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  TodoAttachment map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TodoAttachment(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      serverId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}server_id'],
+      ),
+      taskId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}task_id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      localPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}local_path'],
+      ),
+      remoteUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}remote_url'],
+      ),
+      mimeType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}mime_type'],
+      )!,
+      size: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}size'],
+      )!,
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      error: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}error'],
+      ),
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $TodoAttachmentsTable createAlias(String alias) {
+    return $TodoAttachmentsTable(attachedDatabase, alias);
+  }
+}
+
+class TodoAttachment extends DataClass implements Insertable<TodoAttachment> {
+  final String id;
+  final int? serverId;
+  final String taskId;
+  final String name;
+  final String? localPath;
+  final String? remoteUrl;
+  final String mimeType;
+  final int size;
+  final String status;
+  final String? error;
+  final DateTime updatedAt;
+  final DateTime createdAt;
+  const TodoAttachment({
+    required this.id,
+    this.serverId,
+    required this.taskId,
+    required this.name,
+    this.localPath,
+    this.remoteUrl,
+    required this.mimeType,
+    required this.size,
+    required this.status,
+    this.error,
+    required this.updatedAt,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    if (!nullToAbsent || serverId != null) {
+      map['server_id'] = Variable<int>(serverId);
+    }
+    map['task_id'] = Variable<String>(taskId);
+    map['name'] = Variable<String>(name);
+    if (!nullToAbsent || localPath != null) {
+      map['local_path'] = Variable<String>(localPath);
+    }
+    if (!nullToAbsent || remoteUrl != null) {
+      map['remote_url'] = Variable<String>(remoteUrl);
+    }
+    map['mime_type'] = Variable<String>(mimeType);
+    map['size'] = Variable<int>(size);
+    map['status'] = Variable<String>(status);
+    if (!nullToAbsent || error != null) {
+      map['error'] = Variable<String>(error);
+    }
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  TodoAttachmentsCompanion toCompanion(bool nullToAbsent) {
+    return TodoAttachmentsCompanion(
+      id: Value(id),
+      serverId: serverId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(serverId),
+      taskId: Value(taskId),
+      name: Value(name),
+      localPath: localPath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(localPath),
+      remoteUrl: remoteUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(remoteUrl),
+      mimeType: Value(mimeType),
+      size: Value(size),
+      status: Value(status),
+      error: error == null && nullToAbsent
+          ? const Value.absent()
+          : Value(error),
+      updatedAt: Value(updatedAt),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory TodoAttachment.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TodoAttachment(
+      id: serializer.fromJson<String>(json['id']),
+      serverId: serializer.fromJson<int?>(json['serverId']),
+      taskId: serializer.fromJson<String>(json['taskId']),
+      name: serializer.fromJson<String>(json['name']),
+      localPath: serializer.fromJson<String?>(json['localPath']),
+      remoteUrl: serializer.fromJson<String?>(json['remoteUrl']),
+      mimeType: serializer.fromJson<String>(json['mimeType']),
+      size: serializer.fromJson<int>(json['size']),
+      status: serializer.fromJson<String>(json['status']),
+      error: serializer.fromJson<String?>(json['error']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'serverId': serializer.toJson<int?>(serverId),
+      'taskId': serializer.toJson<String>(taskId),
+      'name': serializer.toJson<String>(name),
+      'localPath': serializer.toJson<String?>(localPath),
+      'remoteUrl': serializer.toJson<String?>(remoteUrl),
+      'mimeType': serializer.toJson<String>(mimeType),
+      'size': serializer.toJson<int>(size),
+      'status': serializer.toJson<String>(status),
+      'error': serializer.toJson<String?>(error),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  TodoAttachment copyWith({
+    String? id,
+    Value<int?> serverId = const Value.absent(),
+    String? taskId,
+    String? name,
+    Value<String?> localPath = const Value.absent(),
+    Value<String?> remoteUrl = const Value.absent(),
+    String? mimeType,
+    int? size,
+    String? status,
+    Value<String?> error = const Value.absent(),
+    DateTime? updatedAt,
+    DateTime? createdAt,
+  }) => TodoAttachment(
+    id: id ?? this.id,
+    serverId: serverId.present ? serverId.value : this.serverId,
+    taskId: taskId ?? this.taskId,
+    name: name ?? this.name,
+    localPath: localPath.present ? localPath.value : this.localPath,
+    remoteUrl: remoteUrl.present ? remoteUrl.value : this.remoteUrl,
+    mimeType: mimeType ?? this.mimeType,
+    size: size ?? this.size,
+    status: status ?? this.status,
+    error: error.present ? error.value : this.error,
+    updatedAt: updatedAt ?? this.updatedAt,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  TodoAttachment copyWithCompanion(TodoAttachmentsCompanion data) {
+    return TodoAttachment(
+      id: data.id.present ? data.id.value : this.id,
+      serverId: data.serverId.present ? data.serverId.value : this.serverId,
+      taskId: data.taskId.present ? data.taskId.value : this.taskId,
+      name: data.name.present ? data.name.value : this.name,
+      localPath: data.localPath.present ? data.localPath.value : this.localPath,
+      remoteUrl: data.remoteUrl.present ? data.remoteUrl.value : this.remoteUrl,
+      mimeType: data.mimeType.present ? data.mimeType.value : this.mimeType,
+      size: data.size.present ? data.size.value : this.size,
+      status: data.status.present ? data.status.value : this.status,
+      error: data.error.present ? data.error.value : this.error,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TodoAttachment(')
+          ..write('id: $id, ')
+          ..write('serverId: $serverId, ')
+          ..write('taskId: $taskId, ')
+          ..write('name: $name, ')
+          ..write('localPath: $localPath, ')
+          ..write('remoteUrl: $remoteUrl, ')
+          ..write('mimeType: $mimeType, ')
+          ..write('size: $size, ')
+          ..write('status: $status, ')
+          ..write('error: $error, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    serverId,
+    taskId,
+    name,
+    localPath,
+    remoteUrl,
+    mimeType,
+    size,
+    status,
+    error,
+    updatedAt,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TodoAttachment &&
+          other.id == this.id &&
+          other.serverId == this.serverId &&
+          other.taskId == this.taskId &&
+          other.name == this.name &&
+          other.localPath == this.localPath &&
+          other.remoteUrl == this.remoteUrl &&
+          other.mimeType == this.mimeType &&
+          other.size == this.size &&
+          other.status == this.status &&
+          other.error == this.error &&
+          other.updatedAt == this.updatedAt &&
+          other.createdAt == this.createdAt);
+}
+
+class TodoAttachmentsCompanion extends UpdateCompanion<TodoAttachment> {
+  final Value<String> id;
+  final Value<int?> serverId;
+  final Value<String> taskId;
+  final Value<String> name;
+  final Value<String?> localPath;
+  final Value<String?> remoteUrl;
+  final Value<String> mimeType;
+  final Value<int> size;
+  final Value<String> status;
+  final Value<String?> error;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const TodoAttachmentsCompanion({
+    this.id = const Value.absent(),
+    this.serverId = const Value.absent(),
+    this.taskId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.localPath = const Value.absent(),
+    this.remoteUrl = const Value.absent(),
+    this.mimeType = const Value.absent(),
+    this.size = const Value.absent(),
+    this.status = const Value.absent(),
+    this.error = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  TodoAttachmentsCompanion.insert({
+    required String id,
+    this.serverId = const Value.absent(),
+    required String taskId,
+    required String name,
+    this.localPath = const Value.absent(),
+    this.remoteUrl = const Value.absent(),
+    required String mimeType,
+    required int size,
+    this.status = const Value.absent(),
+    this.error = const Value.absent(),
+    required DateTime updatedAt,
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       taskId = Value(taskId),
+       name = Value(name),
+       mimeType = Value(mimeType),
+       size = Value(size),
+       updatedAt = Value(updatedAt),
+       createdAt = Value(createdAt);
+  static Insertable<TodoAttachment> custom({
+    Expression<String>? id,
+    Expression<int>? serverId,
+    Expression<String>? taskId,
+    Expression<String>? name,
+    Expression<String>? localPath,
+    Expression<String>? remoteUrl,
+    Expression<String>? mimeType,
+    Expression<int>? size,
+    Expression<String>? status,
+    Expression<String>? error,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (serverId != null) 'server_id': serverId,
+      if (taskId != null) 'task_id': taskId,
+      if (name != null) 'name': name,
+      if (localPath != null) 'local_path': localPath,
+      if (remoteUrl != null) 'remote_url': remoteUrl,
+      if (mimeType != null) 'mime_type': mimeType,
+      if (size != null) 'size': size,
+      if (status != null) 'status': status,
+      if (error != null) 'error': error,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  TodoAttachmentsCompanion copyWith({
+    Value<String>? id,
+    Value<int?>? serverId,
+    Value<String>? taskId,
+    Value<String>? name,
+    Value<String?>? localPath,
+    Value<String?>? remoteUrl,
+    Value<String>? mimeType,
+    Value<int>? size,
+    Value<String>? status,
+    Value<String?>? error,
+    Value<DateTime>? updatedAt,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return TodoAttachmentsCompanion(
+      id: id ?? this.id,
+      serverId: serverId ?? this.serverId,
+      taskId: taskId ?? this.taskId,
+      name: name ?? this.name,
+      localPath: localPath ?? this.localPath,
+      remoteUrl: remoteUrl ?? this.remoteUrl,
+      mimeType: mimeType ?? this.mimeType,
+      size: size ?? this.size,
+      status: status ?? this.status,
+      error: error ?? this.error,
+      updatedAt: updatedAt ?? this.updatedAt,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (serverId.present) {
+      map['server_id'] = Variable<int>(serverId.value);
+    }
+    if (taskId.present) {
+      map['task_id'] = Variable<String>(taskId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (localPath.present) {
+      map['local_path'] = Variable<String>(localPath.value);
+    }
+    if (remoteUrl.present) {
+      map['remote_url'] = Variable<String>(remoteUrl.value);
+    }
+    if (mimeType.present) {
+      map['mime_type'] = Variable<String>(mimeType.value);
+    }
+    if (size.present) {
+      map['size'] = Variable<int>(size.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (error.present) {
+      map['error'] = Variable<String>(error.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TodoAttachmentsCompanion(')
+          ..write('id: $id, ')
+          ..write('serverId: $serverId, ')
+          ..write('taskId: $taskId, ')
+          ..write('name: $name, ')
+          ..write('localPath: $localPath, ')
+          ..write('remoteUrl: $remoteUrl, ')
+          ..write('mimeType: $mimeType, ')
+          ..write('size: $size, ')
+          ..write('status: $status, ')
+          ..write('error: $error, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $TodoActivitiesTable extends TodoActivities
+    with TableInfo<$TodoActivitiesTable, TodoActivity> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TodoActivitiesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _serverIdMeta = const VerificationMeta(
+    'serverId',
+  );
+  @override
+  late final GeneratedColumn<int> serverId = GeneratedColumn<int>(
+    'server_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _taskServerIdMeta = const VerificationMeta(
+    'taskServerId',
+  );
+  @override
+  late final GeneratedColumn<int> taskServerId = GeneratedColumn<int>(
+    'task_server_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _actorUserIdMeta = const VerificationMeta(
+    'actorUserId',
+  );
+  @override
+  late final GeneratedColumn<int> actorUserId = GeneratedColumn<int>(
+    'actor_user_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _actorUserNameMeta = const VerificationMeta(
+    'actorUserName',
+  );
+  @override
+  late final GeneratedColumn<String> actorUserName = GeneratedColumn<String>(
+    'actor_user_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _actionMeta = const VerificationMeta('action');
+  @override
+  late final GeneratedColumn<String> action = GeneratedColumn<String>(
+    'action',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _detailMeta = const VerificationMeta('detail');
+  @override
+  late final GeneratedColumn<String> detail = GeneratedColumn<String>(
+    'detail',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _occurredAtMeta = const VerificationMeta(
+    'occurredAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> occurredAt = GeneratedColumn<DateTime>(
+    'occurred_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    serverId,
+    taskServerId,
+    actorUserId,
+    actorUserName,
+    action,
+    detail,
+    occurredAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'todo_activities';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<TodoActivity> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('server_id')) {
+      context.handle(
+        _serverIdMeta,
+        serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
+      );
+    }
+    if (data.containsKey('task_server_id')) {
+      context.handle(
+        _taskServerIdMeta,
+        taskServerId.isAcceptableOrUnknown(
+          data['task_server_id']!,
+          _taskServerIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_taskServerIdMeta);
+    }
+    if (data.containsKey('actor_user_id')) {
+      context.handle(
+        _actorUserIdMeta,
+        actorUserId.isAcceptableOrUnknown(
+          data['actor_user_id']!,
+          _actorUserIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('actor_user_name')) {
+      context.handle(
+        _actorUserNameMeta,
+        actorUserName.isAcceptableOrUnknown(
+          data['actor_user_name']!,
+          _actorUserNameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('action')) {
+      context.handle(
+        _actionMeta,
+        action.isAcceptableOrUnknown(data['action']!, _actionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_actionMeta);
+    }
+    if (data.containsKey('detail')) {
+      context.handle(
+        _detailMeta,
+        detail.isAcceptableOrUnknown(data['detail']!, _detailMeta),
+      );
+    }
+    if (data.containsKey('occurred_at')) {
+      context.handle(
+        _occurredAtMeta,
+        occurredAt.isAcceptableOrUnknown(data['occurred_at']!, _occurredAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_occurredAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {serverId};
+  @override
+  TodoActivity map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TodoActivity(
+      serverId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}server_id'],
+      )!,
+      taskServerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}task_server_id'],
+      )!,
+      actorUserId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}actor_user_id'],
+      ),
+      actorUserName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}actor_user_name'],
+      ),
+      action: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}action'],
+      )!,
+      detail: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}detail'],
+      ),
+      occurredAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}occurred_at'],
+      )!,
+    );
+  }
+
+  @override
+  $TodoActivitiesTable createAlias(String alias) {
+    return $TodoActivitiesTable(attachedDatabase, alias);
+  }
+}
+
+class TodoActivity extends DataClass implements Insertable<TodoActivity> {
+  final int serverId;
+  final int taskServerId;
+  final int? actorUserId;
+  final String? actorUserName;
+  final String action;
+  final String? detail;
+  final DateTime occurredAt;
+  const TodoActivity({
+    required this.serverId,
+    required this.taskServerId,
+    this.actorUserId,
+    this.actorUserName,
+    required this.action,
+    this.detail,
+    required this.occurredAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['server_id'] = Variable<int>(serverId);
+    map['task_server_id'] = Variable<int>(taskServerId);
+    if (!nullToAbsent || actorUserId != null) {
+      map['actor_user_id'] = Variable<int>(actorUserId);
+    }
+    if (!nullToAbsent || actorUserName != null) {
+      map['actor_user_name'] = Variable<String>(actorUserName);
+    }
+    map['action'] = Variable<String>(action);
+    if (!nullToAbsent || detail != null) {
+      map['detail'] = Variable<String>(detail);
+    }
+    map['occurred_at'] = Variable<DateTime>(occurredAt);
+    return map;
+  }
+
+  TodoActivitiesCompanion toCompanion(bool nullToAbsent) {
+    return TodoActivitiesCompanion(
+      serverId: Value(serverId),
+      taskServerId: Value(taskServerId),
+      actorUserId: actorUserId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(actorUserId),
+      actorUserName: actorUserName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(actorUserName),
+      action: Value(action),
+      detail: detail == null && nullToAbsent
+          ? const Value.absent()
+          : Value(detail),
+      occurredAt: Value(occurredAt),
+    );
+  }
+
+  factory TodoActivity.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TodoActivity(
+      serverId: serializer.fromJson<int>(json['serverId']),
+      taskServerId: serializer.fromJson<int>(json['taskServerId']),
+      actorUserId: serializer.fromJson<int?>(json['actorUserId']),
+      actorUserName: serializer.fromJson<String?>(json['actorUserName']),
+      action: serializer.fromJson<String>(json['action']),
+      detail: serializer.fromJson<String?>(json['detail']),
+      occurredAt: serializer.fromJson<DateTime>(json['occurredAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'serverId': serializer.toJson<int>(serverId),
+      'taskServerId': serializer.toJson<int>(taskServerId),
+      'actorUserId': serializer.toJson<int?>(actorUserId),
+      'actorUserName': serializer.toJson<String?>(actorUserName),
+      'action': serializer.toJson<String>(action),
+      'detail': serializer.toJson<String?>(detail),
+      'occurredAt': serializer.toJson<DateTime>(occurredAt),
+    };
+  }
+
+  TodoActivity copyWith({
+    int? serverId,
+    int? taskServerId,
+    Value<int?> actorUserId = const Value.absent(),
+    Value<String?> actorUserName = const Value.absent(),
+    String? action,
+    Value<String?> detail = const Value.absent(),
+    DateTime? occurredAt,
+  }) => TodoActivity(
+    serverId: serverId ?? this.serverId,
+    taskServerId: taskServerId ?? this.taskServerId,
+    actorUserId: actorUserId.present ? actorUserId.value : this.actorUserId,
+    actorUserName: actorUserName.present
+        ? actorUserName.value
+        : this.actorUserName,
+    action: action ?? this.action,
+    detail: detail.present ? detail.value : this.detail,
+    occurredAt: occurredAt ?? this.occurredAt,
+  );
+  TodoActivity copyWithCompanion(TodoActivitiesCompanion data) {
+    return TodoActivity(
+      serverId: data.serverId.present ? data.serverId.value : this.serverId,
+      taskServerId: data.taskServerId.present
+          ? data.taskServerId.value
+          : this.taskServerId,
+      actorUserId: data.actorUserId.present
+          ? data.actorUserId.value
+          : this.actorUserId,
+      actorUserName: data.actorUserName.present
+          ? data.actorUserName.value
+          : this.actorUserName,
+      action: data.action.present ? data.action.value : this.action,
+      detail: data.detail.present ? data.detail.value : this.detail,
+      occurredAt: data.occurredAt.present
+          ? data.occurredAt.value
+          : this.occurredAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TodoActivity(')
+          ..write('serverId: $serverId, ')
+          ..write('taskServerId: $taskServerId, ')
+          ..write('actorUserId: $actorUserId, ')
+          ..write('actorUserName: $actorUserName, ')
+          ..write('action: $action, ')
+          ..write('detail: $detail, ')
+          ..write('occurredAt: $occurredAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    serverId,
+    taskServerId,
+    actorUserId,
+    actorUserName,
+    action,
+    detail,
+    occurredAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TodoActivity &&
+          other.serverId == this.serverId &&
+          other.taskServerId == this.taskServerId &&
+          other.actorUserId == this.actorUserId &&
+          other.actorUserName == this.actorUserName &&
+          other.action == this.action &&
+          other.detail == this.detail &&
+          other.occurredAt == this.occurredAt);
+}
+
+class TodoActivitiesCompanion extends UpdateCompanion<TodoActivity> {
+  final Value<int> serverId;
+  final Value<int> taskServerId;
+  final Value<int?> actorUserId;
+  final Value<String?> actorUserName;
+  final Value<String> action;
+  final Value<String?> detail;
+  final Value<DateTime> occurredAt;
+  const TodoActivitiesCompanion({
+    this.serverId = const Value.absent(),
+    this.taskServerId = const Value.absent(),
+    this.actorUserId = const Value.absent(),
+    this.actorUserName = const Value.absent(),
+    this.action = const Value.absent(),
+    this.detail = const Value.absent(),
+    this.occurredAt = const Value.absent(),
+  });
+  TodoActivitiesCompanion.insert({
+    this.serverId = const Value.absent(),
+    required int taskServerId,
+    this.actorUserId = const Value.absent(),
+    this.actorUserName = const Value.absent(),
+    required String action,
+    this.detail = const Value.absent(),
+    required DateTime occurredAt,
+  }) : taskServerId = Value(taskServerId),
+       action = Value(action),
+       occurredAt = Value(occurredAt);
+  static Insertable<TodoActivity> custom({
+    Expression<int>? serverId,
+    Expression<int>? taskServerId,
+    Expression<int>? actorUserId,
+    Expression<String>? actorUserName,
+    Expression<String>? action,
+    Expression<String>? detail,
+    Expression<DateTime>? occurredAt,
+  }) {
+    return RawValuesInsertable({
+      if (serverId != null) 'server_id': serverId,
+      if (taskServerId != null) 'task_server_id': taskServerId,
+      if (actorUserId != null) 'actor_user_id': actorUserId,
+      if (actorUserName != null) 'actor_user_name': actorUserName,
+      if (action != null) 'action': action,
+      if (detail != null) 'detail': detail,
+      if (occurredAt != null) 'occurred_at': occurredAt,
+    });
+  }
+
+  TodoActivitiesCompanion copyWith({
+    Value<int>? serverId,
+    Value<int>? taskServerId,
+    Value<int?>? actorUserId,
+    Value<String?>? actorUserName,
+    Value<String>? action,
+    Value<String?>? detail,
+    Value<DateTime>? occurredAt,
+  }) {
+    return TodoActivitiesCompanion(
+      serverId: serverId ?? this.serverId,
+      taskServerId: taskServerId ?? this.taskServerId,
+      actorUserId: actorUserId ?? this.actorUserId,
+      actorUserName: actorUserName ?? this.actorUserName,
+      action: action ?? this.action,
+      detail: detail ?? this.detail,
+      occurredAt: occurredAt ?? this.occurredAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (serverId.present) {
+      map['server_id'] = Variable<int>(serverId.value);
+    }
+    if (taskServerId.present) {
+      map['task_server_id'] = Variable<int>(taskServerId.value);
+    }
+    if (actorUserId.present) {
+      map['actor_user_id'] = Variable<int>(actorUserId.value);
+    }
+    if (actorUserName.present) {
+      map['actor_user_name'] = Variable<String>(actorUserName.value);
+    }
+    if (action.present) {
+      map['action'] = Variable<String>(action.value);
+    }
+    if (detail.present) {
+      map['detail'] = Variable<String>(detail.value);
+    }
+    if (occurredAt.present) {
+      map['occurred_at'] = Variable<DateTime>(occurredAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TodoActivitiesCompanion(')
+          ..write('serverId: $serverId, ')
+          ..write('taskServerId: $taskServerId, ')
+          ..write('actorUserId: $actorUserId, ')
+          ..write('actorUserName: $actorUserName, ')
+          ..write('action: $action, ')
+          ..write('detail: $detail, ')
+          ..write('occurredAt: $occurredAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $TodoTemplatesTable extends TodoTemplates
+    with TableInfo<$TodoTemplatesTable, TodoTemplate> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TodoTemplatesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _serverIdMeta = const VerificationMeta(
+    'serverId',
+  );
+  @override
+  late final GeneratedColumn<int> serverId = GeneratedColumn<int>(
+    'server_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _contentJsonMeta = const VerificationMeta(
+    'contentJson',
+  );
+  @override
+  late final GeneratedColumn<String> contentJson = GeneratedColumn<String>(
+    'content_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('queued'),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    serverId,
+    name,
+    contentJson,
+    status,
+    updatedAt,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'todo_templates';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<TodoTemplate> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('server_id')) {
+      context.handle(
+        _serverIdMeta,
+        serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
+      );
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('content_json')) {
+      context.handle(
+        _contentJsonMeta,
+        contentJson.isAcceptableOrUnknown(
+          data['content_json']!,
+          _contentJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_contentJsonMeta);
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  TodoTemplate map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TodoTemplate(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      serverId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}server_id'],
+      ),
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      contentJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}content_json'],
+      )!,
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $TodoTemplatesTable createAlias(String alias) {
+    return $TodoTemplatesTable(attachedDatabase, alias);
+  }
+}
+
+class TodoTemplate extends DataClass implements Insertable<TodoTemplate> {
+  final String id;
+  final int? serverId;
+  final String name;
+  final String contentJson;
+  final String status;
+  final DateTime updatedAt;
+  final DateTime createdAt;
+  const TodoTemplate({
+    required this.id,
+    this.serverId,
+    required this.name,
+    required this.contentJson,
+    required this.status,
+    required this.updatedAt,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    if (!nullToAbsent || serverId != null) {
+      map['server_id'] = Variable<int>(serverId);
+    }
+    map['name'] = Variable<String>(name);
+    map['content_json'] = Variable<String>(contentJson);
+    map['status'] = Variable<String>(status);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  TodoTemplatesCompanion toCompanion(bool nullToAbsent) {
+    return TodoTemplatesCompanion(
+      id: Value(id),
+      serverId: serverId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(serverId),
+      name: Value(name),
+      contentJson: Value(contentJson),
+      status: Value(status),
+      updatedAt: Value(updatedAt),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory TodoTemplate.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TodoTemplate(
+      id: serializer.fromJson<String>(json['id']),
+      serverId: serializer.fromJson<int?>(json['serverId']),
+      name: serializer.fromJson<String>(json['name']),
+      contentJson: serializer.fromJson<String>(json['contentJson']),
+      status: serializer.fromJson<String>(json['status']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'serverId': serializer.toJson<int?>(serverId),
+      'name': serializer.toJson<String>(name),
+      'contentJson': serializer.toJson<String>(contentJson),
+      'status': serializer.toJson<String>(status),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  TodoTemplate copyWith({
+    String? id,
+    Value<int?> serverId = const Value.absent(),
+    String? name,
+    String? contentJson,
+    String? status,
+    DateTime? updatedAt,
+    DateTime? createdAt,
+  }) => TodoTemplate(
+    id: id ?? this.id,
+    serverId: serverId.present ? serverId.value : this.serverId,
+    name: name ?? this.name,
+    contentJson: contentJson ?? this.contentJson,
+    status: status ?? this.status,
+    updatedAt: updatedAt ?? this.updatedAt,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  TodoTemplate copyWithCompanion(TodoTemplatesCompanion data) {
+    return TodoTemplate(
+      id: data.id.present ? data.id.value : this.id,
+      serverId: data.serverId.present ? data.serverId.value : this.serverId,
+      name: data.name.present ? data.name.value : this.name,
+      contentJson: data.contentJson.present
+          ? data.contentJson.value
+          : this.contentJson,
+      status: data.status.present ? data.status.value : this.status,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TodoTemplate(')
+          ..write('id: $id, ')
+          ..write('serverId: $serverId, ')
+          ..write('name: $name, ')
+          ..write('contentJson: $contentJson, ')
+          ..write('status: $status, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    serverId,
+    name,
+    contentJson,
+    status,
+    updatedAt,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TodoTemplate &&
+          other.id == this.id &&
+          other.serverId == this.serverId &&
+          other.name == this.name &&
+          other.contentJson == this.contentJson &&
+          other.status == this.status &&
+          other.updatedAt == this.updatedAt &&
+          other.createdAt == this.createdAt);
+}
+
+class TodoTemplatesCompanion extends UpdateCompanion<TodoTemplate> {
+  final Value<String> id;
+  final Value<int?> serverId;
+  final Value<String> name;
+  final Value<String> contentJson;
+  final Value<String> status;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const TodoTemplatesCompanion({
+    this.id = const Value.absent(),
+    this.serverId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.contentJson = const Value.absent(),
+    this.status = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  TodoTemplatesCompanion.insert({
+    required String id,
+    this.serverId = const Value.absent(),
+    required String name,
+    required String contentJson,
+    this.status = const Value.absent(),
+    required DateTime updatedAt,
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name),
+       contentJson = Value(contentJson),
+       updatedAt = Value(updatedAt),
+       createdAt = Value(createdAt);
+  static Insertable<TodoTemplate> custom({
+    Expression<String>? id,
+    Expression<int>? serverId,
+    Expression<String>? name,
+    Expression<String>? contentJson,
+    Expression<String>? status,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (serverId != null) 'server_id': serverId,
+      if (name != null) 'name': name,
+      if (contentJson != null) 'content_json': contentJson,
+      if (status != null) 'status': status,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  TodoTemplatesCompanion copyWith({
+    Value<String>? id,
+    Value<int?>? serverId,
+    Value<String>? name,
+    Value<String>? contentJson,
+    Value<String>? status,
+    Value<DateTime>? updatedAt,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return TodoTemplatesCompanion(
+      id: id ?? this.id,
+      serverId: serverId ?? this.serverId,
+      name: name ?? this.name,
+      contentJson: contentJson ?? this.contentJson,
+      status: status ?? this.status,
+      updatedAt: updatedAt ?? this.updatedAt,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (serverId.present) {
+      map['server_id'] = Variable<int>(serverId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (contentJson.present) {
+      map['content_json'] = Variable<String>(contentJson.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TodoTemplatesCompanion(')
+          ..write('id: $id, ')
+          ..write('serverId: $serverId, ')
+          ..write('name: $name, ')
+          ..write('contentJson: $contentJson, ')
+          ..write('status: $status, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $TodoRemindersTable extends TodoReminders
     with TableInfo<$TodoRemindersTable, TodoReminder> {
   @override
@@ -2441,6 +5016,29 @@ class $TodoRemindersTable extends TodoReminders
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _anchorTypeMeta = const VerificationMeta(
+    'anchorType',
+  );
+  @override
+  late final GeneratedColumn<String> anchorType = GeneratedColumn<String>(
+    'anchor_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('ABSOLUTE'),
+  );
+  static const VerificationMeta _offsetMinutesMeta = const VerificationMeta(
+    'offsetMinutes',
+  );
+  @override
+  late final GeneratedColumn<int> offsetMinutes = GeneratedColumn<int>(
+    'offset_minutes',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _statusMeta = const VerificationMeta('status');
   @override
   late final GeneratedColumn<String> status = GeneratedColumn<String>(
@@ -2450,6 +5048,80 @@ class $TodoRemindersTable extends TodoReminders
     type: DriftSqlType.string,
     requiredDuringInsert: false,
     defaultValue: const Constant('PENDING'),
+  );
+  static const VerificationMeta _firedAtMeta = const VerificationMeta(
+    'firedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> firedAt = GeneratedColumn<DateTime>(
+    'fired_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _persistentMeta = const VerificationMeta(
+    'persistent',
+  );
+  @override
+  late final GeneratedColumn<bool> persistent = GeneratedColumn<bool>(
+    'persistent',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("persistent" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _intervalMinutesMeta = const VerificationMeta(
+    'intervalMinutes',
+  );
+  @override
+  late final GeneratedColumn<int> intervalMinutes = GeneratedColumn<int>(
+    'interval_minutes',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _timeZoneMeta = const VerificationMeta(
+    'timeZone',
+  );
+  @override
+  late final GeneratedColumn<String> timeZone = GeneratedColumn<String>(
+    'time_zone',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _fixedTimezoneMeta = const VerificationMeta(
+    'fixedTimezone',
+  );
+  @override
+  late final GeneratedColumn<bool> fixedTimezone = GeneratedColumn<bool>(
+    'fixed_timezone',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("fixed_timezone" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _clientMutationIdMeta = const VerificationMeta(
+    'clientMutationId',
+  );
+  @override
+  late final GeneratedColumn<String> clientMutationId = GeneratedColumn<String>(
+    'client_mutation_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _updatedAtMeta = const VerificationMeta(
     'updatedAt',
@@ -2479,7 +5151,15 @@ class $TodoRemindersTable extends TodoReminders
     serverId,
     taskId,
     remindAt,
+    anchorType,
+    offsetMinutes,
     status,
+    firedAt,
+    persistent,
+    intervalMinutes,
+    timeZone,
+    fixedTimezone,
+    clientMutationId,
     updatedAt,
     createdAt,
   ];
@@ -2522,10 +5202,70 @@ class $TodoRemindersTable extends TodoReminders
     } else if (isInserting) {
       context.missing(_remindAtMeta);
     }
+    if (data.containsKey('anchor_type')) {
+      context.handle(
+        _anchorTypeMeta,
+        anchorType.isAcceptableOrUnknown(data['anchor_type']!, _anchorTypeMeta),
+      );
+    }
+    if (data.containsKey('offset_minutes')) {
+      context.handle(
+        _offsetMinutesMeta,
+        offsetMinutes.isAcceptableOrUnknown(
+          data['offset_minutes']!,
+          _offsetMinutesMeta,
+        ),
+      );
+    }
     if (data.containsKey('status')) {
       context.handle(
         _statusMeta,
         status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    }
+    if (data.containsKey('fired_at')) {
+      context.handle(
+        _firedAtMeta,
+        firedAt.isAcceptableOrUnknown(data['fired_at']!, _firedAtMeta),
+      );
+    }
+    if (data.containsKey('persistent')) {
+      context.handle(
+        _persistentMeta,
+        persistent.isAcceptableOrUnknown(data['persistent']!, _persistentMeta),
+      );
+    }
+    if (data.containsKey('interval_minutes')) {
+      context.handle(
+        _intervalMinutesMeta,
+        intervalMinutes.isAcceptableOrUnknown(
+          data['interval_minutes']!,
+          _intervalMinutesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('time_zone')) {
+      context.handle(
+        _timeZoneMeta,
+        timeZone.isAcceptableOrUnknown(data['time_zone']!, _timeZoneMeta),
+      );
+    }
+    if (data.containsKey('fixed_timezone')) {
+      context.handle(
+        _fixedTimezoneMeta,
+        fixedTimezone.isAcceptableOrUnknown(
+          data['fixed_timezone']!,
+          _fixedTimezoneMeta,
+        ),
+      );
+    }
+    if (data.containsKey('client_mutation_id')) {
+      context.handle(
+        _clientMutationIdMeta,
+        clientMutationId.isAcceptableOrUnknown(
+          data['client_mutation_id']!,
+          _clientMutationIdMeta,
+        ),
       );
     }
     if (data.containsKey('updated_at')) {
@@ -2569,10 +5309,42 @@ class $TodoRemindersTable extends TodoReminders
         DriftSqlType.dateTime,
         data['${effectivePrefix}remind_at'],
       )!,
+      anchorType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}anchor_type'],
+      )!,
+      offsetMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}offset_minutes'],
+      ),
       status: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}status'],
       )!,
+      firedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}fired_at'],
+      ),
+      persistent: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}persistent'],
+      )!,
+      intervalMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}interval_minutes'],
+      ),
+      timeZone: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}time_zone'],
+      ),
+      fixedTimezone: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}fixed_timezone'],
+      )!,
+      clientMutationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}client_mutation_id'],
+      ),
       updatedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}updated_at'],
@@ -2595,7 +5367,15 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
   final int? serverId;
   final String taskId;
   final DateTime remindAt;
+  final String anchorType;
+  final int? offsetMinutes;
   final String status;
+  final DateTime? firedAt;
+  final bool persistent;
+  final int? intervalMinutes;
+  final String? timeZone;
+  final bool fixedTimezone;
+  final String? clientMutationId;
   final DateTime updatedAt;
   final DateTime createdAt;
   const TodoReminder({
@@ -2603,7 +5383,15 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
     this.serverId,
     required this.taskId,
     required this.remindAt,
+    required this.anchorType,
+    this.offsetMinutes,
     required this.status,
+    this.firedAt,
+    required this.persistent,
+    this.intervalMinutes,
+    this.timeZone,
+    required this.fixedTimezone,
+    this.clientMutationId,
     required this.updatedAt,
     required this.createdAt,
   });
@@ -2616,7 +5404,25 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
     }
     map['task_id'] = Variable<String>(taskId);
     map['remind_at'] = Variable<DateTime>(remindAt);
+    map['anchor_type'] = Variable<String>(anchorType);
+    if (!nullToAbsent || offsetMinutes != null) {
+      map['offset_minutes'] = Variable<int>(offsetMinutes);
+    }
     map['status'] = Variable<String>(status);
+    if (!nullToAbsent || firedAt != null) {
+      map['fired_at'] = Variable<DateTime>(firedAt);
+    }
+    map['persistent'] = Variable<bool>(persistent);
+    if (!nullToAbsent || intervalMinutes != null) {
+      map['interval_minutes'] = Variable<int>(intervalMinutes);
+    }
+    if (!nullToAbsent || timeZone != null) {
+      map['time_zone'] = Variable<String>(timeZone);
+    }
+    map['fixed_timezone'] = Variable<bool>(fixedTimezone);
+    if (!nullToAbsent || clientMutationId != null) {
+      map['client_mutation_id'] = Variable<String>(clientMutationId);
+    }
     map['updated_at'] = Variable<DateTime>(updatedAt);
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
@@ -2630,7 +5436,25 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
           : Value(serverId),
       taskId: Value(taskId),
       remindAt: Value(remindAt),
+      anchorType: Value(anchorType),
+      offsetMinutes: offsetMinutes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(offsetMinutes),
       status: Value(status),
+      firedAt: firedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(firedAt),
+      persistent: Value(persistent),
+      intervalMinutes: intervalMinutes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(intervalMinutes),
+      timeZone: timeZone == null && nullToAbsent
+          ? const Value.absent()
+          : Value(timeZone),
+      fixedTimezone: Value(fixedTimezone),
+      clientMutationId: clientMutationId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(clientMutationId),
       updatedAt: Value(updatedAt),
       createdAt: Value(createdAt),
     );
@@ -2646,7 +5470,15 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
       serverId: serializer.fromJson<int?>(json['serverId']),
       taskId: serializer.fromJson<String>(json['taskId']),
       remindAt: serializer.fromJson<DateTime>(json['remindAt']),
+      anchorType: serializer.fromJson<String>(json['anchorType']),
+      offsetMinutes: serializer.fromJson<int?>(json['offsetMinutes']),
       status: serializer.fromJson<String>(json['status']),
+      firedAt: serializer.fromJson<DateTime?>(json['firedAt']),
+      persistent: serializer.fromJson<bool>(json['persistent']),
+      intervalMinutes: serializer.fromJson<int?>(json['intervalMinutes']),
+      timeZone: serializer.fromJson<String?>(json['timeZone']),
+      fixedTimezone: serializer.fromJson<bool>(json['fixedTimezone']),
+      clientMutationId: serializer.fromJson<String?>(json['clientMutationId']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
@@ -2659,7 +5491,15 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
       'serverId': serializer.toJson<int?>(serverId),
       'taskId': serializer.toJson<String>(taskId),
       'remindAt': serializer.toJson<DateTime>(remindAt),
+      'anchorType': serializer.toJson<String>(anchorType),
+      'offsetMinutes': serializer.toJson<int?>(offsetMinutes),
       'status': serializer.toJson<String>(status),
+      'firedAt': serializer.toJson<DateTime?>(firedAt),
+      'persistent': serializer.toJson<bool>(persistent),
+      'intervalMinutes': serializer.toJson<int?>(intervalMinutes),
+      'timeZone': serializer.toJson<String?>(timeZone),
+      'fixedTimezone': serializer.toJson<bool>(fixedTimezone),
+      'clientMutationId': serializer.toJson<String?>(clientMutationId),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
@@ -2670,7 +5510,15 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
     Value<int?> serverId = const Value.absent(),
     String? taskId,
     DateTime? remindAt,
+    String? anchorType,
+    Value<int?> offsetMinutes = const Value.absent(),
     String? status,
+    Value<DateTime?> firedAt = const Value.absent(),
+    bool? persistent,
+    Value<int?> intervalMinutes = const Value.absent(),
+    Value<String?> timeZone = const Value.absent(),
+    bool? fixedTimezone,
+    Value<String?> clientMutationId = const Value.absent(),
     DateTime? updatedAt,
     DateTime? createdAt,
   }) => TodoReminder(
@@ -2678,7 +5526,21 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
     serverId: serverId.present ? serverId.value : this.serverId,
     taskId: taskId ?? this.taskId,
     remindAt: remindAt ?? this.remindAt,
+    anchorType: anchorType ?? this.anchorType,
+    offsetMinutes: offsetMinutes.present
+        ? offsetMinutes.value
+        : this.offsetMinutes,
     status: status ?? this.status,
+    firedAt: firedAt.present ? firedAt.value : this.firedAt,
+    persistent: persistent ?? this.persistent,
+    intervalMinutes: intervalMinutes.present
+        ? intervalMinutes.value
+        : this.intervalMinutes,
+    timeZone: timeZone.present ? timeZone.value : this.timeZone,
+    fixedTimezone: fixedTimezone ?? this.fixedTimezone,
+    clientMutationId: clientMutationId.present
+        ? clientMutationId.value
+        : this.clientMutationId,
     updatedAt: updatedAt ?? this.updatedAt,
     createdAt: createdAt ?? this.createdAt,
   );
@@ -2688,7 +5550,27 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
       serverId: data.serverId.present ? data.serverId.value : this.serverId,
       taskId: data.taskId.present ? data.taskId.value : this.taskId,
       remindAt: data.remindAt.present ? data.remindAt.value : this.remindAt,
+      anchorType: data.anchorType.present
+          ? data.anchorType.value
+          : this.anchorType,
+      offsetMinutes: data.offsetMinutes.present
+          ? data.offsetMinutes.value
+          : this.offsetMinutes,
       status: data.status.present ? data.status.value : this.status,
+      firedAt: data.firedAt.present ? data.firedAt.value : this.firedAt,
+      persistent: data.persistent.present
+          ? data.persistent.value
+          : this.persistent,
+      intervalMinutes: data.intervalMinutes.present
+          ? data.intervalMinutes.value
+          : this.intervalMinutes,
+      timeZone: data.timeZone.present ? data.timeZone.value : this.timeZone,
+      fixedTimezone: data.fixedTimezone.present
+          ? data.fixedTimezone.value
+          : this.fixedTimezone,
+      clientMutationId: data.clientMutationId.present
+          ? data.clientMutationId.value
+          : this.clientMutationId,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
@@ -2701,7 +5583,15 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
           ..write('serverId: $serverId, ')
           ..write('taskId: $taskId, ')
           ..write('remindAt: $remindAt, ')
+          ..write('anchorType: $anchorType, ')
+          ..write('offsetMinutes: $offsetMinutes, ')
           ..write('status: $status, ')
+          ..write('firedAt: $firedAt, ')
+          ..write('persistent: $persistent, ')
+          ..write('intervalMinutes: $intervalMinutes, ')
+          ..write('timeZone: $timeZone, ')
+          ..write('fixedTimezone: $fixedTimezone, ')
+          ..write('clientMutationId: $clientMutationId, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -2709,8 +5599,23 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, serverId, taskId, remindAt, status, updatedAt, createdAt);
+  int get hashCode => Object.hash(
+    id,
+    serverId,
+    taskId,
+    remindAt,
+    anchorType,
+    offsetMinutes,
+    status,
+    firedAt,
+    persistent,
+    intervalMinutes,
+    timeZone,
+    fixedTimezone,
+    clientMutationId,
+    updatedAt,
+    createdAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -2719,7 +5624,15 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
           other.serverId == this.serverId &&
           other.taskId == this.taskId &&
           other.remindAt == this.remindAt &&
+          other.anchorType == this.anchorType &&
+          other.offsetMinutes == this.offsetMinutes &&
           other.status == this.status &&
+          other.firedAt == this.firedAt &&
+          other.persistent == this.persistent &&
+          other.intervalMinutes == this.intervalMinutes &&
+          other.timeZone == this.timeZone &&
+          other.fixedTimezone == this.fixedTimezone &&
+          other.clientMutationId == this.clientMutationId &&
           other.updatedAt == this.updatedAt &&
           other.createdAt == this.createdAt);
 }
@@ -2729,7 +5642,15 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
   final Value<int?> serverId;
   final Value<String> taskId;
   final Value<DateTime> remindAt;
+  final Value<String> anchorType;
+  final Value<int?> offsetMinutes;
   final Value<String> status;
+  final Value<DateTime?> firedAt;
+  final Value<bool> persistent;
+  final Value<int?> intervalMinutes;
+  final Value<String?> timeZone;
+  final Value<bool> fixedTimezone;
+  final Value<String?> clientMutationId;
   final Value<DateTime> updatedAt;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
@@ -2738,7 +5659,15 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
     this.serverId = const Value.absent(),
     this.taskId = const Value.absent(),
     this.remindAt = const Value.absent(),
+    this.anchorType = const Value.absent(),
+    this.offsetMinutes = const Value.absent(),
     this.status = const Value.absent(),
+    this.firedAt = const Value.absent(),
+    this.persistent = const Value.absent(),
+    this.intervalMinutes = const Value.absent(),
+    this.timeZone = const Value.absent(),
+    this.fixedTimezone = const Value.absent(),
+    this.clientMutationId = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -2748,7 +5677,15 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
     this.serverId = const Value.absent(),
     required String taskId,
     required DateTime remindAt,
+    this.anchorType = const Value.absent(),
+    this.offsetMinutes = const Value.absent(),
     this.status = const Value.absent(),
+    this.firedAt = const Value.absent(),
+    this.persistent = const Value.absent(),
+    this.intervalMinutes = const Value.absent(),
+    this.timeZone = const Value.absent(),
+    this.fixedTimezone = const Value.absent(),
+    this.clientMutationId = const Value.absent(),
     required DateTime updatedAt,
     required DateTime createdAt,
     this.rowid = const Value.absent(),
@@ -2762,7 +5699,15 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
     Expression<int>? serverId,
     Expression<String>? taskId,
     Expression<DateTime>? remindAt,
+    Expression<String>? anchorType,
+    Expression<int>? offsetMinutes,
     Expression<String>? status,
+    Expression<DateTime>? firedAt,
+    Expression<bool>? persistent,
+    Expression<int>? intervalMinutes,
+    Expression<String>? timeZone,
+    Expression<bool>? fixedTimezone,
+    Expression<String>? clientMutationId,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
@@ -2772,7 +5717,15 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
       if (serverId != null) 'server_id': serverId,
       if (taskId != null) 'task_id': taskId,
       if (remindAt != null) 'remind_at': remindAt,
+      if (anchorType != null) 'anchor_type': anchorType,
+      if (offsetMinutes != null) 'offset_minutes': offsetMinutes,
       if (status != null) 'status': status,
+      if (firedAt != null) 'fired_at': firedAt,
+      if (persistent != null) 'persistent': persistent,
+      if (intervalMinutes != null) 'interval_minutes': intervalMinutes,
+      if (timeZone != null) 'time_zone': timeZone,
+      if (fixedTimezone != null) 'fixed_timezone': fixedTimezone,
+      if (clientMutationId != null) 'client_mutation_id': clientMutationId,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
@@ -2784,7 +5737,15 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
     Value<int?>? serverId,
     Value<String>? taskId,
     Value<DateTime>? remindAt,
+    Value<String>? anchorType,
+    Value<int?>? offsetMinutes,
     Value<String>? status,
+    Value<DateTime?>? firedAt,
+    Value<bool>? persistent,
+    Value<int?>? intervalMinutes,
+    Value<String?>? timeZone,
+    Value<bool>? fixedTimezone,
+    Value<String?>? clientMutationId,
     Value<DateTime>? updatedAt,
     Value<DateTime>? createdAt,
     Value<int>? rowid,
@@ -2794,7 +5755,15 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
       serverId: serverId ?? this.serverId,
       taskId: taskId ?? this.taskId,
       remindAt: remindAt ?? this.remindAt,
+      anchorType: anchorType ?? this.anchorType,
+      offsetMinutes: offsetMinutes ?? this.offsetMinutes,
       status: status ?? this.status,
+      firedAt: firedAt ?? this.firedAt,
+      persistent: persistent ?? this.persistent,
+      intervalMinutes: intervalMinutes ?? this.intervalMinutes,
+      timeZone: timeZone ?? this.timeZone,
+      fixedTimezone: fixedTimezone ?? this.fixedTimezone,
+      clientMutationId: clientMutationId ?? this.clientMutationId,
       updatedAt: updatedAt ?? this.updatedAt,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
@@ -2816,8 +5785,32 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
     if (remindAt.present) {
       map['remind_at'] = Variable<DateTime>(remindAt.value);
     }
+    if (anchorType.present) {
+      map['anchor_type'] = Variable<String>(anchorType.value);
+    }
+    if (offsetMinutes.present) {
+      map['offset_minutes'] = Variable<int>(offsetMinutes.value);
+    }
     if (status.present) {
       map['status'] = Variable<String>(status.value);
+    }
+    if (firedAt.present) {
+      map['fired_at'] = Variable<DateTime>(firedAt.value);
+    }
+    if (persistent.present) {
+      map['persistent'] = Variable<bool>(persistent.value);
+    }
+    if (intervalMinutes.present) {
+      map['interval_minutes'] = Variable<int>(intervalMinutes.value);
+    }
+    if (timeZone.present) {
+      map['time_zone'] = Variable<String>(timeZone.value);
+    }
+    if (fixedTimezone.present) {
+      map['fixed_timezone'] = Variable<bool>(fixedTimezone.value);
+    }
+    if (clientMutationId.present) {
+      map['client_mutation_id'] = Variable<String>(clientMutationId.value);
     }
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
@@ -2838,7 +5831,15 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
           ..write('serverId: $serverId, ')
           ..write('taskId: $taskId, ')
           ..write('remindAt: $remindAt, ')
+          ..write('anchorType: $anchorType, ')
+          ..write('offsetMinutes: $offsetMinutes, ')
           ..write('status: $status, ')
+          ..write('firedAt: $firedAt, ')
+          ..write('persistent: $persistent, ')
+          ..write('intervalMinutes: $intervalMinutes, ')
+          ..write('timeZone: $timeZone, ')
+          ..write('fixedTimezone: $fixedTimezone, ')
+          ..write('clientMutationId: $clientMutationId, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
@@ -2912,6 +5913,28 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _monthDayMeta = const VerificationMeta(
+    'monthDay',
+  );
+  @override
+  late final GeneratedColumn<int> monthDay = GeneratedColumn<int>(
+    'month_day',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _startAtMeta = const VerificationMeta(
+    'startAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> startAt = GeneratedColumn<DateTime>(
+    'start_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _untilMeta = const VerificationMeta('until');
   @override
   late final GeneratedColumn<DateTime> until = GeneratedColumn<DateTime>(
@@ -2919,6 +5942,55 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
     aliasedName,
     true,
     type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _countLimitMeta = const VerificationMeta(
+    'countLimit',
+  );
+  @override
+  late final GeneratedColumn<int> countLimit = GeneratedColumn<int>(
+    'count_limit',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _enabledMeta = const VerificationMeta(
+    'enabled',
+  );
+  @override
+  late final GeneratedColumn<bool> enabled = GeneratedColumn<bool>(
+    'enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _repeatModeMeta = const VerificationMeta(
+    'repeatMode',
+  );
+  @override
+  late final GeneratedColumn<String> repeatMode = GeneratedColumn<String>(
+    'repeat_mode',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('ON_DUE'),
+  );
+  static const VerificationMeta _timeZoneMeta = const VerificationMeta(
+    'timeZone',
+  );
+  @override
+  late final GeneratedColumn<String> timeZone = GeneratedColumn<String>(
+    'time_zone',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
   static const VerificationMeta _updatedAtMeta = const VerificationMeta(
@@ -2951,7 +6023,13 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
     freq,
     interval,
     byDay,
+    monthDay,
+    startAt,
     until,
+    countLimit,
+    enabled,
+    repeatMode,
+    timeZone,
     updatedAt,
     createdAt,
   ];
@@ -3006,10 +6084,46 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
         byDay.isAcceptableOrUnknown(data['by_day']!, _byDayMeta),
       );
     }
+    if (data.containsKey('month_day')) {
+      context.handle(
+        _monthDayMeta,
+        monthDay.isAcceptableOrUnknown(data['month_day']!, _monthDayMeta),
+      );
+    }
+    if (data.containsKey('start_at')) {
+      context.handle(
+        _startAtMeta,
+        startAt.isAcceptableOrUnknown(data['start_at']!, _startAtMeta),
+      );
+    }
     if (data.containsKey('until')) {
       context.handle(
         _untilMeta,
         until.isAcceptableOrUnknown(data['until']!, _untilMeta),
+      );
+    }
+    if (data.containsKey('count_limit')) {
+      context.handle(
+        _countLimitMeta,
+        countLimit.isAcceptableOrUnknown(data['count_limit']!, _countLimitMeta),
+      );
+    }
+    if (data.containsKey('enabled')) {
+      context.handle(
+        _enabledMeta,
+        enabled.isAcceptableOrUnknown(data['enabled']!, _enabledMeta),
+      );
+    }
+    if (data.containsKey('repeat_mode')) {
+      context.handle(
+        _repeatModeMeta,
+        repeatMode.isAcceptableOrUnknown(data['repeat_mode']!, _repeatModeMeta),
+      );
+    }
+    if (data.containsKey('time_zone')) {
+      context.handle(
+        _timeZoneMeta,
+        timeZone.isAcceptableOrUnknown(data['time_zone']!, _timeZoneMeta),
       );
     }
     if (data.containsKey('updated_at')) {
@@ -3061,9 +6175,33 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
         DriftSqlType.string,
         data['${effectivePrefix}by_day'],
       ),
+      monthDay: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}month_day'],
+      ),
+      startAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}start_at'],
+      ),
       until: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}until'],
+      ),
+      countLimit: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}count_limit'],
+      ),
+      enabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}enabled'],
+      )!,
+      repeatMode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}repeat_mode'],
+      )!,
+      timeZone: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}time_zone'],
       ),
       updatedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
@@ -3089,7 +6227,13 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
   final String freq;
   final int interval;
   final String? byDay;
+  final int? monthDay;
+  final DateTime? startAt;
   final DateTime? until;
+  final int? countLimit;
+  final bool enabled;
+  final String repeatMode;
+  final String? timeZone;
   final DateTime updatedAt;
   final DateTime createdAt;
   const TodoRepeatRule({
@@ -3099,7 +6243,13 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
     required this.freq,
     required this.interval,
     this.byDay,
+    this.monthDay,
+    this.startAt,
     this.until,
+    this.countLimit,
+    required this.enabled,
+    required this.repeatMode,
+    this.timeZone,
     required this.updatedAt,
     required this.createdAt,
   });
@@ -3116,8 +6266,22 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
     if (!nullToAbsent || byDay != null) {
       map['by_day'] = Variable<String>(byDay);
     }
+    if (!nullToAbsent || monthDay != null) {
+      map['month_day'] = Variable<int>(monthDay);
+    }
+    if (!nullToAbsent || startAt != null) {
+      map['start_at'] = Variable<DateTime>(startAt);
+    }
     if (!nullToAbsent || until != null) {
       map['until'] = Variable<DateTime>(until);
+    }
+    if (!nullToAbsent || countLimit != null) {
+      map['count_limit'] = Variable<int>(countLimit);
+    }
+    map['enabled'] = Variable<bool>(enabled);
+    map['repeat_mode'] = Variable<String>(repeatMode);
+    if (!nullToAbsent || timeZone != null) {
+      map['time_zone'] = Variable<String>(timeZone);
     }
     map['updated_at'] = Variable<DateTime>(updatedAt);
     map['created_at'] = Variable<DateTime>(createdAt);
@@ -3136,9 +6300,23 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
       byDay: byDay == null && nullToAbsent
           ? const Value.absent()
           : Value(byDay),
+      monthDay: monthDay == null && nullToAbsent
+          ? const Value.absent()
+          : Value(monthDay),
+      startAt: startAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(startAt),
       until: until == null && nullToAbsent
           ? const Value.absent()
           : Value(until),
+      countLimit: countLimit == null && nullToAbsent
+          ? const Value.absent()
+          : Value(countLimit),
+      enabled: Value(enabled),
+      repeatMode: Value(repeatMode),
+      timeZone: timeZone == null && nullToAbsent
+          ? const Value.absent()
+          : Value(timeZone),
       updatedAt: Value(updatedAt),
       createdAt: Value(createdAt),
     );
@@ -3156,7 +6334,13 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
       freq: serializer.fromJson<String>(json['freq']),
       interval: serializer.fromJson<int>(json['interval']),
       byDay: serializer.fromJson<String?>(json['byDay']),
+      monthDay: serializer.fromJson<int?>(json['monthDay']),
+      startAt: serializer.fromJson<DateTime?>(json['startAt']),
       until: serializer.fromJson<DateTime?>(json['until']),
+      countLimit: serializer.fromJson<int?>(json['countLimit']),
+      enabled: serializer.fromJson<bool>(json['enabled']),
+      repeatMode: serializer.fromJson<String>(json['repeatMode']),
+      timeZone: serializer.fromJson<String?>(json['timeZone']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
@@ -3171,7 +6355,13 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
       'freq': serializer.toJson<String>(freq),
       'interval': serializer.toJson<int>(interval),
       'byDay': serializer.toJson<String?>(byDay),
+      'monthDay': serializer.toJson<int?>(monthDay),
+      'startAt': serializer.toJson<DateTime?>(startAt),
       'until': serializer.toJson<DateTime?>(until),
+      'countLimit': serializer.toJson<int?>(countLimit),
+      'enabled': serializer.toJson<bool>(enabled),
+      'repeatMode': serializer.toJson<String>(repeatMode),
+      'timeZone': serializer.toJson<String?>(timeZone),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
@@ -3184,7 +6374,13 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
     String? freq,
     int? interval,
     Value<String?> byDay = const Value.absent(),
+    Value<int?> monthDay = const Value.absent(),
+    Value<DateTime?> startAt = const Value.absent(),
     Value<DateTime?> until = const Value.absent(),
+    Value<int?> countLimit = const Value.absent(),
+    bool? enabled,
+    String? repeatMode,
+    Value<String?> timeZone = const Value.absent(),
     DateTime? updatedAt,
     DateTime? createdAt,
   }) => TodoRepeatRule(
@@ -3194,7 +6390,13 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
     freq: freq ?? this.freq,
     interval: interval ?? this.interval,
     byDay: byDay.present ? byDay.value : this.byDay,
+    monthDay: monthDay.present ? monthDay.value : this.monthDay,
+    startAt: startAt.present ? startAt.value : this.startAt,
     until: until.present ? until.value : this.until,
+    countLimit: countLimit.present ? countLimit.value : this.countLimit,
+    enabled: enabled ?? this.enabled,
+    repeatMode: repeatMode ?? this.repeatMode,
+    timeZone: timeZone.present ? timeZone.value : this.timeZone,
     updatedAt: updatedAt ?? this.updatedAt,
     createdAt: createdAt ?? this.createdAt,
   );
@@ -3206,7 +6408,17 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
       freq: data.freq.present ? data.freq.value : this.freq,
       interval: data.interval.present ? data.interval.value : this.interval,
       byDay: data.byDay.present ? data.byDay.value : this.byDay,
+      monthDay: data.monthDay.present ? data.monthDay.value : this.monthDay,
+      startAt: data.startAt.present ? data.startAt.value : this.startAt,
       until: data.until.present ? data.until.value : this.until,
+      countLimit: data.countLimit.present
+          ? data.countLimit.value
+          : this.countLimit,
+      enabled: data.enabled.present ? data.enabled.value : this.enabled,
+      repeatMode: data.repeatMode.present
+          ? data.repeatMode.value
+          : this.repeatMode,
+      timeZone: data.timeZone.present ? data.timeZone.value : this.timeZone,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
@@ -3221,7 +6433,13 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
           ..write('freq: $freq, ')
           ..write('interval: $interval, ')
           ..write('byDay: $byDay, ')
+          ..write('monthDay: $monthDay, ')
+          ..write('startAt: $startAt, ')
           ..write('until: $until, ')
+          ..write('countLimit: $countLimit, ')
+          ..write('enabled: $enabled, ')
+          ..write('repeatMode: $repeatMode, ')
+          ..write('timeZone: $timeZone, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -3236,7 +6454,13 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
     freq,
     interval,
     byDay,
+    monthDay,
+    startAt,
     until,
+    countLimit,
+    enabled,
+    repeatMode,
+    timeZone,
     updatedAt,
     createdAt,
   );
@@ -3250,7 +6474,13 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
           other.freq == this.freq &&
           other.interval == this.interval &&
           other.byDay == this.byDay &&
+          other.monthDay == this.monthDay &&
+          other.startAt == this.startAt &&
           other.until == this.until &&
+          other.countLimit == this.countLimit &&
+          other.enabled == this.enabled &&
+          other.repeatMode == this.repeatMode &&
+          other.timeZone == this.timeZone &&
           other.updatedAt == this.updatedAt &&
           other.createdAt == this.createdAt);
 }
@@ -3262,7 +6492,13 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
   final Value<String> freq;
   final Value<int> interval;
   final Value<String?> byDay;
+  final Value<int?> monthDay;
+  final Value<DateTime?> startAt;
   final Value<DateTime?> until;
+  final Value<int?> countLimit;
+  final Value<bool> enabled;
+  final Value<String> repeatMode;
+  final Value<String?> timeZone;
   final Value<DateTime> updatedAt;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
@@ -3273,7 +6509,13 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
     this.freq = const Value.absent(),
     this.interval = const Value.absent(),
     this.byDay = const Value.absent(),
+    this.monthDay = const Value.absent(),
+    this.startAt = const Value.absent(),
     this.until = const Value.absent(),
+    this.countLimit = const Value.absent(),
+    this.enabled = const Value.absent(),
+    this.repeatMode = const Value.absent(),
+    this.timeZone = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -3285,7 +6527,13 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
     required String freq,
     this.interval = const Value.absent(),
     this.byDay = const Value.absent(),
+    this.monthDay = const Value.absent(),
+    this.startAt = const Value.absent(),
     this.until = const Value.absent(),
+    this.countLimit = const Value.absent(),
+    this.enabled = const Value.absent(),
+    this.repeatMode = const Value.absent(),
+    this.timeZone = const Value.absent(),
     required DateTime updatedAt,
     required DateTime createdAt,
     this.rowid = const Value.absent(),
@@ -3301,7 +6549,13 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
     Expression<String>? freq,
     Expression<int>? interval,
     Expression<String>? byDay,
+    Expression<int>? monthDay,
+    Expression<DateTime>? startAt,
     Expression<DateTime>? until,
+    Expression<int>? countLimit,
+    Expression<bool>? enabled,
+    Expression<String>? repeatMode,
+    Expression<String>? timeZone,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
@@ -3313,7 +6567,13 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
       if (freq != null) 'freq': freq,
       if (interval != null) 'interval': interval,
       if (byDay != null) 'by_day': byDay,
+      if (monthDay != null) 'month_day': monthDay,
+      if (startAt != null) 'start_at': startAt,
       if (until != null) 'until': until,
+      if (countLimit != null) 'count_limit': countLimit,
+      if (enabled != null) 'enabled': enabled,
+      if (repeatMode != null) 'repeat_mode': repeatMode,
+      if (timeZone != null) 'time_zone': timeZone,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
@@ -3327,7 +6587,13 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
     Value<String>? freq,
     Value<int>? interval,
     Value<String?>? byDay,
+    Value<int?>? monthDay,
+    Value<DateTime?>? startAt,
     Value<DateTime?>? until,
+    Value<int?>? countLimit,
+    Value<bool>? enabled,
+    Value<String>? repeatMode,
+    Value<String?>? timeZone,
     Value<DateTime>? updatedAt,
     Value<DateTime>? createdAt,
     Value<int>? rowid,
@@ -3339,7 +6605,13 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
       freq: freq ?? this.freq,
       interval: interval ?? this.interval,
       byDay: byDay ?? this.byDay,
+      monthDay: monthDay ?? this.monthDay,
+      startAt: startAt ?? this.startAt,
       until: until ?? this.until,
+      countLimit: countLimit ?? this.countLimit,
+      enabled: enabled ?? this.enabled,
+      repeatMode: repeatMode ?? this.repeatMode,
+      timeZone: timeZone ?? this.timeZone,
       updatedAt: updatedAt ?? this.updatedAt,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
@@ -3367,8 +6639,26 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
     if (byDay.present) {
       map['by_day'] = Variable<String>(byDay.value);
     }
+    if (monthDay.present) {
+      map['month_day'] = Variable<int>(monthDay.value);
+    }
+    if (startAt.present) {
+      map['start_at'] = Variable<DateTime>(startAt.value);
+    }
     if (until.present) {
       map['until'] = Variable<DateTime>(until.value);
+    }
+    if (countLimit.present) {
+      map['count_limit'] = Variable<int>(countLimit.value);
+    }
+    if (enabled.present) {
+      map['enabled'] = Variable<bool>(enabled.value);
+    }
+    if (repeatMode.present) {
+      map['repeat_mode'] = Variable<String>(repeatMode.value);
+    }
+    if (timeZone.present) {
+      map['time_zone'] = Variable<String>(timeZone.value);
     }
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
@@ -3391,7 +6681,13 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
           ..write('freq: $freq, ')
           ..write('interval: $interval, ')
           ..write('byDay: $byDay, ')
+          ..write('monthDay: $monthDay, ')
+          ..write('startAt: $startAt, ')
           ..write('until: $until, ')
+          ..write('countLimit: $countLimit, ')
+          ..write('enabled: $enabled, ')
+          ..write('repeatMode: $repeatMode, ')
+          ..write('timeZone: $timeZone, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
@@ -5955,6 +9251,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $TodoFoldersTable todoFolders = $TodoFoldersTable(this);
   late final $TodoTagsTable todoTags = $TodoTagsTable(this);
   late final $TodoTaskTagsTable todoTaskTags = $TodoTaskTagsTable(this);
+  late final $TodoChecklistItemsTable todoChecklistItems =
+      $TodoChecklistItemsTable(this);
+  late final $TodoAttachmentsTable todoAttachments = $TodoAttachmentsTable(
+    this,
+  );
+  late final $TodoActivitiesTable todoActivities = $TodoActivitiesTable(this);
+  late final $TodoTemplatesTable todoTemplates = $TodoTemplatesTable(this);
   late final $TodoRemindersTable todoReminders = $TodoRemindersTable(this);
   late final $TodoRepeatRulesTable todoRepeatRules = $TodoRepeatRulesTable(
     this,
@@ -5981,6 +9284,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     todoFolders,
     todoTags,
     todoTaskTags,
+    todoChecklistItems,
+    todoAttachments,
+    todoActivities,
+    todoTemplates,
     todoReminders,
     todoRepeatRules,
     todoRepeatSkips,
@@ -6233,12 +9540,20 @@ typedef $$TodoTasksTableCreateCompanionBuilder =
       required String title,
       Value<String?> description,
       Value<bool> completed,
+      Value<DateTime?> completedAt,
+      Value<bool> cancelled,
       Value<int> priority,
       Value<bool> isPinned,
       Value<int> sortOrder,
       Value<DateTime?> startAt,
       Value<DateTime?> endAt,
       Value<DateTime?> dueAt,
+      Value<bool> allDay,
+      Value<String?> timeZone,
+      Value<bool> fixedTimezone,
+      Value<String?> repeatParentTaskId,
+      Value<String?> repeatRuleId,
+      Value<DateTime?> repeatOccurrenceAt,
       required DateTime updatedAt,
       required DateTime createdAt,
       Value<int> rowid,
@@ -6252,12 +9567,20 @@ typedef $$TodoTasksTableUpdateCompanionBuilder =
       Value<String> title,
       Value<String?> description,
       Value<bool> completed,
+      Value<DateTime?> completedAt,
+      Value<bool> cancelled,
       Value<int> priority,
       Value<bool> isPinned,
       Value<int> sortOrder,
       Value<DateTime?> startAt,
       Value<DateTime?> endAt,
       Value<DateTime?> dueAt,
+      Value<bool> allDay,
+      Value<String?> timeZone,
+      Value<bool> fixedTimezone,
+      Value<String?> repeatParentTaskId,
+      Value<String?> repeatRuleId,
+      Value<DateTime?> repeatOccurrenceAt,
       Value<DateTime> updatedAt,
       Value<DateTime> createdAt,
       Value<int> rowid,
@@ -6307,6 +9630,16 @@ class $$TodoTasksTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<DateTime> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get cancelled => $composableBuilder(
+    column: $table.cancelled,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<int> get priority => $composableBuilder(
     column: $table.priority,
     builder: (column) => ColumnFilters(column),
@@ -6334,6 +9667,36 @@ class $$TodoTasksTableFilterComposer
 
   ColumnFilters<DateTime> get dueAt => $composableBuilder(
     column: $table.dueAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get allDay => $composableBuilder(
+    column: $table.allDay,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get timeZone => $composableBuilder(
+    column: $table.timeZone,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get fixedTimezone => $composableBuilder(
+    column: $table.fixedTimezone,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get repeatParentTaskId => $composableBuilder(
+    column: $table.repeatParentTaskId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get repeatRuleId => $composableBuilder(
+    column: $table.repeatRuleId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get repeatOccurrenceAt => $composableBuilder(
+    column: $table.repeatOccurrenceAt,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6392,6 +9755,16 @@ class $$TodoTasksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get cancelled => $composableBuilder(
+    column: $table.cancelled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get priority => $composableBuilder(
     column: $table.priority,
     builder: (column) => ColumnOrderings(column),
@@ -6419,6 +9792,36 @@ class $$TodoTasksTableOrderingComposer
 
   ColumnOrderings<DateTime> get dueAt => $composableBuilder(
     column: $table.dueAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get allDay => $composableBuilder(
+    column: $table.allDay,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get timeZone => $composableBuilder(
+    column: $table.timeZone,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get fixedTimezone => $composableBuilder(
+    column: $table.fixedTimezone,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get repeatParentTaskId => $composableBuilder(
+    column: $table.repeatParentTaskId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get repeatRuleId => $composableBuilder(
+    column: $table.repeatRuleId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get repeatOccurrenceAt => $composableBuilder(
+    column: $table.repeatOccurrenceAt,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -6467,6 +9870,14 @@ class $$TodoTasksTableAnnotationComposer
   GeneratedColumn<bool> get completed =>
       $composableBuilder(column: $table.completed, builder: (column) => column);
 
+  GeneratedColumn<DateTime> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get cancelled =>
+      $composableBuilder(column: $table.cancelled, builder: (column) => column);
+
   GeneratedColumn<int> get priority =>
       $composableBuilder(column: $table.priority, builder: (column) => column);
 
@@ -6484,6 +9895,32 @@ class $$TodoTasksTableAnnotationComposer
 
   GeneratedColumn<DateTime> get dueAt =>
       $composableBuilder(column: $table.dueAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get allDay =>
+      $composableBuilder(column: $table.allDay, builder: (column) => column);
+
+  GeneratedColumn<String> get timeZone =>
+      $composableBuilder(column: $table.timeZone, builder: (column) => column);
+
+  GeneratedColumn<bool> get fixedTimezone => $composableBuilder(
+    column: $table.fixedTimezone,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get repeatParentTaskId => $composableBuilder(
+    column: $table.repeatParentTaskId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get repeatRuleId => $composableBuilder(
+    column: $table.repeatRuleId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get repeatOccurrenceAt => $composableBuilder(
+    column: $table.repeatOccurrenceAt,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
@@ -6527,12 +9964,20 @@ class $$TodoTasksTableTableManager
                 Value<String> title = const Value.absent(),
                 Value<String?> description = const Value.absent(),
                 Value<bool> completed = const Value.absent(),
+                Value<DateTime?> completedAt = const Value.absent(),
+                Value<bool> cancelled = const Value.absent(),
                 Value<int> priority = const Value.absent(),
                 Value<bool> isPinned = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<DateTime?> startAt = const Value.absent(),
                 Value<DateTime?> endAt = const Value.absent(),
                 Value<DateTime?> dueAt = const Value.absent(),
+                Value<bool> allDay = const Value.absent(),
+                Value<String?> timeZone = const Value.absent(),
+                Value<bool> fixedTimezone = const Value.absent(),
+                Value<String?> repeatParentTaskId = const Value.absent(),
+                Value<String?> repeatRuleId = const Value.absent(),
+                Value<DateTime?> repeatOccurrenceAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -6544,12 +9989,20 @@ class $$TodoTasksTableTableManager
                 title: title,
                 description: description,
                 completed: completed,
+                completedAt: completedAt,
+                cancelled: cancelled,
                 priority: priority,
                 isPinned: isPinned,
                 sortOrder: sortOrder,
                 startAt: startAt,
                 endAt: endAt,
                 dueAt: dueAt,
+                allDay: allDay,
+                timeZone: timeZone,
+                fixedTimezone: fixedTimezone,
+                repeatParentTaskId: repeatParentTaskId,
+                repeatRuleId: repeatRuleId,
+                repeatOccurrenceAt: repeatOccurrenceAt,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
                 rowid: rowid,
@@ -6563,12 +10016,20 @@ class $$TodoTasksTableTableManager
                 required String title,
                 Value<String?> description = const Value.absent(),
                 Value<bool> completed = const Value.absent(),
+                Value<DateTime?> completedAt = const Value.absent(),
+                Value<bool> cancelled = const Value.absent(),
                 Value<int> priority = const Value.absent(),
                 Value<bool> isPinned = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<DateTime?> startAt = const Value.absent(),
                 Value<DateTime?> endAt = const Value.absent(),
                 Value<DateTime?> dueAt = const Value.absent(),
+                Value<bool> allDay = const Value.absent(),
+                Value<String?> timeZone = const Value.absent(),
+                Value<bool> fixedTimezone = const Value.absent(),
+                Value<String?> repeatParentTaskId = const Value.absent(),
+                Value<String?> repeatRuleId = const Value.absent(),
+                Value<DateTime?> repeatOccurrenceAt = const Value.absent(),
                 required DateTime updatedAt,
                 required DateTime createdAt,
                 Value<int> rowid = const Value.absent(),
@@ -6580,12 +10041,20 @@ class $$TodoTasksTableTableManager
                 title: title,
                 description: description,
                 completed: completed,
+                completedAt: completedAt,
+                cancelled: cancelled,
                 priority: priority,
                 isPinned: isPinned,
                 sortOrder: sortOrder,
                 startAt: startAt,
                 endAt: endAt,
                 dueAt: dueAt,
+                allDay: allDay,
+                timeZone: timeZone,
+                fixedTimezone: fixedTimezone,
+                repeatParentTaskId: repeatParentTaskId,
+                repeatRuleId: repeatRuleId,
+                repeatOccurrenceAt: repeatOccurrenceAt,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
                 rowid: rowid,
@@ -7206,13 +10675,1112 @@ typedef $$TodoTaskTagsTableProcessedTableManager =
       TodoTaskTag,
       PrefetchHooks Function()
     >;
+typedef $$TodoChecklistItemsTableCreateCompanionBuilder =
+    TodoChecklistItemsCompanion Function({
+      required String id,
+      Value<int?> serverId,
+      required String taskId,
+      required String title,
+      Value<bool> completed,
+      Value<int> sortOrder,
+      required DateTime updatedAt,
+      required DateTime createdAt,
+      Value<int> rowid,
+    });
+typedef $$TodoChecklistItemsTableUpdateCompanionBuilder =
+    TodoChecklistItemsCompanion Function({
+      Value<String> id,
+      Value<int?> serverId,
+      Value<String> taskId,
+      Value<String> title,
+      Value<bool> completed,
+      Value<int> sortOrder,
+      Value<DateTime> updatedAt,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+
+class $$TodoChecklistItemsTableFilterComposer
+    extends Composer<_$AppDatabase, $TodoChecklistItemsTable> {
+  $$TodoChecklistItemsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get serverId => $composableBuilder(
+    column: $table.serverId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get taskId => $composableBuilder(
+    column: $table.taskId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get completed => $composableBuilder(
+    column: $table.completed,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$TodoChecklistItemsTableOrderingComposer
+    extends Composer<_$AppDatabase, $TodoChecklistItemsTable> {
+  $$TodoChecklistItemsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get serverId => $composableBuilder(
+    column: $table.serverId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get taskId => $composableBuilder(
+    column: $table.taskId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get completed => $composableBuilder(
+    column: $table.completed,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$TodoChecklistItemsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $TodoChecklistItemsTable> {
+  $$TodoChecklistItemsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get serverId =>
+      $composableBuilder(column: $table.serverId, builder: (column) => column);
+
+  GeneratedColumn<String> get taskId =>
+      $composableBuilder(column: $table.taskId, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<bool> get completed =>
+      $composableBuilder(column: $table.completed, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$TodoChecklistItemsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $TodoChecklistItemsTable,
+          TodoChecklistItem,
+          $$TodoChecklistItemsTableFilterComposer,
+          $$TodoChecklistItemsTableOrderingComposer,
+          $$TodoChecklistItemsTableAnnotationComposer,
+          $$TodoChecklistItemsTableCreateCompanionBuilder,
+          $$TodoChecklistItemsTableUpdateCompanionBuilder,
+          (
+            TodoChecklistItem,
+            BaseReferences<
+              _$AppDatabase,
+              $TodoChecklistItemsTable,
+              TodoChecklistItem
+            >,
+          ),
+          TodoChecklistItem,
+          PrefetchHooks Function()
+        > {
+  $$TodoChecklistItemsTableTableManager(
+    _$AppDatabase db,
+    $TodoChecklistItemsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$TodoChecklistItemsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$TodoChecklistItemsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$TodoChecklistItemsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<int?> serverId = const Value.absent(),
+                Value<String> taskId = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<bool> completed = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => TodoChecklistItemsCompanion(
+                id: id,
+                serverId: serverId,
+                taskId: taskId,
+                title: title,
+                completed: completed,
+                sortOrder: sortOrder,
+                updatedAt: updatedAt,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                Value<int?> serverId = const Value.absent(),
+                required String taskId,
+                required String title,
+                Value<bool> completed = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                required DateTime updatedAt,
+                required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => TodoChecklistItemsCompanion.insert(
+                id: id,
+                serverId: serverId,
+                taskId: taskId,
+                title: title,
+                completed: completed,
+                sortOrder: sortOrder,
+                updatedAt: updatedAt,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$TodoChecklistItemsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $TodoChecklistItemsTable,
+      TodoChecklistItem,
+      $$TodoChecklistItemsTableFilterComposer,
+      $$TodoChecklistItemsTableOrderingComposer,
+      $$TodoChecklistItemsTableAnnotationComposer,
+      $$TodoChecklistItemsTableCreateCompanionBuilder,
+      $$TodoChecklistItemsTableUpdateCompanionBuilder,
+      (
+        TodoChecklistItem,
+        BaseReferences<
+          _$AppDatabase,
+          $TodoChecklistItemsTable,
+          TodoChecklistItem
+        >,
+      ),
+      TodoChecklistItem,
+      PrefetchHooks Function()
+    >;
+typedef $$TodoAttachmentsTableCreateCompanionBuilder =
+    TodoAttachmentsCompanion Function({
+      required String id,
+      Value<int?> serverId,
+      required String taskId,
+      required String name,
+      Value<String?> localPath,
+      Value<String?> remoteUrl,
+      required String mimeType,
+      required int size,
+      Value<String> status,
+      Value<String?> error,
+      required DateTime updatedAt,
+      required DateTime createdAt,
+      Value<int> rowid,
+    });
+typedef $$TodoAttachmentsTableUpdateCompanionBuilder =
+    TodoAttachmentsCompanion Function({
+      Value<String> id,
+      Value<int?> serverId,
+      Value<String> taskId,
+      Value<String> name,
+      Value<String?> localPath,
+      Value<String?> remoteUrl,
+      Value<String> mimeType,
+      Value<int> size,
+      Value<String> status,
+      Value<String?> error,
+      Value<DateTime> updatedAt,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+
+class $$TodoAttachmentsTableFilterComposer
+    extends Composer<_$AppDatabase, $TodoAttachmentsTable> {
+  $$TodoAttachmentsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get serverId => $composableBuilder(
+    column: $table.serverId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get taskId => $composableBuilder(
+    column: $table.taskId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get localPath => $composableBuilder(
+    column: $table.localPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get remoteUrl => $composableBuilder(
+    column: $table.remoteUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mimeType => $composableBuilder(
+    column: $table.mimeType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get size => $composableBuilder(
+    column: $table.size,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get error => $composableBuilder(
+    column: $table.error,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$TodoAttachmentsTableOrderingComposer
+    extends Composer<_$AppDatabase, $TodoAttachmentsTable> {
+  $$TodoAttachmentsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get serverId => $composableBuilder(
+    column: $table.serverId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get taskId => $composableBuilder(
+    column: $table.taskId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get localPath => $composableBuilder(
+    column: $table.localPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get remoteUrl => $composableBuilder(
+    column: $table.remoteUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get mimeType => $composableBuilder(
+    column: $table.mimeType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get size => $composableBuilder(
+    column: $table.size,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get error => $composableBuilder(
+    column: $table.error,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$TodoAttachmentsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $TodoAttachmentsTable> {
+  $$TodoAttachmentsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get serverId =>
+      $composableBuilder(column: $table.serverId, builder: (column) => column);
+
+  GeneratedColumn<String> get taskId =>
+      $composableBuilder(column: $table.taskId, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get localPath =>
+      $composableBuilder(column: $table.localPath, builder: (column) => column);
+
+  GeneratedColumn<String> get remoteUrl =>
+      $composableBuilder(column: $table.remoteUrl, builder: (column) => column);
+
+  GeneratedColumn<String> get mimeType =>
+      $composableBuilder(column: $table.mimeType, builder: (column) => column);
+
+  GeneratedColumn<int> get size =>
+      $composableBuilder(column: $table.size, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<String> get error =>
+      $composableBuilder(column: $table.error, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$TodoAttachmentsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $TodoAttachmentsTable,
+          TodoAttachment,
+          $$TodoAttachmentsTableFilterComposer,
+          $$TodoAttachmentsTableOrderingComposer,
+          $$TodoAttachmentsTableAnnotationComposer,
+          $$TodoAttachmentsTableCreateCompanionBuilder,
+          $$TodoAttachmentsTableUpdateCompanionBuilder,
+          (
+            TodoAttachment,
+            BaseReferences<
+              _$AppDatabase,
+              $TodoAttachmentsTable,
+              TodoAttachment
+            >,
+          ),
+          TodoAttachment,
+          PrefetchHooks Function()
+        > {
+  $$TodoAttachmentsTableTableManager(
+    _$AppDatabase db,
+    $TodoAttachmentsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$TodoAttachmentsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$TodoAttachmentsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$TodoAttachmentsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<int?> serverId = const Value.absent(),
+                Value<String> taskId = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String?> localPath = const Value.absent(),
+                Value<String?> remoteUrl = const Value.absent(),
+                Value<String> mimeType = const Value.absent(),
+                Value<int> size = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<String?> error = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => TodoAttachmentsCompanion(
+                id: id,
+                serverId: serverId,
+                taskId: taskId,
+                name: name,
+                localPath: localPath,
+                remoteUrl: remoteUrl,
+                mimeType: mimeType,
+                size: size,
+                status: status,
+                error: error,
+                updatedAt: updatedAt,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                Value<int?> serverId = const Value.absent(),
+                required String taskId,
+                required String name,
+                Value<String?> localPath = const Value.absent(),
+                Value<String?> remoteUrl = const Value.absent(),
+                required String mimeType,
+                required int size,
+                Value<String> status = const Value.absent(),
+                Value<String?> error = const Value.absent(),
+                required DateTime updatedAt,
+                required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => TodoAttachmentsCompanion.insert(
+                id: id,
+                serverId: serverId,
+                taskId: taskId,
+                name: name,
+                localPath: localPath,
+                remoteUrl: remoteUrl,
+                mimeType: mimeType,
+                size: size,
+                status: status,
+                error: error,
+                updatedAt: updatedAt,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$TodoAttachmentsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $TodoAttachmentsTable,
+      TodoAttachment,
+      $$TodoAttachmentsTableFilterComposer,
+      $$TodoAttachmentsTableOrderingComposer,
+      $$TodoAttachmentsTableAnnotationComposer,
+      $$TodoAttachmentsTableCreateCompanionBuilder,
+      $$TodoAttachmentsTableUpdateCompanionBuilder,
+      (
+        TodoAttachment,
+        BaseReferences<_$AppDatabase, $TodoAttachmentsTable, TodoAttachment>,
+      ),
+      TodoAttachment,
+      PrefetchHooks Function()
+    >;
+typedef $$TodoActivitiesTableCreateCompanionBuilder =
+    TodoActivitiesCompanion Function({
+      Value<int> serverId,
+      required int taskServerId,
+      Value<int?> actorUserId,
+      Value<String?> actorUserName,
+      required String action,
+      Value<String?> detail,
+      required DateTime occurredAt,
+    });
+typedef $$TodoActivitiesTableUpdateCompanionBuilder =
+    TodoActivitiesCompanion Function({
+      Value<int> serverId,
+      Value<int> taskServerId,
+      Value<int?> actorUserId,
+      Value<String?> actorUserName,
+      Value<String> action,
+      Value<String?> detail,
+      Value<DateTime> occurredAt,
+    });
+
+class $$TodoActivitiesTableFilterComposer
+    extends Composer<_$AppDatabase, $TodoActivitiesTable> {
+  $$TodoActivitiesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get serverId => $composableBuilder(
+    column: $table.serverId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get taskServerId => $composableBuilder(
+    column: $table.taskServerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get actorUserId => $composableBuilder(
+    column: $table.actorUserId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get actorUserName => $composableBuilder(
+    column: $table.actorUserName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get action => $composableBuilder(
+    column: $table.action,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get detail => $composableBuilder(
+    column: $table.detail,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get occurredAt => $composableBuilder(
+    column: $table.occurredAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$TodoActivitiesTableOrderingComposer
+    extends Composer<_$AppDatabase, $TodoActivitiesTable> {
+  $$TodoActivitiesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get serverId => $composableBuilder(
+    column: $table.serverId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get taskServerId => $composableBuilder(
+    column: $table.taskServerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get actorUserId => $composableBuilder(
+    column: $table.actorUserId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get actorUserName => $composableBuilder(
+    column: $table.actorUserName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get action => $composableBuilder(
+    column: $table.action,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get detail => $composableBuilder(
+    column: $table.detail,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get occurredAt => $composableBuilder(
+    column: $table.occurredAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$TodoActivitiesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $TodoActivitiesTable> {
+  $$TodoActivitiesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get serverId =>
+      $composableBuilder(column: $table.serverId, builder: (column) => column);
+
+  GeneratedColumn<int> get taskServerId => $composableBuilder(
+    column: $table.taskServerId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get actorUserId => $composableBuilder(
+    column: $table.actorUserId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get actorUserName => $composableBuilder(
+    column: $table.actorUserName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get action =>
+      $composableBuilder(column: $table.action, builder: (column) => column);
+
+  GeneratedColumn<String> get detail =>
+      $composableBuilder(column: $table.detail, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get occurredAt => $composableBuilder(
+    column: $table.occurredAt,
+    builder: (column) => column,
+  );
+}
+
+class $$TodoActivitiesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $TodoActivitiesTable,
+          TodoActivity,
+          $$TodoActivitiesTableFilterComposer,
+          $$TodoActivitiesTableOrderingComposer,
+          $$TodoActivitiesTableAnnotationComposer,
+          $$TodoActivitiesTableCreateCompanionBuilder,
+          $$TodoActivitiesTableUpdateCompanionBuilder,
+          (
+            TodoActivity,
+            BaseReferences<_$AppDatabase, $TodoActivitiesTable, TodoActivity>,
+          ),
+          TodoActivity,
+          PrefetchHooks Function()
+        > {
+  $$TodoActivitiesTableTableManager(
+    _$AppDatabase db,
+    $TodoActivitiesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$TodoActivitiesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$TodoActivitiesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$TodoActivitiesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> serverId = const Value.absent(),
+                Value<int> taskServerId = const Value.absent(),
+                Value<int?> actorUserId = const Value.absent(),
+                Value<String?> actorUserName = const Value.absent(),
+                Value<String> action = const Value.absent(),
+                Value<String?> detail = const Value.absent(),
+                Value<DateTime> occurredAt = const Value.absent(),
+              }) => TodoActivitiesCompanion(
+                serverId: serverId,
+                taskServerId: taskServerId,
+                actorUserId: actorUserId,
+                actorUserName: actorUserName,
+                action: action,
+                detail: detail,
+                occurredAt: occurredAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> serverId = const Value.absent(),
+                required int taskServerId,
+                Value<int?> actorUserId = const Value.absent(),
+                Value<String?> actorUserName = const Value.absent(),
+                required String action,
+                Value<String?> detail = const Value.absent(),
+                required DateTime occurredAt,
+              }) => TodoActivitiesCompanion.insert(
+                serverId: serverId,
+                taskServerId: taskServerId,
+                actorUserId: actorUserId,
+                actorUserName: actorUserName,
+                action: action,
+                detail: detail,
+                occurredAt: occurredAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$TodoActivitiesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $TodoActivitiesTable,
+      TodoActivity,
+      $$TodoActivitiesTableFilterComposer,
+      $$TodoActivitiesTableOrderingComposer,
+      $$TodoActivitiesTableAnnotationComposer,
+      $$TodoActivitiesTableCreateCompanionBuilder,
+      $$TodoActivitiesTableUpdateCompanionBuilder,
+      (
+        TodoActivity,
+        BaseReferences<_$AppDatabase, $TodoActivitiesTable, TodoActivity>,
+      ),
+      TodoActivity,
+      PrefetchHooks Function()
+    >;
+typedef $$TodoTemplatesTableCreateCompanionBuilder =
+    TodoTemplatesCompanion Function({
+      required String id,
+      Value<int?> serverId,
+      required String name,
+      required String contentJson,
+      Value<String> status,
+      required DateTime updatedAt,
+      required DateTime createdAt,
+      Value<int> rowid,
+    });
+typedef $$TodoTemplatesTableUpdateCompanionBuilder =
+    TodoTemplatesCompanion Function({
+      Value<String> id,
+      Value<int?> serverId,
+      Value<String> name,
+      Value<String> contentJson,
+      Value<String> status,
+      Value<DateTime> updatedAt,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+
+class $$TodoTemplatesTableFilterComposer
+    extends Composer<_$AppDatabase, $TodoTemplatesTable> {
+  $$TodoTemplatesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get serverId => $composableBuilder(
+    column: $table.serverId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get contentJson => $composableBuilder(
+    column: $table.contentJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$TodoTemplatesTableOrderingComposer
+    extends Composer<_$AppDatabase, $TodoTemplatesTable> {
+  $$TodoTemplatesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get serverId => $composableBuilder(
+    column: $table.serverId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get contentJson => $composableBuilder(
+    column: $table.contentJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$TodoTemplatesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $TodoTemplatesTable> {
+  $$TodoTemplatesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get serverId =>
+      $composableBuilder(column: $table.serverId, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get contentJson => $composableBuilder(
+    column: $table.contentJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$TodoTemplatesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $TodoTemplatesTable,
+          TodoTemplate,
+          $$TodoTemplatesTableFilterComposer,
+          $$TodoTemplatesTableOrderingComposer,
+          $$TodoTemplatesTableAnnotationComposer,
+          $$TodoTemplatesTableCreateCompanionBuilder,
+          $$TodoTemplatesTableUpdateCompanionBuilder,
+          (
+            TodoTemplate,
+            BaseReferences<_$AppDatabase, $TodoTemplatesTable, TodoTemplate>,
+          ),
+          TodoTemplate,
+          PrefetchHooks Function()
+        > {
+  $$TodoTemplatesTableTableManager(_$AppDatabase db, $TodoTemplatesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$TodoTemplatesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$TodoTemplatesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$TodoTemplatesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<int?> serverId = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> contentJson = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => TodoTemplatesCompanion(
+                id: id,
+                serverId: serverId,
+                name: name,
+                contentJson: contentJson,
+                status: status,
+                updatedAt: updatedAt,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                Value<int?> serverId = const Value.absent(),
+                required String name,
+                required String contentJson,
+                Value<String> status = const Value.absent(),
+                required DateTime updatedAt,
+                required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => TodoTemplatesCompanion.insert(
+                id: id,
+                serverId: serverId,
+                name: name,
+                contentJson: contentJson,
+                status: status,
+                updatedAt: updatedAt,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$TodoTemplatesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $TodoTemplatesTable,
+      TodoTemplate,
+      $$TodoTemplatesTableFilterComposer,
+      $$TodoTemplatesTableOrderingComposer,
+      $$TodoTemplatesTableAnnotationComposer,
+      $$TodoTemplatesTableCreateCompanionBuilder,
+      $$TodoTemplatesTableUpdateCompanionBuilder,
+      (
+        TodoTemplate,
+        BaseReferences<_$AppDatabase, $TodoTemplatesTable, TodoTemplate>,
+      ),
+      TodoTemplate,
+      PrefetchHooks Function()
+    >;
 typedef $$TodoRemindersTableCreateCompanionBuilder =
     TodoRemindersCompanion Function({
       required String id,
       Value<int?> serverId,
       required String taskId,
       required DateTime remindAt,
+      Value<String> anchorType,
+      Value<int?> offsetMinutes,
       Value<String> status,
+      Value<DateTime?> firedAt,
+      Value<bool> persistent,
+      Value<int?> intervalMinutes,
+      Value<String?> timeZone,
+      Value<bool> fixedTimezone,
+      Value<String?> clientMutationId,
       required DateTime updatedAt,
       required DateTime createdAt,
       Value<int> rowid,
@@ -7223,7 +11791,15 @@ typedef $$TodoRemindersTableUpdateCompanionBuilder =
       Value<int?> serverId,
       Value<String> taskId,
       Value<DateTime> remindAt,
+      Value<String> anchorType,
+      Value<int?> offsetMinutes,
       Value<String> status,
+      Value<DateTime?> firedAt,
+      Value<bool> persistent,
+      Value<int?> intervalMinutes,
+      Value<String?> timeZone,
+      Value<bool> fixedTimezone,
+      Value<String?> clientMutationId,
       Value<DateTime> updatedAt,
       Value<DateTime> createdAt,
       Value<int> rowid,
@@ -7258,8 +11834,48 @@ class $$TodoRemindersTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get anchorType => $composableBuilder(
+    column: $table.anchorType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get offsetMinutes => $composableBuilder(
+    column: $table.offsetMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get status => $composableBuilder(
     column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get firedAt => $composableBuilder(
+    column: $table.firedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get persistent => $composableBuilder(
+    column: $table.persistent,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get intervalMinutes => $composableBuilder(
+    column: $table.intervalMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get timeZone => $composableBuilder(
+    column: $table.timeZone,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get fixedTimezone => $composableBuilder(
+    column: $table.fixedTimezone,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get clientMutationId => $composableBuilder(
+    column: $table.clientMutationId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7303,8 +11919,48 @@ class $$TodoRemindersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get anchorType => $composableBuilder(
+    column: $table.anchorType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get offsetMinutes => $composableBuilder(
+    column: $table.offsetMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get status => $composableBuilder(
     column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get firedAt => $composableBuilder(
+    column: $table.firedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get persistent => $composableBuilder(
+    column: $table.persistent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get intervalMinutes => $composableBuilder(
+    column: $table.intervalMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get timeZone => $composableBuilder(
+    column: $table.timeZone,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get fixedTimezone => $composableBuilder(
+    column: $table.fixedTimezone,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get clientMutationId => $composableBuilder(
+    column: $table.clientMutationId,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -7340,8 +11996,44 @@ class $$TodoRemindersTableAnnotationComposer
   GeneratedColumn<DateTime> get remindAt =>
       $composableBuilder(column: $table.remindAt, builder: (column) => column);
 
+  GeneratedColumn<String> get anchorType => $composableBuilder(
+    column: $table.anchorType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get offsetMinutes => $composableBuilder(
+    column: $table.offsetMinutes,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get status =>
       $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get firedAt =>
+      $composableBuilder(column: $table.firedAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get persistent => $composableBuilder(
+    column: $table.persistent,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get intervalMinutes => $composableBuilder(
+    column: $table.intervalMinutes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get timeZone =>
+      $composableBuilder(column: $table.timeZone, builder: (column) => column);
+
+  GeneratedColumn<bool> get fixedTimezone => $composableBuilder(
+    column: $table.fixedTimezone,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get clientMutationId => $composableBuilder(
+    column: $table.clientMutationId,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
@@ -7385,7 +12077,15 @@ class $$TodoRemindersTableTableManager
                 Value<int?> serverId = const Value.absent(),
                 Value<String> taskId = const Value.absent(),
                 Value<DateTime> remindAt = const Value.absent(),
+                Value<String> anchorType = const Value.absent(),
+                Value<int?> offsetMinutes = const Value.absent(),
                 Value<String> status = const Value.absent(),
+                Value<DateTime?> firedAt = const Value.absent(),
+                Value<bool> persistent = const Value.absent(),
+                Value<int?> intervalMinutes = const Value.absent(),
+                Value<String?> timeZone = const Value.absent(),
+                Value<bool> fixedTimezone = const Value.absent(),
+                Value<String?> clientMutationId = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -7394,7 +12094,15 @@ class $$TodoRemindersTableTableManager
                 serverId: serverId,
                 taskId: taskId,
                 remindAt: remindAt,
+                anchorType: anchorType,
+                offsetMinutes: offsetMinutes,
                 status: status,
+                firedAt: firedAt,
+                persistent: persistent,
+                intervalMinutes: intervalMinutes,
+                timeZone: timeZone,
+                fixedTimezone: fixedTimezone,
+                clientMutationId: clientMutationId,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
                 rowid: rowid,
@@ -7405,7 +12113,15 @@ class $$TodoRemindersTableTableManager
                 Value<int?> serverId = const Value.absent(),
                 required String taskId,
                 required DateTime remindAt,
+                Value<String> anchorType = const Value.absent(),
+                Value<int?> offsetMinutes = const Value.absent(),
                 Value<String> status = const Value.absent(),
+                Value<DateTime?> firedAt = const Value.absent(),
+                Value<bool> persistent = const Value.absent(),
+                Value<int?> intervalMinutes = const Value.absent(),
+                Value<String?> timeZone = const Value.absent(),
+                Value<bool> fixedTimezone = const Value.absent(),
+                Value<String?> clientMutationId = const Value.absent(),
                 required DateTime updatedAt,
                 required DateTime createdAt,
                 Value<int> rowid = const Value.absent(),
@@ -7414,7 +12130,15 @@ class $$TodoRemindersTableTableManager
                 serverId: serverId,
                 taskId: taskId,
                 remindAt: remindAt,
+                anchorType: anchorType,
+                offsetMinutes: offsetMinutes,
                 status: status,
+                firedAt: firedAt,
+                persistent: persistent,
+                intervalMinutes: intervalMinutes,
+                timeZone: timeZone,
+                fixedTimezone: fixedTimezone,
+                clientMutationId: clientMutationId,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
                 rowid: rowid,
@@ -7452,7 +12176,13 @@ typedef $$TodoRepeatRulesTableCreateCompanionBuilder =
       required String freq,
       Value<int> interval,
       Value<String?> byDay,
+      Value<int?> monthDay,
+      Value<DateTime?> startAt,
       Value<DateTime?> until,
+      Value<int?> countLimit,
+      Value<bool> enabled,
+      Value<String> repeatMode,
+      Value<String?> timeZone,
       required DateTime updatedAt,
       required DateTime createdAt,
       Value<int> rowid,
@@ -7465,7 +12195,13 @@ typedef $$TodoRepeatRulesTableUpdateCompanionBuilder =
       Value<String> freq,
       Value<int> interval,
       Value<String?> byDay,
+      Value<int?> monthDay,
+      Value<DateTime?> startAt,
       Value<DateTime?> until,
+      Value<int?> countLimit,
+      Value<bool> enabled,
+      Value<String> repeatMode,
+      Value<String?> timeZone,
       Value<DateTime> updatedAt,
       Value<DateTime> createdAt,
       Value<int> rowid,
@@ -7510,8 +12246,38 @@ class $$TodoRepeatRulesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<int> get monthDay => $composableBuilder(
+    column: $table.monthDay,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get startAt => $composableBuilder(
+    column: $table.startAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<DateTime> get until => $composableBuilder(
     column: $table.until,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get countLimit => $composableBuilder(
+    column: $table.countLimit,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get repeatMode => $composableBuilder(
+    column: $table.repeatMode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get timeZone => $composableBuilder(
+    column: $table.timeZone,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7565,8 +12331,38 @@ class $$TodoRepeatRulesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get monthDay => $composableBuilder(
+    column: $table.monthDay,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get startAt => $composableBuilder(
+    column: $table.startAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get until => $composableBuilder(
     column: $table.until,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get countLimit => $composableBuilder(
+    column: $table.countLimit,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get repeatMode => $composableBuilder(
+    column: $table.repeatMode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get timeZone => $composableBuilder(
+    column: $table.timeZone,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -7608,8 +12404,30 @@ class $$TodoRepeatRulesTableAnnotationComposer
   GeneratedColumn<String> get byDay =>
       $composableBuilder(column: $table.byDay, builder: (column) => column);
 
+  GeneratedColumn<int> get monthDay =>
+      $composableBuilder(column: $table.monthDay, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get startAt =>
+      $composableBuilder(column: $table.startAt, builder: (column) => column);
+
   GeneratedColumn<DateTime> get until =>
       $composableBuilder(column: $table.until, builder: (column) => column);
+
+  GeneratedColumn<int> get countLimit => $composableBuilder(
+    column: $table.countLimit,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get enabled =>
+      $composableBuilder(column: $table.enabled, builder: (column) => column);
+
+  GeneratedColumn<String> get repeatMode => $composableBuilder(
+    column: $table.repeatMode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get timeZone =>
+      $composableBuilder(column: $table.timeZone, builder: (column) => column);
 
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
@@ -7661,7 +12479,13 @@ class $$TodoRepeatRulesTableTableManager
                 Value<String> freq = const Value.absent(),
                 Value<int> interval = const Value.absent(),
                 Value<String?> byDay = const Value.absent(),
+                Value<int?> monthDay = const Value.absent(),
+                Value<DateTime?> startAt = const Value.absent(),
                 Value<DateTime?> until = const Value.absent(),
+                Value<int?> countLimit = const Value.absent(),
+                Value<bool> enabled = const Value.absent(),
+                Value<String> repeatMode = const Value.absent(),
+                Value<String?> timeZone = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -7672,7 +12496,13 @@ class $$TodoRepeatRulesTableTableManager
                 freq: freq,
                 interval: interval,
                 byDay: byDay,
+                monthDay: monthDay,
+                startAt: startAt,
                 until: until,
+                countLimit: countLimit,
+                enabled: enabled,
+                repeatMode: repeatMode,
+                timeZone: timeZone,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
                 rowid: rowid,
@@ -7685,7 +12515,13 @@ class $$TodoRepeatRulesTableTableManager
                 required String freq,
                 Value<int> interval = const Value.absent(),
                 Value<String?> byDay = const Value.absent(),
+                Value<int?> monthDay = const Value.absent(),
+                Value<DateTime?> startAt = const Value.absent(),
                 Value<DateTime?> until = const Value.absent(),
+                Value<int?> countLimit = const Value.absent(),
+                Value<bool> enabled = const Value.absent(),
+                Value<String> repeatMode = const Value.absent(),
+                Value<String?> timeZone = const Value.absent(),
                 required DateTime updatedAt,
                 required DateTime createdAt,
                 Value<int> rowid = const Value.absent(),
@@ -7696,7 +12532,13 @@ class $$TodoRepeatRulesTableTableManager
                 freq: freq,
                 interval: interval,
                 byDay: byDay,
+                monthDay: monthDay,
+                startAt: startAt,
                 until: until,
+                countLimit: countLimit,
+                enabled: enabled,
+                repeatMode: repeatMode,
+                timeZone: timeZone,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
                 rowid: rowid,
@@ -9131,6 +13973,14 @@ class $AppDatabaseManager {
       $$TodoTagsTableTableManager(_db, _db.todoTags);
   $$TodoTaskTagsTableTableManager get todoTaskTags =>
       $$TodoTaskTagsTableTableManager(_db, _db.todoTaskTags);
+  $$TodoChecklistItemsTableTableManager get todoChecklistItems =>
+      $$TodoChecklistItemsTableTableManager(_db, _db.todoChecklistItems);
+  $$TodoAttachmentsTableTableManager get todoAttachments =>
+      $$TodoAttachmentsTableTableManager(_db, _db.todoAttachments);
+  $$TodoActivitiesTableTableManager get todoActivities =>
+      $$TodoActivitiesTableTableManager(_db, _db.todoActivities);
+  $$TodoTemplatesTableTableManager get todoTemplates =>
+      $$TodoTemplatesTableTableManager(_db, _db.todoTemplates);
   $$TodoRemindersTableTableManager get todoReminders =>
       $$TodoRemindersTableTableManager(_db, _db.todoReminders);
   $$TodoRepeatRulesTableTableManager get todoRepeatRules =>
