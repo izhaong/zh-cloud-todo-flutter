@@ -13,6 +13,8 @@ void main() {
       return TodoTask(
         id: '1',
         listId: '1',
+        allDay: false,
+        fixedTimezone: false,
         title: 't',
         completed: false,
         cancelled: false,
@@ -94,6 +96,8 @@ void main() {
       TodoTask(
         id: '1',
         listId: '1',
+        allDay: false,
+        fixedTimezone: false,
         title: '本月任务',
         completed: false,
         cancelled: false,
@@ -132,6 +136,8 @@ void main() {
       TodoTask(
         id: '1',
         listId: '1',
+        allDay: false,
+        fixedTimezone: false,
         title: '晚一点',
         completed: false,
         cancelled: false,
@@ -147,6 +153,8 @@ void main() {
       TodoTask(
         id: '2',
         listId: '1',
+        allDay: false,
+        fixedTimezone: false,
         title: '早一点',
         completed: false,
         cancelled: false,
@@ -196,6 +204,8 @@ void main() {
         TodoTask(
           id: 'compact-calendar-task',
           listId: '1',
+          allDay: false,
+          fixedTimezone: false,
           title: '窄屏日历任务',
           completed: false,
           cancelled: false,

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:drift/drift.dart' show OrderingTerm;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
@@ -10,6 +11,7 @@ import '../../core/theme/brand_colors.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../native/native_intents.dart';
 import '../../state/providers.dart';
+import '../../state/repositories/reminder_repository.dart';
 import '../shell/app_dialog.dart';
 import 'task_quick_add_sheet.dart';
 import '../collaboration/task_comments_page.dart';
@@ -28,6 +30,155 @@ enum _TaskDetailAction {
   abandon,
   collaboration,
   delete,
+}
+
+class _RepeatRuleDraft {
+  const _RepeatRuleDraft({
+    required this.frequency,
+    required this.interval,
+    required this.weekdays,
+    required this.repeatMode,
+  });
+
+  final String frequency;
+  final int interval;
+  final Set<int> weekdays;
+  final String repeatMode;
+}
+
+class _TaskReminderSection extends ConsumerWidget {
+  const _TaskReminderSection({required this.taskId});
+
+  final String taskId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final db = ref.watch(appDatabaseProvider);
+    final repository = ref.read(reminderRepositoryProvider);
+    if (db == null) return const SizedBox.shrink();
+    final reminders = db.select(db.todoReminders)
+      ..where((reminder) => reminder.taskId.equals(taskId))
+      ..orderBy([(reminder) => OrderingTerm.asc(reminder.remindAt)]);
+    return StreamBuilder<List<TodoReminder>>(
+      stream: reminders.watch(),
+      builder: (context, snapshot) {
+        final rows = snapshot.data ?? const <TodoReminder>[];
+        return Column(
+          key: const Key('task-reminders'),
+          children: [
+            if (rows.isEmpty)
+              const Align(alignment: Alignment.centerLeft, child: Text('尚无提醒')),
+            for (final reminder in rows)
+              _TaskReminderTile(reminder: reminder, repository: repository),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _TaskReminderTile extends ConsumerWidget {
+  const _TaskReminderTile({required this.reminder, required this.repository});
+
+  final TodoReminder reminder;
+  final ReminderRepository? repository;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final db = ref.watch(appDatabaseProvider);
+    if (db == null) return const SizedBox.shrink();
+    final changes = db.select(db.todoSyncChanges)
+      ..where((change) => change.entity.equals('reminder'))
+      ..where((change) => change.entityLocalId.equals(reminder.id))
+      ..orderBy([(change) => OrderingTerm.desc(change.id)])
+      ..limit(1);
+    return StreamBuilder<List<TodoSyncChange>>(
+      stream: changes.watch(),
+      builder: (context, snapshot) {
+        final rows = snapshot.data ?? const <TodoSyncChange>[];
+        final change = rows.isEmpty ? null : rows.first;
+        final syncMessage = _reminderSyncMessage(change);
+        return ListTile(
+          key: ValueKey('task-reminder-${reminder.id}'),
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.alarm_outlined),
+          title: Text(reminder.remindAt.toLocal().toString().substring(0, 16)),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                reminder.persistent
+                    ? '持续提醒，每 ${reminder.intervalMinutes ?? 0} 分钟'
+                    : (reminder.anchorType == 'END' ? '截止时提醒' : '单次提醒'),
+              ),
+              if (syncMessage != null)
+                Text(
+                  syncMessage,
+                  key: ValueKey('task-reminder-sync-${reminder.id}'),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+            ],
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (change?.status == 'retryable')
+                IconButton(
+                  key: ValueKey('task-reminder-retry-${reminder.id}'),
+                  tooltip: '立即重试同步',
+                  onPressed: ref.read(syncCoordinatorProvider) == null
+                      ? null
+                      : () => _retrySync(context, ref),
+                  icon: const Icon(Icons.refresh),
+                ),
+              IconButton(
+                key: ValueKey('task-reminder-remove-${reminder.id}'),
+                tooltip: '删除提醒',
+                onPressed: repository == null
+                    ? null
+                    : () async {
+                        final messenger = ScaffoldMessenger.of(context);
+                        await repository!.remove(reminder.id);
+                        if (context.mounted) {
+                          messenger.showSnackBar(
+                            const SnackBar(content: Text('已删除提醒')),
+                          );
+                        }
+                      },
+                icon: const Icon(Icons.delete_outline),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _retrySync(BuildContext context, WidgetRef ref) async {
+    final coordinator = ref.read(syncCoordinatorProvider);
+    if (coordinator == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final outcome = await coordinator.syncOnce();
+      if (!context.mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('已同步 ${outcome.pushed} 项本地变更')),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      messenger.showSnackBar(const SnackBar(content: Text('同步暂时不可用，请稍后重试')));
+    }
+  }
+
+  String? _reminderSyncMessage(TodoSyncChange? change) {
+    if (change == null || change.status == 'synced') return null;
+    if (change.status == 'queued') return '等待同步';
+    if (change.status == 'retryable') {
+      return '同步失败，等待重试（已尝试 ${change.attemptCount} 次）';
+    }
+    if (change.status == 'failed') return '同步冲突，保留本地版本待处理';
+    return null;
+  }
 }
 
 /// 可复用的真实任务详情内容：
@@ -63,7 +214,14 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
   DateTime? _startAt;
   DateTime? _endAt;
   bool _loading = true;
+  bool _clearStartAt = false;
+  bool _clearEndAt = false;
   DateTime? _dueAt;
+  bool _allDay = false;
+  String? _timeZone;
+  bool _fixedTimezone = false;
+  TodoRepeatRule? _repeatRule;
+  bool _repeatOccurrenceSkipped = false;
   String? _selectedListId;
   String? _listName;
   StreamSubscription<TodoTask?>? _taskSubscription;
@@ -103,7 +261,14 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       _priority = 0;
       _startAt = null;
       _endAt = null;
+      _clearStartAt = false;
+      _clearEndAt = false;
       _dueAt = null;
+      _allDay = false;
+      _timeZone = null;
+      _fixedTimezone = false;
+      _repeatRule = null;
+      _repeatOccurrenceSkipped = false;
       _selectedListId = null;
       _listName = null;
       _loading = taskId != null;
@@ -121,6 +286,10 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
 
     final t = await repo.getById(taskId);
     final listName = t == null ? null : await _resolveListName(t.listId);
+    final repeatRule = t == null ? null : await _repeatRuleForTask(t.id);
+    final repeatSkipped = t == null || repeatRule == null
+        ? false
+        : await _repeatSkipExists(repeatRule.id, t.id, _repeatOccurrenceAt(t));
     if (!mounted || generation != _loadGeneration || widget.taskId != taskId) {
       return;
     }
@@ -132,6 +301,11 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       _startAt = t?.startAt;
       _endAt = t?.endAt;
       _dueAt = t?.dueAt;
+      _allDay = t?.allDay ?? false;
+      _timeZone = t?.timeZone;
+      _fixedTimezone = t?.fixedTimezone ?? false;
+      _repeatRule = repeatRule;
+      _repeatOccurrenceSkipped = repeatSkipped;
       _selectedListId = t?.listId;
       _listName = listName;
       _loading = false;
@@ -167,9 +341,15 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     final descriptionDirty =
         previous != null && _desc.text != (previous.description ?? '');
     final priorityDirty = previous != null && _priority != previous.priority;
-    final startDirty = previous != null && _startAt != previous.startAt;
-    final endDirty = previous != null && _endAt != previous.endAt;
+    final startDirty =
+        previous != null && (_clearStartAt || _startAt != previous.startAt);
+    final endDirty =
+        previous != null && (_clearEndAt || _endAt != previous.endAt);
     final dueDirty = previous != null && _dueAt != previous.dueAt;
+    final allDayDirty = previous != null && _allDay != previous.allDay;
+    final timeZoneDirty = previous != null && _timeZone != previous.timeZone;
+    final fixedTimezoneDirty =
+        previous != null && _fixedTimezone != previous.fixedTimezone;
     final listDirty = previous != null && _selectedListId != previous.listId;
     setState(() {
       _task = latest;
@@ -179,6 +359,9 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       if (!startDirty) _startAt = latest.startAt;
       if (!endDirty) _endAt = latest.endAt;
       if (!dueDirty) _dueAt = latest.dueAt;
+      if (!allDayDirty) _allDay = latest.allDay;
+      if (!timeZoneDirty) _timeZone = latest.timeZone;
+      if (!fixedTimezoneDirty) _fixedTimezone = latest.fixedTimezone;
       if (!listDirty) {
         _selectedListId = latest.listId;
         _listName = listName;
@@ -239,24 +422,40 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     if (t == null) return;
     final repo = ref.read(taskRepositoryProvider);
     if (repo == null) return;
-    final updated = await repo.update(
-      t.id,
-      title: _title.text.trim(),
-      description: _desc.text.trim(),
-      priority: _priority,
-      startAt: _startAt,
-      endAt: _endAt,
-      dueAt: _dueAt,
-      clearStartAt: _startAt == null && t.startAt != null,
-      clearEndAt: _endAt == null && t.endAt != null,
-      clearDueAt: _dueAt == null && t.dueAt != null,
-      listId: _selectedListId == t.listId ? null : _selectedListId,
-    );
+    final messenger = ScaffoldMessenger.of(context);
+    TodoTask updated;
+    try {
+      updated = await repo.update(
+        t.id,
+        title: _title.text.trim(),
+        description: _desc.text.trim(),
+        priority: _priority,
+        startAt: _startAt,
+        endAt: _endAt,
+        clearStartAt: _clearStartAt || (_startAt == null && t.startAt != null),
+        clearEndAt: _clearEndAt || (_endAt == null && t.endAt != null),
+        dueAt: _dueAt,
+        clearDueAt: _dueAt == null && t.dueAt != null,
+        allDay: _allDay,
+        timeZone: _fixedTimezone ? (_timeZone ?? 'Asia/Shanghai') : _timeZone,
+        fixedTimezone: _fixedTimezone,
+        listId: _selectedListId == t.listId ? null : _selectedListId,
+      );
+    } on ArgumentError catch (error) {
+      if (_isCurrentTask(t.id)) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(error.message?.toString() ?? '任务时间无效')),
+        );
+      }
+      return;
+    }
     if (mounted && widget.taskId == updated.id) {
-      setState(() => _task = updated);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('已保存')));
+      setState(() {
+        _task = updated;
+        _clearStartAt = false;
+        _clearEndAt = false;
+      });
+      messenger.showSnackBar(const SnackBar(content: Text('已保存')));
     }
   }
 
@@ -487,31 +686,680 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     return db.listByLocalId(localListId);
   }
 
+  Future<TodoRepeatRule?> _repeatRuleForTask(String taskId) {
+    final db = ref.read(appDatabaseProvider);
+    if (db == null) return Future.value(null);
+    return (db.select(
+      db.todoRepeatRules,
+    )..where((rule) => rule.taskId.equals(taskId))).getSingleOrNull();
+  }
+
+  DateTime _repeatOccurrenceAt(TodoTask task) =>
+      _dueAt ?? _startAt ?? task.dueAt ?? task.startAt ?? DateTime.now();
+
+  Future<bool> _repeatSkipExists(
+    String repeatRuleId,
+    String taskId,
+    DateTime occurrenceAt,
+  ) async {
+    final db = ref.read(appDatabaseProvider);
+    if (db == null) return false;
+    return (await (db.select(db.todoRepeatSkips)
+              ..where((entry) => entry.repeatRuleId.equals(repeatRuleId))
+              ..where((entry) => entry.taskId.equals(taskId))
+              ..where((entry) => entry.occurrenceDate.equals(occurrenceAt)))
+            .getSingleOrNull()) !=
+        null;
+  }
+
   Future<void> _pickDue(TodoTask t) async {
-    final repo = ref.read(taskRepositoryProvider);
-    if (repo == null) return;
     final now = _dueAt ?? t.dueAt ?? DateTime.now();
+    final picked = await _pickDateTime(t, now);
+    if (picked == null) return;
+    setState(() => _dueAt = picked);
+  }
+
+  Future<void> _showScheduleSheet(TodoTask t) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          void update(VoidCallback change) {
+            setState(change);
+            setSheetState(() {});
+          }
+
+          Widget heading(String value) => Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 6),
+            child: Text(value, style: Theme.of(context).textTheme.labelLarge),
+          );
+
+          return SafeArea(
+            child: FractionallySizedBox(
+              heightFactor: 0.9,
+              child: Column(
+                children: [
+                  ListTile(
+                    title: const Text('日期、提醒与重复'),
+                    subtitle: const Text('保存任务提交时间语义；提醒和重复会离线排队同步'),
+                    trailing: IconButton(
+                      key: const Key('task-schedule-close'),
+                      tooltip: '关闭时间设置',
+                      onPressed: () => Navigator.pop(sheetContext),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        heading('截止时间'),
+                        OutlinedButton.icon(
+                          key: const Key('task-due-at'),
+                          onPressed: () async {
+                            await _pickDue(t);
+                            if (sheetContext.mounted) setSheetState(() {});
+                          },
+                          icon: const Icon(Icons.event_outlined),
+                          label: Text(
+                            _dueAt == null
+                                ? '未设置'
+                                : '${_dueAt!.toLocal().toString().substring(0, 16)} (本地时区)',
+                          ),
+                        ),
+                        if (_dueAt != null)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              onPressed: () => update(() => _dueAt = null),
+                              icon: const Icon(Icons.clear, size: 16),
+                              label: const Text('清除截止时间'),
+                            ),
+                          ),
+                        const Divider(height: 32),
+                        heading('时间语义'),
+                        OutlinedButton.icon(
+                          key: const Key('task-start-at'),
+                          onPressed: () async {
+                            await _pickStartAt(t);
+                            if (sheetContext.mounted) setSheetState(() {});
+                          },
+                          icon: const Icon(Icons.play_arrow_outlined),
+                          label: Text(
+                            _startAt == null
+                                ? '开始时间未设置'
+                                : '开始：${_startAt!.toLocal().toString().substring(0, 16)}',
+                          ),
+                        ),
+                        if (_startAt != null)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              key: const Key('task-clear-start-at'),
+                              onPressed: () => update(() {
+                                _startAt = null;
+                                _clearStartAt = true;
+                              }),
+                              icon: const Icon(Icons.clear, size: 16),
+                              label: const Text('清除开始时间'),
+                            ),
+                          ),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          key: const Key('task-end-at'),
+                          onPressed: () async {
+                            await _pickEndAt(t);
+                            if (sheetContext.mounted) setSheetState(() {});
+                          },
+                          icon: const Icon(Icons.stop_outlined),
+                          label: Text(
+                            _endAt == null
+                                ? '结束时间未设置'
+                                : '结束：${_endAt!.toLocal().toString().substring(0, 16)}',
+                          ),
+                        ),
+                        if (_endAt != null)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              key: const Key('task-clear-end-at'),
+                              onPressed: () => update(() {
+                                _endAt = null;
+                                _clearEndAt = true;
+                              }),
+                              icon: const Icon(Icons.clear, size: 16),
+                              label: const Text('清除结束时间'),
+                            ),
+                          ),
+                        SwitchListTile(
+                          key: const Key('task-all-day'),
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('全天'),
+                          subtitle: const Text('全天任务按日期范围保存，不绑定具体时分'),
+                          value: _allDay,
+                          onChanged: (value) => update(() => _allDay = value),
+                        ),
+                        SwitchListTile(
+                          key: const Key('task-fixed-timezone'),
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('固定时区'),
+                          subtitle: const Text('固定后按所选时区保留墙上时间'),
+                          value: _fixedTimezone,
+                          onChanged: (value) => update(() {
+                            _fixedTimezone = value;
+                            if (value) _timeZone ??= 'Asia/Shanghai';
+                          }),
+                        ),
+                        if (_fixedTimezone)
+                          DropdownButtonFormField<String>(
+                            key: const Key('task-timezone'),
+                            initialValue: _timeZone ?? 'Asia/Shanghai',
+                            decoration: const InputDecoration(
+                              labelText: '时区',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'Asia/Shanghai',
+                                child: Text('中国标准时间'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'America/Los_Angeles',
+                                child: Text('美国太平洋时间'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'UTC',
+                                child: Text('协调世界时'),
+                              ),
+                            ],
+                            onChanged: (value) =>
+                                update(() => _timeZone = value),
+                          ),
+                        const Divider(height: 32),
+                        heading('提醒'),
+                        OutlinedButton.icon(
+                          key: const Key('task-add-absolute-reminder'),
+                          onPressed: () => _addAbsoluteReminder(t),
+                          icon: const Icon(Icons.add_alarm_outlined),
+                          label: const Text('添加指定时间提醒'),
+                        ),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          key: const Key('task-add-end-reminder'),
+                          onPressed: () => _addEndReminder(t),
+                          icon: const Icon(Icons.alarm_add_outlined),
+                          label: const Text('在截止时提醒'),
+                        ),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          key: const Key('task-add-before-due-reminder'),
+                          onPressed: () =>
+                              _addEndReminder(t, offsetMinutes: 10),
+                          icon: const Icon(Icons.alarm_on_outlined),
+                          label: const Text('截止前 10 分钟提醒'),
+                        ),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          key: const Key('task-add-persistent-end-reminder'),
+                          onPressed: () => _addEndReminder(
+                            t,
+                            persistent: true,
+                            intervalMinutes: 30,
+                          ),
+                          icon: const Icon(Icons.notifications_active_outlined),
+                          label: const Text('截止时持续提醒（每 30 分钟）'),
+                        ),
+                        const SizedBox(height: 8),
+                        _TaskReminderSection(taskId: t.id),
+                        const Divider(height: 32),
+                        heading('重复'),
+                        OutlinedButton.icon(
+                          key: const Key('task-repeat-rule'),
+                          onPressed: () async {
+                            await _editRepeatRule(t);
+                            if (sheetContext.mounted) setSheetState(() {});
+                          },
+                          icon: const Icon(Icons.repeat_outlined),
+                          label: Text(
+                            _repeatRule == null
+                                ? '不重复'
+                                : _repeatRuleLabel(_repeatRule!),
+                          ),
+                        ),
+                        if (_repeatRule?.enabled == true)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Wrap(
+                              spacing: 4,
+                              children: [
+                                if (_repeatOccurrenceSkipped)
+                                  TextButton.icon(
+                                    key: const Key('task-repeat-catchup'),
+                                    onPressed: () async {
+                                      await _catchupRepeatOccurrence(t);
+                                      if (sheetContext.mounted) {
+                                        setSheetState(() {});
+                                      }
+                                    },
+                                    icon: const Icon(
+                                      Icons.playlist_add_outlined,
+                                      size: 16,
+                                    ),
+                                    label: const Text('补做本次'),
+                                  )
+                                else
+                                  TextButton.icon(
+                                    key: const Key('task-repeat-skip'),
+                                    onPressed: () async {
+                                      await _skipRepeatOccurrence(t);
+                                      if (sheetContext.mounted) {
+                                        setSheetState(() {});
+                                      }
+                                    },
+                                    icon: const Icon(
+                                      Icons.skip_next_outlined,
+                                      size: 16,
+                                    ),
+                                    label: const Text('跳过本次'),
+                                  ),
+                                TextButton.icon(
+                                  key: const Key('task-repeat-disable'),
+                                  onPressed: () async {
+                                    await _disableRepeatRule(t);
+                                    if (sheetContext.mounted) {
+                                      setSheetState(() {});
+                                    }
+                                  },
+                                  icon: const Icon(
+                                    Icons.pause_circle_outline,
+                                    size: 16,
+                                  ),
+                                  label: const Text('停止重复'),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _pickStartAt(TodoTask t) async {
+    final now = _startAt ?? _dueAt ?? t.startAt ?? t.dueAt ?? DateTime.now();
+    final picked = await _pickDateTime(t, now);
+    if (picked == null) return;
+    setState(() {
+      _startAt = picked;
+      _clearStartAt = false;
+    });
+  }
+
+  Future<void> _pickEndAt(TodoTask t) async {
+    final fallback =
+        _startAt ?? t.startAt ?? _dueAt ?? t.dueAt ?? DateTime.now();
+    final now = _endAt ?? t.endAt ?? fallback.add(const Duration(hours: 1));
+    final picked = await _pickDateTime(t, now);
+    if (picked == null) return;
+    setState(() {
+      _endAt = picked;
+      _clearEndAt = false;
+    });
+  }
+
+  Future<DateTime?> _pickDateTime(TodoTask t, DateTime now) async {
     final date = await showDatePicker(
       context: context,
       initialDate: now,
       firstDate: DateTime(now.year - 1),
       lastDate: DateTime(now.year + 5),
     );
-    if (date == null || !mounted || widget.taskId != t.id) return;
+    if (date == null || !mounted || widget.taskId != t.id) return null;
     final timeOfDay = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(now),
     );
+    if (!_isCurrentTask(t.id)) return null;
+    return DateTime(
+      date.year,
+      date.month,
+      date.day,
+      timeOfDay?.hour ?? now.hour,
+      timeOfDay?.minute ?? now.minute,
+    );
+  }
+
+  Future<void> _addEndReminder(
+    TodoTask t, {
+    int? offsetMinutes,
+    bool persistent = false,
+    int? intervalMinutes,
+  }) async {
+    final dueAt = _dueAt ?? t.dueAt;
+    final messenger = ScaffoldMessenger.of(context);
+    if (dueAt == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('请先设置截止时间')));
+      return;
+    }
+    final reminders = ref.read(reminderRepositoryProvider);
+    if (reminders == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('提醒存储未就绪')));
+      return;
+    }
+    await reminders.create(
+      taskId: t.id,
+      fireAt: dueAt.subtract(Duration(minutes: offsetMinutes ?? 0)),
+      anchorType: 'END',
+      offsetMinutes: offsetMinutes,
+      persistent: persistent,
+      intervalMinutes: intervalMinutes,
+      timeZone: _timeZone,
+      fixedTimezone: _fixedTimezone,
+    );
     if (!_isCurrentTask(t.id)) return;
-    setState(() {
-      _dueAt = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        timeOfDay?.hour ?? now.hour,
-        timeOfDay?.minute ?? now.minute,
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          persistent
+              ? '已添加截止时持续提醒'
+              : offsetMinutes == null
+              ? '已添加截止时提醒'
+              : '已添加截止前 $offsetMinutes 分钟提醒',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addAbsoluteReminder(TodoTask t) async {
+    final initial =
+        _dueAt ?? t.dueAt ?? DateTime.now().add(const Duration(hours: 1));
+    final fireAt = await _pickDateTime(t, initial);
+    if (fireAt == null || !mounted || !_isCurrentTask(t.id)) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final reminders = ref.read(reminderRepositoryProvider);
+    if (reminders == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('提醒存储未就绪')));
+      return;
+    }
+    await reminders.create(
+      taskId: t.id,
+      fireAt: fireAt,
+      timeZone: _timeZone,
+      fixedTimezone: _fixedTimezone,
+    );
+    if (!_isCurrentTask(t.id)) return;
+    messenger.showSnackBar(const SnackBar(content: Text('已添加指定时间提醒')));
+  }
+
+  Future<void> _editRepeatRule(TodoTask t) async {
+    final repository = ref.read(repeatRuleRepositoryProvider);
+    final messenger = ScaffoldMessenger.of(context);
+    if (repository == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('重复规则存储未就绪')));
+      return;
+    }
+
+    final existing = _repeatRule;
+    final draft = await _showRepeatRuleEditor(existing);
+    if (draft == null || !_isCurrentTask(t.id)) return;
+    try {
+      final rule = await repository.save(
+        taskId: t.id,
+        frequency: draft.frequency,
+        intervalValue: draft.interval,
+        weekdays: draft.frequency == 'CUSTOM' ? draft.weekdays : null,
+        startAt: existing?.startAt ?? _startAt ?? _dueAt ?? DateTime.now(),
+        repeatMode: draft.repeatMode,
+        timeZone: _timeZone,
+        enabled: true,
       );
-    });
+      if (!_isCurrentTask(t.id)) return;
+      setState(() => _repeatRule = rule);
+      messenger.showSnackBar(const SnackBar(content: Text('重复规则已保存')));
+    } on ArgumentError catch (error) {
+      if (_isCurrentTask(t.id)) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(error.message.toString())),
+        );
+      }
+    }
+  }
+
+  Future<void> _disableRepeatRule(TodoTask t) async {
+    final existing = _repeatRule;
+    final repository = ref.read(repeatRuleRepositoryProvider);
+    if (existing == null || repository == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final weekdays = _weekdaysFromText(existing.byDay);
+    final rule = await repository.save(
+      taskId: t.id,
+      frequency: existing.freq,
+      intervalValue: existing.interval,
+      weekdays: existing.freq == 'CUSTOM' ? weekdays : null,
+      monthDay: existing.monthDay,
+      startAt: existing.startAt ?? _startAt ?? _dueAt ?? DateTime.now(),
+      untilAt: existing.until,
+      countLimit: existing.countLimit,
+      repeatMode: existing.repeatMode,
+      timeZone: existing.timeZone,
+      enabled: false,
+    );
+    if (!_isCurrentTask(t.id)) return;
+    setState(() => _repeatRule = rule);
+    messenger.showSnackBar(const SnackBar(content: Text('已停止重复')));
+  }
+
+  Future<void> _skipRepeatOccurrence(TodoTask t) async {
+    final rule = _repeatRule;
+    final repository = ref.read(repeatRuleRepositoryProvider);
+    if (rule == null || !rule.enabled || repository == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await repository.skip(
+        repeatRuleId: rule.id,
+        taskId: t.id,
+        occurrenceAt: _repeatOccurrenceAt(t),
+      );
+      if (_isCurrentTask(t.id)) {
+        setState(() => _repeatOccurrenceSkipped = true);
+        messenger.showSnackBar(const SnackBar(content: Text('已跳过本次重复')));
+      }
+    } on ArgumentError catch (error) {
+      if (_isCurrentTask(t.id)) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(error.message.toString())),
+        );
+      }
+    }
+  }
+
+  Future<void> _catchupRepeatOccurrence(TodoTask t) async {
+    final rule = _repeatRule;
+    final repository = ref.read(repeatRuleRepositoryProvider);
+    if (rule == null || !rule.enabled || repository == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await repository.catchup(
+        repeatRuleId: rule.id,
+        taskId: t.id,
+        occurrenceAt: _repeatOccurrenceAt(t),
+      );
+      if (_isCurrentTask(t.id)) {
+        setState(() => _repeatOccurrenceSkipped = false);
+        messenger.showSnackBar(const SnackBar(content: Text('已安排补做本次重复')));
+      }
+    } on ArgumentError catch (error) {
+      if (_isCurrentTask(t.id)) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(error.message.toString())),
+        );
+      }
+    }
+  }
+
+  Future<_RepeatRuleDraft?> _showRepeatRuleEditor(TodoRepeatRule? existing) {
+    var frequency = existing?.freq ?? 'DAILY';
+    var repeatMode = existing?.repeatMode ?? 'ON_DUE';
+    final intervalController = TextEditingController(
+      text: '${existing?.interval ?? 1}',
+    );
+    final weekdays = _weekdaysFromText(existing?.byDay);
+    if (frequency == 'CUSTOM' && weekdays.isEmpty) {
+      weekdays.add(DateTime.now().weekday);
+    }
+    return showDialog<_RepeatRuleDraft>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('重复规则'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('频率'),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children:
+                      const [
+                            ('DAILY', '每天'),
+                            ('WEEKLY', '每周'),
+                            ('MONTHLY', '每月'),
+                            ('YEARLY', '每年'),
+                            ('WEEKDAY', '工作日'),
+                            ('CUSTOM', '自定义'),
+                          ]
+                          .map(
+                            (option) => ChoiceChip(
+                              key: Key(
+                                'task-repeat-frequency-${option.$1.toLowerCase()}',
+                              ),
+                              label: Text(option.$2),
+                              selected: frequency == option.$1,
+                              onSelected: (_) => setDialogState(() {
+                                frequency = option.$1;
+                                if (frequency == 'CUSTOM' && weekdays.isEmpty) {
+                                  weekdays.add(DateTime.now().weekday);
+                                }
+                              }),
+                            ),
+                          )
+                          .toList(),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  key: const Key('task-repeat-interval'),
+                  controller: intervalController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: '每隔几次',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text('触发方式'),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  children:
+                      const [('ON_DUE', '到期后重复'), ('ON_COMPLETE', '完成后重复')]
+                          .map(
+                            (option) => ChoiceChip(
+                              key: Key(
+                                'task-repeat-mode-${option.$1.toLowerCase()}',
+                              ),
+                              label: Text(option.$2),
+                              selected: repeatMode == option.$1,
+                              onSelected: (_) =>
+                                  setDialogState(() => repeatMode = option.$1),
+                            ),
+                          )
+                          .toList(),
+                ),
+                if (frequency == 'CUSTOM') ...[
+                  const SizedBox(height: 16),
+                  const Text('重复星期'),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    children: List.generate(7, (index) {
+                      final weekday = index + 1;
+                      const labels = ['一', '二', '三', '四', '五', '六', '日'];
+                      return FilterChip(
+                        key: Key('task-repeat-weekday-$weekday'),
+                        label: Text(labels[index]),
+                        selected: weekdays.contains(weekday),
+                        onSelected: (selected) => setDialogState(() {
+                          if (selected) {
+                            weekdays.add(weekday);
+                          } else {
+                            weekdays.remove(weekday);
+                          }
+                        }),
+                      );
+                    }),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              key: const Key('task-repeat-save'),
+              onPressed: () {
+                final interval = int.tryParse(intervalController.text.trim());
+                if (interval == null || interval < 1) return;
+                Navigator.pop(
+                  dialogContext,
+                  _RepeatRuleDraft(
+                    frequency: frequency,
+                    interval: interval,
+                    weekdays: weekdays,
+                    repeatMode: repeatMode,
+                  ),
+                );
+              },
+              child: const Text('保存'),
+            ),
+          ],
+        ),
+      ),
+    ).whenComplete(intervalController.dispose);
+  }
+
+  Set<int> _weekdaysFromText(String? value) => (value ?? '')
+      .split(',')
+      .map(int.tryParse)
+      .whereType<int>()
+      .where((weekday) => weekday >= 1 && weekday <= 7)
+      .toSet();
+
+  String _repeatRuleLabel(TodoRepeatRule rule) {
+    const labels = {
+      'DAILY': '每天',
+      'WEEKLY': '每周',
+      'MONTHLY': '每月',
+      'YEARLY': '每年',
+      'WEEKDAY': '工作日',
+      'CUSTOM': '自定义',
+    };
+    final label = labels[rule.freq] ?? rule.freq;
+    return rule.enabled ? '$label（每隔 ${rule.interval} 次）' : '已停止：$label';
   }
 
   Future<void> _pickSchedule(TodoTask t, {required bool isStart}) async {
@@ -636,7 +1484,8 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
         sh('截止时间'),
         const SizedBox(height: 8),
         OutlinedButton.icon(
-          onPressed: () => _pickDue(t),
+          key: const Key('task-schedule-options'),
+          onPressed: () => _showScheduleSheet(t),
           icon: const Icon(Icons.event_outlined),
           label: Text(
             _dueAt == null

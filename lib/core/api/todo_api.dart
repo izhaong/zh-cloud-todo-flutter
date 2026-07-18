@@ -352,7 +352,6 @@ class TodoRestApi {
       tag = TagApi(client),
       activity = ActivityApi(client),
       reminder = ReminderActionApi(client),
-      repeatOccurrence = RepeatOccurrenceApi(client),
       listCollaboration = ListCollaborationApi(client),
       taskAssign = TaskAssignApi(client),
       comment = TaskCommentApi(client),
@@ -366,7 +365,6 @@ class TodoRestApi {
   final TagApi tag;
   final ActivityApi activity;
   final ReminderActionApi reminder;
-  final RepeatOccurrenceApi repeatOccurrence;
   final ListCollaborationApi listCollaboration;
   final TaskAssignApi taskAssign;
   final TaskCommentApi comment;
@@ -392,7 +390,11 @@ class ReminderActionApi {
   }
 
   static ReminderInboxItem _item(Map<String, dynamic> j) => ReminderInboxItem(
-    id: (j['id'] as num?)?.toInt() ?? 0,
+    id:
+        (j['reminderDispatchId'] as num?)?.toInt() ??
+        (j['id'] as num?)?.toInt() ??
+        0,
+    reminderId: (j['reminderId'] as num?)?.toInt(),
     taskId: (j['taskId'] as num?)?.toInt() ?? 0,
     taskTitle: (j['taskTitle'] ?? j['title'])?.toString() ?? '',
     remindAt: parseTime(j['remindAt'] ?? j['fireAt']),
@@ -463,9 +465,19 @@ class ReminderActionApi {
         data: {'reminderId': reminderId, 'minutes': minutes},
       );
 
-  /// `POST /reminder-action/{id}/persistent` — 持续响铃（后端标记，仅信息态）。
-  Future<void> persistent(int reminderId) => _client.post<Map<String, dynamic>>(
+  /// `POST /reminder-action/{id}/persistent` — 启用持续提醒。
+  Future<void> persistent(
+    int reminderId, {
+    int intervalMinutes = 30,
+    String? timeZone,
+    bool fixedTimezone = false,
+  }) => _client.post<Map<String, dynamic>>(
     '/reminder-action/$reminderId/persistent',
+    data: {
+      'intervalMinutes': intervalMinutes,
+      'timeZone': ?timeZone,
+      'fixedTimezone': fixedTimezone,
+    },
   );
 }
 
@@ -473,14 +485,19 @@ class ReminderActionApi {
 class ReminderInboxItem {
   const ReminderInboxItem({
     required this.id,
+    int? reminderId,
     required this.taskId,
     required this.taskTitle,
     required this.remindAt,
     this.status = 'PENDING',
-  });
+  }) : reminderId = reminderId ?? id;
 
+  /// 派发记录 ID：用于完成、忽略和稍后动作。
   /// 提醒自身服务端 id。
   final int id;
+
+  /// 提醒规则 ID：用于启用或关闭持续提醒，不能替代 [id]。
+  final int reminderId;
 
   /// 关联任务服务端 id（int）。
   final int taskId;
@@ -495,21 +512,6 @@ class ReminderInboxItem {
   final String status;
 
   bool get pending => status == 'PENDING';
-}
-
-/// 重复周期（repeat-occurrence）的跳过 / 追补动作（直达 REST，不走 sync 协议）。
-class RepeatOccurrenceApi {
-  RepeatOccurrenceApi(this._client);
-
-  final ApiClient _client;
-
-  /// `POST /repeat-occurrence/{id}/skip` — 跳过该周期一次发生。
-  Future<void> skip(int id) =>
-      _client.post<Map<String, dynamic>>('/repeat-occurrence/$id/skip');
-
-  /// `POST /repeat-occurrence/{id}/catchup` — 追补该周期一次发生。
-  Future<void> catchup(int id) =>
-      _client.post<Map<String, dynamic>>('/repeat-occurrence/$id/catchup');
 }
 
 /// 清单成员：后端 `members.int` 响应单项。

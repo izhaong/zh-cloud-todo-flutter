@@ -11,6 +11,10 @@ import '../state/session_state.dart';
 import 'repositories/folder_repository.dart';
 import 'repositories/activity_repository.dart';
 import 'repositories/list_repository.dart';
+import 'repositories/reminder_dispatch_action_repository.dart';
+import 'repositories/reminder_inbox_repository.dart';
+import 'repositories/reminder_repository.dart';
+import 'repositories/repeat_rule_repository.dart';
 import 'repositories/tag_repository.dart';
 import 'repositories/template_repository.dart';
 import 'repositories/task_capture_defaults_repository.dart';
@@ -112,6 +116,33 @@ final taskRepositoryProvider = Provider<TaskRepository?>((ref) {
   final queue = ref.watch(syncChangeQueueProvider);
   if (db == null || queue == null) return null;
   return TaskRepository(db, queue);
+});
+
+final reminderRepositoryProvider = Provider<ReminderRepository?>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  final queue = ref.watch(syncChangeQueueProvider);
+  if (db == null || queue == null) return null;
+  return ReminderRepository(db, queue);
+});
+
+final repeatRuleRepositoryProvider = Provider<RepeatRuleRepository?>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  final queue = ref.watch(syncChangeQueueProvider);
+  if (db == null || queue == null) return null;
+  return RepeatRuleRepository(db, queue);
+});
+
+final reminderDispatchActionRepositoryProvider =
+    Provider<ReminderDispatchActionRepository?>((ref) {
+      final queue = ref.watch(syncChangeQueueProvider);
+      if (queue == null) return null;
+      return ReminderDispatchActionRepository(queue);
+    });
+
+final reminderInboxRepositoryProvider = Provider<ReminderInboxRepository>((
+  ref,
+) {
+  return ReminderInboxRepository(ref.watch(todoApiProvider).reminder);
 });
 
 final taskCaptureDefaultsRepositoryProvider =

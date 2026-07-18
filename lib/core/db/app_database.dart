@@ -45,6 +45,7 @@ class TodoTasks extends Table {
   TextColumn get title => text()();
   TextColumn get description => text().nullable()();
   BoolColumn get completed => boolean().withDefault(const Constant(false))();
+  DateTimeColumn get completedAt => dateTime().nullable()();
   BoolColumn get cancelled => boolean().withDefault(const Constant(false))();
   IntColumn get priority => integer().withDefault(const Constant(0))();
   BoolColumn get isPinned => boolean().withDefault(const Constant(false))();
@@ -52,6 +53,19 @@ class TodoTasks extends Table {
   DateTimeColumn get startAt => dateTime().nullable()();
   DateTimeColumn get endAt => dateTime().nullable()();
   DateTimeColumn get dueAt => dateTime().nullable()();
+  BoolColumn get allDay => boolean().withDefault(const Constant(false))();
+
+  /// IANA 时区；固定时区任务必须保留墙上时间所属的时区，不能只依赖设备时区。
+  TextColumn get timeZone => text().nullable()();
+  BoolColumn get fixedTimezone =>
+      boolean().withDefault(const Constant(false))();
+
+  /// 本地 UUID，指向服务端物化实例的源任务。
+  TextColumn get repeatParentTaskId => text().nullable()();
+
+  /// 本地 UUID，指向触发本实例的重复规则。
+  TextColumn get repeatRuleId => text().nullable()();
+  DateTimeColumn get repeatOccurrenceAt => dateTime().nullable()();
   DateTimeColumn get updatedAt => dateTime()();
   DateTimeColumn get createdAt => dateTime()();
 
@@ -163,8 +177,17 @@ class TodoReminders extends Table {
   IntColumn get serverId => integer().nullable()();
   TextColumn get taskId => text()(); // → todo_task.id
   DateTimeColumn get remindAt => dateTime()();
+  TextColumn get anchorType => text().withDefault(const Constant('ABSOLUTE'))();
+  IntColumn get offsetMinutes => integer().nullable()();
   TextColumn get status =>
       text().withDefault(const Constant('PENDING'))(); // PENDING/DISMISSED/DONE
+  DateTimeColumn get firedAt => dateTime().nullable()();
+  BoolColumn get persistent => boolean().withDefault(const Constant(false))();
+  IntColumn get intervalMinutes => integer().nullable()();
+  TextColumn get timeZone => text().nullable()();
+  BoolColumn get fixedTimezone =>
+      boolean().withDefault(const Constant(false))();
+  TextColumn get clientMutationId => text().nullable()();
   DateTimeColumn get updatedAt => dateTime()();
   DateTimeColumn get createdAt => dateTime()();
 
@@ -180,7 +203,13 @@ class TodoRepeatRules extends Table {
   TextColumn get freq => text()(); // DAILY/WEEKLY/MONTHLY/YEARLY/CUSTOM
   IntColumn get interval => integer().withDefault(const Constant(1))();
   TextColumn get byDay => text().nullable()(); // 逗号分隔，如 MO,WE,FR
+  IntColumn get monthDay => integer().nullable()();
+  DateTimeColumn get startAt => dateTime().nullable()();
   DateTimeColumn get until => dateTime().nullable()();
+  IntColumn get countLimit => integer().nullable()();
+  BoolColumn get enabled => boolean().withDefault(const Constant(true))();
+  TextColumn get repeatMode => text().withDefault(const Constant('ON_DUE'))();
+  TextColumn get timeZone => text().nullable()();
   DateTimeColumn get updatedAt => dateTime()();
   DateTimeColumn get createdAt => dateTime()();
 
@@ -248,8 +277,9 @@ class TodoSyncChanges extends Table {
   TextColumn get payloadJson => text()();
   DateTimeColumn get createdAt => dateTime()();
   IntColumn get attemptCount => integer().withDefault(const Constant(0))();
-  TextColumn get status =>
-      text().withDefault(const Constant('queued'))(); // queued/synced/failed
+  TextColumn get status => text().withDefault(
+    const Constant('queued'),
+  )(); // queued/retryable/synced/failed
 }
 
 /// 全局同步游标（单行，id 固定为 1）。
@@ -305,7 +335,7 @@ class AppDatabase extends _$AppDatabase {
     : super(_open('todo_t${tenantId}_u$userId'));
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -320,23 +350,149 @@ class AppDatabase extends _$AppDatabase {
           await m.deleteTable(table.actualTableName);
         }
         await m.createAll();
-      } else if (from < 5) {
-        await m.createTable(todoChecklistItems);
+        return;
+      }
+      if (from < 5) {
+        await m.addColumn(todoTasks, todoTasks.allDay);
       }
       if (from < 6) {
-        await m.createTable(todoAttachments);
+        await m.addColumn(todoReminders, todoReminders.anchorType);
+        await m.addColumn(todoReminders, todoReminders.offsetMinutes);
+        await m.addColumn(todoReminders, todoReminders.firedAt);
+        await m.addColumn(todoReminders, todoReminders.persistent);
+        await m.addColumn(todoReminders, todoReminders.intervalMinutes);
+        await m.addColumn(todoReminders, todoReminders.timeZone);
+        await m.addColumn(todoReminders, todoReminders.fixedTimezone);
+        await m.addColumn(todoReminders, todoReminders.clientMutationId);
       }
       if (from < 7) {
-        await m.addColumn(todoTasks, todoTasks.cancelled);
+        await m.addColumn(todoRepeatRules, todoRepeatRules.monthDay);
+        await m.addColumn(todoRepeatRules, todoRepeatRules.startAt);
+        await m.addColumn(todoRepeatRules, todoRepeatRules.countLimit);
+        await m.addColumn(todoRepeatRules, todoRepeatRules.enabled);
+        await m.addColumn(todoRepeatRules, todoRepeatRules.repeatMode);
+        await m.addColumn(todoRepeatRules, todoRepeatRules.timeZone);
       }
       if (from < 8) {
-        await m.createTable(todoActivities);
+        await m.addColumn(todoTasks, todoTasks.timeZone);
+        await m.addColumn(todoTasks, todoTasks.fixedTimezone);
       }
       if (from < 9) {
-        await m.createTable(todoTemplates);
+        await m.addColumn(todoTasks, todoTasks.completedAt);
+        await m.addColumn(todoTasks, todoTasks.repeatParentTaskId);
+        await m.addColumn(todoTasks, todoTasks.repeatRuleId);
+        await m.addColumn(todoTasks, todoTasks.repeatOccurrenceAt);
+      }
+      // B1 与 B2 曾各自占用 5–9 号 schema。B2 已有 5–9 的时间语义
+      // 迁移，故将 B1 的新增表和放弃状态收敛到新的 10 号迁移。
+      if (from < 10) {
+        // develop 上的 B1 已发布过 schema 9；B2 也曾使用 schema 9。
+        // 两条线的物理表结构不同，不能仅凭 user_version 判断哪个分支曾
+        // 升级过。按实际 sqlite schema 补齐，避免 B1 v9 因重复建表而无法
+        // 启动，同时也让 B2 v9 获得 B1 的聚合表。
+        if (!await _columnExists(m, 'todo_tasks', 'all_day')) {
+          await m.addColumn(todoTasks, todoTasks.allDay);
+        }
+        if (!await _columnExists(m, 'todo_tasks', 'time_zone')) {
+          await m.addColumn(todoTasks, todoTasks.timeZone);
+        }
+        if (!await _columnExists(m, 'todo_tasks', 'fixed_timezone')) {
+          await m.addColumn(todoTasks, todoTasks.fixedTimezone);
+        }
+        if (!await _columnExists(m, 'todo_tasks', 'completed_at')) {
+          await m.addColumn(todoTasks, todoTasks.completedAt);
+        }
+        if (!await _columnExists(m, 'todo_tasks', 'repeat_parent_task_id')) {
+          await m.addColumn(todoTasks, todoTasks.repeatParentTaskId);
+        }
+        if (!await _columnExists(m, 'todo_tasks', 'repeat_rule_id')) {
+          await m.addColumn(todoTasks, todoTasks.repeatRuleId);
+        }
+        if (!await _columnExists(m, 'todo_tasks', 'repeat_occurrence_at')) {
+          await m.addColumn(todoTasks, todoTasks.repeatOccurrenceAt);
+        }
+        if (!await _columnExists(m, 'todo_reminders', 'anchor_type')) {
+          await m.addColumn(todoReminders, todoReminders.anchorType);
+        }
+        if (!await _columnExists(m, 'todo_reminders', 'offset_minutes')) {
+          await m.addColumn(todoReminders, todoReminders.offsetMinutes);
+        }
+        if (!await _columnExists(m, 'todo_reminders', 'fired_at')) {
+          await m.addColumn(todoReminders, todoReminders.firedAt);
+        }
+        if (!await _columnExists(m, 'todo_reminders', 'persistent')) {
+          await m.addColumn(todoReminders, todoReminders.persistent);
+        }
+        if (!await _columnExists(m, 'todo_reminders', 'interval_minutes')) {
+          await m.addColumn(todoReminders, todoReminders.intervalMinutes);
+        }
+        if (!await _columnExists(m, 'todo_reminders', 'time_zone')) {
+          await m.addColumn(todoReminders, todoReminders.timeZone);
+        }
+        if (!await _columnExists(m, 'todo_reminders', 'fixed_timezone')) {
+          await m.addColumn(todoReminders, todoReminders.fixedTimezone);
+        }
+        if (!await _columnExists(m, 'todo_reminders', 'client_mutation_id')) {
+          await m.addColumn(todoReminders, todoReminders.clientMutationId);
+        }
+        if (!await _columnExists(m, 'todo_repeat_rules', 'month_day')) {
+          await m.addColumn(todoRepeatRules, todoRepeatRules.monthDay);
+        }
+        if (!await _columnExists(m, 'todo_repeat_rules', 'start_at')) {
+          await m.addColumn(todoRepeatRules, todoRepeatRules.startAt);
+        }
+        if (!await _columnExists(m, 'todo_repeat_rules', 'count_limit')) {
+          await m.addColumn(todoRepeatRules, todoRepeatRules.countLimit);
+        }
+        if (!await _columnExists(m, 'todo_repeat_rules', 'enabled')) {
+          await m.addColumn(todoRepeatRules, todoRepeatRules.enabled);
+        }
+        if (!await _columnExists(m, 'todo_repeat_rules', 'repeat_mode')) {
+          await m.addColumn(todoRepeatRules, todoRepeatRules.repeatMode);
+        }
+        if (!await _columnExists(m, 'todo_repeat_rules', 'time_zone')) {
+          await m.addColumn(todoRepeatRules, todoRepeatRules.timeZone);
+        }
+        if (!await _columnExists(m, 'todo_tasks', 'cancelled')) {
+          await m.addColumn(todoTasks, todoTasks.cancelled);
+        }
+        if (!await _tableExists(m, 'todo_checklist_items')) {
+          await m.createTable(todoChecklistItems);
+        }
+        if (!await _tableExists(m, 'todo_attachments')) {
+          await m.createTable(todoAttachments);
+        }
+        if (!await _tableExists(m, 'todo_activities')) {
+          await m.createTable(todoActivities);
+        }
+        if (!await _tableExists(m, 'todo_templates')) {
+          await m.createTable(todoTemplates);
+        }
       }
     },
   );
+
+  Future<bool> _tableExists(Migrator migrator, String tableName) async {
+    final row = await migrator.database
+        .customSelect(
+          'SELECT 1 AS present FROM sqlite_master '
+          "WHERE type = 'table' AND name = ? LIMIT 1",
+          variables: [Variable.withString(tableName)],
+        )
+        .getSingleOrNull();
+    return row != null;
+  }
+
+  Future<bool> _columnExists(
+    Migrator migrator,
+    String tableName,
+    String columnName,
+  ) async {
+    final rows = await migrator.database
+        .customSelect('PRAGMA table_info($tableName)')
+        .get();
+    return rows.any((row) => row.data['name'] == columnName);
+  }
 
   static QueryExecutor _open(String? fileName) {
     // 测试环境（forTesting 注入 NativeDatabase.memory）或无文件名时用默认。
@@ -353,6 +509,7 @@ class AppDatabase extends _$AppDatabase {
     )..where((t) => t.id.equals(taskId))).getSingle();
     final next = row.copyWith(
       completed: !row.completed,
+      completedAt: Value(!row.completed ? DateTime.now() : null),
       cancelled: false,
       updatedAt: DateTime.now(),
     );
@@ -442,6 +599,10 @@ class AppDatabase extends _$AppDatabase {
   )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
   Future<TodoTag?> tagByServerId(int serverId) => (select(
     todoTags,
+  )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
+
+  Future<TodoRepeatRule?> repeatRuleByServerId(int serverId) => (select(
+    todoRepeatRules,
   )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
 
   /// 按本地 UUID 主键查清单（任务详情反查清单 serverId 用）。

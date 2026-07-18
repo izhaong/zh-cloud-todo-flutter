@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
@@ -71,6 +74,12 @@ class TodoVisualFixture {
           appDatabaseProvider.overrideWithValue(database),
           apiClientProvider.overrideWithValue(_NoNetworkApiClient()),
           currentDateTimeProvider.overrideWithValue(() => fixedNow),
+          connectivityChangesProvider.overrideWithValue(
+            const Stream<List<ConnectivityResult>>.empty(),
+          ),
+          connectivityInitialStateProvider.overrideWithValue(
+            () async => const [ConnectivityResult.wifi],
+          ),
           deviceIdProvider.overrideWith((ref) async => _fixedDeviceId),
           syncApiProvider.overrideWith((ref) => null),
           syncCoordinatorProvider.overrideWith((ref) => null),

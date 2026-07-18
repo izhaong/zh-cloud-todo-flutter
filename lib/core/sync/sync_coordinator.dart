@@ -42,7 +42,7 @@ class SyncCoordinator {
   final Uuid _uuid;
 
   int _tempIdSeq = 0;
-  final Map<String, int> _tempEntityIdsByLocalId = {};
+  final Map<String, int> _temporaryEntityIds = {};
 
   static const _inboxListId = 'inbox';
   static const _inboxListName = '收集箱';
@@ -58,9 +58,13 @@ class SyncCoordinator {
 
   Future<int> push() async {
     await _prepareInboxChangesForPush();
-    final pending = await (db.select(
-      db.todoSyncChanges,
-    )..where((t) => t.status.equals('queued'))).get();
+    final pending =
+        await (db.select(db.todoSyncChanges)
+              ..where(
+                (t) => t.status.equals('queued') | t.status.equals('retryable'),
+              )
+              ..orderBy([(t) => OrderingTerm.asc(t.id)]))
+            .get();
     if (pending.isEmpty) return 0;
 
     final folderChanges = pending
@@ -280,10 +284,10 @@ class SyncCoordinator {
   Future<int> _pushSyncableChanges(List<TodoSyncChange> changes) async {
     if (changes.isEmpty) return 0;
     _tempIdSeq = 0;
-    _tempEntityIdsByLocalId.clear();
+    _temporaryEntityIds.clear();
     for (final change in changes) {
       if (change.entityServerId == null && change.entityLocalId != null) {
-        _temporaryIdFor(change.entityLocalId!);
+        _temporaryEntityId(change.entity, change.entityLocalId);
       }
     }
     final dtos = <SyncChangeDto>[];
@@ -294,7 +298,10 @@ class SyncCoordinator {
     if (dtos.isEmpty) return 0;
 
     try {
-      final result = await api.push(idempotencyKey: _uuid.v4(), changes: dtos);
+      final result = await api.push(
+        idempotencyKey: changes.first.clientMutationId,
+        changes: dtos,
+      );
       for (final accepted in result.accepted) {
         await _applyAccepted(accepted);
       }
@@ -328,7 +335,7 @@ class SyncCoordinator {
           db.todoSyncChanges,
         )..where((t) => t.id.equals(change.id))).write(
           TodoSyncChangesCompanion(
-            status: const Value('failed'),
+            status: const Value('retryable'),
             attemptCount: Value(change.attemptCount + 1),
           ),
         );
@@ -392,9 +399,9 @@ class SyncCoordinator {
     if (change.entityServerId != null) {
       entityId = change.entityServerId!;
     } else if (change.entityLocalId != null) {
-      entityId = _temporaryIdFor(change.entityLocalId!);
+      entityId = _temporaryEntityId(change.entity, change.entityLocalId);
     } else {
-      entityId = -(++_tempIdSeq);
+      entityId = _temporaryEntityId(change.entity, change.entityLocalId);
     }
 
     int? baseRevision;
@@ -435,7 +442,9 @@ class SyncCoordinator {
         final list = await (db.select(
           db.todoLists,
         )..where((t) => t.id.equals(localListId))).getSingleOrNull();
-        resolved['listId'] = list?.serverId ?? _temporaryIdFor(localListId);
+        resolved['listId'] =
+            list?.serverId ??
+            _temporaryEntityId(SyncEntities.list, localListId);
       }
     }
     if (entity == SyncEntities.task && resolved.containsKey('parentTaskId')) {
@@ -445,7 +454,8 @@ class SyncCoordinator {
           db.todoTasks,
         )..where((t) => t.id.equals(localParentId))).getSingleOrNull();
         resolved['parentTaskId'] =
-            parent?.serverId ?? _temporaryIdFor(localParentId);
+            parent?.serverId ??
+            _temporaryEntityId(SyncEntities.task, localParentId);
       }
     }
     if (entity == SyncEntities.taskTag) {
@@ -454,28 +464,35 @@ class SyncCoordinator {
         final task = await (db.select(
           db.todoTasks,
         )..where((t) => t.id.equals(localTaskId))).getSingleOrNull();
-        resolved['taskId'] = task?.serverId ?? _temporaryIdFor(localTaskId);
+        resolved['taskId'] =
+            task?.serverId ??
+            _temporaryEntityId(SyncEntities.task, localTaskId);
       }
       final localTagId = resolved['tagId']?.toString();
       if (localTagId != null && localTagId.isNotEmpty) {
         final tag = await (db.select(
           db.todoTags,
         )..where((t) => t.id.equals(localTagId))).getSingleOrNull();
-        resolved['tagId'] = tag?.serverId ?? _temporaryIdFor(localTagId);
+        resolved['tagId'] =
+            tag?.serverId ?? _temporaryEntityId(SyncEntities.tag, localTagId);
       }
     }
     if (entity == SyncEntities.reminder ||
         entity == SyncEntities.repeatRule ||
-        entity == SyncEntities.repeatSkip) {
+        entity == SyncEntities.repeatSkip ||
+        entity == SyncEntities.repeatOccurrenceAction) {
       final localTaskId = resolved['taskId']?.toString();
       if (localTaskId != null && localTaskId.isNotEmpty) {
         final task = await (db.select(
           db.todoTasks,
         )..where((t) => t.id.equals(localTaskId))).getSingleOrNull();
-        resolved['taskId'] = task?.serverId ?? _temporaryIdFor(localTaskId);
+        resolved['taskId'] =
+            task?.serverId ??
+            _temporaryEntityId(SyncEntities.task, localTaskId);
       }
     }
-    if (entity == SyncEntities.repeatSkip &&
+    if ((entity == SyncEntities.repeatSkip ||
+            entity == SyncEntities.repeatOccurrenceAction) &&
         resolved.containsKey('repeatRuleId')) {
       final localRuleId = resolved['repeatRuleId']?.toString();
       if (localRuleId != null && localRuleId.isNotEmpty) {
@@ -483,7 +500,8 @@ class SyncCoordinator {
           db.todoRepeatRules,
         )..where((t) => t.id.equals(localRuleId))).getSingleOrNull();
         resolved['repeatRuleId'] =
-            rule?.serverId ?? _temporaryIdFor(localRuleId);
+            rule?.serverId ??
+            _temporaryEntityId(SyncEntities.repeatRule, localRuleId);
       }
     }
     if (entity == SyncEntities.viewPreference &&
@@ -519,8 +537,11 @@ class SyncCoordinator {
     return resolved;
   }
 
-  int _temporaryIdFor(String localId) =>
-      _tempEntityIdsByLocalId.putIfAbsent(localId, () => -(++_tempIdSeq));
+  int _temporaryEntityId(String entity, String? localId) {
+    if (localId == null || localId.isEmpty) return -(++_tempIdSeq);
+    final key = '$entity:$localId';
+    return _temporaryEntityIds.putIfAbsent(key, () => -(++_tempIdSeq));
+  }
 
   Future<void> _applyAccepted(SyncChangeDto accepted) async {
     if (accepted.entityId == null) return;
@@ -727,9 +748,17 @@ class SyncCoordinator {
     }
     // 任务动态依赖服务端任务 ID；即使服务端返回时动态在前，也要让任务
     // 先成为本地聚合的一部分，再通知订阅该任务活动的 UI。
-    if (change.entityType == SyncEntities.activity) return 3;
-    if (change.entityType == SyncEntities.tag) return 3;
+    if (change.entityType == SyncEntities.repeatRule ||
+        change.entityType == SyncEntities.activity ||
+        change.entityType == SyncEntities.tag) {
+      return 3;
+    }
     if (change.entityType == SyncEntities.taskTag) return 6;
+    if (change.entityType == SyncEntities.reminder ||
+        change.entityType == SyncEntities.repeatSkip ||
+        change.entityType == SyncEntities.repeatOccurrenceAction) {
+      return 4;
+    }
     return 4;
   }
 
@@ -753,6 +782,10 @@ class SyncCoordinator {
         await _upsertLocalRepeatRule(entityId, payload);
       case SyncEntities.repeatSkip:
         await _upsertLocalRepeatSkip(entityId, payload);
+      case SyncEntities.repeatOccurrenceAction:
+        // action 只表示服务端已处理的补做决议；真实任务与 skip tombstone
+        // 会以各自的 change feed 返回，本地无需建立第二份状态。
+        break;
       case SyncEntities.viewPreference:
         await _upsertLocalViewPreference(entityId, payload);
       case SyncEntities.filter:
@@ -973,6 +1006,12 @@ class SyncCoordinator {
     final localParentId = await _localTaskIdForServerId(
       (payload['parentTaskId'] as num?)?.toInt(),
     );
+    final localRepeatParentId = await _localTaskIdForServerId(
+      (payload['repeatParentTaskId'] as num?)?.toInt(),
+    );
+    final localRepeatRuleId = await _localRepeatRuleIdForServerId(
+      (payload['repeatRuleId'] as num?)?.toInt(),
+    );
     final now = DateTime.now();
     final status = payload['status']?.toString();
     final companion = TodoTasksCompanion(
@@ -983,8 +1022,12 @@ class SyncCoordinator {
       title: Value(payload['title']?.toString() ?? existing?.title ?? ''),
       description: Value(payload['description']?.toString()),
       completed: Value(
-        status == 'DONE' || status == 'COMPLETED' || status == 'done',
+        payload['completedAt'] != null ||
+            status == 'DONE' ||
+            status == 'COMPLETED' ||
+            status == 'done',
       ),
+      completedAt: Value(_parseDate(payload['completedAt'])),
       cancelled: Value(status == 'CANCELLED' || status == 'cancelled'),
       priority: Value((payload['priority'] as num?)?.toInt() ?? 0),
       isPinned: Value(payload['isPinned'] as bool? ?? false),
@@ -992,6 +1035,12 @@ class SyncCoordinator {
       startAt: Value(_parseDate(payload['startAt'])),
       endAt: Value(_parseDate(payload['endAt'])),
       dueAt: Value(_parseDate(payload['dueAt'])),
+      allDay: Value(payload['allDay'] == true),
+      timeZone: Value(payload['timeZone']?.toString()),
+      fixedTimezone: Value(payload['fixedTimezone'] == true),
+      repeatParentTaskId: Value(localRepeatParentId),
+      repeatRuleId: Value(localRepeatRuleId),
+      repeatOccurrenceAt: Value(_parseDate(payload['repeatOccurrenceAt'])),
       updatedAt: Value(now),
       createdAt: Value(existing?.createdAt ?? now),
     );
@@ -1078,7 +1127,14 @@ class SyncCoordinator {
       remindAt: Value(
         _parseDate(payload['remindAt'] ?? payload['fireAt']) ?? now,
       ),
+      anchorType: Value(payload['anchorType']?.toString() ?? 'ABSOLUTE'),
+      offsetMinutes: Value((payload['offsetMinutes'] as num?)?.toInt()),
       status: Value(payload['status']?.toString() ?? 'PENDING'),
+      firedAt: Value(_parseDate(payload['firedAt'])),
+      persistent: Value(payload['persistent'] == true),
+      intervalMinutes: Value((payload['intervalMinutes'] as num?)?.toInt()),
+      timeZone: Value(payload['timeZone']?.toString()),
+      fixedTimezone: Value(payload['fixedTimezone'] == true),
       updatedAt: Value(now),
       createdAt: Value(existing?.createdAt ?? now),
     );
@@ -1108,9 +1164,10 @@ class SyncCoordinator {
       serverId: Value(serverId),
       taskId: Value(localTaskId),
       freq: Value(
-        payload['frequency']?.toString() ??
-            payload['freq']?.toString() ??
-            'DAILY',
+        (payload['frequency']?.toString() ??
+                payload['freq']?.toString() ??
+                'DAILY')
+            .toUpperCase(),
       ),
       interval: Value(
         (payload['intervalValue'] as num?)?.toInt() ??
@@ -1120,7 +1177,13 @@ class SyncCoordinator {
       byDay: Value(
         payload['weekdays']?.toString() ?? payload['byDay']?.toString(),
       ),
+      monthDay: Value((payload['monthDay'] as num?)?.toInt()),
+      startAt: Value(_parseDate(payload['startAt'])),
       until: Value(_parseDate(payload['untilAt'] ?? payload['until'])),
+      countLimit: Value((payload['countLimit'] as num?)?.toInt()),
+      enabled: Value(payload['enabled'] as bool? ?? true),
+      repeatMode: Value(payload['repeatMode']?.toString() ?? 'ON_DUE'),
+      timeZone: Value(payload['timeZone']?.toString()),
       updatedAt: Value(now),
       createdAt: Value(existing?.createdAt ?? now),
     );

@@ -19,6 +19,8 @@ void main() {
       return TodoTask(
         id: '1',
         listId: '1',
+        allDay: false,
+        fixedTimezone: false,
         title: 't',
         completed: completed,
         cancelled: false,
@@ -138,6 +140,8 @@ void main() {
       TodoTask(
         id: '1',
         listId: '1',
+        allDay: false,
+        fixedTimezone: false,
         title: '昨天的事',
         completed: false,
         cancelled: false,
@@ -153,6 +157,8 @@ void main() {
       TodoTask(
         id: '2',
         listId: '1',
+        allDay: false,
+        fixedTimezone: false,
         title: '今天要完成',
         completed: false,
         cancelled: false,
@@ -168,6 +174,8 @@ void main() {
       TodoTask(
         id: '3',
         listId: '1',
+        allDay: false,
+        fixedTimezone: false,
         title: '本周要做',
         completed: false,
         cancelled: false,

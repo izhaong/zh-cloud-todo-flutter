@@ -546,6 +546,17 @@ class $TodoTasksTable extends TodoTasks
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _completedAtMeta = const VerificationMeta(
+    'completedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> completedAt = GeneratedColumn<DateTime>(
+    'completed_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _cancelledMeta = const VerificationMeta(
     'cancelled',
   );
@@ -629,6 +640,78 @@ class $TodoTasksTable extends TodoTasks
     type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _allDayMeta = const VerificationMeta('allDay');
+  @override
+  late final GeneratedColumn<bool> allDay = GeneratedColumn<bool>(
+    'all_day',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("all_day" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _timeZoneMeta = const VerificationMeta(
+    'timeZone',
+  );
+  @override
+  late final GeneratedColumn<String> timeZone = GeneratedColumn<String>(
+    'time_zone',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _fixedTimezoneMeta = const VerificationMeta(
+    'fixedTimezone',
+  );
+  @override
+  late final GeneratedColumn<bool> fixedTimezone = GeneratedColumn<bool>(
+    'fixed_timezone',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("fixed_timezone" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _repeatParentTaskIdMeta =
+      const VerificationMeta('repeatParentTaskId');
+  @override
+  late final GeneratedColumn<String> repeatParentTaskId =
+      GeneratedColumn<String>(
+        'repeat_parent_task_id',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _repeatRuleIdMeta = const VerificationMeta(
+    'repeatRuleId',
+  );
+  @override
+  late final GeneratedColumn<String> repeatRuleId = GeneratedColumn<String>(
+    'repeat_rule_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _repeatOccurrenceAtMeta =
+      const VerificationMeta('repeatOccurrenceAt');
+  @override
+  late final GeneratedColumn<DateTime> repeatOccurrenceAt =
+      GeneratedColumn<DateTime>(
+        'repeat_occurrence_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _updatedAtMeta = const VerificationMeta(
     'updatedAt',
   );
@@ -660,6 +743,7 @@ class $TodoTasksTable extends TodoTasks
     title,
     description,
     completed,
+    completedAt,
     cancelled,
     priority,
     isPinned,
@@ -667,6 +751,12 @@ class $TodoTasksTable extends TodoTasks
     startAt,
     endAt,
     dueAt,
+    allDay,
+    timeZone,
+    fixedTimezone,
+    repeatParentTaskId,
+    repeatRuleId,
+    repeatOccurrenceAt,
     updatedAt,
     createdAt,
   ];
@@ -733,6 +823,15 @@ class $TodoTasksTable extends TodoTasks
         completed.isAcceptableOrUnknown(data['completed']!, _completedMeta),
       );
     }
+    if (data.containsKey('completed_at')) {
+      context.handle(
+        _completedAtMeta,
+        completedAt.isAcceptableOrUnknown(
+          data['completed_at']!,
+          _completedAtMeta,
+        ),
+      );
+    }
     if (data.containsKey('cancelled')) {
       context.handle(
         _cancelledMeta,
@@ -773,6 +872,54 @@ class $TodoTasksTable extends TodoTasks
       context.handle(
         _dueAtMeta,
         dueAt.isAcceptableOrUnknown(data['due_at']!, _dueAtMeta),
+      );
+    }
+    if (data.containsKey('all_day')) {
+      context.handle(
+        _allDayMeta,
+        allDay.isAcceptableOrUnknown(data['all_day']!, _allDayMeta),
+      );
+    }
+    if (data.containsKey('time_zone')) {
+      context.handle(
+        _timeZoneMeta,
+        timeZone.isAcceptableOrUnknown(data['time_zone']!, _timeZoneMeta),
+      );
+    }
+    if (data.containsKey('fixed_timezone')) {
+      context.handle(
+        _fixedTimezoneMeta,
+        fixedTimezone.isAcceptableOrUnknown(
+          data['fixed_timezone']!,
+          _fixedTimezoneMeta,
+        ),
+      );
+    }
+    if (data.containsKey('repeat_parent_task_id')) {
+      context.handle(
+        _repeatParentTaskIdMeta,
+        repeatParentTaskId.isAcceptableOrUnknown(
+          data['repeat_parent_task_id']!,
+          _repeatParentTaskIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('repeat_rule_id')) {
+      context.handle(
+        _repeatRuleIdMeta,
+        repeatRuleId.isAcceptableOrUnknown(
+          data['repeat_rule_id']!,
+          _repeatRuleIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('repeat_occurrence_at')) {
+      context.handle(
+        _repeatOccurrenceAtMeta,
+        repeatOccurrenceAt.isAcceptableOrUnknown(
+          data['repeat_occurrence_at']!,
+          _repeatOccurrenceAtMeta,
+        ),
       );
     }
     if (data.containsKey('updated_at')) {
@@ -828,6 +975,10 @@ class $TodoTasksTable extends TodoTasks
         DriftSqlType.bool,
         data['${effectivePrefix}completed'],
       )!,
+      completedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}completed_at'],
+      ),
       cancelled: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}cancelled'],
@@ -856,6 +1007,30 @@ class $TodoTasksTable extends TodoTasks
         DriftSqlType.dateTime,
         data['${effectivePrefix}due_at'],
       ),
+      allDay: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}all_day'],
+      )!,
+      timeZone: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}time_zone'],
+      ),
+      fixedTimezone: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}fixed_timezone'],
+      )!,
+      repeatParentTaskId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}repeat_parent_task_id'],
+      ),
+      repeatRuleId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}repeat_rule_id'],
+      ),
+      repeatOccurrenceAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}repeat_occurrence_at'],
+      ),
       updatedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}updated_at'],
@@ -881,6 +1056,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
   final String title;
   final String? description;
   final bool completed;
+  final DateTime? completedAt;
   final bool cancelled;
   final int priority;
   final bool isPinned;
@@ -888,6 +1064,18 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
   final DateTime? startAt;
   final DateTime? endAt;
   final DateTime? dueAt;
+  final bool allDay;
+
+  /// IANA 时区；固定时区任务必须保留墙上时间所属的时区，不能只依赖设备时区。
+  final String? timeZone;
+  final bool fixedTimezone;
+
+  /// 本地 UUID，指向服务端物化实例的源任务。
+  final String? repeatParentTaskId;
+
+  /// 本地 UUID，指向触发本实例的重复规则。
+  final String? repeatRuleId;
+  final DateTime? repeatOccurrenceAt;
   final DateTime updatedAt;
   final DateTime createdAt;
   const TodoTask({
@@ -898,6 +1086,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     required this.title,
     this.description,
     required this.completed,
+    this.completedAt,
     required this.cancelled,
     required this.priority,
     required this.isPinned,
@@ -905,6 +1094,12 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     this.startAt,
     this.endAt,
     this.dueAt,
+    required this.allDay,
+    this.timeZone,
+    required this.fixedTimezone,
+    this.repeatParentTaskId,
+    this.repeatRuleId,
+    this.repeatOccurrenceAt,
     required this.updatedAt,
     required this.createdAt,
   });
@@ -924,6 +1119,9 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       map['description'] = Variable<String>(description);
     }
     map['completed'] = Variable<bool>(completed);
+    if (!nullToAbsent || completedAt != null) {
+      map['completed_at'] = Variable<DateTime>(completedAt);
+    }
     map['cancelled'] = Variable<bool>(cancelled);
     map['priority'] = Variable<int>(priority);
     map['is_pinned'] = Variable<bool>(isPinned);
@@ -936,6 +1134,20 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     }
     if (!nullToAbsent || dueAt != null) {
       map['due_at'] = Variable<DateTime>(dueAt);
+    }
+    map['all_day'] = Variable<bool>(allDay);
+    if (!nullToAbsent || timeZone != null) {
+      map['time_zone'] = Variable<String>(timeZone);
+    }
+    map['fixed_timezone'] = Variable<bool>(fixedTimezone);
+    if (!nullToAbsent || repeatParentTaskId != null) {
+      map['repeat_parent_task_id'] = Variable<String>(repeatParentTaskId);
+    }
+    if (!nullToAbsent || repeatRuleId != null) {
+      map['repeat_rule_id'] = Variable<String>(repeatRuleId);
+    }
+    if (!nullToAbsent || repeatOccurrenceAt != null) {
+      map['repeat_occurrence_at'] = Variable<DateTime>(repeatOccurrenceAt);
     }
     map['updated_at'] = Variable<DateTime>(updatedAt);
     map['created_at'] = Variable<DateTime>(createdAt);
@@ -957,6 +1169,9 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           ? const Value.absent()
           : Value(description),
       completed: Value(completed),
+      completedAt: completedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(completedAt),
       cancelled: Value(cancelled),
       priority: Value(priority),
       isPinned: Value(isPinned),
@@ -970,6 +1185,20 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       dueAt: dueAt == null && nullToAbsent
           ? const Value.absent()
           : Value(dueAt),
+      allDay: Value(allDay),
+      timeZone: timeZone == null && nullToAbsent
+          ? const Value.absent()
+          : Value(timeZone),
+      fixedTimezone: Value(fixedTimezone),
+      repeatParentTaskId: repeatParentTaskId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(repeatParentTaskId),
+      repeatRuleId: repeatRuleId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(repeatRuleId),
+      repeatOccurrenceAt: repeatOccurrenceAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(repeatOccurrenceAt),
       updatedAt: Value(updatedAt),
       createdAt: Value(createdAt),
     );
@@ -988,6 +1217,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       title: serializer.fromJson<String>(json['title']),
       description: serializer.fromJson<String?>(json['description']),
       completed: serializer.fromJson<bool>(json['completed']),
+      completedAt: serializer.fromJson<DateTime?>(json['completedAt']),
       cancelled: serializer.fromJson<bool>(json['cancelled']),
       priority: serializer.fromJson<int>(json['priority']),
       isPinned: serializer.fromJson<bool>(json['isPinned']),
@@ -995,6 +1225,16 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       startAt: serializer.fromJson<DateTime?>(json['startAt']),
       endAt: serializer.fromJson<DateTime?>(json['endAt']),
       dueAt: serializer.fromJson<DateTime?>(json['dueAt']),
+      allDay: serializer.fromJson<bool>(json['allDay']),
+      timeZone: serializer.fromJson<String?>(json['timeZone']),
+      fixedTimezone: serializer.fromJson<bool>(json['fixedTimezone']),
+      repeatParentTaskId: serializer.fromJson<String?>(
+        json['repeatParentTaskId'],
+      ),
+      repeatRuleId: serializer.fromJson<String?>(json['repeatRuleId']),
+      repeatOccurrenceAt: serializer.fromJson<DateTime?>(
+        json['repeatOccurrenceAt'],
+      ),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
@@ -1010,6 +1250,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       'title': serializer.toJson<String>(title),
       'description': serializer.toJson<String?>(description),
       'completed': serializer.toJson<bool>(completed),
+      'completedAt': serializer.toJson<DateTime?>(completedAt),
       'cancelled': serializer.toJson<bool>(cancelled),
       'priority': serializer.toJson<int>(priority),
       'isPinned': serializer.toJson<bool>(isPinned),
@@ -1017,6 +1258,12 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       'startAt': serializer.toJson<DateTime?>(startAt),
       'endAt': serializer.toJson<DateTime?>(endAt),
       'dueAt': serializer.toJson<DateTime?>(dueAt),
+      'allDay': serializer.toJson<bool>(allDay),
+      'timeZone': serializer.toJson<String?>(timeZone),
+      'fixedTimezone': serializer.toJson<bool>(fixedTimezone),
+      'repeatParentTaskId': serializer.toJson<String?>(repeatParentTaskId),
+      'repeatRuleId': serializer.toJson<String?>(repeatRuleId),
+      'repeatOccurrenceAt': serializer.toJson<DateTime?>(repeatOccurrenceAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
@@ -1030,6 +1277,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     String? title,
     Value<String?> description = const Value.absent(),
     bool? completed,
+    Value<DateTime?> completedAt = const Value.absent(),
     bool? cancelled,
     int? priority,
     bool? isPinned,
@@ -1037,6 +1285,12 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     Value<DateTime?> startAt = const Value.absent(),
     Value<DateTime?> endAt = const Value.absent(),
     Value<DateTime?> dueAt = const Value.absent(),
+    bool? allDay,
+    Value<String?> timeZone = const Value.absent(),
+    bool? fixedTimezone,
+    Value<String?> repeatParentTaskId = const Value.absent(),
+    Value<String?> repeatRuleId = const Value.absent(),
+    Value<DateTime?> repeatOccurrenceAt = const Value.absent(),
     DateTime? updatedAt,
     DateTime? createdAt,
   }) => TodoTask(
@@ -1047,6 +1301,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     title: title ?? this.title,
     description: description.present ? description.value : this.description,
     completed: completed ?? this.completed,
+    completedAt: completedAt.present ? completedAt.value : this.completedAt,
     cancelled: cancelled ?? this.cancelled,
     priority: priority ?? this.priority,
     isPinned: isPinned ?? this.isPinned,
@@ -1054,6 +1309,16 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     startAt: startAt.present ? startAt.value : this.startAt,
     endAt: endAt.present ? endAt.value : this.endAt,
     dueAt: dueAt.present ? dueAt.value : this.dueAt,
+    allDay: allDay ?? this.allDay,
+    timeZone: timeZone.present ? timeZone.value : this.timeZone,
+    fixedTimezone: fixedTimezone ?? this.fixedTimezone,
+    repeatParentTaskId: repeatParentTaskId.present
+        ? repeatParentTaskId.value
+        : this.repeatParentTaskId,
+    repeatRuleId: repeatRuleId.present ? repeatRuleId.value : this.repeatRuleId,
+    repeatOccurrenceAt: repeatOccurrenceAt.present
+        ? repeatOccurrenceAt.value
+        : this.repeatOccurrenceAt,
     updatedAt: updatedAt ?? this.updatedAt,
     createdAt: createdAt ?? this.createdAt,
   );
@@ -1070,6 +1335,9 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           ? data.description.value
           : this.description,
       completed: data.completed.present ? data.completed.value : this.completed,
+      completedAt: data.completedAt.present
+          ? data.completedAt.value
+          : this.completedAt,
       cancelled: data.cancelled.present ? data.cancelled.value : this.cancelled,
       priority: data.priority.present ? data.priority.value : this.priority,
       isPinned: data.isPinned.present ? data.isPinned.value : this.isPinned,
@@ -1077,6 +1345,20 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       startAt: data.startAt.present ? data.startAt.value : this.startAt,
       endAt: data.endAt.present ? data.endAt.value : this.endAt,
       dueAt: data.dueAt.present ? data.dueAt.value : this.dueAt,
+      allDay: data.allDay.present ? data.allDay.value : this.allDay,
+      timeZone: data.timeZone.present ? data.timeZone.value : this.timeZone,
+      fixedTimezone: data.fixedTimezone.present
+          ? data.fixedTimezone.value
+          : this.fixedTimezone,
+      repeatParentTaskId: data.repeatParentTaskId.present
+          ? data.repeatParentTaskId.value
+          : this.repeatParentTaskId,
+      repeatRuleId: data.repeatRuleId.present
+          ? data.repeatRuleId.value
+          : this.repeatRuleId,
+      repeatOccurrenceAt: data.repeatOccurrenceAt.present
+          ? data.repeatOccurrenceAt.value
+          : this.repeatOccurrenceAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
@@ -1092,6 +1374,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           ..write('title: $title, ')
           ..write('description: $description, ')
           ..write('completed: $completed, ')
+          ..write('completedAt: $completedAt, ')
           ..write('cancelled: $cancelled, ')
           ..write('priority: $priority, ')
           ..write('isPinned: $isPinned, ')
@@ -1099,6 +1382,12 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           ..write('startAt: $startAt, ')
           ..write('endAt: $endAt, ')
           ..write('dueAt: $dueAt, ')
+          ..write('allDay: $allDay, ')
+          ..write('timeZone: $timeZone, ')
+          ..write('fixedTimezone: $fixedTimezone, ')
+          ..write('repeatParentTaskId: $repeatParentTaskId, ')
+          ..write('repeatRuleId: $repeatRuleId, ')
+          ..write('repeatOccurrenceAt: $repeatOccurrenceAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -1106,7 +1395,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     serverId,
     listId,
@@ -1114,6 +1403,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     title,
     description,
     completed,
+    completedAt,
     cancelled,
     priority,
     isPinned,
@@ -1121,9 +1411,15 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     startAt,
     endAt,
     dueAt,
+    allDay,
+    timeZone,
+    fixedTimezone,
+    repeatParentTaskId,
+    repeatRuleId,
+    repeatOccurrenceAt,
     updatedAt,
     createdAt,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1135,6 +1431,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           other.title == this.title &&
           other.description == this.description &&
           other.completed == this.completed &&
+          other.completedAt == this.completedAt &&
           other.cancelled == this.cancelled &&
           other.priority == this.priority &&
           other.isPinned == this.isPinned &&
@@ -1142,6 +1439,12 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           other.startAt == this.startAt &&
           other.endAt == this.endAt &&
           other.dueAt == this.dueAt &&
+          other.allDay == this.allDay &&
+          other.timeZone == this.timeZone &&
+          other.fixedTimezone == this.fixedTimezone &&
+          other.repeatParentTaskId == this.repeatParentTaskId &&
+          other.repeatRuleId == this.repeatRuleId &&
+          other.repeatOccurrenceAt == this.repeatOccurrenceAt &&
           other.updatedAt == this.updatedAt &&
           other.createdAt == this.createdAt);
 }
@@ -1154,6 +1457,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
   final Value<String> title;
   final Value<String?> description;
   final Value<bool> completed;
+  final Value<DateTime?> completedAt;
   final Value<bool> cancelled;
   final Value<int> priority;
   final Value<bool> isPinned;
@@ -1161,6 +1465,12 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
   final Value<DateTime?> startAt;
   final Value<DateTime?> endAt;
   final Value<DateTime?> dueAt;
+  final Value<bool> allDay;
+  final Value<String?> timeZone;
+  final Value<bool> fixedTimezone;
+  final Value<String?> repeatParentTaskId;
+  final Value<String?> repeatRuleId;
+  final Value<DateTime?> repeatOccurrenceAt;
   final Value<DateTime> updatedAt;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
@@ -1172,6 +1482,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     this.title = const Value.absent(),
     this.description = const Value.absent(),
     this.completed = const Value.absent(),
+    this.completedAt = const Value.absent(),
     this.cancelled = const Value.absent(),
     this.priority = const Value.absent(),
     this.isPinned = const Value.absent(),
@@ -1179,6 +1490,12 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     this.startAt = const Value.absent(),
     this.endAt = const Value.absent(),
     this.dueAt = const Value.absent(),
+    this.allDay = const Value.absent(),
+    this.timeZone = const Value.absent(),
+    this.fixedTimezone = const Value.absent(),
+    this.repeatParentTaskId = const Value.absent(),
+    this.repeatRuleId = const Value.absent(),
+    this.repeatOccurrenceAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -1191,6 +1508,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     required String title,
     this.description = const Value.absent(),
     this.completed = const Value.absent(),
+    this.completedAt = const Value.absent(),
     this.cancelled = const Value.absent(),
     this.priority = const Value.absent(),
     this.isPinned = const Value.absent(),
@@ -1198,6 +1516,12 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     this.startAt = const Value.absent(),
     this.endAt = const Value.absent(),
     this.dueAt = const Value.absent(),
+    this.allDay = const Value.absent(),
+    this.timeZone = const Value.absent(),
+    this.fixedTimezone = const Value.absent(),
+    this.repeatParentTaskId = const Value.absent(),
+    this.repeatRuleId = const Value.absent(),
+    this.repeatOccurrenceAt = const Value.absent(),
     required DateTime updatedAt,
     required DateTime createdAt,
     this.rowid = const Value.absent(),
@@ -1214,6 +1538,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     Expression<String>? title,
     Expression<String>? description,
     Expression<bool>? completed,
+    Expression<DateTime>? completedAt,
     Expression<bool>? cancelled,
     Expression<int>? priority,
     Expression<bool>? isPinned,
@@ -1221,6 +1546,12 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     Expression<DateTime>? startAt,
     Expression<DateTime>? endAt,
     Expression<DateTime>? dueAt,
+    Expression<bool>? allDay,
+    Expression<String>? timeZone,
+    Expression<bool>? fixedTimezone,
+    Expression<String>? repeatParentTaskId,
+    Expression<String>? repeatRuleId,
+    Expression<DateTime>? repeatOccurrenceAt,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
@@ -1233,6 +1564,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
       if (title != null) 'title': title,
       if (description != null) 'description': description,
       if (completed != null) 'completed': completed,
+      if (completedAt != null) 'completed_at': completedAt,
       if (cancelled != null) 'cancelled': cancelled,
       if (priority != null) 'priority': priority,
       if (isPinned != null) 'is_pinned': isPinned,
@@ -1240,6 +1572,14 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
       if (startAt != null) 'start_at': startAt,
       if (endAt != null) 'end_at': endAt,
       if (dueAt != null) 'due_at': dueAt,
+      if (allDay != null) 'all_day': allDay,
+      if (timeZone != null) 'time_zone': timeZone,
+      if (fixedTimezone != null) 'fixed_timezone': fixedTimezone,
+      if (repeatParentTaskId != null)
+        'repeat_parent_task_id': repeatParentTaskId,
+      if (repeatRuleId != null) 'repeat_rule_id': repeatRuleId,
+      if (repeatOccurrenceAt != null)
+        'repeat_occurrence_at': repeatOccurrenceAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
@@ -1254,6 +1594,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     Value<String>? title,
     Value<String?>? description,
     Value<bool>? completed,
+    Value<DateTime?>? completedAt,
     Value<bool>? cancelled,
     Value<int>? priority,
     Value<bool>? isPinned,
@@ -1261,6 +1602,12 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     Value<DateTime?>? startAt,
     Value<DateTime?>? endAt,
     Value<DateTime?>? dueAt,
+    Value<bool>? allDay,
+    Value<String?>? timeZone,
+    Value<bool>? fixedTimezone,
+    Value<String?>? repeatParentTaskId,
+    Value<String?>? repeatRuleId,
+    Value<DateTime?>? repeatOccurrenceAt,
     Value<DateTime>? updatedAt,
     Value<DateTime>? createdAt,
     Value<int>? rowid,
@@ -1273,6 +1620,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
       title: title ?? this.title,
       description: description ?? this.description,
       completed: completed ?? this.completed,
+      completedAt: completedAt ?? this.completedAt,
       cancelled: cancelled ?? this.cancelled,
       priority: priority ?? this.priority,
       isPinned: isPinned ?? this.isPinned,
@@ -1280,6 +1628,12 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
       startAt: startAt ?? this.startAt,
       endAt: endAt ?? this.endAt,
       dueAt: dueAt ?? this.dueAt,
+      allDay: allDay ?? this.allDay,
+      timeZone: timeZone ?? this.timeZone,
+      fixedTimezone: fixedTimezone ?? this.fixedTimezone,
+      repeatParentTaskId: repeatParentTaskId ?? this.repeatParentTaskId,
+      repeatRuleId: repeatRuleId ?? this.repeatRuleId,
+      repeatOccurrenceAt: repeatOccurrenceAt ?? this.repeatOccurrenceAt,
       updatedAt: updatedAt ?? this.updatedAt,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
@@ -1310,6 +1664,9 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     if (completed.present) {
       map['completed'] = Variable<bool>(completed.value);
     }
+    if (completedAt.present) {
+      map['completed_at'] = Variable<DateTime>(completedAt.value);
+    }
     if (cancelled.present) {
       map['cancelled'] = Variable<bool>(cancelled.value);
     }
@@ -1330,6 +1687,26 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     }
     if (dueAt.present) {
       map['due_at'] = Variable<DateTime>(dueAt.value);
+    }
+    if (allDay.present) {
+      map['all_day'] = Variable<bool>(allDay.value);
+    }
+    if (timeZone.present) {
+      map['time_zone'] = Variable<String>(timeZone.value);
+    }
+    if (fixedTimezone.present) {
+      map['fixed_timezone'] = Variable<bool>(fixedTimezone.value);
+    }
+    if (repeatParentTaskId.present) {
+      map['repeat_parent_task_id'] = Variable<String>(repeatParentTaskId.value);
+    }
+    if (repeatRuleId.present) {
+      map['repeat_rule_id'] = Variable<String>(repeatRuleId.value);
+    }
+    if (repeatOccurrenceAt.present) {
+      map['repeat_occurrence_at'] = Variable<DateTime>(
+        repeatOccurrenceAt.value,
+      );
     }
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
@@ -1353,6 +1730,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
           ..write('title: $title, ')
           ..write('description: $description, ')
           ..write('completed: $completed, ')
+          ..write('completedAt: $completedAt, ')
           ..write('cancelled: $cancelled, ')
           ..write('priority: $priority, ')
           ..write('isPinned: $isPinned, ')
@@ -1360,6 +1738,12 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
           ..write('startAt: $startAt, ')
           ..write('endAt: $endAt, ')
           ..write('dueAt: $dueAt, ')
+          ..write('allDay: $allDay, ')
+          ..write('timeZone: $timeZone, ')
+          ..write('fixedTimezone: $fixedTimezone, ')
+          ..write('repeatParentTaskId: $repeatParentTaskId, ')
+          ..write('repeatRuleId: $repeatRuleId, ')
+          ..write('repeatOccurrenceAt: $repeatOccurrenceAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
@@ -4632,6 +5016,29 @@ class $TodoRemindersTable extends TodoReminders
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _anchorTypeMeta = const VerificationMeta(
+    'anchorType',
+  );
+  @override
+  late final GeneratedColumn<String> anchorType = GeneratedColumn<String>(
+    'anchor_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('ABSOLUTE'),
+  );
+  static const VerificationMeta _offsetMinutesMeta = const VerificationMeta(
+    'offsetMinutes',
+  );
+  @override
+  late final GeneratedColumn<int> offsetMinutes = GeneratedColumn<int>(
+    'offset_minutes',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _statusMeta = const VerificationMeta('status');
   @override
   late final GeneratedColumn<String> status = GeneratedColumn<String>(
@@ -4641,6 +5048,80 @@ class $TodoRemindersTable extends TodoReminders
     type: DriftSqlType.string,
     requiredDuringInsert: false,
     defaultValue: const Constant('PENDING'),
+  );
+  static const VerificationMeta _firedAtMeta = const VerificationMeta(
+    'firedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> firedAt = GeneratedColumn<DateTime>(
+    'fired_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _persistentMeta = const VerificationMeta(
+    'persistent',
+  );
+  @override
+  late final GeneratedColumn<bool> persistent = GeneratedColumn<bool>(
+    'persistent',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("persistent" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _intervalMinutesMeta = const VerificationMeta(
+    'intervalMinutes',
+  );
+  @override
+  late final GeneratedColumn<int> intervalMinutes = GeneratedColumn<int>(
+    'interval_minutes',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _timeZoneMeta = const VerificationMeta(
+    'timeZone',
+  );
+  @override
+  late final GeneratedColumn<String> timeZone = GeneratedColumn<String>(
+    'time_zone',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _fixedTimezoneMeta = const VerificationMeta(
+    'fixedTimezone',
+  );
+  @override
+  late final GeneratedColumn<bool> fixedTimezone = GeneratedColumn<bool>(
+    'fixed_timezone',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("fixed_timezone" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _clientMutationIdMeta = const VerificationMeta(
+    'clientMutationId',
+  );
+  @override
+  late final GeneratedColumn<String> clientMutationId = GeneratedColumn<String>(
+    'client_mutation_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _updatedAtMeta = const VerificationMeta(
     'updatedAt',
@@ -4670,7 +5151,15 @@ class $TodoRemindersTable extends TodoReminders
     serverId,
     taskId,
     remindAt,
+    anchorType,
+    offsetMinutes,
     status,
+    firedAt,
+    persistent,
+    intervalMinutes,
+    timeZone,
+    fixedTimezone,
+    clientMutationId,
     updatedAt,
     createdAt,
   ];
@@ -4713,10 +5202,70 @@ class $TodoRemindersTable extends TodoReminders
     } else if (isInserting) {
       context.missing(_remindAtMeta);
     }
+    if (data.containsKey('anchor_type')) {
+      context.handle(
+        _anchorTypeMeta,
+        anchorType.isAcceptableOrUnknown(data['anchor_type']!, _anchorTypeMeta),
+      );
+    }
+    if (data.containsKey('offset_minutes')) {
+      context.handle(
+        _offsetMinutesMeta,
+        offsetMinutes.isAcceptableOrUnknown(
+          data['offset_minutes']!,
+          _offsetMinutesMeta,
+        ),
+      );
+    }
     if (data.containsKey('status')) {
       context.handle(
         _statusMeta,
         status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    }
+    if (data.containsKey('fired_at')) {
+      context.handle(
+        _firedAtMeta,
+        firedAt.isAcceptableOrUnknown(data['fired_at']!, _firedAtMeta),
+      );
+    }
+    if (data.containsKey('persistent')) {
+      context.handle(
+        _persistentMeta,
+        persistent.isAcceptableOrUnknown(data['persistent']!, _persistentMeta),
+      );
+    }
+    if (data.containsKey('interval_minutes')) {
+      context.handle(
+        _intervalMinutesMeta,
+        intervalMinutes.isAcceptableOrUnknown(
+          data['interval_minutes']!,
+          _intervalMinutesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('time_zone')) {
+      context.handle(
+        _timeZoneMeta,
+        timeZone.isAcceptableOrUnknown(data['time_zone']!, _timeZoneMeta),
+      );
+    }
+    if (data.containsKey('fixed_timezone')) {
+      context.handle(
+        _fixedTimezoneMeta,
+        fixedTimezone.isAcceptableOrUnknown(
+          data['fixed_timezone']!,
+          _fixedTimezoneMeta,
+        ),
+      );
+    }
+    if (data.containsKey('client_mutation_id')) {
+      context.handle(
+        _clientMutationIdMeta,
+        clientMutationId.isAcceptableOrUnknown(
+          data['client_mutation_id']!,
+          _clientMutationIdMeta,
+        ),
       );
     }
     if (data.containsKey('updated_at')) {
@@ -4760,10 +5309,42 @@ class $TodoRemindersTable extends TodoReminders
         DriftSqlType.dateTime,
         data['${effectivePrefix}remind_at'],
       )!,
+      anchorType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}anchor_type'],
+      )!,
+      offsetMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}offset_minutes'],
+      ),
       status: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}status'],
       )!,
+      firedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}fired_at'],
+      ),
+      persistent: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}persistent'],
+      )!,
+      intervalMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}interval_minutes'],
+      ),
+      timeZone: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}time_zone'],
+      ),
+      fixedTimezone: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}fixed_timezone'],
+      )!,
+      clientMutationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}client_mutation_id'],
+      ),
       updatedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}updated_at'],
@@ -4786,7 +5367,15 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
   final int? serverId;
   final String taskId;
   final DateTime remindAt;
+  final String anchorType;
+  final int? offsetMinutes;
   final String status;
+  final DateTime? firedAt;
+  final bool persistent;
+  final int? intervalMinutes;
+  final String? timeZone;
+  final bool fixedTimezone;
+  final String? clientMutationId;
   final DateTime updatedAt;
   final DateTime createdAt;
   const TodoReminder({
@@ -4794,7 +5383,15 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
     this.serverId,
     required this.taskId,
     required this.remindAt,
+    required this.anchorType,
+    this.offsetMinutes,
     required this.status,
+    this.firedAt,
+    required this.persistent,
+    this.intervalMinutes,
+    this.timeZone,
+    required this.fixedTimezone,
+    this.clientMutationId,
     required this.updatedAt,
     required this.createdAt,
   });
@@ -4807,7 +5404,25 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
     }
     map['task_id'] = Variable<String>(taskId);
     map['remind_at'] = Variable<DateTime>(remindAt);
+    map['anchor_type'] = Variable<String>(anchorType);
+    if (!nullToAbsent || offsetMinutes != null) {
+      map['offset_minutes'] = Variable<int>(offsetMinutes);
+    }
     map['status'] = Variable<String>(status);
+    if (!nullToAbsent || firedAt != null) {
+      map['fired_at'] = Variable<DateTime>(firedAt);
+    }
+    map['persistent'] = Variable<bool>(persistent);
+    if (!nullToAbsent || intervalMinutes != null) {
+      map['interval_minutes'] = Variable<int>(intervalMinutes);
+    }
+    if (!nullToAbsent || timeZone != null) {
+      map['time_zone'] = Variable<String>(timeZone);
+    }
+    map['fixed_timezone'] = Variable<bool>(fixedTimezone);
+    if (!nullToAbsent || clientMutationId != null) {
+      map['client_mutation_id'] = Variable<String>(clientMutationId);
+    }
     map['updated_at'] = Variable<DateTime>(updatedAt);
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
@@ -4821,7 +5436,25 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
           : Value(serverId),
       taskId: Value(taskId),
       remindAt: Value(remindAt),
+      anchorType: Value(anchorType),
+      offsetMinutes: offsetMinutes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(offsetMinutes),
       status: Value(status),
+      firedAt: firedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(firedAt),
+      persistent: Value(persistent),
+      intervalMinutes: intervalMinutes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(intervalMinutes),
+      timeZone: timeZone == null && nullToAbsent
+          ? const Value.absent()
+          : Value(timeZone),
+      fixedTimezone: Value(fixedTimezone),
+      clientMutationId: clientMutationId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(clientMutationId),
       updatedAt: Value(updatedAt),
       createdAt: Value(createdAt),
     );
@@ -4837,7 +5470,15 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
       serverId: serializer.fromJson<int?>(json['serverId']),
       taskId: serializer.fromJson<String>(json['taskId']),
       remindAt: serializer.fromJson<DateTime>(json['remindAt']),
+      anchorType: serializer.fromJson<String>(json['anchorType']),
+      offsetMinutes: serializer.fromJson<int?>(json['offsetMinutes']),
       status: serializer.fromJson<String>(json['status']),
+      firedAt: serializer.fromJson<DateTime?>(json['firedAt']),
+      persistent: serializer.fromJson<bool>(json['persistent']),
+      intervalMinutes: serializer.fromJson<int?>(json['intervalMinutes']),
+      timeZone: serializer.fromJson<String?>(json['timeZone']),
+      fixedTimezone: serializer.fromJson<bool>(json['fixedTimezone']),
+      clientMutationId: serializer.fromJson<String?>(json['clientMutationId']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
@@ -4850,7 +5491,15 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
       'serverId': serializer.toJson<int?>(serverId),
       'taskId': serializer.toJson<String>(taskId),
       'remindAt': serializer.toJson<DateTime>(remindAt),
+      'anchorType': serializer.toJson<String>(anchorType),
+      'offsetMinutes': serializer.toJson<int?>(offsetMinutes),
       'status': serializer.toJson<String>(status),
+      'firedAt': serializer.toJson<DateTime?>(firedAt),
+      'persistent': serializer.toJson<bool>(persistent),
+      'intervalMinutes': serializer.toJson<int?>(intervalMinutes),
+      'timeZone': serializer.toJson<String?>(timeZone),
+      'fixedTimezone': serializer.toJson<bool>(fixedTimezone),
+      'clientMutationId': serializer.toJson<String?>(clientMutationId),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
@@ -4861,7 +5510,15 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
     Value<int?> serverId = const Value.absent(),
     String? taskId,
     DateTime? remindAt,
+    String? anchorType,
+    Value<int?> offsetMinutes = const Value.absent(),
     String? status,
+    Value<DateTime?> firedAt = const Value.absent(),
+    bool? persistent,
+    Value<int?> intervalMinutes = const Value.absent(),
+    Value<String?> timeZone = const Value.absent(),
+    bool? fixedTimezone,
+    Value<String?> clientMutationId = const Value.absent(),
     DateTime? updatedAt,
     DateTime? createdAt,
   }) => TodoReminder(
@@ -4869,7 +5526,21 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
     serverId: serverId.present ? serverId.value : this.serverId,
     taskId: taskId ?? this.taskId,
     remindAt: remindAt ?? this.remindAt,
+    anchorType: anchorType ?? this.anchorType,
+    offsetMinutes: offsetMinutes.present
+        ? offsetMinutes.value
+        : this.offsetMinutes,
     status: status ?? this.status,
+    firedAt: firedAt.present ? firedAt.value : this.firedAt,
+    persistent: persistent ?? this.persistent,
+    intervalMinutes: intervalMinutes.present
+        ? intervalMinutes.value
+        : this.intervalMinutes,
+    timeZone: timeZone.present ? timeZone.value : this.timeZone,
+    fixedTimezone: fixedTimezone ?? this.fixedTimezone,
+    clientMutationId: clientMutationId.present
+        ? clientMutationId.value
+        : this.clientMutationId,
     updatedAt: updatedAt ?? this.updatedAt,
     createdAt: createdAt ?? this.createdAt,
   );
@@ -4879,7 +5550,27 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
       serverId: data.serverId.present ? data.serverId.value : this.serverId,
       taskId: data.taskId.present ? data.taskId.value : this.taskId,
       remindAt: data.remindAt.present ? data.remindAt.value : this.remindAt,
+      anchorType: data.anchorType.present
+          ? data.anchorType.value
+          : this.anchorType,
+      offsetMinutes: data.offsetMinutes.present
+          ? data.offsetMinutes.value
+          : this.offsetMinutes,
       status: data.status.present ? data.status.value : this.status,
+      firedAt: data.firedAt.present ? data.firedAt.value : this.firedAt,
+      persistent: data.persistent.present
+          ? data.persistent.value
+          : this.persistent,
+      intervalMinutes: data.intervalMinutes.present
+          ? data.intervalMinutes.value
+          : this.intervalMinutes,
+      timeZone: data.timeZone.present ? data.timeZone.value : this.timeZone,
+      fixedTimezone: data.fixedTimezone.present
+          ? data.fixedTimezone.value
+          : this.fixedTimezone,
+      clientMutationId: data.clientMutationId.present
+          ? data.clientMutationId.value
+          : this.clientMutationId,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
@@ -4892,7 +5583,15 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
           ..write('serverId: $serverId, ')
           ..write('taskId: $taskId, ')
           ..write('remindAt: $remindAt, ')
+          ..write('anchorType: $anchorType, ')
+          ..write('offsetMinutes: $offsetMinutes, ')
           ..write('status: $status, ')
+          ..write('firedAt: $firedAt, ')
+          ..write('persistent: $persistent, ')
+          ..write('intervalMinutes: $intervalMinutes, ')
+          ..write('timeZone: $timeZone, ')
+          ..write('fixedTimezone: $fixedTimezone, ')
+          ..write('clientMutationId: $clientMutationId, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -4900,8 +5599,23 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, serverId, taskId, remindAt, status, updatedAt, createdAt);
+  int get hashCode => Object.hash(
+    id,
+    serverId,
+    taskId,
+    remindAt,
+    anchorType,
+    offsetMinutes,
+    status,
+    firedAt,
+    persistent,
+    intervalMinutes,
+    timeZone,
+    fixedTimezone,
+    clientMutationId,
+    updatedAt,
+    createdAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -4910,7 +5624,15 @@ class TodoReminder extends DataClass implements Insertable<TodoReminder> {
           other.serverId == this.serverId &&
           other.taskId == this.taskId &&
           other.remindAt == this.remindAt &&
+          other.anchorType == this.anchorType &&
+          other.offsetMinutes == this.offsetMinutes &&
           other.status == this.status &&
+          other.firedAt == this.firedAt &&
+          other.persistent == this.persistent &&
+          other.intervalMinutes == this.intervalMinutes &&
+          other.timeZone == this.timeZone &&
+          other.fixedTimezone == this.fixedTimezone &&
+          other.clientMutationId == this.clientMutationId &&
           other.updatedAt == this.updatedAt &&
           other.createdAt == this.createdAt);
 }
@@ -4920,7 +5642,15 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
   final Value<int?> serverId;
   final Value<String> taskId;
   final Value<DateTime> remindAt;
+  final Value<String> anchorType;
+  final Value<int?> offsetMinutes;
   final Value<String> status;
+  final Value<DateTime?> firedAt;
+  final Value<bool> persistent;
+  final Value<int?> intervalMinutes;
+  final Value<String?> timeZone;
+  final Value<bool> fixedTimezone;
+  final Value<String?> clientMutationId;
   final Value<DateTime> updatedAt;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
@@ -4929,7 +5659,15 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
     this.serverId = const Value.absent(),
     this.taskId = const Value.absent(),
     this.remindAt = const Value.absent(),
+    this.anchorType = const Value.absent(),
+    this.offsetMinutes = const Value.absent(),
     this.status = const Value.absent(),
+    this.firedAt = const Value.absent(),
+    this.persistent = const Value.absent(),
+    this.intervalMinutes = const Value.absent(),
+    this.timeZone = const Value.absent(),
+    this.fixedTimezone = const Value.absent(),
+    this.clientMutationId = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -4939,7 +5677,15 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
     this.serverId = const Value.absent(),
     required String taskId,
     required DateTime remindAt,
+    this.anchorType = const Value.absent(),
+    this.offsetMinutes = const Value.absent(),
     this.status = const Value.absent(),
+    this.firedAt = const Value.absent(),
+    this.persistent = const Value.absent(),
+    this.intervalMinutes = const Value.absent(),
+    this.timeZone = const Value.absent(),
+    this.fixedTimezone = const Value.absent(),
+    this.clientMutationId = const Value.absent(),
     required DateTime updatedAt,
     required DateTime createdAt,
     this.rowid = const Value.absent(),
@@ -4953,7 +5699,15 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
     Expression<int>? serverId,
     Expression<String>? taskId,
     Expression<DateTime>? remindAt,
+    Expression<String>? anchorType,
+    Expression<int>? offsetMinutes,
     Expression<String>? status,
+    Expression<DateTime>? firedAt,
+    Expression<bool>? persistent,
+    Expression<int>? intervalMinutes,
+    Expression<String>? timeZone,
+    Expression<bool>? fixedTimezone,
+    Expression<String>? clientMutationId,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
@@ -4963,7 +5717,15 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
       if (serverId != null) 'server_id': serverId,
       if (taskId != null) 'task_id': taskId,
       if (remindAt != null) 'remind_at': remindAt,
+      if (anchorType != null) 'anchor_type': anchorType,
+      if (offsetMinutes != null) 'offset_minutes': offsetMinutes,
       if (status != null) 'status': status,
+      if (firedAt != null) 'fired_at': firedAt,
+      if (persistent != null) 'persistent': persistent,
+      if (intervalMinutes != null) 'interval_minutes': intervalMinutes,
+      if (timeZone != null) 'time_zone': timeZone,
+      if (fixedTimezone != null) 'fixed_timezone': fixedTimezone,
+      if (clientMutationId != null) 'client_mutation_id': clientMutationId,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
@@ -4975,7 +5737,15 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
     Value<int?>? serverId,
     Value<String>? taskId,
     Value<DateTime>? remindAt,
+    Value<String>? anchorType,
+    Value<int?>? offsetMinutes,
     Value<String>? status,
+    Value<DateTime?>? firedAt,
+    Value<bool>? persistent,
+    Value<int?>? intervalMinutes,
+    Value<String?>? timeZone,
+    Value<bool>? fixedTimezone,
+    Value<String?>? clientMutationId,
     Value<DateTime>? updatedAt,
     Value<DateTime>? createdAt,
     Value<int>? rowid,
@@ -4985,7 +5755,15 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
       serverId: serverId ?? this.serverId,
       taskId: taskId ?? this.taskId,
       remindAt: remindAt ?? this.remindAt,
+      anchorType: anchorType ?? this.anchorType,
+      offsetMinutes: offsetMinutes ?? this.offsetMinutes,
       status: status ?? this.status,
+      firedAt: firedAt ?? this.firedAt,
+      persistent: persistent ?? this.persistent,
+      intervalMinutes: intervalMinutes ?? this.intervalMinutes,
+      timeZone: timeZone ?? this.timeZone,
+      fixedTimezone: fixedTimezone ?? this.fixedTimezone,
+      clientMutationId: clientMutationId ?? this.clientMutationId,
       updatedAt: updatedAt ?? this.updatedAt,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
@@ -5007,8 +5785,32 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
     if (remindAt.present) {
       map['remind_at'] = Variable<DateTime>(remindAt.value);
     }
+    if (anchorType.present) {
+      map['anchor_type'] = Variable<String>(anchorType.value);
+    }
+    if (offsetMinutes.present) {
+      map['offset_minutes'] = Variable<int>(offsetMinutes.value);
+    }
     if (status.present) {
       map['status'] = Variable<String>(status.value);
+    }
+    if (firedAt.present) {
+      map['fired_at'] = Variable<DateTime>(firedAt.value);
+    }
+    if (persistent.present) {
+      map['persistent'] = Variable<bool>(persistent.value);
+    }
+    if (intervalMinutes.present) {
+      map['interval_minutes'] = Variable<int>(intervalMinutes.value);
+    }
+    if (timeZone.present) {
+      map['time_zone'] = Variable<String>(timeZone.value);
+    }
+    if (fixedTimezone.present) {
+      map['fixed_timezone'] = Variable<bool>(fixedTimezone.value);
+    }
+    if (clientMutationId.present) {
+      map['client_mutation_id'] = Variable<String>(clientMutationId.value);
     }
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
@@ -5029,7 +5831,15 @@ class TodoRemindersCompanion extends UpdateCompanion<TodoReminder> {
           ..write('serverId: $serverId, ')
           ..write('taskId: $taskId, ')
           ..write('remindAt: $remindAt, ')
+          ..write('anchorType: $anchorType, ')
+          ..write('offsetMinutes: $offsetMinutes, ')
           ..write('status: $status, ')
+          ..write('firedAt: $firedAt, ')
+          ..write('persistent: $persistent, ')
+          ..write('intervalMinutes: $intervalMinutes, ')
+          ..write('timeZone: $timeZone, ')
+          ..write('fixedTimezone: $fixedTimezone, ')
+          ..write('clientMutationId: $clientMutationId, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
@@ -5103,6 +5913,28 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _monthDayMeta = const VerificationMeta(
+    'monthDay',
+  );
+  @override
+  late final GeneratedColumn<int> monthDay = GeneratedColumn<int>(
+    'month_day',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _startAtMeta = const VerificationMeta(
+    'startAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> startAt = GeneratedColumn<DateTime>(
+    'start_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _untilMeta = const VerificationMeta('until');
   @override
   late final GeneratedColumn<DateTime> until = GeneratedColumn<DateTime>(
@@ -5110,6 +5942,55 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
     aliasedName,
     true,
     type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _countLimitMeta = const VerificationMeta(
+    'countLimit',
+  );
+  @override
+  late final GeneratedColumn<int> countLimit = GeneratedColumn<int>(
+    'count_limit',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _enabledMeta = const VerificationMeta(
+    'enabled',
+  );
+  @override
+  late final GeneratedColumn<bool> enabled = GeneratedColumn<bool>(
+    'enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _repeatModeMeta = const VerificationMeta(
+    'repeatMode',
+  );
+  @override
+  late final GeneratedColumn<String> repeatMode = GeneratedColumn<String>(
+    'repeat_mode',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('ON_DUE'),
+  );
+  static const VerificationMeta _timeZoneMeta = const VerificationMeta(
+    'timeZone',
+  );
+  @override
+  late final GeneratedColumn<String> timeZone = GeneratedColumn<String>(
+    'time_zone',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
   static const VerificationMeta _updatedAtMeta = const VerificationMeta(
@@ -5142,7 +6023,13 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
     freq,
     interval,
     byDay,
+    monthDay,
+    startAt,
     until,
+    countLimit,
+    enabled,
+    repeatMode,
+    timeZone,
     updatedAt,
     createdAt,
   ];
@@ -5197,10 +6084,46 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
         byDay.isAcceptableOrUnknown(data['by_day']!, _byDayMeta),
       );
     }
+    if (data.containsKey('month_day')) {
+      context.handle(
+        _monthDayMeta,
+        monthDay.isAcceptableOrUnknown(data['month_day']!, _monthDayMeta),
+      );
+    }
+    if (data.containsKey('start_at')) {
+      context.handle(
+        _startAtMeta,
+        startAt.isAcceptableOrUnknown(data['start_at']!, _startAtMeta),
+      );
+    }
     if (data.containsKey('until')) {
       context.handle(
         _untilMeta,
         until.isAcceptableOrUnknown(data['until']!, _untilMeta),
+      );
+    }
+    if (data.containsKey('count_limit')) {
+      context.handle(
+        _countLimitMeta,
+        countLimit.isAcceptableOrUnknown(data['count_limit']!, _countLimitMeta),
+      );
+    }
+    if (data.containsKey('enabled')) {
+      context.handle(
+        _enabledMeta,
+        enabled.isAcceptableOrUnknown(data['enabled']!, _enabledMeta),
+      );
+    }
+    if (data.containsKey('repeat_mode')) {
+      context.handle(
+        _repeatModeMeta,
+        repeatMode.isAcceptableOrUnknown(data['repeat_mode']!, _repeatModeMeta),
+      );
+    }
+    if (data.containsKey('time_zone')) {
+      context.handle(
+        _timeZoneMeta,
+        timeZone.isAcceptableOrUnknown(data['time_zone']!, _timeZoneMeta),
       );
     }
     if (data.containsKey('updated_at')) {
@@ -5252,9 +6175,33 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
         DriftSqlType.string,
         data['${effectivePrefix}by_day'],
       ),
+      monthDay: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}month_day'],
+      ),
+      startAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}start_at'],
+      ),
       until: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}until'],
+      ),
+      countLimit: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}count_limit'],
+      ),
+      enabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}enabled'],
+      )!,
+      repeatMode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}repeat_mode'],
+      )!,
+      timeZone: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}time_zone'],
       ),
       updatedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
@@ -5280,7 +6227,13 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
   final String freq;
   final int interval;
   final String? byDay;
+  final int? monthDay;
+  final DateTime? startAt;
   final DateTime? until;
+  final int? countLimit;
+  final bool enabled;
+  final String repeatMode;
+  final String? timeZone;
   final DateTime updatedAt;
   final DateTime createdAt;
   const TodoRepeatRule({
@@ -5290,7 +6243,13 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
     required this.freq,
     required this.interval,
     this.byDay,
+    this.monthDay,
+    this.startAt,
     this.until,
+    this.countLimit,
+    required this.enabled,
+    required this.repeatMode,
+    this.timeZone,
     required this.updatedAt,
     required this.createdAt,
   });
@@ -5307,8 +6266,22 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
     if (!nullToAbsent || byDay != null) {
       map['by_day'] = Variable<String>(byDay);
     }
+    if (!nullToAbsent || monthDay != null) {
+      map['month_day'] = Variable<int>(monthDay);
+    }
+    if (!nullToAbsent || startAt != null) {
+      map['start_at'] = Variable<DateTime>(startAt);
+    }
     if (!nullToAbsent || until != null) {
       map['until'] = Variable<DateTime>(until);
+    }
+    if (!nullToAbsent || countLimit != null) {
+      map['count_limit'] = Variable<int>(countLimit);
+    }
+    map['enabled'] = Variable<bool>(enabled);
+    map['repeat_mode'] = Variable<String>(repeatMode);
+    if (!nullToAbsent || timeZone != null) {
+      map['time_zone'] = Variable<String>(timeZone);
     }
     map['updated_at'] = Variable<DateTime>(updatedAt);
     map['created_at'] = Variable<DateTime>(createdAt);
@@ -5327,9 +6300,23 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
       byDay: byDay == null && nullToAbsent
           ? const Value.absent()
           : Value(byDay),
+      monthDay: monthDay == null && nullToAbsent
+          ? const Value.absent()
+          : Value(monthDay),
+      startAt: startAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(startAt),
       until: until == null && nullToAbsent
           ? const Value.absent()
           : Value(until),
+      countLimit: countLimit == null && nullToAbsent
+          ? const Value.absent()
+          : Value(countLimit),
+      enabled: Value(enabled),
+      repeatMode: Value(repeatMode),
+      timeZone: timeZone == null && nullToAbsent
+          ? const Value.absent()
+          : Value(timeZone),
       updatedAt: Value(updatedAt),
       createdAt: Value(createdAt),
     );
@@ -5347,7 +6334,13 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
       freq: serializer.fromJson<String>(json['freq']),
       interval: serializer.fromJson<int>(json['interval']),
       byDay: serializer.fromJson<String?>(json['byDay']),
+      monthDay: serializer.fromJson<int?>(json['monthDay']),
+      startAt: serializer.fromJson<DateTime?>(json['startAt']),
       until: serializer.fromJson<DateTime?>(json['until']),
+      countLimit: serializer.fromJson<int?>(json['countLimit']),
+      enabled: serializer.fromJson<bool>(json['enabled']),
+      repeatMode: serializer.fromJson<String>(json['repeatMode']),
+      timeZone: serializer.fromJson<String?>(json['timeZone']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
@@ -5362,7 +6355,13 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
       'freq': serializer.toJson<String>(freq),
       'interval': serializer.toJson<int>(interval),
       'byDay': serializer.toJson<String?>(byDay),
+      'monthDay': serializer.toJson<int?>(monthDay),
+      'startAt': serializer.toJson<DateTime?>(startAt),
       'until': serializer.toJson<DateTime?>(until),
+      'countLimit': serializer.toJson<int?>(countLimit),
+      'enabled': serializer.toJson<bool>(enabled),
+      'repeatMode': serializer.toJson<String>(repeatMode),
+      'timeZone': serializer.toJson<String?>(timeZone),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
@@ -5375,7 +6374,13 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
     String? freq,
     int? interval,
     Value<String?> byDay = const Value.absent(),
+    Value<int?> monthDay = const Value.absent(),
+    Value<DateTime?> startAt = const Value.absent(),
     Value<DateTime?> until = const Value.absent(),
+    Value<int?> countLimit = const Value.absent(),
+    bool? enabled,
+    String? repeatMode,
+    Value<String?> timeZone = const Value.absent(),
     DateTime? updatedAt,
     DateTime? createdAt,
   }) => TodoRepeatRule(
@@ -5385,7 +6390,13 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
     freq: freq ?? this.freq,
     interval: interval ?? this.interval,
     byDay: byDay.present ? byDay.value : this.byDay,
+    monthDay: monthDay.present ? monthDay.value : this.monthDay,
+    startAt: startAt.present ? startAt.value : this.startAt,
     until: until.present ? until.value : this.until,
+    countLimit: countLimit.present ? countLimit.value : this.countLimit,
+    enabled: enabled ?? this.enabled,
+    repeatMode: repeatMode ?? this.repeatMode,
+    timeZone: timeZone.present ? timeZone.value : this.timeZone,
     updatedAt: updatedAt ?? this.updatedAt,
     createdAt: createdAt ?? this.createdAt,
   );
@@ -5397,7 +6408,17 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
       freq: data.freq.present ? data.freq.value : this.freq,
       interval: data.interval.present ? data.interval.value : this.interval,
       byDay: data.byDay.present ? data.byDay.value : this.byDay,
+      monthDay: data.monthDay.present ? data.monthDay.value : this.monthDay,
+      startAt: data.startAt.present ? data.startAt.value : this.startAt,
       until: data.until.present ? data.until.value : this.until,
+      countLimit: data.countLimit.present
+          ? data.countLimit.value
+          : this.countLimit,
+      enabled: data.enabled.present ? data.enabled.value : this.enabled,
+      repeatMode: data.repeatMode.present
+          ? data.repeatMode.value
+          : this.repeatMode,
+      timeZone: data.timeZone.present ? data.timeZone.value : this.timeZone,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
@@ -5412,7 +6433,13 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
           ..write('freq: $freq, ')
           ..write('interval: $interval, ')
           ..write('byDay: $byDay, ')
+          ..write('monthDay: $monthDay, ')
+          ..write('startAt: $startAt, ')
           ..write('until: $until, ')
+          ..write('countLimit: $countLimit, ')
+          ..write('enabled: $enabled, ')
+          ..write('repeatMode: $repeatMode, ')
+          ..write('timeZone: $timeZone, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -5427,7 +6454,13 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
     freq,
     interval,
     byDay,
+    monthDay,
+    startAt,
     until,
+    countLimit,
+    enabled,
+    repeatMode,
+    timeZone,
     updatedAt,
     createdAt,
   );
@@ -5441,7 +6474,13 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
           other.freq == this.freq &&
           other.interval == this.interval &&
           other.byDay == this.byDay &&
+          other.monthDay == this.monthDay &&
+          other.startAt == this.startAt &&
           other.until == this.until &&
+          other.countLimit == this.countLimit &&
+          other.enabled == this.enabled &&
+          other.repeatMode == this.repeatMode &&
+          other.timeZone == this.timeZone &&
           other.updatedAt == this.updatedAt &&
           other.createdAt == this.createdAt);
 }
@@ -5453,7 +6492,13 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
   final Value<String> freq;
   final Value<int> interval;
   final Value<String?> byDay;
+  final Value<int?> monthDay;
+  final Value<DateTime?> startAt;
   final Value<DateTime?> until;
+  final Value<int?> countLimit;
+  final Value<bool> enabled;
+  final Value<String> repeatMode;
+  final Value<String?> timeZone;
   final Value<DateTime> updatedAt;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
@@ -5464,7 +6509,13 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
     this.freq = const Value.absent(),
     this.interval = const Value.absent(),
     this.byDay = const Value.absent(),
+    this.monthDay = const Value.absent(),
+    this.startAt = const Value.absent(),
     this.until = const Value.absent(),
+    this.countLimit = const Value.absent(),
+    this.enabled = const Value.absent(),
+    this.repeatMode = const Value.absent(),
+    this.timeZone = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -5476,7 +6527,13 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
     required String freq,
     this.interval = const Value.absent(),
     this.byDay = const Value.absent(),
+    this.monthDay = const Value.absent(),
+    this.startAt = const Value.absent(),
     this.until = const Value.absent(),
+    this.countLimit = const Value.absent(),
+    this.enabled = const Value.absent(),
+    this.repeatMode = const Value.absent(),
+    this.timeZone = const Value.absent(),
     required DateTime updatedAt,
     required DateTime createdAt,
     this.rowid = const Value.absent(),
@@ -5492,7 +6549,13 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
     Expression<String>? freq,
     Expression<int>? interval,
     Expression<String>? byDay,
+    Expression<int>? monthDay,
+    Expression<DateTime>? startAt,
     Expression<DateTime>? until,
+    Expression<int>? countLimit,
+    Expression<bool>? enabled,
+    Expression<String>? repeatMode,
+    Expression<String>? timeZone,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
@@ -5504,7 +6567,13 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
       if (freq != null) 'freq': freq,
       if (interval != null) 'interval': interval,
       if (byDay != null) 'by_day': byDay,
+      if (monthDay != null) 'month_day': monthDay,
+      if (startAt != null) 'start_at': startAt,
       if (until != null) 'until': until,
+      if (countLimit != null) 'count_limit': countLimit,
+      if (enabled != null) 'enabled': enabled,
+      if (repeatMode != null) 'repeat_mode': repeatMode,
+      if (timeZone != null) 'time_zone': timeZone,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
@@ -5518,7 +6587,13 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
     Value<String>? freq,
     Value<int>? interval,
     Value<String?>? byDay,
+    Value<int?>? monthDay,
+    Value<DateTime?>? startAt,
     Value<DateTime?>? until,
+    Value<int?>? countLimit,
+    Value<bool>? enabled,
+    Value<String>? repeatMode,
+    Value<String?>? timeZone,
     Value<DateTime>? updatedAt,
     Value<DateTime>? createdAt,
     Value<int>? rowid,
@@ -5530,7 +6605,13 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
       freq: freq ?? this.freq,
       interval: interval ?? this.interval,
       byDay: byDay ?? this.byDay,
+      monthDay: monthDay ?? this.monthDay,
+      startAt: startAt ?? this.startAt,
       until: until ?? this.until,
+      countLimit: countLimit ?? this.countLimit,
+      enabled: enabled ?? this.enabled,
+      repeatMode: repeatMode ?? this.repeatMode,
+      timeZone: timeZone ?? this.timeZone,
       updatedAt: updatedAt ?? this.updatedAt,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
@@ -5558,8 +6639,26 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
     if (byDay.present) {
       map['by_day'] = Variable<String>(byDay.value);
     }
+    if (monthDay.present) {
+      map['month_day'] = Variable<int>(monthDay.value);
+    }
+    if (startAt.present) {
+      map['start_at'] = Variable<DateTime>(startAt.value);
+    }
     if (until.present) {
       map['until'] = Variable<DateTime>(until.value);
+    }
+    if (countLimit.present) {
+      map['count_limit'] = Variable<int>(countLimit.value);
+    }
+    if (enabled.present) {
+      map['enabled'] = Variable<bool>(enabled.value);
+    }
+    if (repeatMode.present) {
+      map['repeat_mode'] = Variable<String>(repeatMode.value);
+    }
+    if (timeZone.present) {
+      map['time_zone'] = Variable<String>(timeZone.value);
     }
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
@@ -5582,7 +6681,13 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
           ..write('freq: $freq, ')
           ..write('interval: $interval, ')
           ..write('byDay: $byDay, ')
+          ..write('monthDay: $monthDay, ')
+          ..write('startAt: $startAt, ')
           ..write('until: $until, ')
+          ..write('countLimit: $countLimit, ')
+          ..write('enabled: $enabled, ')
+          ..write('repeatMode: $repeatMode, ')
+          ..write('timeZone: $timeZone, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
@@ -8435,6 +9540,7 @@ typedef $$TodoTasksTableCreateCompanionBuilder =
       required String title,
       Value<String?> description,
       Value<bool> completed,
+      Value<DateTime?> completedAt,
       Value<bool> cancelled,
       Value<int> priority,
       Value<bool> isPinned,
@@ -8442,6 +9548,12 @@ typedef $$TodoTasksTableCreateCompanionBuilder =
       Value<DateTime?> startAt,
       Value<DateTime?> endAt,
       Value<DateTime?> dueAt,
+      Value<bool> allDay,
+      Value<String?> timeZone,
+      Value<bool> fixedTimezone,
+      Value<String?> repeatParentTaskId,
+      Value<String?> repeatRuleId,
+      Value<DateTime?> repeatOccurrenceAt,
       required DateTime updatedAt,
       required DateTime createdAt,
       Value<int> rowid,
@@ -8455,6 +9567,7 @@ typedef $$TodoTasksTableUpdateCompanionBuilder =
       Value<String> title,
       Value<String?> description,
       Value<bool> completed,
+      Value<DateTime?> completedAt,
       Value<bool> cancelled,
       Value<int> priority,
       Value<bool> isPinned,
@@ -8462,6 +9575,12 @@ typedef $$TodoTasksTableUpdateCompanionBuilder =
       Value<DateTime?> startAt,
       Value<DateTime?> endAt,
       Value<DateTime?> dueAt,
+      Value<bool> allDay,
+      Value<String?> timeZone,
+      Value<bool> fixedTimezone,
+      Value<String?> repeatParentTaskId,
+      Value<String?> repeatRuleId,
+      Value<DateTime?> repeatOccurrenceAt,
       Value<DateTime> updatedAt,
       Value<DateTime> createdAt,
       Value<int> rowid,
@@ -8511,6 +9630,11 @@ class $$TodoTasksTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<DateTime> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<bool> get cancelled => $composableBuilder(
     column: $table.cancelled,
     builder: (column) => ColumnFilters(column),
@@ -8543,6 +9667,36 @@ class $$TodoTasksTableFilterComposer
 
   ColumnFilters<DateTime> get dueAt => $composableBuilder(
     column: $table.dueAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get allDay => $composableBuilder(
+    column: $table.allDay,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get timeZone => $composableBuilder(
+    column: $table.timeZone,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get fixedTimezone => $composableBuilder(
+    column: $table.fixedTimezone,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get repeatParentTaskId => $composableBuilder(
+    column: $table.repeatParentTaskId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get repeatRuleId => $composableBuilder(
+    column: $table.repeatRuleId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get repeatOccurrenceAt => $composableBuilder(
+    column: $table.repeatOccurrenceAt,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8601,6 +9755,11 @@ class $$TodoTasksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get cancelled => $composableBuilder(
     column: $table.cancelled,
     builder: (column) => ColumnOrderings(column),
@@ -8633,6 +9792,36 @@ class $$TodoTasksTableOrderingComposer
 
   ColumnOrderings<DateTime> get dueAt => $composableBuilder(
     column: $table.dueAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get allDay => $composableBuilder(
+    column: $table.allDay,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get timeZone => $composableBuilder(
+    column: $table.timeZone,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get fixedTimezone => $composableBuilder(
+    column: $table.fixedTimezone,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get repeatParentTaskId => $composableBuilder(
+    column: $table.repeatParentTaskId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get repeatRuleId => $composableBuilder(
+    column: $table.repeatRuleId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get repeatOccurrenceAt => $composableBuilder(
+    column: $table.repeatOccurrenceAt,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -8681,6 +9870,11 @@ class $$TodoTasksTableAnnotationComposer
   GeneratedColumn<bool> get completed =>
       $composableBuilder(column: $table.completed, builder: (column) => column);
 
+  GeneratedColumn<DateTime> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<bool> get cancelled =>
       $composableBuilder(column: $table.cancelled, builder: (column) => column);
 
@@ -8701,6 +9895,32 @@ class $$TodoTasksTableAnnotationComposer
 
   GeneratedColumn<DateTime> get dueAt =>
       $composableBuilder(column: $table.dueAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get allDay =>
+      $composableBuilder(column: $table.allDay, builder: (column) => column);
+
+  GeneratedColumn<String> get timeZone =>
+      $composableBuilder(column: $table.timeZone, builder: (column) => column);
+
+  GeneratedColumn<bool> get fixedTimezone => $composableBuilder(
+    column: $table.fixedTimezone,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get repeatParentTaskId => $composableBuilder(
+    column: $table.repeatParentTaskId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get repeatRuleId => $composableBuilder(
+    column: $table.repeatRuleId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get repeatOccurrenceAt => $composableBuilder(
+    column: $table.repeatOccurrenceAt,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
@@ -8744,6 +9964,7 @@ class $$TodoTasksTableTableManager
                 Value<String> title = const Value.absent(),
                 Value<String?> description = const Value.absent(),
                 Value<bool> completed = const Value.absent(),
+                Value<DateTime?> completedAt = const Value.absent(),
                 Value<bool> cancelled = const Value.absent(),
                 Value<int> priority = const Value.absent(),
                 Value<bool> isPinned = const Value.absent(),
@@ -8751,6 +9972,12 @@ class $$TodoTasksTableTableManager
                 Value<DateTime?> startAt = const Value.absent(),
                 Value<DateTime?> endAt = const Value.absent(),
                 Value<DateTime?> dueAt = const Value.absent(),
+                Value<bool> allDay = const Value.absent(),
+                Value<String?> timeZone = const Value.absent(),
+                Value<bool> fixedTimezone = const Value.absent(),
+                Value<String?> repeatParentTaskId = const Value.absent(),
+                Value<String?> repeatRuleId = const Value.absent(),
+                Value<DateTime?> repeatOccurrenceAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -8762,6 +9989,7 @@ class $$TodoTasksTableTableManager
                 title: title,
                 description: description,
                 completed: completed,
+                completedAt: completedAt,
                 cancelled: cancelled,
                 priority: priority,
                 isPinned: isPinned,
@@ -8769,6 +9997,12 @@ class $$TodoTasksTableTableManager
                 startAt: startAt,
                 endAt: endAt,
                 dueAt: dueAt,
+                allDay: allDay,
+                timeZone: timeZone,
+                fixedTimezone: fixedTimezone,
+                repeatParentTaskId: repeatParentTaskId,
+                repeatRuleId: repeatRuleId,
+                repeatOccurrenceAt: repeatOccurrenceAt,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
                 rowid: rowid,
@@ -8782,6 +10016,7 @@ class $$TodoTasksTableTableManager
                 required String title,
                 Value<String?> description = const Value.absent(),
                 Value<bool> completed = const Value.absent(),
+                Value<DateTime?> completedAt = const Value.absent(),
                 Value<bool> cancelled = const Value.absent(),
                 Value<int> priority = const Value.absent(),
                 Value<bool> isPinned = const Value.absent(),
@@ -8789,6 +10024,12 @@ class $$TodoTasksTableTableManager
                 Value<DateTime?> startAt = const Value.absent(),
                 Value<DateTime?> endAt = const Value.absent(),
                 Value<DateTime?> dueAt = const Value.absent(),
+                Value<bool> allDay = const Value.absent(),
+                Value<String?> timeZone = const Value.absent(),
+                Value<bool> fixedTimezone = const Value.absent(),
+                Value<String?> repeatParentTaskId = const Value.absent(),
+                Value<String?> repeatRuleId = const Value.absent(),
+                Value<DateTime?> repeatOccurrenceAt = const Value.absent(),
                 required DateTime updatedAt,
                 required DateTime createdAt,
                 Value<int> rowid = const Value.absent(),
@@ -8800,6 +10041,7 @@ class $$TodoTasksTableTableManager
                 title: title,
                 description: description,
                 completed: completed,
+                completedAt: completedAt,
                 cancelled: cancelled,
                 priority: priority,
                 isPinned: isPinned,
@@ -8807,6 +10049,12 @@ class $$TodoTasksTableTableManager
                 startAt: startAt,
                 endAt: endAt,
                 dueAt: dueAt,
+                allDay: allDay,
+                timeZone: timeZone,
+                fixedTimezone: fixedTimezone,
+                repeatParentTaskId: repeatParentTaskId,
+                repeatRuleId: repeatRuleId,
+                repeatOccurrenceAt: repeatOccurrenceAt,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
                 rowid: rowid,
@@ -10524,7 +11772,15 @@ typedef $$TodoRemindersTableCreateCompanionBuilder =
       Value<int?> serverId,
       required String taskId,
       required DateTime remindAt,
+      Value<String> anchorType,
+      Value<int?> offsetMinutes,
       Value<String> status,
+      Value<DateTime?> firedAt,
+      Value<bool> persistent,
+      Value<int?> intervalMinutes,
+      Value<String?> timeZone,
+      Value<bool> fixedTimezone,
+      Value<String?> clientMutationId,
       required DateTime updatedAt,
       required DateTime createdAt,
       Value<int> rowid,
@@ -10535,7 +11791,15 @@ typedef $$TodoRemindersTableUpdateCompanionBuilder =
       Value<int?> serverId,
       Value<String> taskId,
       Value<DateTime> remindAt,
+      Value<String> anchorType,
+      Value<int?> offsetMinutes,
       Value<String> status,
+      Value<DateTime?> firedAt,
+      Value<bool> persistent,
+      Value<int?> intervalMinutes,
+      Value<String?> timeZone,
+      Value<bool> fixedTimezone,
+      Value<String?> clientMutationId,
       Value<DateTime> updatedAt,
       Value<DateTime> createdAt,
       Value<int> rowid,
@@ -10570,8 +11834,48 @@ class $$TodoRemindersTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get anchorType => $composableBuilder(
+    column: $table.anchorType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get offsetMinutes => $composableBuilder(
+    column: $table.offsetMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get status => $composableBuilder(
     column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get firedAt => $composableBuilder(
+    column: $table.firedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get persistent => $composableBuilder(
+    column: $table.persistent,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get intervalMinutes => $composableBuilder(
+    column: $table.intervalMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get timeZone => $composableBuilder(
+    column: $table.timeZone,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get fixedTimezone => $composableBuilder(
+    column: $table.fixedTimezone,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get clientMutationId => $composableBuilder(
+    column: $table.clientMutationId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10615,8 +11919,48 @@ class $$TodoRemindersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get anchorType => $composableBuilder(
+    column: $table.anchorType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get offsetMinutes => $composableBuilder(
+    column: $table.offsetMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get status => $composableBuilder(
     column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get firedAt => $composableBuilder(
+    column: $table.firedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get persistent => $composableBuilder(
+    column: $table.persistent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get intervalMinutes => $composableBuilder(
+    column: $table.intervalMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get timeZone => $composableBuilder(
+    column: $table.timeZone,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get fixedTimezone => $composableBuilder(
+    column: $table.fixedTimezone,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get clientMutationId => $composableBuilder(
+    column: $table.clientMutationId,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -10652,8 +11996,44 @@ class $$TodoRemindersTableAnnotationComposer
   GeneratedColumn<DateTime> get remindAt =>
       $composableBuilder(column: $table.remindAt, builder: (column) => column);
 
+  GeneratedColumn<String> get anchorType => $composableBuilder(
+    column: $table.anchorType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get offsetMinutes => $composableBuilder(
+    column: $table.offsetMinutes,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get status =>
       $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get firedAt =>
+      $composableBuilder(column: $table.firedAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get persistent => $composableBuilder(
+    column: $table.persistent,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get intervalMinutes => $composableBuilder(
+    column: $table.intervalMinutes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get timeZone =>
+      $composableBuilder(column: $table.timeZone, builder: (column) => column);
+
+  GeneratedColumn<bool> get fixedTimezone => $composableBuilder(
+    column: $table.fixedTimezone,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get clientMutationId => $composableBuilder(
+    column: $table.clientMutationId,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
@@ -10697,7 +12077,15 @@ class $$TodoRemindersTableTableManager
                 Value<int?> serverId = const Value.absent(),
                 Value<String> taskId = const Value.absent(),
                 Value<DateTime> remindAt = const Value.absent(),
+                Value<String> anchorType = const Value.absent(),
+                Value<int?> offsetMinutes = const Value.absent(),
                 Value<String> status = const Value.absent(),
+                Value<DateTime?> firedAt = const Value.absent(),
+                Value<bool> persistent = const Value.absent(),
+                Value<int?> intervalMinutes = const Value.absent(),
+                Value<String?> timeZone = const Value.absent(),
+                Value<bool> fixedTimezone = const Value.absent(),
+                Value<String?> clientMutationId = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -10706,7 +12094,15 @@ class $$TodoRemindersTableTableManager
                 serverId: serverId,
                 taskId: taskId,
                 remindAt: remindAt,
+                anchorType: anchorType,
+                offsetMinutes: offsetMinutes,
                 status: status,
+                firedAt: firedAt,
+                persistent: persistent,
+                intervalMinutes: intervalMinutes,
+                timeZone: timeZone,
+                fixedTimezone: fixedTimezone,
+                clientMutationId: clientMutationId,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
                 rowid: rowid,
@@ -10717,7 +12113,15 @@ class $$TodoRemindersTableTableManager
                 Value<int?> serverId = const Value.absent(),
                 required String taskId,
                 required DateTime remindAt,
+                Value<String> anchorType = const Value.absent(),
+                Value<int?> offsetMinutes = const Value.absent(),
                 Value<String> status = const Value.absent(),
+                Value<DateTime?> firedAt = const Value.absent(),
+                Value<bool> persistent = const Value.absent(),
+                Value<int?> intervalMinutes = const Value.absent(),
+                Value<String?> timeZone = const Value.absent(),
+                Value<bool> fixedTimezone = const Value.absent(),
+                Value<String?> clientMutationId = const Value.absent(),
                 required DateTime updatedAt,
                 required DateTime createdAt,
                 Value<int> rowid = const Value.absent(),
@@ -10726,7 +12130,15 @@ class $$TodoRemindersTableTableManager
                 serverId: serverId,
                 taskId: taskId,
                 remindAt: remindAt,
+                anchorType: anchorType,
+                offsetMinutes: offsetMinutes,
                 status: status,
+                firedAt: firedAt,
+                persistent: persistent,
+                intervalMinutes: intervalMinutes,
+                timeZone: timeZone,
+                fixedTimezone: fixedTimezone,
+                clientMutationId: clientMutationId,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
                 rowid: rowid,
@@ -10764,7 +12176,13 @@ typedef $$TodoRepeatRulesTableCreateCompanionBuilder =
       required String freq,
       Value<int> interval,
       Value<String?> byDay,
+      Value<int?> monthDay,
+      Value<DateTime?> startAt,
       Value<DateTime?> until,
+      Value<int?> countLimit,
+      Value<bool> enabled,
+      Value<String> repeatMode,
+      Value<String?> timeZone,
       required DateTime updatedAt,
       required DateTime createdAt,
       Value<int> rowid,
@@ -10777,7 +12195,13 @@ typedef $$TodoRepeatRulesTableUpdateCompanionBuilder =
       Value<String> freq,
       Value<int> interval,
       Value<String?> byDay,
+      Value<int?> monthDay,
+      Value<DateTime?> startAt,
       Value<DateTime?> until,
+      Value<int?> countLimit,
+      Value<bool> enabled,
+      Value<String> repeatMode,
+      Value<String?> timeZone,
       Value<DateTime> updatedAt,
       Value<DateTime> createdAt,
       Value<int> rowid,
@@ -10822,8 +12246,38 @@ class $$TodoRepeatRulesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<int> get monthDay => $composableBuilder(
+    column: $table.monthDay,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get startAt => $composableBuilder(
+    column: $table.startAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<DateTime> get until => $composableBuilder(
     column: $table.until,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get countLimit => $composableBuilder(
+    column: $table.countLimit,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get repeatMode => $composableBuilder(
+    column: $table.repeatMode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get timeZone => $composableBuilder(
+    column: $table.timeZone,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10877,8 +12331,38 @@ class $$TodoRepeatRulesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get monthDay => $composableBuilder(
+    column: $table.monthDay,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get startAt => $composableBuilder(
+    column: $table.startAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get until => $composableBuilder(
     column: $table.until,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get countLimit => $composableBuilder(
+    column: $table.countLimit,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get repeatMode => $composableBuilder(
+    column: $table.repeatMode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get timeZone => $composableBuilder(
+    column: $table.timeZone,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -10920,8 +12404,30 @@ class $$TodoRepeatRulesTableAnnotationComposer
   GeneratedColumn<String> get byDay =>
       $composableBuilder(column: $table.byDay, builder: (column) => column);
 
+  GeneratedColumn<int> get monthDay =>
+      $composableBuilder(column: $table.monthDay, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get startAt =>
+      $composableBuilder(column: $table.startAt, builder: (column) => column);
+
   GeneratedColumn<DateTime> get until =>
       $composableBuilder(column: $table.until, builder: (column) => column);
+
+  GeneratedColumn<int> get countLimit => $composableBuilder(
+    column: $table.countLimit,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get enabled =>
+      $composableBuilder(column: $table.enabled, builder: (column) => column);
+
+  GeneratedColumn<String> get repeatMode => $composableBuilder(
+    column: $table.repeatMode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get timeZone =>
+      $composableBuilder(column: $table.timeZone, builder: (column) => column);
 
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
@@ -10973,7 +12479,13 @@ class $$TodoRepeatRulesTableTableManager
                 Value<String> freq = const Value.absent(),
                 Value<int> interval = const Value.absent(),
                 Value<String?> byDay = const Value.absent(),
+                Value<int?> monthDay = const Value.absent(),
+                Value<DateTime?> startAt = const Value.absent(),
                 Value<DateTime?> until = const Value.absent(),
+                Value<int?> countLimit = const Value.absent(),
+                Value<bool> enabled = const Value.absent(),
+                Value<String> repeatMode = const Value.absent(),
+                Value<String?> timeZone = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -10984,7 +12496,13 @@ class $$TodoRepeatRulesTableTableManager
                 freq: freq,
                 interval: interval,
                 byDay: byDay,
+                monthDay: monthDay,
+                startAt: startAt,
                 until: until,
+                countLimit: countLimit,
+                enabled: enabled,
+                repeatMode: repeatMode,
+                timeZone: timeZone,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
                 rowid: rowid,
@@ -10997,7 +12515,13 @@ class $$TodoRepeatRulesTableTableManager
                 required String freq,
                 Value<int> interval = const Value.absent(),
                 Value<String?> byDay = const Value.absent(),
+                Value<int?> monthDay = const Value.absent(),
+                Value<DateTime?> startAt = const Value.absent(),
                 Value<DateTime?> until = const Value.absent(),
+                Value<int?> countLimit = const Value.absent(),
+                Value<bool> enabled = const Value.absent(),
+                Value<String> repeatMode = const Value.absent(),
+                Value<String?> timeZone = const Value.absent(),
                 required DateTime updatedAt,
                 required DateTime createdAt,
                 Value<int> rowid = const Value.absent(),
@@ -11008,7 +12532,13 @@ class $$TodoRepeatRulesTableTableManager
                 freq: freq,
                 interval: interval,
                 byDay: byDay,
+                monthDay: monthDay,
+                startAt: startAt,
                 until: until,
+                countLimit: countLimit,
+                enabled: enabled,
+                repeatMode: repeatMode,
+                timeZone: timeZone,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
                 rowid: rowid,

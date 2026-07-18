@@ -84,6 +84,7 @@ dev_dependencies:
   # Drift 代码生成
   drift_dev: ^2.18.0
   build_runner: ^2.4.13
+  sqlite3: ^2.9.4
 
   # 模型代码生成
   freezed: ^2.5.7

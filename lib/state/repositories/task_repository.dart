@@ -76,9 +76,15 @@ class TaskRepository {
     DateTime? startAt,
     DateTime? endAt,
     DateTime? dueAt,
+    bool allDay = false,
+    String? timeZone,
+    bool fixedTimezone = false,
     String? parentTaskId,
     bool isPinned = false,
   }) async {
+    if (startAt != null && endAt != null && !endAt.isAfter(startAt)) {
+      throw ArgumentError.value(endAt, 'endAt', '结束时间必须晚于开始时间');
+    }
     final normalizedTitle = title.trim();
     if (normalizedTitle.isEmpty) {
       throw ArgumentError.value(title, 'title', '任务标题不能为空');
@@ -102,6 +108,9 @@ class TaskRepository {
               startAt: Value(startAt),
               endAt: Value(endAt),
               dueAt: Value(dueAt),
+              allDay: Value(allDay),
+              timeZone: Value(timeZone),
+              fixedTimezone: Value(fixedTimezone),
               updatedAt: now,
               createdAt: now,
             ),
@@ -183,6 +192,9 @@ class TaskRepository {
       startAt: original.startAt,
       endAt: original.endAt,
       dueAt: original.dueAt,
+      allDay: original.allDay,
+      timeZone: original.timeZone,
+      fixedTimezone: original.fixedTimezone,
     );
   }
 
@@ -193,49 +205,64 @@ class TaskRepository {
     int? priority,
     DateTime? startAt,
     DateTime? endAt,
-    DateTime? dueAt,
     bool clearStartAt = false,
     bool clearEndAt = false,
+    DateTime? dueAt,
     bool clearDueAt = false,
+    bool? allDay,
+    String? timeZone,
+    bool? fixedTimezone,
     String? listId,
     bool? isPinned,
   }) async {
     final now = DateTime.now();
     late TodoTask row;
     await _db.transaction(() async {
+      final current = await (_db.select(
+        _db.todoTasks,
+      )..where((t) => t.id.equals(taskId))).getSingle();
+      final nextStartAt = clearStartAt ? null : startAt ?? current.startAt;
+      final nextEndAt = clearEndAt ? null : endAt ?? current.endAt;
+      if (nextStartAt != null &&
+          nextEndAt != null &&
+          !nextEndAt.isAfter(nextStartAt)) {
+        throw ArgumentError.value(nextEndAt, 'endAt', '结束时间必须晚于开始时间');
+      }
       if (listId != null) await _ensureInboxList(listId, now);
-      await (_db.update(_db.todoTasks)..where((t) => t.id.equals(taskId)))
-          .write(
-            TodoTasksCompanion(
-              title: title == null ? const Value.absent() : Value(title),
-              description: description == null
-                  ? const Value.absent()
-                  : Value(description),
-              priority: priority == null
-                  ? const Value.absent()
-                  : Value(priority),
-              isPinned: isPinned == null
-                  ? const Value.absent()
-                  : Value(isPinned),
-              startAt: clearStartAt
-                  ? const Value(null)
-                  : startAt == null
-                  ? const Value.absent()
-                  : Value(startAt),
-              endAt: clearEndAt
-                  ? const Value(null)
-                  : endAt == null
-                  ? const Value.absent()
-                  : Value(endAt),
-              dueAt: clearDueAt
-                  ? const Value(null)
-                  : dueAt == null
-                  ? const Value.absent()
-                  : Value(dueAt),
-              listId: listId == null ? const Value.absent() : Value(listId),
-              updatedAt: Value(now),
-            ),
-          );
+      await (_db.update(
+        _db.todoTasks,
+      )..where((t) => t.id.equals(taskId))).write(
+        TodoTasksCompanion(
+          title: title == null ? const Value.absent() : Value(title),
+          description: description == null
+              ? const Value.absent()
+              : Value(description),
+          priority: priority == null ? const Value.absent() : Value(priority),
+          isPinned: isPinned == null ? const Value.absent() : Value(isPinned),
+          startAt: clearStartAt
+              ? const Value(null)
+              : startAt == null
+              ? const Value.absent()
+              : Value(startAt),
+          endAt: clearEndAt
+              ? const Value(null)
+              : endAt == null
+              ? const Value.absent()
+              : Value(endAt),
+          dueAt: clearDueAt
+              ? const Value(null)
+              : dueAt == null
+              ? const Value.absent()
+              : Value(dueAt),
+          allDay: allDay == null ? const Value.absent() : Value(allDay),
+          timeZone: timeZone == null ? const Value.absent() : Value(timeZone),
+          fixedTimezone: fixedTimezone == null
+              ? const Value.absent()
+              : Value(fixedTimezone),
+          listId: listId == null ? const Value.absent() : Value(listId),
+          updatedAt: Value(now),
+        ),
+      );
       row = await (_db.select(
         _db.todoTasks,
       )..where((t) => t.id.equals(taskId))).getSingle();
@@ -674,7 +701,8 @@ class TaskRepository {
     'status': task.cancelled
         ? 'cancelled'
         : task.completed
-        ? 'done'
-        : 'todo',
+        ? 'DONE'
+        : 'TODO',
+    'completedAt': task.completedAt?.millisecondsSinceEpoch,
   };
 }
