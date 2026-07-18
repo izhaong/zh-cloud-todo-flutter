@@ -80,6 +80,22 @@ void main() {
     expect(tester.getSize(find.byType(QuickAddBar)).height, 44);
   });
 
+  testWidgets(
+    'desktop QuickAdd exposes a stable input anchor for GUI journeys',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData.light().copyWith(
+            extensions: const [AppThemeExtension(AppColors.light)],
+          ),
+          home: Scaffold(body: QuickAddBar(onSubmit: (_) {})),
+        ),
+      );
+
+      expect(find.byKey(const Key('todo-quick-add-input')), findsOneWidget);
+    },
+  );
+
   testWidgets('QuickAddBar sends explicit priority and tag overrides', (
     tester,
   ) async {

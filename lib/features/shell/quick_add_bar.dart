@@ -437,6 +437,7 @@ class _QuickAddBarState extends State<QuickAddBar> {
               const SizedBox(width: 8),
               Expanded(
                 child: TextField(
+                  key: const Key('todo-quick-add-input'),
                   controller: _ctrl,
                   enabled: !_submitting,
                   minLines: 1,
