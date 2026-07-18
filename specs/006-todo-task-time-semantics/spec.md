@@ -21,7 +21,7 @@
 
 ### User Story 3 - 配置可解释的重复、跳过和补做 (P1)
 
-用户可以设置每天、每周、每月、每年、工作日和自定义重复，并对一个 occurrence 执行跳过或补做，不改变其它 occurrence。
+用户可以设置每天、每周、每月、每年、工作日和自定义重复，并对模板或已物化实例的一个 occurrence 执行跳过或补做，不改变其它 occurrence。
 
 **Independent Test**: 对每种频率生成本地规则载荷，写入一个跳过和一个补做记录；同步映射后验证规则 UUID、serverId 与 occurrence 标识不混淆。
 
@@ -33,7 +33,7 @@
 - **FR-004**: 每个提醒规则都有本地 UUID、可空 `serverId`、任务本地 UUID、`fireAt`、`anchorType`、`offsetMinutes`、`status`、`firedAt` 与 `clientMutationId`；创建、修改、删除和持续提醒确认均先落库再进入 `reminder` outbox。收件箱的完成、忽略和稍后是派发动作，必须使用独立的本地 UUID、派发 serverId、动作类型、可选 minutes 与 `clientMutationId`，不得把派发 ID 写入提醒规则实体。
 - **FR-005**: 一个任务可有多个提醒；同一任务的同一 `clientMutationId` 只对应一个本地提醒，失败、等待、同步成功和删除状态必须在详情与提醒收件箱显示一致。
 - **FR-006**: 重复规则支持 `DAILY`、`WEEKLY`、`MONTHLY`、`YEARLY`、`WEEKDAY` 与 `CUSTOM`，并保存 interval、weekdays、monthDay、startAt、untilAt、countLimit、repeatMode 与时区；未知频率不得写入 outbox。
-- **FR-007**: 跳过和补做记录以规则 UUID 与 occurrence 时间为键；跳过不生成补做，补做不删除原 occurrence，重复执行同一动作必须幂等。
+- **FR-007**: 跳过和补做记录以规则 UUID、模板任务 UUID 与 occurrence 时间为键；已物化实例必须经其 repeatRuleId 回到模板任务写入 skip，不能把实例 UUID 作为服务端规则 taskId。跳过不生成补做，补做不删除原 occurrence，重复执行同一动作必须幂等。
 - **FR-008**: `SyncCoordinator` 必须在任务 serverId 已映射后推送提醒和重复规则，在重复规则 serverId 已映射后推送跳过/补做；提醒派发动作以服务端派发 ID 推送；拉取顺序必须先任务、再规则、再 occurrence 动作。临时网络失败必须保留原 `clientMutationId`、增加 `attemptCount` 并标记为 `retryable` 以便下一轮 push；按 outbox ID 最早的 mutation 生成稳定批次 `idempotency_key`，同一待重试批次不得更换该 key；服务端冲突保持 `failed`，不得自动重放。
 - **FR-009**: 详情与提醒收件箱只能经 Repository/use-case 读取和写入；派发 ID 用于完成、忽略和稍后，提醒规则 ID 只用于持续提醒配置。保留 `specs/002-todo-visual-fidelity/` 的工作区与九张批准 golden，不重新设计视觉结构。
 - **FR-010**: 任务聚合必须持久化 `completedAt`、`repeatParentTaskId`、`repeatRuleId` 与 `repeatOccurrenceAt`。完成/重新打开在同一 Drift 事务内更新任务和 task outbox，payload 显式发送 `status` 与 `completedAt`；pull 以 `completedAt` 或完成状态恢复完成态，并将服务端重复关联 ID 映射回本地 UUID。

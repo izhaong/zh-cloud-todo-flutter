@@ -667,4 +667,67 @@ void main() {
       expect(catchupChange.entity, 'repeat_occurrence_action');
     },
   );
+
+  testWidgets(
+    'detail skips a materialized repeat instance through its template rule',
+    (tester) async {
+      final fixture = await TodoVisualFixture.create();
+      addTearDown(fixture.dispose);
+      final repository = fixture.container.read(repeatRuleRepositoryProvider)!;
+      final occurrenceAt = DateTime(2026, 7, 18, 9);
+      final rule = await repository.save(
+        taskId: _taskId,
+        frequency: 'WEEKLY',
+        startAt: DateTime(2026, 7, 11, 9),
+      );
+      await fixture.database.into(fixture.database.todoTasks).insert(
+        TodoTasksCompanion.insert(
+          id: 'materialized-repeat-instance',
+          listId: TodoVisualFixture.inboxListId,
+          title: '完成后生成的下一次',
+          dueAt: Value(occurrenceAt),
+          repeatParentTaskId: const Value(_taskId),
+          repeatRuleId: Value(rule.id),
+          repeatOccurrenceAt: Value(occurrenceAt),
+          updatedAt: occurrenceAt,
+          createdAt: occurrenceAt,
+        ),
+      );
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: fixture.container,
+          child: MaterialApp(
+            theme: ThemeData.light().copyWith(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            home: const Scaffold(
+              body: TaskDetailPane(
+                taskId: 'materialized-repeat-instance',
+                embedded: true,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _openScheduleOptions(tester);
+      final detailScroll = find.byType(Scrollable).last;
+      final skip = find.byKey(const Key('task-repeat-skip'));
+      await tester.scrollUntilVisible(skip, 160, scrollable: detailScroll);
+      await tester.ensureVisible(skip);
+      await tester.drag(detailScroll, const Offset(0, -120));
+      await tester.pumpAndSettle();
+      await tester.tap(skip);
+      await tester.pumpAndSettle();
+
+      final skipEntry = await fixture.database
+          .select(fixture.database.todoRepeatSkips)
+          .getSingle();
+      expect(skipEntry.repeatRuleId, rule.id);
+      expect(skipEntry.taskId, _taskId);
+      expect(skipEntry.occurrenceDate, occurrenceAt);
+    },
+  );
 }
