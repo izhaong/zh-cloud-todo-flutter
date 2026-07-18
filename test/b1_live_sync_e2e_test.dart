@@ -929,6 +929,127 @@ void main() {
   );
 
   test(
+    'B2 live END reminder syncs the end anchor and dispatches it',
+    () async {
+      expect(_mobile, isNotEmpty, reason: 'TODO_B1_E2E_MOBILE is required');
+      expect(_password, isNotEmpty, reason: 'TODO_B1_E2E_PASSWORD is required');
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+
+      final sessionA = await _login();
+      final sessionB = await _login();
+      final dbA = AppDatabase.forTesting(NativeDatabase.memory());
+      final dbB = AppDatabase.forTesting(NativeDatabase.memory());
+      final apiA = _client(sessionA.accessToken);
+      final coordinatorA = _coordinator(
+        dbA,
+        apiA,
+        'b2-end-reminder-live-device-a',
+      );
+      final coordinatorB = _coordinator(
+        dbB,
+        _client(sessionB.accessToken),
+        'b2-end-reminder-live-device-b',
+      );
+      final listsA = ListRepository(dbA, SyncChangeQueue(dbA));
+      final tasksA = TaskRepository(dbA, SyncChangeQueue(dbA));
+      final remindersA = ReminderRepository(dbA, SyncChangeQueue(dbA));
+      final inboxA = ReminderInboxRepository(TodoRestApi(apiA).reminder);
+      final suffix = DateTime.now().microsecondsSinceEpoch;
+      final endAt = DateTime.now().toUtc().subtract(const Duration(minutes: 2));
+      final startAt = endAt.subtract(const Duration(hours: 1));
+      final list = await listsA.create(name: 'B2 END reminder live $suffix');
+      String? taskId;
+      var stage = 'push list';
+
+      try {
+        await coordinatorA.push();
+        final syncedList = await dbA.listByLocalId(list.id);
+        expect(syncedList?.serverId, isPositive);
+
+        final task = await tasksA.create(
+          listId: list.id,
+          title: 'B2 END reminder $suffix',
+          startAt: startAt,
+          endAt: endAt,
+          dueAt: endAt,
+          timeZone: 'Asia/Shanghai',
+          fixedTimezone: true,
+        );
+        taskId = task.id;
+        stage = 'push dated task';
+        await coordinatorA.push();
+        final syncedTask = await tasksA.getById(task.id);
+        expect(syncedTask?.serverId, isPositive);
+
+        // END 的 fireAt 由客户端按截止时刻与 offset 展开后经 outbox 提交；
+        // 同时保留 anchor 元数据供跨端编辑与服务端契约使用。
+        final reminder = await remindersA.create(
+          taskId: task.id,
+          fireAt: endAt,
+          anchorType: 'END',
+          offsetMinutes: 0,
+          timeZone: 'Asia/Shanghai',
+          fixedTimezone: true,
+        );
+        stage = 'push END reminder';
+        await coordinatorA.push();
+        final syncedReminder = await (dbA.select(
+          dbA.todoReminders,
+        )..where((row) => row.id.equals(reminder.id))).getSingle();
+        expect(syncedReminder.serverId, isPositive);
+        expect(syncedReminder.anchorType, 'END');
+        expect(syncedReminder.offsetMinutes, 0);
+        expect(
+          syncedReminder.remindAt.toUtc().difference(endAt).abs(),
+          lessThan(const Duration(seconds: 1)),
+        );
+
+        stage = 'pull END reminder on second device';
+        await coordinatorB.pull();
+        final taskB = await dbB.taskByServerId(syncedTask!.serverId!);
+        expect(taskB, isNotNull);
+        final reminderB =
+            await (dbB.select(dbB.todoReminders)..where(
+                  (row) => row.serverId.equals(syncedReminder.serverId!),
+                ))
+                .getSingle();
+        expect(reminderB.taskId, taskB!.id);
+        expect(reminderB.anchorType, 'END');
+        expect(reminderB.offsetMinutes, 0);
+        expect(
+          reminderB.remindAt.toUtc().difference(endAt).abs(),
+          lessThan(const Duration(seconds: 1)),
+        );
+
+        stage = 'wait for END reminder dispatch';
+        final dispatch = await _waitForReminderDispatch(
+          inboxA,
+          syncedReminder.serverId!,
+        );
+        expect(dispatch.reminderId, syncedReminder.serverId);
+      } catch (error, stackTrace) {
+        Error.throwWithStackTrace(
+          StateError(
+            'B2 END reminder live sync failed at stage: $stage; $error',
+          ),
+          stackTrace,
+        );
+      } finally {
+        if (taskId != null) {
+          await tasksA.delete(taskId);
+          await coordinatorA.push();
+        }
+        await listsA.delete(list.id);
+        await coordinatorA.push();
+        await dbA.close();
+        await dbB.close();
+      }
+    },
+    skip: _b2Enabled ? false : 'set --dart-define=TODO_B2_LIVE=true to run',
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+
+  test(
     'B2 live persistent reminder redispatches after its configured interval',
     () async {
       expect(_mobile, isNotEmpty, reason: 'TODO_B1_E2E_MOBILE is required');
