@@ -744,6 +744,10 @@ class SyncCoordinator {
     if (change.entityType == SyncEntities.list) return 0;
     if (change.entityType == SyncEntities.task) {
       if (change.payload?['isChecklistItem'] == true) return 5;
+      // 完成后物化的实例同时依赖父任务和 repeat_rule。普通顶层任务
+      // 没有 parentTaskId，不能仅以该字段判定优先级；否则空白第二设备
+      // 会在规则落库前写入实例，永久丢失本地 repeatRuleId 映射。
+      if (change.payload?['repeatParentTaskId'] != null) return 4;
       return change.payload?['parentTaskId'] == null ? 1 : 2;
     }
     // 任务动态依赖服务端任务 ID；即使服务端返回时动态在前，也要让任务
