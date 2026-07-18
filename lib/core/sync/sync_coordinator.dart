@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:dio/dio.dart';
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
@@ -359,8 +360,26 @@ class SyncCoordinator {
             '/folder/create',
             data: {'name': payload['name']},
           );
-          final serverId = (resp.data?['data'] as num?)?.toInt();
-          if (serverId != null && change.entityLocalId != null) {
+          if (resp.data?['code'] != null && resp.data?['code'] != 0) {
+            throw DioException(
+              requestOptions: resp.requestOptions,
+              error: resp.data?['msg'] ?? '文件夹创建失败',
+            );
+          }
+          final rawServerId = resp.data?['data'];
+          final nestedServerId = rawServerId is Map
+              ? rawServerId['id'] ?? rawServerId['folderId']
+              : rawServerId;
+          final serverId = nestedServerId is num
+              ? nestedServerId.toInt()
+              : int.tryParse(nestedServerId?.toString() ?? '');
+          if (serverId == null) {
+            throw DioException(
+              requestOptions: resp.requestOptions,
+              error: '文件夹创建响应缺少服务端 ID',
+            );
+          }
+          if (change.entityLocalId != null) {
             await (db.update(db.todoFolders)
                   ..where((t) => t.id.equals(change.entityLocalId!)))
                 .write(TodoFoldersCompanion(serverId: Value(serverId)));
@@ -744,7 +763,33 @@ class SyncCoordinator {
       await db.writeSyncCursor(cursor);
       if (result.changes.isEmpty && result.tombstones.isEmpty) break;
     }
-    return applied;
+    // folder 是 REST 特例，不在 /sync change feed。每次 pull 后从同一用户的
+    // folder/list 补齐到 Drift，确保第二设备不会只恢复 list/task 而丢失组织层。
+    return applied + await _pullFolders();
+  }
+
+  Future<int> _pullFolders() async {
+    try {
+      final response = await todoApi.get<Map<String, dynamic>>('/folder/list');
+      final body = response.data ?? const <String, dynamic>{};
+      if (body['code'] != null && body['code'] != 0) return 0;
+      final raw = body['code'] != null
+          ? body['data']
+          : body['data'] ?? body['list'];
+      if (raw is! List) return 0;
+      var hydrated = 0;
+      for (final item in raw.whereType<Map>()) {
+        final payload = Map<String, dynamic>.from(item);
+        final serverId = (payload['id'] as num?)?.toInt();
+        if (serverId == null) continue;
+        await _upsertLocalFolder(serverId, payload);
+        hydrated++;
+      }
+      return hydrated;
+    } on DioException {
+      // folder REST 不可用不能阻断同步白名单实体；对应 outbox 项会保持可重试。
+      return 0;
+    }
   }
 
   /// 服务端变更流不承诺父子实体的返回顺序。先应用清单和普通父任务，
@@ -1013,6 +1058,31 @@ class SyncCoordinator {
       await (db.update(
         db.todoLists,
       )..where((t) => t.id.equals(existing.id))).write(companion);
+    }
+  }
+
+  Future<void> _upsertLocalFolder(
+    int serverId,
+    Map<String, dynamic> payload,
+  ) async {
+    final existing = await (db.select(
+      db.todoFolders,
+    )..where((row) => row.serverId.equals(serverId))).getSingleOrNull();
+    final now = DateTime.now();
+    final companion = TodoFoldersCompanion(
+      id: Value(existing?.id ?? _uuid.v4()),
+      serverId: Value(serverId),
+      name: Value(payload['name']?.toString() ?? existing?.name ?? ''),
+      sortOrder: Value((payload['sortOrder'] as num?)?.toInt() ?? 0),
+      updatedAt: Value(now),
+      createdAt: Value(existing?.createdAt ?? now),
+    );
+    if (existing == null) {
+      await db.into(db.todoFolders).insert(companion);
+    } else {
+      await (db.update(
+        db.todoFolders,
+      )..where((row) => row.id.equals(existing.id))).write(companion);
     }
   }
 
