@@ -1050,6 +1050,115 @@ void main() {
   );
 
   test(
+    'B2 live reminder completion replays through outbox and syncs the task',
+    () async {
+      expect(_mobile, isNotEmpty, reason: 'TODO_B1_E2E_MOBILE is required');
+      expect(_password, isNotEmpty, reason: 'TODO_B1_E2E_PASSWORD is required');
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+
+      final sessionA = await _login();
+      final sessionB = await _login();
+      final dbA = AppDatabase.forTesting(NativeDatabase.memory());
+      final dbB = AppDatabase.forTesting(NativeDatabase.memory());
+      final apiA = _client(sessionA.accessToken);
+      final coordinatorA = _coordinator(
+        dbA,
+        apiA,
+        'b2-reminder-complete-live-device-a',
+      );
+      final coordinatorB = _coordinator(
+        dbB,
+        _client(sessionB.accessToken),
+        'b2-reminder-complete-live-device-b',
+      );
+      final listsA = ListRepository(dbA, SyncChangeQueue(dbA));
+      final tasksA = TaskRepository(dbA, SyncChangeQueue(dbA));
+      final remindersA = ReminderRepository(dbA, SyncChangeQueue(dbA));
+      final actionsA = ReminderDispatchActionRepository(SyncChangeQueue(dbA));
+      final inboxA = ReminderInboxRepository(TodoRestApi(apiA).reminder);
+      final suffix = DateTime.now().microsecondsSinceEpoch;
+      final list = await listsA.create(name: 'B2 complete reminder live $suffix');
+      String? taskId;
+      var stage = 'push list';
+
+      try {
+        await coordinatorA.push();
+        final syncedList = await dbA.listByLocalId(list.id);
+        expect(syncedList?.serverId, isPositive);
+
+        final task = await tasksA.create(
+          listId: list.id,
+          title: 'B2 complete reminder $suffix',
+        );
+        taskId = task.id;
+        stage = 'push task';
+        await coordinatorA.push();
+        final syncedTask = await tasksA.getById(task.id);
+        expect(syncedTask?.serverId, isPositive);
+
+        final reminder = await remindersA.create(
+          taskId: task.id,
+          fireAt: DateTime.now().toUtc().subtract(const Duration(minutes: 2)),
+          timeZone: 'Asia/Shanghai',
+          fixedTimezone: true,
+        );
+        stage = 'push due reminder';
+        await coordinatorA.push();
+        final syncedReminder = await (dbA.select(
+          dbA.todoReminders,
+        )..where((row) => row.id.equals(reminder.id))).getSingle();
+        expect(syncedReminder.serverId, isPositive);
+
+        stage = 'pull task on second device';
+        await coordinatorB.pull();
+        final taskB = await dbB.taskByServerId(syncedTask!.serverId!);
+        expect(taskB, isNotNull);
+        expect(taskB!.completedAt, isNull);
+
+        stage = 'wait for reminder dispatch';
+        final dispatch = await _waitForReminderDispatch(
+          inboxA,
+          syncedReminder.serverId!,
+        );
+        final mutationId = await actionsA.complete(
+          reminderDispatchId: dispatch.id,
+        );
+        stage = 'push completion action';
+        expect(await coordinatorA.push(), 1);
+        final action = await (dbA.select(
+          dbA.todoSyncChanges,
+        )..where((row) => row.clientMutationId.equals(mutationId))).getSingle();
+        expect(action.status, 'synced');
+
+        stage = 'confirm completed dispatch leaves inbox';
+        await _waitForReminderDispatchRemoval(inboxA, dispatch.id);
+        stage = 'pull completed task on second device';
+        await coordinatorB.pull();
+        final completedTaskB = await dbB.taskByServerId(syncedTask.serverId!);
+        expect(completedTaskB?.completedAt, isNotNull);
+      } catch (error, stackTrace) {
+        Error.throwWithStackTrace(
+          StateError(
+            'B2 reminder completion live sync failed at stage: $stage; $error',
+          ),
+          stackTrace,
+        );
+      } finally {
+        if (taskId != null) {
+          await tasksA.delete(taskId);
+          await coordinatorA.push();
+        }
+        await listsA.delete(list.id);
+        await coordinatorA.push();
+        await dbA.close();
+        await dbB.close();
+      }
+    },
+    skip: _b2Enabled ? false : 'set --dart-define=TODO_B2_LIVE=true to run',
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+
+  test(
     'B2 live persistent reminder redispatches after its configured interval',
     () async {
       expect(_mobile, isNotEmpty, reason: 'TODO_B1_E2E_MOBILE is required');
