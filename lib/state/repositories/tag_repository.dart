@@ -68,12 +68,18 @@ class TagRepository {
     return row;
   }
 
-  Future<TodoTag> update(String tagId, {String? name, String? color}) async {
+  Future<TodoTag> update(
+    String tagId, {
+    String? name,
+    String? color,
+    required String? parentId,
+  }) async {
     final now = DateTime.now();
     await (_db.update(_db.todoTags)..where((t) => t.id.equals(tagId))).write(
       TodoTagsCompanion(
         name: name == null ? const Value.absent() : Value(name),
         color: color == null ? const Value.absent() : Value(color),
+        parentId: Value(parentId),
         updatedAt: Value(now),
       ),
     );
