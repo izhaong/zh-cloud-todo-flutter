@@ -590,6 +590,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
         Semantics(
           identifier: 'todo_task_detail_description',
           child: TextField(
+            key: const Key('todo-task-detail-description-input'),
             controller: _desc,
             minLines: 3,
             maxLines: 6,

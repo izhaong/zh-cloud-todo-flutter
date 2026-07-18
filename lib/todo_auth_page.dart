@@ -193,6 +193,7 @@ class _TodoAuthPageState extends ConsumerState<TodoAuthPage> {
                 Semantics(
                   identifier: 'todo_auth_mobile',
                   child: TextFormField(
+                    key: const Key('todo-auth-mobile-input'),
                     controller: _mobileController,
                     keyboardType: TextInputType.phone,
                     textInputAction: TextInputAction.next,
@@ -210,6 +211,7 @@ class _TodoAuthPageState extends ConsumerState<TodoAuthPage> {
                   Semantics(
                     identifier: 'todo_auth_password',
                     child: TextFormField(
+                      key: const Key('todo-auth-password-input'),
                       controller: _passwordController,
                       obscureText: _obscurePassword,
                       enableSuggestions: false,
