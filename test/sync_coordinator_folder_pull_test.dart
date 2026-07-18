@@ -126,4 +126,75 @@ void main() {
       expect(await db.select(db.todoFolders).get(), isEmpty);
     },
   );
+
+  test('pull clears a list folder when the sync payload explicitly contains null',
+      () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final now = DateTime.now();
+    await db.into(db.todoLists).insert(
+          TodoListsCompanion.insert(
+            id: 'list-in-folder',
+            serverId: const Value(101),
+            name: '待办',
+            folderId: const Value(88),
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    final dio = Dio(BaseOptions(baseUrl: 'https://todo.test'))
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            if (options.path.endsWith('/folder/list')) {
+              handler.resolve(
+                Response<Map<String, dynamic>>(
+                  requestOptions: options,
+                  data: {'code': 0, 'data': []},
+                ),
+              );
+              return;
+            }
+            handler.resolve(
+              Response<Map<String, dynamic>>(
+                requestOptions: options,
+                data: {
+                  'code': 0,
+                  'data': {
+                    'changes': [
+                      {
+                        'changeId': 1,
+                        'entityType': 'list',
+                        'entityId': 101,
+                        'operation': 'upsert',
+                        'revision': 2,
+                        'tombstone': false,
+                        'payload': {
+                          'id': 101,
+                          'name': '待办',
+                          'folderId': null,
+                          'sortOrder': 0,
+                        },
+                      },
+                    ],
+                    'tombstones': [],
+                    'nextCursor': 'todo-core:1',
+                    'hasMore': false,
+                  },
+                },
+              ),
+            );
+          },
+        ),
+      );
+    final client = ApiClient(dio: dio);
+    await SyncCoordinator(
+      db: db,
+      api: SyncApi(client, clientId: 'list-clear', deviceId: 'list-clear'),
+      todoApi: client,
+    ).pull();
+
+    final list = await db.listByServerId(101);
+    expect(list?.folderId, isNull);
+  });
 }

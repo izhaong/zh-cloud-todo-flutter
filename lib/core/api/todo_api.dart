@@ -26,6 +26,16 @@ Map<String, dynamic> _unwrapBody(Map<String, dynamic>? body) {
   return body;
 }
 
+void _ensureSuccess(Map<String, dynamic>? body) {
+  if (body == null || !body.containsKey('code')) return;
+  if (body['code'] != 0) {
+    throw DioException(
+      requestOptions: RequestOptions(path: '/app-api/todo'),
+      error: body['msg'] ?? '请求失败',
+    );
+  }
+}
+
 List<dynamic> _unwrapListBody(Map<String, dynamic>? body) {
   if (body == null) return const [];
   if (body.containsKey('code')) {
@@ -332,18 +342,29 @@ class FolderApi {
 
   final ApiClient _client;
 
-  /// `POST /folder/delete`
-  Future<void> deleteFolder(int serverId) =>
-      _client.post('/folder/delete', data: {'id': serverId});
+  /// `DELETE /folder/delete?id=...`
+  Future<void> deleteFolder(int serverId) async {
+    final response = await _client.raw.delete<Map<String, dynamic>>(
+      '/app-api/todo/folder/delete',
+      queryParameters: {'id': serverId},
+    );
+    _ensureSuccess(response.data);
+  }
 
-  /// `POST /folder/move-list` — 把 [listServerId] 挪到 [folderServerId] 下。
-  Future<void> moveList({
-    required int listServerId,
-    required int folderServerId,
-  }) => _client.post(
-    '/folder/move-list',
-    data: {'listId': listServerId, 'folderId': folderServerId},
-  );
+  /// `POST /folder/move-list` — 批量把清单挪到目标文件夹；传 null 表示移出文件夹。
+  Future<void> moveLists({
+    required List<int> listServerIds,
+    int? folderServerId,
+  }) async {
+    if (listServerIds.isEmpty) {
+      throw ArgumentError.value(listServerIds, 'listServerIds', '清单不能为空');
+    }
+    final response = await _client.post<Map<String, dynamic>>(
+      '/folder/move-list',
+      data: {'listIds': listServerIds, 'folderId': ?folderServerId},
+    );
+    _ensureSuccess(response.data);
+  }
 }
 
 /// NLP 自然语言日期解析（`POST /nlp/parse`）。

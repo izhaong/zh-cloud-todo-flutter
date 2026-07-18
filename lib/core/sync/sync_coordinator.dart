@@ -1072,13 +1072,18 @@ class SyncCoordinator {
     final existing =
         await db.listByServerId(serverId) ??
         (isInbox ? await db.listByLocalId(_inboxListId) : null);
+    final hasFolderId =
+        payload.containsKey('folderId') || payload.containsKey('folder_id');
+    final rawFolderId = payload.containsKey('folderId')
+        ? payload['folderId']
+        : payload['folder_id'];
     final now = DateTime.now();
     final companion = TodoListsCompanion(
       id: Value(existing?.id ?? (isInbox ? _inboxListId : _uuid.v4())),
       serverId: Value(serverId),
       name: Value(payload['name']?.toString() ?? existing?.name ?? ''),
       folderId: Value(
-        (payload['folderId'] as num?)?.toInt() ?? existing?.folderId,
+        hasFolderId ? (rawFolderId as num?)?.toInt() : existing?.folderId,
       ),
       sortOrder: Value((payload['sortOrder'] as num?)?.toInt() ?? 0),
       updatedAt: Value(now),
