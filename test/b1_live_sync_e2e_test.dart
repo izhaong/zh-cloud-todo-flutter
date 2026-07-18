@@ -704,6 +704,140 @@ void main() {
     },
     skip: _b2Enabled ? false : 'set --dart-define=TODO_B2_LIVE=true to run',
   );
+
+  test(
+    'B2 live sync materializes every remaining ON_DUE frequency on both devices',
+    () async {
+      expect(_mobile, isNotEmpty, reason: 'TODO_B1_E2E_MOBILE is required');
+      expect(_password, isNotEmpty, reason: 'TODO_B1_E2E_PASSWORD is required');
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+
+      final now = DateTime.now().toUtc();
+      final definitions = <String, Map<String, Object?>>{
+        'WEEKLY': {
+          'weekdays': [now.weekday],
+        },
+        'MONTHLY': {'monthDay': now.day},
+        'YEARLY': const {},
+        'WEEKDAY': const {},
+        'CUSTOM': {
+          'weekdays': [now.weekday],
+        },
+      };
+      final sessionA = await _login();
+      final sessionB = await _login();
+      final dbA = AppDatabase.forTesting(NativeDatabase.memory());
+      final dbB = AppDatabase.forTesting(NativeDatabase.memory());
+      final coordinatorA = _coordinator(
+        dbA,
+        _client(sessionA.accessToken),
+        'b2-frequency-live-device-a',
+      );
+      final coordinatorB = _coordinator(
+        dbB,
+        _client(sessionB.accessToken),
+        'b2-frequency-live-device-b',
+      );
+      final listsA = ListRepository(dbA, SyncChangeQueue(dbA));
+      final tasksA = TaskRepository(dbA, SyncChangeQueue(dbA));
+      final repeatsA = RepeatRuleRepository(dbA, SyncChangeQueue(dbA));
+      final suffix = DateTime.now().microsecondsSinceEpoch;
+      final list = await listsA.create(name: 'B2 frequency live $suffix');
+      final taskIds = <String, String>{};
+      final generatedTaskIds = <String>[];
+      final ruleIds = <String, String>{};
+      var stage = 'push list';
+
+      try {
+        await coordinatorA.push();
+        for (final frequency in definitions.keys) {
+          final task = await tasksA.create(
+            listId: list.id,
+            title: 'B2 $frequency $suffix',
+            dueAt: now,
+            timeZone: 'Asia/Shanghai',
+            fixedTimezone: true,
+          );
+          taskIds[frequency] = task.id;
+        }
+        stage = 'push frequency templates';
+        await coordinatorA.push();
+
+        for (final entry in definitions.entries) {
+          final rule = await repeatsA.save(
+            taskId: taskIds[entry.key]!,
+            frequency: entry.key,
+            weekdays: entry.value['weekdays'] as List<int>?,
+            monthDay: entry.value['monthDay'] as int?,
+            startAt: now,
+            countLimit: 1,
+            repeatMode: 'ON_DUE',
+            timeZone: 'Asia/Shanghai',
+          );
+          ruleIds[entry.key] = rule.id;
+        }
+        stage = 'push remaining ON_DUE rules';
+        await coordinatorA.push();
+        stage = 'pull generated frequencies on both devices';
+        await coordinatorA.pull();
+        await coordinatorB.pull();
+
+        for (final frequency in definitions.keys) {
+          final templateA = await tasksA.getById(taskIds[frequency]!);
+          expect(templateA?.serverId, isPositive, reason: frequency);
+          final generatedA =
+              await (dbA.select(dbA.todoTasks)..where(
+                    (row) => row.repeatParentTaskId.equals(taskIds[frequency]!),
+                  ))
+                  .getSingle();
+          final parentB = await dbB.taskByServerId(templateA!.serverId!);
+          expect(parentB, isNotNull, reason: frequency);
+          final generatedB =
+              await (dbB.select(
+                    dbB.todoTasks,
+                  )..where((row) => row.repeatParentTaskId.equals(parentB!.id)))
+                  .getSingle();
+          generatedTaskIds.add(generatedA.id);
+          expect(generatedA.serverId, isPositive, reason: frequency);
+          expect(
+            generatedA.repeatRuleId,
+            ruleIds[frequency],
+            reason: frequency,
+          );
+          expect(generatedA.repeatOccurrenceAt, isNotNull, reason: frequency);
+          expect(generatedB.serverId, generatedA.serverId, reason: frequency);
+          expect(
+            generatedB.repeatOccurrenceAt,
+            generatedA.repeatOccurrenceAt,
+            reason: frequency,
+          );
+        }
+      } catch (error, stackTrace) {
+        Error.throwWithStackTrace(
+          StateError('B2 frequency live sync failed at stage: $stage; $error'),
+          stackTrace,
+        );
+      } finally {
+        for (final generatedTaskId in generatedTaskIds) {
+          await tasksA.delete(generatedTaskId);
+        }
+        if (generatedTaskIds.isNotEmpty) {
+          await coordinatorA.push();
+        }
+        for (final taskId in taskIds.values) {
+          await tasksA.delete(taskId);
+        }
+        if (taskIds.isNotEmpty) {
+          await coordinatorA.push();
+        }
+        await listsA.delete(list.id);
+        await coordinatorA.push();
+        await dbA.close();
+        await dbB.close();
+      }
+    },
+    skip: _b2Enabled ? false : 'set --dart-define=TODO_B2_LIVE=true to run',
+  );
 }
 
 Future<ReminderInboxItem> _waitForReminderDispatch(
