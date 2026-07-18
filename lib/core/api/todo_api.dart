@@ -26,6 +26,21 @@ Map<String, dynamic> _unwrapBody(Map<String, dynamic>? body) {
   return body;
 }
 
+List<dynamic> _unwrapListBody(Map<String, dynamic>? body) {
+  if (body == null) return const [];
+  if (body.containsKey('code')) {
+    final code = body['code'];
+    if (code != 0) {
+      throw DioException(
+        requestOptions: RequestOptions(path: '/app-api/todo'),
+        error: body['msg'] ?? '请求失败',
+      );
+    }
+    return (body['data'] as List?)?.toList(growable: false) ?? const [];
+  }
+  return (body['data'] as List?)?.toList(growable: false) ?? const [];
+}
+
 /// 一条服务端全局搜索结果。UI 不直接消费该类型：工作区继续通过
 /// `TaskQueryRepository` 查询本地 Drift；此 API 供同步后的契约/A-B 对照使用。
 class TodoGlobalSearchResult {
@@ -100,6 +115,114 @@ class TodoGlobalSearchApi {
           .toList(growable: false),
       total: (data['total'] as num?)?.toInt() ?? raw.length,
     );
+  }
+}
+
+/// 一次服务端批量更新的冻结请求。
+///
+/// 与本地 [TaskBatchEditRepository] 的 Drift/outbox 写路径分离：该类型用于
+/// 显式 HTTP 消费、逐项结果显示和可重试幂等契约，绝不替代离线本地写入。
+class TodoTaskBatchUpdateRequest {
+  const TodoTaskBatchUpdateRequest({
+    required this.taskIds,
+    this.listId,
+    this.priority,
+    this.dueAt,
+    this.clearDueAt,
+    this.completed,
+    this.isPinned,
+    this.tagIds,
+    this.deviceId,
+    this.clientMutationId,
+  });
+
+  final List<int> taskIds;
+  final int? listId;
+  final int? priority;
+  final DateTime? dueAt;
+  final bool? clearDueAt;
+  final bool? completed;
+  final bool? isPinned;
+  final List<int>? tagIds;
+  final String? deviceId;
+  final String? clientMutationId;
+
+  bool get hasChanges =>
+      listId != null ||
+      priority != null ||
+      dueAt != null ||
+      clearDueAt == true ||
+      completed != null ||
+      isPinned != null ||
+      tagIds != null;
+
+  Map<String, dynamic> toJson() => {
+    'taskIds': taskIds,
+    'listId': ?listId,
+    'priority': ?priority,
+    'dueAt': ?dueAt?.toIso8601String(),
+    'clearDueAt': ?clearDueAt,
+    'completed': ?completed,
+    'isPinned': ?isPinned,
+    'tagIds': ?tagIds,
+    'deviceId': ?deviceId,
+    'clientMutationId': ?clientMutationId,
+  };
+}
+
+/// 服务端批量更新的一项结果；[errorCode] 可用于失败项重试提示。
+class TodoTaskBatchUpdateResult {
+  const TodoTaskBatchUpdateResult({
+    required this.taskId,
+    required this.status,
+    this.errorCode,
+  });
+
+  final int? taskId;
+  final String status;
+  final String? errorCode;
+
+  factory TodoTaskBatchUpdateResult.fromJson(Map<String, dynamic> json) =>
+      TodoTaskBatchUpdateResult(
+        taskId: (json['taskId'] as num?)?.toInt(),
+        status: json['status']?.toString() ?? 'failed',
+        errorCode: json['errorCode']?.toString(),
+      );
+}
+
+/// `PUT /task/batch-update` 的逐项、可重试 HTTP 契约。
+class TodoTaskBatchApi {
+  TodoTaskBatchApi(this._client);
+
+  final ApiClient _client;
+
+  Future<List<TodoTaskBatchUpdateResult>> update(
+    TodoTaskBatchUpdateRequest request,
+  ) async {
+    if (request.taskIds.isEmpty) {
+      throw ArgumentError.value(request.taskIds, 'taskIds', '任务编号不能为空');
+    }
+    if (!request.hasChanges) {
+      throw ArgumentError.value(request, 'request', '至少提供一个批量修改字段');
+    }
+    final hasDeviceId = (request.deviceId?.trim().isNotEmpty ?? false);
+    final hasMutationId =
+        (request.clientMutationId?.trim().isNotEmpty ?? false);
+    if (hasDeviceId != hasMutationId) {
+      throw ArgumentError('deviceId 和 clientMutationId 必须成对提供');
+    }
+    final resp = await _client.put<Map<String, dynamic>>(
+      '/task/batch-update',
+      data: request.toJson(),
+    );
+    return _unwrapListBody(resp.data)
+        .whereType<Map>()
+        .map(
+          (item) => TodoTaskBatchUpdateResult.fromJson(
+            Map<String, dynamic>.from(item),
+          ),
+        )
+        .toList(growable: false);
   }
 }
 
@@ -423,6 +546,7 @@ class SecurityApi {
 class TodoRestApi {
   TodoRestApi(ApiClient client)
     : task = TaskRestApi(client),
+      taskBatch = TodoTaskBatchApi(client),
       globalSearch = TodoGlobalSearchApi(client),
       checklist = ChecklistApi(client),
       folder = FolderApi(client),
@@ -437,6 +561,7 @@ class TodoRestApi {
       security = SecurityApi(client);
 
   final TaskRestApi task;
+  final TodoTaskBatchApi taskBatch;
   final TodoGlobalSearchApi globalSearch;
   final ChecklistApi checklist;
   final FolderApi folder;
