@@ -12,11 +12,14 @@ import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_coordinator.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/list_repository.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/reminder_repository.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/repeat_rule_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_capture_defaults_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/template_repository.dart';
 
 const _enabled = bool.fromEnvironment('TODO_B1_LIVE');
+const _b2Enabled = bool.fromEnvironment('TODO_B2_LIVE');
 const _baseUrl = String.fromEnvironment(
   'TODO_API_BASE_URL',
   defaultValue: 'https://todo-test.zh04.com',
@@ -269,6 +272,139 @@ void main() {
       }
     },
     skip: _enabled ? false : 'set --dart-define=TODO_B1_LIVE=true to run',
+  );
+
+  test(
+    'B2 live sync preserves time, persistent reminder and ON_COMPLETE linkage',
+    () async {
+      expect(_mobile, isNotEmpty, reason: 'TODO_B1_E2E_MOBILE is required');
+      expect(_password, isNotEmpty, reason: 'TODO_B1_E2E_PASSWORD is required');
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+
+      final sessionA = await _login();
+      final sessionB = await _login();
+      final dbA = AppDatabase.forTesting(NativeDatabase.memory());
+      final dbB = AppDatabase.forTesting(NativeDatabase.memory());
+      final apiA = _client(sessionA.accessToken);
+      final coordinatorA = _coordinator(dbA, apiA, 'b2-live-device-a');
+      final coordinatorB = _coordinator(
+        dbB,
+        _client(sessionB.accessToken),
+        'b2-live-device-b',
+      );
+      final listsA = ListRepository(dbA, SyncChangeQueue(dbA));
+      final tasksA = TaskRepository(dbA, SyncChangeQueue(dbA));
+      final remindersA = ReminderRepository(dbA, SyncChangeQueue(dbA));
+      final repeatsA = RepeatRuleRepository(dbA, SyncChangeQueue(dbA));
+      final suffix = DateTime.now().microsecondsSinceEpoch;
+      final startAt = DateTime.now().toUtc().add(const Duration(days: 2));
+      final endAt = startAt.add(const Duration(hours: 2));
+      final list = await listsA.create(name: 'B2 live sync $suffix');
+      String? taskId;
+      var stage = 'push list';
+
+      try {
+        await coordinatorA.push();
+        stage = 'read synced list';
+        final syncedList = await dbA.listByLocalId(list.id);
+        expect(syncedList?.serverId, isPositive);
+
+        final task = await tasksA.create(
+          listId: list.id,
+          title: 'B2 ON_COMPLETE $suffix',
+          startAt: startAt,
+          endAt: endAt,
+          dueAt: endAt,
+          timeZone: 'Asia/Shanghai',
+          fixedTimezone: true,
+        );
+        taskId = task.id;
+        stage = 'push task';
+        await coordinatorA.push();
+        stage = 'read synced task';
+        final syncedTask = await dbA.taskByServerId(
+          (await tasksA.getById(task.id))!.serverId!,
+        );
+        expect(syncedTask?.serverId, isPositive);
+
+        final reminder = await remindersA.create(
+          taskId: task.id,
+          fireAt: startAt.subtract(const Duration(hours: 1)),
+          persistent: true,
+          intervalMinutes: 30,
+          timeZone: 'Asia/Shanghai',
+          fixedTimezone: true,
+        );
+        final rule = await repeatsA.save(
+          taskId: task.id,
+          frequency: 'DAILY',
+          startAt: startAt,
+          repeatMode: 'ON_COMPLETE',
+          timeZone: 'Asia/Shanghai',
+        );
+        stage = 'push reminder and repeat rule';
+        await coordinatorA.push();
+        stage = 'read synced reminder and repeat rule';
+        final syncedReminder = await (dbA.select(
+          dbA.todoReminders,
+        )..where((row) => row.id.equals(reminder.id))).getSingle();
+        final syncedRule = await (dbA.select(
+          dbA.todoRepeatRules,
+        )..where((row) => row.id.equals(rule.id))).getSingle();
+        expect(syncedReminder.serverId, isPositive);
+        expect(syncedRule.serverId, isPositive);
+
+        await tasksA.toggleComplete(task.id);
+        stage = 'push completion';
+        await coordinatorA.push();
+        stage = 'pull second device';
+        await coordinatorB.pull();
+
+        stage = 'read second-device parent task';
+        final parentB = await dbB.taskByServerId(syncedTask!.serverId!);
+        expect(parentB, isNotNull);
+        final parent = parentB!;
+        stage = 'read second-device repeat rule';
+        final ruleB =
+            await (dbB.select(dbB.todoRepeatRules)
+                  ..where((row) => row.serverId.equals(syncedRule.serverId!)))
+                .getSingle();
+        stage = 'read second-device persistent reminder';
+        final reminderB =
+            await (dbB.select(dbB.todoReminders)..where(
+                  (row) => row.serverId.equals(syncedReminder.serverId!),
+                ))
+                .getSingle();
+        stage = 'read second-device ON_COMPLETE instance';
+        final generated =
+            await (dbB.select(dbB.todoTasks)
+                  ..where((row) => row.repeatParentTaskId.equals(parent.id)))
+                .getSingle();
+
+        expect(parent.completedAt, isNotNull);
+        expect(parent.timeZone, 'Asia/Shanghai');
+        expect(parent.fixedTimezone, isTrue);
+        expect(reminderB.persistent, isTrue);
+        expect(reminderB.intervalMinutes, 30);
+        expect(generated.repeatRuleId, ruleB.id);
+        expect(generated.repeatOccurrenceAt, isNotNull);
+      } catch (error, stackTrace) {
+        Error.throwWithStackTrace(
+          StateError('B2 live sync failed at stage: $stage; $error'),
+          stackTrace,
+        );
+      } finally {
+        if (taskId != null) {
+          await tasksA.delete(taskId);
+          await coordinatorA.push();
+        }
+        await listsA.delete(list.id);
+        await coordinatorA.push();
+        await dbA.close();
+        await dbB.close();
+      }
+    },
+    skip: _b2Enabled ? false : 'set --dart-define=TODO_B2_LIVE=true to run',
   );
 }
 
