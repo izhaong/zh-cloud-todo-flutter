@@ -286,10 +286,14 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
 
     final t = await repo.getById(taskId);
     final listName = t == null ? null : await _resolveListName(t.listId);
-    final repeatRule = t == null ? null : await _repeatRuleForTask(t.id);
+    final repeatRule = t == null ? null : await _repeatRuleForTask(t);
     final repeatSkipped = t == null || repeatRule == null
         ? false
-        : await _repeatSkipExists(repeatRule.id, t.id, _repeatOccurrenceAt(t));
+        : await _repeatSkipExists(
+            repeatRule.id,
+            repeatRule.taskId,
+            _repeatOccurrenceAt(t),
+          );
     if (!mounted || generation != _loadGeneration || widget.taskId != taskId) {
       return;
     }
@@ -686,16 +690,26 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     return db.listByLocalId(localListId);
   }
 
-  Future<TodoRepeatRule?> _repeatRuleForTask(String taskId) {
+  Future<TodoRepeatRule?> _repeatRuleForTask(TodoTask task) {
     final db = ref.read(appDatabaseProvider);
     if (db == null) return Future.value(null);
+    if (task.repeatRuleId != null) {
+      return (db.select(
+        db.todoRepeatRules,
+      )..where((rule) => rule.id.equals(task.repeatRuleId!))).getSingleOrNull();
+    }
     return (db.select(
       db.todoRepeatRules,
-    )..where((rule) => rule.taskId.equals(taskId))).getSingleOrNull();
+    )..where((rule) => rule.taskId.equals(task.id))).getSingleOrNull();
   }
 
   DateTime _repeatOccurrenceAt(TodoTask task) =>
-      _dueAt ?? _startAt ?? task.dueAt ?? task.startAt ?? DateTime.now();
+      task.repeatOccurrenceAt ??
+      _dueAt ??
+      _startAt ??
+      task.dueAt ??
+      task.startAt ??
+      DateTime.now();
 
   Future<bool> _repeatSkipExists(
     String repeatRuleId,
@@ -1166,7 +1180,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     try {
       await repository.skip(
         repeatRuleId: rule.id,
-        taskId: t.id,
+        taskId: rule.taskId,
         occurrenceAt: _repeatOccurrenceAt(t),
       );
       if (_isCurrentTask(t.id)) {
@@ -1190,7 +1204,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     try {
       await repository.catchup(
         repeatRuleId: rule.id,
-        taskId: t.id,
+        taskId: rule.taskId,
         occurrenceAt: _repeatOccurrenceAt(t),
       );
       if (_isCurrentTask(t.id)) {
