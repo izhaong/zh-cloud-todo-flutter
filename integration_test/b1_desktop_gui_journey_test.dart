@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -10,8 +12,14 @@ import 'package:zh_cloud_todo_flutter/main.dart' as app;
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  const mobile = String.fromEnvironment('TODO_B1_E2E_MOBILE');
-  const password = String.fromEnvironment('TODO_B1_E2E_PASSWORD');
+  const definedMobile = String.fromEnvironment('TODO_B1_E2E_MOBILE');
+  const definedPassword = String.fromEnvironment('TODO_B1_E2E_PASSWORD');
+  final mobile = definedMobile.isNotEmpty
+      ? definedMobile
+      : Platform.environment['TODO_B1_E2E_MOBILE'] ?? '';
+  final password = definedPassword.isNotEmpty
+      ? definedPassword
+      : Platform.environment['TODO_B1_E2E_PASSWORD'] ?? '';
 
   testWidgets('B1 desktop GUI journey logs in and saves Markdown task detail', (
     tester,

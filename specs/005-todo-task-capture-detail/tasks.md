@@ -27,7 +27,8 @@
 
 - [x] T010 增加离线重启、恢复网络、幂等上传和双端回显旅程；更新 Docs #47 的证据链接。
 - [x] T011 运行 `flutter analyze`、完整 `flutter test` 和批准 golden；仅将有实际输出的条目标记完成。
-- [ ] T012 为固定移动验收增加稳定的登录、快速添加、详情保存和同步状态语义锚点，并跑通不影响宿主网络的离线恢复旅程。
-- [x] T012c [US1] 固化隔离 macOS runner 的 Flutter `integration_test/b1_desktop_gui_journey_test.dart`，为既有桌面快速添加输入增加稳定 Key，并以 Widget 锚点测试与 `flutter analyze` 验证可执行性；该测试尚未在隔离 macOS runner 运行，不能替代桌面 GUI 验收。
+- [x] T012 为固定移动验收增加稳定的登录、快速添加、详情保存和同步状态语义锚点，并跑通不影响宿主网络的离线恢复旅程。
+- [x] T012c [US1] 固化隔离 macOS runner 的 Flutter `integration_test/b1_desktop_gui_journey_test.dart`，为既有桌面快速添加输入增加稳定 Key，并以 Widget 锚点测试与 `flutter analyze` 验证可执行性；测试账号可从进程环境读取，避免作为命令行参数暴露。
+- [x] T012d [US1] 在 macOS target 实跑 `integration_test/b1_desktop_gui_journey_test.dart`，验证密码登录、桌面快速添加、Markdown 保存和详情回读；结果 `00:19 +1: All tests passed!`。
 - [x] T012a [US1] 区分会话启动时的网络验证错误与明确令牌失效：离线时保留安全会话和本地 Drift 访问，明确拒绝仍清除会话；验证 `test/core/auth/auth_gateway_test.dart`、`test/state/session_state_test.dart`、`flutter analyze` 与完整 `flutter test`。
 - [x] T012b [US1] 读取可注入的初始连接状态并用变化流仅在 `none → online` 时触发既有同步协调器；验证 `test/core/sync/connectivity_recovery_trigger_test.dart`、`flutter analyze` 与完整 `flutter test`，但不把该单测替代真实设备网络恢复验收。
