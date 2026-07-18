@@ -98,4 +98,50 @@ void main() {
     )..where((entry) => entry.entityLocalId.equals(child.id))).getSingle();
     expect(outbox.payloadJson, contains('project'));
   });
+
+  testWidgets('explains that deleting a parent reparents its children', (
+    tester,
+  ) async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final now = DateTime.utc(2026, 7, 19);
+    await db
+        .into(db.todoTags)
+        .insert(
+          TodoTagsCompanion.insert(
+            id: 'project',
+            name: '项目',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    await db
+        .into(db.todoTags)
+        .insert(
+          TodoTagsCompanion.insert(
+            id: 'client',
+            parentId: const Value('project'),
+            name: '客户端',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    final container = ProviderContainer(
+      overrides: [appDatabaseProvider.overrideWithValue(db)],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: TagPage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.delete_outline).first);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('关联任务将解除；直接子标签会移至顶层。'), findsOneWidget);
+  });
 }

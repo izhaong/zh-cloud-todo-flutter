@@ -98,7 +98,7 @@ class TagPage extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('删除标签'),
-        content: Text('确认删除"${tag.name}"？关联任务将解除。'),
+        content: Text('确认删除"${tag.name}"？关联任务将解除；直接子标签会移至顶层。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
