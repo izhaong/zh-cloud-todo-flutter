@@ -117,6 +117,9 @@ class ListRepository {
     if (existing == null) {
       throw StateError('清单不存在');
     }
+    if (existing.name.startsWith('smart:')) {
+      throw StateError('智能清单不支持移动到文件夹');
+    }
     if (folderServerId != null) {
       final folder = await (_db.select(
         _db.todoFolders,

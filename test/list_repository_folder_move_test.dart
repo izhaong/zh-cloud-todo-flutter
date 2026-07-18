@@ -52,4 +52,51 @@ void main() {
       expect(jsonDecode(changes.single.payloadJson)['folderId'], 88);
     },
   );
+
+  test('moving a smart list into a folder is rejected without an outbox change',
+      () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final now = DateTime.utc(2026, 7, 19);
+    await db.batch((batch) {
+      batch.insert(
+        db.todoFolders,
+        TodoFoldersCompanion.insert(
+          id: 'folder-local',
+          serverId: const Value(88),
+          name: '项目',
+          updatedAt: now,
+          createdAt: now,
+        ),
+      );
+      batch.insert(
+        db.todoLists,
+        TodoListsCompanion.insert(
+          id: 'smart-list-local',
+          serverId: const Value(102),
+          name: 'smart:today',
+          updatedAt: now,
+          createdAt: now,
+        ),
+      );
+    });
+
+    await expectLater(
+      ListRepository(db, SyncChangeQueue(db)).moveToFolder(
+        'smart-list-local',
+        88,
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          '智能清单不支持移动到文件夹',
+        ),
+      ),
+    );
+
+    final list = await db.listByLocalId('smart-list-local');
+    expect(list?.folderId, isNull);
+    expect(await db.select(db.todoSyncChanges).get(), isEmpty);
+  });
 }
