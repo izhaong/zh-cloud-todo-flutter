@@ -344,6 +344,7 @@ void main() {
 
       var pushes = 0;
       final sentMutationIds = <String?>[];
+      final sentBatchKeys = <String?>[];
       final dio = Dio();
       dio.interceptors.add(
         InterceptorsWrapper(
@@ -355,6 +356,7 @@ void main() {
                 .toList();
             final mutationId = changes.single['clientMutationId'] as String?;
             sentMutationIds.add(mutationId);
+            sentBatchKeys.add((options.data as Map)['idempotency_key'] as String?);
             if (pushes == 1) {
               handler.reject(
                 DioException(
@@ -405,6 +407,8 @@ void main() {
       expect(pushes, 2);
       expect(sentMutationIds, hasLength(2));
       expect(sentMutationIds[1], sentMutationIds[0]);
+      expect(sentBatchKeys, hasLength(2));
+      expect(sentBatchKeys[1], sentBatchKeys[0]);
     },
   );
 }

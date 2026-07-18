@@ -54,7 +54,7 @@ class SyncCoordinator {
       db.todoSyncChanges,
     )..where(
       (t) => t.status.equals('queued') | t.status.equals('retryable'),
-    )).get();
+    )..orderBy([(t) => OrderingTerm.asc(t.id)])).get();
     if (pending.isEmpty) return 0;
 
     final folderChanges = pending
@@ -82,7 +82,10 @@ class SyncCoordinator {
     if (dtos.isEmpty) return 0;
 
     try {
-      final result = await api.push(idempotencyKey: _uuid.v4(), changes: dtos);
+      final result = await api.push(
+        idempotencyKey: changes.first.clientMutationId,
+        changes: dtos,
+      );
       for (final accepted in result.accepted) {
         await _applyAccepted(accepted);
       }
