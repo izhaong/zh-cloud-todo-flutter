@@ -301,6 +301,7 @@ void main() {
       final endAt = startAt.add(const Duration(hours: 2));
       final list = await listsA.create(name: 'B2 live sync $suffix');
       String? taskId;
+      String? generatedTaskId;
       var stage = 'push list';
 
       try {
@@ -388,12 +389,67 @@ void main() {
         expect(reminderB.intervalMinutes, 30);
         expect(generated.repeatRuleId, ruleB.id);
         expect(generated.repeatOccurrenceAt, isNotNull);
+
+        // A materialized ON_COMPLETE occurrence is a real server task.  Its
+        // skip/catchup commands must still be addressed to the template rule
+        // and template task, then converge through the normal outbox on both
+        // devices.
+        stage = 'pull materialized instance on first device';
+        await coordinatorA.pull();
+        final generatedA = await (dbA.select(
+          dbA.todoTasks,
+        )..where((row) => row.repeatParentTaskId.equals(task.id))).getSingle();
+        final occurrenceAt = generatedA.repeatOccurrenceAt;
+        expect(occurrenceAt, isNotNull);
+
+        stage = 'queue skip for materialized instance';
+        await repeatsA.skip(
+          repeatRuleId: rule.id,
+          taskId: task.id,
+          occurrenceAt: occurrenceAt!,
+        );
+        stage = 'push materialized-instance skip';
+        await coordinatorA.push();
+        stage = 'pull materialized-instance tombstone on both devices';
+        await coordinatorA.pull();
+        await coordinatorB.pull();
+        expect(await dbA.taskByServerId(generatedA.serverId!), isNull);
+        expect(await dbB.taskByServerId(generated.serverId!), isNull);
+
+        stage = 'queue catchup for materialized instance';
+        await repeatsA.catchup(
+          repeatRuleId: rule.id,
+          taskId: task.id,
+          occurrenceAt: occurrenceAt,
+        );
+        stage = 'push materialized-instance catchup';
+        await coordinatorA.push();
+        stage = 'pull caught-up instance on both devices';
+        await coordinatorA.pull();
+        await coordinatorB.pull();
+        final restoredA = await (dbA.select(
+          dbA.todoTasks,
+        )..where((row) => row.repeatParentTaskId.equals(task.id))).getSingle();
+        final restoredB =
+            await (dbB.select(dbB.todoTasks)
+                  ..where((row) => row.repeatParentTaskId.equals(parent.id)))
+                .getSingle();
+        generatedTaskId = restoredA.id;
+        expect(restoredA.serverId, isPositive);
+        expect(restoredA.serverId, isNot(generatedA.serverId));
+        expect(restoredA.repeatOccurrenceAt, occurrenceAt);
+        expect(restoredB.serverId, restoredA.serverId);
+        expect(restoredB.repeatOccurrenceAt, occurrenceAt);
       } catch (error, stackTrace) {
         Error.throwWithStackTrace(
           StateError('B2 live sync failed at stage: $stage; $error'),
           stackTrace,
         );
       } finally {
+        if (generatedTaskId != null) {
+          await tasksA.delete(generatedTaskId);
+          await coordinatorA.push();
+        }
         if (taskId != null) {
           await tasksA.delete(taskId);
           await coordinatorA.push();
