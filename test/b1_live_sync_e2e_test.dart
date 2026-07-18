@@ -7,12 +7,15 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zh_cloud_todo_flutter/core/api/api_client.dart';
 import 'package:zh_cloud_todo_flutter/core/api/sync_api.dart';
+import 'package:zh_cloud_todo_flutter/core/api/todo_api.dart';
 import 'package:zh_cloud_todo_flutter/core/auth/auth_gateway.dart';
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_coordinator.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/list_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/reminder_repository.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/reminder_dispatch_action_repository.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/reminder_inbox_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/repeat_rule_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_capture_defaults_repository.dart';
@@ -462,6 +465,177 @@ void main() {
     },
     skip: _b2Enabled ? false : 'set --dart-define=TODO_B2_LIVE=true to run',
   );
+
+  test(
+    'B2 live reminder dispatch syncs multi-reminder snooze with retry',
+    () async {
+      expect(_mobile, isNotEmpty, reason: 'TODO_B1_E2E_MOBILE is required');
+      expect(_password, isNotEmpty, reason: 'TODO_B1_E2E_PASSWORD is required');
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+
+      final sessionA = await _login();
+      final sessionB = await _login();
+      final dbA = AppDatabase.forTesting(NativeDatabase.memory());
+      final dbB = AppDatabase.forTesting(NativeDatabase.memory());
+      final apiA = _client(sessionA.accessToken);
+      final coordinatorA = _coordinator(dbA, apiA, 'b2-reminder-live-device-a');
+      final coordinatorB = _coordinator(
+        dbB,
+        _client(sessionB.accessToken),
+        'b2-reminder-live-device-b',
+      );
+      final listsA = ListRepository(dbA, SyncChangeQueue(dbA));
+      final tasksA = TaskRepository(dbA, SyncChangeQueue(dbA));
+      final remindersA = ReminderRepository(dbA, SyncChangeQueue(dbA));
+      final actionsA = ReminderDispatchActionRepository(SyncChangeQueue(dbA));
+      final inboxA = ReminderInboxRepository(TodoRestApi(apiA).reminder);
+      final suffix = DateTime.now().microsecondsSinceEpoch;
+      final list = await listsA.create(name: 'B2 dispatch live $suffix');
+      String? taskId;
+      var stage = 'push list';
+
+      try {
+        await coordinatorA.push();
+        final syncedList = await dbA.listByLocalId(list.id);
+        expect(syncedList?.serverId, isPositive);
+
+        final task = await tasksA.create(
+          listId: list.id,
+          title: 'B2 dispatch $suffix',
+        );
+        taskId = task.id;
+        await coordinatorA.push();
+        final syncedTask = await tasksA.getById(task.id);
+        expect(syncedTask?.serverId, isPositive);
+
+        // 同一任务写入一条已经到期、可由服务端 Job 派发的提醒和一条未来提醒。
+        final dueReminder = await remindersA.create(
+          taskId: task.id,
+          fireAt: DateTime.now().toUtc().subtract(const Duration(minutes: 2)),
+          timeZone: 'Asia/Shanghai',
+          fixedTimezone: true,
+        );
+        final laterReminder = await remindersA.create(
+          taskId: task.id,
+          fireAt: DateTime.now().toUtc().add(const Duration(days: 1)),
+          timeZone: 'Asia/Shanghai',
+          fixedTimezone: true,
+        );
+        stage = 'push two reminder rules';
+        await coordinatorA.push();
+        final syncedDue = await (dbA.select(
+          dbA.todoReminders,
+        )..where((row) => row.id.equals(dueReminder.id))).getSingle();
+        final syncedLater = await (dbA.select(
+          dbA.todoReminders,
+        )..where((row) => row.id.equals(laterReminder.id))).getSingle();
+        expect(syncedDue.serverId, isPositive);
+        expect(syncedLater.serverId, isPositive);
+
+        stage = 'pull two reminder rules on second device';
+        await coordinatorB.pull();
+        final taskB = await dbB.taskByServerId(syncedTask!.serverId!);
+        expect(taskB, isNotNull);
+        final remindersB = await (dbB.select(
+          dbB.todoReminders,
+        )..where((row) => row.taskId.equals(taskB!.id))).get();
+        expect(remindersB, hasLength(2));
+
+        stage = 'wait for due reminder dispatch';
+        final dispatch = await _waitForReminderDispatch(
+          inboxA,
+          syncedDue.serverId!,
+        );
+        expect(dispatch.reminderId, syncedDue.serverId);
+
+        stage = 'queue snooze action';
+        final mutationId = await actionsA.snooze(
+          reminderDispatchId: dispatch.id,
+          minutes: 10,
+        );
+        // 在已持久化 outbox 的第一次 push 注入短暂连接失败；第二次仍必须以原
+        // mutation 回放到真实 Service，不会把动作旁路为直连 REST。
+        var rejected = false;
+        apiA.raw.interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (options, handler) {
+              if (!rejected && options.path.endsWith('/todo/sync/push')) {
+                rejected = true;
+                handler.reject(
+                  DioException(
+                    requestOptions: options,
+                    type: DioExceptionType.connectionError,
+                  ),
+                );
+                return;
+              }
+              handler.next(options);
+            },
+          ),
+        );
+        stage = 'push transient snooze failure';
+        expect(await coordinatorA.push(), 0);
+        final retryable = await (dbA.select(
+          dbA.todoSyncChanges,
+        )..where((row) => row.clientMutationId.equals(mutationId))).getSingle();
+        expect(retryable.status, 'retryable');
+        expect(retryable.attemptCount, 1);
+
+        stage = 'replay snooze action';
+        expect(await coordinatorA.push(), 1);
+        final syncedAction = await (dbA.select(
+          dbA.todoSyncChanges,
+        )..where((row) => row.clientMutationId.equals(mutationId))).getSingle();
+        expect(syncedAction.status, 'synced');
+        stage = 'confirm snoozed dispatch leaves inbox';
+        await _waitForReminderDispatchRemoval(inboxA, dispatch.id);
+      } catch (error, stackTrace) {
+        Error.throwWithStackTrace(
+          StateError(
+            'B2 reminder dispatch live sync failed at stage: $stage; $error',
+          ),
+          stackTrace,
+        );
+      } finally {
+        if (taskId != null) {
+          await tasksA.delete(taskId);
+          await coordinatorA.push();
+        }
+        await listsA.delete(list.id);
+        await coordinatorA.push();
+        await dbA.close();
+        await dbB.close();
+      }
+    },
+    skip: _b2Enabled ? false : 'set --dart-define=TODO_B2_LIVE=true to run',
+  );
+}
+
+Future<ReminderInboxItem> _waitForReminderDispatch(
+  ReminderInboxRepository inbox,
+  int reminderId,
+) async {
+  for (var attempt = 0; attempt < 18; attempt++) {
+    final match = (await inbox.list()).cast<ReminderInboxItem?>().firstWhere(
+      (item) => item?.reminderId == reminderId,
+      orElse: () => null,
+    );
+    if (match != null) return match;
+    await Future<void>.delayed(const Duration(seconds: 3));
+  }
+  throw StateError('reminder dispatch was not available before timeout');
+}
+
+Future<void> _waitForReminderDispatchRemoval(
+  ReminderInboxRepository inbox,
+  int dispatchId,
+) async {
+  for (var attempt = 0; attempt < 6; attempt++) {
+    final remains = (await inbox.list()).any((item) => item.id == dispatchId);
+    if (!remains) return;
+    await Future<void>.delayed(const Duration(seconds: 1));
+  }
+  throw StateError('snoozed reminder dispatch remained in the inbox');
 }
 
 Future<void> _deleteAttachmentIfPresent(ApiClient client, int serverId) async {

@@ -25,6 +25,31 @@ class _FakeReminderInboxRepository extends ReminderInboxRepository {
 
 void main() {
   group('ReminderActionApi.normalize', () {
+    test('收件箱读取统一数组信封', () async {
+      final dio = Dio();
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) => handler.resolve(
+            Response(
+              requestOptions: options,
+              data: {
+                'code': 0,
+                'data': [
+                  {'reminderDispatchId': 8, 'reminderId': 9, 'taskId': 60},
+                ],
+              },
+            ),
+          ),
+        ),
+      );
+
+      final items = await ReminderActionApi(ApiClient(dio: dio)).inbox();
+
+      expect(items, hasLength(1));
+      expect(items.single.id, 8);
+      expect(items.single.reminderId, 9);
+    });
+
     test('解析纯数组', () {
       final raw = [
         {
