@@ -404,7 +404,7 @@ class SyncCoordinator {
           db.todoSyncChanges,
         )..where((t) => t.id.equals(change.id))).write(
           TodoSyncChangesCompanion(
-            status: const Value('failed'),
+            status: const Value('retryable'),
             attemptCount: Value(change.attemptCount + 1),
           ),
         );
