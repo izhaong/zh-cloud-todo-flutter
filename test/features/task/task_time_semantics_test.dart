@@ -126,6 +126,43 @@ void main() {
     },
   );
 
+  testWidgets(
+    'detail renders a fixed timezone due time as its configured wall clock',
+    (tester) async {
+      final fixture = await TodoVisualFixture.create();
+      addTearDown(fixture.dispose);
+      await (fixture.database.update(
+        fixture.database.todoTasks,
+      )..where((task) => task.id.equals(_taskId))).write(
+        TodoTasksCompanion(
+          dueAt: Value(DateTime.utc(2026, 7, 11, 16, 30)),
+          timeZone: const Value('America/Los_Angeles'),
+          fixedTimezone: const Value(true),
+        ),
+      );
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: fixture.container,
+          child: MaterialApp(
+            theme: ThemeData.light().copyWith(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            home: const Scaffold(
+              body: TaskDetailPane(taskId: _taskId, embedded: true),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('2026-07-11 09:30 (America/Los_Angeles 固定时区)'),
+        findsOneWidget,
+      );
+    },
+  );
+
   testWidgets('detail creates an end reminder through reminder repository', (
     tester,
   ) async {
@@ -680,19 +717,21 @@ void main() {
         frequency: 'WEEKLY',
         startAt: DateTime(2026, 7, 11, 9),
       );
-      await fixture.database.into(fixture.database.todoTasks).insert(
-        TodoTasksCompanion.insert(
-          id: 'materialized-repeat-instance',
-          listId: TodoVisualFixture.inboxListId,
-          title: '完成后生成的下一次',
-          dueAt: Value(occurrenceAt),
-          repeatParentTaskId: const Value(_taskId),
-          repeatRuleId: Value(rule.id),
-          repeatOccurrenceAt: Value(occurrenceAt),
-          updatedAt: occurrenceAt,
-          createdAt: occurrenceAt,
-        ),
-      );
+      await fixture.database
+          .into(fixture.database.todoTasks)
+          .insert(
+            TodoTasksCompanion.insert(
+              id: 'materialized-repeat-instance',
+              listId: TodoVisualFixture.inboxListId,
+              title: '完成后生成的下一次',
+              dueAt: Value(occurrenceAt),
+              repeatParentTaskId: const Value(_taskId),
+              repeatRuleId: Value(rule.id),
+              repeatOccurrenceAt: Value(occurrenceAt),
+              updatedAt: occurrenceAt,
+              createdAt: occurrenceAt,
+            ),
+          );
 
       await tester.pumpWidget(
         UncontrolledProviderScope(
