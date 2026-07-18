@@ -91,6 +91,40 @@ void main() {
     expect(payload['allDay'], isFalse);
   });
 
+  test(
+    'completes and reopens a task with the service time-semantics payload',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final repository = TaskRepository(db, SyncChangeQueue(db));
+      final task = await repository.create(listId: 'inbox', title: '完成后重复');
+
+      final completed = await repository.toggleComplete(task.id);
+      final completedPayload =
+          jsonDecode(
+                (await db.select(db.todoSyncChanges).get()).last.payloadJson,
+              )
+              as Map<String, dynamic>;
+
+      expect(completed.completed, isTrue);
+      expect(completed.completedAt, isNotNull);
+      expect(completedPayload['status'], 'DONE');
+      expect(completedPayload['completedAt'], isNotNull);
+
+      final reopened = await repository.toggleComplete(task.id);
+      final reopenedPayload =
+          jsonDecode(
+                (await db.select(db.todoSyncChanges).get()).last.payloadJson,
+              )
+              as Map<String, dynamic>;
+
+      expect(reopened.completed, isFalse);
+      expect(reopened.completedAt, isNull);
+      expect(reopenedPayload['status'], 'TODO');
+      expect(reopenedPayload['completedAt'], isNull);
+    },
+  );
+
   test('persists an all-day choice when creating and editing a task', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);

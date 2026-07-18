@@ -45,6 +45,7 @@ class TodoTasks extends Table {
   TextColumn get title => text()();
   TextColumn get description => text().nullable()();
   BoolColumn get completed => boolean().withDefault(const Constant(false))();
+  DateTimeColumn get completedAt => dateTime().nullable()();
   IntColumn get priority => integer().withDefault(const Constant(0))();
   BoolColumn get isPinned => boolean().withDefault(const Constant(false))();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
@@ -57,6 +58,13 @@ class TodoTasks extends Table {
   TextColumn get timeZone => text().nullable()();
   BoolColumn get fixedTimezone =>
       boolean().withDefault(const Constant(false))();
+
+  /// 本地 UUID，指向服务端物化实例的源任务。
+  TextColumn get repeatParentTaskId => text().nullable()();
+
+  /// 本地 UUID，指向触发本实例的重复规则。
+  TextColumn get repeatRuleId => text().nullable()();
+  DateTimeColumn get repeatOccurrenceAt => dateTime().nullable()();
   DateTimeColumn get updatedAt => dateTime()();
   DateTimeColumn get createdAt => dateTime()();
 
@@ -259,7 +267,7 @@ class AppDatabase extends _$AppDatabase {
     : super(_open('todo_t${tenantId}_u$userId'));
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -300,6 +308,12 @@ class AppDatabase extends _$AppDatabase {
         await m.addColumn(todoTasks, todoTasks.timeZone);
         await m.addColumn(todoTasks, todoTasks.fixedTimezone);
       }
+      if (from < 9) {
+        await m.addColumn(todoTasks, todoTasks.completedAt);
+        await m.addColumn(todoTasks, todoTasks.repeatParentTaskId);
+        await m.addColumn(todoTasks, todoTasks.repeatRuleId);
+        await m.addColumn(todoTasks, todoTasks.repeatOccurrenceAt);
+      }
     },
   );
 
@@ -318,6 +332,7 @@ class AppDatabase extends _$AppDatabase {
     )..where((t) => t.id.equals(taskId))).getSingle();
     final next = row.copyWith(
       completed: !row.completed,
+      completedAt: Value(!row.completed ? DateTime.now() : null),
       updatedAt: DateTime.now(),
     );
     await (update(todoTasks)..where((t) => t.id.equals(taskId))).write(next);
@@ -406,6 +421,10 @@ class AppDatabase extends _$AppDatabase {
   )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
   Future<TodoTag?> tagByServerId(int serverId) => (select(
     todoTags,
+  )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
+
+  Future<TodoRepeatRule?> repeatRuleByServerId(int serverId) => (select(
+    todoRepeatRules,
   )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
 
   /// 按本地 UUID 主键查清单（任务详情反查清单 serverId 用）。

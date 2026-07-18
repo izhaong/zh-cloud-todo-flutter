@@ -10,6 +10,7 @@ import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_coordinator.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/reminder_dispatch_action_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/repeat_rule_repository.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/task_repository.dart';
 
 void main() {
   test('pull preserves a task fixed timezone', () async {
@@ -74,6 +75,189 @@ void main() {
     final task = await db.taskByServerId(201);
     expect(task?.timeZone, 'America/Los_Angeles');
     expect(task?.fixedTimezone, isTrue);
+  });
+
+  test(
+    'pull preserves ON_COMPLETE task completion and repeat linkage',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final now = DateTime.utc(2026, 7, 15, 9);
+      await db
+          .into(db.todoLists)
+          .insert(
+            TodoListsCompanion.insert(
+              id: 'list-1',
+              serverId: const Value(101),
+              name: '收集箱',
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      await db
+          .into(db.todoTasks)
+          .insert(
+            TodoTasksCompanion.insert(
+              id: 'parent-task',
+              serverId: const Value(201),
+              listId: 'list-1',
+              title: '重复模板',
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      await db
+          .into(db.todoRepeatRules)
+          .insert(
+            TodoRepeatRulesCompanion.insert(
+              id: 'repeat-rule',
+              serverId: const Value(301),
+              taskId: 'parent-task',
+              freq: 'DAILY',
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      final dio = Dio();
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                data: {
+                  'code': 0,
+                  'data': {
+                    'changes': [
+                      {
+                        'entityType': 'task',
+                        'entityId': 201,
+                        'operation': 'upsert',
+                        'payload': {
+                          'listId': 101,
+                          'title': '重复模板',
+                          'status': 'DONE',
+                          'completedAt': '2026-07-15T09:00:00.000Z',
+                        },
+                      },
+                      {
+                        'entityType': 'task',
+                        'entityId': 202,
+                        'operation': 'upsert',
+                        'payload': {
+                          'listId': 101,
+                          'title': '重复模板',
+                          'status': 'TODO',
+                          'repeatParentTaskId': 201,
+                          'repeatRuleId': 301,
+                          'repeatOccurrenceAt': '2026-07-16T09:00:00.000Z',
+                        },
+                      },
+                    ],
+                    'tombstones': const [],
+                    'hasMore': false,
+                  },
+                },
+              ),
+            );
+          },
+        ),
+      );
+      final client = ApiClient(dio: dio);
+      final coordinator = SyncCoordinator(
+        db: db,
+        api: SyncApi(client, clientId: 'test', deviceId: 'device-1'),
+        todoApi: client,
+      );
+
+      expect(await coordinator.pull(), 2);
+      final parent = await db.taskByServerId(201);
+      final generated = await db.taskByServerId(202);
+      expect(parent?.completed, isTrue);
+      expect(parent?.completedAt?.toUtc(), DateTime.utc(2026, 7, 15, 9));
+      expect(generated?.repeatParentTaskId, 'parent-task');
+      expect(generated?.repeatRuleId, 'repeat-rule');
+      expect(
+        generated?.repeatOccurrenceAt?.toUtc(),
+        DateTime.utc(2026, 7, 16, 9),
+      );
+    },
+  );
+
+  test('pushes completion with the ON_COMPLETE service contract', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final now = DateTime.utc(2026, 7, 15, 9);
+    await db
+        .into(db.todoLists)
+        .insert(
+          TodoListsCompanion.insert(
+            id: 'list-1',
+            serverId: const Value(101),
+            name: '收集箱',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    await db
+        .into(db.todoTasks)
+        .insert(
+          TodoTasksCompanion.insert(
+            id: 'task-1',
+            serverId: const Value(201),
+            listId: 'list-1',
+            title: '完成后生成下一次',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    await TaskRepository(db, SyncChangeQueue(db)).toggleComplete('task-1');
+
+    Map<String, dynamic>? sentTask;
+    final dio = Dio();
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          final changes = ((options.data as Map)['changes'] as List)
+              .cast<Map>()
+              .map((entry) => entry.cast<String, dynamic>())
+              .toList();
+          sentTask = changes.single;
+          handler.resolve(
+            Response(
+              requestOptions: options,
+              data: {
+                'code': 0,
+                'data': {
+                  'ok': true,
+                  'accepted': [
+                    {
+                      'entityType': 'task',
+                      'entityId': 201,
+                      'operation': 'upsert',
+                      'clientMutationId': sentTask!['clientMutationId'],
+                    },
+                  ],
+                  'conflicts': const [],
+                },
+              },
+            ),
+          );
+        },
+      ),
+    );
+    final client = ApiClient(dio: dio);
+    final coordinator = SyncCoordinator(
+      db: db,
+      api: SyncApi(client, clientId: 'test', deviceId: 'device-1'),
+      todoApi: client,
+    );
+
+    expect(await coordinator.push(), 1);
+    final payload = sentTask!['payload'] as Map<String, dynamic>;
+    expect(sentTask!['entityType'], 'task');
+    expect(payload['status'], 'DONE');
+    expect(payload['completedAt'], isA<int>());
   });
 
   test('pushes a repeat skip with the same temporary rule ID', () async {
@@ -356,7 +540,9 @@ void main() {
                 .toList();
             final mutationId = changes.single['clientMutationId'] as String?;
             sentMutationIds.add(mutationId);
-            sentBatchKeys.add((options.data as Map)['idempotency_key'] as String?);
+            sentBatchKeys.add(
+              (options.data as Map)['idempotency_key'] as String?,
+            );
             if (pushes == 1) {
               handler.reject(
                 DioException(

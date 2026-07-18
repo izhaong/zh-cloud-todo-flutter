@@ -9,7 +9,7 @@ import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 
 void main() {
   test(
-    'upgrades schema 4 scheduling records with B2 defaults across restart',
+    'upgrades schema 4 scheduling and completion records across restart',
     () async {
       final directory = await Directory.systemTemp.createTemp(
         'zh_cloud_todo_b2_migration_',
@@ -87,7 +87,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 8);
+      expect(version.data['user_version'], 9);
       await upgraded.close();
 
       final reopened = AppDatabase.forTesting(NativeDatabase(databaseFile));
@@ -109,6 +109,10 @@ void main() {
       expect(task.allDay, isFalse);
       expect(task.timeZone, isNull);
       expect(task.fixedTimezone, isFalse);
+      expect(task.completedAt, isNull);
+      expect(task.repeatParentTaskId, isNull);
+      expect(task.repeatRuleId, isNull);
+      expect(task.repeatOccurrenceAt, isNull);
       expect(reminder.anchorType, 'ABSOLUTE');
       expect(reminder.remindAt.toUtc(), DateTime.utc(2026, 7, 16, 23));
       expect(reminder.status, 'PENDING');

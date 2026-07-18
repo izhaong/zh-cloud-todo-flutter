@@ -69,7 +69,7 @@ pubspec.yaml
 ### 4.2 离线同步与 LWW（目标）
 
 - 当前：本地状态变更入 `_SyncQueueItem` 同步队列雏形，随状态一并持久化。
-- 目标：Drift 本地库 + outbox，由 `SyncCoordinator` 驱动 `/app-api/todo/sync/{pull,push}` 增量同步；临时网络失败保留原 `clientMutationId`，以最早 outbox mutation 作为稳定批次 `idempotency_key` 并标记为 `retryable`，在下次同步继续推送；冲突按 **LWW（Last-Write-Wins，以更新时间为准）** 合并并保持 `failed` 供用户恢复。离线优先、恢复网络后增量推送/拉取。
+- 目标：Drift 本地库 + outbox，由 `SyncCoordinator` 驱动 `/app-api/todo/sync/{pull,push}` 增量同步；临时网络失败保留原 `clientMutationId`，以最早 outbox mutation 作为稳定批次 `idempotency_key` 并标记为 `retryable`，在下次同步继续推送；冲突按 **LWW（Last-Write-Wins，以更新时间为准）** 合并并保持 `failed` 供用户恢复。任务完成统一以 `status` 与 `completedAt` 推送；拉取将 `completedAt`、重复父任务、重复规则和 occurrence 映射为本地 UUID，离线完成后能回放 `ON_COMPLETE` 生成的下一实例。
 
 ## 5. 对外契约
 

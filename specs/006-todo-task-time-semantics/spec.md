@@ -36,6 +36,7 @@
 - **FR-007**: 跳过和补做记录以规则 UUID 与 occurrence 时间为键；跳过不生成补做，补做不删除原 occurrence，重复执行同一动作必须幂等。
 - **FR-008**: `SyncCoordinator` 必须在任务 serverId 已映射后推送提醒和重复规则，在重复规则 serverId 已映射后推送跳过/补做；提醒派发动作以服务端派发 ID 推送；拉取顺序必须先任务、再规则、再 occurrence 动作。临时网络失败必须保留原 `clientMutationId`、增加 `attemptCount` 并标记为 `retryable` 以便下一轮 push；按 outbox ID 最早的 mutation 生成稳定批次 `idempotency_key`，同一待重试批次不得更换该 key；服务端冲突保持 `failed`，不得自动重放。
 - **FR-009**: 详情与提醒收件箱只能经 Repository/use-case 读取和写入；派发 ID 用于完成、忽略和稍后，提醒规则 ID 只用于持续提醒配置。保留 `specs/002-todo-visual-fidelity/` 的工作区与九张批准 golden，不重新设计视觉结构。
+- **FR-010**: 任务聚合必须持久化 `completedAt`、`repeatParentTaskId`、`repeatRuleId` 与 `repeatOccurrenceAt`。完成/重新打开在同一 Drift 事务内更新任务和 task outbox，payload 显式发送 `status` 与 `completedAt`；pull 以 `completedAt` 或完成状态恢复完成态，并将服务端重复关联 ID 映射回本地 UUID。
 
 ## Success Criteria
 
@@ -43,6 +44,7 @@
 - **SC-002**: 单提醒、多提醒、结束提醒、持续提醒和稍后提醒各有 Repository、SyncCoordinator 和 Widget 测试，所有核心写测试均断言 outbox 状态。
 - **SC-003**: 六类重复频率、跳过和补做各有有效与无效输入测试；重复 push 不产生重复本地或服务端映射。
 - **SC-004**: `flutter analyze` 与本规格列出的定向测试在低资源命令下通过；未执行的桌面/移动/测试环境旅程保持未完成。
+- **SC-005**: mock `/sync/push` 断言完成任务发送 `status=DONE` 与非空 `completedAt`；mock `/sync/pull` 断言已完成父任务和 `ON_COMPLETE` 新实例的重复关联在 Drift 中可重建，详情勾选操作只经 `TaskRepository` 写入 outbox。
 
 ## Assumptions and Boundaries
 

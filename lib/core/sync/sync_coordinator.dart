@@ -565,6 +565,12 @@ class SyncCoordinator {
     final localParentId = await _localTaskIdForServerId(
       (payload['parentTaskId'] as num?)?.toInt(),
     );
+    final localRepeatParentId = await _localTaskIdForServerId(
+      (payload['repeatParentTaskId'] as num?)?.toInt(),
+    );
+    final localRepeatRuleId = await _localRepeatRuleIdForServerId(
+      (payload['repeatRuleId'] as num?)?.toInt(),
+    );
     final now = DateTime.now();
     final status = payload['status']?.toString();
     final companion = TodoTasksCompanion(
@@ -574,7 +580,12 @@ class SyncCoordinator {
       parentTaskId: Value(localParentId ?? existing?.parentTaskId),
       title: Value(payload['title']?.toString() ?? existing?.title ?? ''),
       description: Value(payload['description']?.toString()),
-      completed: Value(status == 'DONE' || status == 'COMPLETED'),
+      completed: Value(
+        payload['completedAt'] != null ||
+            status == 'DONE' ||
+            status == 'COMPLETED',
+      ),
+      completedAt: Value(_parseDate(payload['completedAt'])),
       priority: Value((payload['priority'] as num?)?.toInt() ?? 0),
       isPinned: Value(payload['isPinned'] as bool? ?? false),
       sortOrder: Value((payload['sortOrder'] as num?)?.toInt() ?? 0),
@@ -584,6 +595,9 @@ class SyncCoordinator {
       allDay: Value(payload['allDay'] == true),
       timeZone: Value(payload['timeZone']?.toString()),
       fixedTimezone: Value(payload['fixedTimezone'] == true),
+      repeatParentTaskId: Value(localRepeatParentId),
+      repeatRuleId: Value(localRepeatRuleId),
+      repeatOccurrenceAt: Value(_parseDate(payload['repeatOccurrenceAt'])),
       updatedAt: Value(now),
       createdAt: Value(existing?.createdAt ?? now),
     );

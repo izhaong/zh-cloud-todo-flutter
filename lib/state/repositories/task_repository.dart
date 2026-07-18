@@ -96,7 +96,7 @@ class TaskRepository {
       entity: SyncEntities.task,
       op: SyncOps.upsert,
       localId: id,
-      payload: row.toJson(),
+      payload: _syncPayload(row),
     );
     return row;
   }
@@ -164,7 +164,7 @@ class TaskRepository {
       op: SyncOps.upsert,
       localId: taskId,
       serverId: row.serverId,
-      payload: row.toJson(),
+      payload: _syncPayload(row),
     );
     return row;
   }
@@ -186,23 +186,33 @@ class TaskRepository {
       op: SyncOps.upsert,
       localId: taskId,
       serverId: next.serverId,
-      payload: next.toJson(),
+      payload: _syncPayload(next),
     );
     return next;
   }
 
   /// 切换完成状态 + sync_queue。
   Future<TodoTask> toggleComplete(String taskId) async {
-    final next = await _db.toggleTaskComplete(taskId);
-    await _queue.enqueue(
-      entity: SyncEntities.task,
-      op: SyncOps.upsert,
-      localId: taskId,
-      serverId: next.serverId,
-      payload: next.toJson(),
-    );
-    return next;
+    return _db.transaction(() async {
+      final next = await _db.toggleTaskComplete(taskId);
+      await _queue.enqueue(
+        entity: SyncEntities.task,
+        op: SyncOps.upsert,
+        localId: taskId,
+        serverId: next.serverId,
+        payload: _syncPayload(next),
+      );
+      return next;
+    });
   }
+
+  /// 服务端以 `status + completedAt` 作为任务完成协议；Drift 的 `completed`
+  /// 仅供本地 UI 查询，不能直接作为 sync payload。
+  Map<String, dynamic> _syncPayload(TodoTask task) => {
+    ...task.toJson(),
+    'status': task.completed ? 'DONE' : 'TODO',
+    'completedAt': task.completedAt?.millisecondsSinceEpoch,
+  };
 
   Future<void> delete(String taskId) async {
     final row = await (_db.select(

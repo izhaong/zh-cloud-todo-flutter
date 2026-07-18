@@ -26,6 +26,47 @@ Future<void> _closeScheduleOptions(WidgetTester tester) async {
 
 void main() {
   testWidgets(
+    'detail completes a task only through the repository outbox contract',
+    (tester) async {
+      final fixture = await TodoVisualFixture.create();
+      addTearDown(fixture.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: fixture.container,
+          child: MaterialApp(
+            theme: ThemeData.light().copyWith(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            home: const Scaffold(
+              body: TaskDetailPane(taskId: _taskId, embedded: true),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('勾选完成'));
+      await tester.pumpAndSettle();
+
+      final task = await fixture.container
+          .read(taskRepositoryProvider)!
+          .getById(_taskId);
+      final change =
+          (await fixture.database
+                  .select(fixture.database.todoSyncChanges)
+                  .get())
+              .last;
+      final payload = jsonDecode(change.payloadJson) as Map<String, dynamic>;
+      expect(task?.completed, isTrue);
+      expect(task?.completedAt, isNotNull);
+      expect(change.entity, 'task');
+      expect(payload['status'], 'DONE');
+      expect(payload['completedAt'], isNotNull);
+    },
+  );
+
+  testWidgets(
     'detail saves all-day and fixed timezone through task repository',
     (tester) async {
       final fixture = await TodoVisualFixture.create();
