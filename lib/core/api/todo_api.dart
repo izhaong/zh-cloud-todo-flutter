@@ -26,6 +26,83 @@ Map<String, dynamic> _unwrapBody(Map<String, dynamic>? body) {
   return body;
 }
 
+/// 一条服务端全局搜索结果。UI 不直接消费该类型：工作区继续通过
+/// `TaskQueryRepository` 查询本地 Drift；此 API 供同步后的契约/A-B 对照使用。
+class TodoGlobalSearchResult {
+  const TodoGlobalSearchResult({
+    required this.type,
+    required this.id,
+    required this.title,
+    this.listId,
+  });
+
+  final String type;
+  final int id;
+  final String title;
+  final int? listId;
+
+  factory TodoGlobalSearchResult.fromJson(Map<String, dynamic> json) =>
+      TodoGlobalSearchResult(
+        type: json['type']?.toString() ?? '',
+        id: (json['id'] as num?)?.toInt() ?? 0,
+        title: json['title']?.toString() ?? '',
+        listId: (json['listId'] as num?)?.toInt(),
+      );
+}
+
+/// 服务端稳定分页的搜索页。
+class TodoGlobalSearchPage {
+  const TodoGlobalSearchPage({required this.items, required this.total});
+
+  final List<TodoGlobalSearchResult> items;
+  final int total;
+}
+
+/// `GET /task/global-search` 的契约封装。
+///
+/// 它只属于 API 边界及真实 HTTP A/B Drift 验收；离线 UI 不以网络响应作为
+/// 真相源，避免违反 B3 的 Repository/use-case 约束。
+class TodoGlobalSearchApi {
+  TodoGlobalSearchApi(this._client);
+
+  final ApiClient _client;
+
+  Future<TodoGlobalSearchPage> search({
+    required String keyword,
+    int pageNo = 1,
+    int pageSize = 20,
+  }) async {
+    final normalizedKeyword = keyword.trim();
+    if (normalizedKeyword.isEmpty) {
+      throw ArgumentError.value(keyword, 'keyword', '关键词不能为空');
+    }
+    if (pageNo < 1 || pageSize < 1) {
+      throw ArgumentError('pageNo 和 pageSize 必须为正数');
+    }
+
+    final resp = await _client.get<Map<String, dynamic>>(
+      '/task/global-search',
+      query: {
+        'keyword': normalizedKeyword,
+        'pageNo': pageNo,
+        'pageSize': pageSize,
+      },
+    );
+    final data = _unwrapBody(resp.data);
+    final raw = (data['list'] as List?) ?? const [];
+    return TodoGlobalSearchPage(
+      items: raw
+          .map(
+            (item) => TodoGlobalSearchResult.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList(growable: false),
+      total: (data['total'] as num?)?.toInt() ?? raw.length,
+    );
+  }
+}
+
 /// 任务动作：完成 / 取消完成 / 重排顺序（直接 REST）。
 class TaskRestApi {
   TaskRestApi(this._client);
@@ -346,6 +423,7 @@ class SecurityApi {
 class TodoRestApi {
   TodoRestApi(ApiClient client)
     : task = TaskRestApi(client),
+      globalSearch = TodoGlobalSearchApi(client),
       checklist = ChecklistApi(client),
       folder = FolderApi(client),
       nlp = NlpApi(client),
@@ -359,6 +437,7 @@ class TodoRestApi {
       security = SecurityApi(client);
 
   final TaskRestApi task;
+  final TodoGlobalSearchApi globalSearch;
   final ChecklistApi checklist;
   final FolderApi folder;
   final NlpApi nlp;
