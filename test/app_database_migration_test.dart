@@ -28,7 +28,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 12);
+      expect(version.data['user_version'], 13);
 
       final taskColumns = await upgraded
           .customSelect('PRAGMA table_info(todo_tasks)')
@@ -100,6 +100,13 @@ void main() {
       expect(
         tagColumns.map((row) => row.data['name']),
         contains('parent_id'),
+      );
+      final filterColumns = await upgraded
+          .customSelect('PRAGMA table_info(todo_filters)')
+          .get();
+      expect(
+        filterColumns.map((row) => row.data['name']),
+        containsAll(<String>{'sort_orders_json', 'is_smart', 'is_pinned'}),
       );
       final indexTable = await upgraded
           .customSelect(
@@ -190,7 +197,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 12);
+      expect(version.data['user_version'], 13);
       await upgraded.close();
 
       final reopened = AppDatabase.forTesting(NativeDatabase(databaseFile));

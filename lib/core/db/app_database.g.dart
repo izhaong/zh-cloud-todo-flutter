@@ -7738,6 +7738,48 @@ class $TodoFiltersTable extends TodoFilters
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _sortOrdersJsonMeta = const VerificationMeta(
+    'sortOrdersJson',
+  );
+  @override
+  late final GeneratedColumn<String> sortOrdersJson = GeneratedColumn<String>(
+    'sort_orders_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('[]'),
+  );
+  static const VerificationMeta _isSmartMeta = const VerificationMeta(
+    'isSmart',
+  );
+  @override
+  late final GeneratedColumn<bool> isSmart = GeneratedColumn<bool>(
+    'is_smart',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_smart" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _isPinnedMeta = const VerificationMeta(
+    'isPinned',
+  );
+  @override
+  late final GeneratedColumn<bool> isPinned = GeneratedColumn<bool>(
+    'is_pinned',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_pinned" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _sortOrderMeta = const VerificationMeta(
     'sortOrder',
   );
@@ -7778,6 +7820,9 @@ class $TodoFiltersTable extends TodoFilters
     serverId,
     name,
     conditionJson,
+    sortOrdersJson,
+    isSmart,
+    isPinned,
     sortOrder,
     updatedAt,
     createdAt,
@@ -7823,6 +7868,27 @@ class $TodoFiltersTable extends TodoFilters
       );
     } else if (isInserting) {
       context.missing(_conditionJsonMeta);
+    }
+    if (data.containsKey('sort_orders_json')) {
+      context.handle(
+        _sortOrdersJsonMeta,
+        sortOrdersJson.isAcceptableOrUnknown(
+          data['sort_orders_json']!,
+          _sortOrdersJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_smart')) {
+      context.handle(
+        _isSmartMeta,
+        isSmart.isAcceptableOrUnknown(data['is_smart']!, _isSmartMeta),
+      );
+    }
+    if (data.containsKey('is_pinned')) {
+      context.handle(
+        _isPinnedMeta,
+        isPinned.isAcceptableOrUnknown(data['is_pinned']!, _isPinnedMeta),
+      );
     }
     if (data.containsKey('sort_order')) {
       context.handle(
@@ -7871,6 +7937,18 @@ class $TodoFiltersTable extends TodoFilters
         DriftSqlType.string,
         data['${effectivePrefix}condition_json'],
       )!,
+      sortOrdersJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sort_orders_json'],
+      )!,
+      isSmart: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_smart'],
+      )!,
+      isPinned: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_pinned'],
+      )!,
       sortOrder: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}sort_order'],
@@ -7897,6 +7975,9 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
   final int? serverId;
   final String name;
   final String conditionJson;
+  final String sortOrdersJson;
+  final bool isSmart;
+  final bool isPinned;
   final int sortOrder;
   final DateTime updatedAt;
   final DateTime createdAt;
@@ -7905,6 +7986,9 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
     this.serverId,
     required this.name,
     required this.conditionJson,
+    required this.sortOrdersJson,
+    required this.isSmart,
+    required this.isPinned,
     required this.sortOrder,
     required this.updatedAt,
     required this.createdAt,
@@ -7918,6 +8002,9 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
     }
     map['name'] = Variable<String>(name);
     map['condition_json'] = Variable<String>(conditionJson);
+    map['sort_orders_json'] = Variable<String>(sortOrdersJson);
+    map['is_smart'] = Variable<bool>(isSmart);
+    map['is_pinned'] = Variable<bool>(isPinned);
     map['sort_order'] = Variable<int>(sortOrder);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     map['created_at'] = Variable<DateTime>(createdAt);
@@ -7932,6 +8019,9 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
           : Value(serverId),
       name: Value(name),
       conditionJson: Value(conditionJson),
+      sortOrdersJson: Value(sortOrdersJson),
+      isSmart: Value(isSmart),
+      isPinned: Value(isPinned),
       sortOrder: Value(sortOrder),
       updatedAt: Value(updatedAt),
       createdAt: Value(createdAt),
@@ -7948,6 +8038,9 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
       serverId: serializer.fromJson<int?>(json['serverId']),
       name: serializer.fromJson<String>(json['name']),
       conditionJson: serializer.fromJson<String>(json['conditionJson']),
+      sortOrdersJson: serializer.fromJson<String>(json['sortOrdersJson']),
+      isSmart: serializer.fromJson<bool>(json['isSmart']),
+      isPinned: serializer.fromJson<bool>(json['isPinned']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
@@ -7961,6 +8054,9 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
       'serverId': serializer.toJson<int?>(serverId),
       'name': serializer.toJson<String>(name),
       'conditionJson': serializer.toJson<String>(conditionJson),
+      'sortOrdersJson': serializer.toJson<String>(sortOrdersJson),
+      'isSmart': serializer.toJson<bool>(isSmart),
+      'isPinned': serializer.toJson<bool>(isPinned),
       'sortOrder': serializer.toJson<int>(sortOrder),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
@@ -7972,6 +8068,9 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
     Value<int?> serverId = const Value.absent(),
     String? name,
     String? conditionJson,
+    String? sortOrdersJson,
+    bool? isSmart,
+    bool? isPinned,
     int? sortOrder,
     DateTime? updatedAt,
     DateTime? createdAt,
@@ -7980,6 +8079,9 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
     serverId: serverId.present ? serverId.value : this.serverId,
     name: name ?? this.name,
     conditionJson: conditionJson ?? this.conditionJson,
+    sortOrdersJson: sortOrdersJson ?? this.sortOrdersJson,
+    isSmart: isSmart ?? this.isSmart,
+    isPinned: isPinned ?? this.isPinned,
     sortOrder: sortOrder ?? this.sortOrder,
     updatedAt: updatedAt ?? this.updatedAt,
     createdAt: createdAt ?? this.createdAt,
@@ -7992,6 +8094,11 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
       conditionJson: data.conditionJson.present
           ? data.conditionJson.value
           : this.conditionJson,
+      sortOrdersJson: data.sortOrdersJson.present
+          ? data.sortOrdersJson.value
+          : this.sortOrdersJson,
+      isSmart: data.isSmart.present ? data.isSmart.value : this.isSmart,
+      isPinned: data.isPinned.present ? data.isPinned.value : this.isPinned,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
@@ -8005,6 +8112,9 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
           ..write('serverId: $serverId, ')
           ..write('name: $name, ')
           ..write('conditionJson: $conditionJson, ')
+          ..write('sortOrdersJson: $sortOrdersJson, ')
+          ..write('isSmart: $isSmart, ')
+          ..write('isPinned: $isPinned, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt')
@@ -8018,6 +8128,9 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
     serverId,
     name,
     conditionJson,
+    sortOrdersJson,
+    isSmart,
+    isPinned,
     sortOrder,
     updatedAt,
     createdAt,
@@ -8030,6 +8143,9 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
           other.serverId == this.serverId &&
           other.name == this.name &&
           other.conditionJson == this.conditionJson &&
+          other.sortOrdersJson == this.sortOrdersJson &&
+          other.isSmart == this.isSmart &&
+          other.isPinned == this.isPinned &&
           other.sortOrder == this.sortOrder &&
           other.updatedAt == this.updatedAt &&
           other.createdAt == this.createdAt);
@@ -8040,6 +8156,9 @@ class TodoFiltersCompanion extends UpdateCompanion<TodoFilter> {
   final Value<int?> serverId;
   final Value<String> name;
   final Value<String> conditionJson;
+  final Value<String> sortOrdersJson;
+  final Value<bool> isSmart;
+  final Value<bool> isPinned;
   final Value<int> sortOrder;
   final Value<DateTime> updatedAt;
   final Value<DateTime> createdAt;
@@ -8049,6 +8168,9 @@ class TodoFiltersCompanion extends UpdateCompanion<TodoFilter> {
     this.serverId = const Value.absent(),
     this.name = const Value.absent(),
     this.conditionJson = const Value.absent(),
+    this.sortOrdersJson = const Value.absent(),
+    this.isSmart = const Value.absent(),
+    this.isPinned = const Value.absent(),
     this.sortOrder = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -8059,6 +8181,9 @@ class TodoFiltersCompanion extends UpdateCompanion<TodoFilter> {
     this.serverId = const Value.absent(),
     required String name,
     required String conditionJson,
+    this.sortOrdersJson = const Value.absent(),
+    this.isSmart = const Value.absent(),
+    this.isPinned = const Value.absent(),
     this.sortOrder = const Value.absent(),
     required DateTime updatedAt,
     required DateTime createdAt,
@@ -8073,6 +8198,9 @@ class TodoFiltersCompanion extends UpdateCompanion<TodoFilter> {
     Expression<int>? serverId,
     Expression<String>? name,
     Expression<String>? conditionJson,
+    Expression<String>? sortOrdersJson,
+    Expression<bool>? isSmart,
+    Expression<bool>? isPinned,
     Expression<int>? sortOrder,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? createdAt,
@@ -8083,6 +8211,9 @@ class TodoFiltersCompanion extends UpdateCompanion<TodoFilter> {
       if (serverId != null) 'server_id': serverId,
       if (name != null) 'name': name,
       if (conditionJson != null) 'condition_json': conditionJson,
+      if (sortOrdersJson != null) 'sort_orders_json': sortOrdersJson,
+      if (isSmart != null) 'is_smart': isSmart,
+      if (isPinned != null) 'is_pinned': isPinned,
       if (sortOrder != null) 'sort_order': sortOrder,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (createdAt != null) 'created_at': createdAt,
@@ -8095,6 +8226,9 @@ class TodoFiltersCompanion extends UpdateCompanion<TodoFilter> {
     Value<int?>? serverId,
     Value<String>? name,
     Value<String>? conditionJson,
+    Value<String>? sortOrdersJson,
+    Value<bool>? isSmart,
+    Value<bool>? isPinned,
     Value<int>? sortOrder,
     Value<DateTime>? updatedAt,
     Value<DateTime>? createdAt,
@@ -8105,6 +8239,9 @@ class TodoFiltersCompanion extends UpdateCompanion<TodoFilter> {
       serverId: serverId ?? this.serverId,
       name: name ?? this.name,
       conditionJson: conditionJson ?? this.conditionJson,
+      sortOrdersJson: sortOrdersJson ?? this.sortOrdersJson,
+      isSmart: isSmart ?? this.isSmart,
+      isPinned: isPinned ?? this.isPinned,
       sortOrder: sortOrder ?? this.sortOrder,
       updatedAt: updatedAt ?? this.updatedAt,
       createdAt: createdAt ?? this.createdAt,
@@ -8126,6 +8263,15 @@ class TodoFiltersCompanion extends UpdateCompanion<TodoFilter> {
     }
     if (conditionJson.present) {
       map['condition_json'] = Variable<String>(conditionJson.value);
+    }
+    if (sortOrdersJson.present) {
+      map['sort_orders_json'] = Variable<String>(sortOrdersJson.value);
+    }
+    if (isSmart.present) {
+      map['is_smart'] = Variable<bool>(isSmart.value);
+    }
+    if (isPinned.present) {
+      map['is_pinned'] = Variable<bool>(isPinned.value);
     }
     if (sortOrder.present) {
       map['sort_order'] = Variable<int>(sortOrder.value);
@@ -8149,6 +8295,9 @@ class TodoFiltersCompanion extends UpdateCompanion<TodoFilter> {
           ..write('serverId: $serverId, ')
           ..write('name: $name, ')
           ..write('conditionJson: $conditionJson, ')
+          ..write('sortOrdersJson: $sortOrdersJson, ')
+          ..write('isSmart: $isSmart, ')
+          ..write('isPinned: $isPinned, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt, ')
@@ -13147,6 +13296,9 @@ typedef $$TodoFiltersTableCreateCompanionBuilder =
       Value<int?> serverId,
       required String name,
       required String conditionJson,
+      Value<String> sortOrdersJson,
+      Value<bool> isSmart,
+      Value<bool> isPinned,
       Value<int> sortOrder,
       required DateTime updatedAt,
       required DateTime createdAt,
@@ -13158,6 +13310,9 @@ typedef $$TodoFiltersTableUpdateCompanionBuilder =
       Value<int?> serverId,
       Value<String> name,
       Value<String> conditionJson,
+      Value<String> sortOrdersJson,
+      Value<bool> isSmart,
+      Value<bool> isPinned,
       Value<int> sortOrder,
       Value<DateTime> updatedAt,
       Value<DateTime> createdAt,
@@ -13190,6 +13345,21 @@ class $$TodoFiltersTableFilterComposer
 
   ColumnFilters<String> get conditionJson => $composableBuilder(
     column: $table.conditionJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sortOrdersJson => $composableBuilder(
+    column: $table.sortOrdersJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isSmart => $composableBuilder(
+    column: $table.isSmart,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isPinned => $composableBuilder(
+    column: $table.isPinned,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -13238,6 +13408,21 @@ class $$TodoFiltersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get sortOrdersJson => $composableBuilder(
+    column: $table.sortOrdersJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isSmart => $composableBuilder(
+    column: $table.isSmart,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isPinned => $composableBuilder(
+    column: $table.isPinned,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get sortOrder => $composableBuilder(
     column: $table.sortOrder,
     builder: (column) => ColumnOrderings(column),
@@ -13276,6 +13461,17 @@ class $$TodoFiltersTableAnnotationComposer
     column: $table.conditionJson,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get sortOrdersJson => $composableBuilder(
+    column: $table.sortOrdersJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isSmart =>
+      $composableBuilder(column: $table.isSmart, builder: (column) => column);
+
+  GeneratedColumn<bool> get isPinned =>
+      $composableBuilder(column: $table.isPinned, builder: (column) => column);
 
   GeneratedColumn<int> get sortOrder =>
       $composableBuilder(column: $table.sortOrder, builder: (column) => column);
@@ -13322,6 +13518,9 @@ class $$TodoFiltersTableTableManager
                 Value<int?> serverId = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String> conditionJson = const Value.absent(),
+                Value<String> sortOrdersJson = const Value.absent(),
+                Value<bool> isSmart = const Value.absent(),
+                Value<bool> isPinned = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -13331,6 +13530,9 @@ class $$TodoFiltersTableTableManager
                 serverId: serverId,
                 name: name,
                 conditionJson: conditionJson,
+                sortOrdersJson: sortOrdersJson,
+                isSmart: isSmart,
+                isPinned: isPinned,
                 sortOrder: sortOrder,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
@@ -13342,6 +13544,9 @@ class $$TodoFiltersTableTableManager
                 Value<int?> serverId = const Value.absent(),
                 required String name,
                 required String conditionJson,
+                Value<String> sortOrdersJson = const Value.absent(),
+                Value<bool> isSmart = const Value.absent(),
+                Value<bool> isPinned = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 required DateTime updatedAt,
                 required DateTime createdAt,
@@ -13351,6 +13556,9 @@ class $$TodoFiltersTableTableManager
                 serverId: serverId,
                 name: name,
                 conditionJson: conditionJson,
+                sortOrdersJson: sortOrdersJson,
+                isSmart: isSmart,
+                isPinned: isPinned,
                 sortOrder: sortOrder,
                 updatedAt: updatedAt,
                 createdAt: createdAt,

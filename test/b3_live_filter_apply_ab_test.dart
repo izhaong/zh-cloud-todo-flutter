@@ -133,7 +133,8 @@ void main() {
           dbB.todoFilters,
         )..where((row) => row.serverId.equals(filterServerId!))).getSingle();
         expect(restored.name, '$keyword 高优先级');
-        expect(jsonDecode(restored.conditionJson), conditionsJson);
+        expect(jsonDecode(restored.conditionJson), jsonDecode(conditionsJson));
+        expect(restored.sortOrdersJson, sortOrdersJson);
       } finally {
         if (filterServerId != null && filterLocalId != null) {
           await queueA.enqueue(

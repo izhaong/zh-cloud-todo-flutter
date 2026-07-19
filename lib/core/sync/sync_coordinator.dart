@@ -581,9 +581,62 @@ class SyncCoordinator {
         }
       }
     }
+    if (entity == SyncEntities.filter) {
+      final conditionsJson = resolved['conditionsJson'];
+      if (conditionsJson is String) {
+        try {
+          final conditions = jsonDecode(conditionsJson);
+          if (conditions is Map<String, dynamic>) {
+            if (conditions.containsKey('listIds')) {
+              conditions['listIds'] = await _resolveFilterListIds(
+                conditions['listIds'] as List?,
+              );
+            }
+            if (conditions.containsKey('tagIds')) {
+              conditions['tagIds'] = await _resolveFilterTagIds(
+                conditions['tagIds'] as List?,
+              );
+            }
+            resolved['conditionsJson'] = jsonEncode(conditions);
+          }
+        } on FormatException {
+          // 让服务端按既有过滤器 JSON 校验返回可解释错误，不吞掉本地原文。
+        }
+      }
+    }
     // 移除仅本地使用的字段，避免污染服务端 payload。
     resolved.remove('id');
     resolved.remove('serverId');
+    return resolved;
+  }
+
+  Future<List<Object>> _resolveFilterListIds(List? localIds) async {
+    final resolved = <Object>[];
+    for (final localId in localIds ?? const []) {
+      if (localId is num) {
+        resolved.add(localId);
+        continue;
+      }
+      final row = await (db.select(
+        db.todoLists,
+      )..where((list) => list.id.equals(localId.toString()))).getSingleOrNull();
+      resolved.add(row?.serverId ?? localId.toString());
+    }
+    return resolved;
+  }
+
+  Future<List<Object>> _resolveFilterTagIds(List? localIds) async {
+    final resolved = <Object>[];
+    for (final localId in localIds ?? const []) {
+      if (localId is num) {
+        resolved.add(localId);
+        continue;
+      }
+      final row = await (db.select(
+        db.todoTags,
+      )..where((tag) => tag.id.equals(localId.toString()))).getSingleOrNull();
+      resolved.add(row?.serverId ?? localId.toString());
+    }
     return resolved;
   }
 
@@ -1507,14 +1560,24 @@ class SyncCoordinator {
       db.todoFilters,
     )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
     final now = DateTime.now();
+    final rawConditions =
+        payload['conditionsJson'] ?? payload['conditions'] ?? payload;
+    final conditionJson = rawConditions is String
+        ? rawConditions
+        : jsonEncode(rawConditions);
     final companion = TodoFiltersCompanion(
       id: Value(existing?.id ?? _uuid.v4()),
       serverId: Value(serverId),
       name: Value(payload['name']?.toString() ?? existing?.name ?? ''),
-      conditionJson: Value(
-        jsonEncode(
-          payload['conditionsJson'] ?? payload['conditions'] ?? payload,
-        ),
+      conditionJson: Value(conditionJson),
+      sortOrdersJson: Value(
+        payload['sortOrdersJson']?.toString() ??
+            existing?.sortOrdersJson ??
+            '[]',
+      ),
+      isSmart: Value(payload['isSmart'] as bool? ?? existing?.isSmart ?? false),
+      isPinned: Value(
+        payload['isPinned'] as bool? ?? existing?.isPinned ?? false,
       ),
       sortOrder: Value((payload['sortOrder'] as num?)?.toInt() ?? 0),
       updatedAt: Value(now),

@@ -90,6 +90,7 @@ class TodoFolders extends Table {
 class TodoTags extends Table {
   TextColumn get id => text()();
   IntColumn get serverId => integer().nullable()();
+
   /// 本地 UUID，指向上级标签；同步时转换为服务端整数 ID。
   TextColumn get parentId => text().nullable()();
   TextColumn get name => text()();
@@ -257,6 +258,9 @@ class TodoFilters extends Table {
   IntColumn get serverId => integer().nullable()();
   TextColumn get name => text()();
   TextColumn get conditionJson => text()();
+  TextColumn get sortOrdersJson => text().withDefault(const Constant('[]'))();
+  BoolColumn get isSmart => boolean().withDefault(const Constant(false))();
+  BoolColumn get isPinned => boolean().withDefault(const Constant(false))();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
   DateTimeColumn get updatedAt => dateTime()();
   DateTimeColumn get createdAt => dateTime()();
@@ -355,7 +359,7 @@ class AppDatabase extends _$AppDatabase {
     : super(_open('todo_t${tenantId}_u$userId'));
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -494,6 +498,17 @@ class AppDatabase extends _$AppDatabase {
         // 因而不能只凭 user_version 重复 add；按实际表结构收敛。
         if (!await _columnExists(m, 'todo_tags', 'parent_id')) {
           await m.addColumn(todoTags, todoTags.parentId);
+        }
+      }
+      if (from < 13) {
+        if (!await _columnExists(m, 'todo_filters', 'sort_orders_json')) {
+          await m.addColumn(todoFilters, todoFilters.sortOrdersJson);
+        }
+        if (!await _columnExists(m, 'todo_filters', 'is_smart')) {
+          await m.addColumn(todoFilters, todoFilters.isSmart);
+        }
+        if (!await _columnExists(m, 'todo_filters', 'is_pinned')) {
+          await m.addColumn(todoFilters, todoFilters.isPinned);
         }
       }
     },
