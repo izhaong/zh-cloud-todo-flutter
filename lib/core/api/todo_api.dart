@@ -128,6 +128,72 @@ class TodoGlobalSearchApi {
   }
 }
 
+/// 服务端已保存过滤器命中的单条任务。
+///
+/// 该模型只描述 `/filter/apply` 的只读分页结果。离线工作区仍通过
+/// `TaskQueryRepository` 查询 Drift，不能用网络结果取代本地真相源。
+class TodoFilterTaskResult {
+  const TodoFilterTaskResult({
+    required this.id,
+    required this.title,
+    required this.priority,
+  });
+
+  final int id;
+  final String title;
+  final int priority;
+
+  factory TodoFilterTaskResult.fromJson(Map<String, dynamic> json) =>
+      TodoFilterTaskResult(
+        id: (json['id'] as num?)?.toInt() ?? 0,
+        title: json['title']?.toString() ?? '',
+        priority: (json['priority'] as num?)?.toInt() ?? 0,
+      );
+}
+
+/// 服务端过滤器应用结果的稳定分页。
+class TodoFilterApplyPage {
+  const TodoFilterApplyPage({required this.items, required this.total});
+
+  final List<TodoFilterTaskResult> items;
+  final int total;
+}
+
+/// `POST /filter/apply` 的契约封装。
+///
+/// 用于真实 HTTP 及同步 A/B 对照，不供 Widget 绕过 Repository/use-case 直连。
+class TodoFilterApplyApi {
+  TodoFilterApplyApi(this._client);
+
+  final ApiClient _client;
+
+  Future<TodoFilterApplyPage> apply({
+    required int filterId,
+    int pageNo = 1,
+    int pageSize = 20,
+  }) async {
+    if (filterId <= 0 || pageNo < 1 || pageSize < 1 || pageSize > 200) {
+      throw ArgumentError('filterId、pageNo 和 pageSize 必须在有效范围内');
+    }
+    final resp = await _client.post<Map<String, dynamic>>(
+      '/filter/apply',
+      data: {'id': filterId, 'pageNo': pageNo, 'pageSize': pageSize},
+    );
+    final data = _unwrapBody(resp.data);
+    final raw = (data['list'] as List?) ?? const [];
+    return TodoFilterApplyPage(
+      items: raw
+          .map(
+            (item) => TodoFilterTaskResult.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList(growable: false),
+      total: (data['total'] as num?)?.toInt() ?? raw.length,
+    );
+  }
+}
+
 /// 一次服务端批量更新的冻结请求。
 ///
 /// 与本地 [TaskBatchEditRepository] 的 Drift/outbox 写路径分离：该类型用于
@@ -569,6 +635,7 @@ class TodoRestApi {
     : task = TaskRestApi(client),
       taskBatch = TodoTaskBatchApi(client),
       globalSearch = TodoGlobalSearchApi(client),
+      filter = TodoFilterApplyApi(client),
       checklist = ChecklistApi(client),
       folder = FolderApi(client),
       nlp = NlpApi(client),
@@ -584,6 +651,7 @@ class TodoRestApi {
   final TaskRestApi task;
   final TodoTaskBatchApi taskBatch;
   final TodoGlobalSearchApi globalSearch;
+  final TodoFilterApplyApi filter;
   final ChecklistApi checklist;
   final FolderApi folder;
   final NlpApi nlp;

@@ -1435,8 +1435,20 @@ class SyncCoordinator {
     int serverId,
     Map<String, dynamic> payload,
   ) async {
-    final sourceType = payload['sourceType']?.toString() ?? 'default';
-    final sourceKey = payload['sourceKey']?.toString() ?? 'default';
+    final payloadSourceType =
+        payload['sourceType']?.toString() ?? payload['source_type']?.toString();
+    final payloadSourceKey =
+        payload['sourceKey']?.toString() ?? payload['source_key']?.toString();
+    // 历史服务端可能只返回 `{id}`。不能将所有这类记录折叠到
+    // `default/default`，否则第二条 pull 会覆盖第一条；按 server ID
+    // 隔离它们，保留诊断和后续服务端修复所需的映射。
+    final hasSourceIdentity =
+        payloadSourceType != null &&
+        payloadSourceType.trim().isNotEmpty &&
+        payloadSourceKey != null &&
+        payloadSourceKey.trim().isNotEmpty;
+    final sourceType = hasSourceIdentity ? payloadSourceType : 'LEGACY_SERVER';
+    final sourceKey = hasSourceIdentity ? payloadSourceKey : '$serverId';
     final localPayload = Map<String, dynamic>.from(payload);
     final nestedValue = localPayload['valueJson'];
     if (sourceType == 'TASK_CAPTURE' &&
