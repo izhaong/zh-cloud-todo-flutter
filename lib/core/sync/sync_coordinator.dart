@@ -441,6 +441,11 @@ class SyncCoordinator {
     final resolvedPayload = isDelete
         ? null
         : await _resolvePayloadRefs(change.entity, payload);
+    // 已保存过滤器只能引用服务端已经可见的清单/标签。与 task 的同批临时
+    // ID 解析不同，filter 条件会立刻参与服务端归属校验，不能把本地 UUID 或
+    // 临时 ID 交给服务端。返回 null 即本轮延后该 outbox；父实体被接受并回写
+    // serverId 后，下一轮 push 会自动重新解析。
+    if (!isDelete && resolvedPayload == null) return null;
 
     return SyncChangeDto(
       entityType: change.entity,
@@ -457,7 +462,7 @@ class SyncCoordinator {
   /// 把 payload 内引用本地 UUID 的外键（如 task.listId）替换为服务端 ID
   /// 或本批负数临时 ID（对应尚未同步的本地行），与后端
   /// `resolvePayloadEntityRefs` 的临时 ID 约定对齐。
-  Future<Map<String, dynamic>> _resolvePayloadRefs(
+  Future<Map<String, dynamic>?> _resolvePayloadRefs(
     String entity,
     Map<String, dynamic> payload,
   ) async {
@@ -588,14 +593,18 @@ class SyncCoordinator {
           final conditions = jsonDecode(conditionsJson);
           if (conditions is Map<String, dynamic>) {
             if (conditions.containsKey('listIds')) {
-              conditions['listIds'] = await _resolveFilterListIds(
+              final listIds = await _resolveFilterListIds(
                 conditions['listIds'] as List?,
               );
+              if (listIds == null) return null;
+              conditions['listIds'] = listIds;
             }
             if (conditions.containsKey('tagIds')) {
-              conditions['tagIds'] = await _resolveFilterTagIds(
+              final tagIds = await _resolveFilterTagIds(
                 conditions['tagIds'] as List?,
               );
+              if (tagIds == null) return null;
+              conditions['tagIds'] = tagIds;
             }
             resolved['conditionsJson'] = jsonEncode(conditions);
           }
@@ -610,7 +619,7 @@ class SyncCoordinator {
     return resolved;
   }
 
-  Future<List<Object>> _resolveFilterListIds(List? localIds) async {
+  Future<List<Object>?> _resolveFilterListIds(List? localIds) async {
     final resolved = <Object>[];
     for (final localId in localIds ?? const []) {
       if (localId is num) {
@@ -620,12 +629,13 @@ class SyncCoordinator {
       final row = await (db.select(
         db.todoLists,
       )..where((list) => list.id.equals(localId.toString()))).getSingleOrNull();
+      if (row != null && row.serverId == null) return null;
       resolved.add(row?.serverId ?? localId.toString());
     }
     return resolved;
   }
 
-  Future<List<Object>> _resolveFilterTagIds(List? localIds) async {
+  Future<List<Object>?> _resolveFilterTagIds(List? localIds) async {
     final resolved = <Object>[];
     for (final localId in localIds ?? const []) {
       if (localId is num) {
@@ -635,6 +645,7 @@ class SyncCoordinator {
       final row = await (db.select(
         db.todoTags,
       )..where((tag) => tag.id.equals(localId.toString()))).getSingleOrNull();
+      if (row != null && row.serverId == null) return null;
       resolved.add(row?.serverId ?? localId.toString());
     }
     return resolved;

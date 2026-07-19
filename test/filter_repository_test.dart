@@ -102,4 +102,117 @@ void main() {
       expect((await db.select(db.todoFilters).getSingle()).serverId, 201);
     },
   );
+
+  test(
+    'filter waits for unsynced list and tag server IDs before it is pushed',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final queue = SyncChangeQueue(db);
+      final now = DateTime.utc(2026, 7, 19);
+      await db
+          .into(db.todoLists)
+          .insert(
+            TodoListsCompanion.insert(
+              id: 'local-list',
+              name: '项目',
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      await db
+          .into(db.todoTags)
+          .insert(
+            TodoTagsCompanion.insert(
+              id: 'local-tag',
+              name: '工作',
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      await queue.enqueue(
+        entity: 'list',
+        op: 'upsert',
+        localId: 'local-list',
+        payload: const {'name': '项目'},
+      );
+      await queue.enqueue(
+        entity: 'tag',
+        op: 'upsert',
+        localId: 'local-tag',
+        payload: const {'name': '工作'},
+      );
+      final filter = await FilterRepository(db, queue).save(
+        name: '项目工作',
+        conditions: const TodoFilterConditions(
+          listIds: ['local-list'],
+          tagIds: ['local-tag'],
+        ),
+      );
+
+      final pushedBatches = <List<Map<String, dynamic>>>[];
+      final dio = Dio()
+        ..interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (options, handler) {
+              final changes = ((options.data as Map)['changes'] as List)
+                  .cast<Map>()
+                  .map((entry) => entry.cast<String, dynamic>())
+                  .toList();
+              pushedBatches.add(changes);
+              handler.resolve(
+                Response<Map<String, dynamic>>(
+                  requestOptions: options,
+                  data: {
+                    'code': 0,
+                    'data': {
+                      'ok': true,
+                      'accepted': [
+                        for (final change in changes)
+                          {
+                            'entityType': change['entityType'],
+                            'entityId': switch (change['entityType']) {
+                              'list' => 101,
+                              'tag' => 201,
+                              _ => 301,
+                            },
+                            'operation': 'upsert',
+                            'clientMutationId': change['clientMutationId'],
+                          },
+                      ],
+                      'conflicts': const [],
+                    },
+                  },
+                ),
+              );
+            },
+          ),
+        );
+      final client = ApiClient(dio: dio);
+      final coordinator = SyncCoordinator(
+        db: db,
+        api: SyncApi(client, clientId: 'test', deviceId: 'device-1'),
+        todoApi: client,
+      );
+
+      expect(await coordinator.push(), 2);
+      expect(pushedBatches.single.map((change) => change['entityType']), [
+        'list',
+        'tag',
+      ]);
+      final filterChange = await (db.select(
+        db.todoSyncChanges,
+      )..where((row) => row.entityLocalId.equals(filter.id))).getSingle();
+      expect(filterChange.status, 'queued');
+
+      expect(await coordinator.push(), 1);
+      expect(pushedBatches, hasLength(2));
+      final filterPayload =
+          pushedBatches.last.single['payload'] as Map<String, dynamic>;
+      expect(jsonDecode(filterPayload['conditionsJson'] as String), {
+        'listIds': [101],
+        'tagIds': [201],
+      });
+    },
+  );
 }
