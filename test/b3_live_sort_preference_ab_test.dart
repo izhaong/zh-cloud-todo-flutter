@@ -45,11 +45,10 @@ void main() {
       try {
         final preferencesA = TaskSortPreferenceRepository(dbA, queueA);
         await preferencesA.save(listKey, TaskSort.dueDate);
-        localId = (await dbA.select(dbA.todoViewPreferences).getSingle()).id;
+        localId = (await _sortPreference(dbA, listKey)).id;
 
         expect(await coordinatorA.push(), 1);
-        serverId =
-            (await dbA.select(dbA.todoViewPreferences).getSingle()).serverId;
+        serverId = (await _sortPreference(dbA, listKey)).serverId;
         expect(serverId, isPositive);
 
         await coordinatorB.pull();
@@ -58,10 +57,7 @@ void main() {
           SyncChangeQueue(dbB),
         );
         expect(await preferencesB.get(listKey), TaskSort.dueDate);
-        expect(
-          (await dbB.select(dbB.todoViewPreferences).getSingle()).serverId,
-          serverId,
-        );
+        expect((await _sortPreference(dbB, listKey)).serverId, serverId);
       } finally {
         if (serverId != null && localId != null) {
           await queueA.enqueue(
@@ -79,6 +75,13 @@ void main() {
     },
     skip: !_enabled,
   );
+}
+
+Future<TodoViewPreference> _sortPreference(AppDatabase db, String listKey) {
+  final query = db.select(db.todoViewPreferences)
+    ..where((row) => row.sourceType.equals('TASK_SORT'))
+    ..where((row) => row.sourceKey.equals(listKey));
+  return query.getSingle();
 }
 
 Future<TodoAuthSession> _login() => AuthGatewayImpl(
