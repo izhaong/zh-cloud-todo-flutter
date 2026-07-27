@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart' hide isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -101,6 +103,101 @@ void main() {
       'tag:tag-collection',
     ]);
     expect(entries.map((entry) => entry.title).toList(), ['收集周报', '收集箱', '收集']);
+  });
+
+  test('文件型 SQLite 的千条任务首个搜索过滤和批量反馈均在 300ms 内', () async {
+    final databasePath =
+        '${Directory.systemTemp.path}/todo-b3-performance-${DateTime.now().microsecondsSinceEpoch}.sqlite';
+    final previousMultipleDatabaseWarning =
+        driftRuntimeOptions.dontWarnAboutMultipleDatabases;
+    driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+    final fileDb = AppDatabase.forTesting(
+      NativeDatabase.createInBackground(File(databasePath)),
+    );
+    addTearDown(() async {
+      await fileDb.close();
+      await File(databasePath).delete();
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases =
+          previousMultipleDatabaseWarning;
+    });
+    final fileRepository = TaskQueryRepository(fileDb);
+    final batchRepository = TaskBatchEditRepository(
+      fileDb,
+      SyncChangeQueue(fileDb),
+    );
+    final now = DateTime.utc(2026, 7, 27, 9);
+
+    await fileDb.batch((batch) {
+      batch.insert(
+        fileDb.todoLists,
+        TodoListsCompanion.insert(
+          id: 'performance-list',
+          name: '性能清单',
+          updatedAt: now,
+          createdAt: now,
+        ),
+      );
+      for (var index = 0; index < 1000; index++) {
+        batch.insert(
+          fileDb.todoTasks,
+          TodoTasksCompanion.insert(
+            id: 'performance-task-$index',
+            listId: 'performance-list',
+            title: index == 700 ? '性能收集结果' : '性能常规任务 $index',
+            priority: Value(index % 4),
+            sortOrder: Value(index),
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+      }
+    });
+
+    await fileRepository.search('不存在的预热词');
+    final searchWatch = Stopwatch()..start();
+    final search = await fileRepository.search('性能收集');
+    searchWatch.stop();
+
+    final filterWatch = Stopwatch()..start();
+    final filtered = await fileRepository.filter(
+      const TaskQueryFilter(
+        listId: 'performance-list',
+        priority: 3,
+        sort: TaskSort.priorityDesc,
+      ),
+    );
+    filterWatch.stop();
+
+    final batchWatch = Stopwatch()..start();
+    final batch = await batchRepository.apply(
+      const TaskBatchEditCommand(
+        taskIds: [
+          'performance-task-1',
+          'performance-task-2',
+          'performance-task-3',
+        ],
+        priority: 3,
+      ),
+    );
+    batchWatch.stop();
+
+    expect(search.single.identity, 'task:performance-task-700');
+    expect(filtered, isNotEmpty);
+    expect(
+      batch.every((result) => result.status == TaskBatchEditStatus.success),
+      isTrue,
+    );
+    expect(searchWatch.elapsedMilliseconds, lessThan(300));
+    expect(filterWatch.elapsedMilliseconds, lessThan(300));
+    expect(batchWatch.elapsedMilliseconds, lessThan(300));
+    // 保留本机实际测量，供 Docs 验收记录而非将固定时间写死在断言中。
+    // ignore: avoid_print
+    print(
+      'B3_PERF file-sqlite-1000 '
+      'search=${searchWatch.elapsedMilliseconds}ms '
+      'filter=${filterWatch.elapsedMilliseconds}ms '
+      'batch3=${batchWatch.elapsedMilliseconds}ms',
+    );
   });
 
   test('重设父任务拒绝自引用', () async {
