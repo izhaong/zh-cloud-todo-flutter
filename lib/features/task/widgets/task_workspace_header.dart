@@ -24,6 +24,28 @@ enum TaskBatchAction {
   unpin,
 }
 
+/// Commands kept in the existing sort menu so the idle workspace retains the
+/// approved visual structure while batch editing remains explicitly reachable.
+enum _TaskWorkspaceHeaderCommand {
+  smart,
+  priorityDesc,
+  dueDate,
+  title,
+  createdAt,
+  batchEdit,
+}
+
+extension on _TaskWorkspaceHeaderCommand {
+  TaskSort? get sort => switch (this) {
+    _TaskWorkspaceHeaderCommand.smart => TaskSort.smart,
+    _TaskWorkspaceHeaderCommand.priorityDesc => TaskSort.priorityDesc,
+    _TaskWorkspaceHeaderCommand.dueDate => TaskSort.dueDate,
+    _TaskWorkspaceHeaderCommand.title => TaskSort.title,
+    _TaskWorkspaceHeaderCommand.createdAt => TaskSort.createdAt,
+    _TaskWorkspaceHeaderCommand.batchEdit => null,
+  };
+}
+
 extension TaskBatchActionX on TaskBatchAction {
   String get label => switch (this) {
     TaskBatchAction.moveToInbox => '移至收集箱',
@@ -142,17 +164,32 @@ class TaskWorkspaceHeader extends StatelessWidget {
                     ),
                 ],
               ),
-              PopupMenuButton<TaskSort>(
+              PopupMenuButton<_TaskWorkspaceHeaderCommand>(
                 key: const Key('todo-sort-menu'),
-                tooltip: '排序',
-                initialValue: sort,
+                tooltip: '排序与批量编辑',
                 icon: const Icon(Icons.sort, size: 20),
-                onSelected: onSortChanged,
+                onSelected: (command) {
+                  final nextSort = command.sort;
+                  if (nextSort != null) {
+                    onSortChanged(nextSort);
+                  } else {
+                    onBatchPressed?.call();
+                  }
+                },
                 itemBuilder: (context) => [
                   for (final candidate in TaskSort.values)
                     PopupMenuItem(
-                      value: candidate,
+                      value: _TaskWorkspaceHeaderCommand.values.byName(
+                        candidate.name,
+                      ),
                       child: Text(candidate.label),
+                    ),
+                  if (onBatchPressed != null) const PopupMenuDivider(),
+                  if (onBatchPressed != null)
+                    PopupMenuItem(
+                      key: const Key('todo-batch-edit'),
+                      value: _TaskWorkspaceHeaderCommand.batchEdit,
+                      child: Text(batchSelectionActive ? '退出批量编辑' : '批量编辑'),
                     ),
                 ],
               ),
@@ -207,18 +244,6 @@ class TaskWorkspaceHeader extends StatelessWidget {
                         child: Text(action.label),
                       ),
                   ],
-                ),
-              if (onBatchPressed != null)
-                IconButton(
-                  key: const Key('todo-batch-edit'),
-                  tooltip: batchSelectionActive ? '退出批量编辑' : '批量编辑',
-                  onPressed: onBatchPressed,
-                  icon: Icon(
-                    batchSelectionActive
-                        ? Icons.close_outlined
-                        : Icons.checklist_outlined,
-                    size: 20,
-                  ),
                 ),
             ],
           ),

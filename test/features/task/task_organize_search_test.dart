@@ -11,6 +11,13 @@ import 'package:zh_cloud_todo_flutter/features/task/task_search_page.dart';
 import '../../support/todo_visual_fixture.dart';
 import '../../support/todo_visual_test_harness.dart';
 
+Future<void> enterBatchEdit(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('todo-sort-menu')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const Key('todo-batch-edit')));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets(
     'global search reads task, list and tag results from local query repository',
@@ -188,8 +195,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('todo-batch-edit')));
-      await tester.pumpAndSettle();
+      await enterBatchEdit(tester);
       await tester.tap(
         find.byKey(Key('task-batch-select-${TodoVisualFixture.pinnedTaskId}')),
       );
@@ -237,8 +243,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('todo-batch-edit')));
-      await tester.pumpAndSettle();
+      await enterBatchEdit(tester);
       for (final taskId in [
         TodoVisualFixture.pinnedTaskId,
         TodoVisualFixture.todayTaskId,
@@ -290,8 +295,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('todo-batch-edit')));
-    await tester.pumpAndSettle();
+    await enterBatchEdit(tester);
     await tester.tap(
       find.byKey(Key('task-batch-select-${TodoVisualFixture.todayTaskId}')),
     );
@@ -326,8 +330,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('todo-batch-edit')));
-    await tester.pumpAndSettle();
+    await enterBatchEdit(tester);
     await tester.tap(
       find.byKey(Key('task-batch-select-${TodoVisualFixture.todayTaskId}')),
     );
@@ -381,8 +384,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('todo-batch-edit')));
-      await tester.pumpAndSettle();
+      await enterBatchEdit(tester);
       for (final taskId in [
         TodoVisualFixture.todayTaskId,
         TodoVisualFixture.secondaryTodayTaskId,
@@ -431,8 +433,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('todo-batch-edit')));
-      await tester.pumpAndSettle();
+      await enterBatchEdit(tester);
       await tester.tap(
         find.byKey(
           Key('task-batch-select-${TodoVisualFixture.metadataTaskId}'),
@@ -457,8 +458,7 @@ void main() {
               .getSingle();
       expect(task.listId, TodoVisualFixture.inboxListId);
 
-      await tester.tap(find.byKey(const Key('todo-batch-edit')));
-      await tester.pumpAndSettle();
+      await enterBatchEdit(tester);
       await tester.tap(
         find.byKey(
           Key('task-batch-select-${TodoVisualFixture.metadataTaskId}'),
@@ -505,8 +505,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('todo-batch-edit')));
-    await tester.pumpAndSettle();
+    await enterBatchEdit(tester);
     await tester.tap(
       find.byKey(Key('task-batch-select-${TodoVisualFixture.metadataTaskId}')),
     );
@@ -546,8 +545,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('todo-batch-edit')));
-    await tester.pumpAndSettle();
+    await enterBatchEdit(tester);
     await tester.tap(
       find.byKey(Key('task-batch-select-${TodoVisualFixture.todayTaskId}')),
     );
@@ -587,8 +585,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('todo-batch-edit')));
-    await tester.pumpAndSettle();
+    await enterBatchEdit(tester);
     await tester.tap(
       find.byKey(Key('task-batch-select-${TodoVisualFixture.metadataTaskId}')),
     );
@@ -631,8 +628,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('todo-batch-edit')));
-    await tester.pumpAndSettle();
+    await enterBatchEdit(tester);
     await tester.tap(
       find.byKey(Key('task-batch-select-${TodoVisualFixture.todayTaskId}')),
     );
