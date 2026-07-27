@@ -134,7 +134,7 @@ void main() {
       final template = await db.select(db.todoTemplates).getSingle();
       expect(template.serverId, isNull);
       final change = await db.select(db.todoSyncChanges).getSingle();
-      expect(change.status, 'failed');
+      expect(change.status, 'retryable');
       expect(change.attemptCount, 1);
     },
   );

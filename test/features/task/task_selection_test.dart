@@ -198,7 +198,7 @@ void main() {
     expect(find.text('确定今天最重要的三件事'), findsNothing);
   });
 
-  testWidgets('repository reorder preserves selection by task ID', (
+  testWidgets('repository update preserves selection in stable smart order', (
     tester,
   ) async {
     final fixture = await _pumpWorkspace(tester);
@@ -217,8 +217,8 @@ void main() {
     final afterTop = tester.getTopLeft(surface).dy;
     expect(
       afterTop,
-      lessThan(beforeTop),
-      reason: 'repository update must actually move the task in smart order',
+      beforeTop,
+      reason: 'smart order is pinned, manual sort order, then task ID',
     );
     _expectSelectedTask(tester, taskId: taskId, title: selectedTitle);
   });
