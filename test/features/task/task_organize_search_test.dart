@@ -308,6 +308,60 @@ void main() {
     expect(find.text('已更新 0 项；失败 1 项：任务不存在'), findsOneWidget);
   });
 
+  testWidgets('batch feedback retries only failed tasks after data recovers', (
+    tester,
+  ) async {
+    final fixture = await TodoVisualFixture.create();
+    addTearDown(fixture.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: fixture.container,
+        child: MaterialApp(
+          theme: ThemeData.light().copyWith(
+            extensions: const [AppThemeExtension(AppColors.light)],
+          ),
+          home: const Scaffold(body: TasksByListPage(hideAppBar: true)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('todo-batch-edit')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(Key('task-batch-select-${TodoVisualFixture.todayTaskId}')),
+    );
+    final deletedTask =
+        await (fixture.database.select(fixture.database.todoTasks)
+              ..where((task) => task.id.equals(TodoVisualFixture.todayTaskId)))
+            .getSingle();
+    await (fixture.database.delete(
+      fixture.database.todoTasks,
+    )..where((task) => task.id.equals(TodoVisualFixture.todayTaskId))).go();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('todo-batch-more')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('设为高优先级'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('已更新 0 项；失败 1 项：任务不存在'), findsOneWidget);
+    expect(find.text('重试失败项'), findsOneWidget);
+
+    await fixture.database
+        .into(fixture.database.todoTasks)
+        .insertOnConflictUpdate(deletedTask.toCompanion(true));
+    await tester.tap(find.text('重试失败项'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('已重试 1 项；失败 0 项'), findsOneWidget);
+    final retried =
+        await (fixture.database.select(fixture.database.todoTasks)
+              ..where((task) => task.id.equals(TodoVisualFixture.todayTaskId)))
+            .getSingle();
+    expect(retried.priority, 3);
+  });
+
   testWidgets(
     'batch pin action updates selected tasks through the local use-case',
     (tester) async {

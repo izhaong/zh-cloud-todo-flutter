@@ -525,7 +525,9 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       ).showSnackBar(const SnackBar(content: Text('批量编辑暂不可用，请稍后重试')));
       return;
     }
-    final selectedIds = _batchSelectedTaskIds.toList(growable: false);
+    final selectedIds = baseCommand.taskIds.isEmpty
+        ? _batchSelectedTaskIds.toList(growable: false)
+        : baseCommand.taskIds;
     setState(() => _batchApplying = true);
     final results = await repository.apply(
       TaskBatchEditCommand(
@@ -549,6 +551,10 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     final skipped = results
         .where((result) => result.status == TaskBatchEditStatus.skipped)
         .length;
+    final failedTaskIds = results
+        .where((result) => result.status == TaskBatchEditStatus.failed)
+        .map((result) => result.taskId)
+        .toList(growable: false);
     final failedReasons = results
         .where((result) => result.status == TaskBatchEditStatus.failed)
         .map((result) => result.reason)
@@ -574,6 +580,27 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           '${skipped == 0 ? '' : '；跳过 $skipped 项'}'
           '${skippedReasons.isEmpty ? '' : '：$skippedReasons'}',
         ),
+        action: failedTaskIds.isEmpty
+            ? null
+            : SnackBarAction(
+                label: '重试失败项',
+                onPressed: () {
+                  if (!mounted) return;
+                  _applyBatchEdit(
+                    TaskBatchEditCommand(
+                      taskIds: failedTaskIds,
+                      listId: baseCommand.listId,
+                      dueAt: baseCommand.dueAt,
+                      clearDueAt: baseCommand.clearDueAt,
+                      tagIds: baseCommand.tagIds,
+                      priority: baseCommand.priority,
+                      completed: baseCommand.completed,
+                      isPinned: baseCommand.isPinned,
+                    ),
+                    successVerb: '已重试',
+                  );
+                },
+              ),
       ),
     );
   }
