@@ -111,12 +111,6 @@ pipeline {
       description: '为 true 时上传 Web 产物并重启远端 compose（PR 构建不部署）'
     )
     string(
-      name: 'FLUTTER_DOCKER_IMAGE',
-      defaultValue: 'ghcr.io/cirruslabs/flutter:3.44.0',
-      trim: true,
-      description: 'CI 内执行 flutter 的 Docker 镜像（须 Dart ≥ 3.11，与 pubspec 一致）'
-    )
-    string(
       name: 'TODO_API_BASE_URL_TEST',
       defaultValue: 'https://todo-test.zh04.com',
       trim: true,
@@ -256,7 +250,7 @@ pipeline {
     stage('Flutter 依赖与质量 + 构建 Web') {
       steps {
         script {
-          String flutterImg = (params.FLUTTER_DOCKER_IMAGE ?: 'ghcr.io/cirruslabs/flutter:stable').trim()
+          String flutterImg = 'ghcr.io/cirruslabs/flutter:3.44.0'
           String apiBase = resolveApiBase(params, env.RESOLVED_ENV ?: 'test')
           if (!apiBase) {
             error('TODO_API_BASE_URL 未解析到，请检查 DEPLOY_ENV 或显式设置 TODO_API_BASE_URL')
