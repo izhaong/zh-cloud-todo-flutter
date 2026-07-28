@@ -48,7 +48,7 @@ class Sidebar extends ConsumerWidget {
 
     return SizedBox(
       width: width,
-      child: ColoredBox(
+      child: Material(
         color: colors.surface,
         child: SafeArea(
           child: Column(
