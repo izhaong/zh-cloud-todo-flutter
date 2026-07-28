@@ -50,7 +50,9 @@ void feishuBuildNotify(String statusEmoji, String title) {
 // 进入 Flutter 镜像执行闭包；统一 user 映射避免 root 写出 _netrc / .pub-cache 之类。
 void flutterInside(String flutterImg, Closure body) {
   def img = docker.image(flutterImg)
-  img.pull()
+  retry(3) {
+    img.pull()
+  }
   String dockerUser = sh(script: 'echo "$(id -u):$(id -g)"', returnStdout: true).trim()
   img.inside("-u ${dockerUser}", body)
 }
@@ -110,7 +112,7 @@ pipeline {
     )
     string(
       name: 'FLUTTER_DOCKER_IMAGE',
-      defaultValue: 'ghcr.io/cirruslabs/flutter:stable',
+      defaultValue: 'ghcr.io/cirruslabs/flutter:3.44.0',
       trim: true,
       description: 'CI 内执行 flutter 的 Docker 镜像（须 Dart ≥ 3.11，与 pubspec 一致）'
     )
