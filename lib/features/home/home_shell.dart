@@ -91,28 +91,10 @@ class _HomeShellState extends ConsumerState<HomeShell>
 
   Future<void> _pollUpcomingReminders() async {
     if (const bool.fromEnvironment('FLUTTER_TEST')) return;
-    final svc = ref.read(localNotificationServiceProvider);
-    final api = ref.read(todoApiProvider).reminder;
-    final db = ref.read(appDatabaseProvider);
-    if (db == null) return;
+    final poller = ref.read(reminderNotificationPollerProvider);
+    if (poller == null) return;
     try {
-      final items = await api.inbox();
-      final now = DateTime.now();
-      for (final it in items.where((e) => e.pending)) {
-        final diff = it.remindAt.difference(now);
-        if (diff.inSeconds <= 30) {
-          final task = await db.taskByServerId(it.taskId);
-          final taskTitle = (task != null && task.title.isNotEmpty)
-              ? task.title
-              : it.taskTitle;
-          await svc.show(
-            id: it.id,
-            title: taskTitle.isEmpty ? '提醒' : taskTitle,
-            body: '到期提醒',
-            payload: 'reminder:${it.id}',
-          );
-        }
-      }
+      await poller.poll();
     } catch (_) {}
   }
 
