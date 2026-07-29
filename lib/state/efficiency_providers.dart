@@ -12,6 +12,21 @@ final countdownApiProvider = Provider<CountdownApi>((ref) {
   return CountdownApi(ref.watch(apiClientProvider).raw);
 });
 
+final quadrantApiProvider = Provider<QuadrantApi>((ref) {
+  return QuadrantApi(ref.watch(apiClientProvider).raw);
+});
+
+final quadrantRulesProvider = FutureProvider.autoDispose<List<QuadrantRuleDto>>(
+  (ref) {
+    return ref.watch(quadrantApiProvider).listRules();
+  },
+);
+
+final quadrantBoardProvider = FutureProvider.autoDispose
+    .family<Map<String, Set<int>>, int>((ref, ruleId) {
+      return ref.watch(quadrantApiProvider).board(ruleId: ruleId);
+    });
+
 final reminderActionApiProvider = Provider<ReminderActionApi>((ref) {
   return ReminderActionApi(ref.watch(apiClientProvider).raw);
 });
