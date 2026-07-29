@@ -660,6 +660,16 @@ void main() {
       expect(change.status, 'retryable');
       expect(change.attemptCount, 1);
 
+      expect(await coordinator.push(), 0);
+      await db
+          .update(db.todoSyncChanges)
+          .write(
+            TodoSyncChangesCompanion(
+              nextAttemptAt: Value(
+                DateTime.now().subtract(const Duration(seconds: 1)),
+              ),
+            ),
+          );
       expect(await coordinator.push(), 1);
       change = await db.select(db.todoSyncChanges).getSingle();
       expect(change.status, 'synced');

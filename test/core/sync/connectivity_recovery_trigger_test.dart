@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/connectivity_recovery_trigger.dart';
 
 void main() {
-  test('triggers sync only when offline connectivity recovers', () async {
+  test('仅在离线恢复为在线时触发同步', () async {
     final changes = StreamController<List<ConnectivityResult>>();
     addTearDown(changes.close);
     var recovered = 0;

@@ -44,7 +44,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 16);
+      expect(version.data['user_version'], 17);
       final task = await upgraded.select(upgraded.todoTasks).getSingle();
       expect(task.title, '迁移前任务');
       expect(task.assigneeUserId, isNull);
@@ -72,7 +72,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 16);
+      expect(version.data['user_version'], 17);
 
       final taskColumns = await upgraded
           .customSelect('PRAGMA table_info(todo_tasks)')
@@ -201,7 +201,7 @@ void main() {
           .getSingle();
       final rule = await upgraded.select(upgraded.todoRepeatRules).getSingle();
 
-      expect(version.data['user_version'], 16);
+      expect(version.data['user_version'], 17);
       expect(rule.id, 'repeat-rule-before-b2-b3-merge');
       expect(rule.byDay, '1,3,5');
       expect(rule.selectedDatesJson, isNull);
@@ -246,7 +246,7 @@ void main() {
         .getSingle();
     final rule = await upgraded.select(upgraded.todoRepeatRules).getSingle();
 
-    expect(version.data['user_version'], 16);
+    expect(version.data['user_version'], 17);
     expect(rule.freq, 'CUSTOM');
     expect(rule.byDay, '1,3,5');
     expect(rule.repeatMode, 'ON_DUE');
@@ -333,7 +333,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 16);
+      expect(version.data['user_version'], 17);
       await upgraded.close();
 
       final reopened = AppDatabase.forTesting(NativeDatabase(databaseFile));
@@ -425,9 +425,77 @@ void main() {
           )
           .getSingle();
 
-      expect(version.data['user_version'], 16);
+      expect(version.data['user_version'], 17);
       expect(task.title, '迁移前看板任务');
       expect(boardTable.data['name'], 'todo_board_preferences');
+    },
+  );
+
+  test(
+    'upgrades schema 16 with recovery metadata and recommendation cache',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'zh_cloud_todo_b5_schema16_',
+      );
+      final databaseFile = File('${directory.path}/todo.sqlite');
+      addTearDown(() async {
+        if (await directory.exists()) {
+          await directory.delete(recursive: true);
+        }
+      });
+
+      final beforeUpgrade = AppDatabase.forTesting(
+        NativeDatabase(databaseFile),
+      );
+      final now = DateTime.utc(2026, 7, 30, 11);
+      await beforeUpgrade
+          .into(beforeUpgrade.todoTasks)
+          .insert(
+            TodoTasksCompanion.insert(
+              id: 'task-before-reliability-closeout',
+              listId: 'inbox',
+              title: '迁移前可靠性任务',
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      await beforeUpgrade
+          .into(beforeUpgrade.todoSyncChanges)
+          .insert(
+            TodoSyncChangesCompanion.insert(
+              clientMutationId: 'mutation-before-reliability-closeout',
+              entity: 'task',
+              op: 'upsert',
+              entityLocalId: const Value('task-before-reliability-closeout'),
+              payloadJson: '{"title":"迁移前可靠性任务"}',
+              createdAt: now,
+            ),
+          );
+      await beforeUpgrade.close();
+      _downgradeToSchema16WithoutReliabilityColumns(databaseFile);
+
+      final upgraded = AppDatabase.forTesting(NativeDatabase(databaseFile));
+      addTearDown(upgraded.close);
+      final version = await upgraded
+          .customSelect('PRAGMA user_version')
+          .getSingle();
+      final task = await upgraded.select(upgraded.todoTasks).getSingle();
+      final change = await upgraded
+          .select(upgraded.todoSyncChanges)
+          .getSingle();
+      final recommendationTable = await upgraded
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type = 'table' "
+            "AND name = 'todo_recommendations'",
+          )
+          .getSingle();
+
+      expect(version.data['user_version'], 17);
+      expect(task.title, '迁移前可靠性任务');
+      expect(change.status, 'queued');
+      expect(change.nextAttemptAt, isNull);
+      expect(change.failureReason, isNull);
+      expect(recommendationTable.data['name'], 'todo_recommendations');
     },
   );
 }
@@ -473,6 +541,22 @@ void _downgradeToSchema15WithoutBoardPreferences(File databaseFile) {
   try {
     database.execute('DROP TABLE todo_board_preferences');
     database.execute('PRAGMA user_version = 15');
+  } finally {
+    database.dispose();
+  }
+}
+
+void _downgradeToSchema16WithoutReliabilityColumns(File databaseFile) {
+  final database = sqlite.sqlite3.open(databaseFile.path);
+  try {
+    database.execute('DROP TABLE todo_recommendations');
+    database.execute(
+      'ALTER TABLE todo_sync_changes DROP COLUMN failure_reason',
+    );
+    database.execute(
+      'ALTER TABLE todo_sync_changes DROP COLUMN next_attempt_at',
+    );
+    database.execute('PRAGMA user_version = 16');
   } finally {
     database.dispose();
   }

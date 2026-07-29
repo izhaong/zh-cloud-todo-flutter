@@ -290,6 +290,21 @@ class TodoFilters extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+/// 推荐任务读取模型。它是服务端基于当前用户可见任务计算出的只读投影，
+/// 不进入 outbox；网络不可用时继续展示最近一次成功拉取的缓存。
+class TodoRecommendations extends Table {
+  IntColumn get taskServerId => integer()();
+  TextColumn get title => text()();
+  DateTimeColumn get dueAt => dateTime().nullable()();
+  TextColumn get reasonCode => text()();
+  TextColumn get reason => text()();
+  IntColumn get score => integer()();
+  DateTimeColumn get refreshedAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {taskServerId};
+}
+
 // --- sync 协调表 -----------------------------------------------------------
 
 /// 本地变更队列（outbox）。
@@ -304,9 +319,11 @@ class TodoSyncChanges extends Table {
   TextColumn get payloadJson => text()();
   DateTimeColumn get createdAt => dateTime()();
   IntColumn get attemptCount => integer().withDefault(const Constant(0))();
+  DateTimeColumn get nextAttemptAt => dateTime().nullable()();
   TextColumn get status => text().withDefault(
     const Constant('queued'),
   )(); // queued/retryable/synced/failed/resolved
+  TextColumn get failureReason => text().nullable()();
 }
 
 /// 全局同步游标（单行，id 固定为 1）。
@@ -365,6 +382,7 @@ class TodoSearchIndexEntry {
     TodoViewPreferences,
     TodoBoardPreferences,
     TodoFilters,
+    TodoRecommendations,
     TodoSyncChanges,
     TodoSyncCursor,
     TodoEntityRevisions,
@@ -384,7 +402,7 @@ class AppDatabase extends _$AppDatabase {
   }) : super(_open(_userDatabaseName(tenantId, userId, testNamespace)));
 
   @override
-  int get schemaVersion => 16;
+  int get schemaVersion => 17;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -556,6 +574,25 @@ class AppDatabase extends _$AppDatabase {
       if (from < 16 &&
           !await _tableExists(m, todoBoardPreferences.actualTableName)) {
         await m.createTable(todoBoardPreferences);
+      }
+      if (from < 17) {
+        if (!await _columnExists(
+          m,
+          todoSyncChanges.actualTableName,
+          'next_attempt_at',
+        )) {
+          await m.addColumn(todoSyncChanges, todoSyncChanges.nextAttemptAt);
+        }
+        if (!await _columnExists(
+          m,
+          todoSyncChanges.actualTableName,
+          'failure_reason',
+        )) {
+          await m.addColumn(todoSyncChanges, todoSyncChanges.failureReason);
+        }
+        if (!await _tableExists(m, todoRecommendations.actualTableName)) {
+          await m.createTable(todoRecommendations);
+        }
       }
     },
   );

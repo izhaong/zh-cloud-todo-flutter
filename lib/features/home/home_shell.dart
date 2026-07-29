@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/db/app_database.dart';
 import '../../core/notification/local_notification_service.dart';
 import '../../core/sync/connectivity_recovery_trigger.dart';
+import '../../core/sync/sync_entities.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../state/nlp_date.dart';
@@ -22,6 +23,8 @@ import '../task/task_detail_pane.dart';
 import '../task/tasks_by_list_page.dart';
 import '../task/views/calendar_view.dart';
 import '../tag/tag_page.dart';
+import 'sync_recovery_banner.dart';
+import 'recommendation_panel.dart';
 import 'todo_workspace.dart';
 
 /// Todo 主壳：只负责状态与内容分发，布局交给 [TodoWorkspace]。
@@ -60,7 +63,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
       _connectivityRecoveryTrigger = ConnectivityRecoveryTrigger(
         ref.read(connectivityChangesProvider),
         initialState: ref.read(connectivityInitialStateProvider),
-        onOnlineRecovered: _triggerSync,
+        onOnlineRecovered: _recoverAfterNetworkRestored,
       );
       unawaited(_connectivityRecoveryTrigger!.start());
       _periodicSync = Timer.periodic(const Duration(seconds: 30), (_) {
@@ -120,6 +123,43 @@ class _HomeShellState extends ConsumerState<HomeShell>
       if (mounted) setState(() => _syncStatus = '同步失败，将在稍后重试');
     } finally {
       _syncing = false;
+    }
+  }
+
+  Future<void> _recoverAfterNetworkRestored() async {
+    await _triggerSync();
+    try {
+      await ref.read(recommendationRepositoryProvider)?.refresh();
+    } catch (_) {
+      // 推荐读取失败时保留上一次成功的 Drift 缓存。
+    }
+  }
+
+  Future<void> _retryFailedSyncChanges(List<TodoSyncChange> changes) async {
+    final queue = ref.read(syncChangeQueueProvider);
+    if (queue == null) return;
+    for (final change in changes) {
+      await queue.retryNow(change.id);
+    }
+    await _triggerSync();
+  }
+
+  Future<void> _preserveConflictCopies(List<TodoSyncChange> changes) async {
+    final repository = ref.read(taskRepositoryProvider);
+    if (repository == null) return;
+    try {
+      final restored = await repository.createConflictCopies(changes);
+      if (restored == 0) return;
+      await _triggerSync();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('已保留 $restored 项本地副本')));
+    } on FormatException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('本地副本无法恢复，请保留同步记录后重试')));
     }
   }
 
@@ -354,6 +394,20 @@ class _HomeShellState extends ConsumerState<HomeShell>
 
   @override
   Widget build(BuildContext context) {
+    final failedChanges =
+        ref.watch(failedSyncChangesProvider).valueOrNull ??
+        const <TodoSyncChange>[];
+    final conflictCount = failedChanges
+        .where((change) => change.failureReason != null)
+        .length;
+    final recoverableTaskConflicts = failedChanges
+        .where(
+          (change) =>
+              change.entity == SyncEntities.task &&
+              change.op == SyncOps.upsert &&
+              change.failureReason != null,
+        )
+        .toList(growable: false);
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
@@ -364,7 +418,28 @@ class _HomeShellState extends ConsumerState<HomeShell>
           section: _section,
           smart: _smart,
           listId: _listId,
-          content: _buildContent(),
+          content: Stack(
+            children: [
+              _buildContent(),
+              if (failedChanges.isNotEmpty)
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  left: 12,
+                  child: SyncRecoveryBanner(
+                    failedCount: failedChanges.length,
+                    conflictCount: conflictCount,
+                    recoverableTaskConflictCount:
+                        recoverableTaskConflicts.length,
+                    onRetry: () => _retryFailedSyncChanges(failedChanges),
+                    onPreserveLocalCopies: recoverableTaskConflicts.isEmpty
+                        ? null
+                        : () =>
+                              _preserveConflictCopies(recoverableTaskConflicts),
+                  ),
+                ),
+            ],
+          ),
           detail: TaskDetailPane(
             taskId: _selectedTaskId,
             embedded: true,
@@ -433,18 +508,31 @@ class _HomeShellState extends ConsumerState<HomeShell>
         child: AppEmptyState(title: '垃圾桶', subtitle: '回收站内容将显示在这里。'),
       );
     }
-    return TasksByListPage(
-      title: _taskPaneTitle,
-      hideAppBar: true,
-      lockedListId: true,
-      initialListId: _effectiveListId,
-      initialDueRange: _dueRange,
-      initialCompleted: _smart == SmartList.completed ? true : null,
-      selectedTaskId: _selectedTaskId,
-      onTaskSelected: _selectTask,
-      onSelectionInvalidated: _invalidateTaskSelection,
-      onQuickAdd: _quickAdd,
+    return Column(
+      children: [
+        RecommendationPanel(onTaskSelected: _selectRecommendedTask),
+        Expanded(
+          child: TasksByListPage(
+            title: _taskPaneTitle,
+            hideAppBar: true,
+            lockedListId: true,
+            initialListId: _effectiveListId,
+            initialDueRange: _dueRange,
+            initialCompleted: _smart == SmartList.completed ? true : null,
+            selectedTaskId: _selectedTaskId,
+            onTaskSelected: _selectTask,
+            onSelectionInvalidated: _invalidateTaskSelection,
+            onQuickAdd: _quickAdd,
+          ),
+        ),
+      ],
     );
+  }
+
+  Future<void> _selectRecommendedTask(int serverTaskId) async {
+    final db = ref.read(appDatabaseProvider);
+    final task = await db?.taskByServerId(serverTaskId);
+    if (task != null && mounted) _selectTask(task.id);
   }
 
   String get _taskPaneTitle {

@@ -8958,6 +8958,467 @@ class TodoFiltersCompanion extends UpdateCompanion<TodoFilter> {
   }
 }
 
+class $TodoRecommendationsTable extends TodoRecommendations
+    with TableInfo<$TodoRecommendationsTable, TodoRecommendation> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TodoRecommendationsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _taskServerIdMeta = const VerificationMeta(
+    'taskServerId',
+  );
+  @override
+  late final GeneratedColumn<int> taskServerId = GeneratedColumn<int>(
+    'task_server_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dueAtMeta = const VerificationMeta('dueAt');
+  @override
+  late final GeneratedColumn<DateTime> dueAt = GeneratedColumn<DateTime>(
+    'due_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _reasonCodeMeta = const VerificationMeta(
+    'reasonCode',
+  );
+  @override
+  late final GeneratedColumn<String> reasonCode = GeneratedColumn<String>(
+    'reason_code',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _reasonMeta = const VerificationMeta('reason');
+  @override
+  late final GeneratedColumn<String> reason = GeneratedColumn<String>(
+    'reason',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _scoreMeta = const VerificationMeta('score');
+  @override
+  late final GeneratedColumn<int> score = GeneratedColumn<int>(
+    'score',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _refreshedAtMeta = const VerificationMeta(
+    'refreshedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> refreshedAt = GeneratedColumn<DateTime>(
+    'refreshed_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    taskServerId,
+    title,
+    dueAt,
+    reasonCode,
+    reason,
+    score,
+    refreshedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'todo_recommendations';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<TodoRecommendation> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('task_server_id')) {
+      context.handle(
+        _taskServerIdMeta,
+        taskServerId.isAcceptableOrUnknown(
+          data['task_server_id']!,
+          _taskServerIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('due_at')) {
+      context.handle(
+        _dueAtMeta,
+        dueAt.isAcceptableOrUnknown(data['due_at']!, _dueAtMeta),
+      );
+    }
+    if (data.containsKey('reason_code')) {
+      context.handle(
+        _reasonCodeMeta,
+        reasonCode.isAcceptableOrUnknown(data['reason_code']!, _reasonCodeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_reasonCodeMeta);
+    }
+    if (data.containsKey('reason')) {
+      context.handle(
+        _reasonMeta,
+        reason.isAcceptableOrUnknown(data['reason']!, _reasonMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_reasonMeta);
+    }
+    if (data.containsKey('score')) {
+      context.handle(
+        _scoreMeta,
+        score.isAcceptableOrUnknown(data['score']!, _scoreMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_scoreMeta);
+    }
+    if (data.containsKey('refreshed_at')) {
+      context.handle(
+        _refreshedAtMeta,
+        refreshedAt.isAcceptableOrUnknown(
+          data['refreshed_at']!,
+          _refreshedAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_refreshedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {taskServerId};
+  @override
+  TodoRecommendation map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TodoRecommendation(
+      taskServerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}task_server_id'],
+      )!,
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      )!,
+      dueAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}due_at'],
+      ),
+      reasonCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}reason_code'],
+      )!,
+      reason: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}reason'],
+      )!,
+      score: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}score'],
+      )!,
+      refreshedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}refreshed_at'],
+      )!,
+    );
+  }
+
+  @override
+  $TodoRecommendationsTable createAlias(String alias) {
+    return $TodoRecommendationsTable(attachedDatabase, alias);
+  }
+}
+
+class TodoRecommendation extends DataClass
+    implements Insertable<TodoRecommendation> {
+  final int taskServerId;
+  final String title;
+  final DateTime? dueAt;
+  final String reasonCode;
+  final String reason;
+  final int score;
+  final DateTime refreshedAt;
+  const TodoRecommendation({
+    required this.taskServerId,
+    required this.title,
+    this.dueAt,
+    required this.reasonCode,
+    required this.reason,
+    required this.score,
+    required this.refreshedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['task_server_id'] = Variable<int>(taskServerId);
+    map['title'] = Variable<String>(title);
+    if (!nullToAbsent || dueAt != null) {
+      map['due_at'] = Variable<DateTime>(dueAt);
+    }
+    map['reason_code'] = Variable<String>(reasonCode);
+    map['reason'] = Variable<String>(reason);
+    map['score'] = Variable<int>(score);
+    map['refreshed_at'] = Variable<DateTime>(refreshedAt);
+    return map;
+  }
+
+  TodoRecommendationsCompanion toCompanion(bool nullToAbsent) {
+    return TodoRecommendationsCompanion(
+      taskServerId: Value(taskServerId),
+      title: Value(title),
+      dueAt: dueAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dueAt),
+      reasonCode: Value(reasonCode),
+      reason: Value(reason),
+      score: Value(score),
+      refreshedAt: Value(refreshedAt),
+    );
+  }
+
+  factory TodoRecommendation.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TodoRecommendation(
+      taskServerId: serializer.fromJson<int>(json['taskServerId']),
+      title: serializer.fromJson<String>(json['title']),
+      dueAt: serializer.fromJson<DateTime?>(json['dueAt']),
+      reasonCode: serializer.fromJson<String>(json['reasonCode']),
+      reason: serializer.fromJson<String>(json['reason']),
+      score: serializer.fromJson<int>(json['score']),
+      refreshedAt: serializer.fromJson<DateTime>(json['refreshedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'taskServerId': serializer.toJson<int>(taskServerId),
+      'title': serializer.toJson<String>(title),
+      'dueAt': serializer.toJson<DateTime?>(dueAt),
+      'reasonCode': serializer.toJson<String>(reasonCode),
+      'reason': serializer.toJson<String>(reason),
+      'score': serializer.toJson<int>(score),
+      'refreshedAt': serializer.toJson<DateTime>(refreshedAt),
+    };
+  }
+
+  TodoRecommendation copyWith({
+    int? taskServerId,
+    String? title,
+    Value<DateTime?> dueAt = const Value.absent(),
+    String? reasonCode,
+    String? reason,
+    int? score,
+    DateTime? refreshedAt,
+  }) => TodoRecommendation(
+    taskServerId: taskServerId ?? this.taskServerId,
+    title: title ?? this.title,
+    dueAt: dueAt.present ? dueAt.value : this.dueAt,
+    reasonCode: reasonCode ?? this.reasonCode,
+    reason: reason ?? this.reason,
+    score: score ?? this.score,
+    refreshedAt: refreshedAt ?? this.refreshedAt,
+  );
+  TodoRecommendation copyWithCompanion(TodoRecommendationsCompanion data) {
+    return TodoRecommendation(
+      taskServerId: data.taskServerId.present
+          ? data.taskServerId.value
+          : this.taskServerId,
+      title: data.title.present ? data.title.value : this.title,
+      dueAt: data.dueAt.present ? data.dueAt.value : this.dueAt,
+      reasonCode: data.reasonCode.present
+          ? data.reasonCode.value
+          : this.reasonCode,
+      reason: data.reason.present ? data.reason.value : this.reason,
+      score: data.score.present ? data.score.value : this.score,
+      refreshedAt: data.refreshedAt.present
+          ? data.refreshedAt.value
+          : this.refreshedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TodoRecommendation(')
+          ..write('taskServerId: $taskServerId, ')
+          ..write('title: $title, ')
+          ..write('dueAt: $dueAt, ')
+          ..write('reasonCode: $reasonCode, ')
+          ..write('reason: $reason, ')
+          ..write('score: $score, ')
+          ..write('refreshedAt: $refreshedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    taskServerId,
+    title,
+    dueAt,
+    reasonCode,
+    reason,
+    score,
+    refreshedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TodoRecommendation &&
+          other.taskServerId == this.taskServerId &&
+          other.title == this.title &&
+          other.dueAt == this.dueAt &&
+          other.reasonCode == this.reasonCode &&
+          other.reason == this.reason &&
+          other.score == this.score &&
+          other.refreshedAt == this.refreshedAt);
+}
+
+class TodoRecommendationsCompanion extends UpdateCompanion<TodoRecommendation> {
+  final Value<int> taskServerId;
+  final Value<String> title;
+  final Value<DateTime?> dueAt;
+  final Value<String> reasonCode;
+  final Value<String> reason;
+  final Value<int> score;
+  final Value<DateTime> refreshedAt;
+  const TodoRecommendationsCompanion({
+    this.taskServerId = const Value.absent(),
+    this.title = const Value.absent(),
+    this.dueAt = const Value.absent(),
+    this.reasonCode = const Value.absent(),
+    this.reason = const Value.absent(),
+    this.score = const Value.absent(),
+    this.refreshedAt = const Value.absent(),
+  });
+  TodoRecommendationsCompanion.insert({
+    this.taskServerId = const Value.absent(),
+    required String title,
+    this.dueAt = const Value.absent(),
+    required String reasonCode,
+    required String reason,
+    required int score,
+    required DateTime refreshedAt,
+  }) : title = Value(title),
+       reasonCode = Value(reasonCode),
+       reason = Value(reason),
+       score = Value(score),
+       refreshedAt = Value(refreshedAt);
+  static Insertable<TodoRecommendation> custom({
+    Expression<int>? taskServerId,
+    Expression<String>? title,
+    Expression<DateTime>? dueAt,
+    Expression<String>? reasonCode,
+    Expression<String>? reason,
+    Expression<int>? score,
+    Expression<DateTime>? refreshedAt,
+  }) {
+    return RawValuesInsertable({
+      if (taskServerId != null) 'task_server_id': taskServerId,
+      if (title != null) 'title': title,
+      if (dueAt != null) 'due_at': dueAt,
+      if (reasonCode != null) 'reason_code': reasonCode,
+      if (reason != null) 'reason': reason,
+      if (score != null) 'score': score,
+      if (refreshedAt != null) 'refreshed_at': refreshedAt,
+    });
+  }
+
+  TodoRecommendationsCompanion copyWith({
+    Value<int>? taskServerId,
+    Value<String>? title,
+    Value<DateTime?>? dueAt,
+    Value<String>? reasonCode,
+    Value<String>? reason,
+    Value<int>? score,
+    Value<DateTime>? refreshedAt,
+  }) {
+    return TodoRecommendationsCompanion(
+      taskServerId: taskServerId ?? this.taskServerId,
+      title: title ?? this.title,
+      dueAt: dueAt ?? this.dueAt,
+      reasonCode: reasonCode ?? this.reasonCode,
+      reason: reason ?? this.reason,
+      score: score ?? this.score,
+      refreshedAt: refreshedAt ?? this.refreshedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (taskServerId.present) {
+      map['task_server_id'] = Variable<int>(taskServerId.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (dueAt.present) {
+      map['due_at'] = Variable<DateTime>(dueAt.value);
+    }
+    if (reasonCode.present) {
+      map['reason_code'] = Variable<String>(reasonCode.value);
+    }
+    if (reason.present) {
+      map['reason'] = Variable<String>(reason.value);
+    }
+    if (score.present) {
+      map['score'] = Variable<int>(score.value);
+    }
+    if (refreshedAt.present) {
+      map['refreshed_at'] = Variable<DateTime>(refreshedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TodoRecommendationsCompanion(')
+          ..write('taskServerId: $taskServerId, ')
+          ..write('title: $title, ')
+          ..write('dueAt: $dueAt, ')
+          ..write('reasonCode: $reasonCode, ')
+          ..write('reason: $reason, ')
+          ..write('score: $score, ')
+          ..write('refreshedAt: $refreshedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $TodoSyncChangesTable extends TodoSyncChanges
     with TableInfo<$TodoSyncChangesTable, TodoSyncChange> {
   @override
@@ -9063,6 +9524,18 @@ class $TodoSyncChangesTable extends TodoSyncChanges
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _nextAttemptAtMeta = const VerificationMeta(
+    'nextAttemptAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> nextAttemptAt =
+      GeneratedColumn<DateTime>(
+        'next_attempt_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _statusMeta = const VerificationMeta('status');
   @override
   late final GeneratedColumn<String> status = GeneratedColumn<String>(
@@ -9072,6 +9545,17 @@ class $TodoSyncChangesTable extends TodoSyncChanges
     type: DriftSqlType.string,
     requiredDuringInsert: false,
     defaultValue: const Constant('queued'),
+  );
+  static const VerificationMeta _failureReasonMeta = const VerificationMeta(
+    'failureReason',
+  );
+  @override
+  late final GeneratedColumn<String> failureReason = GeneratedColumn<String>(
+    'failure_reason',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
   );
   @override
   List<GeneratedColumn> get $columns => [
@@ -9084,7 +9568,9 @@ class $TodoSyncChangesTable extends TodoSyncChanges
     payloadJson,
     createdAt,
     attemptCount,
+    nextAttemptAt,
     status,
+    failureReason,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -9171,10 +9657,28 @@ class $TodoSyncChangesTable extends TodoSyncChanges
         ),
       );
     }
+    if (data.containsKey('next_attempt_at')) {
+      context.handle(
+        _nextAttemptAtMeta,
+        nextAttemptAt.isAcceptableOrUnknown(
+          data['next_attempt_at']!,
+          _nextAttemptAtMeta,
+        ),
+      );
+    }
     if (data.containsKey('status')) {
       context.handle(
         _statusMeta,
         status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    }
+    if (data.containsKey('failure_reason')) {
+      context.handle(
+        _failureReasonMeta,
+        failureReason.isAcceptableOrUnknown(
+          data['failure_reason']!,
+          _failureReasonMeta,
+        ),
       );
     }
     return context;
@@ -9222,10 +9726,18 @@ class $TodoSyncChangesTable extends TodoSyncChanges
         DriftSqlType.int,
         data['${effectivePrefix}attempt_count'],
       )!,
+      nextAttemptAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}next_attempt_at'],
+      ),
       status: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}status'],
       )!,
+      failureReason: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}failure_reason'],
+      ),
     );
   }
 
@@ -9245,7 +9757,9 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
   final String payloadJson;
   final DateTime createdAt;
   final int attemptCount;
+  final DateTime? nextAttemptAt;
   final String status;
+  final String? failureReason;
   const TodoSyncChange({
     required this.id,
     required this.clientMutationId,
@@ -9256,7 +9770,9 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
     required this.payloadJson,
     required this.createdAt,
     required this.attemptCount,
+    this.nextAttemptAt,
     required this.status,
+    this.failureReason,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -9274,7 +9790,13 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
     map['payload_json'] = Variable<String>(payloadJson);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['attempt_count'] = Variable<int>(attemptCount);
+    if (!nullToAbsent || nextAttemptAt != null) {
+      map['next_attempt_at'] = Variable<DateTime>(nextAttemptAt);
+    }
     map['status'] = Variable<String>(status);
+    if (!nullToAbsent || failureReason != null) {
+      map['failure_reason'] = Variable<String>(failureReason);
+    }
     return map;
   }
 
@@ -9293,7 +9815,13 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
       payloadJson: Value(payloadJson),
       createdAt: Value(createdAt),
       attemptCount: Value(attemptCount),
+      nextAttemptAt: nextAttemptAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(nextAttemptAt),
       status: Value(status),
+      failureReason: failureReason == null && nullToAbsent
+          ? const Value.absent()
+          : Value(failureReason),
     );
   }
 
@@ -9312,7 +9840,9 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
       payloadJson: serializer.fromJson<String>(json['payloadJson']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       attemptCount: serializer.fromJson<int>(json['attemptCount']),
+      nextAttemptAt: serializer.fromJson<DateTime?>(json['nextAttemptAt']),
       status: serializer.fromJson<String>(json['status']),
+      failureReason: serializer.fromJson<String?>(json['failureReason']),
     );
   }
   @override
@@ -9328,7 +9858,9 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
       'payloadJson': serializer.toJson<String>(payloadJson),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'attemptCount': serializer.toJson<int>(attemptCount),
+      'nextAttemptAt': serializer.toJson<DateTime?>(nextAttemptAt),
       'status': serializer.toJson<String>(status),
+      'failureReason': serializer.toJson<String?>(failureReason),
     };
   }
 
@@ -9342,7 +9874,9 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
     String? payloadJson,
     DateTime? createdAt,
     int? attemptCount,
+    Value<DateTime?> nextAttemptAt = const Value.absent(),
     String? status,
+    Value<String?> failureReason = const Value.absent(),
   }) => TodoSyncChange(
     id: id ?? this.id,
     clientMutationId: clientMutationId ?? this.clientMutationId,
@@ -9357,7 +9891,13 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
     payloadJson: payloadJson ?? this.payloadJson,
     createdAt: createdAt ?? this.createdAt,
     attemptCount: attemptCount ?? this.attemptCount,
+    nextAttemptAt: nextAttemptAt.present
+        ? nextAttemptAt.value
+        : this.nextAttemptAt,
     status: status ?? this.status,
+    failureReason: failureReason.present
+        ? failureReason.value
+        : this.failureReason,
   );
   TodoSyncChange copyWithCompanion(TodoSyncChangesCompanion data) {
     return TodoSyncChange(
@@ -9380,7 +9920,13 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
       attemptCount: data.attemptCount.present
           ? data.attemptCount.value
           : this.attemptCount,
+      nextAttemptAt: data.nextAttemptAt.present
+          ? data.nextAttemptAt.value
+          : this.nextAttemptAt,
       status: data.status.present ? data.status.value : this.status,
+      failureReason: data.failureReason.present
+          ? data.failureReason.value
+          : this.failureReason,
     );
   }
 
@@ -9396,7 +9942,9 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
           ..write('payloadJson: $payloadJson, ')
           ..write('createdAt: $createdAt, ')
           ..write('attemptCount: $attemptCount, ')
-          ..write('status: $status')
+          ..write('nextAttemptAt: $nextAttemptAt, ')
+          ..write('status: $status, ')
+          ..write('failureReason: $failureReason')
           ..write(')'))
         .toString();
   }
@@ -9412,7 +9960,9 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
     payloadJson,
     createdAt,
     attemptCount,
+    nextAttemptAt,
     status,
+    failureReason,
   );
   @override
   bool operator ==(Object other) =>
@@ -9427,7 +9977,9 @@ class TodoSyncChange extends DataClass implements Insertable<TodoSyncChange> {
           other.payloadJson == this.payloadJson &&
           other.createdAt == this.createdAt &&
           other.attemptCount == this.attemptCount &&
-          other.status == this.status);
+          other.nextAttemptAt == this.nextAttemptAt &&
+          other.status == this.status &&
+          other.failureReason == this.failureReason);
 }
 
 class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
@@ -9440,7 +9992,9 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
   final Value<String> payloadJson;
   final Value<DateTime> createdAt;
   final Value<int> attemptCount;
+  final Value<DateTime?> nextAttemptAt;
   final Value<String> status;
+  final Value<String?> failureReason;
   const TodoSyncChangesCompanion({
     this.id = const Value.absent(),
     this.clientMutationId = const Value.absent(),
@@ -9451,7 +10005,9 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
     this.payloadJson = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.attemptCount = const Value.absent(),
+    this.nextAttemptAt = const Value.absent(),
     this.status = const Value.absent(),
+    this.failureReason = const Value.absent(),
   });
   TodoSyncChangesCompanion.insert({
     this.id = const Value.absent(),
@@ -9463,7 +10019,9 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
     required String payloadJson,
     required DateTime createdAt,
     this.attemptCount = const Value.absent(),
+    this.nextAttemptAt = const Value.absent(),
     this.status = const Value.absent(),
+    this.failureReason = const Value.absent(),
   }) : clientMutationId = Value(clientMutationId),
        entity = Value(entity),
        op = Value(op),
@@ -9479,7 +10037,9 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
     Expression<String>? payloadJson,
     Expression<DateTime>? createdAt,
     Expression<int>? attemptCount,
+    Expression<DateTime>? nextAttemptAt,
     Expression<String>? status,
+    Expression<String>? failureReason,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -9491,7 +10051,9 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
       if (payloadJson != null) 'payload_json': payloadJson,
       if (createdAt != null) 'created_at': createdAt,
       if (attemptCount != null) 'attempt_count': attemptCount,
+      if (nextAttemptAt != null) 'next_attempt_at': nextAttemptAt,
       if (status != null) 'status': status,
+      if (failureReason != null) 'failure_reason': failureReason,
     });
   }
 
@@ -9505,7 +10067,9 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
     Value<String>? payloadJson,
     Value<DateTime>? createdAt,
     Value<int>? attemptCount,
+    Value<DateTime?>? nextAttemptAt,
     Value<String>? status,
+    Value<String?>? failureReason,
   }) {
     return TodoSyncChangesCompanion(
       id: id ?? this.id,
@@ -9517,7 +10081,9 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
       payloadJson: payloadJson ?? this.payloadJson,
       createdAt: createdAt ?? this.createdAt,
       attemptCount: attemptCount ?? this.attemptCount,
+      nextAttemptAt: nextAttemptAt ?? this.nextAttemptAt,
       status: status ?? this.status,
+      failureReason: failureReason ?? this.failureReason,
     );
   }
 
@@ -9551,8 +10117,14 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
     if (attemptCount.present) {
       map['attempt_count'] = Variable<int>(attemptCount.value);
     }
+    if (nextAttemptAt.present) {
+      map['next_attempt_at'] = Variable<DateTime>(nextAttemptAt.value);
+    }
     if (status.present) {
       map['status'] = Variable<String>(status.value);
+    }
+    if (failureReason.present) {
+      map['failure_reason'] = Variable<String>(failureReason.value);
     }
     return map;
   }
@@ -9569,7 +10141,9 @@ class TodoSyncChangesCompanion extends UpdateCompanion<TodoSyncChange> {
           ..write('payloadJson: $payloadJson, ')
           ..write('createdAt: $createdAt, ')
           ..write('attemptCount: $attemptCount, ')
-          ..write('status: $status')
+          ..write('nextAttemptAt: $nextAttemptAt, ')
+          ..write('status: $status, ')
+          ..write('failureReason: $failureReason')
           ..write(')'))
         .toString();
   }
@@ -10120,6 +10694,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $TodoBoardPreferencesTable todoBoardPreferences =
       $TodoBoardPreferencesTable(this);
   late final $TodoFiltersTable todoFilters = $TodoFiltersTable(this);
+  late final $TodoRecommendationsTable todoRecommendations =
+      $TodoRecommendationsTable(this);
   late final $TodoSyncChangesTable todoSyncChanges = $TodoSyncChangesTable(
     this,
   );
@@ -10146,6 +10722,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     todoViewPreferences,
     todoBoardPreferences,
     todoFilters,
+    todoRecommendations,
     todoSyncChanges,
     todoSyncCursor,
     todoEntityRevisions,
@@ -14564,6 +15141,260 @@ typedef $$TodoFiltersTableProcessedTableManager =
       TodoFilter,
       PrefetchHooks Function()
     >;
+typedef $$TodoRecommendationsTableCreateCompanionBuilder =
+    TodoRecommendationsCompanion Function({
+      Value<int> taskServerId,
+      required String title,
+      Value<DateTime?> dueAt,
+      required String reasonCode,
+      required String reason,
+      required int score,
+      required DateTime refreshedAt,
+    });
+typedef $$TodoRecommendationsTableUpdateCompanionBuilder =
+    TodoRecommendationsCompanion Function({
+      Value<int> taskServerId,
+      Value<String> title,
+      Value<DateTime?> dueAt,
+      Value<String> reasonCode,
+      Value<String> reason,
+      Value<int> score,
+      Value<DateTime> refreshedAt,
+    });
+
+class $$TodoRecommendationsTableFilterComposer
+    extends Composer<_$AppDatabase, $TodoRecommendationsTable> {
+  $$TodoRecommendationsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get taskServerId => $composableBuilder(
+    column: $table.taskServerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get dueAt => $composableBuilder(
+    column: $table.dueAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get reasonCode => $composableBuilder(
+    column: $table.reasonCode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get reason => $composableBuilder(
+    column: $table.reason,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get score => $composableBuilder(
+    column: $table.score,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get refreshedAt => $composableBuilder(
+    column: $table.refreshedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$TodoRecommendationsTableOrderingComposer
+    extends Composer<_$AppDatabase, $TodoRecommendationsTable> {
+  $$TodoRecommendationsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get taskServerId => $composableBuilder(
+    column: $table.taskServerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get dueAt => $composableBuilder(
+    column: $table.dueAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get reasonCode => $composableBuilder(
+    column: $table.reasonCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get reason => $composableBuilder(
+    column: $table.reason,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get score => $composableBuilder(
+    column: $table.score,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get refreshedAt => $composableBuilder(
+    column: $table.refreshedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$TodoRecommendationsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $TodoRecommendationsTable> {
+  $$TodoRecommendationsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get taskServerId => $composableBuilder(
+    column: $table.taskServerId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get dueAt =>
+      $composableBuilder(column: $table.dueAt, builder: (column) => column);
+
+  GeneratedColumn<String> get reasonCode => $composableBuilder(
+    column: $table.reasonCode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get reason =>
+      $composableBuilder(column: $table.reason, builder: (column) => column);
+
+  GeneratedColumn<int> get score =>
+      $composableBuilder(column: $table.score, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get refreshedAt => $composableBuilder(
+    column: $table.refreshedAt,
+    builder: (column) => column,
+  );
+}
+
+class $$TodoRecommendationsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $TodoRecommendationsTable,
+          TodoRecommendation,
+          $$TodoRecommendationsTableFilterComposer,
+          $$TodoRecommendationsTableOrderingComposer,
+          $$TodoRecommendationsTableAnnotationComposer,
+          $$TodoRecommendationsTableCreateCompanionBuilder,
+          $$TodoRecommendationsTableUpdateCompanionBuilder,
+          (
+            TodoRecommendation,
+            BaseReferences<
+              _$AppDatabase,
+              $TodoRecommendationsTable,
+              TodoRecommendation
+            >,
+          ),
+          TodoRecommendation,
+          PrefetchHooks Function()
+        > {
+  $$TodoRecommendationsTableTableManager(
+    _$AppDatabase db,
+    $TodoRecommendationsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$TodoRecommendationsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$TodoRecommendationsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$TodoRecommendationsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> taskServerId = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<DateTime?> dueAt = const Value.absent(),
+                Value<String> reasonCode = const Value.absent(),
+                Value<String> reason = const Value.absent(),
+                Value<int> score = const Value.absent(),
+                Value<DateTime> refreshedAt = const Value.absent(),
+              }) => TodoRecommendationsCompanion(
+                taskServerId: taskServerId,
+                title: title,
+                dueAt: dueAt,
+                reasonCode: reasonCode,
+                reason: reason,
+                score: score,
+                refreshedAt: refreshedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> taskServerId = const Value.absent(),
+                required String title,
+                Value<DateTime?> dueAt = const Value.absent(),
+                required String reasonCode,
+                required String reason,
+                required int score,
+                required DateTime refreshedAt,
+              }) => TodoRecommendationsCompanion.insert(
+                taskServerId: taskServerId,
+                title: title,
+                dueAt: dueAt,
+                reasonCode: reasonCode,
+                reason: reason,
+                score: score,
+                refreshedAt: refreshedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$TodoRecommendationsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $TodoRecommendationsTable,
+      TodoRecommendation,
+      $$TodoRecommendationsTableFilterComposer,
+      $$TodoRecommendationsTableOrderingComposer,
+      $$TodoRecommendationsTableAnnotationComposer,
+      $$TodoRecommendationsTableCreateCompanionBuilder,
+      $$TodoRecommendationsTableUpdateCompanionBuilder,
+      (
+        TodoRecommendation,
+        BaseReferences<
+          _$AppDatabase,
+          $TodoRecommendationsTable,
+          TodoRecommendation
+        >,
+      ),
+      TodoRecommendation,
+      PrefetchHooks Function()
+    >;
 typedef $$TodoSyncChangesTableCreateCompanionBuilder =
     TodoSyncChangesCompanion Function({
       Value<int> id,
@@ -14575,7 +15406,9 @@ typedef $$TodoSyncChangesTableCreateCompanionBuilder =
       required String payloadJson,
       required DateTime createdAt,
       Value<int> attemptCount,
+      Value<DateTime?> nextAttemptAt,
       Value<String> status,
+      Value<String?> failureReason,
     });
 typedef $$TodoSyncChangesTableUpdateCompanionBuilder =
     TodoSyncChangesCompanion Function({
@@ -14588,7 +15421,9 @@ typedef $$TodoSyncChangesTableUpdateCompanionBuilder =
       Value<String> payloadJson,
       Value<DateTime> createdAt,
       Value<int> attemptCount,
+      Value<DateTime?> nextAttemptAt,
       Value<String> status,
+      Value<String?> failureReason,
     });
 
 class $$TodoSyncChangesTableFilterComposer
@@ -14645,8 +15480,18 @@ class $$TodoSyncChangesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<DateTime> get nextAttemptAt => $composableBuilder(
+    column: $table.nextAttemptAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get status => $composableBuilder(
     column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get failureReason => $composableBuilder(
+    column: $table.failureReason,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -14705,8 +15550,18 @@ class $$TodoSyncChangesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get nextAttemptAt => $composableBuilder(
+    column: $table.nextAttemptAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get status => $composableBuilder(
     column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get failureReason => $composableBuilder(
+    column: $table.failureReason,
     builder: (column) => ColumnOrderings(column),
   );
 }
@@ -14757,8 +15612,18 @@ class $$TodoSyncChangesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<DateTime> get nextAttemptAt => $composableBuilder(
+    column: $table.nextAttemptAt,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get status =>
       $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<String> get failureReason => $composableBuilder(
+    column: $table.failureReason,
+    builder: (column) => column,
+  );
 }
 
 class $$TodoSyncChangesTableTableManager
@@ -14807,7 +15672,9 @@ class $$TodoSyncChangesTableTableManager
                 Value<String> payloadJson = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> attemptCount = const Value.absent(),
+                Value<DateTime?> nextAttemptAt = const Value.absent(),
                 Value<String> status = const Value.absent(),
+                Value<String?> failureReason = const Value.absent(),
               }) => TodoSyncChangesCompanion(
                 id: id,
                 clientMutationId: clientMutationId,
@@ -14818,7 +15685,9 @@ class $$TodoSyncChangesTableTableManager
                 payloadJson: payloadJson,
                 createdAt: createdAt,
                 attemptCount: attemptCount,
+                nextAttemptAt: nextAttemptAt,
                 status: status,
+                failureReason: failureReason,
               ),
           createCompanionCallback:
               ({
@@ -14831,7 +15700,9 @@ class $$TodoSyncChangesTableTableManager
                 required String payloadJson,
                 required DateTime createdAt,
                 Value<int> attemptCount = const Value.absent(),
+                Value<DateTime?> nextAttemptAt = const Value.absent(),
                 Value<String> status = const Value.absent(),
+                Value<String?> failureReason = const Value.absent(),
               }) => TodoSyncChangesCompanion.insert(
                 id: id,
                 clientMutationId: clientMutationId,
@@ -14842,7 +15713,9 @@ class $$TodoSyncChangesTableTableManager
                 payloadJson: payloadJson,
                 createdAt: createdAt,
                 attemptCount: attemptCount,
+                nextAttemptAt: nextAttemptAt,
                 status: status,
+                failureReason: failureReason,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -15245,6 +16118,8 @@ class $AppDatabaseManager {
       $$TodoBoardPreferencesTableTableManager(_db, _db.todoBoardPreferences);
   $$TodoFiltersTableTableManager get todoFilters =>
       $$TodoFiltersTableTableManager(_db, _db.todoFilters);
+  $$TodoRecommendationsTableTableManager get todoRecommendations =>
+      $$TodoRecommendationsTableTableManager(_db, _db.todoRecommendations);
   $$TodoSyncChangesTableTableManager get todoSyncChanges =>
       $$TodoSyncChangesTableTableManager(_db, _db.todoSyncChanges);
   $$TodoSyncCursorTableTableManager get todoSyncCursor =>

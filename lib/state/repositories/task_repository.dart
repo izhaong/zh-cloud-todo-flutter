@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
@@ -197,6 +199,72 @@ class TaskRepository {
       timeZone: original.timeZone,
       fixedTimezone: original.fixedTimezone,
     );
+  }
+
+  /// 将服务端优先冲突前的任务 payload 保存为一个新的可同步任务。
+  ///
+  /// 原冲突项只在副本及其 outbox 已落库后标记为 `resolved`，因此重复点击
+  /// 不会生成重复副本，也不会丢失仍需用户处理的 failed 项。
+  Future<int> createConflictCopies(Iterable<TodoSyncChange> changes) async {
+    var restored = 0;
+    for (final change in changes) {
+      restored += await _db.transaction(() async {
+        final current = await (_db.select(
+          _db.todoSyncChanges,
+        )..where((row) => row.id.equals(change.id))).getSingleOrNull();
+        if (current == null ||
+            current.status != 'failed' ||
+            current.failureReason == null ||
+            current.entity != SyncEntities.task ||
+            current.op != SyncOps.upsert) {
+          return 0;
+        }
+
+        final payload = jsonDecode(current.payloadJson) as Map<String, dynamic>;
+        final snapshot = TodoTask.fromJson(payload);
+        final now = DateTime.now();
+        final id = _uuid.v4();
+        await _db
+            .into(_db.todoTasks)
+            .insert(
+              TodoTasksCompanion.insert(
+                id: id,
+                listId: snapshot.listId,
+                parentTaskId: const Value(null),
+                title: '${snapshot.title}（本地副本）',
+                description: Value(snapshot.description),
+                completed: Value(snapshot.completed),
+                priority: Value(snapshot.priority),
+                isPinned: Value(snapshot.isPinned),
+                sortOrder: Value(snapshot.sortOrder),
+                startAt: Value(snapshot.startAt),
+                endAt: Value(snapshot.endAt),
+                dueAt: Value(snapshot.dueAt),
+                updatedAt: now,
+                createdAt: now,
+              ),
+            );
+        final copy = await (_db.select(
+          _db.todoTasks,
+        )..where((row) => row.id.equals(id))).getSingle();
+        await _queue.enqueue(
+          entity: SyncEntities.task,
+          op: SyncOps.upsert,
+          localId: id,
+          payload: copy.toJson(),
+        );
+        await (_db.update(
+          _db.todoSyncChanges,
+        )..where((row) => row.id.equals(current.id))).write(
+          const TodoSyncChangesCompanion(
+            status: Value('resolved'),
+            nextAttemptAt: Value(null),
+          ),
+        );
+        return 1;
+      });
+    }
+    return restored;
   }
 
   Future<TodoTask> update(

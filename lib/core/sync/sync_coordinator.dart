@@ -9,6 +9,7 @@ import '../api/api_client.dart';
 import '../api/sync_api.dart';
 import '../db/app_database.dart';
 import 'sync_entities.dart';
+import 'sync_retry_policy.dart';
 
 /// 离线优先双向同步协调器。
 ///
@@ -59,10 +60,14 @@ class SyncCoordinator {
 
   Future<int> push() async {
     await _prepareInboxChangesForPush();
+    final now = DateTime.now();
     final pending =
         await (db.select(db.todoSyncChanges)
               ..where(
-                (t) => t.status.equals('queued') | t.status.equals('retryable'),
+                (t) =>
+                    (t.status.equals('queued') | t.status.equals('retryable')) &
+                    (t.nextAttemptAt.isNull() |
+                        t.nextAttemptAt.isSmallerOrEqualValue(now)),
               )
               ..orderBy([(t) => OrderingTerm.asc(t.id)]))
             .get();
@@ -309,20 +314,24 @@ class SyncCoordinator {
         for (final a in result.accepted) a.clientMutationId,
         for (final c in result.conflicts) c.clientMutationId,
       };
+      final conflictsByMutationId = {
+        for (final conflict in result.conflicts)
+          if (conflict.clientMutationId != null)
+            conflict.clientMutationId!: conflict,
+      };
       var count = 0;
       for (final change in changes) {
         if (acceptedIds.contains(change.clientMutationId)) {
-          final isConflict = result.conflicts.any(
-            (c) => c.clientMutationId == change.clientMutationId,
-          );
+          final conflict = conflictsByMutationId[change.clientMutationId];
           await (db.update(
             db.todoSyncChanges,
           )..where((t) => t.id.equals(change.id))).write(
             TodoSyncChangesCompanion(
-              status: Value(isConflict ? 'failed' : 'synced'),
+              status: Value(conflict == null ? 'synced' : 'failed'),
+              failureReason: Value(conflict?.reason),
             ),
           );
-          if (!isConflict) count++;
+          if (conflict == null) count++;
         }
       }
       return count;
@@ -334,6 +343,9 @@ class SyncCoordinator {
           TodoSyncChangesCompanion(
             status: const Value('retryable'),
             attemptCount: Value(change.attemptCount + 1),
+            nextAttemptAt: Value(
+              DateTime.now().add(syncRetryDelay(change.attemptCount + 1)),
+            ),
           ),
         );
       }
@@ -402,6 +414,9 @@ class SyncCoordinator {
           TodoSyncChangesCompanion(
             status: const Value('retryable'),
             attemptCount: Value(change.attemptCount + 1),
+            nextAttemptAt: Value(
+              DateTime.now().add(syncRetryDelay(change.attemptCount + 1)),
+            ),
           ),
         );
       }
