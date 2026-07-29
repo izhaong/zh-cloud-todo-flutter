@@ -255,6 +255,24 @@ class TodoViewPreferences extends Table {
   ];
 }
 
+/// 看板偏好与通用视图偏好分表保存，保留服务端的分组和列配置语义。
+class TodoBoardPreferences extends Table {
+  TextColumn get id => text()();
+  IntColumn get serverId => integer().nullable()();
+  TextColumn get listId => text()(); // → todo_list.id
+  TextColumn get groupDimension => text()();
+  TextColumn get columnsJson => text().nullable()();
+  DateTimeColumn get updatedAt => dateTime()();
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+  @override
+  List<Set<Column>> get uniqueKeys => [
+    {listId},
+  ];
+}
+
 /// 过滤器 / 智能清单条件。
 class TodoFilters extends Table {
   TextColumn get id => text()();
@@ -288,7 +306,7 @@ class TodoSyncChanges extends Table {
   IntColumn get attemptCount => integer().withDefault(const Constant(0))();
   TextColumn get status => text().withDefault(
     const Constant('queued'),
-  )(); // queued/retryable/synced/failed
+  )(); // queued/retryable/synced/failed/resolved
 }
 
 /// 全局同步游标（单行，id 固定为 1）。
@@ -345,6 +363,7 @@ class TodoSearchIndexEntry {
     TodoRepeatRules,
     TodoRepeatSkips,
     TodoViewPreferences,
+    TodoBoardPreferences,
     TodoFilters,
     TodoSyncChanges,
     TodoSyncCursor,
@@ -365,7 +384,7 @@ class AppDatabase extends _$AppDatabase {
   }) : super(_open(_userDatabaseName(tenantId, userId, testNamespace)));
 
   @override
-  int get schemaVersion => 15;
+  int get schemaVersion => 16;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -383,6 +402,7 @@ class AppDatabase extends _$AppDatabase {
         }
         await m.createAll();
         await _createSearchIndex(m.database);
+        await _createAssigneeFilterIndex(m.database);
         return;
       }
       if (from < 5) {
@@ -532,6 +552,10 @@ class AppDatabase extends _$AppDatabase {
       if (from < 15 &&
           !await _columnExists(m, 'todo_repeat_rules', 'selected_dates_json')) {
         await m.addColumn(todoRepeatRules, todoRepeatRules.selectedDatesJson);
+      }
+      if (from < 16 &&
+          !await _tableExists(m, todoBoardPreferences.actualTableName)) {
+        await m.createTable(todoBoardPreferences);
       }
     },
   );

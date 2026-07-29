@@ -10,6 +10,7 @@ import '../core/notification/reminder_notification_poller.dart';
 import '../core/sync/sync_change_queue.dart';
 import '../core/sync/sync_coordinator.dart';
 import '../state/session_state.dart';
+import 'repositories/board_preference_repository.dart';
 import 'repositories/folder_repository.dart';
 import 'repositories/activity_repository.dart';
 import 'repositories/list_repository.dart';
@@ -24,6 +25,7 @@ import 'repositories/template_repository.dart';
 import 'repositories/task_capture_defaults_repository.dart';
 import 'repositories/task_repository.dart';
 import 'repositories/task_sort_preference_repository.dart';
+import 'repositories/task_view_action_repository.dart';
 
 /// UI-facing clock. Production reads the current instant on each rebuild;
 /// deterministic widget/golden fixtures override the callback explicitly.
@@ -142,6 +144,31 @@ final taskBatchEditRepositoryProvider = Provider<TaskBatchEditRepository?>((
   if (db == null || queue == null) return null;
   return TaskBatchEditRepository(db, queue);
 });
+
+final taskViewActionRepositoryProvider = Provider<TaskViewActionRepository?>((
+  ref,
+) {
+  final db = ref.watch(appDatabaseProvider);
+  final queue = ref.watch(syncChangeQueueProvider);
+  if (db == null || queue == null) return null;
+  return TaskViewActionRepository(db, queue);
+});
+
+final boardPreferenceRepositoryProvider = Provider<BoardPreferenceRepository?>((
+  ref,
+) {
+  final db = ref.watch(appDatabaseProvider);
+  final queue = ref.watch(syncChangeQueueProvider);
+  if (db == null || queue == null) return null;
+  return BoardPreferenceRepository(db, queue);
+});
+
+final boardPreferenceRecoveryAvailableProvider =
+    FutureProvider.family<bool, String>((ref, listId) {
+      final repository = ref.watch(boardPreferenceRepositoryProvider);
+      if (repository == null) return false;
+      return repository.hasRecoverableFailed(listId: listId);
+    });
 
 final reminderRepositoryProvider = Provider<ReminderRepository?>((ref) {
   final db = ref.watch(appDatabaseProvider);

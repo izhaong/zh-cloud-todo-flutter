@@ -286,13 +286,7 @@ class SyncCoordinator {
 
   Future<int> _pushSyncableChanges(List<TodoSyncChange> changes) async {
     if (changes.isEmpty) return 0;
-    _tempIdSeq = 0;
-    _temporaryEntityIds.clear();
-    for (final change in changes) {
-      if (change.entityServerId == null && change.entityLocalId != null) {
-        _temporaryEntityId(change.entity, change.entityLocalId);
-      }
-    }
+    _prepareTemporaryEntityIds(changes);
     final dtos = <SyncChangeDto>[];
     for (final change in changes) {
       final dto = await _toChangeDto(change);
@@ -467,7 +461,16 @@ class SyncCoordinator {
     Map<String, dynamic> payload,
   ) async {
     final resolved = Map<String, dynamic>.from(payload);
-    if (entity == SyncEntities.task && resolved.containsKey('listId')) {
+    // Drift 的任务聚合用 completed 表示完成态；服务端任务契约以 status
+    // （TODO / DONE）为准。出站时在唯一的协议适配层转换，避免视图层直接
+    // 拼接服务端字段，也避免服务端收到无法识别的本地 completed 字段。
+    if (entity == SyncEntities.task && resolved.containsKey('completed')) {
+      resolved['status'] = resolved['completed'] == true ? 'DONE' : 'TODO';
+      resolved.remove('completed');
+    }
+    if ((entity == SyncEntities.task ||
+            entity == SyncEntities.boardPreference) &&
+        resolved.containsKey('listId')) {
       final localListId = resolved['listId']?.toString();
       if (localListId != null && localListId.isNotEmpty) {
         final list = await (db.select(
@@ -619,6 +622,21 @@ class SyncCoordinator {
     return resolved;
   }
 
+  void _prepareTemporaryEntityIds(List<TodoSyncChange> changes) {
+    _tempIdSeq = 0;
+    _temporaryEntityIds.clear();
+    for (final change in changes) {
+      if (change.entityServerId == null &&
+          change.entityLocalId != null &&
+          change.entityLocalId!.isNotEmpty) {
+        _temporaryEntityIds.putIfAbsent(
+          _temporaryEntityKey(change.entity, change.entityLocalId!),
+          () => -(++_tempIdSeq),
+        );
+      }
+    }
+  }
+
   Future<List<Object>?> _resolveFilterListIds(List? localIds) async {
     final resolved = <Object>[];
     for (final localId in localIds ?? const []) {
@@ -653,9 +671,14 @@ class SyncCoordinator {
 
   int _temporaryEntityId(String entity, String? localId) {
     if (localId == null || localId.isEmpty) return -(++_tempIdSeq);
-    final key = '$entity:$localId';
-    return _temporaryEntityIds.putIfAbsent(key, () => -(++_tempIdSeq));
+    return _temporaryEntityIds.putIfAbsent(
+      _temporaryEntityKey(entity, localId),
+      () => -(++_tempIdSeq),
+    );
   }
+
+  String _temporaryEntityKey(String entity, String localId) =>
+      '$entity:$localId';
 
   Future<void> _applyAccepted(SyncChangeDto accepted) async {
     if (accepted.entityId == null) return;
@@ -723,6 +746,13 @@ class SyncCoordinator {
         await _bindServerId(
           db.todoViewPreferences,
           db.todoViewPreferences.serverId,
+          accepted.clientMutationId,
+          accepted.entityId!,
+        );
+      case SyncEntities.boardPreference:
+        await _bindServerId(
+          db.todoBoardPreferences,
+          db.todoBoardPreferences.serverId,
           accepted.clientMutationId,
           accepted.entityId!,
         );
@@ -794,6 +824,13 @@ class SyncCoordinator {
   Future<void> _applyConflict(SyncConflictDto conflict) async {
     // 服务端优先：以 serverValue 覆盖本地对应行（若已知本地映射）。
     if (conflict.entityType == null || conflict.entityId == null) return;
+    if (conflict.serverRevision != null) {
+      await db.writeRevision(
+        conflict.entityType!,
+        conflict.entityId!,
+        conflict.serverRevision!,
+      );
+    }
     final serverValue = conflict.serverValue;
     if (serverValue == null) return;
     switch (conflict.entityType) {
@@ -811,6 +848,8 @@ class SyncCoordinator {
         await _upsertLocalRepeatSkip(conflict.entityId!, serverValue);
       case SyncEntities.viewPreference:
         await _upsertLocalViewPreference(conflict.entityId!, serverValue);
+      case SyncEntities.boardPreference:
+        await _upsertLocalBoardPreference(conflict.entityId!, serverValue);
       case SyncEntities.filter:
         await _upsertLocalFilter(conflict.entityId!, serverValue);
     }
@@ -1015,6 +1054,8 @@ class SyncCoordinator {
         break;
       case SyncEntities.viewPreference:
         await _upsertLocalViewPreference(entityId, payload);
+      case SyncEntities.boardPreference:
+        await _upsertLocalBoardPreference(entityId, payload);
       case SyncEntities.filter:
         await _upsertLocalFilter(entityId, payload);
       case SyncEntities.template:
@@ -1061,6 +1102,10 @@ class SyncCoordinator {
       case SyncEntities.viewPreference:
         await (db.delete(
           db.todoViewPreferences,
+        )..where((t) => t.serverId.equals(tombstone.entityId))).go();
+      case SyncEntities.boardPreference:
+        await (db.delete(
+          db.todoBoardPreferences,
         )..where((t) => t.serverId.equals(tombstone.entityId))).go();
       case SyncEntities.filter:
         await (db.delete(
@@ -1270,7 +1315,7 @@ class SyncCoordinator {
       (payload['repeatRuleId'] as num?)?.toInt(),
     );
     final now = DateTime.now();
-    final status = payload['status']?.toString();
+    final status = payload['status']?.toString().toLowerCase();
     final companion = TodoTasksCompanion(
       id: Value(existing?.id ?? _uuid.v4()),
       serverId: Value(serverId),
@@ -1280,12 +1325,11 @@ class SyncCoordinator {
       description: Value(payload['description']?.toString()),
       completed: Value(
         payload['completedAt'] != null ||
-            status == 'DONE' ||
-            status == 'COMPLETED' ||
-            status == 'done',
+            status == 'done' ||
+            status == 'completed',
       ),
       completedAt: Value(_parseDate(payload['completedAt'])),
-      cancelled: Value(status == 'CANCELLED' || status == 'cancelled'),
+      cancelled: Value(status == 'cancelled'),
       priority: Value((payload['priority'] as num?)?.toInt() ?? 0),
       isPinned: Value(payload['isPinned'] as bool? ?? false),
       assigneeUserId: Value(
@@ -1574,6 +1618,45 @@ class SyncCoordinator {
             createdAt: existing?.createdAt ?? now,
           ),
         );
+  }
+
+  Future<void> _upsertLocalBoardPreference(
+    int serverId,
+    Map<String, dynamic> payload,
+  ) async {
+    final existing = await (db.select(
+      db.todoBoardPreferences,
+    )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
+    final localListId = await _localListIdForServerId(
+      (payload['listId'] as num?)?.toInt(),
+    );
+    if (localListId == null && existing == null) return;
+    final now = DateTime.now();
+    final companion = TodoBoardPreferencesCompanion(
+      id: Value(existing?.id ?? _uuid.v4()),
+      serverId: Value(serverId),
+      listId: Value(localListId ?? existing!.listId),
+      groupDimension: Value(
+        payload['groupDimension']?.toString() ??
+            payload['group_dimension']?.toString() ??
+            existing?.groupDimension ??
+            'LIST',
+      ),
+      columnsJson: Value(
+        payload['columnsJson']?.toString() ??
+            payload['columns_json']?.toString() ??
+            existing?.columnsJson,
+      ),
+      updatedAt: Value(now),
+      createdAt: Value(existing?.createdAt ?? now),
+    );
+    if (existing == null) {
+      await db.into(db.todoBoardPreferences).insert(companion);
+    } else {
+      await (db.update(
+        db.todoBoardPreferences,
+      )..where((t) => t.id.equals(existing.id))).write(companion);
+    }
   }
 
   Future<void> _upsertLocalFilter(

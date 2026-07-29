@@ -44,7 +44,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 15);
+      expect(version.data['user_version'], 16);
       final task = await upgraded.select(upgraded.todoTasks).getSingle();
       expect(task.title, '迁移前任务');
       expect(task.assigneeUserId, isNull);
@@ -72,7 +72,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 15);
+      expect(version.data['user_version'], 16);
 
       final taskColumns = await upgraded
           .customSelect('PRAGMA table_info(todo_tasks)')
@@ -201,7 +201,7 @@ void main() {
           .getSingle();
       final rule = await upgraded.select(upgraded.todoRepeatRules).getSingle();
 
-      expect(version.data['user_version'], 15);
+      expect(version.data['user_version'], 16);
       expect(rule.id, 'repeat-rule-before-b2-b3-merge');
       expect(rule.byDay, '1,3,5');
       expect(rule.selectedDatesJson, isNull);
@@ -246,7 +246,7 @@ void main() {
         .getSingle();
     final rule = await upgraded.select(upgraded.todoRepeatRules).getSingle();
 
-    expect(version.data['user_version'], 15);
+    expect(version.data['user_version'], 16);
     expect(rule.freq, 'CUSTOM');
     expect(rule.byDay, '1,3,5');
     expect(rule.repeatMode, 'ON_DUE');
@@ -333,7 +333,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 15);
+      expect(version.data['user_version'], 16);
       await upgraded.close();
 
       final reopened = AppDatabase.forTesting(NativeDatabase(databaseFile));
@@ -380,6 +380,56 @@ void main() {
       expect(repeatRule.selectedDatesJson, isNull);
     },
   );
+
+  test(
+    'upgrades schema 15 with board preferences table and preserves tasks',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'zh_cloud_todo_b4_schema15_',
+      );
+      final databaseFile = File('${directory.path}/todo.sqlite');
+      addTearDown(() async {
+        if (await directory.exists()) {
+          await directory.delete(recursive: true);
+        }
+      });
+
+      final beforeUpgrade = AppDatabase.forTesting(
+        NativeDatabase(databaseFile),
+      );
+      final now = DateTime.utc(2026, 7, 30, 10);
+      await beforeUpgrade
+          .into(beforeUpgrade.todoTasks)
+          .insert(
+            TodoTasksCompanion.insert(
+              id: 'task-before-board-preference',
+              listId: 'inbox',
+              title: '迁移前看板任务',
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      await beforeUpgrade.close();
+      _downgradeToSchema15WithoutBoardPreferences(databaseFile);
+
+      final upgraded = AppDatabase.forTesting(NativeDatabase(databaseFile));
+      addTearDown(upgraded.close);
+      final version = await upgraded
+          .customSelect('PRAGMA user_version')
+          .getSingle();
+      final task = await upgraded.select(upgraded.todoTasks).getSingle();
+      final boardTable = await upgraded
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type = 'table' "
+            "AND name = 'todo_board_preferences'",
+          )
+          .getSingle();
+
+      expect(version.data['user_version'], 16);
+      expect(task.title, '迁移前看板任务');
+      expect(boardTable.data['name'], 'todo_board_preferences');
+    },
+  );
 }
 
 void _downgradeToSchema10(File databaseFile) {
@@ -413,6 +463,16 @@ void _downgradeToSchema14WithoutSelectedDates(File databaseFile) {
       'ALTER TABLE todo_repeat_rules DROP COLUMN selected_dates_json',
     );
     database.execute('PRAGMA user_version = 14');
+  } finally {
+    database.dispose();
+  }
+}
+
+void _downgradeToSchema15WithoutBoardPreferences(File databaseFile) {
+  final database = sqlite.sqlite3.open(databaseFile.path);
+  try {
+    database.execute('DROP TABLE todo_board_preferences');
+    database.execute('PRAGMA user_version = 15');
   } finally {
     database.dispose();
   }

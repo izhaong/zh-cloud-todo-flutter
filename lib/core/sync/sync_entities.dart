@@ -9,6 +9,7 @@ class SyncEntities {
   static const repeatSkip = 'repeat_skip';
   static const repeatOccurrenceAction = 'repeat_occurrence_action';
   static const viewPreference = 'view_preference';
+  static const boardPreference = 'board_preference';
   static const tag = 'tag';
   static const taskTag = 'task_tag';
   static const filter = 'filter';
@@ -33,6 +34,7 @@ class SyncEntities {
     repeatSkip,
     repeatOccurrenceAction,
     viewPreference,
+    boardPreference,
     tag,
     taskTag,
     filter,

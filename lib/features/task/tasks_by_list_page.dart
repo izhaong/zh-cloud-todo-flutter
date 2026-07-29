@@ -216,20 +216,67 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           now: now,
           selectedTaskId: widget.selectedTaskId,
           onTaskSelected: widget.onTaskSelected,
+          onTasksReordered: (taskIds) async {
+            final repository = ref.read(taskViewActionRepositoryProvider);
+            if (repository == null) return;
+            await repository.reorderListTasks(taskIds);
+          },
           batchSelectionActive: _batchSelectionActive,
           batchSelectedTaskIds: _batchSelectedTaskIds,
           onBatchSelectionChanged: _updateBatchSelection,
         );
       case TaskViewMode.kanban:
+        final listId = _selectedListId;
+        final hasRecoverablePreference =
+            listId != null &&
+            (ref
+                    .watch(boardPreferenceRecoveryAvailableProvider(listId))
+                    .valueOrNull ??
+                false);
         return KanbanView(
           tasks: items,
-          listId: _selectedListId,
+          listId: listId,
+          hasRecoverablePreference: hasRecoverablePreference,
+          onRecoverPreference: !hasRecoverablePreference
+              ? null
+              : () async {
+                  final repository = ref.read(
+                    boardPreferenceRepositoryProvider,
+                  );
+                  final recovered =
+                      await repository?.recoverLatestFailed(listId: listId) ??
+                      false;
+                  ref.invalidate(
+                    boardPreferenceRecoveryAvailableProvider(listId),
+                  );
+                  return recovered;
+                },
           onTaskSelected: widget.onTaskSelected,
+          onTaskMove: (task, priority, completed) async {
+            final repository = ref.read(taskViewActionRepositoryProvider);
+            if (repository == null) return;
+            await repository.moveKanbanTask(
+              task.id,
+              priority: priority,
+              completed: completed,
+            );
+          },
         );
       case TaskViewMode.timeline:
         return TimelineView(
           tasks: items,
           onTaskSelected: widget.onTaskSelected,
+          onTaskTimeChange:
+              (task, {required startAt, required endAt, required dueAt}) async {
+                final repository = ref.read(taskViewActionRepositoryProvider);
+                if (repository == null) return;
+                await repository.moveTimelineTask(
+                  task.id,
+                  startAt: startAt,
+                  endAt: endAt,
+                  dueAt: dueAt,
+                );
+              },
         );
       case TaskViewMode.eisenhower:
         return EisenhowerView(
@@ -264,23 +311,22 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     }
   }
 
-  void _changeMode(TaskViewMode mode) {
+  Future<void> _changeMode(TaskViewMode mode) async {
     setState(() {
       _mode = mode;
       _batchSelectionActive = false;
       _batchSelectedTaskIds.clear();
     });
-    ref
-        .read(syncChangeQueueProvider)
-        ?.enqueue(
-          entity: 'view_preference',
-          op: 'upsert',
-          payload: {
-            'sourceType': 'task_view',
-            'sourceKey': 'tasks_by_list',
-            'viewType': mode.name,
-          },
-        );
+    final repository = ref.read(taskViewActionRepositoryProvider);
+    if (repository == null) return;
+    try {
+      await repository.saveTaskWorkspaceViewMode(mode.name);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('视图设置保存失败，请重试')));
+    }
   }
 
   void _toggleBatchSelection() {
@@ -765,6 +811,7 @@ class _ListBody extends StatefulWidget {
     required this.now,
     required this.selectedTaskId,
     required this.onTaskSelected,
+    this.onTasksReordered,
     required this.batchSelectionActive,
     required this.batchSelectedTaskIds,
     required this.onBatchSelectionChanged,
@@ -776,6 +823,7 @@ class _ListBody extends StatefulWidget {
   final DateTime now;
   final String? selectedTaskId;
   final ValueChanged<String>? onTaskSelected;
+  final Future<void> Function(List<String> taskIds)? onTasksReordered;
   final bool batchSelectionActive;
   final Set<String> batchSelectedTaskIds;
   final void Function(String taskId, bool selected) onBatchSelectionChanged;
@@ -841,7 +889,7 @@ class _ListBodyState extends State<_ListBody> {
         // yet. Keep the established callback until the project baseline moves
         // forward; the adjustment below preserves its pre-3.44 index contract.
         // ignore: deprecated_member_use
-        onReorder: (oldIndex, newIndex) {
+        onReorder: (oldIndex, newIndex) async {
           final entry = entries[oldIndex];
           if (entry is! TodoTask) return;
           final visibleTaskIds = entries
@@ -861,10 +909,24 @@ class _ListBodyState extends State<_ListBody> {
           final reordered = [...visibleTaskIds]..remove(entry.id);
           insertionIndex = insertionIndex.clamp(0, reordered.length);
           reordered.insert(insertionIndex, entry.id);
+          final previousOrder = _orderedIds;
+          final previousHasCustomOrder = _hasCustomOrder;
           setState(() {
             _orderedIds = reordered;
             _hasCustomOrder = true;
           });
+          try {
+            await widget.onTasksReordered?.call(reordered);
+          } catch (_) {
+            if (!context.mounted) return;
+            setState(() {
+              _orderedIds = previousOrder;
+              _hasCustomOrder = previousHasCustomOrder;
+            });
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('排序保存失败，请重试')));
+          }
         },
         itemBuilder: (context, index) {
           final entry = entries[index];

@@ -19,11 +19,19 @@ class TimelineView extends ConsumerWidget {
     required this.tasks,
     DateTime? now,
     this.onTaskSelected,
+    this.onTaskTimeChange,
   }) : _now = now;
 
   final DateTime? _now;
   final List<TodoTask> tasks;
   final ValueChanged<String>? onTaskSelected;
+  final Future<void> Function(
+    TodoTask task, {
+    required DateTime startAt,
+    required DateTime endAt,
+    required DateTime dueAt,
+  })?
+  onTaskTimeChange;
 
   DateTime get _effectiveNow => _now ?? DateTime.now();
 
@@ -43,6 +51,7 @@ class TimelineView extends ConsumerWidget {
         return _TimelineSection(
           data: g,
           onTaskTap: (t) => _openDetail(context, t),
+          onTaskTimeChange: onTaskTimeChange,
         );
       },
     );
@@ -188,9 +197,20 @@ class _TimelineGroup {
 }
 
 class _TimelineSection extends StatelessWidget {
-  const _TimelineSection({required this.data, required this.onTaskTap});
+  const _TimelineSection({
+    required this.data,
+    required this.onTaskTap,
+    this.onTaskTimeChange,
+  });
   final _TimelineGroup data;
   final ValueChanged<TodoTask> onTaskTap;
+  final Future<void> Function(
+    TodoTask task, {
+    required DateTime startAt,
+    required DateTime endAt,
+    required DateTime dueAt,
+  })?
+  onTaskTimeChange;
 
   @override
   Widget build(BuildContext context) {
@@ -235,33 +255,127 @@ class _TimelineSection extends StatelessWidget {
             ),
             const Divider(height: 1),
             for (final t in data.items)
-              Material(
-                type: MaterialType.transparency,
-                child: ListTile(
-                  dense: true,
-                  leading: Icon(
-                    Icons.schedule,
-                    size: 18,
-                    color: colors.mutedForeground,
-                  ),
-                  title: Text(
-                    t.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: colors.foreground),
-                  ),
-                  subtitle: t.dueAt == null
-                      ? null
-                      : Text(
-                          tf.format(t.dueAt!),
-                          style: TextStyle(color: colors.mutedForeground),
-                        ),
-                  onTap: () => onTaskTap(t),
-                ),
+              _TimelineTaskTile(
+                task: t,
+                dueDateFormat: tf,
+                onTaskTap: onTaskTap,
+                onTaskTimeChange: onTaskTimeChange,
               ),
             const SizedBox(height: 4),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// 时间线内的最小编辑入口。
+///
+/// 不在 Widget 内触碰 API：成功动作只通过 [onTaskTimeChange] 交给 B4 共享
+/// Repository，由它在同一 Drift transaction 写入任务和 outbox。无时间段的任务
+/// 仍可打开详情补齐，不会被时间线静默伪造开始/结束时间。
+class _TimelineTaskTile extends StatefulWidget {
+  const _TimelineTaskTile({
+    required this.task,
+    required this.dueDateFormat,
+    required this.onTaskTap,
+    this.onTaskTimeChange,
+  });
+
+  final TodoTask task;
+  final DateFormat dueDateFormat;
+  final ValueChanged<TodoTask> onTaskTap;
+  final Future<void> Function(
+    TodoTask task, {
+    required DateTime startAt,
+    required DateTime endAt,
+    required DateTime dueAt,
+  })?
+  onTaskTimeChange;
+
+  @override
+  State<_TimelineTaskTile> createState() => _TimelineTaskTileState();
+}
+
+class _TimelineTaskTileState extends State<_TimelineTaskTile> {
+  bool _saving = false;
+
+  Future<void> _apply({required bool extend}) async {
+    final callback = widget.onTaskTimeChange;
+    final startAt = widget.task.startAt;
+    final endAt = widget.task.endAt;
+    if (callback == null) return;
+    if (startAt == null || endAt == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请先在任务详情中设置开始和结束时间')),
+      );
+      return;
+    }
+    final change = extend ? const Duration(hours: 1) : const Duration(days: 1);
+    final nextStartAt = extend ? startAt : startAt.add(change);
+    final nextEndAt = endAt.add(change);
+    final nextDueAt = (widget.task.dueAt ?? endAt).add(change);
+    setState(() => _saving = true);
+    try {
+      await callback(
+        widget.task,
+        startAt: nextStartAt,
+        endAt: nextEndAt,
+        dueAt: nextDueAt,
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('调整时间失败，请重试')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = brandColors(context);
+    return Material(
+      type: MaterialType.transparency,
+      child: ListTile(
+        dense: true,
+        leading: Icon(
+          Icons.schedule,
+          size: 18,
+          color: colors.mutedForeground,
+        ),
+        title: Text(
+          widget.task.title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(color: colors.foreground),
+        ),
+        subtitle: widget.task.dueAt == null
+            ? null
+            : Text(
+                widget.dueDateFormat.format(widget.task.dueAt!),
+                style: TextStyle(color: colors.mutedForeground),
+              ),
+        trailing: widget.onTaskTimeChange == null
+            ? null
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: '顺延一天',
+                    icon: const Icon(Icons.calendar_today_outlined, size: 18),
+                    onPressed: _saving ? null : () => _apply(extend: false),
+                  ),
+                  IconButton(
+                    tooltip: '延长一小时',
+                    icon: const Icon(Icons.more_time, size: 19),
+                    onPressed: _saving ? null : () => _apply(extend: true),
+                  ),
+                ],
+              ),
+        onTap: () => widget.onTaskTap(widget.task),
       ),
     );
   }

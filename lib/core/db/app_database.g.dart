@@ -7863,6 +7863,486 @@ class TodoViewPreferencesCompanion extends UpdateCompanion<TodoViewPreference> {
   }
 }
 
+class $TodoBoardPreferencesTable extends TodoBoardPreferences
+    with TableInfo<$TodoBoardPreferencesTable, TodoBoardPreference> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TodoBoardPreferencesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _serverIdMeta = const VerificationMeta(
+    'serverId',
+  );
+  @override
+  late final GeneratedColumn<int> serverId = GeneratedColumn<int>(
+    'server_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _listIdMeta = const VerificationMeta('listId');
+  @override
+  late final GeneratedColumn<String> listId = GeneratedColumn<String>(
+    'list_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _groupDimensionMeta = const VerificationMeta(
+    'groupDimension',
+  );
+  @override
+  late final GeneratedColumn<String> groupDimension = GeneratedColumn<String>(
+    'group_dimension',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _columnsJsonMeta = const VerificationMeta(
+    'columnsJson',
+  );
+  @override
+  late final GeneratedColumn<String> columnsJson = GeneratedColumn<String>(
+    'columns_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    serverId,
+    listId,
+    groupDimension,
+    columnsJson,
+    updatedAt,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'todo_board_preferences';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<TodoBoardPreference> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('server_id')) {
+      context.handle(
+        _serverIdMeta,
+        serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
+      );
+    }
+    if (data.containsKey('list_id')) {
+      context.handle(
+        _listIdMeta,
+        listId.isAcceptableOrUnknown(data['list_id']!, _listIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_listIdMeta);
+    }
+    if (data.containsKey('group_dimension')) {
+      context.handle(
+        _groupDimensionMeta,
+        groupDimension.isAcceptableOrUnknown(
+          data['group_dimension']!,
+          _groupDimensionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_groupDimensionMeta);
+    }
+    if (data.containsKey('columns_json')) {
+      context.handle(
+        _columnsJsonMeta,
+        columnsJson.isAcceptableOrUnknown(
+          data['columns_json']!,
+          _columnsJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {listId},
+  ];
+  @override
+  TodoBoardPreference map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TodoBoardPreference(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      serverId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}server_id'],
+      ),
+      listId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}list_id'],
+      )!,
+      groupDimension: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}group_dimension'],
+      )!,
+      columnsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}columns_json'],
+      ),
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $TodoBoardPreferencesTable createAlias(String alias) {
+    return $TodoBoardPreferencesTable(attachedDatabase, alias);
+  }
+}
+
+class TodoBoardPreference extends DataClass
+    implements Insertable<TodoBoardPreference> {
+  final String id;
+  final int? serverId;
+  final String listId;
+  final String groupDimension;
+  final String? columnsJson;
+  final DateTime updatedAt;
+  final DateTime createdAt;
+  const TodoBoardPreference({
+    required this.id,
+    this.serverId,
+    required this.listId,
+    required this.groupDimension,
+    this.columnsJson,
+    required this.updatedAt,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    if (!nullToAbsent || serverId != null) {
+      map['server_id'] = Variable<int>(serverId);
+    }
+    map['list_id'] = Variable<String>(listId);
+    map['group_dimension'] = Variable<String>(groupDimension);
+    if (!nullToAbsent || columnsJson != null) {
+      map['columns_json'] = Variable<String>(columnsJson);
+    }
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  TodoBoardPreferencesCompanion toCompanion(bool nullToAbsent) {
+    return TodoBoardPreferencesCompanion(
+      id: Value(id),
+      serverId: serverId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(serverId),
+      listId: Value(listId),
+      groupDimension: Value(groupDimension),
+      columnsJson: columnsJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(columnsJson),
+      updatedAt: Value(updatedAt),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory TodoBoardPreference.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TodoBoardPreference(
+      id: serializer.fromJson<String>(json['id']),
+      serverId: serializer.fromJson<int?>(json['serverId']),
+      listId: serializer.fromJson<String>(json['listId']),
+      groupDimension: serializer.fromJson<String>(json['groupDimension']),
+      columnsJson: serializer.fromJson<String?>(json['columnsJson']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'serverId': serializer.toJson<int?>(serverId),
+      'listId': serializer.toJson<String>(listId),
+      'groupDimension': serializer.toJson<String>(groupDimension),
+      'columnsJson': serializer.toJson<String?>(columnsJson),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  TodoBoardPreference copyWith({
+    String? id,
+    Value<int?> serverId = const Value.absent(),
+    String? listId,
+    String? groupDimension,
+    Value<String?> columnsJson = const Value.absent(),
+    DateTime? updatedAt,
+    DateTime? createdAt,
+  }) => TodoBoardPreference(
+    id: id ?? this.id,
+    serverId: serverId.present ? serverId.value : this.serverId,
+    listId: listId ?? this.listId,
+    groupDimension: groupDimension ?? this.groupDimension,
+    columnsJson: columnsJson.present ? columnsJson.value : this.columnsJson,
+    updatedAt: updatedAt ?? this.updatedAt,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  TodoBoardPreference copyWithCompanion(TodoBoardPreferencesCompanion data) {
+    return TodoBoardPreference(
+      id: data.id.present ? data.id.value : this.id,
+      serverId: data.serverId.present ? data.serverId.value : this.serverId,
+      listId: data.listId.present ? data.listId.value : this.listId,
+      groupDimension: data.groupDimension.present
+          ? data.groupDimension.value
+          : this.groupDimension,
+      columnsJson: data.columnsJson.present
+          ? data.columnsJson.value
+          : this.columnsJson,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TodoBoardPreference(')
+          ..write('id: $id, ')
+          ..write('serverId: $serverId, ')
+          ..write('listId: $listId, ')
+          ..write('groupDimension: $groupDimension, ')
+          ..write('columnsJson: $columnsJson, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    serverId,
+    listId,
+    groupDimension,
+    columnsJson,
+    updatedAt,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TodoBoardPreference &&
+          other.id == this.id &&
+          other.serverId == this.serverId &&
+          other.listId == this.listId &&
+          other.groupDimension == this.groupDimension &&
+          other.columnsJson == this.columnsJson &&
+          other.updatedAt == this.updatedAt &&
+          other.createdAt == this.createdAt);
+}
+
+class TodoBoardPreferencesCompanion
+    extends UpdateCompanion<TodoBoardPreference> {
+  final Value<String> id;
+  final Value<int?> serverId;
+  final Value<String> listId;
+  final Value<String> groupDimension;
+  final Value<String?> columnsJson;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const TodoBoardPreferencesCompanion({
+    this.id = const Value.absent(),
+    this.serverId = const Value.absent(),
+    this.listId = const Value.absent(),
+    this.groupDimension = const Value.absent(),
+    this.columnsJson = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  TodoBoardPreferencesCompanion.insert({
+    required String id,
+    this.serverId = const Value.absent(),
+    required String listId,
+    required String groupDimension,
+    this.columnsJson = const Value.absent(),
+    required DateTime updatedAt,
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       listId = Value(listId),
+       groupDimension = Value(groupDimension),
+       updatedAt = Value(updatedAt),
+       createdAt = Value(createdAt);
+  static Insertable<TodoBoardPreference> custom({
+    Expression<String>? id,
+    Expression<int>? serverId,
+    Expression<String>? listId,
+    Expression<String>? groupDimension,
+    Expression<String>? columnsJson,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (serverId != null) 'server_id': serverId,
+      if (listId != null) 'list_id': listId,
+      if (groupDimension != null) 'group_dimension': groupDimension,
+      if (columnsJson != null) 'columns_json': columnsJson,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  TodoBoardPreferencesCompanion copyWith({
+    Value<String>? id,
+    Value<int?>? serverId,
+    Value<String>? listId,
+    Value<String>? groupDimension,
+    Value<String?>? columnsJson,
+    Value<DateTime>? updatedAt,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return TodoBoardPreferencesCompanion(
+      id: id ?? this.id,
+      serverId: serverId ?? this.serverId,
+      listId: listId ?? this.listId,
+      groupDimension: groupDimension ?? this.groupDimension,
+      columnsJson: columnsJson ?? this.columnsJson,
+      updatedAt: updatedAt ?? this.updatedAt,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (serverId.present) {
+      map['server_id'] = Variable<int>(serverId.value);
+    }
+    if (listId.present) {
+      map['list_id'] = Variable<String>(listId.value);
+    }
+    if (groupDimension.present) {
+      map['group_dimension'] = Variable<String>(groupDimension.value);
+    }
+    if (columnsJson.present) {
+      map['columns_json'] = Variable<String>(columnsJson.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TodoBoardPreferencesCompanion(')
+          ..write('id: $id, ')
+          ..write('serverId: $serverId, ')
+          ..write('listId: $listId, ')
+          ..write('groupDimension: $groupDimension, ')
+          ..write('columnsJson: $columnsJson, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $TodoFiltersTable extends TodoFilters
     with TableInfo<$TodoFiltersTable, TodoFilter> {
   @override
@@ -9637,6 +10117,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   );
   late final $TodoViewPreferencesTable todoViewPreferences =
       $TodoViewPreferencesTable(this);
+  late final $TodoBoardPreferencesTable todoBoardPreferences =
+      $TodoBoardPreferencesTable(this);
   late final $TodoFiltersTable todoFilters = $TodoFiltersTable(this);
   late final $TodoSyncChangesTable todoSyncChanges = $TodoSyncChangesTable(
     this,
@@ -9662,6 +10144,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     todoRepeatRules,
     todoRepeatSkips,
     todoViewPreferences,
+    todoBoardPreferences,
     todoFilters,
     todoSyncChanges,
     todoSyncCursor,
@@ -13524,6 +14007,264 @@ typedef $$TodoViewPreferencesTableProcessedTableManager =
       TodoViewPreference,
       PrefetchHooks Function()
     >;
+typedef $$TodoBoardPreferencesTableCreateCompanionBuilder =
+    TodoBoardPreferencesCompanion Function({
+      required String id,
+      Value<int?> serverId,
+      required String listId,
+      required String groupDimension,
+      Value<String?> columnsJson,
+      required DateTime updatedAt,
+      required DateTime createdAt,
+      Value<int> rowid,
+    });
+typedef $$TodoBoardPreferencesTableUpdateCompanionBuilder =
+    TodoBoardPreferencesCompanion Function({
+      Value<String> id,
+      Value<int?> serverId,
+      Value<String> listId,
+      Value<String> groupDimension,
+      Value<String?> columnsJson,
+      Value<DateTime> updatedAt,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+
+class $$TodoBoardPreferencesTableFilterComposer
+    extends Composer<_$AppDatabase, $TodoBoardPreferencesTable> {
+  $$TodoBoardPreferencesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get serverId => $composableBuilder(
+    column: $table.serverId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get listId => $composableBuilder(
+    column: $table.listId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get groupDimension => $composableBuilder(
+    column: $table.groupDimension,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get columnsJson => $composableBuilder(
+    column: $table.columnsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$TodoBoardPreferencesTableOrderingComposer
+    extends Composer<_$AppDatabase, $TodoBoardPreferencesTable> {
+  $$TodoBoardPreferencesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get serverId => $composableBuilder(
+    column: $table.serverId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get listId => $composableBuilder(
+    column: $table.listId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get groupDimension => $composableBuilder(
+    column: $table.groupDimension,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get columnsJson => $composableBuilder(
+    column: $table.columnsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$TodoBoardPreferencesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $TodoBoardPreferencesTable> {
+  $$TodoBoardPreferencesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get serverId =>
+      $composableBuilder(column: $table.serverId, builder: (column) => column);
+
+  GeneratedColumn<String> get listId =>
+      $composableBuilder(column: $table.listId, builder: (column) => column);
+
+  GeneratedColumn<String> get groupDimension => $composableBuilder(
+    column: $table.groupDimension,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get columnsJson => $composableBuilder(
+    column: $table.columnsJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$TodoBoardPreferencesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $TodoBoardPreferencesTable,
+          TodoBoardPreference,
+          $$TodoBoardPreferencesTableFilterComposer,
+          $$TodoBoardPreferencesTableOrderingComposer,
+          $$TodoBoardPreferencesTableAnnotationComposer,
+          $$TodoBoardPreferencesTableCreateCompanionBuilder,
+          $$TodoBoardPreferencesTableUpdateCompanionBuilder,
+          (
+            TodoBoardPreference,
+            BaseReferences<
+              _$AppDatabase,
+              $TodoBoardPreferencesTable,
+              TodoBoardPreference
+            >,
+          ),
+          TodoBoardPreference,
+          PrefetchHooks Function()
+        > {
+  $$TodoBoardPreferencesTableTableManager(
+    _$AppDatabase db,
+    $TodoBoardPreferencesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$TodoBoardPreferencesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$TodoBoardPreferencesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$TodoBoardPreferencesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<int?> serverId = const Value.absent(),
+                Value<String> listId = const Value.absent(),
+                Value<String> groupDimension = const Value.absent(),
+                Value<String?> columnsJson = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => TodoBoardPreferencesCompanion(
+                id: id,
+                serverId: serverId,
+                listId: listId,
+                groupDimension: groupDimension,
+                columnsJson: columnsJson,
+                updatedAt: updatedAt,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                Value<int?> serverId = const Value.absent(),
+                required String listId,
+                required String groupDimension,
+                Value<String?> columnsJson = const Value.absent(),
+                required DateTime updatedAt,
+                required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => TodoBoardPreferencesCompanion.insert(
+                id: id,
+                serverId: serverId,
+                listId: listId,
+                groupDimension: groupDimension,
+                columnsJson: columnsJson,
+                updatedAt: updatedAt,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$TodoBoardPreferencesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $TodoBoardPreferencesTable,
+      TodoBoardPreference,
+      $$TodoBoardPreferencesTableFilterComposer,
+      $$TodoBoardPreferencesTableOrderingComposer,
+      $$TodoBoardPreferencesTableAnnotationComposer,
+      $$TodoBoardPreferencesTableCreateCompanionBuilder,
+      $$TodoBoardPreferencesTableUpdateCompanionBuilder,
+      (
+        TodoBoardPreference,
+        BaseReferences<
+          _$AppDatabase,
+          $TodoBoardPreferencesTable,
+          TodoBoardPreference
+        >,
+      ),
+      TodoBoardPreference,
+      PrefetchHooks Function()
+    >;
 typedef $$TodoFiltersTableCreateCompanionBuilder =
     TodoFiltersCompanion Function({
       required String id,
@@ -14500,6 +15241,8 @@ class $AppDatabaseManager {
       $$TodoRepeatSkipsTableTableManager(_db, _db.todoRepeatSkips);
   $$TodoViewPreferencesTableTableManager get todoViewPreferences =>
       $$TodoViewPreferencesTableTableManager(_db, _db.todoViewPreferences);
+  $$TodoBoardPreferencesTableTableManager get todoBoardPreferences =>
+      $$TodoBoardPreferencesTableTableManager(_db, _db.todoBoardPreferences);
   $$TodoFiltersTableTableManager get todoFilters =>
       $$TodoFiltersTableTableManager(_db, _db.todoFilters);
   $$TodoSyncChangesTableTableManager get todoSyncChanges =>
