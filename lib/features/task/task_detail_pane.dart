@@ -39,12 +39,16 @@ class _RepeatRuleDraft {
     required this.interval,
     required this.weekdays,
     required this.repeatMode,
+    required this.untilAt,
+    required this.countLimit,
   });
 
   final String frequency;
   final int interval;
   final Set<int> weekdays;
   final String repeatMode;
+  final DateTime? untilAt;
+  final int? countLimit;
 }
 
 class _TaskReminderSection extends ConsumerWidget {
@@ -1147,6 +1151,8 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
         intervalValue: draft.interval,
         weekdays: draft.frequency == 'CUSTOM' ? draft.weekdays : null,
         startAt: existing?.startAt ?? _startAt ?? _dueAt ?? DateTime.now(),
+        untilAt: draft.untilAt,
+        countLimit: draft.countLimit,
         repeatMode: draft.repeatMode,
         timeZone: _timeZone,
         enabled: true,
@@ -1239,6 +1245,13 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     var frequency = existing?.freq ?? 'DAILY';
     var repeatMode = existing?.repeatMode ?? 'ON_DUE';
     var intervalText = '${existing?.interval ?? 1}';
+    var endMode = existing?.until != null
+        ? 'until'
+        : (existing?.countLimit != null ? 'count' : 'never');
+    var untilAt = existing?.until;
+    var countText = '${existing?.countLimit ?? 1}';
+    final repeatStart =
+        existing?.startAt ?? _startAt ?? _dueAt ?? DateTime.now();
     final weekdays = _weekdaysFromText(existing?.byDay);
     if (frequency == 'CUSTOM' && weekdays.isEmpty) {
       weekdays.add(DateTime.now().weekday);
@@ -1339,6 +1352,85 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                     }),
                   ),
                 ],
+                const SizedBox(height: 16),
+                const Text('结束重复'),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children:
+                      const [
+                            ('never', '永不'),
+                            ('until', '按日期'),
+                            ('count', '按次数'),
+                          ]
+                          .map(
+                            (option) => ChoiceChip(
+                              key: Key('task-repeat-end-${option.$1}'),
+                              label: Text(option.$2),
+                              selected: endMode == option.$1,
+                              onSelected: (_) =>
+                                  setDialogState(() => endMode = option.$1),
+                            ),
+                          )
+                          .toList(),
+                ),
+                if (endMode == 'until') ...[
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    key: const Key('task-repeat-until-date'),
+                    onPressed: () async {
+                      final firstDate = DateTime(
+                        repeatStart.year,
+                        repeatStart.month,
+                        repeatStart.day,
+                      );
+                      final lastDate = DateTime(firstDate.year + 20, 12, 31);
+                      final candidate = untilAt ?? firstDate;
+                      final initialDate = candidate.isBefore(firstDate)
+                          ? firstDate
+                          : (candidate.isAfter(lastDate)
+                                ? lastDate
+                                : candidate);
+                      final picked = await showDatePicker(
+                        context: dialogContext,
+                        initialDate: initialDate,
+                        firstDate: firstDate,
+                        lastDate: lastDate,
+                      );
+                      if (picked == null || !dialogContext.mounted) return;
+                      setDialogState(() {
+                        untilAt = DateTime(
+                          picked.year,
+                          picked.month,
+                          picked.day,
+                          23,
+                          59,
+                          59,
+                        );
+                      });
+                    },
+                    icon: const Icon(Icons.event_outlined),
+                    label: Text(
+                      untilAt == null
+                          ? '选择结束日期'
+                          : '结束于 ${_formatDateOnly(untilAt!)}',
+                    ),
+                  ),
+                ],
+                if (endMode == 'count') ...[
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    key: const Key('task-repeat-count'),
+                    initialValue: countText,
+                    onChanged: (value) => countText = value,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: '重复次数',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -1352,6 +1444,14 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
               onPressed: () {
                 final interval = int.tryParse(intervalText.trim());
                 if (interval == null || interval < 1) return;
+                final countLimit = endMode == 'count'
+                    ? int.tryParse(countText.trim())
+                    : null;
+                if (endMode == 'count' &&
+                    (countLimit == null || countLimit < 1)) {
+                  return;
+                }
+                if (endMode == 'until' && untilAt == null) return;
                 Navigator.pop(
                   dialogContext,
                   _RepeatRuleDraft(
@@ -1359,6 +1459,8 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                     interval: interval,
                     weekdays: weekdays,
                     repeatMode: repeatMode,
+                    untilAt: endMode == 'until' ? untilAt : null,
+                    countLimit: countLimit,
                   ),
                 );
               },
@@ -1377,6 +1479,12 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       .where((weekday) => weekday >= 1 && weekday <= 7)
       .toSet();
 
+  String _formatDateOnly(DateTime value) {
+    final month = value.month.toString().padLeft(2, '0');
+    final day = value.day.toString().padLeft(2, '0');
+    return '${value.year}-$month-$day';
+  }
+
   String _repeatRuleLabel(TodoRepeatRule rule) {
     const labels = {
       'DAILY': '每天',
@@ -1387,7 +1495,10 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       'CUSTOM': '自定义',
     };
     final label = labels[rule.freq] ?? rule.freq;
-    return rule.enabled ? '$label（每隔 ${rule.interval} 次）' : '已停止：$label';
+    final ending = rule.until != null
+        ? '，至 ${_formatDateOnly(rule.until!)}'
+        : (rule.countLimit != null ? '，共 ${rule.countLimit} 次' : '');
+    return rule.enabled ? '$label（每隔 ${rule.interval} 次$ending）' : '已停止：$label';
   }
 
   Future<void> _pickSchedule(TodoTask t, {required bool isStart}) async {

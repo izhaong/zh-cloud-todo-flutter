@@ -23,7 +23,7 @@
 
 用户可以设置每天、每周、每月、每年、工作日和自定义重复，并对模板或已物化实例的一个 occurrence 执行跳过或补做，不改变其它 occurrence。
 
-**Independent Test**: 对每种频率生成本地规则载荷，写入一个跳过和一个补做记录；同步映射后验证规则 UUID、serverId 与 occurrence 标识不混淆。
+**Independent Test**: 对每种频率生成本地规则载荷，在详情编辑器分别配置按日期结束与按次数结束，并写入一个跳过和一个补做记录；同步映射后验证规则 UUID、serverId、结束条件与 occurrence 标识不混淆。
 
 ## Functional Requirements
 
@@ -43,7 +43,7 @@
 
 - **SC-001**: UTC+8 的跨午夜、全天和固定时区 fixture 在 Drift 重启、Repository 读取与 sync payload 中字段完全一致。
 - **SC-002**: 单提醒、多提醒、结束提醒、持续提醒、稍后提醒和开始专注各有 Repository、SyncCoordinator 和 Widget 测试，所有核心写测试均断言 outbox 状态；开始专注的 Widget 测试同时证明进入关联任务的番茄专注页。
-- **SC-003**: 六类重复频率、跳过和补做各有有效与无效输入测试；重复 push 不产生重复本地或服务端映射。
+- **SC-003**: 六类重复频率、包含式日期上界、次数上限、跳过和补做各有有效与无效输入测试；详情 Widget 测试证明两类结束条件经 `RepeatRuleRepository` 写入 Drift/outbox，重复 push 不产生重复本地或服务端映射。
 - **SC-004**: `flutter analyze` 与本规格列出的定向测试在低资源命令下通过；未执行的桌面/移动/测试环境旅程保持未完成。
 - **SC-005**: mock `/sync/push` 断言完成任务发送 `status=DONE` 与非空 `completedAt`；mock `/sync/pull` 断言已完成父任务和 `ON_COMPLETE` 新实例的重复关联在 Drift 中可重建，详情勾选操作只经 `TaskRepository` 写入 outbox。
 - **SC-006**: 通知轮询测试使用 Fake Repository、内存 Drift 与 Fake 通知服务，证明仅展示待处理且已到期/即将到期的派发，同一派发连续轮询只展示一次，且测试不触发真实平台通知。

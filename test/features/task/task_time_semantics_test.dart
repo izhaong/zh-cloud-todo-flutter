@@ -533,6 +533,112 @@ void main() {
     },
   );
 
+  testWidgets(
+    'detail saves a repeat count limit through the repeat repository',
+    (tester) async {
+      final fixture = await TodoVisualFixture.create();
+      addTearDown(fixture.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: fixture.container,
+          child: MaterialApp(
+            theme: ThemeData.light().copyWith(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            home: const Scaffold(
+              body: TaskDetailPane(taskId: _taskId, embedded: true),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _openScheduleOptions(tester);
+
+      final detailScroll = find.byType(Scrollable).last;
+      final repeatRule = find.byKey(const Key('task-repeat-rule'));
+      await tester.scrollUntilVisible(
+        repeatRule,
+        160,
+        scrollable: detailScroll,
+      );
+      await tester.tap(repeatRule);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('task-repeat-end-count')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('task-repeat-count')), '3');
+      await tester.tap(find.byKey(const Key('task-repeat-save')));
+      await tester.pumpAndSettle();
+
+      final rule = await fixture.database
+          .select(fixture.database.todoRepeatRules)
+          .getSingle();
+      expect(rule.countLimit, 3);
+      expect(rule.until, isNull);
+      final change =
+          (await fixture.database
+                  .select(fixture.database.todoSyncChanges)
+                  .get())
+              .last;
+      final payload = jsonDecode(change.payloadJson) as Map<String, dynamic>;
+      expect(payload['countLimit'], 3);
+      expect(payload['untilAt'], isNull);
+    },
+  );
+
+  testWidgets('detail saves a repeat end date as an inclusive day boundary', (
+    tester,
+  ) async {
+    final fixture = await TodoVisualFixture.create();
+    addTearDown(fixture.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: fixture.container,
+        child: MaterialApp(
+          theme: ThemeData.light().copyWith(
+            extensions: const [AppThemeExtension(AppColors.light)],
+          ),
+          home: const Scaffold(
+            body: TaskDetailPane(taskId: _taskId, embedded: true),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _openScheduleOptions(tester);
+
+    final detailScroll = find.byType(Scrollable).last;
+    final repeatRule = find.byKey(const Key('task-repeat-rule'));
+    await tester.scrollUntilVisible(repeatRule, 160, scrollable: detailScroll);
+    await tester.tap(repeatRule);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('task-repeat-end-until')));
+    await tester.pumpAndSettle();
+    final untilDate = find.byKey(const Key('task-repeat-until-date'));
+    await tester.ensureVisible(untilDate);
+    await tester.pumpAndSettle();
+    await tester.tap(untilDate);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('18').last);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('task-repeat-save')));
+    await tester.pumpAndSettle();
+
+    final rule = await fixture.database
+        .select(fixture.database.todoRepeatRules)
+        .getSingle();
+    expect(rule.until, DateTime(2026, 7, 18, 23, 59, 59));
+    expect(rule.countLimit, isNull);
+    final change =
+        (await fixture.database.select(fixture.database.todoSyncChanges).get())
+            .last;
+    final payload = jsonDecode(change.payloadJson) as Map<String, dynamic>;
+    expect(payload['untilAt'], '2026-07-18T23:59:59.000');
+    expect(payload['countLimit'], isNull);
+  });
+
   testWidgets('detail shows a recoverable error for an invalid time range', (
     tester,
   ) async {
