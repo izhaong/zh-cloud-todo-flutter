@@ -599,6 +599,28 @@ class $TodoTasksTable extends TodoTasks
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _assigneeUserIdMeta = const VerificationMeta(
+    'assigneeUserId',
+  );
+  @override
+  late final GeneratedColumn<int> assigneeUserId = GeneratedColumn<int>(
+    'assignee_user_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _assigneeUserNameMeta = const VerificationMeta(
+    'assigneeUserName',
+  );
+  @override
+  late final GeneratedColumn<String> assigneeUserName = GeneratedColumn<String>(
+    'assignee_user_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _sortOrderMeta = const VerificationMeta(
     'sortOrder',
   );
@@ -747,6 +769,8 @@ class $TodoTasksTable extends TodoTasks
     cancelled,
     priority,
     isPinned,
+    assigneeUserId,
+    assigneeUserName,
     sortOrder,
     startAt,
     endAt,
@@ -848,6 +872,24 @@ class $TodoTasksTable extends TodoTasks
       context.handle(
         _isPinnedMeta,
         isPinned.isAcceptableOrUnknown(data['is_pinned']!, _isPinnedMeta),
+      );
+    }
+    if (data.containsKey('assignee_user_id')) {
+      context.handle(
+        _assigneeUserIdMeta,
+        assigneeUserId.isAcceptableOrUnknown(
+          data['assignee_user_id']!,
+          _assigneeUserIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('assignee_user_name')) {
+      context.handle(
+        _assigneeUserNameMeta,
+        assigneeUserName.isAcceptableOrUnknown(
+          data['assignee_user_name']!,
+          _assigneeUserNameMeta,
+        ),
       );
     }
     if (data.containsKey('sort_order')) {
@@ -991,6 +1033,14 @@ class $TodoTasksTable extends TodoTasks
         DriftSqlType.bool,
         data['${effectivePrefix}is_pinned'],
       )!,
+      assigneeUserId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}assignee_user_id'],
+      ),
+      assigneeUserName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}assignee_user_name'],
+      ),
       sortOrder: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}sort_order'],
@@ -1060,6 +1110,8 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
   final bool cancelled;
   final int priority;
   final bool isPinned;
+  final int? assigneeUserId;
+  final String? assigneeUserName;
   final int sortOrder;
   final DateTime? startAt;
   final DateTime? endAt;
@@ -1090,6 +1142,8 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     required this.cancelled,
     required this.priority,
     required this.isPinned,
+    this.assigneeUserId,
+    this.assigneeUserName,
     required this.sortOrder,
     this.startAt,
     this.endAt,
@@ -1125,6 +1179,12 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     map['cancelled'] = Variable<bool>(cancelled);
     map['priority'] = Variable<int>(priority);
     map['is_pinned'] = Variable<bool>(isPinned);
+    if (!nullToAbsent || assigneeUserId != null) {
+      map['assignee_user_id'] = Variable<int>(assigneeUserId);
+    }
+    if (!nullToAbsent || assigneeUserName != null) {
+      map['assignee_user_name'] = Variable<String>(assigneeUserName);
+    }
     map['sort_order'] = Variable<int>(sortOrder);
     if (!nullToAbsent || startAt != null) {
       map['start_at'] = Variable<DateTime>(startAt);
@@ -1175,6 +1235,12 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       cancelled: Value(cancelled),
       priority: Value(priority),
       isPinned: Value(isPinned),
+      assigneeUserId: assigneeUserId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(assigneeUserId),
+      assigneeUserName: assigneeUserName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(assigneeUserName),
       sortOrder: Value(sortOrder),
       startAt: startAt == null && nullToAbsent
           ? const Value.absent()
@@ -1221,6 +1287,8 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       cancelled: serializer.fromJson<bool>(json['cancelled']),
       priority: serializer.fromJson<int>(json['priority']),
       isPinned: serializer.fromJson<bool>(json['isPinned']),
+      assigneeUserId: serializer.fromJson<int?>(json['assigneeUserId']),
+      assigneeUserName: serializer.fromJson<String?>(json['assigneeUserName']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
       startAt: serializer.fromJson<DateTime?>(json['startAt']),
       endAt: serializer.fromJson<DateTime?>(json['endAt']),
@@ -1254,6 +1322,8 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       'cancelled': serializer.toJson<bool>(cancelled),
       'priority': serializer.toJson<int>(priority),
       'isPinned': serializer.toJson<bool>(isPinned),
+      'assigneeUserId': serializer.toJson<int?>(assigneeUserId),
+      'assigneeUserName': serializer.toJson<String?>(assigneeUserName),
       'sortOrder': serializer.toJson<int>(sortOrder),
       'startAt': serializer.toJson<DateTime?>(startAt),
       'endAt': serializer.toJson<DateTime?>(endAt),
@@ -1281,6 +1351,8 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     bool? cancelled,
     int? priority,
     bool? isPinned,
+    Value<int?> assigneeUserId = const Value.absent(),
+    Value<String?> assigneeUserName = const Value.absent(),
     int? sortOrder,
     Value<DateTime?> startAt = const Value.absent(),
     Value<DateTime?> endAt = const Value.absent(),
@@ -1305,6 +1377,12 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     cancelled: cancelled ?? this.cancelled,
     priority: priority ?? this.priority,
     isPinned: isPinned ?? this.isPinned,
+    assigneeUserId: assigneeUserId.present
+        ? assigneeUserId.value
+        : this.assigneeUserId,
+    assigneeUserName: assigneeUserName.present
+        ? assigneeUserName.value
+        : this.assigneeUserName,
     sortOrder: sortOrder ?? this.sortOrder,
     startAt: startAt.present ? startAt.value : this.startAt,
     endAt: endAt.present ? endAt.value : this.endAt,
@@ -1341,6 +1419,12 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       cancelled: data.cancelled.present ? data.cancelled.value : this.cancelled,
       priority: data.priority.present ? data.priority.value : this.priority,
       isPinned: data.isPinned.present ? data.isPinned.value : this.isPinned,
+      assigneeUserId: data.assigneeUserId.present
+          ? data.assigneeUserId.value
+          : this.assigneeUserId,
+      assigneeUserName: data.assigneeUserName.present
+          ? data.assigneeUserName.value
+          : this.assigneeUserName,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
       startAt: data.startAt.present ? data.startAt.value : this.startAt,
       endAt: data.endAt.present ? data.endAt.value : this.endAt,
@@ -1378,6 +1462,8 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           ..write('cancelled: $cancelled, ')
           ..write('priority: $priority, ')
           ..write('isPinned: $isPinned, ')
+          ..write('assigneeUserId: $assigneeUserId, ')
+          ..write('assigneeUserName: $assigneeUserName, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('startAt: $startAt, ')
           ..write('endAt: $endAt, ')
@@ -1407,6 +1493,8 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     cancelled,
     priority,
     isPinned,
+    assigneeUserId,
+    assigneeUserName,
     sortOrder,
     startAt,
     endAt,
@@ -1435,6 +1523,8 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           other.cancelled == this.cancelled &&
           other.priority == this.priority &&
           other.isPinned == this.isPinned &&
+          other.assigneeUserId == this.assigneeUserId &&
+          other.assigneeUserName == this.assigneeUserName &&
           other.sortOrder == this.sortOrder &&
           other.startAt == this.startAt &&
           other.endAt == this.endAt &&
@@ -1461,6 +1551,8 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
   final Value<bool> cancelled;
   final Value<int> priority;
   final Value<bool> isPinned;
+  final Value<int?> assigneeUserId;
+  final Value<String?> assigneeUserName;
   final Value<int> sortOrder;
   final Value<DateTime?> startAt;
   final Value<DateTime?> endAt;
@@ -1486,6 +1578,8 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     this.cancelled = const Value.absent(),
     this.priority = const Value.absent(),
     this.isPinned = const Value.absent(),
+    this.assigneeUserId = const Value.absent(),
+    this.assigneeUserName = const Value.absent(),
     this.sortOrder = const Value.absent(),
     this.startAt = const Value.absent(),
     this.endAt = const Value.absent(),
@@ -1512,6 +1606,8 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     this.cancelled = const Value.absent(),
     this.priority = const Value.absent(),
     this.isPinned = const Value.absent(),
+    this.assigneeUserId = const Value.absent(),
+    this.assigneeUserName = const Value.absent(),
     this.sortOrder = const Value.absent(),
     this.startAt = const Value.absent(),
     this.endAt = const Value.absent(),
@@ -1542,6 +1638,8 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     Expression<bool>? cancelled,
     Expression<int>? priority,
     Expression<bool>? isPinned,
+    Expression<int>? assigneeUserId,
+    Expression<String>? assigneeUserName,
     Expression<int>? sortOrder,
     Expression<DateTime>? startAt,
     Expression<DateTime>? endAt,
@@ -1568,6 +1666,8 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
       if (cancelled != null) 'cancelled': cancelled,
       if (priority != null) 'priority': priority,
       if (isPinned != null) 'is_pinned': isPinned,
+      if (assigneeUserId != null) 'assignee_user_id': assigneeUserId,
+      if (assigneeUserName != null) 'assignee_user_name': assigneeUserName,
       if (sortOrder != null) 'sort_order': sortOrder,
       if (startAt != null) 'start_at': startAt,
       if (endAt != null) 'end_at': endAt,
@@ -1598,6 +1698,8 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     Value<bool>? cancelled,
     Value<int>? priority,
     Value<bool>? isPinned,
+    Value<int?>? assigneeUserId,
+    Value<String?>? assigneeUserName,
     Value<int>? sortOrder,
     Value<DateTime?>? startAt,
     Value<DateTime?>? endAt,
@@ -1624,6 +1726,8 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
       cancelled: cancelled ?? this.cancelled,
       priority: priority ?? this.priority,
       isPinned: isPinned ?? this.isPinned,
+      assigneeUserId: assigneeUserId ?? this.assigneeUserId,
+      assigneeUserName: assigneeUserName ?? this.assigneeUserName,
       sortOrder: sortOrder ?? this.sortOrder,
       startAt: startAt ?? this.startAt,
       endAt: endAt ?? this.endAt,
@@ -1675,6 +1779,12 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     }
     if (isPinned.present) {
       map['is_pinned'] = Variable<bool>(isPinned.value);
+    }
+    if (assigneeUserId.present) {
+      map['assignee_user_id'] = Variable<int>(assigneeUserId.value);
+    }
+    if (assigneeUserName.present) {
+      map['assignee_user_name'] = Variable<String>(assigneeUserName.value);
     }
     if (sortOrder.present) {
       map['sort_order'] = Variable<int>(sortOrder.value);
@@ -1734,6 +1844,8 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
           ..write('cancelled: $cancelled, ')
           ..write('priority: $priority, ')
           ..write('isPinned: $isPinned, ')
+          ..write('assigneeUserId: $assigneeUserId, ')
+          ..write('assigneeUserName: $assigneeUserName, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('startAt: $startAt, ')
           ..write('endAt: $endAt, ')
@@ -2184,6 +2296,17 @@ class $TodoTagsTable extends TodoTags with TableInfo<$TodoTagsTable, TodoTag> {
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _parentIdMeta = const VerificationMeta(
+    'parentId',
+  );
+  @override
+  late final GeneratedColumn<String> parentId = GeneratedColumn<String>(
+    'parent_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _nameMeta = const VerificationMeta('name');
   @override
   late final GeneratedColumn<String> name = GeneratedColumn<String>(
@@ -2228,6 +2351,7 @@ class $TodoTagsTable extends TodoTags with TableInfo<$TodoTagsTable, TodoTag> {
   List<GeneratedColumn> get $columns => [
     id,
     serverId,
+    parentId,
     name,
     color,
     updatedAt,
@@ -2254,6 +2378,12 @@ class $TodoTagsTable extends TodoTags with TableInfo<$TodoTagsTable, TodoTag> {
       context.handle(
         _serverIdMeta,
         serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
+      );
+    }
+    if (data.containsKey('parent_id')) {
+      context.handle(
+        _parentIdMeta,
+        parentId.isAcceptableOrUnknown(data['parent_id']!, _parentIdMeta),
       );
     }
     if (data.containsKey('name')) {
@@ -2303,6 +2433,10 @@ class $TodoTagsTable extends TodoTags with TableInfo<$TodoTagsTable, TodoTag> {
         DriftSqlType.int,
         data['${effectivePrefix}server_id'],
       ),
+      parentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}parent_id'],
+      ),
       name: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}name'],
@@ -2331,6 +2465,9 @@ class $TodoTagsTable extends TodoTags with TableInfo<$TodoTagsTable, TodoTag> {
 class TodoTag extends DataClass implements Insertable<TodoTag> {
   final String id;
   final int? serverId;
+
+  /// 本地 UUID，指向上级标签；同步时转换为服务端整数 ID。
+  final String? parentId;
   final String name;
   final String? color;
   final DateTime updatedAt;
@@ -2338,6 +2475,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
   const TodoTag({
     required this.id,
     this.serverId,
+    this.parentId,
     required this.name,
     this.color,
     required this.updatedAt,
@@ -2349,6 +2487,9 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
     map['id'] = Variable<String>(id);
     if (!nullToAbsent || serverId != null) {
       map['server_id'] = Variable<int>(serverId);
+    }
+    if (!nullToAbsent || parentId != null) {
+      map['parent_id'] = Variable<String>(parentId);
     }
     map['name'] = Variable<String>(name);
     if (!nullToAbsent || color != null) {
@@ -2365,6 +2506,9 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
       serverId: serverId == null && nullToAbsent
           ? const Value.absent()
           : Value(serverId),
+      parentId: parentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parentId),
       name: Value(name),
       color: color == null && nullToAbsent
           ? const Value.absent()
@@ -2382,6 +2526,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
     return TodoTag(
       id: serializer.fromJson<String>(json['id']),
       serverId: serializer.fromJson<int?>(json['serverId']),
+      parentId: serializer.fromJson<String?>(json['parentId']),
       name: serializer.fromJson<String>(json['name']),
       color: serializer.fromJson<String?>(json['color']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
@@ -2394,6 +2539,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
       'serverId': serializer.toJson<int?>(serverId),
+      'parentId': serializer.toJson<String?>(parentId),
       'name': serializer.toJson<String>(name),
       'color': serializer.toJson<String?>(color),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
@@ -2404,6 +2550,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
   TodoTag copyWith({
     String? id,
     Value<int?> serverId = const Value.absent(),
+    Value<String?> parentId = const Value.absent(),
     String? name,
     Value<String?> color = const Value.absent(),
     DateTime? updatedAt,
@@ -2411,6 +2558,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
   }) => TodoTag(
     id: id ?? this.id,
     serverId: serverId.present ? serverId.value : this.serverId,
+    parentId: parentId.present ? parentId.value : this.parentId,
     name: name ?? this.name,
     color: color.present ? color.value : this.color,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -2420,6 +2568,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
     return TodoTag(
       id: data.id.present ? data.id.value : this.id,
       serverId: data.serverId.present ? data.serverId.value : this.serverId,
+      parentId: data.parentId.present ? data.parentId.value : this.parentId,
       name: data.name.present ? data.name.value : this.name,
       color: data.color.present ? data.color.value : this.color,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
@@ -2432,6 +2581,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
     return (StringBuffer('TodoTag(')
           ..write('id: $id, ')
           ..write('serverId: $serverId, ')
+          ..write('parentId: $parentId, ')
           ..write('name: $name, ')
           ..write('color: $color, ')
           ..write('updatedAt: $updatedAt, ')
@@ -2442,13 +2592,14 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
 
   @override
   int get hashCode =>
-      Object.hash(id, serverId, name, color, updatedAt, createdAt);
+      Object.hash(id, serverId, parentId, name, color, updatedAt, createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is TodoTag &&
           other.id == this.id &&
           other.serverId == this.serverId &&
+          other.parentId == this.parentId &&
           other.name == this.name &&
           other.color == this.color &&
           other.updatedAt == this.updatedAt &&
@@ -2458,6 +2609,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
 class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
   final Value<String> id;
   final Value<int?> serverId;
+  final Value<String?> parentId;
   final Value<String> name;
   final Value<String?> color;
   final Value<DateTime> updatedAt;
@@ -2466,6 +2618,7 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
   const TodoTagsCompanion({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
+    this.parentId = const Value.absent(),
     this.name = const Value.absent(),
     this.color = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -2475,6 +2628,7 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
   TodoTagsCompanion.insert({
     required String id,
     this.serverId = const Value.absent(),
+    this.parentId = const Value.absent(),
     required String name,
     this.color = const Value.absent(),
     required DateTime updatedAt,
@@ -2487,6 +2641,7 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
   static Insertable<TodoTag> custom({
     Expression<String>? id,
     Expression<int>? serverId,
+    Expression<String>? parentId,
     Expression<String>? name,
     Expression<String>? color,
     Expression<DateTime>? updatedAt,
@@ -2496,6 +2651,7 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (serverId != null) 'server_id': serverId,
+      if (parentId != null) 'parent_id': parentId,
       if (name != null) 'name': name,
       if (color != null) 'color': color,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -2507,6 +2663,7 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
   TodoTagsCompanion copyWith({
     Value<String>? id,
     Value<int?>? serverId,
+    Value<String?>? parentId,
     Value<String>? name,
     Value<String?>? color,
     Value<DateTime>? updatedAt,
@@ -2516,6 +2673,7 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
     return TodoTagsCompanion(
       id: id ?? this.id,
       serverId: serverId ?? this.serverId,
+      parentId: parentId ?? this.parentId,
       name: name ?? this.name,
       color: color ?? this.color,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -2532,6 +2690,9 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
     }
     if (serverId.present) {
       map['server_id'] = Variable<int>(serverId.value);
+    }
+    if (parentId.present) {
+      map['parent_id'] = Variable<String>(parentId.value);
     }
     if (name.present) {
       map['name'] = Variable<String>(name.value);
@@ -2556,6 +2717,7 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
     return (StringBuffer('TodoTagsCompanion(')
           ..write('id: $id, ')
           ..write('serverId: $serverId, ')
+          ..write('parentId: $parentId, ')
           ..write('name: $name, ')
           ..write('color: $color, ')
           ..write('updatedAt: $updatedAt, ')
@@ -7747,6 +7909,48 @@ class $TodoFiltersTable extends TodoFilters
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _sortOrdersJsonMeta = const VerificationMeta(
+    'sortOrdersJson',
+  );
+  @override
+  late final GeneratedColumn<String> sortOrdersJson = GeneratedColumn<String>(
+    'sort_orders_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('[]'),
+  );
+  static const VerificationMeta _isSmartMeta = const VerificationMeta(
+    'isSmart',
+  );
+  @override
+  late final GeneratedColumn<bool> isSmart = GeneratedColumn<bool>(
+    'is_smart',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_smart" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _isPinnedMeta = const VerificationMeta(
+    'isPinned',
+  );
+  @override
+  late final GeneratedColumn<bool> isPinned = GeneratedColumn<bool>(
+    'is_pinned',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_pinned" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _sortOrderMeta = const VerificationMeta(
     'sortOrder',
   );
@@ -7787,6 +7991,9 @@ class $TodoFiltersTable extends TodoFilters
     serverId,
     name,
     conditionJson,
+    sortOrdersJson,
+    isSmart,
+    isPinned,
     sortOrder,
     updatedAt,
     createdAt,
@@ -7832,6 +8039,27 @@ class $TodoFiltersTable extends TodoFilters
       );
     } else if (isInserting) {
       context.missing(_conditionJsonMeta);
+    }
+    if (data.containsKey('sort_orders_json')) {
+      context.handle(
+        _sortOrdersJsonMeta,
+        sortOrdersJson.isAcceptableOrUnknown(
+          data['sort_orders_json']!,
+          _sortOrdersJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_smart')) {
+      context.handle(
+        _isSmartMeta,
+        isSmart.isAcceptableOrUnknown(data['is_smart']!, _isSmartMeta),
+      );
+    }
+    if (data.containsKey('is_pinned')) {
+      context.handle(
+        _isPinnedMeta,
+        isPinned.isAcceptableOrUnknown(data['is_pinned']!, _isPinnedMeta),
+      );
     }
     if (data.containsKey('sort_order')) {
       context.handle(
@@ -7880,6 +8108,18 @@ class $TodoFiltersTable extends TodoFilters
         DriftSqlType.string,
         data['${effectivePrefix}condition_json'],
       )!,
+      sortOrdersJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sort_orders_json'],
+      )!,
+      isSmart: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_smart'],
+      )!,
+      isPinned: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_pinned'],
+      )!,
       sortOrder: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}sort_order'],
@@ -7906,6 +8146,9 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
   final int? serverId;
   final String name;
   final String conditionJson;
+  final String sortOrdersJson;
+  final bool isSmart;
+  final bool isPinned;
   final int sortOrder;
   final DateTime updatedAt;
   final DateTime createdAt;
@@ -7914,6 +8157,9 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
     this.serverId,
     required this.name,
     required this.conditionJson,
+    required this.sortOrdersJson,
+    required this.isSmart,
+    required this.isPinned,
     required this.sortOrder,
     required this.updatedAt,
     required this.createdAt,
@@ -7927,6 +8173,9 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
     }
     map['name'] = Variable<String>(name);
     map['condition_json'] = Variable<String>(conditionJson);
+    map['sort_orders_json'] = Variable<String>(sortOrdersJson);
+    map['is_smart'] = Variable<bool>(isSmart);
+    map['is_pinned'] = Variable<bool>(isPinned);
     map['sort_order'] = Variable<int>(sortOrder);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     map['created_at'] = Variable<DateTime>(createdAt);
@@ -7941,6 +8190,9 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
           : Value(serverId),
       name: Value(name),
       conditionJson: Value(conditionJson),
+      sortOrdersJson: Value(sortOrdersJson),
+      isSmart: Value(isSmart),
+      isPinned: Value(isPinned),
       sortOrder: Value(sortOrder),
       updatedAt: Value(updatedAt),
       createdAt: Value(createdAt),
@@ -7957,6 +8209,9 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
       serverId: serializer.fromJson<int?>(json['serverId']),
       name: serializer.fromJson<String>(json['name']),
       conditionJson: serializer.fromJson<String>(json['conditionJson']),
+      sortOrdersJson: serializer.fromJson<String>(json['sortOrdersJson']),
+      isSmart: serializer.fromJson<bool>(json['isSmart']),
+      isPinned: serializer.fromJson<bool>(json['isPinned']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
@@ -7970,6 +8225,9 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
       'serverId': serializer.toJson<int?>(serverId),
       'name': serializer.toJson<String>(name),
       'conditionJson': serializer.toJson<String>(conditionJson),
+      'sortOrdersJson': serializer.toJson<String>(sortOrdersJson),
+      'isSmart': serializer.toJson<bool>(isSmart),
+      'isPinned': serializer.toJson<bool>(isPinned),
       'sortOrder': serializer.toJson<int>(sortOrder),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
@@ -7981,6 +8239,9 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
     Value<int?> serverId = const Value.absent(),
     String? name,
     String? conditionJson,
+    String? sortOrdersJson,
+    bool? isSmart,
+    bool? isPinned,
     int? sortOrder,
     DateTime? updatedAt,
     DateTime? createdAt,
@@ -7989,6 +8250,9 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
     serverId: serverId.present ? serverId.value : this.serverId,
     name: name ?? this.name,
     conditionJson: conditionJson ?? this.conditionJson,
+    sortOrdersJson: sortOrdersJson ?? this.sortOrdersJson,
+    isSmart: isSmart ?? this.isSmart,
+    isPinned: isPinned ?? this.isPinned,
     sortOrder: sortOrder ?? this.sortOrder,
     updatedAt: updatedAt ?? this.updatedAt,
     createdAt: createdAt ?? this.createdAt,
@@ -8001,6 +8265,11 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
       conditionJson: data.conditionJson.present
           ? data.conditionJson.value
           : this.conditionJson,
+      sortOrdersJson: data.sortOrdersJson.present
+          ? data.sortOrdersJson.value
+          : this.sortOrdersJson,
+      isSmart: data.isSmart.present ? data.isSmart.value : this.isSmart,
+      isPinned: data.isPinned.present ? data.isPinned.value : this.isPinned,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
@@ -8014,6 +8283,9 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
           ..write('serverId: $serverId, ')
           ..write('name: $name, ')
           ..write('conditionJson: $conditionJson, ')
+          ..write('sortOrdersJson: $sortOrdersJson, ')
+          ..write('isSmart: $isSmart, ')
+          ..write('isPinned: $isPinned, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt')
@@ -8027,6 +8299,9 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
     serverId,
     name,
     conditionJson,
+    sortOrdersJson,
+    isSmart,
+    isPinned,
     sortOrder,
     updatedAt,
     createdAt,
@@ -8039,6 +8314,9 @@ class TodoFilter extends DataClass implements Insertable<TodoFilter> {
           other.serverId == this.serverId &&
           other.name == this.name &&
           other.conditionJson == this.conditionJson &&
+          other.sortOrdersJson == this.sortOrdersJson &&
+          other.isSmart == this.isSmart &&
+          other.isPinned == this.isPinned &&
           other.sortOrder == this.sortOrder &&
           other.updatedAt == this.updatedAt &&
           other.createdAt == this.createdAt);
@@ -8049,6 +8327,9 @@ class TodoFiltersCompanion extends UpdateCompanion<TodoFilter> {
   final Value<int?> serverId;
   final Value<String> name;
   final Value<String> conditionJson;
+  final Value<String> sortOrdersJson;
+  final Value<bool> isSmart;
+  final Value<bool> isPinned;
   final Value<int> sortOrder;
   final Value<DateTime> updatedAt;
   final Value<DateTime> createdAt;
@@ -8058,6 +8339,9 @@ class TodoFiltersCompanion extends UpdateCompanion<TodoFilter> {
     this.serverId = const Value.absent(),
     this.name = const Value.absent(),
     this.conditionJson = const Value.absent(),
+    this.sortOrdersJson = const Value.absent(),
+    this.isSmart = const Value.absent(),
+    this.isPinned = const Value.absent(),
     this.sortOrder = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -8068,6 +8352,9 @@ class TodoFiltersCompanion extends UpdateCompanion<TodoFilter> {
     this.serverId = const Value.absent(),
     required String name,
     required String conditionJson,
+    this.sortOrdersJson = const Value.absent(),
+    this.isSmart = const Value.absent(),
+    this.isPinned = const Value.absent(),
     this.sortOrder = const Value.absent(),
     required DateTime updatedAt,
     required DateTime createdAt,
@@ -8082,6 +8369,9 @@ class TodoFiltersCompanion extends UpdateCompanion<TodoFilter> {
     Expression<int>? serverId,
     Expression<String>? name,
     Expression<String>? conditionJson,
+    Expression<String>? sortOrdersJson,
+    Expression<bool>? isSmart,
+    Expression<bool>? isPinned,
     Expression<int>? sortOrder,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? createdAt,
@@ -8092,6 +8382,9 @@ class TodoFiltersCompanion extends UpdateCompanion<TodoFilter> {
       if (serverId != null) 'server_id': serverId,
       if (name != null) 'name': name,
       if (conditionJson != null) 'condition_json': conditionJson,
+      if (sortOrdersJson != null) 'sort_orders_json': sortOrdersJson,
+      if (isSmart != null) 'is_smart': isSmart,
+      if (isPinned != null) 'is_pinned': isPinned,
       if (sortOrder != null) 'sort_order': sortOrder,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (createdAt != null) 'created_at': createdAt,
@@ -8104,6 +8397,9 @@ class TodoFiltersCompanion extends UpdateCompanion<TodoFilter> {
     Value<int?>? serverId,
     Value<String>? name,
     Value<String>? conditionJson,
+    Value<String>? sortOrdersJson,
+    Value<bool>? isSmart,
+    Value<bool>? isPinned,
     Value<int>? sortOrder,
     Value<DateTime>? updatedAt,
     Value<DateTime>? createdAt,
@@ -8114,6 +8410,9 @@ class TodoFiltersCompanion extends UpdateCompanion<TodoFilter> {
       serverId: serverId ?? this.serverId,
       name: name ?? this.name,
       conditionJson: conditionJson ?? this.conditionJson,
+      sortOrdersJson: sortOrdersJson ?? this.sortOrdersJson,
+      isSmart: isSmart ?? this.isSmart,
+      isPinned: isPinned ?? this.isPinned,
       sortOrder: sortOrder ?? this.sortOrder,
       updatedAt: updatedAt ?? this.updatedAt,
       createdAt: createdAt ?? this.createdAt,
@@ -8135,6 +8434,15 @@ class TodoFiltersCompanion extends UpdateCompanion<TodoFilter> {
     }
     if (conditionJson.present) {
       map['condition_json'] = Variable<String>(conditionJson.value);
+    }
+    if (sortOrdersJson.present) {
+      map['sort_orders_json'] = Variable<String>(sortOrdersJson.value);
+    }
+    if (isSmart.present) {
+      map['is_smart'] = Variable<bool>(isSmart.value);
+    }
+    if (isPinned.present) {
+      map['is_pinned'] = Variable<bool>(isPinned.value);
     }
     if (sortOrder.present) {
       map['sort_order'] = Variable<int>(sortOrder.value);
@@ -8158,6 +8466,9 @@ class TodoFiltersCompanion extends UpdateCompanion<TodoFilter> {
           ..write('serverId: $serverId, ')
           ..write('name: $name, ')
           ..write('conditionJson: $conditionJson, ')
+          ..write('sortOrdersJson: $sortOrdersJson, ')
+          ..write('isSmart: $isSmart, ')
+          ..write('isPinned: $isPinned, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt, ')
@@ -9603,6 +9914,8 @@ typedef $$TodoTasksTableCreateCompanionBuilder =
       Value<bool> cancelled,
       Value<int> priority,
       Value<bool> isPinned,
+      Value<int?> assigneeUserId,
+      Value<String?> assigneeUserName,
       Value<int> sortOrder,
       Value<DateTime?> startAt,
       Value<DateTime?> endAt,
@@ -9630,6 +9943,8 @@ typedef $$TodoTasksTableUpdateCompanionBuilder =
       Value<bool> cancelled,
       Value<int> priority,
       Value<bool> isPinned,
+      Value<int?> assigneeUserId,
+      Value<String?> assigneeUserName,
       Value<int> sortOrder,
       Value<DateTime?> startAt,
       Value<DateTime?> endAt,
@@ -9706,6 +10021,16 @@ class $$TodoTasksTableFilterComposer
 
   ColumnFilters<bool> get isPinned => $composableBuilder(
     column: $table.isPinned,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get assigneeUserId => $composableBuilder(
+    column: $table.assigneeUserId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get assigneeUserName => $composableBuilder(
+    column: $table.assigneeUserName,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9834,6 +10159,16 @@ class $$TodoTasksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get assigneeUserId => $composableBuilder(
+    column: $table.assigneeUserId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get assigneeUserName => $composableBuilder(
+    column: $table.assigneeUserName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get sortOrder => $composableBuilder(
     column: $table.sortOrder,
     builder: (column) => ColumnOrderings(column),
@@ -9943,6 +10278,16 @@ class $$TodoTasksTableAnnotationComposer
   GeneratedColumn<bool> get isPinned =>
       $composableBuilder(column: $table.isPinned, builder: (column) => column);
 
+  GeneratedColumn<int> get assigneeUserId => $composableBuilder(
+    column: $table.assigneeUserId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get assigneeUserName => $composableBuilder(
+    column: $table.assigneeUserName,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get sortOrder =>
       $composableBuilder(column: $table.sortOrder, builder: (column) => column);
 
@@ -10027,6 +10372,8 @@ class $$TodoTasksTableTableManager
                 Value<bool> cancelled = const Value.absent(),
                 Value<int> priority = const Value.absent(),
                 Value<bool> isPinned = const Value.absent(),
+                Value<int?> assigneeUserId = const Value.absent(),
+                Value<String?> assigneeUserName = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<DateTime?> startAt = const Value.absent(),
                 Value<DateTime?> endAt = const Value.absent(),
@@ -10052,6 +10399,8 @@ class $$TodoTasksTableTableManager
                 cancelled: cancelled,
                 priority: priority,
                 isPinned: isPinned,
+                assigneeUserId: assigneeUserId,
+                assigneeUserName: assigneeUserName,
                 sortOrder: sortOrder,
                 startAt: startAt,
                 endAt: endAt,
@@ -10079,6 +10428,8 @@ class $$TodoTasksTableTableManager
                 Value<bool> cancelled = const Value.absent(),
                 Value<int> priority = const Value.absent(),
                 Value<bool> isPinned = const Value.absent(),
+                Value<int?> assigneeUserId = const Value.absent(),
+                Value<String?> assigneeUserName = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<DateTime?> startAt = const Value.absent(),
                 Value<DateTime?> endAt = const Value.absent(),
@@ -10104,6 +10455,8 @@ class $$TodoTasksTableTableManager
                 cancelled: cancelled,
                 priority: priority,
                 isPinned: isPinned,
+                assigneeUserId: assigneeUserId,
+                assigneeUserName: assigneeUserName,
                 sortOrder: sortOrder,
                 startAt: startAt,
                 endAt: endAt,
@@ -10363,6 +10716,7 @@ typedef $$TodoTagsTableCreateCompanionBuilder =
     TodoTagsCompanion Function({
       required String id,
       Value<int?> serverId,
+      Value<String?> parentId,
       required String name,
       Value<String?> color,
       required DateTime updatedAt,
@@ -10373,6 +10727,7 @@ typedef $$TodoTagsTableUpdateCompanionBuilder =
     TodoTagsCompanion Function({
       Value<String> id,
       Value<int?> serverId,
+      Value<String?> parentId,
       Value<String> name,
       Value<String?> color,
       Value<DateTime> updatedAt,
@@ -10396,6 +10751,11 @@ class $$TodoTagsTableFilterComposer
 
   ColumnFilters<int> get serverId => $composableBuilder(
     column: $table.serverId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get parentId => $composableBuilder(
+    column: $table.parentId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10439,6 +10799,11 @@ class $$TodoTagsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get parentId => $composableBuilder(
+    column: $table.parentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get name => $composableBuilder(
     column: $table.name,
     builder: (column) => ColumnOrderings(column),
@@ -10474,6 +10839,9 @@ class $$TodoTagsTableAnnotationComposer
 
   GeneratedColumn<int> get serverId =>
       $composableBuilder(column: $table.serverId, builder: (column) => column);
+
+  GeneratedColumn<String> get parentId =>
+      $composableBuilder(column: $table.parentId, builder: (column) => column);
 
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
@@ -10518,6 +10886,7 @@ class $$TodoTagsTableTableManager
               ({
                 Value<String> id = const Value.absent(),
                 Value<int?> serverId = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String?> color = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -10526,6 +10895,7 @@ class $$TodoTagsTableTableManager
               }) => TodoTagsCompanion(
                 id: id,
                 serverId: serverId,
+                parentId: parentId,
                 name: name,
                 color: color,
                 updatedAt: updatedAt,
@@ -10536,6 +10906,7 @@ class $$TodoTagsTableTableManager
               ({
                 required String id,
                 Value<int?> serverId = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
                 required String name,
                 Value<String?> color = const Value.absent(),
                 required DateTime updatedAt,
@@ -10544,6 +10915,7 @@ class $$TodoTagsTableTableManager
               }) => TodoTagsCompanion.insert(
                 id: id,
                 serverId: serverId,
+                parentId: parentId,
                 name: name,
                 color: color,
                 updatedAt: updatedAt,
@@ -13158,6 +13530,9 @@ typedef $$TodoFiltersTableCreateCompanionBuilder =
       Value<int?> serverId,
       required String name,
       required String conditionJson,
+      Value<String> sortOrdersJson,
+      Value<bool> isSmart,
+      Value<bool> isPinned,
       Value<int> sortOrder,
       required DateTime updatedAt,
       required DateTime createdAt,
@@ -13169,6 +13544,9 @@ typedef $$TodoFiltersTableUpdateCompanionBuilder =
       Value<int?> serverId,
       Value<String> name,
       Value<String> conditionJson,
+      Value<String> sortOrdersJson,
+      Value<bool> isSmart,
+      Value<bool> isPinned,
       Value<int> sortOrder,
       Value<DateTime> updatedAt,
       Value<DateTime> createdAt,
@@ -13201,6 +13579,21 @@ class $$TodoFiltersTableFilterComposer
 
   ColumnFilters<String> get conditionJson => $composableBuilder(
     column: $table.conditionJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sortOrdersJson => $composableBuilder(
+    column: $table.sortOrdersJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isSmart => $composableBuilder(
+    column: $table.isSmart,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isPinned => $composableBuilder(
+    column: $table.isPinned,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -13249,6 +13642,21 @@ class $$TodoFiltersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get sortOrdersJson => $composableBuilder(
+    column: $table.sortOrdersJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isSmart => $composableBuilder(
+    column: $table.isSmart,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isPinned => $composableBuilder(
+    column: $table.isPinned,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get sortOrder => $composableBuilder(
     column: $table.sortOrder,
     builder: (column) => ColumnOrderings(column),
@@ -13287,6 +13695,17 @@ class $$TodoFiltersTableAnnotationComposer
     column: $table.conditionJson,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get sortOrdersJson => $composableBuilder(
+    column: $table.sortOrdersJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isSmart =>
+      $composableBuilder(column: $table.isSmart, builder: (column) => column);
+
+  GeneratedColumn<bool> get isPinned =>
+      $composableBuilder(column: $table.isPinned, builder: (column) => column);
 
   GeneratedColumn<int> get sortOrder =>
       $composableBuilder(column: $table.sortOrder, builder: (column) => column);
@@ -13333,6 +13752,9 @@ class $$TodoFiltersTableTableManager
                 Value<int?> serverId = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String> conditionJson = const Value.absent(),
+                Value<String> sortOrdersJson = const Value.absent(),
+                Value<bool> isSmart = const Value.absent(),
+                Value<bool> isPinned = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -13342,6 +13764,9 @@ class $$TodoFiltersTableTableManager
                 serverId: serverId,
                 name: name,
                 conditionJson: conditionJson,
+                sortOrdersJson: sortOrdersJson,
+                isSmart: isSmart,
+                isPinned: isPinned,
                 sortOrder: sortOrder,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
@@ -13353,6 +13778,9 @@ class $$TodoFiltersTableTableManager
                 Value<int?> serverId = const Value.absent(),
                 required String name,
                 required String conditionJson,
+                Value<String> sortOrdersJson = const Value.absent(),
+                Value<bool> isSmart = const Value.absent(),
+                Value<bool> isPinned = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 required DateTime updatedAt,
                 required DateTime createdAt,
@@ -13362,6 +13790,9 @@ class $$TodoFiltersTableTableManager
                 serverId: serverId,
                 name: name,
                 conditionJson: conditionJson,
+                sortOrdersJson: sortOrdersJson,
+                isSmart: isSmart,
+                isPinned: isPinned,
                 sortOrder: sortOrder,
                 updatedAt: updatedAt,
                 createdAt: createdAt,

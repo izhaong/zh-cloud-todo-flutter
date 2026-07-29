@@ -49,6 +49,8 @@ class TodoTasks extends Table {
   BoolColumn get cancelled => boolean().withDefault(const Constant(false))();
   IntColumn get priority => integer().withDefault(const Constant(0))();
   BoolColumn get isPinned => boolean().withDefault(const Constant(false))();
+  IntColumn get assigneeUserId => integer().nullable()();
+  TextColumn get assigneeUserName => text().nullable()();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
   DateTimeColumn get startAt => dateTime().nullable()();
   DateTimeColumn get endAt => dateTime().nullable()();
@@ -90,6 +92,9 @@ class TodoFolders extends Table {
 class TodoTags extends Table {
   TextColumn get id => text()();
   IntColumn get serverId => integer().nullable()();
+
+  /// 本地 UUID，指向上级标签；同步时转换为服务端整数 ID。
+  TextColumn get parentId => text().nullable()();
   TextColumn get name => text()();
   TextColumn get color => text().nullable()();
   DateTimeColumn get updatedAt => dateTime()();
@@ -256,6 +261,9 @@ class TodoFilters extends Table {
   IntColumn get serverId => integer().nullable()();
   TextColumn get name => text()();
   TextColumn get conditionJson => text()();
+  TextColumn get sortOrdersJson => text().withDefault(const Constant('[]'))();
+  BoolColumn get isSmart => boolean().withDefault(const Constant(false))();
+  BoolColumn get isPinned => boolean().withDefault(const Constant(false))();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
   DateTimeColumn get updatedAt => dateTime()();
   DateTimeColumn get createdAt => dateTime()();
@@ -304,6 +312,24 @@ class TodoEntityRevisions extends Table {
   Set<Column> get primaryKey => {entity, serverId};
 }
 
+/// B3 本地全文索引的只读结果。
+///
+/// 这不是 Drift 表：索引由 SQLite FTS5 和触发器维护，源数据始终仍是各
+/// Todo 表。保留实体类型和本地主键，Repository 才能继续以离线 UUID 路由。
+class TodoSearchIndexEntry {
+  const TodoSearchIndexEntry({
+    required this.entityType,
+    required this.entityId,
+    required this.title,
+  });
+
+  final String entityType;
+  final String entityId;
+  final String title;
+
+  String get identity => '$entityType:$entityId';
+}
+
 @DriftDatabase(
   tables: [
     TodoLists,
@@ -339,12 +365,14 @@ class AppDatabase extends _$AppDatabase {
   }) : super(_open(_userDatabaseName(tenantId, userId, testNamespace)));
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) async {
       await m.createAll();
+      await _createSearchIndex(m.database);
+      await _createAssigneeFilterIndex(m.database);
     },
     // 注：schemaVersion 4 = P1 重建（UUID 本地主键）。本地库为全新结构，
     // 旧 schema（int 主键）与新版不兼容；升级时逐表 drop 重建。
@@ -354,6 +382,7 @@ class AppDatabase extends _$AppDatabase {
           await m.deleteTable(table.actualTableName);
         }
         await m.createAll();
+        await _createSearchIndex(m.database);
         return;
       }
       if (from < 5) {
@@ -460,25 +489,168 @@ class AppDatabase extends _$AppDatabase {
         if (!await _columnExists(m, 'todo_tasks', 'cancelled')) {
           await m.addColumn(todoTasks, todoTasks.cancelled);
         }
-        if (!await _tableExists(m, 'todo_checklist_items')) {
-          await m.createTable(todoChecklistItems);
-        }
-        if (!await _tableExists(m, 'todo_attachments')) {
-          await m.createTable(todoAttachments);
-        }
-        if (!await _tableExists(m, 'todo_activities')) {
-          await m.createTable(todoActivities);
-        }
-        if (!await _tableExists(m, 'todo_templates')) {
-          await m.createTable(todoTemplates);
+        // B1 schema 9 只含任务聚合表；B2 schema 9 则含不同的时间字段。
+        // 版本号无法表达这两个历史分支，逐表补齐才可让两者安全收敛到 B3。
+        for (final table in allTables) {
+          if (!await _tableExists(m, table.actualTableName)) {
+            await m.createTable(table);
+          }
         }
       }
-      if (from < 11 &&
+      if (from < 11) {
+        await _createSearchIndex(m.database);
+      }
+      if (from < 12) {
+        // schema 9 会在 10 号迁移按当前定义创建缺失的聚合表，
+        // 因而不能只凭 user_version 重复 add；按实际表结构收敛。
+        if (!await _columnExists(m, 'todo_tags', 'parent_id')) {
+          await m.addColumn(todoTags, todoTags.parentId);
+        }
+      }
+      if (from < 13) {
+        if (!await _columnExists(m, 'todo_filters', 'sort_orders_json')) {
+          await m.addColumn(todoFilters, todoFilters.sortOrdersJson);
+        }
+        if (!await _columnExists(m, 'todo_filters', 'is_smart')) {
+          await m.addColumn(todoFilters, todoFilters.isSmart);
+        }
+        if (!await _columnExists(m, 'todo_filters', 'is_pinned')) {
+          await m.addColumn(todoFilters, todoFilters.isPinned);
+        }
+      }
+      if (from < 14) {
+        if (!await _columnExists(m, 'todo_tasks', 'assignee_user_id')) {
+          await m.addColumn(todoTasks, todoTasks.assigneeUserId);
+        }
+        if (!await _columnExists(m, 'todo_tasks', 'assignee_user_name')) {
+          await m.addColumn(todoTasks, todoTasks.assigneeUserName);
+        }
+        await _createAssigneeFilterIndex(m.database);
+      }
+      // B2 与 B3 曾在独立分支分别占用 11 和 14。合并后的新字段必须使用
+      // 全新的 15 号迁移，保证已经升级到 B3 schema 14 的用户也能补齐。
+      if (from < 15 &&
           !await _columnExists(m, 'todo_repeat_rules', 'selected_dates_json')) {
         await m.addColumn(todoRepeatRules, todoRepeatRules.selectedDatesJson);
       }
     },
   );
+
+  Future<void> _createSearchIndex(GeneratedDatabase database) async {
+    // trigram 让中文及英文的包含式查询都可命中；不足三个字符时
+    // [searchIndex] 会安全退回到 FTS 表上的短词扫描，保持旧 UI 的语义。
+    await database.customStatement('''
+      CREATE VIRTUAL TABLE IF NOT EXISTS todo_search_index USING fts5(
+        entity_type UNINDEXED,
+        entity_id UNINDEXED,
+        title UNINDEXED,
+        content,
+        tokenize = 'trigram'
+      )
+    ''');
+    await database.customStatement('''
+      CREATE INDEX IF NOT EXISTS idx_todo_tasks_b3_filter
+      ON todo_tasks (list_id, completed, priority, due_at, is_pinned, sort_order, id)
+    ''');
+    await database.customStatement('''
+      CREATE INDEX IF NOT EXISTS idx_todo_task_tags_b3_filter
+      ON todo_task_tags (task_id, tag_id)
+    ''');
+    await database.customStatement('''
+      CREATE TRIGGER IF NOT EXISTS todo_tasks_search_index_ai
+      AFTER INSERT ON todo_tasks BEGIN
+        INSERT INTO todo_search_index (entity_type, entity_id, title, content)
+        VALUES ('task', NEW.id, NEW.title,
+          NEW.title || ' ' || COALESCE(NEW.description, ''));
+      END
+    ''');
+    await database.customStatement('''
+      CREATE TRIGGER IF NOT EXISTS todo_tasks_search_index_au
+      AFTER UPDATE OF id, title, description ON todo_tasks BEGIN
+        DELETE FROM todo_search_index
+        WHERE entity_type = 'task' AND entity_id = OLD.id;
+        INSERT INTO todo_search_index (entity_type, entity_id, title, content)
+        VALUES ('task', NEW.id, NEW.title,
+          NEW.title || ' ' || COALESCE(NEW.description, ''));
+      END
+    ''');
+    await database.customStatement('''
+      CREATE TRIGGER IF NOT EXISTS todo_tasks_search_index_ad
+      AFTER DELETE ON todo_tasks BEGIN
+        DELETE FROM todo_search_index
+        WHERE entity_type = 'task' AND entity_id = OLD.id;
+      END
+    ''');
+    await database.customStatement('''
+      CREATE TRIGGER IF NOT EXISTS todo_lists_search_index_ai
+      AFTER INSERT ON todo_lists BEGIN
+        INSERT INTO todo_search_index (entity_type, entity_id, title, content)
+        VALUES ('list', NEW.id, NEW.name, NEW.name);
+      END
+    ''');
+    await database.customStatement('''
+      CREATE TRIGGER IF NOT EXISTS todo_lists_search_index_au
+      AFTER UPDATE OF id, name ON todo_lists BEGIN
+        DELETE FROM todo_search_index
+        WHERE entity_type = 'list' AND entity_id = OLD.id;
+        INSERT INTO todo_search_index (entity_type, entity_id, title, content)
+        VALUES ('list', NEW.id, NEW.name, NEW.name);
+      END
+    ''');
+    await database.customStatement('''
+      CREATE TRIGGER IF NOT EXISTS todo_lists_search_index_ad
+      AFTER DELETE ON todo_lists BEGIN
+        DELETE FROM todo_search_index
+        WHERE entity_type = 'list' AND entity_id = OLD.id;
+      END
+    ''');
+    await database.customStatement('''
+      CREATE TRIGGER IF NOT EXISTS todo_tags_search_index_ai
+      AFTER INSERT ON todo_tags BEGIN
+        INSERT INTO todo_search_index (entity_type, entity_id, title, content)
+        VALUES ('tag', NEW.id, NEW.name, NEW.name);
+      END
+    ''');
+    await database.customStatement('''
+      CREATE TRIGGER IF NOT EXISTS todo_tags_search_index_au
+      AFTER UPDATE OF id, name ON todo_tags BEGIN
+        DELETE FROM todo_search_index
+        WHERE entity_type = 'tag' AND entity_id = OLD.id;
+        INSERT INTO todo_search_index (entity_type, entity_id, title, content)
+        VALUES ('tag', NEW.id, NEW.name, NEW.name);
+      END
+    ''');
+    await database.customStatement('''
+      CREATE TRIGGER IF NOT EXISTS todo_tags_search_index_ad
+      AFTER DELETE ON todo_tags BEGIN
+        DELETE FROM todo_search_index
+        WHERE entity_type = 'tag' AND entity_id = OLD.id;
+      END
+    ''');
+
+    // 迁移已有数据库时，旧记录不会经过 INSERT trigger，故索引必须可重建。
+    await database.customStatement('DELETE FROM todo_search_index');
+    await database.customStatement('''
+      INSERT INTO todo_search_index (entity_type, entity_id, title, content)
+      SELECT 'task', id, title, title || ' ' || COALESCE(description, '')
+      FROM todo_tasks
+    ''');
+    await database.customStatement('''
+      INSERT INTO todo_search_index (entity_type, entity_id, title, content)
+      SELECT 'list', id, name, name FROM todo_lists
+    ''');
+    await database.customStatement('''
+      INSERT INTO todo_search_index (entity_type, entity_id, title, content)
+      SELECT 'tag', id, name, name FROM todo_tags
+    ''');
+  }
+
+  Future<void> _createAssigneeFilterIndex(GeneratedDatabase database) {
+    return database.customStatement('''
+      CREATE INDEX IF NOT EXISTS idx_todo_tasks_b3_assignee_filter
+      ON todo_tasks (assignee_user_id, completed, due_at, id)
+    ''');
+  }
 
   Future<bool> _tableExists(Migrator migrator, String tableName) async {
     final row = await migrator.database
@@ -543,6 +715,52 @@ class AppDatabase extends _$AppDatabase {
       readsFrom: {todoTasks},
     ).getSingle();
     return row.read<int>('c');
+  }
+
+  /// 从 SQLite FTS 索引搜索任务、清单和标签。
+  ///
+  /// FTS 查询值始终用参数绑定。三字符以内没有可用 trigram token，改在更窄
+  /// 的索引表上保持原有「包含」语义；其余查询由 FTS5 完成倒排检索。
+  Future<List<TodoSearchIndexEntry>> searchIndex(String keyword) async {
+    final normalized = keyword.trim().toLowerCase();
+    if (normalized.isEmpty) return const [];
+
+    final isShortTerm = normalized.runes.length < 3;
+    final query = isShortTerm
+        ? '''
+            SELECT entity_type, entity_id, title
+            FROM todo_search_index
+            WHERE instr(lower(content), ?) > 0
+          '''
+        : '''
+            SELECT entity_type, entity_id, title
+            FROM todo_search_index
+            WHERE todo_search_index MATCH ?
+          ''';
+    final matchValue = isShortTerm
+        ? normalized
+        : '"${normalized.replaceAll('"', '""')}"';
+    final rows = await customSelect(
+      '''
+        $query
+        ORDER BY CASE entity_type
+          WHEN 'task' THEN 0
+          WHEN 'list' THEN 1
+          WHEN 'tag' THEN 2
+          ELSE 3
+        END, title COLLATE NOCASE, entity_id
+      ''',
+      variables: [Variable.withString(matchValue)],
+    ).get();
+    return rows
+        .map(
+          (row) => TodoSearchIndexEntry(
+            entityType: row.read<String>('entity_type'),
+            entityId: row.read<String>('entity_id'),
+            title: row.read<String>('title'),
+          ),
+        )
+        .toList(growable: false);
   }
 
   /// 子任务查询（直接 children）。

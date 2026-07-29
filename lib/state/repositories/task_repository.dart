@@ -94,6 +94,7 @@ class TaskRepository {
     late TodoTask row;
     await _db.transaction(() async {
       await _ensureInboxList(listId, now);
+      await _assertParentChainDoesNotContain(null, listId, parentTaskId);
       await _db
           .into(_db.todoTasks)
           .insert(
@@ -681,28 +682,74 @@ class TaskRepository {
     return result;
   }
 
-  Future<void> reparent(String taskId, String? newParentId) =>
-      _db.transaction(() async {
-        await _db.reparentTask(taskId, newParentId);
-        final row = await (_db.select(
-          _db.todoTasks,
-        )..where((t) => t.id.equals(taskId))).getSingle();
-        await _queue.enqueue(
-          entity: SyncEntities.task,
-          op: SyncOps.upsert,
-          localId: taskId,
-          serverId: row.serverId,
-          payload: _taskPayload(row),
-        );
-      });
+  Future<void> reparent(String taskId, String? newParentId) => _db.transaction(
+    () async {
+      if (taskId == newParentId) {
+        throw ArgumentError.value(newParentId, 'newParentId', '任务不能引用自身');
+      }
+      final task = await (_db.select(
+        _db.todoTasks,
+      )..where((row) => row.id.equals(taskId))).getSingleOrNull();
+      if (task == null) {
+        throw StateError('任务不存在');
+      }
+      await _assertParentChainDoesNotContain(taskId, task.listId, newParentId);
+      await _db.reparentTask(taskId, newParentId);
+      final row = await (_db.select(
+        _db.todoTasks,
+      )..where((t) => t.id.equals(taskId))).getSingle();
+      await _queue.enqueue(
+        entity: SyncEntities.task,
+        op: SyncOps.upsert,
+        localId: taskId,
+        serverId: row.serverId,
+        payload: _taskPayload(row),
+      );
+    },
+  );
 
-  Map<String, dynamic> _taskPayload(TodoTask task) => {
-    ...task.toJson(),
-    'status': task.cancelled
-        ? 'cancelled'
-        : task.completed
-        ? 'DONE'
-        : 'TODO',
-    'completedAt': task.completedAt?.millisecondsSinceEpoch,
-  };
+  Future<void> _assertParentChainDoesNotContain(
+    String? taskId,
+    String taskListId,
+    String? newParentId,
+  ) async {
+    var currentId = newParentId;
+    final visited = <String>{};
+    var parentChainLength = 0;
+    while (currentId != null) {
+      final parentId = currentId;
+      if (parentId == taskId || !visited.add(parentId)) {
+        throw StateError('任务父子关系形成循环');
+      }
+      if (parentChainLength >= 5) {
+        throw StateError('任务层级不能超过五级');
+      }
+      final current = await (_db.select(
+        _db.todoTasks,
+      )..where((task) => task.id.equals(parentId))).getSingleOrNull();
+      if (current == null) {
+        throw StateError('父任务不存在');
+      }
+      if (current.listId != taskListId) {
+        throw StateError('父任务必须属于同一清单');
+      }
+      currentId = current.parentTaskId;
+      parentChainLength += 1;
+    }
+  }
+
+  Map<String, dynamic> _taskPayload(TodoTask task) {
+    final payload = <String, dynamic>{
+      ...task.toJson(),
+      'status': task.cancelled
+          ? 'cancelled'
+          : task.completed
+          ? 'DONE'
+          : 'TODO',
+      'completedAt': task.completedAt?.millisecondsSinceEpoch,
+    };
+    // 名称是本地展示缓存；服务端写契约只使用稳定的用户 ID。
+    payload.remove('assigneeUserName');
+    return payload;
+  }
 }

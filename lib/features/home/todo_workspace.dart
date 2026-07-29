@@ -1,10 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/brand_colors.dart';
 import '../../core/theme/todo_layout_tokens.dart';
+import '../../state/repositories/task_query_repository.dart';
 import '../shell/section.dart';
 import '../shell/sidebar.dart';
+import '../task/task_search_page.dart';
 
 enum TodoWorkspaceProfile { wide, compact, tablet, mobile }
 
@@ -42,6 +47,7 @@ class TodoWorkspace extends StatelessWidget {
     required this.onOpenTags,
     required this.onOpenFilters,
     required this.onOpenSettings,
+    this.onSearchResultSelected,
     this.scaffoldKey,
     this.onDetailDrawerChanged,
     this.syncStatus = '同步尚未执行',
@@ -61,6 +67,7 @@ class TodoWorkspace extends StatelessWidget {
   final VoidCallback onOpenTags;
   final VoidCallback onOpenFilters;
   final VoidCallback onOpenSettings;
+  final ValueChanged<TaskSearchResult>? onSearchResultSelected;
   final GlobalKey<ScaffoldState>? scaffoldKey;
   final TodoDetailDrawerChanged? onDetailDrawerChanged;
   final String syncStatus;
@@ -73,12 +80,35 @@ class TodoWorkspace extends StatelessWidget {
       TodoWorkspaceProfile.tablet => _tablet(context),
       TodoWorkspaceProfile.mobile => _mobile(context),
     };
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        workspace,
-        IgnorePointer(child: TodoSyncStatusAnnouncement(status: syncStatus)),
-      ],
+    return Shortcuts(
+      shortcuts: const {
+        SingleActivator(LogicalKeyboardKey.keyK, control: true):
+            _OpenGlobalSearchIntent(),
+        SingleActivator(LogicalKeyboardKey.keyK, meta: true):
+            _OpenGlobalSearchIntent(),
+      },
+      child: Actions(
+        actions: {
+          _OpenGlobalSearchIntent: CallbackAction<_OpenGlobalSearchIntent>(
+            onInvoke: (_) {
+              unawaited(_openSearch(context));
+              return null;
+            },
+          ),
+        },
+        child: Focus(
+          autofocus: true,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              workspace,
+              IgnorePointer(
+                child: TodoSyncStatusAnnouncement(status: syncStatus),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -266,11 +296,18 @@ class TodoWorkspace extends StatelessWidget {
         IconButton(
           tooltip: '搜索',
           icon: Icon(Icons.search, color: colors.mutedForeground),
-          onPressed: () {},
+          onPressed: () => unawaited(_openSearch(context)),
         ),
         const SizedBox(width: 8),
       ],
     );
+  }
+
+  Future<void> _openSearch(BuildContext context) async {
+    final result = await Navigator.of(context).push<TaskSearchResult>(
+      MaterialPageRoute(builder: (_) => const TaskSearchPage()),
+    );
+    if (result != null) onSearchResultSelected?.call(result);
   }
 }
 
@@ -354,6 +391,10 @@ class TodoRail extends StatelessWidget {
       ),
     );
   }
+}
+
+class _OpenGlobalSearchIntent extends Intent {
+  const _OpenGlobalSearchIntent();
 }
 
 class _RailButton extends StatefulWidget {
