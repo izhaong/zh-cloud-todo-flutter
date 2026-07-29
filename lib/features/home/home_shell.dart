@@ -12,6 +12,7 @@ import '../../state/nlp_date.dart';
 import '../../state/providers.dart';
 import '../../state/session_state.dart';
 import '../habit/habit_page.dart';
+import '../reminder/reminder_inbox_page.dart';
 import '../settings/settings_route.dart';
 import '../shell/section.dart';
 import '../shell/quick_add_bar.dart';
@@ -52,9 +53,9 @@ class _HomeShellState extends ConsumerState<HomeShell>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _triggerSync();
     _initNotifications();
     if (!const bool.fromEnvironment('FLUTTER_TEST')) {
+      _triggerSync();
       _connectivityRecoveryTrigger = ConnectivityRecoveryTrigger(
         ref.read(connectivityChangesProvider),
         initialState: ref.read(connectivityInitialStateProvider),
@@ -78,7 +79,10 @@ class _HomeShellState extends ConsumerState<HomeShell>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _triggerSync();
+    if (!const bool.fromEnvironment('FLUTTER_TEST') &&
+        state == AppLifecycleState.resumed) {
+      _triggerSync();
+    }
   }
 
   Future<void> _initNotifications() async {
@@ -279,6 +283,12 @@ class _HomeShellState extends ConsumerState<HomeShell>
     );
   }
 
+  void _openReminders() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const ReminderInboxPage()));
+  }
+
   Future<void> _quickAdd(QuickAddRequest request) async {
     final repo = ref.read(taskRepositoryProvider);
     if (repo == null) return;
@@ -342,6 +352,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
           ),
           onSelectSection: _selectSection,
           onSync: () => unawaited(_triggerSync()),
+          onOpenReminders: _openReminders,
           syncStatus: _syncStatus,
           onSelectSmart: _selectSmart,
           onSelectList: _selectList,

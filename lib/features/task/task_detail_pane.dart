@@ -1238,9 +1238,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
   Future<_RepeatRuleDraft?> _showRepeatRuleEditor(TodoRepeatRule? existing) {
     var frequency = existing?.freq ?? 'DAILY';
     var repeatMode = existing?.repeatMode ?? 'ON_DUE';
-    final intervalController = TextEditingController(
-      text: '${existing?.interval ?? 1}',
-    );
+    var intervalText = '${existing?.interval ?? 1}';
     final weekdays = _weekdaysFromText(existing?.byDay);
     if (frequency == 'CUSTOM' && weekdays.isEmpty) {
       weekdays.add(DateTime.now().weekday);
@@ -1287,9 +1285,10 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                           .toList(),
                 ),
                 const SizedBox(height: 16),
-                TextField(
+                TextFormField(
                   key: const Key('task-repeat-interval'),
-                  controller: intervalController,
+                  initialValue: intervalText,
+                  onChanged: (value) => intervalText = value,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
                     labelText: '每隔几次',
@@ -1351,7 +1350,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
             FilledButton(
               key: const Key('task-repeat-save'),
               onPressed: () {
-                final interval = int.tryParse(intervalController.text.trim());
+                final interval = int.tryParse(intervalText.trim());
                 if (interval == null || interval < 1) return;
                 Navigator.pop(
                   dialogContext,
@@ -1368,7 +1367,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
           ],
         ),
       ),
-    ).whenComplete(intervalController.dispose);
+    );
   }
 
   Set<int> _weekdaysFromText(String? value) => (value ?? '')

@@ -36,6 +36,7 @@ class TodoWorkspace extends StatelessWidget {
     required this.detail,
     required this.onSelectSection,
     required this.onSync,
+    required this.onOpenReminders,
     required this.onSelectSmart,
     required this.onSelectList,
     required this.onOpenTags,
@@ -54,6 +55,7 @@ class TodoWorkspace extends StatelessWidget {
   final Widget detail;
   final ValueChanged<Section> onSelectSection;
   final VoidCallback onSync;
+  final VoidCallback onOpenReminders;
   final ValueChanged<SmartList> onSelectSmart;
   final ValueChanged<String?> onSelectList;
   final VoidCallback onOpenTags;
@@ -87,7 +89,12 @@ class TodoWorkspace extends StatelessWidget {
       backgroundColor: colors.background,
       body: Row(
         children: [
-          TodoRail(section: section, onSelect: onSelectSection, onSync: onSync),
+          TodoRail(
+            section: section,
+            onSelect: onSelectSection,
+            onSync: onSync,
+            onOpenReminders: onOpenReminders,
+          ),
           _WorkspaceDivider(color: colors.border),
           Sidebar(
             key: const Key('todo-sidebar'),
@@ -125,7 +132,12 @@ class TodoWorkspace extends StatelessWidget {
           onDetailDrawerChanged?.call(TodoWorkspaceProfile.compact, isOpen),
       body: Row(
         children: [
-          TodoRail(section: section, onSelect: onSelectSection, onSync: onSync),
+          TodoRail(
+            section: section,
+            onSelect: onSelectSection,
+            onSync: onSync,
+            onOpenReminders: onOpenReminders,
+          ),
           _WorkspaceDivider(color: colors.border),
           Sidebar(
             key: const Key('todo-sidebar'),
@@ -159,7 +171,12 @@ class TodoWorkspace extends StatelessWidget {
       appBar: _shellAppBar(context),
       body: Row(
         children: [
-          TodoRail(section: section, onSelect: onSelectSection, onSync: onSync),
+          TodoRail(
+            section: section,
+            onSelect: onSelectSection,
+            onSync: onSync,
+            onOpenReminders: onOpenReminders,
+          ),
           _WorkspaceDivider(color: colors.border),
           Expanded(child: _contentRegion(colors)),
         ],
@@ -217,6 +234,7 @@ class TodoWorkspace extends StatelessWidget {
           onOpenTags: onOpenTags,
           onOpenFilters: onOpenFilters,
           onOpenSettings: onOpenSettings,
+          onOpenReminders: onOpenReminders,
           onNavigationCommitted: () => Scaffold.of(drawerContext).closeDrawer(),
         ),
       ),
@@ -263,11 +281,13 @@ class TodoRail extends StatelessWidget {
     required this.section,
     required this.onSelect,
     required this.onSync,
+    required this.onOpenReminders,
   });
 
   final Section section;
   final ValueChanged<Section> onSelect;
   final VoidCallback onSync;
+  final VoidCallback onOpenReminders;
 
   @override
   Widget build(BuildContext context) {
@@ -320,10 +340,12 @@ class TodoRail extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               _RailButton(
+                key: const Key('todo-reminder-inbox-action'),
                 tooltip: '通知',
                 icon: Icons.notifications_none,
                 selected: false,
-                onTap: () {},
+                onTap: onOpenReminders,
+                identifier: 'todo_reminder_inbox_action',
               ),
               const SizedBox(height: 8),
             ],
@@ -336,6 +358,7 @@ class TodoRail extends StatelessWidget {
 
 class _RailButton extends StatefulWidget {
   const _RailButton({
+    super.key,
     required this.tooltip,
     required this.icon,
     required this.selected,
