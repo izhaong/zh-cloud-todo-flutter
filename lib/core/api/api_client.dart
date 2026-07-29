@@ -65,16 +65,40 @@ class ApiClient {
     return _dio.get<T>('${ApiConfig.todoPrefix}$path', queryParameters: query);
   }
 
-  Future<Response<T>> post<T>(String path, {Object? data}) {
-    return _dio.post<T>('${ApiConfig.todoPrefix}$path', data: data);
+  Future<Response<T>> post<T>(
+    String path, {
+    Object? data,
+    Map<String, dynamic>? queryParameters,
+  }) {
+    return _dio.post<T>(
+      '${ApiConfig.todoPrefix}$path',
+      data: data,
+      queryParameters: queryParameters,
+    );
   }
 
-  Future<Response<T>> put<T>(String path, {Object? data}) {
-    return _dio.put<T>('${ApiConfig.todoPrefix}$path', data: data);
+  Future<Response<T>> put<T>(
+    String path, {
+    Object? data,
+    Map<String, dynamic>? queryParameters,
+  }) {
+    return _dio.put<T>(
+      '${ApiConfig.todoPrefix}$path',
+      data: data,
+      queryParameters: queryParameters,
+    );
   }
 
-  Future<Response<T>> delete<T>(String path, {Object? data}) {
-    return _dio.delete<T>('${ApiConfig.todoPrefix}$path', data: data);
+  Future<Response<T>> delete<T>(
+    String path, {
+    Object? data,
+    Map<String, dynamic>? queryParameters,
+  }) {
+    return _dio.delete<T>(
+      '${ApiConfig.todoPrefix}$path',
+      data: data,
+      queryParameters: queryParameters,
+    );
   }
 
   // --- /app-api/todo-member/** 认证 -----------------------------------------

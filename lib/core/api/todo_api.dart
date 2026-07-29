@@ -704,6 +704,7 @@ class TodoRestApi {
       listCollaboration = ListCollaborationApi(client),
       taskAssign = TaskAssignApi(client),
       comment = TaskCommentApi(client),
+      note = NoteApi(client),
       calSubscription = CalendarSubscriptionApi(client),
       security = SecurityApi(client);
 
@@ -721,6 +722,7 @@ class TodoRestApi {
   final ListCollaborationApi listCollaboration;
   final TaskAssignApi taskAssign;
   final TaskCommentApi comment;
+  final NoteApi note;
   final CalendarSubscriptionApi calSubscription;
   final SecurityApi security;
 }
@@ -1119,6 +1121,134 @@ class TaskCommentApi {
   /// `POST /comment/delete` body `{id}`。
   Future<void> delete(int commentId) =>
       _client.delete('/comment/delete', data: {'id': commentId});
+}
+
+/// 一条服务端笔记。
+class TodoNoteItem {
+  const TodoNoteItem({
+    required this.id,
+    required this.title,
+    required this.content,
+    required this.contentType,
+    required this.archived,
+    this.taskId,
+    this.sortOrder = 0,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  final int id;
+  final String title;
+  final String content;
+  final int contentType;
+  final bool archived;
+  final int? taskId;
+  final int sortOrder;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  factory TodoNoteItem.fromJson(Map<String, dynamic> json) => TodoNoteItem(
+    id: (json['id'] as num?)?.toInt() ?? 0,
+    title: json['title']?.toString() ?? '',
+    content: json['content']?.toString() ?? '',
+    contentType: (json['contentType'] as num?)?.toInt() ?? 1,
+    archived: json['archived'] == true,
+    taskId: (json['taskId'] as num?)?.toInt(),
+    sortOrder: (json['sortOrder'] as num?)?.toInt() ?? 0,
+    createdAt: _parseOptionalTime(json['createTime'] ?? json['createdAt']),
+    updatedAt: _parseOptionalTime(json['updateTime'] ?? json['updatedAt']),
+  );
+
+  static DateTime? _parseOptionalTime(Object? value) {
+    if (value is String && value.isNotEmpty) return DateTime.tryParse(value);
+    if (value is num) {
+      return DateTime.fromMillisecondsSinceEpoch(value.toInt());
+    }
+    return null;
+  }
+}
+
+/// 笔记 REST 合同：列表、创建、编辑、删除、归档以及任务转笔记。
+class NoteApi {
+  NoteApi(this._client);
+
+  final ApiClient _client;
+
+  Future<List<TodoNoteItem>> list() async {
+    final response = await _client.get<Map<String, dynamic>>('/note/list');
+    final raw = _unwrapListBody(response.data);
+    return raw
+        .map(
+          (item) =>
+              TodoNoteItem.fromJson(Map<String, dynamic>.from(item as Map)),
+        )
+        .toList(growable: false);
+  }
+
+  Future<int> create({
+    required String title,
+    required String content,
+    int contentType = 2,
+  }) async {
+    final response = await _client.post<Map<String, dynamic>>(
+      '/note/create',
+      data: {'title': title, 'content': content, 'contentType': contentType},
+    );
+    return _unwrapId(response.data);
+  }
+
+  Future<void> update({
+    required int id,
+    required String title,
+    required String content,
+    int contentType = 2,
+    int sortOrder = 0,
+  }) async {
+    final response = await _client.put<Map<String, dynamic>>(
+      '/note/update',
+      data: {
+        'id': id,
+        'title': title,
+        'content': content,
+        'contentType': contentType,
+        'sortOrder': sortOrder,
+      },
+    );
+    _ensureSuccess(response.data);
+  }
+
+  Future<void> delete(int id) async {
+    final response = await _client.delete<Map<String, dynamic>>(
+      '/note/delete',
+      queryParameters: {'id': id},
+    );
+    _ensureSuccess(response.data);
+  }
+
+  Future<void> archive(int id, {required bool archived}) async {
+    final response = await _client.put<Map<String, dynamic>>(
+      '/note/archive',
+      queryParameters: {'id': id, 'archived': archived},
+    );
+    _ensureSuccess(response.data);
+  }
+
+  Future<int> convertFromTask(int taskId) async {
+    final response = await _client.post<Map<String, dynamic>>(
+      '/note/convert-from-task',
+      queryParameters: {'taskId': taskId},
+    );
+    return _unwrapId(response.data);
+  }
+
+  int _unwrapId(Map<String, dynamic>? body) {
+    if (body == null) return 0;
+    _ensureSuccess(body);
+    final data = body.containsKey('code') ? body['data'] : body['id'];
+    if (data is num) return data.toInt();
+    if (data is Map) return (data['id'] as num?)?.toInt() ?? 0;
+    return int.tryParse(data?.toString() ?? '') ?? 0;
+  }
 }
 
 /// 一行后端 ICS 订阅。

@@ -21,6 +21,7 @@ class Sidebar extends ConsumerWidget {
     required this.onOpenTags,
     required this.onOpenFilters,
     required this.onOpenSettings,
+    this.onOpenNotes,
     this.onOpenReminders,
     this.width = TodoLayoutTokens.wideSidebarWidth,
     this.onNavigationCommitted,
@@ -36,6 +37,7 @@ class Sidebar extends ConsumerWidget {
   final VoidCallback onOpenTags;
   final VoidCallback onOpenFilters;
   final VoidCallback onOpenSettings;
+  final VoidCallback? onOpenNotes;
   final VoidCallback? onOpenReminders;
   final VoidCallback? onNavigationCommitted;
 
@@ -185,6 +187,18 @@ class Sidebar extends ConsumerWidget {
                       colors: colors,
                       onTap: onOpenFilters,
                     ),
+                    if (onOpenNotes != null)
+                      _NavRow(
+                        rowKey: const Key('todo-sidebar-row-notes'),
+                        icon: Icons.description_outlined,
+                        label: '笔记',
+                        selected: false,
+                        colors: colors,
+                        onTap: () {
+                          onNavigationCommitted?.call();
+                          onOpenNotes!();
+                        },
+                      ),
                     const SizedBox(height: TodoLayoutTokens.sidebarSectionGap),
                     _GroupTitle('清单', colors: colors),
                     Padding(

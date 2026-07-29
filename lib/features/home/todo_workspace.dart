@@ -47,6 +47,7 @@ class TodoWorkspace extends StatelessWidget {
     required this.onOpenTags,
     required this.onOpenFilters,
     required this.onOpenSettings,
+    this.onOpenNotes,
     this.onSearchResultSelected,
     this.scaffoldKey,
     this.onDetailDrawerChanged,
@@ -67,6 +68,7 @@ class TodoWorkspace extends StatelessWidget {
   final VoidCallback onOpenTags;
   final VoidCallback onOpenFilters;
   final VoidCallback onOpenSettings;
+  final VoidCallback? onOpenNotes;
   final ValueChanged<TaskSearchResult>? onSearchResultSelected;
   final GlobalKey<ScaffoldState>? scaffoldKey;
   final TodoDetailDrawerChanged? onDetailDrawerChanged;
@@ -138,6 +140,7 @@ class TodoWorkspace extends StatelessWidget {
             onOpenTags: onOpenTags,
             onOpenFilters: onOpenFilters,
             onOpenSettings: onOpenSettings,
+            onOpenNotes: onOpenNotes,
           ),
           _WorkspaceDivider(color: colors.border),
           Expanded(child: _contentRegion(colors)),
@@ -181,6 +184,7 @@ class TodoWorkspace extends StatelessWidget {
             onOpenTags: onOpenTags,
             onOpenFilters: onOpenFilters,
             onOpenSettings: onOpenSettings,
+            onOpenNotes: onOpenNotes,
           ),
           _WorkspaceDivider(color: colors.border),
           Expanded(child: _contentRegion(colors)),
@@ -264,6 +268,7 @@ class TodoWorkspace extends StatelessWidget {
           onOpenTags: onOpenTags,
           onOpenFilters: onOpenFilters,
           onOpenSettings: onOpenSettings,
+          onOpenNotes: onOpenNotes,
           onOpenReminders: onOpenReminders,
           onNavigationCommitted: () => Scaffold.of(drawerContext).closeDrawer(),
         ),

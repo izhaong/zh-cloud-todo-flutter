@@ -19,6 +19,7 @@ import 'task_quick_add_sheet.dart';
 import '../collaboration/task_comments_page.dart';
 import '../collaboration/task_assign_page.dart';
 import '../collaboration/list_member_page.dart';
+import '../note/note_page.dart';
 
 /// 收集箱的本地清单 id（synthetic inbox）：listId 为该值的任务视为"未归清单"。
 const String kInboxListId = 'inbox';
@@ -29,6 +30,7 @@ enum _TaskDetailAction {
   moveToInbox,
   copy,
   share,
+  convertToNote,
   abandon,
   collaboration,
   delete,
@@ -937,6 +939,36 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(shared ? '已打开系统分享' : '当前设备不支持系统分享')));
+  }
+
+  Future<void> _convertToNote(TodoTask task) async {
+    final serverId = task.serverId;
+    if (serverId == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('任务同步后才能转换为笔记')));
+      return;
+    }
+    try {
+      await ref.read(noteRepositoryProvider).convertFromTask(serverId);
+      if (!mounted || widget.taskId != task.id) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('已转换为笔记'),
+          action: SnackBarAction(
+            label: '查看',
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const NotePage())),
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted || widget.taskId != task.id) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('转换失败：$error')));
+    }
   }
 
   Future<void> _previewMarkdown(TodoTask t) async {
@@ -2336,6 +2368,11 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                 icon: const Icon(Icons.people_outline),
               ),
               IconButton(
+                tooltip: '转为笔记',
+                onPressed: () => _convertToNote(t),
+                icon: const Icon(Icons.note_add_outlined),
+              ),
+              IconButton(
                 tooltip: '删除',
                 onPressed: () => _delete(t),
                 icon: const Icon(Icons.delete_outline),
@@ -2386,6 +2423,9 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                       case _TaskDetailAction.share:
                         unawaited(_share(t));
                         return;
+                      case _TaskDetailAction.convertToNote:
+                        unawaited(_convertToNote(t));
+                        return;
                       case _TaskDetailAction.abandon:
                         unawaited(_abandon(t));
                         return;
@@ -2418,6 +2458,10 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                     const PopupMenuItem(
                       value: _TaskDetailAction.share,
                       child: Text('分享任务'),
+                    ),
+                    const PopupMenuItem(
+                      value: _TaskDetailAction.convertToNote,
+                      child: Text('转为笔记'),
                     ),
                     const PopupMenuItem(
                       value: _TaskDetailAction.abandon,
@@ -2465,6 +2509,11 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                   tooltip: '分享任务',
                   onPressed: () => _share(t),
                   icon: const Icon(Icons.share_outlined),
+                ),
+                IconButton(
+                  tooltip: '转为笔记',
+                  onPressed: () => _convertToNote(t),
+                  icon: const Icon(Icons.note_add_outlined),
                 ),
                 IconButton(
                   tooltip: '放弃任务',

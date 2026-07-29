@@ -14,6 +14,7 @@ import 'repositories/board_preference_repository.dart';
 import 'repositories/folder_repository.dart';
 import 'repositories/activity_repository.dart';
 import 'repositories/list_repository.dart';
+import 'repositories/note_repository.dart';
 import 'repositories/recommendation_repository.dart';
 import 'repositories/reminder_dispatch_action_repository.dart';
 import 'repositories/reminder_inbox_repository.dart';
@@ -139,6 +140,10 @@ final taskRepositoryProvider = Provider<TaskRepository?>((ref) {
   final queue = ref.watch(syncChangeQueueProvider);
   if (db == null || queue == null) return null;
   return TaskRepository(db, queue);
+});
+
+final noteRepositoryProvider = Provider<NoteRepository>((ref) {
+  return ApiNoteRepository(ref.watch(todoApiProvider).note);
 });
 
 /// 推荐为只读服务端投影，成功拉取后落入 Drift；不使用 outbox。
