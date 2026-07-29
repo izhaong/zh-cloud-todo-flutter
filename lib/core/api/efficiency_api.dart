@@ -98,6 +98,80 @@ class CountdownDto {
   bool get isCountUp => daysRemaining < 0;
 }
 
+class AchievementBadgeDto {
+  const AchievementBadgeDto({
+    required this.badgeType,
+    required this.name,
+    required this.description,
+    required this.earned,
+    this.icon,
+  });
+
+  final int badgeType;
+  final String name;
+  final String description;
+  final String? icon;
+  final bool earned;
+
+  factory AchievementBadgeDto.fromJson(Map<String, dynamic> json) {
+    return AchievementBadgeDto(
+      badgeType: (json['badgeType'] as num?)?.toInt() ?? 0,
+      name: json['name']?.toString() ?? '',
+      description: json['description']?.toString() ?? '',
+      icon: json['icon']?.toString(),
+      earned: json['earned'] == true,
+    );
+  }
+}
+
+class AchievementWallDto {
+  const AchievementWallDto({
+    required this.totalScore,
+    required this.level,
+    required this.nextLevelName,
+    required this.nextLevelRequired,
+    required this.earnedBadges,
+    required this.lockedBadges,
+  });
+
+  final int totalScore;
+  final int level;
+  final String nextLevelName;
+  final int nextLevelRequired;
+  final List<AchievementBadgeDto> earnedBadges;
+  final List<AchievementBadgeDto> lockedBadges;
+
+  bool get isMaxLevel =>
+      nextLevelRequired <= 0 || totalScore >= nextLevelRequired;
+
+  double get progress {
+    if (isMaxLevel) return 1;
+    return (totalScore / nextLevelRequired).clamp(0, 1).toDouble();
+  }
+
+  factory AchievementWallDto.fromJson(Map<String, dynamic> json) {
+    List<AchievementBadgeDto> badges(Object? value) {
+      if (value is! List) return const [];
+      return value
+          .whereType<Map>()
+          .map(
+            (item) =>
+                AchievementBadgeDto.fromJson(Map<String, dynamic>.from(item)),
+          )
+          .toList(growable: false);
+    }
+
+    return AchievementWallDto(
+      totalScore: (json['totalScore'] as num?)?.toInt() ?? 0,
+      level: (json['level'] as num?)?.toInt() ?? 1,
+      nextLevelName: json['nextLevelName']?.toString() ?? '',
+      nextLevelRequired: (json['nextLevelRequired'] as num?)?.toInt() ?? 0,
+      earnedBadges: badges(json['earnedBadges']),
+      lockedBadges: badges(json['lockedBadges']),
+    );
+  }
+}
+
 DateTime? _parseDate(Object? v) {
   if (v == null) return null;
   if (v is String) return DateTime.tryParse(v);
@@ -403,6 +477,24 @@ class CountdownApi {
     if (data is num) return data.toInt();
     if (data is Map) return (data['id'] as num?)?.toInt() ?? 0;
     return int.tryParse('$data') ?? 0;
+  }
+}
+
+/// 会员自己的成就值、等级进度与勋章墙。
+class AchievementApi {
+  AchievementApi(this._dio);
+
+  final Dio _dio;
+
+  Future<AchievementWallDto> wall() async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '${ApiConfig.todoPrefix}/achievement/wall',
+    );
+    final data = _unwrapData(response.data);
+    if (data is! Map) {
+      throw StateError('成就墙响应无效');
+    }
+    return AchievementWallDto.fromJson(Map<String, dynamic>.from(data));
   }
 }
 

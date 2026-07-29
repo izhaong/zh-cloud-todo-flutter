@@ -12,6 +12,10 @@ final countdownApiProvider = Provider<CountdownApi>((ref) {
   return CountdownApi(ref.watch(apiClientProvider).raw);
 });
 
+final achievementApiProvider = Provider<AchievementApi>((ref) {
+  return AchievementApi(ref.watch(apiClientProvider).raw);
+});
+
 final quadrantApiProvider = Provider<QuadrantApi>((ref) {
   return QuadrantApi(ref.watch(apiClientProvider).raw);
 });
@@ -53,6 +57,13 @@ final countdownsProvider = FutureProvider.autoDispose<List<CountdownDto>>((
 ) async {
   final api = ref.watch(countdownApiProvider);
   return api.list();
+});
+
+/// 当前会员的成就值、等级与勋章墙。
+final achievementWallProvider = FutureProvider.autoDispose<AchievementWallDto>((
+  ref,
+) {
+  return ref.watch(achievementApiProvider).wall();
 });
 
 /// 我的习惯列表。

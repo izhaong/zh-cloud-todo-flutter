@@ -5,6 +5,20 @@ import 'package:zh_cloud_todo_flutter/core/api/efficiency_api.dart';
 import 'package:zh_cloud_todo_flutter/features/habit/habit_repository.dart';
 
 void main() {
+  test('最高等级成就进度保持为 100% 且不显示负数差额', () {
+    const wall = AchievementWallDto(
+      totalScore: 15000,
+      level: 6,
+      nextLevelName: '进阶',
+      nextLevelRequired: 100,
+      earnedBadges: [],
+      lockedBadges: [],
+    );
+
+    expect(wall.isMaxLevel, isTrue);
+    expect(wall.progress, 1);
+  });
+
   test(
     'efficiency clients follow the service CommonResult contracts',
     () async {
@@ -98,6 +112,33 @@ void main() {
               if (path.endsWith('/countdown/create')) {
                 return handler.resolve(_response(options, 8));
               }
+              if (path.endsWith('/achievement/wall')) {
+                return handler.resolve(
+                  _response(options, {
+                    'totalScore': 250,
+                    'level': 2,
+                    'nextLevelName': 'Lv3',
+                    'nextLevelRequired': 500,
+                    'earnedBadges': [
+                      {
+                        'badgeType': 1,
+                        'name': '新手',
+                        'description': '完成首个任务',
+                        'icon': 'starter',
+                        'earned': true,
+                      },
+                    ],
+                    'lockedBadges': [
+                      {
+                        'badgeType': 2,
+                        'name': '连续打卡',
+                        'description': '连续打卡 7 天',
+                        'earned': false,
+                      },
+                    ],
+                  }),
+                );
+              }
               return handler.resolve(_response(options, true));
             },
           ),
@@ -126,6 +167,8 @@ void main() {
         title: '下次发布',
         targetDate: DateTime(2026, 9, 1),
       );
+
+      final achievement = await AchievementApi(dio).wall();
 
       expect(started.id, 41);
       expect(pomodoroStats['totalMinutes'], 75);
@@ -174,6 +217,23 @@ void main() {
           'style': 1,
           'showAge': false,
         },
+      );
+
+      expect(achievement.totalScore, 250);
+      expect(achievement.level, 2);
+      expect(achievement.nextLevelName, 'Lv3');
+      expect(achievement.nextLevelRequired, 500);
+      expect(achievement.progress, 0.5);
+      expect(achievement.isMaxLevel, isFalse);
+      expect(achievement.earnedBadges.single.name, '新手');
+      expect(achievement.earnedBadges.single.icon, 'starter');
+      expect(achievement.lockedBadges.single.earned, isFalse);
+      expect(
+        requests
+            .where((request) => request.path.endsWith('/achievement/wall'))
+            .single
+            .method,
+        'GET',
       );
     },
   );
