@@ -47,6 +47,7 @@ class TaskQueryFilter {
     this.listId,
     this.priority,
     this.completed,
+    this.assigneeUserId,
     this.tagIds = const [],
     this.keyword,
     this.dueAtFrom,
@@ -57,6 +58,7 @@ class TaskQueryFilter {
   final String? listId;
   final int? priority;
   final bool? completed;
+  final int? assigneeUserId;
   final List<String> tagIds;
   final String? keyword;
   final DateTime? dueAtFrom;
@@ -106,6 +108,10 @@ class TaskQueryRepository {
         return false;
       }
       if (filter.completed != null && task.completed != filter.completed) {
+        return false;
+      }
+      if (filter.assigneeUserId != null &&
+          task.assigneeUserId != filter.assigneeUserId) {
         return false;
       }
       if (normalizedKeyword != null && normalizedKeyword.isNotEmpty) {

@@ -147,7 +147,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 filterActive: !_filter.isEmpty,
                 onModeChanged: _changeMode,
                 onSortChanged: _changeSort,
-                onFilterPressed: _openFilterPanel,
+                onFilterPressed: () => _openFilterPanel(raw),
                 batchSelectionActive: _batchSelectionActive,
                 batchSelectedCount: _batchSelectedTaskIds.length,
                 onBatchPressed: _toggleBatchSelection,
@@ -704,8 +704,25 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     }
   }
 
-  Future<void> _openFilterPanel() async {
+  Future<void> _openFilterPanel(List<TodoTask> tasks) async {
     var draft = _filter;
+    final assigneesById = <int, TaskAssigneeOption>{};
+    for (final task in tasks) {
+      final userId = task.assigneeUserId;
+      if (userId == null) continue;
+      final cachedName = task.assigneeUserName?.trim();
+      assigneesById[userId] = TaskAssigneeOption(
+        userId: userId,
+        name: cachedName == null || cachedName.isEmpty
+            ? '负责人 #$userId'
+            : cachedName,
+      );
+    }
+    final assigneeOptions = assigneesById.values.toList(growable: false)
+      ..sort((left, right) {
+        final byName = left.name.compareTo(right.name);
+        return byName != 0 ? byName : left.userId.compareTo(right.userId);
+      });
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -724,6 +741,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 const SizedBox(height: 12),
                 FilterBar(
                   filter: draft,
+                  assigneeOptions: assigneeOptions,
                   onChanged: (next) {
                     draft = next;
                     setState(() => _filter = next);
@@ -990,6 +1008,10 @@ List<TodoTask> _applyFilter(
       return false;
     }
     if (filter.completed != null && task.completed != filter.completed) {
+      return false;
+    }
+    if (filter.assigneeUserId != null &&
+        task.assigneeUserId != filter.assigneeUserId) {
       return false;
     }
     if (keyword != null && keyword.isNotEmpty) {

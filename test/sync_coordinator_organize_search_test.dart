@@ -335,6 +335,71 @@ void main() {
     expect(child.parentId, parent.id);
   });
 
+  test('pull preserves task assignee for offline filtering', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final dio = Dio()
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            final isFolderList = options.path.endsWith('/folder/list');
+            handler.resolve(
+              Response<Map<String, dynamic>>(
+                requestOptions: options,
+                data: isFolderList
+                    ? {'code': 0, 'data': const []}
+                    : {
+                        'code': 0,
+                        'data': {
+                          'changes': [
+                            {
+                              'entityType': 'list',
+                              'entityId': 11,
+                              'operation': 'upsert',
+                              'revision': 1,
+                              'payload': {'name': '协作清单'},
+                            },
+                            {
+                              'entityType': 'task',
+                              'entityId': 21,
+                              'operation': 'upsert',
+                              'revision': 1,
+                              'payload': {
+                                'listId': 11,
+                                'title': '负责人筛选任务',
+                                'status': 'TODO',
+                                'assigneeUserId': 101,
+                                'assigneeUserName': '小周',
+                              },
+                            },
+                          ],
+                          'tombstones': const [],
+                          'nextCursor': 'assignee-task',
+                          'hasMore': false,
+                        },
+                      },
+              ),
+            );
+          },
+        ),
+      );
+    final client = ApiClient(dio: dio);
+    final coordinator = SyncCoordinator(
+      db: db,
+      api: SyncApi(client, clientId: 'device-b', deviceId: 'device-b'),
+      todoApi: client,
+    );
+
+    expect(await coordinator.pull(), 2);
+    final task = await db.select(db.todoTasks).getSingle();
+    expect(task.assigneeUserId, 101);
+    expect(task.assigneeUserName, '小周');
+    final filtered = await TaskQueryRepository(
+      db,
+    ).filter(const TaskQueryFilter(assigneeUserId: 101));
+    expect(filtered.map((item) => item.id), [task.id]);
+  });
+
   test('push resolves a child tag parent UUID to its server ID', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);

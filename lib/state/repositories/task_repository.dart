@@ -738,13 +738,18 @@ class TaskRepository {
     }
   }
 
-  Map<String, dynamic> _taskPayload(TodoTask task) => {
-    ...task.toJson(),
-    'status': task.cancelled
-        ? 'cancelled'
-        : task.completed
-        ? 'DONE'
-        : 'TODO',
-    'completedAt': task.completedAt?.millisecondsSinceEpoch,
-  };
+  Map<String, dynamic> _taskPayload(TodoTask task) {
+    final payload = <String, dynamic>{
+      ...task.toJson(),
+      'status': task.cancelled
+          ? 'cancelled'
+          : task.completed
+          ? 'DONE'
+          : 'TODO',
+      'completedAt': task.completedAt?.millisecondsSinceEpoch,
+    };
+    // 名称是本地展示缓存；服务端写契约只使用稳定的用户 ID。
+    payload.remove('assigneeUserName');
+    return payload;
+  }
 }

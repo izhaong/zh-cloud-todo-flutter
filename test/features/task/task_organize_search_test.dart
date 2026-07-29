@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:drift/drift.dart' show Value;
 
+import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/core/theme/app_theme.dart';
 import 'package:zh_cloud_todo_flutter/features/home/home_shell.dart';
 import 'package:zh_cloud_todo_flutter/features/task/tasks_by_list_page.dart';
@@ -175,6 +177,60 @@ void main() {
         .getSingle();
     expect(change.entity, 'view_preference');
   });
+
+  testWidgets(
+    'advanced filter selects a cached assignee and narrows the workspace',
+    (tester) async {
+      final fixture = await TodoVisualFixture.create();
+      addTearDown(fixture.dispose);
+      await (fixture.database.update(
+        fixture.database.todoTasks,
+      )..where((row) => row.id.equals(TodoVisualFixture.pinnedTaskId))).write(
+        const TodoTasksCompanion(
+          assigneeUserId: Value(101),
+          assigneeUserName: Value('小周'),
+        ),
+      );
+      await (fixture.database.update(
+        fixture.database.todoTasks,
+      )..where((row) => row.id.equals(TodoVisualFixture.todayTaskId))).write(
+        const TodoTasksCompanion(
+          assigneeUserId: Value(102),
+          assigneeUserName: Value('小李'),
+        ),
+      );
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: fixture.container,
+          child: MaterialApp(
+            theme: ThemeData.light().copyWith(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            home: const Scaffold(body: TasksByListPage(hideAppBar: true)),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('todo-filter-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('todo-filter-advanced')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('task-filter-assignee')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('小周').first);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('应用高级筛选'));
+      await tester.tap(find.text('应用高级筛选'));
+      await tester.pumpAndSettle();
+      await tester.tapAt(const Offset(8, 8));
+      await tester.pumpAndSettle();
+
+      expect(find.text('确定今天最重要的三件事'), findsOneWidget);
+      expect(find.text('完成 Todo 工作区视觉评审'), findsNothing);
+    },
+  );
 
   testWidgets(
     'batch completion reports per-task results from the local use-case',

@@ -49,6 +49,8 @@ class TodoTasks extends Table {
   BoolColumn get cancelled => boolean().withDefault(const Constant(false))();
   IntColumn get priority => integer().withDefault(const Constant(0))();
   BoolColumn get isPinned => boolean().withDefault(const Constant(false))();
+  IntColumn get assigneeUserId => integer().nullable()();
+  TextColumn get assigneeUserName => text().nullable()();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
   DateTimeColumn get startAt => dateTime().nullable()();
   DateTimeColumn get endAt => dateTime().nullable()();
@@ -359,13 +361,14 @@ class AppDatabase extends _$AppDatabase {
     : super(_open('todo_t${tenantId}_u$userId'));
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) async {
       await m.createAll();
       await _createSearchIndex(m.database);
+      await _createAssigneeFilterIndex(m.database);
     },
     // 注：schemaVersion 4 = P1 重建（UUID 本地主键）。本地库为全新结构，
     // 旧 schema（int 主键）与新版不兼容；升级时逐表 drop 重建。
@@ -511,6 +514,15 @@ class AppDatabase extends _$AppDatabase {
           await m.addColumn(todoFilters, todoFilters.isPinned);
         }
       }
+      if (from < 14) {
+        if (!await _columnExists(m, 'todo_tasks', 'assignee_user_id')) {
+          await m.addColumn(todoTasks, todoTasks.assigneeUserId);
+        }
+        if (!await _columnExists(m, 'todo_tasks', 'assignee_user_name')) {
+          await m.addColumn(todoTasks, todoTasks.assigneeUserName);
+        }
+        await _createAssigneeFilterIndex(m.database);
+      }
     },
   );
 
@@ -620,6 +632,13 @@ class AppDatabase extends _$AppDatabase {
     await database.customStatement('''
       INSERT INTO todo_search_index (entity_type, entity_id, title, content)
       SELECT 'tag', id, name, name FROM todo_tags
+    ''');
+  }
+
+  Future<void> _createAssigneeFilterIndex(GeneratedDatabase database) {
+    return database.customStatement('''
+      CREATE INDEX IF NOT EXISTS idx_todo_tasks_b3_assignee_filter
+      ON todo_tasks (assignee_user_id, completed, due_at, id)
     ''');
   }
 

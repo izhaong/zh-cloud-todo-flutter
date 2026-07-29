@@ -599,6 +599,28 @@ class $TodoTasksTable extends TodoTasks
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _assigneeUserIdMeta = const VerificationMeta(
+    'assigneeUserId',
+  );
+  @override
+  late final GeneratedColumn<int> assigneeUserId = GeneratedColumn<int>(
+    'assignee_user_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _assigneeUserNameMeta = const VerificationMeta(
+    'assigneeUserName',
+  );
+  @override
+  late final GeneratedColumn<String> assigneeUserName = GeneratedColumn<String>(
+    'assignee_user_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _sortOrderMeta = const VerificationMeta(
     'sortOrder',
   );
@@ -747,6 +769,8 @@ class $TodoTasksTable extends TodoTasks
     cancelled,
     priority,
     isPinned,
+    assigneeUserId,
+    assigneeUserName,
     sortOrder,
     startAt,
     endAt,
@@ -848,6 +872,24 @@ class $TodoTasksTable extends TodoTasks
       context.handle(
         _isPinnedMeta,
         isPinned.isAcceptableOrUnknown(data['is_pinned']!, _isPinnedMeta),
+      );
+    }
+    if (data.containsKey('assignee_user_id')) {
+      context.handle(
+        _assigneeUserIdMeta,
+        assigneeUserId.isAcceptableOrUnknown(
+          data['assignee_user_id']!,
+          _assigneeUserIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('assignee_user_name')) {
+      context.handle(
+        _assigneeUserNameMeta,
+        assigneeUserName.isAcceptableOrUnknown(
+          data['assignee_user_name']!,
+          _assigneeUserNameMeta,
+        ),
       );
     }
     if (data.containsKey('sort_order')) {
@@ -991,6 +1033,14 @@ class $TodoTasksTable extends TodoTasks
         DriftSqlType.bool,
         data['${effectivePrefix}is_pinned'],
       )!,
+      assigneeUserId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}assignee_user_id'],
+      ),
+      assigneeUserName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}assignee_user_name'],
+      ),
       sortOrder: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}sort_order'],
@@ -1060,6 +1110,8 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
   final bool cancelled;
   final int priority;
   final bool isPinned;
+  final int? assigneeUserId;
+  final String? assigneeUserName;
   final int sortOrder;
   final DateTime? startAt;
   final DateTime? endAt;
@@ -1090,6 +1142,8 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     required this.cancelled,
     required this.priority,
     required this.isPinned,
+    this.assigneeUserId,
+    this.assigneeUserName,
     required this.sortOrder,
     this.startAt,
     this.endAt,
@@ -1125,6 +1179,12 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     map['cancelled'] = Variable<bool>(cancelled);
     map['priority'] = Variable<int>(priority);
     map['is_pinned'] = Variable<bool>(isPinned);
+    if (!nullToAbsent || assigneeUserId != null) {
+      map['assignee_user_id'] = Variable<int>(assigneeUserId);
+    }
+    if (!nullToAbsent || assigneeUserName != null) {
+      map['assignee_user_name'] = Variable<String>(assigneeUserName);
+    }
     map['sort_order'] = Variable<int>(sortOrder);
     if (!nullToAbsent || startAt != null) {
       map['start_at'] = Variable<DateTime>(startAt);
@@ -1175,6 +1235,12 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       cancelled: Value(cancelled),
       priority: Value(priority),
       isPinned: Value(isPinned),
+      assigneeUserId: assigneeUserId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(assigneeUserId),
+      assigneeUserName: assigneeUserName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(assigneeUserName),
       sortOrder: Value(sortOrder),
       startAt: startAt == null && nullToAbsent
           ? const Value.absent()
@@ -1221,6 +1287,8 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       cancelled: serializer.fromJson<bool>(json['cancelled']),
       priority: serializer.fromJson<int>(json['priority']),
       isPinned: serializer.fromJson<bool>(json['isPinned']),
+      assigneeUserId: serializer.fromJson<int?>(json['assigneeUserId']),
+      assigneeUserName: serializer.fromJson<String?>(json['assigneeUserName']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
       startAt: serializer.fromJson<DateTime?>(json['startAt']),
       endAt: serializer.fromJson<DateTime?>(json['endAt']),
@@ -1254,6 +1322,8 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       'cancelled': serializer.toJson<bool>(cancelled),
       'priority': serializer.toJson<int>(priority),
       'isPinned': serializer.toJson<bool>(isPinned),
+      'assigneeUserId': serializer.toJson<int?>(assigneeUserId),
+      'assigneeUserName': serializer.toJson<String?>(assigneeUserName),
       'sortOrder': serializer.toJson<int>(sortOrder),
       'startAt': serializer.toJson<DateTime?>(startAt),
       'endAt': serializer.toJson<DateTime?>(endAt),
@@ -1281,6 +1351,8 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     bool? cancelled,
     int? priority,
     bool? isPinned,
+    Value<int?> assigneeUserId = const Value.absent(),
+    Value<String?> assigneeUserName = const Value.absent(),
     int? sortOrder,
     Value<DateTime?> startAt = const Value.absent(),
     Value<DateTime?> endAt = const Value.absent(),
@@ -1305,6 +1377,12 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     cancelled: cancelled ?? this.cancelled,
     priority: priority ?? this.priority,
     isPinned: isPinned ?? this.isPinned,
+    assigneeUserId: assigneeUserId.present
+        ? assigneeUserId.value
+        : this.assigneeUserId,
+    assigneeUserName: assigneeUserName.present
+        ? assigneeUserName.value
+        : this.assigneeUserName,
     sortOrder: sortOrder ?? this.sortOrder,
     startAt: startAt.present ? startAt.value : this.startAt,
     endAt: endAt.present ? endAt.value : this.endAt,
@@ -1341,6 +1419,12 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       cancelled: data.cancelled.present ? data.cancelled.value : this.cancelled,
       priority: data.priority.present ? data.priority.value : this.priority,
       isPinned: data.isPinned.present ? data.isPinned.value : this.isPinned,
+      assigneeUserId: data.assigneeUserId.present
+          ? data.assigneeUserId.value
+          : this.assigneeUserId,
+      assigneeUserName: data.assigneeUserName.present
+          ? data.assigneeUserName.value
+          : this.assigneeUserName,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
       startAt: data.startAt.present ? data.startAt.value : this.startAt,
       endAt: data.endAt.present ? data.endAt.value : this.endAt,
@@ -1378,6 +1462,8 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           ..write('cancelled: $cancelled, ')
           ..write('priority: $priority, ')
           ..write('isPinned: $isPinned, ')
+          ..write('assigneeUserId: $assigneeUserId, ')
+          ..write('assigneeUserName: $assigneeUserName, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('startAt: $startAt, ')
           ..write('endAt: $endAt, ')
@@ -1407,6 +1493,8 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     cancelled,
     priority,
     isPinned,
+    assigneeUserId,
+    assigneeUserName,
     sortOrder,
     startAt,
     endAt,
@@ -1435,6 +1523,8 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           other.cancelled == this.cancelled &&
           other.priority == this.priority &&
           other.isPinned == this.isPinned &&
+          other.assigneeUserId == this.assigneeUserId &&
+          other.assigneeUserName == this.assigneeUserName &&
           other.sortOrder == this.sortOrder &&
           other.startAt == this.startAt &&
           other.endAt == this.endAt &&
@@ -1461,6 +1551,8 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
   final Value<bool> cancelled;
   final Value<int> priority;
   final Value<bool> isPinned;
+  final Value<int?> assigneeUserId;
+  final Value<String?> assigneeUserName;
   final Value<int> sortOrder;
   final Value<DateTime?> startAt;
   final Value<DateTime?> endAt;
@@ -1486,6 +1578,8 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     this.cancelled = const Value.absent(),
     this.priority = const Value.absent(),
     this.isPinned = const Value.absent(),
+    this.assigneeUserId = const Value.absent(),
+    this.assigneeUserName = const Value.absent(),
     this.sortOrder = const Value.absent(),
     this.startAt = const Value.absent(),
     this.endAt = const Value.absent(),
@@ -1512,6 +1606,8 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     this.cancelled = const Value.absent(),
     this.priority = const Value.absent(),
     this.isPinned = const Value.absent(),
+    this.assigneeUserId = const Value.absent(),
+    this.assigneeUserName = const Value.absent(),
     this.sortOrder = const Value.absent(),
     this.startAt = const Value.absent(),
     this.endAt = const Value.absent(),
@@ -1542,6 +1638,8 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     Expression<bool>? cancelled,
     Expression<int>? priority,
     Expression<bool>? isPinned,
+    Expression<int>? assigneeUserId,
+    Expression<String>? assigneeUserName,
     Expression<int>? sortOrder,
     Expression<DateTime>? startAt,
     Expression<DateTime>? endAt,
@@ -1568,6 +1666,8 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
       if (cancelled != null) 'cancelled': cancelled,
       if (priority != null) 'priority': priority,
       if (isPinned != null) 'is_pinned': isPinned,
+      if (assigneeUserId != null) 'assignee_user_id': assigneeUserId,
+      if (assigneeUserName != null) 'assignee_user_name': assigneeUserName,
       if (sortOrder != null) 'sort_order': sortOrder,
       if (startAt != null) 'start_at': startAt,
       if (endAt != null) 'end_at': endAt,
@@ -1598,6 +1698,8 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     Value<bool>? cancelled,
     Value<int>? priority,
     Value<bool>? isPinned,
+    Value<int?>? assigneeUserId,
+    Value<String?>? assigneeUserName,
     Value<int>? sortOrder,
     Value<DateTime?>? startAt,
     Value<DateTime?>? endAt,
@@ -1624,6 +1726,8 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
       cancelled: cancelled ?? this.cancelled,
       priority: priority ?? this.priority,
       isPinned: isPinned ?? this.isPinned,
+      assigneeUserId: assigneeUserId ?? this.assigneeUserId,
+      assigneeUserName: assigneeUserName ?? this.assigneeUserName,
       sortOrder: sortOrder ?? this.sortOrder,
       startAt: startAt ?? this.startAt,
       endAt: endAt ?? this.endAt,
@@ -1675,6 +1779,12 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     }
     if (isPinned.present) {
       map['is_pinned'] = Variable<bool>(isPinned.value);
+    }
+    if (assigneeUserId.present) {
+      map['assignee_user_id'] = Variable<int>(assigneeUserId.value);
+    }
+    if (assigneeUserName.present) {
+      map['assignee_user_name'] = Variable<String>(assigneeUserName.value);
     }
     if (sortOrder.present) {
       map['sort_order'] = Variable<int>(sortOrder.value);
@@ -1734,6 +1844,8 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
           ..write('cancelled: $cancelled, ')
           ..write('priority: $priority, ')
           ..write('isPinned: $isPinned, ')
+          ..write('assigneeUserId: $assigneeUserId, ')
+          ..write('assigneeUserName: $assigneeUserName, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('startAt: $startAt, ')
           ..write('endAt: $endAt, ')
@@ -9743,6 +9855,8 @@ typedef $$TodoTasksTableCreateCompanionBuilder =
       Value<bool> cancelled,
       Value<int> priority,
       Value<bool> isPinned,
+      Value<int?> assigneeUserId,
+      Value<String?> assigneeUserName,
       Value<int> sortOrder,
       Value<DateTime?> startAt,
       Value<DateTime?> endAt,
@@ -9770,6 +9884,8 @@ typedef $$TodoTasksTableUpdateCompanionBuilder =
       Value<bool> cancelled,
       Value<int> priority,
       Value<bool> isPinned,
+      Value<int?> assigneeUserId,
+      Value<String?> assigneeUserName,
       Value<int> sortOrder,
       Value<DateTime?> startAt,
       Value<DateTime?> endAt,
@@ -9846,6 +9962,16 @@ class $$TodoTasksTableFilterComposer
 
   ColumnFilters<bool> get isPinned => $composableBuilder(
     column: $table.isPinned,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get assigneeUserId => $composableBuilder(
+    column: $table.assigneeUserId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get assigneeUserName => $composableBuilder(
+    column: $table.assigneeUserName,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9974,6 +10100,16 @@ class $$TodoTasksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get assigneeUserId => $composableBuilder(
+    column: $table.assigneeUserId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get assigneeUserName => $composableBuilder(
+    column: $table.assigneeUserName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get sortOrder => $composableBuilder(
     column: $table.sortOrder,
     builder: (column) => ColumnOrderings(column),
@@ -10083,6 +10219,16 @@ class $$TodoTasksTableAnnotationComposer
   GeneratedColumn<bool> get isPinned =>
       $composableBuilder(column: $table.isPinned, builder: (column) => column);
 
+  GeneratedColumn<int> get assigneeUserId => $composableBuilder(
+    column: $table.assigneeUserId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get assigneeUserName => $composableBuilder(
+    column: $table.assigneeUserName,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get sortOrder =>
       $composableBuilder(column: $table.sortOrder, builder: (column) => column);
 
@@ -10167,6 +10313,8 @@ class $$TodoTasksTableTableManager
                 Value<bool> cancelled = const Value.absent(),
                 Value<int> priority = const Value.absent(),
                 Value<bool> isPinned = const Value.absent(),
+                Value<int?> assigneeUserId = const Value.absent(),
+                Value<String?> assigneeUserName = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<DateTime?> startAt = const Value.absent(),
                 Value<DateTime?> endAt = const Value.absent(),
@@ -10192,6 +10340,8 @@ class $$TodoTasksTableTableManager
                 cancelled: cancelled,
                 priority: priority,
                 isPinned: isPinned,
+                assigneeUserId: assigneeUserId,
+                assigneeUserName: assigneeUserName,
                 sortOrder: sortOrder,
                 startAt: startAt,
                 endAt: endAt,
@@ -10219,6 +10369,8 @@ class $$TodoTasksTableTableManager
                 Value<bool> cancelled = const Value.absent(),
                 Value<int> priority = const Value.absent(),
                 Value<bool> isPinned = const Value.absent(),
+                Value<int?> assigneeUserId = const Value.absent(),
+                Value<String?> assigneeUserName = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<DateTime?> startAt = const Value.absent(),
                 Value<DateTime?> endAt = const Value.absent(),
@@ -10244,6 +10396,8 @@ class $$TodoTasksTableTableManager
                 cancelled: cancelled,
                 priority: priority,
                 isPinned: isPinned,
+                assigneeUserId: assigneeUserId,
+                assigneeUserName: assigneeUserName,
                 sortOrder: sortOrder,
                 startAt: startAt,
                 endAt: endAt,

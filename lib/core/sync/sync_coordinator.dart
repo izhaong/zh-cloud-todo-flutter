@@ -1288,6 +1288,14 @@ class SyncCoordinator {
       cancelled: Value(status == 'CANCELLED' || status == 'cancelled'),
       priority: Value((payload['priority'] as num?)?.toInt() ?? 0),
       isPinned: Value(payload['isPinned'] as bool? ?? false),
+      assigneeUserId: Value(
+        (payload['assigneeUserId'] as num?)?.toInt() ??
+            (payload['assignee_user_id'] as num?)?.toInt(),
+      ),
+      assigneeUserName: Value(
+        payload['assigneeUserName']?.toString() ??
+            payload['assignee_user_name']?.toString(),
+      ),
       sortOrder: Value((payload['sortOrder'] as num?)?.toInt() ?? 0),
       startAt: Value(_parseDate(payload['startAt'])),
       endAt: Value(_parseDate(payload['endAt'])),

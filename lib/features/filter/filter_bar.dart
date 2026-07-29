@@ -3,6 +3,13 @@ import 'package:flutter/material.dart';
 import '../../state/providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+class TaskAssigneeOption {
+  const TaskAssigneeOption({required this.userId, required this.name});
+
+  final int userId;
+  final String name;
+}
+
 /// M11-B2 过滤条：list / folder / tag / priority / due 范围 / completed 状态。
 class TaskFilter {
   TaskFilter({
@@ -12,6 +19,7 @@ class TaskFilter {
     this.priority,
     this.dueRange,
     this.completed,
+    this.assigneeUserId,
     this.keyword,
     this.dueAtFrom,
     this.dueAtTo,
@@ -23,6 +31,7 @@ class TaskFilter {
   final int? priority;
   final String? dueRange; // today / overdue / future
   final bool? completed;
+  final int? assigneeUserId;
   final String? keyword;
 
   /// Local calendar-day lower bound chosen in the advanced filter.
@@ -38,6 +47,8 @@ class TaskFilter {
     int? priority,
     String? dueRange,
     bool? completed,
+    int? assigneeUserId,
+    bool clearAssigneeUserId = false,
     String? keyword,
     bool clearKeyword = false,
     DateTime? dueAtFrom,
@@ -52,6 +63,9 @@ class TaskFilter {
       priority: priority ?? this.priority,
       dueRange: dueRange ?? this.dueRange,
       completed: completed ?? this.completed,
+      assigneeUserId: clearAssigneeUserId
+          ? null
+          : assigneeUserId ?? this.assigneeUserId,
       keyword: clearKeyword ? null : keyword ?? this.keyword,
       dueAtFrom: clearDueAtFrom ? null : dueAtFrom ?? this.dueAtFrom,
       dueAtTo: clearDueAtTo ? null : dueAtTo ?? this.dueAtTo,
@@ -65,6 +79,7 @@ class TaskFilter {
       priority == null &&
       dueRange == null &&
       completed == null &&
+      assigneeUserId == null &&
       (keyword == null || keyword!.trim().isEmpty) &&
       dueAtFrom == null &&
       dueAtTo == null;
@@ -77,6 +92,7 @@ class TaskFilter {
     'priority': priority,
     'dueRange': dueRange,
     'completed': completed,
+    'assigneeUserId': assigneeUserId,
     'keyword': keyword,
     'dueAtFrom': dueAtFrom?.toIso8601String(),
     'dueAtTo': dueAtTo?.toIso8601String(),
@@ -85,10 +101,16 @@ class TaskFilter {
 
 /// M11-B2 顶部过滤条 + "保存为智能清单" 按钮。
 class FilterBar extends ConsumerWidget {
-  const FilterBar({super.key, required this.filter, required this.onChanged});
+  const FilterBar({
+    super.key,
+    required this.filter,
+    required this.onChanged,
+    this.assigneeOptions = const [],
+  });
 
   final TaskFilter filter;
   final ValueChanged<TaskFilter> onChanged;
+  final List<TaskAssigneeOption> assigneeOptions;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -134,7 +156,11 @@ class FilterBar extends ConsumerWidget {
             label: _advancedFilterLabel(filter),
             selected: _hasAdvancedFilter(filter),
             onTap: () async {
-              final next = await _pickAdvancedFilter(context, filter);
+              final next = await _pickAdvancedFilter(
+                context,
+                filter,
+                assigneeOptions,
+              );
               if (next == null) return;
               onChanged(
                 filter.copyWith(
@@ -144,6 +170,8 @@ class FilterBar extends ConsumerWidget {
                   clearDueAtFrom: next.dueAtFrom == null,
                   dueAtTo: next.dueAtTo,
                   clearDueAtTo: next.dueAtTo == null,
+                  assigneeUserId: next.assigneeUserId,
+                  clearAssigneeUserId: next.assigneeUserId == null,
                 ),
               );
             },
@@ -275,10 +303,12 @@ class FilterBar extends ConsumerWidget {
   static Future<_AdvancedFilter?> _pickAdvancedFilter(
     BuildContext context,
     TaskFilter current,
+    List<TaskAssigneeOption> assigneeOptions,
   ) async {
     final keywordController = TextEditingController(
       text: current.keyword ?? '',
     );
+    int? selectedAssigneeUserId = current.assigneeUserId;
     final dueAtFromController = TextEditingController(
       text: _formatDate(current.dueAtFrom),
     );
@@ -303,6 +333,29 @@ class FilterBar extends ConsumerWidget {
                     labelText: '关键词（标题或正文）',
                     border: OutlineInputBorder(),
                   ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int?>(
+                  key: const Key('task-filter-assignee'),
+                  initialValue: selectedAssigneeUserId,
+                  decoration: const InputDecoration(
+                    labelText: '负责人',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    const DropdownMenuItem<int?>(
+                      value: null,
+                      child: Text('全部负责人'),
+                    ),
+                    for (final option in assigneeOptions)
+                      DropdownMenuItem<int?>(
+                        value: option.userId,
+                        child: Text(option.name),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    setDialogState(() => selectedAssigneeUserId = value);
+                  },
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -362,6 +415,7 @@ class FilterBar extends ConsumerWidget {
                         : keywordController.text.trim(),
                     dueAtFrom: dueAtFrom,
                     dueAtTo: dueAtTo,
+                    assigneeUserId: selectedAssigneeUserId,
                   ),
                 );
               },
@@ -407,19 +461,23 @@ class _AdvancedFilter {
     required this.keyword,
     required this.dueAtFrom,
     required this.dueAtTo,
+    required this.assigneeUserId,
   });
 
   final String? keyword;
   final DateTime? dueAtFrom;
   final DateTime? dueAtTo;
+  final int? assigneeUserId;
 }
 
 bool _hasAdvancedFilter(TaskFilter filter) =>
     filter.keyword?.trim().isNotEmpty == true ||
     filter.dueAtFrom != null ||
-    filter.dueAtTo != null;
+    filter.dueAtTo != null ||
+    filter.assigneeUserId != null;
 
 String _advancedFilterLabel(TaskFilter filter) {
+  if (filter.assigneeUserId != null) return '负责人';
   if (filter.keyword?.trim().isNotEmpty == true) return '关键词';
   if (filter.dueAtFrom != null || filter.dueAtTo != null) return '日期';
   return '高级';

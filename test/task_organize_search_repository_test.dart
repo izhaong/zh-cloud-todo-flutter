@@ -424,6 +424,32 @@ void main() {
     expect(results.map((task) => task.id), ['task-1']);
   });
 
+  test('高级过滤按负责人返回稳定结果', () async {
+    await (db.update(
+      db.todoTasks,
+    )..where((row) => row.id.equals('task-1'))).write(
+      const TodoTasksCompanion(
+        assigneeUserId: Value(101),
+        assigneeUserName: Value('小周'),
+      ),
+    );
+    await (db.update(
+      db.todoTasks,
+    )..where((row) => row.id.equals('task-2'))).write(
+      const TodoTasksCompanion(
+        assigneeUserId: Value(102),
+        assigneeUserName: Value('小李'),
+      ),
+    );
+
+    final results = await repository.filter(
+      const TaskQueryFilter(assigneeUserId: 101),
+    );
+
+    expect(results.map((task) => task.id), ['task-1']);
+    expect(results.single.assigneeUserName, '小周');
+  });
+
   test('高级过滤拒绝倒置的截止日期区间', () async {
     await expectLater(
       repository.filter(
