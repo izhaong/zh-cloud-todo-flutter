@@ -32,7 +32,7 @@
 - **FR-003**: 固定时区任务保留 IANA 时区标识与墙上时间；非固定时区任务保留创建时区但允许显示层按设备时区转换，转换不得修改 Drift 原值。
 - **FR-004**: 每个提醒规则都有本地 UUID、可空 `serverId`、任务本地 UUID、`fireAt`、`anchorType`、`offsetMinutes`、`status`、`firedAt` 与 `clientMutationId`；创建、修改、删除和持续提醒确认均先落库再进入 `reminder` outbox。收件箱的完成、忽略和稍后是派发动作，必须使用独立的本地 UUID、派发 serverId、动作类型、可选 minutes 与 `clientMutationId`，不得把派发 ID 写入提醒规则实体。收件箱读取必须兼容标准成功信封中 `data` 为数组的响应，不得把数组强制解为 Map。
 - **FR-005**: 一个任务可有多个提醒；同一任务的同一 `clientMutationId` 只对应一个本地提醒，失败、等待、同步成功和删除状态必须在详情与提醒收件箱显示一致。
-- **FR-006**: 重复规则支持 `DAILY`、`WEEKLY`、`MONTHLY`、`YEARLY`、`WEEKDAY` 与 `CUSTOM`，并保存 interval、weekdays、monthDay、startAt、untilAt、countLimit、repeatMode 与时区；未知频率不得写入 outbox。
+- **FR-006**: 重复规则支持 `DAILY`、`WEEKLY`、`MONTHLY`、`YEARLY`、`WEEKDAY` 与 `CUSTOM`，并保存 interval、weekdays、monthDay、startAt、untilAt、countLimit、repeatMode 与时区；`untilAt` 按 TickTick“指定日期结束”和 RFC 5545 `UNTIL` 采用包含式上界，落在该时刻或该截止日内的 occurrence 必须保留；未知频率不得写入 outbox。
 - **FR-007**: 跳过和补做记录以规则 UUID、模板任务 UUID 与 occurrence 时间为键；已物化实例必须经其 repeatRuleId 回到模板任务写入 skip，不能把实例 UUID 作为服务端规则 taskId。跳过不生成补做，补做不删除原 occurrence，重复执行同一动作必须幂等。
 - **FR-008**: `SyncCoordinator` 必须在任务 serverId 已映射后推送提醒和重复规则，在重复规则 serverId 已映射后推送跳过/补做；提醒派发动作以服务端派发 ID 推送；拉取顺序必须先任务、再规则、再 occurrence 动作。临时网络失败必须保留原 `clientMutationId`、增加 `attemptCount` 并标记为 `retryable` 以便下一轮 push；按 outbox ID 最早的 mutation 生成稳定批次 `idempotency_key`，同一待重试批次不得更换该 key；服务端冲突保持 `failed`，不得自动重放。
 - **FR-009**: 详情与提醒收件箱只能经 Repository/use-case 读取和写入；派发 ID 用于完成、忽略和稍后，提醒规则 ID 只用于持续提醒配置。保留 `specs/002-todo-visual-fidelity/` 的工作区与九张批准 golden，不重新设计视觉结构。
