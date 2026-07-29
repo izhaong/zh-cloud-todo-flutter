@@ -525,11 +525,9 @@ void main() {
   ) async {
     final fixture = await TodoVisualFixture.create();
     addTearDown(fixture.dispose);
-    await (fixture.database.update(
-      fixture.database.todoTasks,
-    )..where((task) => task.id.equals(_taskId))).write(
-      const TodoTasksCompanion(timeZone: Value('Asia/Shanghai')),
-    );
+    await (fixture.database.update(fixture.database.todoTasks)
+          ..where((task) => task.id.equals(_taskId)))
+        .write(const TodoTasksCompanion(timeZone: Value('Asia/Shanghai')));
     final repository = fixture.container.read(reminderRepositoryProvider)!;
     final reminder = await repository.create(
       taskId: _taskId,
@@ -740,6 +738,139 @@ void main() {
       expect(payload['repeatMode'], 'ON_DUE');
     },
   );
+
+  testWidgets(
+    'detail saves two selected repeat dates without another end boundary',
+    (tester) async {
+      final fixture = await TodoVisualFixture.create();
+      addTearDown(fixture.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: fixture.container,
+          child: MaterialApp(
+            theme: ThemeData.light().copyWith(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            home: const Scaffold(
+              body: TaskDetailPane(taskId: _taskId, embedded: true),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _openScheduleOptions(tester);
+
+      final detailScroll = find.byType(Scrollable).last;
+      final repeatRule = find.byKey(const Key('task-repeat-rule'));
+      await tester.scrollUntilVisible(
+        repeatRule,
+        160,
+        scrollable: detailScroll,
+      );
+      await tester.ensureVisible(repeatRule);
+      await tester.pumpAndSettle();
+      await tester.tap(repeatRule);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('task-repeat-mode-on_selected_dates')),
+      );
+      await tester.pumpAndSettle();
+
+      final addDate = find.byKey(const Key('task-repeat-selected-date-add'));
+      expect(addDate, findsOneWidget);
+      expect(find.byKey(const Key('task-repeat-end-until')), findsNothing);
+      await tester.tap(addDate);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('15').last);
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      await tester.tap(addDate);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('20').last);
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('task-repeat-save')));
+      await tester.pumpAndSettle();
+
+      final rule = await fixture.database
+          .select(fixture.database.todoRepeatRules)
+          .getSingle();
+      expect(rule.freq, 'CUSTOM');
+      expect(rule.repeatMode, 'ON_SELECTED_DATES');
+      expect(rule.byDay, isNull);
+      expect(rule.until, isNull);
+      expect(rule.countLimit, isNull);
+      expect(rule.selectedDatesJson, '["2026-07-15","2026-07-20"]');
+      final change =
+          (await fixture.database
+                  .select(fixture.database.todoSyncChanges)
+                  .get())
+              .last;
+      final payload = jsonDecode(change.payloadJson) as Map<String, dynamic>;
+      expect(payload['selectedDates'], ['2026-07-15', '2026-07-20']);
+    },
+  );
+
+  testWidgets('detail can change a selected-date rule back to due mode', (
+    tester,
+  ) async {
+    final fixture = await TodoVisualFixture.create();
+    addTearDown(fixture.dispose);
+    await fixture.container
+        .read(repeatRuleRepositoryProvider)!
+        .save(
+          taskId: _taskId,
+          frequency: 'CUSTOM',
+          startAt: DateTime(2026, 7, 11, 9, 30),
+          repeatMode: 'ON_SELECTED_DATES',
+          selectedDates: [DateTime(2026, 7, 15), DateTime(2026, 7, 20)],
+        );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: fixture.container,
+        child: MaterialApp(
+          theme: ThemeData.light().copyWith(
+            extensions: const [AppThemeExtension(AppColors.light)],
+          ),
+          home: const Scaffold(
+            body: TaskDetailPane(taskId: _taskId, embedded: true),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _openScheduleOptions(tester);
+
+    final detailScroll = find.byType(Scrollable).last;
+    final repeatRule = find.byKey(const Key('task-repeat-rule'));
+    await tester.scrollUntilVisible(repeatRule, 160, scrollable: detailScroll);
+    await tester.ensureVisible(repeatRule);
+    await tester.pumpAndSettle();
+    await tester.tap(repeatRule);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('task-repeat-selected-date-2026-07-15')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('task-repeat-mode-on_due')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('task-repeat-save')));
+    await tester.pumpAndSettle();
+
+    final rule = await fixture.database
+        .select(fixture.database.todoRepeatRules)
+        .getSingle();
+    expect(rule.repeatMode, 'ON_DUE');
+    expect(rule.selectedDatesJson, isNull);
+    expect(rule.byDay, isNotNull);
+    final change =
+        (await fixture.database.select(fixture.database.todoSyncChanges).get())
+            .last;
+    final payload = jsonDecode(change.payloadJson) as Map<String, dynamic>;
+    expect(payload['selectedDates'], isNull);
+  });
 
   testWidgets(
     'detail saves a repeat count limit through the repeat repository',

@@ -503,6 +503,89 @@ void main() {
   });
 
   test(
+    'stores normalized selected-date repeat rule and queues its date list',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final repeats = RepeatRuleRepository(db, SyncChangeQueue(db));
+
+      final rule = await repeats.save(
+        taskId: 'task-1',
+        frequency: 'CUSTOM',
+        startAt: DateTime(2026, 7, 13, 9, 30),
+        repeatMode: 'ON_SELECTED_DATES',
+        selectedDates: [
+          DateTime(2026, 7, 20, 18),
+          DateTime(2026, 7, 15, 8),
+          DateTime(2026, 7, 20, 7),
+        ],
+        timeZone: 'Asia/Shanghai',
+      );
+
+      final change = (await db.select(db.todoSyncChanges).get()).single;
+      final payload = jsonDecode(change.payloadJson) as Map<String, dynamic>;
+      expect(rule.byDay, isNull);
+      expect(rule.until, isNull);
+      expect(rule.countLimit, isNull);
+      expect(rule.selectedDatesJson, '["2026-07-15","2026-07-20"]');
+      expect(payload['repeatMode'], 'ON_SELECTED_DATES');
+      expect(payload['selectedDates'], ['2026-07-15', '2026-07-20']);
+    },
+  );
+
+  test('rejects contradictory selected-date repeat contracts', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final repeats = RepeatRuleRepository(db, SyncChangeQueue(db));
+    final startAt = DateTime(2026, 7, 13, 9, 30);
+    final validDate = DateTime(2026, 7, 15);
+
+    final invalidSaves = <Future<TodoRepeatRule> Function()>[
+      () => repeats.save(
+        taskId: 'task-empty',
+        frequency: 'CUSTOM',
+        startAt: startAt,
+        repeatMode: 'ON_SELECTED_DATES',
+      ),
+      () => repeats.save(
+        taskId: 'task-before',
+        frequency: 'CUSTOM',
+        startAt: startAt,
+        repeatMode: 'ON_SELECTED_DATES',
+        selectedDates: [DateTime(2026, 7, 12)],
+      ),
+      () => repeats.save(
+        taskId: 'task-weekday',
+        frequency: 'CUSTOM',
+        weekdays: const [1, 3],
+        startAt: startAt,
+        repeatMode: 'ON_SELECTED_DATES',
+        selectedDates: [validDate],
+      ),
+      () => repeats.save(
+        taskId: 'task-until',
+        frequency: 'CUSTOM',
+        startAt: startAt,
+        untilAt: DateTime(2026, 7, 31),
+        repeatMode: 'ON_SELECTED_DATES',
+        selectedDates: [validDate],
+      ),
+      () => repeats.save(
+        taskId: 'task-mode',
+        frequency: 'DAILY',
+        startAt: startAt,
+        selectedDates: [validDate],
+      ),
+    ];
+
+    for (final save in invalidSaves) {
+      await expectLater(save(), throwsArgumentError);
+    }
+    expect(await db.select(db.todoRepeatRules).get(), isEmpty);
+    expect(await db.select(db.todoSyncChanges).get(), isEmpty);
+  });
+
+  test(
     'collapses an unsynced skip followed by catchup to no local action',
     () async {
       final db = AppDatabase.forTesting(NativeDatabase.memory());

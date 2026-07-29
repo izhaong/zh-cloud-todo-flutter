@@ -1196,6 +1196,11 @@ class SyncCoordinator {
       enabled: Value(payload['enabled'] as bool? ?? true),
       repeatMode: Value(payload['repeatMode']?.toString() ?? 'ON_DUE'),
       timeZone: Value(payload['timeZone']?.toString()),
+      selectedDatesJson: Value(
+        _normalizedSelectedDatesJson(
+          payload['selectedDates'] ?? payload['selected_dates'],
+        ),
+      ),
       updatedAt: Value(now),
       createdAt: Value(existing?.createdAt ?? now),
     );
@@ -1384,6 +1389,36 @@ class SyncCoordinator {
     if (value == null) return null;
     if (value is int) return DateTime.fromMillisecondsSinceEpoch(value);
     return DateTime.tryParse(value.toString());
+  }
+
+  String? _normalizedSelectedDatesJson(Object? value) {
+    if (value == null) return null;
+    List<dynamic> raw;
+    if (value is List<dynamic>) {
+      raw = value;
+    } else if (value is String) {
+      try {
+        final decoded = jsonDecode(value);
+        raw = decoded is List<dynamic> ? decoded : const <dynamic>[];
+      } on FormatException {
+        raw = const <dynamic>[];
+      }
+    } else {
+      raw = const <dynamic>[];
+    }
+    final dates = <String>{};
+    for (final item in raw) {
+      final parsed = DateTime.tryParse(item.toString());
+      if (parsed == null) continue;
+      dates.add(
+        '${parsed.year.toString().padLeft(4, '0')}-'
+        '${parsed.month.toString().padLeft(2, '0')}-'
+        '${parsed.day.toString().padLeft(2, '0')}',
+      );
+    }
+    if (dates.isEmpty) return null;
+    final normalized = dates.toList()..sort();
+    return jsonEncode(normalized);
   }
 }
 

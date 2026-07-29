@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
@@ -27,11 +29,13 @@ class RepeatRuleRepository {
     DateTime? untilAt,
     int? countLimit,
     String repeatMode = 'ON_DUE',
+    Iterable<DateTime>? selectedDates,
     String? timeZone,
     bool enabled = true,
   }) async {
     final normalizedFrequency = frequency.trim().toUpperCase();
     final normalizedMode = repeatMode.trim().toUpperCase();
+    final normalizedSelectedDates = _normalizeSelectedDates(selectedDates);
     final normalizedWeekdays = _validate(
       frequency: normalizedFrequency,
       intervalValue: intervalValue,
@@ -41,6 +45,7 @@ class RepeatRuleRepository {
       untilAt: untilAt,
       countLimit: countLimit,
       repeatMode: normalizedMode,
+      selectedDates: normalizedSelectedDates,
     );
     final effectiveMonthDay = normalizedFrequency == 'MONTHLY'
         ? (monthDay ?? startAt.day)
@@ -67,6 +72,11 @@ class RepeatRuleRepository {
         enabled: Value(enabled),
         repeatMode: Value(normalizedMode),
         timeZone: Value(timeZone),
+        selectedDatesJson: Value(
+          normalizedSelectedDates.isEmpty
+              ? null
+              : jsonEncode(normalizedSelectedDates.map(_dateText).toList()),
+        ),
         updatedAt: Value(now),
         createdAt: Value(existing?.createdAt ?? now),
       );
@@ -224,6 +234,7 @@ class RepeatRuleRepository {
     required DateTime? untilAt,
     required int? countLimit,
     required String repeatMode,
+    required List<DateTime> selectedDates,
   }) {
     const frequencies = {
       'DAILY',
@@ -245,7 +256,10 @@ class RepeatRuleRepository {
     if (countLimit != null && countLimit < 1) {
       throw ArgumentError.value(countLimit, 'countLimit', '次数上限必须为正整数');
     }
-    if (repeatMode != 'ON_DUE' && repeatMode != 'ON_COMPLETE') {
+    const selectedDatesMode = 'ON_SELECTED_DATES';
+    if (repeatMode != 'ON_DUE' &&
+        repeatMode != 'ON_COMPLETE' &&
+        repeatMode != selectedDatesMode) {
       throw ArgumentError.value(repeatMode, 'repeatMode', '不支持的重复模式');
     }
     if (monthDay != null && (monthDay < 1 || monthDay > 31)) {
@@ -255,6 +269,29 @@ class RepeatRuleRepository {
     if (normalized.any((day) => day < 1 || day > 7)) {
       throw ArgumentError.value(weekdays, 'weekdays', '星期必须在 1 到 7 之间');
     }
+    if (repeatMode == selectedDatesMode) {
+      final startDate = DateTime(startAt.year, startAt.month, startAt.day);
+      if (frequency != 'CUSTOM' ||
+          selectedDates.isEmpty ||
+          normalized.isNotEmpty ||
+          untilAt != null ||
+          countLimit != null ||
+          selectedDates.any((date) => date.isBefore(startDate))) {
+        throw ArgumentError.value(
+          selectedDates,
+          'selectedDates',
+          '自选日期重复必须使用 CUSTOM，且日期不能为空、不得早于开始日期或与其他结束条件并用',
+        );
+      }
+      return null;
+    }
+    if (selectedDates.isNotEmpty) {
+      throw ArgumentError.value(
+        selectedDates,
+        'selectedDates',
+        '仅 ON_SELECTED_DATES 模式可设置自选日期',
+      );
+    }
     if (frequency == 'WEEKDAY') return const [1, 2, 3, 4, 5];
     if (frequency == 'CUSTOM' && normalized.isEmpty) {
       throw ArgumentError.value(weekdays, 'weekdays', '自定义重复必须指定星期');
@@ -263,6 +300,28 @@ class RepeatRuleRepository {
   }
 
   String? _weekdayText(List<int>? weekdays) => weekdays?.join(',');
+
+  List<DateTime> _normalizeSelectedDates(Iterable<DateTime>? dates) {
+    final byDate = <String, DateTime>{};
+    for (final value in dates ?? const <DateTime>[]) {
+      final date = DateTime(value.year, value.month, value.day);
+      byDate[_dateText(date)] = date;
+    }
+    final normalized = byDate.values.toList()
+      ..sort((left, right) => left.compareTo(right));
+    return normalized;
+  }
+
+  String _dateText(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-'
+      '${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}';
+
+  List<String>? _selectedDatePayload(TodoRepeatRule row) {
+    final encoded = row.selectedDatesJson;
+    if (encoded == null || encoded.isEmpty) return null;
+    return (jsonDecode(encoded) as List<dynamic>).cast<String>();
+  }
 
   Map<String, dynamic> _rulePayload(TodoRepeatRule row) => {
     'id': row.id,
@@ -278,5 +337,6 @@ class RepeatRuleRepository {
     'enabled': row.enabled,
     'repeatMode': row.repeatMode,
     'timeZone': row.timeZone,
+    'selectedDates': _selectedDatePayload(row),
   };
 }

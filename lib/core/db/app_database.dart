@@ -210,6 +210,7 @@ class TodoRepeatRules extends Table {
   BoolColumn get enabled => boolean().withDefault(const Constant(true))();
   TextColumn get repeatMode => text().withDefault(const Constant('ON_DUE'))();
   TextColumn get timeZone => text().nullable()();
+  TextColumn get selectedDatesJson => text().nullable()();
   DateTimeColumn get updatedAt => dateTime()();
   DateTimeColumn get createdAt => dateTime()();
 
@@ -338,7 +339,7 @@ class AppDatabase extends _$AppDatabase {
   }) : super(_open(_userDatabaseName(tenantId, userId, testNamespace)));
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -471,6 +472,10 @@ class AppDatabase extends _$AppDatabase {
         if (!await _tableExists(m, 'todo_templates')) {
           await m.createTable(todoTemplates);
         }
+      }
+      if (from < 11 &&
+          !await _columnExists(m, 'todo_repeat_rules', 'selected_dates_json')) {
+        await m.addColumn(todoRepeatRules, todoRepeatRules.selectedDatesJson);
       }
     },
   );

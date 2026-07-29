@@ -21,9 +21,9 @@
 
 ### User Story 3 - 配置可解释的重复、跳过和补做 (P1)
 
-用户可以设置每天、每周、每月、每年、工作日和自定义重复，并对模板或已物化实例的一个 occurrence 执行跳过或补做，不改变其它 occurrence。
+用户可以设置每天、每周、每月、每年、工作日和自定义重复；自定义重复可选择到期、完成或一个/多个自选日期，并可对模板或已物化实例的一个 occurrence 执行跳过或补做，不改变其它 occurrence。
 
-**Independent Test**: 对每种频率生成本地规则载荷，在详情编辑器分别配置按日期结束与按次数结束，并写入一个跳过和一个补做记录；同步映射后验证规则 UUID、serverId、结束条件与 occurrence 标识不混淆。
+**Independent Test**: 对每种频率生成本地规则载荷，在详情编辑器分别配置按日期结束、按次数结束与两个乱序重复的自选日期，并写入一个跳过和一个补做记录；同步映射后验证规则 UUID、serverId、排序去重后的 selectedDates、结束条件与 occurrence 标识不混淆。
 
 ## Functional Requirements
 
@@ -32,7 +32,7 @@
 - **FR-003**: 固定时区任务保留 IANA 时区标识与墙上时间；非固定时区任务保留创建时区但允许显示层按设备时区转换，转换不得修改 Drift 原值。
 - **FR-004**: 每个提醒规则都有本地 UUID、可空 `serverId`、任务本地 UUID、`fireAt`、`anchorType`、`offsetMinutes`、`status`、`firedAt` 与 `clientMutationId`；`anchorType` 必须区分 `ABSOLUTE`、`START`、`DUE` 与 `END`，其中截止提醒使用 `DUE/dueAt`、结束时间提醒使用 `END/endAt`，相对提醒编辑后按锚点减去非负 `offsetMinutes` 重算 `fireAt`。创建、修改、删除和持续提醒确认均先落库再进入 `reminder` outbox，详情页必须支持编辑已有规则的锚点、绝对时间、提前量、持续间隔与时区并保持原规则 UUID。收件箱的完成、忽略、开始专注和稍后是派发动作，必须使用独立的本地 UUID、派发 serverId、动作类型、可选 minutes 与 `clientMutationId`，不得把派发 ID 写入提醒规则实体；开始专注动作入队成功后必须进入关联任务的番茄专注页，由用户选择时长并启动会话。收件箱读取必须兼容标准成功信封中 `data` 为数组的响应，不得把数组强制解为 Map。
 - **FR-005**: 一个任务可有多个提醒；同一任务的同一 `clientMutationId` 只对应一个本地提醒，失败、等待、同步成功和删除状态必须在详情与提醒收件箱显示一致。提醒收件箱重新读取时必须用同一派发 ID 的最新本地动作 outbox 覆盖尚未刷新的远端待处理状态，显示 `queued`、`retryable`、`synced` 或 `failed` 结果，并在本地动作未消解前移除该派发的待处理计数与重复操作入口。
-- **FR-006**: 重复规则支持 `DAILY`、`WEEKLY`、`MONTHLY`、`YEARLY`、`WEEKDAY` 与 `CUSTOM`，并保存 interval、weekdays、monthDay、startAt、untilAt、countLimit、repeatMode 与时区；`untilAt` 按 TickTick“指定日期结束”和 RFC 5545 `UNTIL` 采用包含式上界，落在该时刻或该截止日内的 occurrence 必须保留；未知频率不得写入 outbox。
+- **FR-006**: 重复规则支持 `DAILY`、`WEEKLY`、`MONTHLY`、`YEARLY`、`WEEKDAY` 与 `CUSTOM`，并保存 interval、weekdays、monthDay、startAt、untilAt、countLimit、repeatMode、selectedDates 与时区；repeatMode 接受 `ON_DUE`、`ON_COMPLETE` 与 `ON_SELECTED_DATES`。自选日期复用 `CUSTOM`，必须选择至少一天；Repository 将日期按规则时区解释，规范为排序去重的 `YYYY-MM-DD` 数组，并拒绝早于 startAt 本地日期的值。`ON_SELECTED_DATES` 不得同时设置 weekdays、untilAt 或 countLimit，其有限日期集合本身就是结束边界；其它模式不得携带 selectedDates。`untilAt` 按 TickTick“指定日期结束”和 RFC 5545 `UNTIL` 采用包含式上界，落在该时刻或该截止日内的 occurrence 必须保留；未知频率或重复模式不得写入 outbox。
 - **FR-007**: 跳过和补做记录以规则 UUID、模板任务 UUID 与 occurrence 时间为键；已物化实例必须经其 repeatRuleId 回到模板任务写入 skip，不能把实例 UUID 作为服务端规则 taskId。跳过不生成补做，补做不删除原 occurrence，重复执行同一动作必须幂等。
 - **FR-008**: `SyncCoordinator` 必须在任务 serverId 已映射后推送提醒和重复规则，在重复规则 serverId 已映射后推送跳过/补做；提醒派发动作以服务端派发 ID 推送；拉取顺序必须先任务、再规则、再 occurrence 动作。临时网络失败必须保留原 `clientMutationId`、增加 `attemptCount` 并标记为 `retryable` 以便下一轮 push；按 outbox ID 最早的 mutation 生成稳定批次 `idempotency_key`，同一待重试批次不得更换该 key；服务端冲突保持 `failed`，不得自动重放。
 - **FR-009**: 详情与提醒收件箱只能经 Repository/use-case 读取和写入；派发 ID 用于完成、忽略、开始专注和稍后，提醒规则 ID 只用于持续提醒配置。保留 `specs/002-todo-visual-fidelity/` 的工作区与九张批准 golden，不重新设计视觉结构。
@@ -43,7 +43,7 @@
 
 - **SC-001**: UTC+8 的跨午夜、全天和固定时区 fixture 在 Drift 重启、Repository 读取与 sync payload 中字段完全一致。
 - **SC-002**: 单提醒、多提醒、截止提醒、结束提醒、持续提醒、稍后提醒和开始专注各有 Repository、SyncCoordinator 和 Widget 测试，已有提醒编辑测试同时断言规则 UUID 不变、锚点派生时间、持续间隔、时区与 outbox 载荷；所有核心写测试均断言 outbox 状态，开始专注的 Widget 测试同时证明进入关联任务的番茄专注页，完成与批量忽略的 Widget 测试必须证明远端旧读模型不会造成重复动作。
-- **SC-003**: 六类重复频率、包含式日期上界、次数上限、跳过和补做各有有效与无效输入测试；详情 Widget 测试证明两类结束条件经 `RepeatRuleRepository` 写入 Drift/outbox，重复 push 不产生重复本地或服务端映射。
+- **SC-003**: 六类重复频率、三类重复模式、包含式日期上界、次数上限、自选日期排序去重/非法边界、跳过和补做各有有效与无效输入测试；详情 Widget 测试证明两类结束条件与自选日期经 `RepeatRuleRepository` 写入 Drift/outbox，重复 push 不产生重复本地或服务端映射。
 - **SC-004**: `flutter analyze` 与本规格列出的定向测试在低资源命令下通过；未执行的桌面/移动/测试环境旅程保持未完成。
 - **SC-005**: mock `/sync/push` 断言完成任务发送 `status=DONE` 与非空 `completedAt`；mock `/sync/pull` 断言已完成父任务和 `ON_COMPLETE` 新实例的重复关联在 Drift 中可重建，详情勾选操作只经 `TaskRepository` 写入 outbox。
 - **SC-006**: 通知轮询测试使用 Fake Repository、内存 Drift 与 Fake 通知服务，证明仅展示待处理且已到期/即将到期的派发，同一派发连续轮询只展示一次，且测试不触发真实平台通知。

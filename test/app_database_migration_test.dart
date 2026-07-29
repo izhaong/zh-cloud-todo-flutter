@@ -28,7 +28,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 10);
+      expect(version.data['user_version'], 11);
 
       final taskColumns = await upgraded
           .customSelect('PRAGMA table_info(todo_tasks)')
@@ -76,6 +76,7 @@ void main() {
           'enabled',
           'repeat_mode',
           'time_zone',
+          'selected_dates_json',
         }),
       );
 
@@ -89,6 +90,52 @@ void main() {
       expect(preservedTables.map((row) => row.data['name']), hasLength(4));
     },
   );
+
+  test('upgrades schema 10 repeat rules without losing rows', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'zh_cloud_todo_b2_schema10_',
+    );
+    final databaseFile = File('${directory.path}/todo.sqlite');
+    addTearDown(() async {
+      if (await directory.exists()) {
+        await directory.delete(recursive: true);
+      }
+    });
+
+    final beforeUpgrade = AppDatabase.forTesting(NativeDatabase(databaseFile));
+    final createdAt = DateTime.utc(2026, 7, 13, 8);
+    await beforeUpgrade
+        .into(beforeUpgrade.todoRepeatRules)
+        .insert(
+          TodoRepeatRulesCompanion.insert(
+            id: 'repeat-rule-1',
+            taskId: 'task-1',
+            freq: 'CUSTOM',
+            byDay: const Value('1,3,5'),
+            startAt: Value(DateTime(2026, 7, 13, 9, 30)),
+            repeatMode: const Value('ON_DUE'),
+            timeZone: const Value('Asia/Shanghai'),
+            updatedAt: createdAt,
+            createdAt: createdAt,
+          ),
+        );
+    await beforeUpgrade.close();
+    _downgradeToSchema10(databaseFile);
+
+    final upgraded = AppDatabase.forTesting(NativeDatabase(databaseFile));
+    addTearDown(upgraded.close);
+    final version = await upgraded
+        .customSelect('PRAGMA user_version')
+        .getSingle();
+    final rule = await upgraded.select(upgraded.todoRepeatRules).getSingle();
+
+    expect(version.data['user_version'], 11);
+    expect(rule.freq, 'CUSTOM');
+    expect(rule.byDay, '1,3,5');
+    expect(rule.repeatMode, 'ON_DUE');
+    expect(rule.timeZone, 'Asia/Shanghai');
+    expect(rule.selectedDatesJson, isNull);
+  });
 
   test(
     'upgrades schema 4 scheduling and completion records across restart',
@@ -169,7 +216,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 10);
+      expect(version.data['user_version'], 11);
       await upgraded.close();
 
       final reopened = AppDatabase.forTesting(NativeDatabase(databaseFile));
@@ -213,8 +260,21 @@ void main() {
       expect(repeatRule.enabled, isTrue);
       expect(repeatRule.repeatMode, 'ON_DUE');
       expect(repeatRule.timeZone, isNull);
+      expect(repeatRule.selectedDatesJson, isNull);
     },
   );
+}
+
+void _downgradeToSchema10(File databaseFile) {
+  final database = sqlite.sqlite3.open(databaseFile.path);
+  try {
+    database.execute(
+      'ALTER TABLE todo_repeat_rules DROP COLUMN selected_dates_json',
+    );
+    database.execute('PRAGMA user_version = 10');
+  } finally {
+    database.dispose();
+  }
 }
 
 void _createB1Schema9(File databaseFile) {

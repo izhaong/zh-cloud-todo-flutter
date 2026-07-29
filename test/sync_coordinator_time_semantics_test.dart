@@ -188,6 +188,75 @@ void main() {
     },
   );
 
+  test('pull preserves normalized selected-date repeat rules', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final now = DateTime(2026, 7, 13, 9, 30);
+    await db
+        .into(db.todoTasks)
+        .insert(
+          TodoTasksCompanion.insert(
+            id: 'task-1',
+            serverId: const Value(201),
+            listId: 'list-1',
+            title: '自选日期模板',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    final dio = Dio();
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          handler.resolve(
+            Response(
+              requestOptions: options,
+              data: {
+                'code': 0,
+                'data': {
+                  'changes': [
+                    {
+                      'entityType': 'repeat_rule',
+                      'entityId': 301,
+                      'operation': 'upsert',
+                      'payload': {
+                        'taskId': 201,
+                        'frequency': 'custom',
+                        'intervalValue': 1,
+                        'startAt': '2026-07-13T09:30:00',
+                        'repeatMode': 'ON_SELECTED_DATES',
+                        'selectedDates': [
+                          '2026-07-20',
+                          '2026-07-15',
+                          '2026-07-20',
+                        ],
+                        'timeZone': 'Asia/Shanghai',
+                      },
+                    },
+                  ],
+                  'tombstones': const [],
+                  'hasMore': false,
+                },
+              },
+            ),
+          );
+        },
+      ),
+    );
+    final client = ApiClient(dio: dio);
+    final coordinator = SyncCoordinator(
+      db: db,
+      api: SyncApi(client, clientId: 'test', deviceId: 'device-1'),
+      todoApi: client,
+    );
+
+    expect(await coordinator.pull(), 1);
+    final rule = await db.select(db.todoRepeatRules).getSingle();
+    expect(rule.repeatMode, 'ON_SELECTED_DATES');
+    expect(rule.byDay, isNull);
+    expect(rule.selectedDatesJson, '["2026-07-15","2026-07-20"]');
+  });
+
   test('pushes completion with the ON_COMPLETE service contract', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);

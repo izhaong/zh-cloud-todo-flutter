@@ -12,7 +12,7 @@ zh-cloud 平台 Todo 产品的 **唯一 C 端客户端**（**Web / H5**、iOS、
 
 - `specs/001-todo-dida-core-parity/{spec,plan,tasks}.md`：功能能力事实源，定义任务、清单、同步、多视图、日历、效率、提醒、协作与账号能力。
 - `specs/002-todo-visual-fidelity/{spec,plan,tasks}.md`：视觉与响应式事实源，定义工作区结构、视觉状态、布局档位、验收视口与 golden 基准。
-- `specs/006-todo-task-time-semantics/{spec,plan,tasks}.md`：任务时间、提醒、重复与 occurrence 动作的当前实现契约，定义 Drift/outbox、时区、锚点和提醒派发边界。
+- `specs/006-todo-task-time-semantics/{spec,plan,tasks}.md`：任务时间、提醒、三类重复模式（含自选日期）与 occurrence 动作的当前实现契约，定义 Drift/outbox、时区、锚点和提醒派发边界。
 - 两套规格按职责互补；视觉规格不得改写账号、数据、同步、接口或权限语义，功能规格不得复制视觉契约正文。
 
 ### 1.2 桌面母版与响应式档位
