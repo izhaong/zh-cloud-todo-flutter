@@ -67,6 +67,7 @@ pubspec.yaml
 - 登录表现层按 900px 断点适配：宽屏使用“今日节奏 + 表单”双栏并垂直居中，窄屏使用表单优先单栏；密码、验证码、注册与重置密码四种模式保持同一卡片层级。
 - 表单支持密码显示/隐藏、手机号/密码/验证码自动填充提示、键盘焦点、动态错误播报，以及 320px / 200% 文本缩放 / 深色主题无溢出回归。设计与验收见 [`specs/003-todo-auth-visual-polish/`](specs/003-todo-auth-visual-polish/)。
 - 账号启用 RFC 6238 TOTP 后，密码与短信登录会根据后端业务码展示独立的 6 位动态码字段并保留原表单内容；账户安全页通过 `setup → confirm` 完成认证器绑定，关闭时必须提交当前动态码。
+- 账户安全页可生成服务端不可变 JSON 数据快照；READY 记录通过当前会员登录态和租户头下载字节，再交给系统保存对话框落盘，不暴露或跳转无鉴权裸链接。
 
 ### 4.2 离线同步与 LWW（目标）
 
@@ -77,7 +78,7 @@ pubspec.yaml
 ## 5. 对外契约
 
 - 登录：`/app-api/todo-member/auth/{login,sms-login,send-sms-code,logout}`、`/app-api/todo-member/user/reset-password`；已启用双重验证的登录请求携带可选 `twoFactorCode`。
-- 业务：`/app-api/todo/**`；双重验证使用 `/security/2fa/{status,setup,confirm,disable}`，setup 返回 Base32 密钥与标准 `otpauth` URI。
+- 业务：`/app-api/todo/**`；双重验证使用 `/security/2fa/{status,setup,confirm,disable}`，setup 返回 Base32 密钥与标准 `otpauth` URI；数据导出使用 `/security/export`、`/security/export/list`、`/security/export/{id}/download`，下载请求复用会话鉴权。
 - 同步：`/app-api/todo/sync/{pull,push}`。
 - 默认 API `http://127.0.0.1:48080`、租户 `1`，可用 `--dart-define=TODO_API_BASE_URL`、`--dart-define=TODO_TENANT_ID` 覆盖。
 - 后端契约变更须在 `zh-cloud-service`（`service-dev`）配套 PR 并互链。
