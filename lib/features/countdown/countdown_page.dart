@@ -32,10 +32,9 @@ class CountdownPage extends ConsumerWidget {
             separatorBuilder: (_, _) => const Divider(height: 1),
             itemBuilder: (_, i) {
               final c = items[i];
-              final daysLeft = c.targetDate.difference(DateTime.now()).inDays;
               return ListTile(
                 leading: CircleAvatar(
-                  backgroundColor: _parseColor(c.color),
+                  backgroundColor: Colors.blue,
                   child: Text(
                     c.isCountUp ? '正' : '倒',
                     style: const TextStyle(color: Colors.white),
@@ -43,7 +42,9 @@ class CountdownPage extends ConsumerWidget {
                 ),
                 title: Text(c.title),
                 subtitle: Text(
-                  c.isCountUp ? '已 ${-daysLeft} 天' : '还有 $daysLeft 天',
+                  c.isCountUp
+                      ? '已 ${-c.daysRemaining} 天'
+                      : '还有 ${c.daysRemaining} 天',
                 ),
               );
             },
@@ -112,15 +113,5 @@ class CountdownPage extends ConsumerWidget {
         ),
       ),
     );
-  }
-}
-
-Color _parseColor(String? hex) {
-  if (hex == null || hex.isEmpty) return Colors.blue;
-  try {
-    final s = hex.startsWith('#') ? hex : '#$hex';
-    return Color(int.parse(s.substring(1), radix: 16) | 0xFF000000);
-  } catch (_) {
-    return Colors.blue;
   }
 }

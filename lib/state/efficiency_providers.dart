@@ -29,7 +29,7 @@ final pomodoroStatsProvider = FutureProvider.autoDispose<Map<String, dynamic>>((
   ref,
 ) async {
   final api = ref.watch(pomodoroApiProvider);
-  return api.stats(days: 7);
+  return api.stats(period: 'week');
 });
 
 /// 倒数日列表。
@@ -53,5 +53,5 @@ final habitStatsProvider = FutureProvider.autoDispose<Map<String, dynamic>>((
   ref,
 ) async {
   final repo = ref.watch(habitRepositoryProvider);
-  return repo.stats();
+  return repo.overviewStats();
 });

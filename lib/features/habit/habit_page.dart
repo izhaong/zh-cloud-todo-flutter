@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/brand_colors.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../state/efficiency_providers.dart';
-import '../../state/providers.dart';
 import 'habit_repository.dart';
 
 /// M11-B4 习惯列表 + 打卡
@@ -101,13 +100,7 @@ class HabitPage extends ConsumerWidget {
               final name = ctl.text.trim();
               if (name.isEmpty) return;
               try {
-                await ref
-                    .read(apiClientProvider)
-                    .raw
-                    .post(
-                      '/app-api/todo/habit/create',
-                      data: {'name': name, 'targetPerWeek': 7},
-                    );
+                await ref.read(habitRepositoryProvider).create(name: name);
                 ref.invalidate(myHabitsProvider);
                 ref.invalidate(habitStatsProvider);
                 if (ctx.mounted) Navigator.pop(ctx);
@@ -188,7 +181,7 @@ class _HabitTile extends ConsumerWidget {
                     ),
                   ),
                   Text(
-                    '目标 ${habit.targetPerWeek} 次/周',
+                    _targetLabel(habit),
                     style: TextStyle(
                       fontSize: 12,
                       color: colors.mutedForeground,
@@ -210,6 +203,15 @@ class _HabitTile extends ConsumerWidget {
       ),
     );
   }
+}
+
+String _targetLabel(HabitDto habit) {
+  final unit = switch (habit.period) {
+    2 => '周',
+    3 => '月',
+    _ => '天',
+  };
+  return '目标 ${habit.targetCount} 次/$unit';
 }
 
 Color _parseColor(String? hex) {
