@@ -124,7 +124,7 @@ void main() {
         _goldenTarget(goldenCase.scenario),
         matchesGoldenFile(todoGoldenPath(goldenCase.id)),
       );
-    });
+    }, tags: const ['golden']);
   }
 }
 
