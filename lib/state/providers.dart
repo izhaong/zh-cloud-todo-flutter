@@ -75,9 +75,14 @@ final appDatabaseProvider = Provider<AppDatabase?>((ref) {
   ref.watch(sessionProvider);
   final session = ref.watch(sessionProvider);
   if (session == null) return null;
+  const testNamespace = String.fromEnvironment('TODO_E2E_DATABASE_SUFFIX');
   final db = AppDatabase.forUser(
     tenantId: session.tenantId,
     userId: session.userId,
+    testNamespace:
+        const bool.fromEnvironment('FLUTTER_TEST') && testNamespace.isNotEmpty
+        ? testNamespace
+        : null,
   );
   ref.onDispose(db.close);
   return db;

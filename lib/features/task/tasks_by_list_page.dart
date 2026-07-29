@@ -169,7 +169,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       },
     );
     if (widget.hideAppBar) {
-      return ColoredBox(color: colors.surface, child: body);
+      return Material(color: colors.surface, child: body);
     }
     return Scaffold(
       backgroundColor: colors.surface,
@@ -440,6 +440,7 @@ class _ListBodyState extends State<_ListBody> {
           bottom: TodoLayoutTokens.mainHorizontalInset,
         ),
         itemCount: entries.length,
+        // ignore: deprecated_member_use
         onReorder: (oldIndex, newIndex) {
           final entry = entries[oldIndex];
           if (entry is! TodoTask) return;

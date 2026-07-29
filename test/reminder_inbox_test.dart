@@ -96,6 +96,19 @@ void main() {
       expect(items.single.reminderId, 72);
     });
 
+    test('服务端 SENT 派发仍是收件箱中的待处理提醒', () {
+      final items = ReminderActionApi.normalize([
+        {
+          'reminderDispatchId': 81,
+          'reminderId': 82,
+          'taskId': 20,
+          'status': 'SENT',
+        },
+      ]);
+
+      expect(items.single.pending, isTrue);
+    });
+
     test('解析信封 {code,data:{list:[…]}}', () {
       final body = {
         'code': 0,

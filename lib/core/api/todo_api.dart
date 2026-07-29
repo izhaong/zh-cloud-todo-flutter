@@ -521,7 +521,7 @@ class ReminderInboxItem {
   /// PENDING / DISMISSED / DONE 等。
   final String status;
 
-  bool get pending => status == 'PENDING';
+  bool get pending => status == 'PENDING' || status == 'SENT';
 }
 
 /// 清单成员：后端 `members.int` 响应单项。
