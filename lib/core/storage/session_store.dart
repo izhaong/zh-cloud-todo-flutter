@@ -23,8 +23,14 @@ class SessionStore {
 
   static const _sessionKey = 'zh_cloud_todo_flutter_session_v2';
   static const _deviceIdKey = 'zh_cloud_todo_flutter_device_id';
+  static const _e2eDeviceId = String.fromEnvironment('TODO_E2E_DEVICE_ID');
+  static TodoAuthSession? _e2eSession;
+
+  static bool get _useE2eMemoryStore =>
+      const bool.fromEnvironment('FLUTTER_TEST') && _e2eDeviceId.isNotEmpty;
 
   Future<TodoAuthSession?> readSession() async {
+    if (_useE2eMemoryStore) return _e2eSession;
     final raw = await _storage.read(key: _sessionKey);
     if (raw == null || raw.isEmpty) return null;
     try {
@@ -36,15 +42,24 @@ class SessionStore {
   }
 
   Future<void> writeSession(TodoAuthSession session) async {
+    if (_useE2eMemoryStore) {
+      _e2eSession = session;
+      return;
+    }
     await _storage.write(key: _sessionKey, value: jsonEncode(session.toJson()));
   }
 
   Future<void> clearSession() async {
+    if (_useE2eMemoryStore) {
+      _e2eSession = null;
+      return;
+    }
     await _storage.delete(key: _sessionKey);
   }
 
   /// 设备唯一标识：跨启动稳定；不存在则生成 UUID-v4 并写回。
   Future<String> readOrCreateDeviceId({String Function()? generate}) async {
+    if (_useE2eMemoryStore) return _e2eDeviceId;
     final existing = await _storage.read(key: _deviceIdKey);
     if (existing != null && existing.isNotEmpty) return existing;
     final generated = (generate ?? _defaultUuid)();

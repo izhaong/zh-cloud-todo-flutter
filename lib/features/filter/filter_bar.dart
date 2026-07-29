@@ -3,6 +3,13 @@ import 'package:flutter/material.dart';
 import '../../state/providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+class TaskAssigneeOption {
+  const TaskAssigneeOption({required this.userId, required this.name});
+
+  final int userId;
+  final String name;
+}
+
 /// M11-B2 过滤条：list / folder / tag / priority / due 范围 / completed 状态。
 class TaskFilter {
   TaskFilter({
@@ -12,6 +19,10 @@ class TaskFilter {
     this.priority,
     this.dueRange,
     this.completed,
+    this.assigneeUserId,
+    this.keyword,
+    this.dueAtFrom,
+    this.dueAtTo,
   });
 
   final String? listId;
@@ -20,6 +31,14 @@ class TaskFilter {
   final int? priority;
   final String? dueRange; // today / overdue / future
   final bool? completed;
+  final int? assigneeUserId;
+  final String? keyword;
+
+  /// Local calendar-day lower bound chosen in the advanced filter.
+  final DateTime? dueAtFrom;
+
+  /// Local calendar-day upper bound chosen in the advanced filter.
+  final DateTime? dueAtTo;
 
   TaskFilter copyWith({
     String? listId,
@@ -28,6 +47,14 @@ class TaskFilter {
     int? priority,
     String? dueRange,
     bool? completed,
+    int? assigneeUserId,
+    bool clearAssigneeUserId = false,
+    String? keyword,
+    bool clearKeyword = false,
+    DateTime? dueAtFrom,
+    bool clearDueAtFrom = false,
+    DateTime? dueAtTo,
+    bool clearDueAtTo = false,
   }) {
     return TaskFilter(
       listId: listId ?? this.listId,
@@ -36,6 +63,12 @@ class TaskFilter {
       priority: priority ?? this.priority,
       dueRange: dueRange ?? this.dueRange,
       completed: completed ?? this.completed,
+      assigneeUserId: clearAssigneeUserId
+          ? null
+          : assigneeUserId ?? this.assigneeUserId,
+      keyword: clearKeyword ? null : keyword ?? this.keyword,
+      dueAtFrom: clearDueAtFrom ? null : dueAtFrom ?? this.dueAtFrom,
+      dueAtTo: clearDueAtTo ? null : dueAtTo ?? this.dueAtTo,
     );
   }
 
@@ -45,7 +78,11 @@ class TaskFilter {
       tagIds.isEmpty &&
       priority == null &&
       dueRange == null &&
-      completed == null;
+      completed == null &&
+      assigneeUserId == null &&
+      (keyword == null || keyword!.trim().isEmpty) &&
+      dueAtFrom == null &&
+      dueAtTo == null;
 
   /// 把当前 filter 物化为智能清单的入参 map。
   Map<String, dynamic> toJson() => {
@@ -55,15 +92,25 @@ class TaskFilter {
     'priority': priority,
     'dueRange': dueRange,
     'completed': completed,
+    'assigneeUserId': assigneeUserId,
+    'keyword': keyword,
+    'dueAtFrom': dueAtFrom?.toIso8601String(),
+    'dueAtTo': dueAtTo?.toIso8601String(),
   };
 }
 
 /// M11-B2 顶部过滤条 + "保存为智能清单" 按钮。
 class FilterBar extends ConsumerWidget {
-  const FilterBar({super.key, required this.filter, required this.onChanged});
+  const FilterBar({
+    super.key,
+    required this.filter,
+    required this.onChanged,
+    this.assigneeOptions = const [],
+  });
 
   final TaskFilter filter;
   final ValueChanged<TaskFilter> onChanged;
+  final List<TaskAssigneeOption> assigneeOptions;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -102,6 +149,31 @@ class FilterBar extends ConsumerWidget {
               if (next != filter.priority) {
                 onChanged(filter.copyWith(priority: next));
               }
+            },
+          ),
+          _Choice(
+            key: const Key('todo-filter-advanced'),
+            label: _advancedFilterLabel(filter),
+            selected: _hasAdvancedFilter(filter),
+            onTap: () async {
+              final next = await _pickAdvancedFilter(
+                context,
+                filter,
+                assigneeOptions,
+              );
+              if (next == null) return;
+              onChanged(
+                filter.copyWith(
+                  keyword: next.keyword,
+                  clearKeyword: next.keyword == null,
+                  dueAtFrom: next.dueAtFrom,
+                  clearDueAtFrom: next.dueAtFrom == null,
+                  dueAtTo: next.dueAtTo,
+                  clearDueAtTo: next.dueAtTo == null,
+                  assigneeUserId: next.assigneeUserId,
+                  clearAssigneeUserId: next.assigneeUserId == null,
+                ),
+              );
             },
           ),
           const SizedBox(width: 4),
@@ -228,6 +300,133 @@ class FilterBar extends ConsumerWidget {
     ).then((v) => v == -1 ? null : v);
   }
 
+  static Future<_AdvancedFilter?> _pickAdvancedFilter(
+    BuildContext context,
+    TaskFilter current,
+    List<TaskAssigneeOption> assigneeOptions,
+  ) async {
+    final keywordController = TextEditingController(
+      text: current.keyword ?? '',
+    );
+    int? selectedAssigneeUserId = current.assigneeUserId;
+    final dueAtFromController = TextEditingController(
+      text: _formatDate(current.dueAtFrom),
+    );
+    final dueAtToController = TextEditingController(
+      text: _formatDate(current.dueAtTo),
+    );
+    String? validationMessage;
+    return showDialog<_AdvancedFilter?>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('高级筛选'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  key: const Key('task-filter-keyword'),
+                  controller: keywordController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: '关键词（标题或正文）',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int?>(
+                  key: const Key('task-filter-assignee'),
+                  initialValue: selectedAssigneeUserId,
+                  decoration: const InputDecoration(
+                    labelText: '负责人',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    const DropdownMenuItem<int?>(
+                      value: null,
+                      child: Text('全部负责人'),
+                    ),
+                    for (final option in assigneeOptions)
+                      DropdownMenuItem<int?>(
+                        value: option.userId,
+                        child: Text(option.name),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    setDialogState(() => selectedAssigneeUserId = value);
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  key: const Key('task-filter-due-at-from'),
+                  controller: dueAtFromController,
+                  keyboardType: TextInputType.datetime,
+                  decoration: const InputDecoration(
+                    labelText: '截止日期起（YYYY-MM-DD）',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  key: const Key('task-filter-due-at-to'),
+                  controller: dueAtToController,
+                  keyboardType: TextInputType.datetime,
+                  decoration: InputDecoration(
+                    labelText: '截止日期止（YYYY-MM-DD）',
+                    border: const OutlineInputBorder(),
+                    errorText: validationMessage,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final dueAtFrom = _parseLocalDate(dueAtFromController.text);
+                final dueAtTo = _parseLocalDate(dueAtToController.text);
+                final fromInvalid =
+                    dueAtFromController.text.trim().isNotEmpty &&
+                    dueAtFrom == null;
+                final toInvalid =
+                    dueAtToController.text.trim().isNotEmpty && dueAtTo == null;
+                if (fromInvalid || toInvalid) {
+                  setDialogState(
+                    () => validationMessage = '请输入有效日期，例如 2026-07-12',
+                  );
+                  return;
+                }
+                if (dueAtFrom != null &&
+                    dueAtTo != null &&
+                    dueAtFrom.isAfter(dueAtTo)) {
+                  setDialogState(() => validationMessage = '截止日期起不能晚于截止日期止');
+                  return;
+                }
+                Navigator.pop(
+                  ctx,
+                  _AdvancedFilter(
+                    keyword: keywordController.text.trim().isEmpty
+                        ? null
+                        : keywordController.text.trim(),
+                    dueAtFrom: dueAtFrom,
+                    dueAtTo: dueAtTo,
+                    assigneeUserId: selectedAssigneeUserId,
+                  ),
+                );
+              },
+              child: const Text('应用高级筛选'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   static Future<String?> _promptSmartName(BuildContext context) async {
     final ctrl = TextEditingController();
     return showDialog<String?>(
@@ -257,6 +456,53 @@ class FilterBar extends ConsumerWidget {
   }
 }
 
+class _AdvancedFilter {
+  const _AdvancedFilter({
+    required this.keyword,
+    required this.dueAtFrom,
+    required this.dueAtTo,
+    required this.assigneeUserId,
+  });
+
+  final String? keyword;
+  final DateTime? dueAtFrom;
+  final DateTime? dueAtTo;
+  final int? assigneeUserId;
+}
+
+bool _hasAdvancedFilter(TaskFilter filter) =>
+    filter.keyword?.trim().isNotEmpty == true ||
+    filter.dueAtFrom != null ||
+    filter.dueAtTo != null ||
+    filter.assigneeUserId != null;
+
+String _advancedFilterLabel(TaskFilter filter) {
+  if (filter.assigneeUserId != null) return '负责人';
+  if (filter.keyword?.trim().isNotEmpty == true) return '关键词';
+  if (filter.dueAtFrom != null || filter.dueAtTo != null) return '日期';
+  return '高级';
+}
+
+String _formatDate(DateTime? value) {
+  if (value == null) return '';
+  final month = value.month.toString().padLeft(2, '0');
+  final day = value.day.toString().padLeft(2, '0');
+  return '${value.year}-$month-$day';
+}
+
+DateTime? _parseLocalDate(String value) {
+  final match = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(value.trim());
+  if (match == null) return null;
+  final year = int.parse(match.group(1)!);
+  final month = int.parse(match.group(2)!);
+  final day = int.parse(match.group(3)!);
+  final parsed = DateTime(year, month, day);
+  if (parsed.year != year || parsed.month != month || parsed.day != day) {
+    return null;
+  }
+  return parsed;
+}
+
 String dueRangeChipLabel(String? v) {
   switch (v) {
     case 'today':
@@ -282,6 +528,7 @@ String priorityChipLabel(int? v) {
 
 class _Choice extends StatelessWidget {
   const _Choice({
+    super.key,
     required this.label,
     required this.selected,
     required this.onTap,

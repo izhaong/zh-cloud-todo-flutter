@@ -20,7 +20,9 @@ class ListRepository {
   /// 顶层非智能清单（不解析 smart 前缀），按 folderId / sortOrder 排序。
   Stream<List<TodoList>> watchAll() {
     return (_db.select(_db.todoLists)
-          ..where((t) => t.name.like('smart:%').not())
+          ..where(
+            (t) => t.name.like('smart:%').not() & t.id.equals('inbox').not(),
+          )
           ..orderBy([
             (t) => OrderingTerm(expression: t.folderId),
             (t) => OrderingTerm(expression: t.sortOrder),
@@ -31,7 +33,9 @@ class ListRepository {
 
   Future<List<TodoList>> getAll() {
     return (_db.select(_db.todoLists)
-          ..where((t) => t.name.like('smart:%').not())
+          ..where(
+            (t) => t.name.like('smart:%').not() & t.id.equals('inbox').not(),
+          )
           ..orderBy([
             (t) => OrderingTerm(expression: t.folderId),
             (t) => OrderingTerm(expression: t.sortOrder),
@@ -100,6 +104,49 @@ class ListRepository {
       payload: row.toJson(),
     );
     return row;
+  }
+
+  /// 将普通清单移入 [folderServerId]，或传 null 移到顶层。
+  ///
+  /// folder 是 REST 特例，但 list 仍是同步白名单实体：本地更新与 list/upsert
+  /// outbox 必须一起写入，才能让另一个设备经正常 pull 恢复组织关系。
+  Future<TodoList> moveToFolder(String listId, int? folderServerId) async {
+    final existing = await (_db.select(
+      _db.todoLists,
+    )..where((row) => row.id.equals(listId))).getSingleOrNull();
+    if (existing == null) {
+      throw StateError('清单不存在');
+    }
+    if (existing.name.startsWith('smart:')) {
+      throw StateError('智能清单不支持移动到文件夹');
+    }
+    if (folderServerId != null) {
+      final folder = await (_db.select(
+        _db.todoFolders,
+      )..where((row) => row.serverId.equals(folderServerId))).getSingleOrNull();
+      if (folder == null) {
+        throw StateError('文件夹不存在');
+      }
+    }
+    await (_db.update(
+      _db.todoLists,
+    )..where((row) => row.id.equals(listId))).write(
+      TodoListsCompanion(
+        folderId: Value(folderServerId),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+    final moved = await (_db.select(
+      _db.todoLists,
+    )..where((row) => row.id.equals(listId))).getSingle();
+    await _queue.enqueue(
+      entity: SyncEntities.list,
+      op: SyncOps.upsert,
+      localId: listId,
+      serverId: moved.serverId,
+      payload: moved.toJson(),
+    );
+    return moved;
   }
 
   Future<void> reorder(List<String> orderedIds) async {

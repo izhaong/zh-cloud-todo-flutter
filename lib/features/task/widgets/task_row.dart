@@ -57,6 +57,9 @@ class TaskRow extends StatelessWidget {
     this.hovered = false,
     this.focused = false,
     this.selected = false,
+    this.batchSelectionActive = false,
+    this.batchSelected = false,
+    this.onBatchSelectionChanged,
     this.now,
   });
 
@@ -70,6 +73,9 @@ class TaskRow extends StatelessWidget {
   final bool hovered;
   final bool focused;
   final bool selected;
+  final bool batchSelectionActive;
+  final bool batchSelected;
+  final ValueChanged<bool>? onBatchSelectionChanged;
   final DateTime? now;
 
   @override
@@ -112,7 +118,9 @@ class TaskRow extends StatelessWidget {
               ),
             ),
             child: InkWell(
-              onTap: onTap,
+              onTap: batchSelectionActive
+                  ? () => onBatchSelectionChanged?.call(!batchSelected)
+                  : onTap,
               hoverColor: Colors.transparent,
               borderRadius: BorderRadius.circular(
                 TodoLayoutTokens.selectedRowRadius,
@@ -132,13 +140,21 @@ class TaskRow extends StatelessWidget {
                       ),
                       const SizedBox(width: 7),
                     ],
-                    AppCheckbox(
-                      value: data.completed,
-                      visualSize: TodoLayoutTokens.checkboxVisualSize,
-                      tapTargetSize: TodoLayoutTokens.checkboxTapTargetSize,
-                      strokeWidth: TodoLayoutTokens.checkboxStrokeWidth,
-                      onChanged: (_) => onToggleComplete(),
-                    ),
+                    if (batchSelectionActive)
+                      Checkbox(
+                        key: Key('task-batch-select-${data.id}'),
+                        value: batchSelected,
+                        onChanged: (value) =>
+                            onBatchSelectionChanged?.call(value ?? false),
+                      )
+                    else
+                      AppCheckbox(
+                        value: data.completed,
+                        visualSize: TodoLayoutTokens.checkboxVisualSize,
+                        tapTargetSize: TodoLayoutTokens.checkboxTapTargetSize,
+                        strokeWidth: TodoLayoutTokens.checkboxStrokeWidth,
+                        onChanged: (_) => onToggleComplete(),
+                      ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Column(

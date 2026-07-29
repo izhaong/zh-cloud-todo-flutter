@@ -9,11 +9,15 @@ import '../../core/sync/connectivity_recovery_trigger.dart';
 import '../../core/sync/sync_entities.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_widgets.dart';
+import '../../state/nlp_date.dart';
 import '../../state/providers.dart';
+import '../../state/repositories/task_query_repository.dart';
 import '../../state/session_state.dart';
 import '../habit/habit_page.dart';
+import '../reminder/reminder_inbox_page.dart';
 import '../settings/settings_route.dart';
 import '../shell/section.dart';
+import '../shell/quick_add_bar.dart';
 import '../task/task_detail_page.dart';
 import '../task/task_detail_pane.dart';
 import '../task/tasks_by_list_page.dart';
@@ -45,6 +49,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
   bool _preserveSelectionWhenMobileRouteCloses = false;
 
   bool _syncing = false;
+  String _syncStatus = '同步尚未执行';
   Timer? _periodicSync;
   ConnectivityRecoveryTrigger? _connectivityRecoveryTrigger;
 
@@ -52,13 +57,15 @@ class _HomeShellState extends ConsumerState<HomeShell>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _triggerSync();
     _initNotifications();
     if (!const bool.fromEnvironment('FLUTTER_TEST')) {
+      _triggerSync();
       _connectivityRecoveryTrigger = ConnectivityRecoveryTrigger(
         ref.read(connectivityChangesProvider),
+        initialState: ref.read(connectivityInitialStateProvider),
         onOnlineRecovered: _recoverAfterNetworkRestored,
-      )..start();
+      );
+      unawaited(_connectivityRecoveryTrigger!.start());
       _periodicSync = Timer.periodic(const Duration(seconds: 30), (_) {
         _triggerSync();
         _pollUpcomingReminders();
@@ -76,7 +83,10 @@ class _HomeShellState extends ConsumerState<HomeShell>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _triggerSync();
+    if (!const bool.fromEnvironment('FLUTTER_TEST') &&
+        state == AppLifecycleState.resumed) {
+      _triggerSync();
+    }
   }
 
   Future<void> _initNotifications() async {
@@ -89,28 +99,10 @@ class _HomeShellState extends ConsumerState<HomeShell>
 
   Future<void> _pollUpcomingReminders() async {
     if (const bool.fromEnvironment('FLUTTER_TEST')) return;
-    final svc = ref.read(localNotificationServiceProvider);
-    final api = ref.read(todoApiProvider).reminder;
-    final db = ref.read(appDatabaseProvider);
-    if (db == null) return;
+    final poller = ref.read(reminderNotificationPollerProvider);
+    if (poller == null) return;
     try {
-      final items = await api.inbox();
-      final now = DateTime.now();
-      for (final it in items.where((e) => e.pending)) {
-        final diff = it.remindAt.difference(now);
-        if (diff.inSeconds <= 30) {
-          final task = await db.taskByServerId(it.taskId);
-          final taskTitle = (task != null && task.title.isNotEmpty)
-              ? task.title
-              : it.taskTitle;
-          await svc.show(
-            id: it.id,
-            title: taskTitle.isEmpty ? '提醒' : taskTitle,
-            body: '到期提醒',
-            payload: 'reminder:${it.id}',
-          );
-        }
-      }
+      await poller.poll();
     } catch (_) {}
   }
 
@@ -118,10 +110,17 @@ class _HomeShellState extends ConsumerState<HomeShell>
     final coordinator = ref.read(syncCoordinatorProvider);
     if (coordinator == null || _syncing) return;
     _syncing = true;
+    if (mounted) setState(() => _syncStatus = '正在同步');
     try {
-      await coordinator.syncOnce();
+      final outcome = await coordinator.syncOnce();
+      if (mounted) {
+        setState(
+          () => _syncStatus =
+              '同步完成：推送 ${outcome.pushed} 项，拉取 ${outcome.pulled} 项',
+        );
+      }
     } catch (_) {
-      // 同步失败静默重试。
+      if (mounted) setState(() => _syncStatus = '同步失败，将在稍后重试');
     } finally {
       _syncing = false;
     }
@@ -304,10 +303,30 @@ class _HomeShellState extends ConsumerState<HomeShell>
     Navigator.of(context).removeRoute(route);
   }
 
-  void _openTags() {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const TagPage()));
+  void _openTags({String? initialTagId}) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => TagPage(initialTagId: initialTagId)),
+    );
+  }
+
+  void _handleSearchResult(TaskSearchResult result) {
+    switch (result.type) {
+      case TaskSearchResultType.task:
+        final hadTaskSelection = _selectedTaskId != null;
+        setState(() {
+          _section = Section.tasks;
+          _smart = SmartList.all;
+          _listId = null;
+          _selectedTaskId = null;
+        });
+        if (hadTaskSelection) _dismissDetailPresentation();
+        _selectTask(result.id);
+      case TaskSearchResultType.list:
+        _selectSection(Section.tasks);
+        _selectList(result.id);
+      case TaskSearchResultType.tag:
+        _openTags(initialTagId: result.id);
+    }
   }
 
   void _openFilters() {
@@ -325,11 +344,52 @@ class _HomeShellState extends ConsumerState<HomeShell>
     );
   }
 
-  Future<void> _quickAdd(String title) async {
+  void _openReminders() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const ReminderInboxPage()));
+  }
+
+  Future<void> _quickAdd(QuickAddRequest request) async {
     final repo = ref.read(taskRepositoryProvider);
     if (repo == null) return;
-    final listId = _effectiveListId ?? 'inbox';
-    await repo.create(listId: listId, title: title);
+    final defaults = await ref
+        .read(taskCaptureDefaultsRepositoryProvider)
+        ?.get();
+    final selectedListId = _effectiveListId;
+    final listId = selectedListId == null || selectedListId == 'inbox'
+        ? defaults?.defaultListId ?? 'inbox'
+        : selectedListId;
+    final created = await repo.createBatch(
+      listId: listId,
+      input: request.input,
+      priority: request.priorityOverride ?? defaults?.defaultPriority ?? 0,
+      dueAtResolver: request.dueAtOverride != null
+          ? (_) => request.dueAtOverride
+          : request.useNlpDate
+          ? (line) => NlpDateParser().parse(line)?.date
+          : null,
+    );
+    final tags = ref.read(tagRepositoryProvider);
+    if (tags != null && request.tagIds.isNotEmpty) {
+      await Future.wait(
+        created.map((task) => tags.setTaskTags(task.id, request.tagIds)),
+      );
+    }
+    if (!mounted || created.isEmpty) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('已创建 ${created.length} 项任务'),
+          action: SnackBarAction(
+            label: '撤销',
+            onPressed: () => unawaited(
+              Future.wait(created.map((task) => repo.delete(task.id))),
+            ),
+          ),
+        ),
+      );
   }
 
   @override
@@ -387,11 +447,15 @@ class _HomeShellState extends ConsumerState<HomeShell>
             onUnavailable: _invalidateTaskSelection,
           ),
           onSelectSection: _selectSection,
+          onSync: () => unawaited(_triggerSync()),
+          onOpenReminders: _openReminders,
+          syncStatus: _syncStatus,
           onSelectSmart: _selectSmart,
           onSelectList: _selectList,
           onOpenTags: _openTags,
           onOpenFilters: _openFilters,
           onOpenSettings: _openSettings,
+          onSearchResultSelected: _handleSearchResult,
           scaffoldKey: _workspaceScaffoldKey,
           onDetailDrawerChanged: _handleDetailDrawerChanged,
         );

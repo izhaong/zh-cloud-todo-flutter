@@ -45,7 +45,7 @@ extension SmartListX on SmartList {
   String get label {
     switch (this) {
       case SmartList.inbox:
-        return '收件箱';
+        return '收集箱';
       case SmartList.today:
         return '今天';
       case SmartList.upcoming:

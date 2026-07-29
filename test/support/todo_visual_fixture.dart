@@ -1,7 +1,9 @@
+import 'dart:async';
+
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:zh_cloud_todo_flutter/core/api/api_client.dart';
@@ -74,6 +76,9 @@ class TodoVisualFixture {
           currentDateTimeProvider.overrideWithValue(() => fixedNow),
           connectivityChangesProvider.overrideWithValue(
             const Stream<List<ConnectivityResult>>.empty(),
+          ),
+          connectivityInitialStateProvider.overrideWithValue(
+            () async => const [ConnectivityResult.wifi],
           ),
           deviceIdProvider.overrideWith((ref) async => _fixedDeviceId),
           syncApiProvider.overrideWith((ref) => null),
@@ -355,7 +360,7 @@ class TodoVisualFixture {
       ),
       _task(
         id: 'visual-task-completed',
-        title: '清理收件箱中的旧任务',
+        title: '清理收集箱中的旧任务',
         listId: inboxListId,
         completed: true,
         dueAt: at(-1, 17),
@@ -485,6 +490,7 @@ class _NoNetworkApiClient extends ApiClient {
   Future<Response<T>> memberGet<T>(
     String path, {
     Map<String, dynamic>? query,
+    Options? options,
   }) => _blocked('MEMBER GET', path);
 
   @override

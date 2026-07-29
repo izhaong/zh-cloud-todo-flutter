@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -5,7 +7,10 @@ import '../../core/db/app_database.dart';
 import '../../core/theme/brand_colors.dart';
 import '../../core/theme/todo_layout_tokens.dart';
 import '../../core/widgets/app_widgets.dart';
+import '../../state/nlp_date.dart';
 import '../../state/providers.dart';
+import '../../state/repositories/task_batch_edit_repository.dart';
+import '../../state/repositories/task_query_repository.dart';
 import '../../state/repositories/task_repository.dart';
 import '../filter/filter_bar.dart';
 import '../shell/quick_add_bar.dart';
@@ -66,6 +71,9 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   bool? _selectedTaskLastCompleted;
   String? _completionInvalidationTaskId;
   String? _reportedInvalidSelectionId;
+  bool _batchSelectionActive = false;
+  bool _batchApplying = false;
+  final Set<String> _batchSelectedTaskIds = <String>{};
 
   @override
   void initState() {
@@ -75,6 +83,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       dueRange: widget.initialDueRange,
       completed: widget.initialCompleted,
     );
+    Future<void>.microtask(_restoreSortPreference);
   }
 
   @override
@@ -83,6 +92,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     if (widget.lockedListId &&
         widget.initialListId != oldWidget.initialListId) {
       setState(() => _selectedListId = widget.initialListId);
+      Future<void>.microtask(_restoreSortPreference);
     }
     if (widget.initialDueRange != oldWidget.initialDueRange ||
         widget.initialCompleted != oldWidget.initialCompleted) {
@@ -99,6 +109,9 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   Widget build(BuildContext context) {
     final colors = brandColors(context);
     final taskRepo = ref.watch(taskRepositoryProvider);
+    final tagOptions = (ref.watch(tagsStreamProvider).valueOrNull ?? const [])
+        .map((tag) => QuickAddTagOption(id: tag.id, name: tag.name))
+        .toList(growable: false);
     final now = ref.watch(currentDateTimeProvider)();
     final viewportWidth = MediaQuery.sizeOf(context).width;
     final desktopMode = viewportWidth >= TodoLayoutTokens.compactMinWidth;
@@ -133,10 +146,26 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 sort: _sort,
                 filterActive: !_filter.isEmpty,
                 onModeChanged: _changeMode,
-                onSortChanged: (sort) => setState(() => _sort = sort),
-                onFilterPressed: _openFilterPanel,
+                onSortChanged: _changeSort,
+                onFilterPressed: () => _openFilterPanel(raw),
+                batchSelectionActive: _batchSelectionActive,
+                batchSelectedCount: _batchSelectedTaskIds.length,
+                onBatchPressed: _toggleBatchSelection,
+                onBatchCompletePressed:
+                    _batchSelectionActive &&
+                        _batchSelectedTaskIds.isNotEmpty &&
+                        !_batchApplying
+                    ? _completeBatchSelection
+                    : null,
+                onBatchActionSelected:
+                    _batchSelectionActive &&
+                        _batchSelectedTaskIds.isNotEmpty &&
+                        !_batchApplying
+                    ? _applyBatchAction
+                    : null,
               ),
-            if (showQuickAdd) QuickAddBar(onSubmit: _submitQuickAdd),
+            if (showQuickAdd)
+              QuickAddBar(onSubmit: _submitQuickAdd, tagOptions: tagOptions),
             Expanded(
               child: mobileMode
                   ? Padding(
@@ -154,14 +183,17 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
             Positioned(
               right: 16,
               bottom: 16,
-              child: MobileQuickAddButton(onSubmit: _submitQuickAdd),
+              child: MobileQuickAddButton(
+                onSubmit: _submitQuickAdd,
+                tagOptions: tagOptions,
+              ),
             ),
           ],
         );
       },
     );
     if (widget.hideAppBar) {
-      return ColoredBox(color: colors.surface, child: body);
+      return Material(color: colors.surface, child: body);
     }
     return Scaffold(
       backgroundColor: colors.surface,
@@ -184,17 +216,67 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           now: now,
           selectedTaskId: widget.selectedTaskId,
           onTaskSelected: widget.onTaskSelected,
+          onTasksReordered: (taskIds) async {
+            final repository = ref.read(taskViewActionRepositoryProvider);
+            if (repository == null) return;
+            await repository.reorderListTasks(taskIds);
+          },
+          batchSelectionActive: _batchSelectionActive,
+          batchSelectedTaskIds: _batchSelectedTaskIds,
+          onBatchSelectionChanged: _updateBatchSelection,
         );
       case TaskViewMode.kanban:
+        final listId = _selectedListId;
+        final hasRecoverablePreference =
+            listId != null &&
+            (ref
+                    .watch(boardPreferenceRecoveryAvailableProvider(listId))
+                    .valueOrNull ??
+                false);
         return KanbanView(
           tasks: items,
-          listId: _selectedListId,
+          listId: listId,
+          hasRecoverablePreference: hasRecoverablePreference,
+          onRecoverPreference: !hasRecoverablePreference
+              ? null
+              : () async {
+                  final repository = ref.read(
+                    boardPreferenceRepositoryProvider,
+                  );
+                  final recovered =
+                      await repository?.recoverLatestFailed(listId: listId) ??
+                      false;
+                  ref.invalidate(
+                    boardPreferenceRecoveryAvailableProvider(listId),
+                  );
+                  return recovered;
+                },
           onTaskSelected: widget.onTaskSelected,
+          onTaskMove: (task, priority, completed) async {
+            final repository = ref.read(taskViewActionRepositoryProvider);
+            if (repository == null) return;
+            await repository.moveKanbanTask(
+              task.id,
+              priority: priority,
+              completed: completed,
+            );
+          },
         );
       case TaskViewMode.timeline:
         return TimelineView(
           tasks: items,
           onTaskSelected: widget.onTaskSelected,
+          onTaskTimeChange:
+              (task, {required startAt, required endAt, required dueAt}) async {
+                final repository = ref.read(taskViewActionRepositoryProvider);
+                if (repository == null) return;
+                await repository.moveTimelineTask(
+                  task.id,
+                  startAt: startAt,
+                  endAt: endAt,
+                  dueAt: dueAt,
+                );
+              },
         );
       case TaskViewMode.eisenhower:
         return EisenhowerView(
@@ -209,19 +291,364 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     }
   }
 
-  void _changeMode(TaskViewMode mode) {
-    setState(() => _mode = mode);
-    ref
-        .read(syncChangeQueueProvider)
-        ?.enqueue(
-          entity: 'view_preference',
-          op: 'upsert',
-          payload: {
-            'sourceType': 'task_view',
-            'sourceKey': 'tasks_by_list',
-            'viewType': mode.name,
-          },
-        );
+  Future<void> _restoreSortPreference() async {
+    final repository = ref.read(taskSortPreferenceRepositoryProvider);
+    final sort = await repository?.get(_selectedListId);
+    if (mounted && sort != null) setState(() => _sort = sort);
+  }
+
+  Future<void> _changeSort(TaskSort sort) async {
+    setState(() => _sort = sort);
+    try {
+      await ref
+          .read(taskSortPreferenceRepositoryProvider)
+          ?.save(_selectedListId, sort);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('排序偏好保存失败，请稍后重试')));
+    }
+  }
+
+  Future<void> _changeMode(TaskViewMode mode) async {
+    setState(() {
+      _mode = mode;
+      _batchSelectionActive = false;
+      _batchSelectedTaskIds.clear();
+    });
+    final repository = ref.read(taskViewActionRepositoryProvider);
+    if (repository == null) return;
+    try {
+      await repository.saveTaskWorkspaceViewMode(mode.name);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('视图设置保存失败，请重试')));
+    }
+  }
+
+  void _toggleBatchSelection() {
+    setState(() {
+      _mode = TaskViewMode.list;
+      _batchSelectionActive = !_batchSelectionActive;
+      _batchSelectedTaskIds.clear();
+    });
+  }
+
+  void _updateBatchSelection(String taskId, bool selected) {
+    setState(() {
+      if (selected) {
+        _batchSelectedTaskIds.add(taskId);
+      } else {
+        _batchSelectedTaskIds.remove(taskId);
+      }
+    });
+  }
+
+  Future<void> _completeBatchSelection() async {
+    await _applyBatchEdit(
+      const TaskBatchEditCommand(taskIds: [], completed: true),
+      successVerb: '已完成',
+    );
+  }
+
+  Future<void> _applyBatchAction(TaskBatchAction action) async {
+    if (action == TaskBatchAction.moveToList) {
+      final listId = await _selectBatchDestinationList();
+      if (listId == null || !mounted) return;
+      await _applyBatchEdit(
+        TaskBatchEditCommand(taskIds: [], listId: listId),
+        successVerb: '已更新',
+      );
+      return;
+    }
+    if (action == TaskBatchAction.setTags) {
+      final tagIds = await _selectBatchTagIds();
+      if (tagIds == null || !mounted) return;
+      await _applyBatchEdit(
+        TaskBatchEditCommand(taskIds: [], tagIds: tagIds),
+        successVerb: '已更新',
+      );
+      return;
+    }
+    if (action == TaskBatchAction.setDueAt) {
+      final dueAt = await _selectBatchDueAt();
+      if (dueAt == null || !mounted) return;
+      await _applyBatchEdit(
+        TaskBatchEditCommand(taskIds: [], dueAt: dueAt),
+        successVerb: '已更新',
+      );
+      return;
+    }
+    final command = switch (action) {
+      TaskBatchAction.priorityNone => const TaskBatchEditCommand(
+        taskIds: [],
+        priority: 0,
+      ),
+      TaskBatchAction.priorityLow => const TaskBatchEditCommand(
+        taskIds: [],
+        priority: 1,
+      ),
+      TaskBatchAction.priorityMedium => const TaskBatchEditCommand(
+        taskIds: [],
+        priority: 2,
+      ),
+      TaskBatchAction.priorityHigh => const TaskBatchEditCommand(
+        taskIds: [],
+        priority: 3,
+      ),
+      TaskBatchAction.pin => const TaskBatchEditCommand(
+        taskIds: [],
+        isPinned: true,
+      ),
+      TaskBatchAction.unpin => const TaskBatchEditCommand(
+        taskIds: [],
+        isPinned: false,
+      ),
+      TaskBatchAction.moveToInbox => const TaskBatchEditCommand(
+        taskIds: [],
+        listId: kInboxListId,
+      ),
+      TaskBatchAction.moveToList => throw StateError('指定清单需要先选择目标'),
+      TaskBatchAction.setTags => throw StateError('标签需要先选择目标'),
+      TaskBatchAction.setDueAt => throw StateError('截止日期需要先选择目标'),
+      TaskBatchAction.clearDueAt => const TaskBatchEditCommand(
+        taskIds: [],
+        clearDueAt: true,
+      ),
+      TaskBatchAction.clearTags => const TaskBatchEditCommand(
+        taskIds: [],
+        tagIds: [],
+      ),
+    };
+    await _applyBatchEdit(command, successVerb: '已更新');
+  }
+
+  Future<String?> _selectBatchDestinationList() async {
+    final repository = ref.read(listRepositoryProvider);
+    if (repository == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('清单暂不可用，请稍后重试')));
+      return null;
+    }
+    final lists = await repository.getAll();
+    if (!mounted) return null;
+    if (lists.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('暂无可移动的清单')));
+      return null;
+    }
+    return showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(
+                '移至清单',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+            ),
+            for (final list in lists)
+              ListTile(
+                key: Key('todo-batch-list-${list.id}'),
+                title: Text(list.name),
+                onTap: () => Navigator.of(sheetContext).pop(list.id),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<DateTime?> _selectBatchDueAt() {
+    final now = ref.read(currentDateTimeProvider)();
+    return showDatePicker(
+      context: context,
+      initialDate: DateTime(now.year, now.month, now.day),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      helpText: '设置截止日期',
+    );
+  }
+
+  Future<List<String>?> _selectBatchTagIds() async {
+    final repository = ref.read(tagRepositoryProvider);
+    if (repository == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('标签暂不可用，请稍后重试')));
+      return null;
+    }
+    final tags = await repository.getAll();
+    if (!mounted) return null;
+    if (tags.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('暂无可选择的标签')));
+      return null;
+    }
+    final selectedIds = <String>{};
+    return showModalBottomSheet<List<String>>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => SafeArea(
+          child: SizedBox(
+            height: MediaQuery.sizeOf(context).height * 0.55,
+            child: Column(
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '设置标签',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: ListView(
+                    children: [
+                      for (final tag in tags)
+                        CheckboxListTile(
+                          key: Key('todo-batch-tag-${tag.id}'),
+                          title: Text(tag.name),
+                          value: selectedIds.contains(tag.id),
+                          onChanged: (checked) {
+                            setSheetState(() {
+                              if (checked ?? false) {
+                                selectedIds.add(tag.id);
+                              } else {
+                                selectedIds.remove(tag.id);
+                              }
+                            });
+                          },
+                        ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      key: const Key('todo-batch-apply-tags'),
+                      onPressed: () => Navigator.of(
+                        sheetContext,
+                      ).pop(selectedIds.toList(growable: false)),
+                      child: const Text('应用标签'),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _applyBatchEdit(
+    TaskBatchEditCommand baseCommand, {
+    required String successVerb,
+  }) async {
+    final repository = ref.read(taskBatchEditRepositoryProvider);
+    if (repository == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('批量编辑暂不可用，请稍后重试')));
+      return;
+    }
+    final selectedIds = baseCommand.taskIds.isEmpty
+        ? _batchSelectedTaskIds.toList(growable: false)
+        : baseCommand.taskIds;
+    setState(() => _batchApplying = true);
+    final results = await repository.apply(
+      TaskBatchEditCommand(
+        taskIds: selectedIds,
+        listId: baseCommand.listId,
+        dueAt: baseCommand.dueAt,
+        clearDueAt: baseCommand.clearDueAt,
+        tagIds: baseCommand.tagIds,
+        priority: baseCommand.priority,
+        completed: baseCommand.completed,
+        isPinned: baseCommand.isPinned,
+      ),
+    );
+    if (!mounted) return;
+    final succeeded = results
+        .where((result) => result.status == TaskBatchEditStatus.success)
+        .length;
+    final failed = results
+        .where((result) => result.status == TaskBatchEditStatus.failed)
+        .length;
+    final skipped = results
+        .where((result) => result.status == TaskBatchEditStatus.skipped)
+        .length;
+    final failedTaskIds = results
+        .where((result) => result.status == TaskBatchEditStatus.failed)
+        .map((result) => result.taskId)
+        .toList(growable: false);
+    final failedReasons = results
+        .where((result) => result.status == TaskBatchEditStatus.failed)
+        .map((result) => result.reason)
+        .whereType<String>()
+        .toSet()
+        .join('、');
+    final skippedReasons = results
+        .where((result) => result.status == TaskBatchEditStatus.skipped)
+        .map((result) => result.reason)
+        .whereType<String>()
+        .toSet()
+        .join('、');
+    setState(() {
+      _batchApplying = false;
+      _batchSelectionActive = false;
+      _batchSelectedTaskIds.clear();
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '$successVerb $succeeded 项；失败 $failed 项'
+          '${failedReasons.isEmpty ? '' : '：$failedReasons'}'
+          '${skipped == 0 ? '' : '；跳过 $skipped 项'}'
+          '${skippedReasons.isEmpty ? '' : '：$skippedReasons'}',
+        ),
+        action: failedTaskIds.isEmpty
+            ? null
+            : SnackBarAction(
+                label: '重试失败项',
+                onPressed: () {
+                  if (!mounted) return;
+                  _applyBatchEdit(
+                    TaskBatchEditCommand(
+                      taskIds: failedTaskIds,
+                      listId: baseCommand.listId,
+                      dueAt: baseCommand.dueAt,
+                      clearDueAt: baseCommand.clearDueAt,
+                      tagIds: baseCommand.tagIds,
+                      priority: baseCommand.priority,
+                      completed: baseCommand.completed,
+                      isPinned: baseCommand.isPinned,
+                    ),
+                    successVerb: '已重试',
+                  );
+                },
+              ),
+      ),
+    );
   }
 
   Stream<List<TodoTask>> _resolveTasksStream(TaskRepository repository) {
@@ -294,19 +721,54 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     });
   }
 
-  Future<void> _submitQuickAdd(String title) async {
+  Future<void> _submitQuickAdd(QuickAddRequest request) async {
     final callback = widget.onQuickAdd;
     if (callback != null) {
-      await callback(title);
+      await callback(request);
       return;
     }
     final repo = ref.read(taskRepositoryProvider);
     if (repo == null) return;
-    await repo.create(listId: _selectedListId ?? kInboxListId, title: title);
+    final defaults = await ref
+        .read(taskCaptureDefaultsRepositoryProvider)
+        ?.get();
+    final created = await repo.createBatch(
+      listId: _selectedListId ?? kInboxListId,
+      input: request.input,
+      priority: request.priorityOverride ?? defaults?.defaultPriority ?? 0,
+      dueAtResolver: request.dueAtOverride != null
+          ? (_) => request.dueAtOverride
+          : request.useNlpDate
+          ? (line) => NlpDateParser().parse(line)?.date
+          : null,
+    );
+    final tags = ref.read(tagRepositoryProvider);
+    if (tags != null && request.tagIds.isNotEmpty) {
+      await Future.wait(
+        created.map((task) => tags.setTaskTags(task.id, request.tagIds)),
+      );
+    }
   }
 
-  Future<void> _openFilterPanel() async {
+  Future<void> _openFilterPanel(List<TodoTask> tasks) async {
     var draft = _filter;
+    final assigneesById = <int, TaskAssigneeOption>{};
+    for (final task in tasks) {
+      final userId = task.assigneeUserId;
+      if (userId == null) continue;
+      final cachedName = task.assigneeUserName?.trim();
+      assigneesById[userId] = TaskAssigneeOption(
+        userId: userId,
+        name: cachedName == null || cachedName.isEmpty
+            ? '负责人 #$userId'
+            : cachedName,
+      );
+    }
+    final assigneeOptions = assigneesById.values.toList(growable: false)
+      ..sort((left, right) {
+        final byName = left.name.compareTo(right.name);
+        return byName != 0 ? byName : left.userId.compareTo(right.userId);
+      });
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -325,6 +787,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 const SizedBox(height: 12),
                 FilterBar(
                   filter: draft,
+                  assigneeOptions: assigneeOptions,
                   onChanged: (next) {
                     draft = next;
                     setState(() => _filter = next);
@@ -348,6 +811,10 @@ class _ListBody extends StatefulWidget {
     required this.now,
     required this.selectedTaskId,
     required this.onTaskSelected,
+    this.onTasksReordered,
+    required this.batchSelectionActive,
+    required this.batchSelectedTaskIds,
+    required this.onBatchSelectionChanged,
   });
 
   final List<TodoTask> items;
@@ -356,6 +823,10 @@ class _ListBody extends StatefulWidget {
   final DateTime now;
   final String? selectedTaskId;
   final ValueChanged<String>? onTaskSelected;
+  final Future<void> Function(List<String> taskIds)? onTasksReordered;
+  final bool batchSelectionActive;
+  final Set<String> batchSelectedTaskIds;
+  final void Function(String taskId, bool selected) onBatchSelectionChanged;
 
   @override
   State<_ListBody> createState() => _ListBodyState();
@@ -414,7 +885,11 @@ class _ListBodyState extends State<_ListBody> {
           bottom: TodoLayoutTokens.mainHorizontalInset,
         ),
         itemCount: entries.length,
-        onReorder: (oldIndex, newIndex) {
+        // Flutter 3.41 (the local baseline) does not expose `onReorderItem`
+        // yet. Keep the established callback until the project baseline moves
+        // forward; the adjustment below preserves its pre-3.44 index contract.
+        // ignore: deprecated_member_use
+        onReorder: (oldIndex, newIndex) async {
           final entry = entries[oldIndex];
           if (entry is! TodoTask) return;
           final visibleTaskIds = entries
@@ -434,10 +909,24 @@ class _ListBodyState extends State<_ListBody> {
           final reordered = [...visibleTaskIds]..remove(entry.id);
           insertionIndex = insertionIndex.clamp(0, reordered.length);
           reordered.insert(insertionIndex, entry.id);
+          final previousOrder = _orderedIds;
+          final previousHasCustomOrder = _hasCustomOrder;
           setState(() {
             _orderedIds = reordered;
             _hasCustomOrder = true;
           });
+          try {
+            await widget.onTasksReordered?.call(reordered);
+          } catch (_) {
+            if (!context.mounted) return;
+            setState(() {
+              _orderedIds = previousOrder;
+              _hasCustomOrder = previousHasCustomOrder;
+            });
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('排序保存失败，请重试')));
+          }
         },
         itemBuilder: (context, index) {
           final entry = entries[index];
@@ -458,6 +947,10 @@ class _ListBodyState extends State<_ListBody> {
               reorderIndex: index,
               selected: widget.selectedTaskId == task.id,
               onTap: widget.onTaskSelected,
+              batchSelectionActive: widget.batchSelectionActive,
+              batchSelected: widget.batchSelectedTaskIds.contains(task.id),
+              onBatchSelectionChanged: (selected) =>
+                  widget.onBatchSelectionChanged(task.id, selected),
             ),
           );
         },
@@ -483,6 +976,10 @@ class _ListBodyState extends State<_ListBody> {
           task: task,
           selected: widget.selectedTaskId == task.id,
           onTap: widget.onTaskSelected,
+          batchSelectionActive: widget.batchSelectionActive,
+          batchSelected: widget.batchSelectedTaskIds.contains(task.id),
+          onBatchSelectionChanged: (selected) =>
+              widget.onBatchSelectionChanged(task.id, selected),
         );
       },
     );
@@ -490,23 +987,7 @@ class _ListBodyState extends State<_ListBody> {
 
   List<TodoTask> _sortedItems(List<TodoTask> items) {
     final sorted = [...items];
-    sorted.sort((a, b) {
-      if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
-      switch (widget.sort) {
-        case TaskSort.smart:
-          return b.updatedAt.compareTo(a.updatedAt);
-        case TaskSort.priorityDesc:
-          return b.priority.compareTo(a.priority);
-        case TaskSort.dueDate:
-          return (a.dueAt ?? DateTime(9999)).compareTo(
-            b.dueAt ?? DateTime(9999),
-          );
-        case TaskSort.title:
-          return a.title.toLowerCase().compareTo(b.title.toLowerCase());
-        case TaskSort.createdAt:
-          return b.createdAt.compareTo(a.createdAt);
-      }
-    });
+    sorted.sort((a, b) => compareTodoTasks(a, b, widget.sort));
     return sorted;
   }
 }
@@ -580,6 +1061,7 @@ List<TodoTask> _applyFilter(
   if (filter.isEmpty && selectedListId == null) return source;
   final startOfDay = DateTime(now.year, now.month, now.day);
   final todayEnd = startOfDay.add(const Duration(days: 1));
+  final keyword = filter.keyword?.trim().toLowerCase();
 
   return source.where((task) {
     if (selectedListId != null && task.listId != selectedListId) return false;
@@ -589,6 +1071,27 @@ List<TodoTask> _applyFilter(
     }
     if (filter.completed != null && task.completed != filter.completed) {
       return false;
+    }
+    if (filter.assigneeUserId != null &&
+        task.assigneeUserId != filter.assigneeUserId) {
+      return false;
+    }
+    if (keyword != null && keyword.isNotEmpty) {
+      final titleMatches = task.title.toLowerCase().contains(keyword);
+      final descriptionMatches =
+          task.description?.toLowerCase().contains(keyword) ?? false;
+      if (!titleMatches && !descriptionMatches) return false;
+    }
+    if (filter.dueAtFrom != null || filter.dueAtTo != null) {
+      final due = task.dueAt;
+      if (due == null) return false;
+      final dueDay = DateTime(due.year, due.month, due.day);
+      if (filter.dueAtFrom != null && dueDay.isBefore(filter.dueAtFrom!)) {
+        return false;
+      }
+      if (filter.dueAtTo != null && dueDay.isAfter(filter.dueAtTo!)) {
+        return false;
+      }
     }
     if (filter.dueRange != null) {
       final due = task.dueAt;

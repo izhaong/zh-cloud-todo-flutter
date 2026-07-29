@@ -72,6 +72,31 @@ void main() {
     }
   });
 
+  for (final scenario in const [
+    (name: 'desktop', viewport: TodoVisualViewports.wide),
+    (name: 'mobile', viewport: TodoVisualViewports.mobile),
+  ]) {
+    testWidgets('${scenario.name} reminder entry opens the inbox', (
+      tester,
+    ) async {
+      await pumpTodoVisualScenario(
+        tester,
+        viewport: scenario.viewport,
+        fixtureSet: TodoVisualFixtureSet.populated,
+        child: const HomeShell(),
+      );
+
+      if (scenario.name == 'mobile') {
+        await tester.tap(find.byTooltip('菜单'));
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(find.byKey(const Key('todo-reminder-inbox-action')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('提醒收件箱'), findsOneWidget);
+    });
+  }
+
   testWidgets('no-selection detail uses the neutral Todo guidance', (
     tester,
   ) async {

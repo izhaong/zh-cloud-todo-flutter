@@ -1,10 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/brand_colors.dart';
 import '../../core/theme/todo_layout_tokens.dart';
+import '../../state/repositories/task_query_repository.dart';
 import '../shell/section.dart';
 import '../shell/sidebar.dart';
+import '../task/task_search_page.dart';
 
 enum TodoWorkspaceProfile { wide, compact, tablet, mobile }
 
@@ -35,13 +40,17 @@ class TodoWorkspace extends StatelessWidget {
     required this.content,
     required this.detail,
     required this.onSelectSection,
+    required this.onSync,
+    required this.onOpenReminders,
     required this.onSelectSmart,
     required this.onSelectList,
     required this.onOpenTags,
     required this.onOpenFilters,
     required this.onOpenSettings,
+    this.onSearchResultSelected,
     this.scaffoldKey,
     this.onDetailDrawerChanged,
+    this.syncStatus = '同步尚未执行',
   });
 
   final double width;
@@ -51,22 +60,56 @@ class TodoWorkspace extends StatelessWidget {
   final Widget content;
   final Widget detail;
   final ValueChanged<Section> onSelectSection;
+  final VoidCallback onSync;
+  final VoidCallback onOpenReminders;
   final ValueChanged<SmartList> onSelectSmart;
   final ValueChanged<String?> onSelectList;
   final VoidCallback onOpenTags;
   final VoidCallback onOpenFilters;
   final VoidCallback onOpenSettings;
+  final ValueChanged<TaskSearchResult>? onSearchResultSelected;
   final GlobalKey<ScaffoldState>? scaffoldKey;
   final TodoDetailDrawerChanged? onDetailDrawerChanged;
+  final String syncStatus;
 
   @override
   Widget build(BuildContext context) {
-    return switch (todoWorkspaceProfileForWidth(width)) {
+    final workspace = switch (todoWorkspaceProfileForWidth(width)) {
       TodoWorkspaceProfile.wide => _desktopWide(context),
       TodoWorkspaceProfile.compact => _desktopCompact(context),
       TodoWorkspaceProfile.tablet => _tablet(context),
       TodoWorkspaceProfile.mobile => _mobile(context),
     };
+    return Shortcuts(
+      shortcuts: const {
+        SingleActivator(LogicalKeyboardKey.keyK, control: true):
+            _OpenGlobalSearchIntent(),
+        SingleActivator(LogicalKeyboardKey.keyK, meta: true):
+            _OpenGlobalSearchIntent(),
+      },
+      child: Actions(
+        actions: {
+          _OpenGlobalSearchIntent: CallbackAction<_OpenGlobalSearchIntent>(
+            onInvoke: (_) {
+              unawaited(_openSearch(context));
+              return null;
+            },
+          ),
+        },
+        child: Focus(
+          autofocus: true,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              workspace,
+              IgnorePointer(
+                child: TodoSyncStatusAnnouncement(status: syncStatus),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _desktopWide(BuildContext context) {
@@ -76,7 +119,12 @@ class TodoWorkspace extends StatelessWidget {
       backgroundColor: colors.background,
       body: Row(
         children: [
-          TodoRail(section: section, onSelect: onSelectSection),
+          TodoRail(
+            section: section,
+            onSelect: onSelectSection,
+            onSync: onSync,
+            onOpenReminders: onOpenReminders,
+          ),
           _WorkspaceDivider(color: colors.border),
           Sidebar(
             key: const Key('todo-sidebar'),
@@ -114,7 +162,12 @@ class TodoWorkspace extends StatelessWidget {
           onDetailDrawerChanged?.call(TodoWorkspaceProfile.compact, isOpen),
       body: Row(
         children: [
-          TodoRail(section: section, onSelect: onSelectSection),
+          TodoRail(
+            section: section,
+            onSelect: onSelectSection,
+            onSync: onSync,
+            onOpenReminders: onOpenReminders,
+          ),
           _WorkspaceDivider(color: colors.border),
           Sidebar(
             key: const Key('todo-sidebar'),
@@ -148,7 +201,12 @@ class TodoWorkspace extends StatelessWidget {
       appBar: _shellAppBar(context),
       body: Row(
         children: [
-          TodoRail(section: section, onSelect: onSelectSection),
+          TodoRail(
+            section: section,
+            onSelect: onSelectSection,
+            onSync: onSync,
+            onOpenReminders: onOpenReminders,
+          ),
           _WorkspaceDivider(color: colors.border),
           Expanded(child: _contentRegion(colors)),
         ],
@@ -206,6 +264,7 @@ class TodoWorkspace extends StatelessWidget {
           onOpenTags: onOpenTags,
           onOpenFilters: onOpenFilters,
           onOpenSettings: onOpenSettings,
+          onOpenReminders: onOpenReminders,
           onNavigationCommitted: () => Scaffold.of(drawerContext).closeDrawer(),
         ),
       ),
@@ -237,20 +296,35 @@ class TodoWorkspace extends StatelessWidget {
         IconButton(
           tooltip: '搜索',
           icon: Icon(Icons.search, color: colors.mutedForeground),
-          onPressed: () {},
+          onPressed: () => unawaited(_openSearch(context)),
         ),
         const SizedBox(width: 8),
       ],
     );
   }
+
+  Future<void> _openSearch(BuildContext context) async {
+    final result = await Navigator.of(context).push<TaskSearchResult>(
+      MaterialPageRoute(builder: (_) => const TaskSearchPage()),
+    );
+    if (result != null) onSearchResultSelected?.call(result);
+  }
 }
 
 /// Slim product-level navigation rail shared by desktop and tablet profiles.
 class TodoRail extends StatelessWidget {
-  const TodoRail({super.key, required this.section, required this.onSelect});
+  const TodoRail({
+    super.key,
+    required this.section,
+    required this.onSelect,
+    required this.onSync,
+    required this.onOpenReminders,
+  });
 
   final Section section;
   final ValueChanged<Section> onSelect;
+  final VoidCallback onSync;
+  final VoidCallback onOpenReminders;
 
   @override
   Widget build(BuildContext context) {
@@ -298,14 +372,17 @@ class TodoRail extends StatelessWidget {
                 tooltip: '同步',
                 icon: Icons.sync,
                 selected: false,
-                onTap: () {},
+                onTap: onSync,
+                identifier: 'todo_sync_action',
               ),
               const SizedBox(height: 4),
               _RailButton(
+                key: const Key('todo-reminder-inbox-action'),
                 tooltip: '通知',
                 icon: Icons.notifications_none,
                 selected: false,
-                onTap: () {},
+                onTap: onOpenReminders,
+                identifier: 'todo_reminder_inbox_action',
               ),
               const SizedBox(height: 8),
             ],
@@ -316,18 +393,25 @@ class TodoRail extends StatelessWidget {
   }
 }
 
+class _OpenGlobalSearchIntent extends Intent {
+  const _OpenGlobalSearchIntent();
+}
+
 class _RailButton extends StatefulWidget {
   const _RailButton({
+    super.key,
     required this.tooltip,
     required this.icon,
     required this.selected,
     required this.onTap,
+    this.identifier,
   });
 
   final String tooltip;
   final IconData icon;
   final bool selected;
   final VoidCallback onTap;
+  final String? identifier;
 
   @override
   State<_RailButton> createState() => _RailButtonState();
@@ -340,36 +424,57 @@ class _RailButtonState extends State<_RailButton> {
   Widget build(BuildContext context) {
     final colors = brandColors(context);
     final brightness = Theme.of(context).brightness;
-    return Tooltip(
-      message: widget.tooltip,
-      child: InkResponse(
-        onTap: widget.onTap,
-        onFocusChange: (focused) => setState(() => _focused = focused),
-        radius: 20,
-        child: AnimatedContainer(
-          duration: TodoLayoutTokens.stateTransitionDurationFor(context),
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: widget.selected
-                ? TodoLayoutTokens.selectedRowFor(brightness)
-                : Colors.transparent,
-            border: _focused
-                ? Border.all(color: colors.accent, width: 1.5)
-                : null,
-            borderRadius: BorderRadius.circular(
-              TodoLayoutTokens.selectedRowRadius,
+    return Semantics(
+      identifier: widget.identifier,
+      button: true,
+      label: widget.tooltip,
+      child: Tooltip(
+        message: widget.tooltip,
+        child: InkResponse(
+          onTap: widget.onTap,
+          onFocusChange: (focused) => setState(() => _focused = focused),
+          radius: 20,
+          child: AnimatedContainer(
+            duration: TodoLayoutTokens.stateTransitionDurationFor(context),
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: widget.selected
+                  ? TodoLayoutTokens.selectedRowFor(brightness)
+                  : Colors.transparent,
+              border: _focused
+                  ? Border.all(color: colors.accent, width: 1.5)
+                  : null,
+              borderRadius: BorderRadius.circular(
+                TodoLayoutTokens.selectedRowRadius,
+              ),
             ),
-          ),
-          child: Icon(
-            widget.icon,
-            size: 20,
-            color: widget.selected ? colors.accent : colors.mutedForeground,
+            child: Icon(
+              widget.icon,
+              size: 20,
+              color: widget.selected ? colors.accent : colors.mutedForeground,
+            ),
           ),
         ),
       ),
     );
   }
+}
+
+/// 不改变视觉布局的同步状态播报锚点，供辅助技术和固定设备验收读取。
+class TodoSyncStatusAnnouncement extends StatelessWidget {
+  const TodoSyncStatusAnnouncement({super.key, required this.status});
+
+  final String status;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    identifier: 'todo_sync_status',
+    label: status,
+    liveRegion: true,
+    container: true,
+    child: const SizedBox.shrink(),
+  );
 }
 
 class _WorkspaceDivider extends StatelessWidget {

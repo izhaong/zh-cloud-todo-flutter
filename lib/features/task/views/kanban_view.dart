@@ -24,12 +24,19 @@ class KanbanView extends ConsumerWidget {
     required this.tasks,
     this.listId,
     this.onTaskSelected,
+    this.onTaskMove,
+    this.hasRecoverablePreference = false,
+    this.onRecoverPreference,
   });
 
   /// 渲染用的任务列表（已应用 list/filter 的客户端过滤结果）。
   final List<TodoTask> tasks;
   final String? listId;
   final ValueChanged<String>? onTaskSelected;
+  final Future<void> Function(TodoTask task, int priority, bool completed)?
+  onTaskMove;
+  final bool hasRecoverablePreference;
+  final Future<bool> Function()? onRecoverPreference;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -38,47 +45,89 @@ class KanbanView extends ConsumerWidget {
         key: const ValueKey('col-todo'),
         title: '未开始',
         color: Colors.blueGrey,
+        priority: 0,
+        completed: false,
         tasks: tasks.where((t) => t.priority == 0 && !t.completed).toList(),
       ),
       _KanbanColumnData(
         key: const ValueKey('col-doing'),
         title: '进行中',
         color: Colors.blue,
+        priority: 1,
+        completed: false,
         tasks: tasks.where((t) => t.priority == 1 && !t.completed).toList(),
       ),
       _KanbanColumnData(
         key: const ValueKey('col-urgent'),
         title: '紧急',
         color: Colors.deepOrange,
+        priority: 2,
+        completed: false,
         tasks: tasks.where((t) => t.priority == 2 && !t.completed).toList(),
       ),
       _KanbanColumnData(
         key: const ValueKey('col-archive'),
         title: '归档',
         color: Colors.grey,
+        priority: 3,
+        completed: true,
         tasks: tasks.where((t) => t.completed || t.priority >= 3).toList(),
       ),
     ];
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (final col in columns)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: _KanbanColumn(
-                data: col,
-                onCardTap: (t) => _openDetail(context, t),
-                onAdd: col.key == const ValueKey('col-todo') && listId != null
-                    ? () => _quickAdd(context, ref, listId!)
-                    : null,
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        if (hasRecoverablePreference && onRecoverPreference != null)
+          Padding(
+            padding: const EdgeInsets.only(right: 8, top: 4),
+            child: TextButton.icon(
+              onPressed: () => _recoverPreference(context),
+              icon: const Icon(Icons.restore, size: 18),
+              label: const Text('恢复看板设置'),
             ),
-        ],
-      ),
+          ),
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final col in columns)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: _KanbanColumn(
+                      data: col,
+                      onCardTap: (t) => _openDetail(context, t),
+                      onCardMove: onTaskMove == null
+                          ? null
+                          : (task) => _moveTask(
+                              context,
+                              task,
+                              priority: col.priority,
+                              completed: col.completed,
+                            ),
+                      onAdd:
+                          col.key == const ValueKey('col-todo') &&
+                              listId != null
+                          ? () => _quickAdd(context, ref, listId!)
+                          : null,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _recoverPreference(BuildContext context) async {
+    final recovered = await onRecoverPreference!();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(recovered ? '已恢复上次看板设置，等待同步' : '没有可恢复的看板设置')),
     );
   }
 
@@ -89,6 +138,36 @@ class KanbanView extends ConsumerWidget {
       return;
     }
     showTaskDetailSheet(context, t.id);
+  }
+
+  Future<void> _moveTask(
+    BuildContext context,
+    TodoTask task, {
+    required int priority,
+    required bool completed,
+  }) async {
+    try {
+      await onTaskMove!(task, priority, completed);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('移动任务失败，请重试'),
+            action: SnackBarAction(
+              label: '重试',
+              onPressed: () {
+                _moveTask(
+                  context,
+                  task,
+                  priority: priority,
+                  completed: completed,
+                );
+              },
+            ),
+          ),
+        );
+      }
+    }
   }
 
   static Future<void> _quickAdd(
@@ -109,11 +188,15 @@ class _KanbanColumnData {
     required this.key,
     required this.title,
     required this.color,
+    required this.priority,
+    required this.completed,
     required this.tasks,
   });
   final Key key;
   final String title;
   final Color color;
+  final int priority;
+  final bool completed;
   final List<TodoTask> tasks;
 }
 
@@ -121,11 +204,13 @@ class _KanbanColumn extends StatelessWidget {
   const _KanbanColumn({
     required this.data,
     required this.onCardTap,
+    this.onCardMove,
     this.onAdd,
   });
 
   final _KanbanColumnData data;
   final ValueChanged<TodoTask> onCardTap;
+  final Future<void> Function(TodoTask task)? onCardMove;
   final VoidCallback? onAdd;
 
   @override
@@ -189,27 +274,30 @@ class _KanbanColumn extends StatelessWidget {
             ),
             const Divider(height: 1),
             Expanded(
-              child: data.tasks.isEmpty
-                  ? Center(
-                      child: Text(
-                        '空',
-                        style: TextStyle(
-                          color: Theme.of(context).disabledColor,
+              child: DragTarget<TodoTask>(
+                onWillAcceptWithDetails: (details) => onCardMove != null,
+                onAcceptWithDetails: (details) => onCardMove!(details.data),
+                builder: (context, candidateData, rejectedData) =>
+                    data.tasks.isEmpty
+                    ? Center(
+                        child: Text(
+                          '空',
+                          style: TextStyle(
+                            color: Theme.of(context).disabledColor,
+                          ),
                         ),
-                      ),
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.all(8),
-                      itemCount: data.tasks.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 8),
-                      itemBuilder: (_, i) {
-                        return _KanbanCard(
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.all(8),
+                        itemCount: data.tasks.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
+                        itemBuilder: (_, i) => _KanbanCard(
                           task: data.tasks[i],
                           accent: data.color,
                           onTap: () => onCardTap(data.tasks[i]),
-                        );
-                      },
-                    ),
+                        ),
+                      ),
+              ),
             ),
           ],
         ),
@@ -233,7 +321,7 @@ class _KanbanCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = brandColors(context);
     final df = DateFormat('MM-dd');
-    return AppCard(
+    final card = AppCard(
       padding: const EdgeInsets.all(10),
       onTap: onTap,
       child: Column(
@@ -266,6 +354,17 @@ class _KanbanCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+    return LongPressDraggable<TodoTask>(
+      data: task,
+      feedback: Material(
+        color: Colors.transparent,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 220),
+          child: Text(task.title, style: const TextStyle(fontSize: 14)),
+        ),
+      ),
+      child: card,
     );
   }
 }

@@ -18,7 +18,7 @@ class TaskQuickAddSheet extends ConsumerStatefulWidget {
 
 class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
   final _titleCtrl = TextEditingController();
-  int _priority = 0;
+  int? _priorityOverride;
   DateTime? _nlpResolvedDueAt;
 
   @override
@@ -47,18 +47,34 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
     if (text.isEmpty) return;
     final repo = ref.read(taskRepositoryProvider);
     if (repo == null) return;
-    await repo.create(
-      listId: widget.listId,
-      parentTaskId: widget.parentTaskId,
-      title: text,
-      priority: _priority,
-      dueAt: _nlpResolvedDueAt,
-    );
-    if (mounted) Navigator.pop(context);
+    try {
+      final defaults = await ref
+          .read(taskCaptureDefaultsRepositoryProvider)
+          ?.get();
+      await repo.create(
+        listId: widget.listId,
+        parentTaskId: widget.parentTaskId,
+        title: text,
+        priority: _priorityOverride ?? defaults?.defaultPriority ?? 0,
+        dueAt: _nlpResolvedDueAt,
+      );
+      if (mounted) Navigator.pop(context);
+    } on StateError catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message.toString())));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('保存任务失败，请稍后重试')));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final priority = _priorityOverride ?? 0;
     return Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
@@ -84,7 +100,8 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<int>(
-              initialValue: _priority,
+              key: ValueKey(priority),
+              initialValue: priority,
               decoration: const InputDecoration(
                 labelText: '优先级',
                 border: OutlineInputBorder(),
@@ -95,7 +112,7 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
                 DropdownMenuItem(value: 2, child: Text('中')),
                 DropdownMenuItem(value: 3, child: Text('高')),
               ],
-              onChanged: (v) => setState(() => _priority = v ?? 0),
+              onChanged: (v) => setState(() => _priorityOverride = v ?? 0),
             ),
             const SizedBox(height: 16),
             if (_nlpResolvedDueAt != null)

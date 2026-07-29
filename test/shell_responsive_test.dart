@@ -29,7 +29,7 @@ void main() {
   group('SmartList 枚举', () {
     test('6 个智能清单文案', () {
       expect(SmartList.values.map((s) => s.label).toList(), [
-        '收件箱',
+        '收集箱',
         '今天',
         '最近7天',
         '全部',
@@ -54,7 +54,7 @@ void main() {
       );
       // 智能清单
       expect(find.text('智能清单'), findsOneWidget);
-      expect(find.text('收件箱'), findsOneWidget);
+      expect(find.text('收集箱'), findsOneWidget);
       expect(find.text('今天'), findsOneWidget);
       expect(find.text('最近7天'), findsOneWidget);
       expect(find.text('全部'), findsOneWidget);
