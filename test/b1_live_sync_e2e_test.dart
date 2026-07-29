@@ -369,6 +369,215 @@ void main() {
   );
 
   test(
+    'B2 live reminder and repeat conflicts restore before new edits replay',
+    () async {
+      expect(_mobile, isNotEmpty, reason: 'TODO_B1_E2E_MOBILE is required');
+      expect(_password, isNotEmpty, reason: 'TODO_B1_E2E_PASSWORD is required');
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+
+      final sessionA = await _login();
+      final sessionB = await _login();
+      final dbA = AppDatabase.forTesting(NativeDatabase.memory());
+      final dbB = AppDatabase.forTesting(NativeDatabase.memory());
+      final coordinatorA = _coordinator(
+        dbA,
+        _client(sessionA.accessToken),
+        'b2-reminder-repeat-conflict-live-a',
+      );
+      final coordinatorB = _coordinator(
+        dbB,
+        _client(sessionB.accessToken),
+        'b2-reminder-repeat-conflict-live-b',
+      );
+      final listsA = ListRepository(dbA, SyncChangeQueue(dbA));
+      final tasksA = TaskRepository(dbA, SyncChangeQueue(dbA));
+      final remindersA = ReminderRepository(dbA, SyncChangeQueue(dbA));
+      final remindersB = ReminderRepository(dbB, SyncChangeQueue(dbB));
+      final repeatsA = RepeatRuleRepository(dbA, SyncChangeQueue(dbA));
+      final repeatsB = RepeatRuleRepository(dbB, SyncChangeQueue(dbB));
+      final suffix = DateTime.now().microsecondsSinceEpoch;
+      final baseTime = DateTime.now().toUtc().add(const Duration(days: 10));
+      final list = await listsA.create(
+        name: 'B2 reminder repeat conflict $suffix',
+      );
+      String? taskId;
+      var stage = 'push list';
+
+      try {
+        expect(await coordinatorA.push(), 1);
+        final task = await tasksA.create(
+          listId: list.id,
+          title: 'B2 reminder repeat conflict $suffix',
+          dueAt: baseTime,
+          timeZone: 'Asia/Shanghai',
+          fixedTimezone: true,
+        );
+        taskId = task.id;
+        stage = 'push task';
+        expect(await coordinatorA.push(), 1);
+
+        final reminderA = await remindersA.create(
+          taskId: task.id,
+          fireAt: baseTime.subtract(const Duration(hours: 1)),
+          anchorType: 'ABSOLUTE',
+        );
+        final repeatA = await repeatsA.save(
+          taskId: task.id,
+          frequency: 'DAILY',
+          startAt: baseTime,
+          countLimit: 2,
+          repeatMode: 'ON_COMPLETE',
+          timeZone: 'Asia/Shanghai',
+        );
+        stage = 'push initial reminder and repeat';
+        expect(await coordinatorA.push(), 2);
+        final syncedReminderA = await (dbA.select(
+          dbA.todoReminders,
+        )..where((row) => row.id.equals(reminderA.id))).getSingle();
+        final syncedRepeatA = await (dbA.select(
+          dbA.todoRepeatRules,
+        )..where((row) => row.id.equals(repeatA.id))).getSingle();
+        expect(syncedReminderA.serverId, isPositive);
+        expect(syncedRepeatA.serverId, isPositive);
+
+        stage = 'pull stale reminder and repeat on device B';
+        await coordinatorB.pull();
+        final reminderB =
+            await (dbB.select(dbB.todoReminders)..where(
+                  (row) => row.serverId.equals(syncedReminderA.serverId!),
+                ))
+                .getSingle();
+        final repeatB =
+            await (dbB.select(
+                  dbB.todoRepeatRules,
+                )..where((row) => row.serverId.equals(syncedRepeatA.serverId!)))
+                .getSingle();
+
+        stage = 'commit newer reminder and repeat on device A';
+        await remindersA.update(
+          id: reminderA.id,
+          fireAt: baseTime.subtract(const Duration(minutes: 15)),
+          anchorType: 'ON_DUE',
+          offsetMinutes: -15,
+          persistent: true,
+          intervalMinutes: 30,
+          timeZone: 'Asia/Shanghai',
+          fixedTimezone: true,
+        );
+        await repeatsA.save(
+          taskId: task.id,
+          frequency: 'WEEKLY',
+          intervalValue: 2,
+          weekdays: const [1, 3],
+          startAt: baseTime,
+          countLimit: 4,
+          repeatMode: 'ON_COMPLETE',
+          timeZone: 'Asia/Shanghai',
+        );
+        expect(await coordinatorA.push(), 2);
+
+        stage = 'push stale reminder and repeat from device B';
+        await remindersB.update(
+          id: reminderB.id,
+          fireAt: baseTime.subtract(const Duration(minutes: 10)),
+          anchorType: 'ABSOLUTE',
+          persistent: true,
+          intervalMinutes: 10,
+          fixedTimezone: false,
+        );
+        await repeatsB.save(
+          taskId: repeatB.taskId,
+          frequency: 'DAILY',
+          startAt: baseTime,
+          countLimit: 3,
+          repeatMode: 'ON_COMPLETE',
+        );
+        expect(await coordinatorB.push(), 0);
+
+        final restoredReminderB = await (dbB.select(
+          dbB.todoReminders,
+        )..where((row) => row.id.equals(reminderB.id))).getSingle();
+        final restoredRepeatB = await (dbB.select(
+          dbB.todoRepeatRules,
+        )..where((row) => row.id.equals(repeatB.id))).getSingle();
+        expect(restoredReminderB.anchorType, 'ON_DUE');
+        expect(restoredReminderB.offsetMinutes, -15);
+        expect(restoredReminderB.intervalMinutes, 30);
+        expect(restoredReminderB.fixedTimezone, isTrue);
+        expect(restoredRepeatB.freq, 'WEEKLY');
+        expect(restoredRepeatB.interval, 2);
+        expect(restoredRepeatB.byDay, '1,3');
+        expect(restoredRepeatB.countLimit, 4);
+        expect(
+          await (dbB.select(
+            dbB.todoSyncChanges,
+          )..where((change) => change.status.equals('failed'))).get(),
+          hasLength(2),
+        );
+
+        stage = 'replay new reminder and repeat edits from restored revisions';
+        await remindersB.update(
+          id: reminderB.id,
+          fireAt: baseTime.subtract(const Duration(minutes: 30)),
+          anchorType: 'ON_DUE',
+          offsetMinutes: -30,
+          persistent: true,
+          intervalMinutes: 45,
+          timeZone: 'Asia/Shanghai',
+          fixedTimezone: true,
+        );
+        await repeatsB.save(
+          taskId: repeatB.taskId,
+          frequency: 'WEEKLY',
+          intervalValue: 2,
+          weekdays: const [1, 3],
+          startAt: baseTime,
+          countLimit: 3,
+          repeatMode: 'ON_COMPLETE',
+          timeZone: 'Asia/Shanghai',
+        );
+        expect(await coordinatorB.push(), 2);
+        await coordinatorA.pull();
+
+        final convergedReminderA =
+            await (dbA.select(dbA.todoReminders)..where(
+                  (row) => row.serverId.equals(syncedReminderA.serverId!),
+                ))
+                .getSingle();
+        final convergedRepeatA =
+            await (dbA.select(
+                  dbA.todoRepeatRules,
+                )..where((row) => row.serverId.equals(syncedRepeatA.serverId!)))
+                .getSingle();
+        expect(convergedReminderA.offsetMinutes, -30);
+        expect(convergedReminderA.intervalMinutes, 45);
+        expect(convergedRepeatA.freq, 'WEEKLY');
+        expect(convergedRepeatA.interval, 2);
+        expect(convergedRepeatA.byDay, '1,3');
+        expect(convergedRepeatA.countLimit, 3);
+      } catch (error, stackTrace) {
+        Error.throwWithStackTrace(
+          StateError(
+            'B2 live reminder/repeat conflict failed at stage: $stage; $error',
+          ),
+          stackTrace,
+        );
+      } finally {
+        if (taskId != null) {
+          await tasksA.delete(taskId);
+          await coordinatorA.push();
+        }
+        await listsA.delete(list.id);
+        await coordinatorA.push();
+        await dbA.close();
+        await dbB.close();
+      }
+    },
+    skip: _b2Enabled ? false : 'set --dart-define=TODO_B2_LIVE=true to run',
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+
+  test(
     'B2 live cross-midnight fixed timezone task converges on a second device',
     () async {
       expect(_mobile, isNotEmpty, reason: 'TODO_B1_E2E_MOBILE is required');
@@ -1095,6 +1304,10 @@ void main() {
         await coordinatorB.pull();
 
         for (final limit in const ['until', 'count']) {
+          // TickTick 的“指定日期结束”与 RFC 5545 UNTIL 都是包含式上界：
+          // 当前 fixture 的 untilAt 落在第三个 occurrence 当天，因此应保留
+          // 起始日、次日和截止日三条；countLimit=2 仍只生成两条。
+          final expectedCount = limit == 'until' ? 3 : 2;
           final taskA = await tasksA.getById(taskIds[limit]!);
           expect(taskA?.serverId, isPositive, reason: limit);
           final ruleA = await (dbA.select(
@@ -1116,16 +1329,16 @@ void main() {
           )..where((row) => row.repeatParentTaskId.equals(taskB!.id))).get();
 
           generatedTaskIds.addAll(childrenA.map((task) => task.id));
-          expect(childrenA, hasLength(2), reason: limit);
-          expect(childrenB, hasLength(2), reason: limit);
+          expect(childrenA, hasLength(expectedCount), reason: limit);
+          expect(childrenB, hasLength(expectedCount), reason: limit);
           expect(
             childrenB.map((task) => task.serverId).toSet(),
             childrenA.map((task) => task.serverId).toSet(),
             reason: limit,
           );
           if (limit == 'until') {
-            expect(ruleA.until, untilAt);
-            expect(ruleB.until, untilAt);
+            expect(ruleA.until?.isAtSameMomentAs(untilAt), isTrue);
+            expect(ruleB.until?.isAtSameMomentAs(untilAt), isTrue);
             expect(ruleA.countLimit, isNull);
             expect(ruleB.countLimit, isNull);
           } else {
