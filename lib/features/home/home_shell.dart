@@ -10,6 +10,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../state/nlp_date.dart';
 import '../../state/providers.dart';
+import '../../state/repositories/task_query_repository.dart';
 import '../../state/session_state.dart';
 import '../habit/habit_page.dart';
 import '../reminder/reminder_inbox_page.dart';
@@ -262,10 +263,30 @@ class _HomeShellState extends ConsumerState<HomeShell>
     Navigator.of(context).removeRoute(route);
   }
 
-  void _openTags() {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const TagPage()));
+  void _openTags({String? initialTagId}) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => TagPage(initialTagId: initialTagId)),
+    );
+  }
+
+  void _handleSearchResult(TaskSearchResult result) {
+    switch (result.type) {
+      case TaskSearchResultType.task:
+        final hadTaskSelection = _selectedTaskId != null;
+        setState(() {
+          _section = Section.tasks;
+          _smart = SmartList.all;
+          _listId = null;
+          _selectedTaskId = null;
+        });
+        if (hadTaskSelection) _dismissDetailPresentation();
+        _selectTask(result.id);
+      case TaskSearchResultType.list:
+        _selectSection(Section.tasks);
+        _selectList(result.id);
+      case TaskSearchResultType.tag:
+        _openTags(initialTagId: result.id);
+    }
   }
 
   void _openFilters() {
@@ -359,6 +380,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
           onOpenTags: _openTags,
           onOpenFilters: _openFilters,
           onOpenSettings: _openSettings,
+          onSearchResultSelected: _handleSearchResult,
           scaffoldKey: _workspaceScaffoldKey,
           onDetailDrawerChanged: _handleDetailDrawerChanged,
         );

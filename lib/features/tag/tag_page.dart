@@ -8,7 +8,9 @@ import 'tag_color.dart';
 
 /// M11-B2 标签管理页（独立页面）。
 class TagPage extends ConsumerWidget {
-  const TagPage({super.key});
+  const TagPage({super.key, this.initialTagId});
+
+  final String? initialTagId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -19,7 +21,7 @@ class TagPage extends ConsumerWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: () => _create(context, ref),
+            onPressed: () => _create(context, ref, tagsAsync.valueOrNull ?? []),
           ),
         ],
       ),
@@ -32,9 +34,13 @@ class TagPage extends ConsumerWidget {
                 itemCount: tags.length,
                 itemBuilder: (_, i) {
                   final t = tags[i];
+                  final selected = t.id == initialTagId;
                   return ListTile(
+                    key: Key('tag-search-result-${t.id}'),
                     leading: _ColorDot(colorHex: t.color),
-                    title: Text(t.name),
+                    title: Text(_tagPath(t, tags)),
+                    subtitle: selected ? const Text('搜索定位的标签') : null,
+                    selected: selected,
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -55,24 +61,36 @@ class TagPage extends ConsumerWidget {
     );
   }
 
-  Future<void> _create(BuildContext context, WidgetRef ref) async {
-    final result = await _promptNameColor(context);
+  Future<void> _create(
+    BuildContext context,
+    WidgetRef ref,
+    List<TodoTag> tags,
+  ) async {
+    final result = await _promptNameColor(context, tags: tags);
     if (result == null) return;
     final repo = ref.read(tagRepositoryProvider);
     if (repo == null) return;
-    await repo.create(name: result.$1, color: result.$2);
+    await repo.create(name: result.$1, color: result.$2, parentId: result.$3);
   }
 
   Future<void> _edit(BuildContext context, WidgetRef ref, TodoTag tag) async {
     final result = await _promptNameColor(
       context,
+      tags: (ref.read(tagsStreamProvider).valueOrNull ?? const []),
+      editingTagId: tag.id,
       initialName: tag.name,
       initialColor: tag.color,
+      initialParentId: tag.parentId,
     );
     if (result == null) return;
     final repo = ref.read(tagRepositoryProvider);
     if (repo == null) return;
-    await repo.update(tag.id, name: result.$1, color: result.$2);
+    await repo.update(
+      tag.id,
+      name: result.$1,
+      color: result.$2,
+      parentId: result.$3,
+    );
   }
 
   Future<void> _delete(BuildContext context, WidgetRef ref, TodoTag tag) async {
@@ -80,7 +98,7 @@ class TagPage extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('删除标签'),
-        content: Text('确认删除"${tag.name}"？关联任务将解除。'),
+        content: Text('确认删除"${tag.name}"？关联任务将解除；直接子标签会移至顶层。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -100,15 +118,22 @@ class TagPage extends ConsumerWidget {
     }
   }
 
-  /// 弹窗：标签名 + 颜色（8 色）选择。
-  Future<(String, String)?> _promptNameColor(
+  /// 弹窗：标签名、颜色和本地父标签选择。
+  Future<(String, String, String?)?> _promptNameColor(
     BuildContext context, {
+    required List<TodoTag> tags,
+    String? editingTagId,
     String? initialName,
     String? initialColor,
+    String? initialParentId,
   }) async {
     final nameCtrl = TextEditingController(text: initialName ?? '');
     String? color = initialColor ?? TagRepository.palette.first;
-    return showDialog<(String, String)>(
+    String? parentId = initialParentId;
+    final parentChoices = tags
+        .where((tag) => _canUseAsParent(tag, editingTagId, tags))
+        .toList();
+    return showDialog<(String, String, String?)>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) => AlertDialog(
@@ -123,6 +148,34 @@ class TagPage extends ConsumerWidget {
                 decoration: const InputDecoration(
                   labelText: '标签名',
                   border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              InputDecorator(
+                decoration: const InputDecoration(
+                  labelText: '父标签',
+                  border: OutlineInputBorder(),
+                ),
+                child: DropdownButton<String>(
+                  key: const Key('tag-parent-picker'),
+                  value: parentId ?? _rootParentValue,
+                  isExpanded: true,
+                  underline: const SizedBox.shrink(),
+                  items: [
+                    const DropdownMenuItem(
+                      value: _rootParentValue,
+                      child: Text('顶层标签'),
+                    ),
+                    ...parentChoices.map(
+                      (tag) => DropdownMenuItem(
+                        value: tag.id,
+                        child: Text(_tagPath(tag, tags)),
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) => setState(
+                    () => parentId = value == _rootParentValue ? null : value,
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -161,7 +214,7 @@ class TagPage extends ConsumerWidget {
               onPressed: () {
                 final n = nameCtrl.text.trim();
                 if (n.isEmpty || color == null) return;
-                Navigator.pop(ctx, (n, color!));
+                Navigator.pop(ctx, (n, color!, parentId));
               },
               child: const Text('保存'),
             ),
@@ -170,6 +223,38 @@ class TagPage extends ConsumerWidget {
       ),
     );
   }
+}
+
+const _rootParentValue = '__todo_root_tag__';
+
+bool _canUseAsParent(
+  TodoTag candidate,
+  String? editingTagId,
+  List<TodoTag> tags,
+) {
+  if (editingTagId == null) return true;
+  if (candidate.id == editingTagId) return false;
+  final visited = <String>{};
+  TodoTag? current = candidate;
+  while (current?.parentId != null) {
+    if (!visited.add(current!.id) || current.parentId == editingTagId) {
+      return false;
+    }
+    current = tags.where((tag) => tag.id == current!.parentId).firstOrNull;
+  }
+  return true;
+}
+
+String _tagPath(TodoTag tag, List<TodoTag> tags, {Set<String>? visiting}) {
+  final parentId = tag.parentId;
+  if (parentId == null) return tag.name;
+  final seen = {...?visiting, tag.id};
+  if (seen.contains(parentId)) return tag.name;
+  final parent = tags
+      .where((candidate) => candidate.id == parentId)
+      .firstOrNull;
+  if (parent == null) return tag.name;
+  return '${_tagPath(parent, tags, visiting: seen)} / ${tag.name}';
 }
 
 class _ColorDot extends StatelessWidget {

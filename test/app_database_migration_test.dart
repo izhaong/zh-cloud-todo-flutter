@@ -9,6 +9,50 @@ import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 
 void main() {
   test(
+    'upgrades schema 13 with assignee columns and preserves tasks',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'zh_cloud_todo_b3_schema13_',
+      );
+      final databaseFile = File('${directory.path}/todo.sqlite');
+      addTearDown(() async {
+        if (await directory.exists()) {
+          await directory.delete(recursive: true);
+        }
+      });
+
+      final beforeUpgrade = AppDatabase.forTesting(
+        NativeDatabase(databaseFile),
+      );
+      final now = DateTime.utc(2026, 7, 30, 8);
+      await beforeUpgrade
+          .into(beforeUpgrade.todoTasks)
+          .insert(
+            TodoTasksCompanion.insert(
+              id: 'task-before-assignee-filter',
+              listId: 'inbox',
+              title: '迁移前任务',
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      await beforeUpgrade.close();
+      _downgradeToSchema13WithoutAssignee(databaseFile);
+
+      final upgraded = AppDatabase.forTesting(NativeDatabase(databaseFile));
+      addTearDown(upgraded.close);
+      final version = await upgraded
+          .customSelect('PRAGMA user_version')
+          .getSingle();
+      expect(version.data['user_version'], 14);
+      final task = await upgraded.select(upgraded.todoTasks).getSingle();
+      expect(task.title, '迁移前任务');
+      expect(task.assigneeUserId, isNull);
+      expect(task.assigneeUserName, isNull);
+    },
+  );
+
+  test(
     'upgrades the released B1 schema 9 without losing its aggregate tables',
     () async {
       final directory = await Directory.systemTemp.createTemp(
@@ -28,7 +72,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 10);
+      expect(version.data['user_version'], 14);
 
       final taskColumns = await upgraded
           .customSelect('PRAGMA table_info(todo_tasks)')
@@ -45,6 +89,8 @@ void main() {
           'repeat_parent_task_id',
           'repeat_rule_id',
           'repeat_occurrence_at',
+          'assignee_user_id',
+          'assignee_user_name',
         }),
       );
 
@@ -87,6 +133,31 @@ void main() {
           )
           .get();
       expect(preservedTables.map((row) => row.data['name']), hasLength(4));
+      final b3Dependencies = await upgraded
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN "
+            "('todo_lists', 'todo_tags', 'todo_task_tags')",
+          )
+          .get();
+      expect(b3Dependencies.map((row) => row.data['name']), hasLength(3));
+      final tagColumns = await upgraded
+          .customSelect('PRAGMA table_info(todo_tags)')
+          .get();
+      expect(tagColumns.map((row) => row.data['name']), contains('parent_id'));
+      final filterColumns = await upgraded
+          .customSelect('PRAGMA table_info(todo_filters)')
+          .get();
+      expect(
+        filterColumns.map((row) => row.data['name']),
+        containsAll(<String>{'sort_orders_json', 'is_smart', 'is_pinned'}),
+      );
+      final indexTable = await upgraded
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type = 'table' "
+            "AND name = 'todo_search_index'",
+          )
+          .getSingle();
+      expect(indexTable.data['name'], 'todo_search_index');
     },
   );
 
@@ -169,7 +240,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 10);
+      expect(version.data['user_version'], 14);
       await upgraded.close();
 
       final reopened = AppDatabase.forTesting(NativeDatabase(databaseFile));
@@ -215,6 +286,18 @@ void main() {
       expect(repeatRule.timeZone, isNull);
     },
   );
+}
+
+void _downgradeToSchema13WithoutAssignee(File databaseFile) {
+  final database = sqlite.sqlite3.open(databaseFile.path);
+  try {
+    database.execute('DROP INDEX IF EXISTS idx_todo_tasks_b3_assignee_filter');
+    database.execute('ALTER TABLE todo_tasks DROP COLUMN assignee_user_name');
+    database.execute('ALTER TABLE todo_tasks DROP COLUMN assignee_user_id');
+    database.execute('PRAGMA user_version = 13');
+  } finally {
+    database.dispose();
+  }
 }
 
 void _createB1Schema9(File databaseFile) {

@@ -18,9 +18,12 @@ import 'repositories/reminder_inbox_repository.dart';
 import 'repositories/reminder_repository.dart';
 import 'repositories/repeat_rule_repository.dart';
 import 'repositories/tag_repository.dart';
+import 'repositories/task_batch_edit_repository.dart';
+import 'repositories/task_query_repository.dart';
 import 'repositories/template_repository.dart';
 import 'repositories/task_capture_defaults_repository.dart';
 import 'repositories/task_repository.dart';
+import 'repositories/task_sort_preference_repository.dart';
 
 /// UI-facing clock. Production reads the current instant on each rebuild;
 /// deterministic widget/golden fixtures override the callback explicitly.
@@ -125,6 +128,21 @@ final taskRepositoryProvider = Provider<TaskRepository?>((ref) {
   return TaskRepository(db, queue);
 });
 
+final taskQueryRepositoryProvider = Provider<TaskQueryRepository?>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  if (db == null) return null;
+  return TaskQueryRepository(db);
+});
+
+final taskBatchEditRepositoryProvider = Provider<TaskBatchEditRepository?>((
+  ref,
+) {
+  final db = ref.watch(appDatabaseProvider);
+  final queue = ref.watch(syncChangeQueueProvider);
+  if (db == null || queue == null) return null;
+  return TaskBatchEditRepository(db, queue);
+});
+
 final reminderRepositoryProvider = Provider<ReminderRepository?>((ref) {
   final db = ref.watch(appDatabaseProvider);
   final queue = ref.watch(syncChangeQueueProvider);
@@ -170,6 +188,14 @@ final taskCaptureDefaultsRepositoryProvider =
       final queue = ref.watch(syncChangeQueueProvider);
       if (db == null || queue == null) return null;
       return TaskCaptureDefaultsRepository(db, queue);
+    });
+
+final taskSortPreferenceRepositoryProvider =
+    Provider<TaskSortPreferenceRepository?>((ref) {
+      final db = ref.watch(appDatabaseProvider);
+      final queue = ref.watch(syncChangeQueueProvider);
+      if (db == null || queue == null) return null;
+      return TaskSortPreferenceRepository(db, queue);
     });
 
 final activityRepositoryProvider = Provider<ActivityRepository?>((ref) {

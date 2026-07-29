@@ -47,17 +47,29 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
     if (text.isEmpty) return;
     final repo = ref.read(taskRepositoryProvider);
     if (repo == null) return;
-    final defaults = await ref
-        .read(taskCaptureDefaultsRepositoryProvider)
-        ?.get();
-    await repo.create(
-      listId: widget.listId,
-      parentTaskId: widget.parentTaskId,
-      title: text,
-      priority: _priorityOverride ?? defaults?.defaultPriority ?? 0,
-      dueAt: _nlpResolvedDueAt,
-    );
-    if (mounted) Navigator.pop(context);
+    try {
+      final defaults = await ref
+          .read(taskCaptureDefaultsRepositoryProvider)
+          ?.get();
+      await repo.create(
+        listId: widget.listId,
+        parentTaskId: widget.parentTaskId,
+        title: text,
+        priority: _priorityOverride ?? defaults?.defaultPriority ?? 0,
+        dueAt: _nlpResolvedDueAt,
+      );
+      if (mounted) Navigator.pop(context);
+    } on StateError catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message.toString())));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('保存任务失败，请稍后重试')));
+    }
   }
 
   @override
