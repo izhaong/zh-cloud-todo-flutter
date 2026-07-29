@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zh_cloud_todo_flutter/core/auth/auth_gateway.dart';
 import 'package:zh_cloud_todo_flutter/state/session_state.dart';
 import 'package:zh_cloud_todo_flutter/todo_auth_page.dart';
 
@@ -134,6 +135,79 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets('密码登录需要双重验证时保留表单并携带动态码重试', (tester) async {
+    final gateway = _FakeAuthGateway(requirePasswordTwoFactor: true);
+    await _pumpAuthPage(tester, authGateway: gateway);
+
+    await tester.enterText(
+      find.widgetWithText(TextFormField, '手机号'),
+      '18800000000',
+    );
+    await tester.enterText(find.widgetWithText(TextFormField, '密码'), '123456');
+    await tester.tap(find.byKey(const ValueKey('todo-auth-submit')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('todo-auth-two-factor-input')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<TextFormField>(find.widgetWithText(TextFormField, '手机号'))
+          .controller
+          ?.text,
+      '18800000000',
+    );
+    expect(
+      tester
+          .widget<TextFormField>(find.widgetWithText(TextFormField, '密码'))
+          .controller
+          ?.text,
+      '123456',
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('todo-auth-two-factor-input')),
+      '654321',
+    );
+    await tester.tap(find.byKey(const ValueKey('todo-auth-submit')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastPasswordTwoFactorCode, '654321');
+  });
+
+  testWidgets('短信登录需要双重验证时携带动态码重试', (tester) async {
+    final gateway = _FakeAuthGateway(requireSmsTwoFactor: true);
+    await _pumpAuthPage(tester, authGateway: gateway);
+
+    await tester.tap(find.text('验证码'));
+    await tester.pump();
+    await tester.enterText(
+      find.widgetWithText(TextFormField, '手机号'),
+      '18800000000',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, '短信验证码'),
+      '123456',
+    );
+    await tester.tap(find.byKey(const ValueKey('todo-auth-submit')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('todo-auth-two-factor-input')),
+      findsOneWidget,
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('todo-auth-two-factor-input')),
+      '654321',
+    );
+    await tester.tap(find.byKey(const ValueKey('todo-auth-submit')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastSmsTwoFactorCode, '654321');
+  });
+
   testWidgets('深色主题与 200% 文本缩放在最小宽度保持可用', (tester) async {
     await _setViewport(tester, const Size(320, 1000));
     await _pumpAuthPage(
@@ -199,17 +273,30 @@ Future<void> _pumpAuthPage(
 }
 
 class _FakeAuthGateway implements AuthGateway {
-  _FakeAuthGateway({this.failPasswordLogin = false});
+  _FakeAuthGateway({
+    this.failPasswordLogin = false,
+    this.requirePasswordTwoFactor = false,
+    this.requireSmsTwoFactor = false,
+  });
 
   final bool failPasswordLogin;
+  final bool requirePasswordTwoFactor;
+  final bool requireSmsTwoFactor;
+  String? lastPasswordTwoFactorCode;
+  String? lastSmsTwoFactorCode;
 
   @override
   Future<TodoAuthSession> passwordLogin({
     required String mobile,
     required String password,
+    String? twoFactorCode,
   }) async {
     if (failPasswordLogin) {
       throw Exception('internal-auth-error');
+    }
+    lastPasswordTwoFactorCode = twoFactorCode;
+    if (requirePasswordTwoFactor && twoFactorCode == null) {
+      throw const TodoAuthException('请输入双重验证动态码', code: 1099110104);
     }
     return TodoAuthSession(
       userId: 1,
@@ -230,13 +317,20 @@ class _FakeAuthGateway implements AuthGateway {
   Future<TodoAuthSession> smsLogin({
     required String mobile,
     required String code,
-  }) async => TodoAuthSession(
-    userId: 1,
-    accessToken: 'access-token',
-    refreshToken: 'refresh-token',
-    tenantId: '1',
-    mobile: mobile,
-  );
+    String? twoFactorCode,
+  }) async {
+    lastSmsTwoFactorCode = twoFactorCode;
+    if (requireSmsTwoFactor && twoFactorCode == null) {
+      throw const TodoAuthException('请输入双重验证动态码', code: 1099110104);
+    }
+    return TodoAuthSession(
+      userId: 1,
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      tenantId: '1',
+      mobile: mobile,
+    );
+  }
 
   @override
   Future<void> resetPassword({

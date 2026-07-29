@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/todo_api.dart';
@@ -10,8 +11,9 @@ import 'change_password_page.dart';
 ///
 /// service 契约：
 /// - `GET /security/2fa/status` → bool（当前 2FA 是否开启）
-/// - `POST /security/2fa/enable` → Long（2FA 记录 ID）
-/// - `POST /security/2fa/disable` → Boolean
+/// - `POST /security/2fa/setup` → TOTP 密钥与 otpauth URI
+/// - `POST /security/2fa/confirm?code=...` → Boolean
+/// - `POST /security/2fa/disable?code=...` → Boolean
 /// - `POST /security/export?exportType=FULL` → Long（导出任务 ID）
 /// - `GET /security/export/list` → `List<DataExportItem>`
 class AccountSecurityPage extends ConsumerWidget {
@@ -112,9 +114,25 @@ class _TwoFactorCardState extends ConsumerState<_TwoFactorCard> {
     setState(() => _busy = true);
     try {
       if (target) {
-        await widget.api.security.enableTwoFactor();
+        final setup = await widget.api.security.setupTwoFactor();
+        if (!mounted) return;
+        final code = await _requestCode(
+          title: '绑定认证器',
+          description: '请在认证器中添加下方密钥，再输入当前显示的 6 位动态码完成启用。',
+          setup: setup,
+        );
+        if (code == null) return;
+        final confirmed = await widget.api.security.confirmTwoFactor(code);
+        if (!confirmed) {
+          throw Exception('动态码校验失败，请确认设备时间后重试');
+        }
       } else {
-        await widget.api.security.disableTwoFactor();
+        final code = await _requestCode(
+          title: '关闭双重验证',
+          description: '请输入认证器当前显示的 6 位动态码，以确认由你本人关闭。',
+        );
+        if (code == null) return;
+        await widget.api.security.disableTwoFactor(code);
       }
       if (mounted) setState(() => _enabled = target);
       if (mounted) {
@@ -132,6 +150,19 @@ class _TwoFactorCardState extends ConsumerState<_TwoFactorCard> {
       if (mounted) setState(() => _busy = false);
     }
   }
+
+  Future<String?> _requestCode({
+    required String title,
+    required String description,
+    TwoFactorSetup? setup,
+  }) => showDialog<String>(
+    context: context,
+    builder: (_) => _TwoFactorCodeDialog(
+      title: title,
+      description: description,
+      setup: setup,
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -158,7 +189,11 @@ class _TwoFactorCardState extends ConsumerState<_TwoFactorCard> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 else
-                  Switch(value: enabled, onChanged: _toggle),
+                  Switch(
+                    key: const ValueKey('account-security-two-factor-switch'),
+                    value: enabled,
+                    onChanged: _toggle,
+                  ),
               ],
             ),
             const SizedBox(height: 8),
@@ -169,6 +204,103 @@ class _TwoFactorCardState extends ConsumerState<_TwoFactorCard> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _TwoFactorCodeDialog extends StatefulWidget {
+  const _TwoFactorCodeDialog({
+    required this.title,
+    required this.description,
+    this.setup,
+  });
+
+  final String title;
+  final String description;
+  final TwoFactorSetup? setup;
+
+  @override
+  State<_TwoFactorCodeDialog> createState() => _TwoFactorCodeDialogState();
+}
+
+class _TwoFactorCodeDialogState extends State<_TwoFactorCodeDialog> {
+  final _controller = TextEditingController();
+  String? _errorText;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _confirm() {
+    final code = _controller.text.trim();
+    if (RegExp(r'^\d{6}$').hasMatch(code)) {
+      Navigator.of(context).pop(code);
+    } else {
+      setState(() => _errorText = '请输入 6 位动态码');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final setup = widget.setup;
+    return AlertDialog(
+      title: Text(widget.title),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(widget.description),
+            if (setup != null) ...[
+              const SizedBox(height: 16),
+              Text('手工密钥', style: Theme.of(context).textTheme.labelLarge),
+              const SizedBox(height: 4),
+              SelectableText(
+                setup.secret,
+                key: const ValueKey('two-factor-setup-secret'),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'otpauth URI',
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+              const SizedBox(height: 4),
+              SelectableText(
+                setup.otpauthUri,
+                key: const ValueKey('two-factor-setup-uri'),
+              ),
+            ],
+            const SizedBox(height: 16),
+            TextField(
+              key: const ValueKey('two-factor-code-input'),
+              controller: _controller,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              textInputAction: TextInputAction.done,
+              maxLength: 6,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: InputDecoration(
+                labelText: '6 位动态码',
+                errorText: _errorText,
+              ),
+              onSubmitted: (_) => _confirm(),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          key: const ValueKey('two-factor-code-confirm'),
+          onPressed: _confirm,
+          child: const Text('确认'),
+        ),
+      ],
     );
   }
 }

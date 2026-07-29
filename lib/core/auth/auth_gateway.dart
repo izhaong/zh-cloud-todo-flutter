@@ -10,6 +10,7 @@ abstract class AuthGateway {
   Future<TodoAuthSession> passwordLogin({
     required String mobile,
     required String password,
+    String? twoFactorCode,
   });
 
   Future<void> sendSmsCode({required String mobile, required int scene});
@@ -17,6 +18,7 @@ abstract class AuthGateway {
   Future<TodoAuthSession> smsLogin({
     required String mobile,
     required String code,
+    String? twoFactorCode,
   });
 
   Future<void> resetPassword({
@@ -48,6 +50,7 @@ class AuthGatewayImpl implements AuthGateway {
       if (code != 0) {
         throw TodoAuthException(
           body['msg']?.toString() ?? body['message']?.toString() ?? '账号请求失败',
+          code: int.tryParse(code.toString()),
         );
       }
       return body['data'];
@@ -59,10 +62,17 @@ class AuthGatewayImpl implements AuthGateway {
   Future<TodoAuthSession> passwordLogin({
     required String mobile,
     required String password,
+    String? twoFactorCode,
   }) async {
     final resp = await _client.memberPost<Map<String, dynamic>>(
       '/auth/login',
-      data: {'mobile': mobile, 'password': password, 'terminal': '30'},
+      data: {
+        'mobile': mobile,
+        'password': password,
+        'terminal': '30',
+        if (twoFactorCode != null && twoFactorCode.isNotEmpty)
+          'twoFactorCode': twoFactorCode,
+      },
     );
     final data = _unwrap(resp);
     if (data is! Map) {
@@ -88,10 +98,17 @@ class AuthGatewayImpl implements AuthGateway {
   Future<TodoAuthSession> smsLogin({
     required String mobile,
     required String code,
+    String? twoFactorCode,
   }) async {
     final resp = await _client.memberPost<Map<String, dynamic>>(
       '/auth/sms-login',
-      data: {'mobile': mobile, 'code': code, 'terminal': '30'},
+      data: {
+        'mobile': mobile,
+        'code': code,
+        'terminal': '30',
+        if (twoFactorCode != null && twoFactorCode.isNotEmpty)
+          'twoFactorCode': twoFactorCode,
+      },
     );
     final data = _unwrap(resp);
     if (data is! Map) {

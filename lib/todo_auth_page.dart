@@ -29,10 +29,12 @@ class _TodoAuthPageState extends ConsumerState<TodoAuthPage> {
   final _mobileController = TextEditingController();
   final _passwordController = TextEditingController();
   final _codeController = TextEditingController();
+  final _twoFactorController = TextEditingController();
   _AuthMode _mode = _AuthMode.password;
   bool _submitting = false;
   bool _sendingCode = false;
   bool _obscurePassword = true;
+  bool _twoFactorRequired = false;
   String? _message;
   bool _messageIsError = false;
 
@@ -41,6 +43,7 @@ class _TodoAuthPageState extends ConsumerState<TodoAuthPage> {
     _mobileController.dispose();
     _passwordController.dispose();
     _codeController.dispose();
+    _twoFactorController.dispose();
     super.dispose();
   }
 
@@ -251,6 +254,22 @@ class _TodoAuthPageState extends ConsumerState<TodoAuthPage> {
                   _buildCodeField(colorScheme),
                   const SizedBox(height: _fieldGap),
                 ],
+                if (_twoFactorRequired) ...[
+                  TextFormField(
+                    key: const ValueKey('todo-auth-two-factor-input'),
+                    controller: _twoFactorController,
+                    keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.done,
+                    autofillHints: const [AutofillHints.oneTimeCode],
+                    decoration: const InputDecoration(
+                      labelText: '双重验证动态码',
+                      hintText: '请输入认证器中的 6 位动态码',
+                      prefixIcon: Icon(Icons.security_outlined),
+                    ),
+                    validator: _validateTwoFactorCode,
+                  ),
+                  const SizedBox(height: _fieldGap),
+                ],
                 if (_message != null) ...[
                   _AuthMessage(text: _message!, isError: _messageIsError),
                   const SizedBox(height: _fieldGap),
@@ -368,6 +387,8 @@ class _TodoAuthPageState extends ConsumerState<TodoAuthPage> {
       _message = null;
       _messageIsError = false;
       _obscurePassword = true;
+      _twoFactorRequired = false;
+      _twoFactorController.clear();
       if (mode != _AuthMode.forgotPassword) {
         _passwordController.clear();
       }
@@ -435,6 +456,9 @@ class _TodoAuthPageState extends ConsumerState<TodoAuthPage> {
             .passwordLogin(
               mobile: _mobileController.text.trim(),
               password: _passwordController.text,
+              twoFactorCode: _twoFactorRequired
+                  ? _twoFactorController.text.trim()
+                  : null,
             );
         await ref.read(sessionProvider.notifier).setSession(session);
         return;
@@ -461,10 +485,16 @@ class _TodoAuthPageState extends ConsumerState<TodoAuthPage> {
           .smsLogin(
             mobile: _mobileController.text.trim(),
             code: _codeController.text.trim(),
+            twoFactorCode: _twoFactorRequired
+                ? _twoFactorController.text.trim()
+                : null,
           );
       await ref.read(sessionProvider.notifier).setSession(session);
     } on TodoAuthException catch (error) {
       setState(() {
+        if (error.code == TodoAuthException.twoFactorRequiredCode) {
+          _twoFactorRequired = true;
+        }
         _message = error.message;
         _messageIsError = true;
       });
@@ -511,6 +541,14 @@ class _TodoAuthPageState extends ConsumerState<TodoAuthPage> {
     }
     if (!RegExp(r'^\d{4,6}$').hasMatch(code)) {
       return '验证码为 4-6 位数字';
+    }
+    return null;
+  }
+
+  String? _validateTwoFactorCode(String? value) {
+    final code = value?.trim() ?? '';
+    if (!RegExp(r'^\d{6}$').hasMatch(code)) {
+      return '请输入认证器中的 6 位动态码';
     }
     return null;
   }

@@ -120,6 +120,7 @@ class _FakeAuthGateway implements AuthGateway {
   Future<TodoAuthSession> passwordLogin({
     required String mobile,
     required String password,
+    String? twoFactorCode,
   }) {
     throw UnimplementedError();
   }
@@ -128,6 +129,7 @@ class _FakeAuthGateway implements AuthGateway {
   Future<TodoAuthSession> smsLogin({
     required String mobile,
     required String code,
+    String? twoFactorCode,
   }) {
     throw UnimplementedError();
   }

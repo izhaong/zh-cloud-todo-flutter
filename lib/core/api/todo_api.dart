@@ -620,6 +620,19 @@ class DataExportItem {
   );
 }
 
+/// 认证器注册所需的 TOTP 密钥与标准 URI。
+class TwoFactorSetup {
+  const TwoFactorSetup({required this.secret, required this.otpauthUri});
+
+  factory TwoFactorSetup.fromJson(Map<String, dynamic> json) => TwoFactorSetup(
+    secret: json['secret']?.toString() ?? '',
+    otpauthUri: json['otpauthUri']?.toString() ?? '',
+  );
+
+  final String secret;
+  final String otpauthUri;
+}
+
 /// 账户安全 REST：会员改密 + Todo 2FA 状态 / 开关与数据导出。
 class SecurityApi {
   SecurityApi(this._client);
@@ -663,21 +676,40 @@ class SecurityApi {
     return data == true || data == 'true';
   }
 
-  /// `POST /security/2fa/enable` — 开启 2FA，返回 2FA 记录 ID。
-  Future<int> enableTwoFactor() async {
+  /// `POST /security/2fa/setup` — 创建待确认的 TOTP 配置。
+  Future<TwoFactorSetup> setupTwoFactor({String? currentCode}) async {
     final resp = await _client.post<Map<String, dynamic>>(
-      '/security/2fa/enable',
+      '/security/2fa/setup',
+      queryParameters: {
+        if (currentCode != null && currentCode.isNotEmpty)
+          'currentCode': currentCode,
+      },
     );
     final data = _unwrap(resp.data);
-    return (data as num?)?.toInt() ?? 0;
+    if (data is! Map) {
+      throw Exception('双重验证配置响应无效');
+    }
+    return TwoFactorSetup.fromJson(Map<String, dynamic>.from(data));
   }
 
-  /// `POST /security/2fa/disable` — 关闭 2FA。
-  Future<void> disableTwoFactor() async {
+  /// `POST /security/2fa/confirm?code=...` — 校验首个动态码并正式启用。
+  Future<bool> confirmTwoFactor(String code) async {
+    final resp = await _client.post<Map<String, dynamic>>(
+      '/security/2fa/confirm',
+      queryParameters: {'code': code},
+    );
+    return _unwrap(resp.data) == true;
+  }
+
+  /// `POST /security/2fa/disable?code=...` — 校验当前动态码后关闭。
+  Future<void> disableTwoFactor(String code) async {
     final resp = await _client.post<Map<String, dynamic>>(
       '/security/2fa/disable',
+      queryParameters: {'code': code},
     );
-    _unwrap(resp.data);
+    if (_unwrap(resp.data) != true) {
+      throw Exception('关闭双重验证失败');
+    }
   }
 
   /// `POST /security/export?exportType=FULL` — 请求数据导出。
