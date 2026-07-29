@@ -370,26 +370,64 @@ void main() {
     expect(changes[3].entityLocalId, second.id);
   });
 
-  test('queues reminder dispatch actions by dispatch ID', () async {
+  test('queues every reminder dispatch action by dispatch ID', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
     final actions = ReminderDispatchActionRepository(SyncChangeQueue(db));
 
-    final mutationId = await actions.snooze(
+    final snoozeMutationId = await actions.snooze(
       reminderDispatchId: 400,
       minutes: 10,
     );
+    await actions.dismiss(reminderDispatchId: 401);
+    await actions.complete(reminderDispatchId: 402);
+    await actions.startFocus(reminderDispatchId: 403);
 
-    final change = await db.select(db.todoSyncChanges).getSingle();
-    final payload = jsonDecode(change.payloadJson) as Map<String, dynamic>;
-    expect(change.entity, 'reminder_dispatch_action');
-    expect(change.entityServerId, 400);
-    expect(change.clientMutationId, mutationId);
-    expect(payload, {
+    final changes = await db.select(db.todoSyncChanges).get();
+    expect(changes, hasLength(4));
+    expect(
+      changes.every((change) => change.entity == 'reminder_dispatch_action'),
+      isTrue,
+    );
+    expect(changes.map((change) => change.entityServerId), [
+      400,
+      401,
+      402,
+      403,
+    ]);
+    expect(changes.first.clientMutationId, snoozeMutationId);
+    expect(jsonDecode(changes.first.payloadJson), {
       'reminderDispatchId': 400,
       'action': 'snooze',
       'minutes': 10,
     });
+    expect(
+      changes
+          .skip(1)
+          .map(
+            (change) =>
+                (jsonDecode(change.payloadJson)
+                    as Map<String, dynamic>)['action'],
+          ),
+      ['dismiss', 'complete', 'start_focus'],
+    );
+  });
+
+  test('rejects invalid reminder dispatch actions before enqueue', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final actions = ReminderDispatchActionRepository(SyncChangeQueue(db));
+
+    await expectLater(
+      actions.complete(reminderDispatchId: 0),
+      throwsArgumentError,
+    );
+    expect(
+      () => actions.snooze(reminderDispatchId: 400, minutes: 0),
+      throwsArgumentError,
+    );
+
+    expect(await db.select(db.todoSyncChanges).get(), isEmpty);
   });
 
   test(

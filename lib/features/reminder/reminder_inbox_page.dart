@@ -1,8 +1,11 @@
 import 'dart:async';
 
+import 'package:drift/drift.dart' show OrderingTerm;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/db/app_database.dart' show TodoSyncChange;
+import '../../core/sync/sync_entities.dart' show SyncEntities;
 import '../../state/providers.dart';
 import '../../state/repositories/reminder_inbox_repository.dart'
     show ReminderInboxItem;
@@ -11,12 +14,15 @@ import '../task/task_detail_page.dart' show TaskDetailPage;
 
 /// 当前收件箱条目（拉取后回写解析好的任务标题）。
 class InboxEntry {
-  InboxEntry(this.item, {this.localTitle});
+  InboxEntry(this.item, {this.localTitle, this.localActionChange});
 
   final ReminderInboxItem item;
 
   /// 本地解析出的任务标题（按 taskId serverId 查不到时回退 item.taskTitle）。
   final String? localTitle;
+
+  /// 当前派发记录最近一次本地动作，用于覆盖尚未刷新的远端待处理状态。
+  final TodoSyncChange? localActionChange;
 
   int get id => item.id;
   String get title => (localTitle != null && localTitle!.isNotEmpty)
@@ -24,7 +30,23 @@ class InboxEntry {
       : item.taskTitle;
   DateTime get remindAt => item.remindAt;
   String get status => item.status;
-  bool get pending => item.pending;
+  bool get pending => localActionChange == null && item.pending;
+
+  String? get localSyncMessage {
+    final change = localActionChange;
+    if (change == null) return null;
+    switch (change.status) {
+      case 'queued':
+        return '操作等待同步';
+      case 'retryable':
+        return '操作同步失败，等待重试（已尝试 ${change.attemptCount} 次）';
+      case 'synced':
+        return '操作已同步';
+      case 'failed':
+        return '操作同步冲突，请刷新确认';
+    }
+    return null;
+  }
 }
 
 /// 收件箱状态：加载中 / 错误 / 数据三类。
@@ -81,6 +103,22 @@ final inboxProvider = FutureProvider.autoDispose<InboxState>((ref) async {
     return InboxState.data([for (final it in items) InboxEntry(it)]);
   }
 
+  final actionChanges =
+      await (db.select(db.todoSyncChanges)
+            ..where(
+              (change) =>
+                  change.entity.equals(SyncEntities.reminderDispatchAction),
+            )
+            ..orderBy([(change) => OrderingTerm.desc(change.id)]))
+          .get();
+  final latestActionByDispatchId = <int, TodoSyncChange>{};
+  for (final change in actionChanges) {
+    final dispatchId = change.entityServerId;
+    if (dispatchId != null) {
+      latestActionByDispatchId.putIfAbsent(dispatchId, () => change);
+    }
+  }
+
   final entries = <InboxEntry>[];
   for (final it in items) {
     String? localTitle;
@@ -90,7 +128,13 @@ final inboxProvider = FutureProvider.autoDispose<InboxState>((ref) async {
     } catch (_) {
       // 解析失败时回退后端冗余标题。
     }
-    entries.add(InboxEntry(it, localTitle: localTitle));
+    entries.add(
+      InboxEntry(
+        it,
+        localTitle: localTitle,
+        localActionChange: latestActionByDispatchId[it.id],
+      ),
+    );
   }
   return InboxState.data(entries);
 });
@@ -335,6 +379,7 @@ class _ReminderTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final overdue = entry.remindAt.isBefore(DateTime.now());
+    final localSyncMessage = entry.localSyncMessage;
     return ListTile(
       dense: true,
       leading: Icon(
@@ -343,8 +388,19 @@ class _ReminderTile extends StatelessWidget {
         size: 20,
       ),
       title: Text(entry.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text(
-        '${_fmtRemain(entry.remindAt)} · ${entry.remindAt.toLocal().toString().substring(0, 16)}',
+      subtitle: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${_fmtRemain(entry.remindAt)} · ${entry.remindAt.toLocal().toString().substring(0, 16)}',
+          ),
+          if (localSyncMessage != null)
+            Text(
+              localSyncMessage,
+              key: ValueKey('reminder-inbox-sync-${entry.id}'),
+            ),
+        ],
       ),
       trailing: entry.pending
           ? Row(
