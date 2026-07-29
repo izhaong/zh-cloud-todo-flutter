@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zh_cloud_todo_flutter/core/theme/app_theme.dart';
 import 'package:zh_cloud_todo_flutter/features/home/home_shell.dart';
 import 'package:zh_cloud_todo_flutter/features/task/view_mode.dart';
 
@@ -52,6 +54,32 @@ void main() {
       expect(queued.single.entityLocalId, preference.id);
     },
   );
+
+  testWidgets('workspace restores the persisted mode after remount', (
+    tester,
+  ) async {
+    final fixture = await _pumpWorkspace(tester);
+    await _switchWorkspaceMode(tester, TaskViewMode.kanban);
+    expect(find.text('未开始'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: fixture.container,
+        child: MaterialApp(
+          theme: ThemeData(
+            extensions: const [AppThemeExtension(AppColors.light)],
+          ),
+          home: const HomeShell(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('未开始'), findsOneWidget);
+    expect(find.byKey(const Key('task-list-reorderable')), findsNothing);
+  });
 
   for (final mode in const [
     TaskViewMode.kanban,

@@ -38,8 +38,8 @@
 ## Phase 4: User Story 2 — 多视图与日历 (P1)
 
 - [ ] T015 [P][US2] `lib/features/views/{list,board,timeline}_view.dart`
-- [ ] T016 [US2] `lib/features/calendar/calendar_page.dart`：周/月/年/列表/日程五视图（`table_calendar` + 自绘时间线/年视图热力图）
-- [ ] T017 [US2] 视图偏好读写接入 `view_preference` sync 实体
+- [x] T016 [US2] `lib/features/task/views/calendar_view.dart`：周/月/年/列表/日程五视图（月网格 + 自绘日程/周/年视图）
+- [x] T017 [US2] 视图偏好读写接入 `view_preference` sync 实体
 
 **Checkpoint**: 视图与日历可用且偏好跨端保持
 

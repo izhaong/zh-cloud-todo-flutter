@@ -24,11 +24,43 @@ class TaskViewActionRepository {
   /// 视图切换同样属于离线优先写链路：先以 source type/key 落入 Drift，
   /// 再引用同一条本地记录入队，不能由 Widget 直接拼 outbox payload。
   Future<void> saveTaskWorkspaceViewMode(String viewType) async {
+    return _saveViewPreference(
+      sourceType: 'task_view',
+      sourceKey: 'tasks_by_list',
+      viewType: viewType,
+    );
+  }
+
+  Future<String?> getTaskWorkspaceViewMode() {
+    return _getViewPreference(
+      sourceType: 'task_view',
+      sourceKey: 'tasks_by_list',
+    );
+  }
+
+  Future<void> saveCalendarViewMode(String viewType) async {
+    return _saveViewPreference(
+      sourceType: 'calendar_view',
+      sourceKey: 'task_calendar',
+      viewType: viewType,
+    );
+  }
+
+  Future<String?> getCalendarViewMode() {
+    return _getViewPreference(
+      sourceType: 'calendar_view',
+      sourceKey: 'task_calendar',
+    );
+  }
+
+  Future<void> _saveViewPreference({
+    required String sourceType,
+    required String sourceKey,
+    required String viewType,
+  }) async {
     if (viewType.trim().isEmpty) {
       throw ArgumentError.value(viewType, 'viewType', '视图类型不能为空');
     }
-    const sourceType = 'task_view';
-    const sourceKey = 'tasks_by_list';
     final payload = <String, dynamic>{
       'sourceType': sourceType,
       'sourceKey': sourceKey,
@@ -47,8 +79,8 @@ class TaskViewActionRepository {
       final companion = TodoViewPreferencesCompanion(
         id: Value(existing?.id ?? _uuid.v4()),
         serverId: Value(existing?.serverId),
-        sourceType: const Value(sourceType),
-        sourceKey: const Value(sourceKey),
+        sourceType: Value(sourceType),
+        sourceKey: Value(sourceKey),
         valueJson: Value(jsonEncode(payload)),
         updatedAt: Value(now),
         createdAt: Value(existing?.createdAt ?? now),
@@ -75,6 +107,28 @@ class TaskViewActionRepository {
         payload: payload,
       );
     });
+  }
+
+  Future<String?> _getViewPreference({
+    required String sourceType,
+    required String sourceKey,
+  }) async {
+    final preference =
+        await (_db.select(_db.todoViewPreferences)..where(
+              (row) =>
+                  row.sourceType.equals(sourceType) &
+                  row.sourceKey.equals(sourceKey),
+            ))
+            .getSingleOrNull();
+    if (preference == null) return null;
+    try {
+      final value = jsonDecode(preference.valueJson);
+      if (value is! Map<String, dynamic>) return null;
+      final viewType = value['viewType'];
+      return viewType is String && viewType.trim().isNotEmpty ? viewType : null;
+    } on FormatException {
+      return null;
+    }
   }
 
   Future<void> moveTimelineTask(
