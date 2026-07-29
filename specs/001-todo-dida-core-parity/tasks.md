@@ -45,13 +45,14 @@
 
 ---
 
-## Phase 5: User Story 3 — 四象限/番茄/习惯/倒数 (P2)
+## Phase 5: User Story 3 — 四象限/番茄/习惯/倒数/成就 (P2)
 
-- [x] T018 [P][US3] `lib/core/api/todo_efficiency_api.dart`：`/app-api/todo/{quadrant,pomodoro,habit,countdown,achievement}` 封装
+- [x] T018 [P][US3] `lib/core/api/efficiency_api.dart`：`/app-api/todo/{quadrant,pomodoro,habit,countdown,achievement}` 封装
 - [x] T019 [US3] `lib/features/quadrant/quadrant_page.dart`
 - [x] T020 [US3] `lib/features/focus/{focus_timer_page,focus_stats_page}.dart`
 - [x] T021 [US3] `lib/features/habit/{habit_list_page,habit_stats_page}.dart`
 - [x] T022 [US3] `lib/features/countdown/countdown_page.dart`
+- [x] T022A [US3] `lib/features/achievement/achievement_page.dart`：成就值、等级进度、已获得与未解锁勋章墙
 
 **Checkpoint**: 效率工具全部为真实后端数据
 
