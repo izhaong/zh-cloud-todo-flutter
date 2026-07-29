@@ -84,6 +84,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       completed: widget.initialCompleted,
     );
     Future<void>.microtask(_restoreSortPreference);
+    Future<void>.microtask(_restoreViewPreference);
   }
 
   @override
@@ -295,6 +296,18 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     final repository = ref.read(taskSortPreferenceRepositoryProvider);
     final sort = await repository?.get(_selectedListId);
     if (mounted && sort != null) setState(() => _sort = sort);
+  }
+
+  Future<void> _restoreViewPreference() async {
+    final repository = ref.read(taskViewActionRepositoryProvider);
+    final savedMode = await repository?.getTaskWorkspaceViewMode();
+    if (!mounted || savedMode == null) return;
+    for (final mode in TaskViewMode.values) {
+      if (mode.name == savedMode) {
+        setState(() => _mode = mode);
+        return;
+      }
+    }
   }
 
   Future<void> _changeSort(TaskSort sort) async {

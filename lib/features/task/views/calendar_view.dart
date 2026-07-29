@@ -6,15 +6,17 @@ import '../../../core/db/app_database.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/brand_colors.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../state/providers.dart';
 import '../task_detail_page.dart';
 
-/// M11-B3 日历视图：周 / 月 / 年 / 列表 4 模式。
+/// M11-B3 日历视图：周 / 月 / 年 / 列表 / 日程 5 模式。
 ///
 /// 任务落点优先级：dueAt > endAt > startAt。
-/// - 月模式：7x6 网格，列 = 周一~周日；行 = 自然周；点日期格弹当日任务列表
+/// - 月模式：7x6 网格，列 = 周一~周日；行 = 自然周；点日期格进入日程模式
 /// - 周模式：7 列横排（Mon..Sun），每个列内是该周内的任务列表
 /// - 年模式：12 月聚合（每月任务计数 + 切换月份）
 /// - 列表模式：所有任务按日期排序的扁平列表
+/// - 日程模式：单日任务按时间顺序展示
 ///
 /// 纯函数：
 ///   - [resolveTaskDate] 取单个任务落点日期
@@ -45,6 +47,7 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
     _anchor = widget._now ?? DateTime.now();
     // 锚点归零到当天 00:00
     _anchor = DateTime(_anchor.year, _anchor.month, _anchor.day);
+    Future<void>.microtask(_restoreMode);
   }
 
   @override
@@ -54,7 +57,7 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
         _Toolbar(
           mode: _mode,
           anchor: _anchor,
-          onModeChanged: (m) => setState(() => _mode = m),
+          onModeChanged: _changeMode,
           onPrev: () => setState(() => _shift(-1)),
           onNext: () => setState(() => _shift(1)),
         ),
@@ -64,7 +67,10 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
             CalendarMode.month => _MonthGrid(
               anchor: _anchor,
               tasks: widget.tasks,
-              onDayTap: (d) => _showDayTasks(context, d),
+              onDayTap: (day) {
+                setState(() => _anchor = day);
+                _changeMode(CalendarMode.agenda);
+              },
             ),
             CalendarMode.week => _WeekView(
               anchor: _anchor,
@@ -75,13 +81,16 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
               anchor: _anchor,
               tasks: widget.tasks,
               onMonthTap: (m) {
-                setState(() {
-                  _mode = CalendarMode.month;
-                  _anchor = DateTime(_anchor.year, m, 1);
-                });
+                setState(() => _anchor = DateTime(_anchor.year, m, 1));
+                _changeMode(CalendarMode.month);
               },
             ),
             CalendarMode.list => _ListView(
+              tasks: widget.tasks,
+              onTaskTap: (t) => _openDetail(context, t),
+            ),
+            CalendarMode.agenda => _AgendaView(
+              anchor: _anchor,
               tasks: widget.tasks,
               onTaskTap: (t) => _openDetail(context, t),
             ),
@@ -105,6 +114,35 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
       case CalendarMode.list:
         // 列表模式不切换锚点
         break;
+      case CalendarMode.agenda:
+        _anchor = _anchor.add(Duration(days: direction));
+        break;
+    }
+  }
+
+  Future<void> _restoreMode() async {
+    final repository = ref.read(taskViewActionRepositoryProvider);
+    final savedMode = await repository?.getCalendarViewMode();
+    if (!mounted || savedMode == null) return;
+    for (final mode in CalendarMode.values) {
+      if (mode.name == savedMode) {
+        setState(() => _mode = mode);
+        return;
+      }
+    }
+  }
+
+  Future<void> _changeMode(CalendarMode mode) async {
+    if (mounted) setState(() => _mode = mode);
+    try {
+      await ref
+          .read(taskViewActionRepositoryProvider)
+          ?.saveCalendarViewMode(mode.name);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(const SnackBar(content: Text('日历视图设置保存失败，请重试')));
     }
   }
 
@@ -120,27 +158,9 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
     }
     showTaskDetailSheet(context, t.id);
   }
-
-  Future<void> _showDayTasks(BuildContext context, DateTime day) async {
-    final dayTasks = widget.tasks.where((t) {
-      final d = resolveTaskDate(t);
-      if (d == null) return false;
-      return d.year == day.year && d.month == day.month && d.day == day.day;
-    }).toList();
-    if (!context.mounted) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => _DayTasksSheet(
-        day: day,
-        tasks: dayTasks,
-        onTaskTap: (task) => _openDetail(context, task),
-      ),
-    );
-  }
 }
 
-enum CalendarMode { month, week, year, list }
+enum CalendarMode { month, week, year, list, agenda }
 
 extension CalendarModeX on CalendarMode {
   String get label {
@@ -153,6 +173,8 @@ extension CalendarModeX on CalendarMode {
         return '年';
       case CalendarMode.list:
         return '列表';
+      case CalendarMode.agenda:
+        return '日程';
     }
   }
 }
@@ -242,6 +264,7 @@ class _Toolbar extends StatelessWidget {
       CalendarMode.week => ym,
       CalendarMode.year => y,
       CalendarMode.list => '全部任务',
+      CalendarMode.agenda => DateFormat('yyyy 年 M 月 d 日').format(anchor),
     };
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -280,7 +303,10 @@ class _Toolbar extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Align(alignment: Alignment.center, child: modeSelector),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: modeSelector,
+                    ),
                     Row(
                       children: [
                         previousButton,
@@ -651,6 +677,85 @@ class _YearView extends StatelessWidget {
   }
 }
 
+class _AgendaView extends StatelessWidget {
+  const _AgendaView({
+    required this.anchor,
+    required this.tasks,
+    required this.onTaskTap,
+  });
+
+  final DateTime anchor;
+  final List<TodoTask> tasks;
+  final ValueChanged<TodoTask> onTaskTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final dayTasks = tasks.where((task) {
+      final date = resolveTaskDate(task);
+      return date != null &&
+          date.year == anchor.year &&
+          date.month == anchor.month &&
+          date.day == anchor.day;
+    }).toList()..sort(_compareByTime);
+    if (dayTasks.isEmpty) {
+      return const AppEmptyState(
+        title: '当日暂无日程',
+        subtitle: '切换日期，或为任务设置开始和截止时间。',
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemCount: dayTasks.length,
+      separatorBuilder: (_, _) => const Divider(height: 1, indent: 72),
+      itemBuilder: (context, index) {
+        final task = dayTasks[index];
+        final timeLabel = _formatTime(task);
+        return ListTile(
+          leading: SizedBox(
+            width: 48,
+            child: Text(
+              task.allDay
+                  ? '全天'
+                  : DateFormat(
+                      'HH:mm',
+                    ).format(task.startAt ?? task.dueAt ?? task.endAt!),
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
+          ),
+          title: Text(task.title),
+          subtitle: Text(timeLabel),
+          trailing: isExternalCalendarTask(task)
+              ? const Icon(Icons.lock_outline, size: 18)
+              : null,
+          onTap: () => onTaskTap(task),
+        );
+      },
+    );
+  }
+
+  static int _compareByTime(TodoTask left, TodoTask right) {
+    if (left.allDay != right.allDay) return left.allDay ? -1 : 1;
+    final leftTime = left.startAt ?? left.dueAt ?? left.endAt;
+    final rightTime = right.startAt ?? right.dueAt ?? right.endAt;
+    if (leftTime == null && rightTime == null) return 0;
+    if (leftTime == null) return 1;
+    if (rightTime == null) return -1;
+    return leftTime.compareTo(rightTime);
+  }
+
+  static String _formatTime(TodoTask task) {
+    if (task.allDay) return '全天';
+    final start = task.startAt ?? task.dueAt ?? task.endAt;
+    if (start == null) return '未设置时间';
+    final startLabel = DateFormat('HH:mm').format(start);
+    final end = task.endAt;
+    if (end == null || !end.isAfter(start)) return startLabel;
+    return '$startLabel–${DateFormat('HH:mm').format(end)}';
+  }
+}
+
 class _ListView extends StatelessWidget {
   const _ListView({required this.tasks, required this.onTaskTap});
   final List<TodoTask> tasks;
@@ -684,70 +789,6 @@ class _ListView extends StatelessWidget {
           onTap: () => onTaskTap(t),
         );
       },
-    );
-  }
-}
-
-class _DayTasksSheet extends StatelessWidget {
-  const _DayTasksSheet({
-    required this.day,
-    required this.tasks,
-    required this.onTaskTap,
-  });
-  final DateTime day;
-  final List<TodoTask> tasks;
-  final ValueChanged<TodoTask> onTaskTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final df = DateFormat('yyyy 年 M 月 d 日');
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              df.format(day),
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            if (tasks.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: Text('该日无任务'),
-              )
-            else
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 320),
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: tasks.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
-                  itemBuilder: (_, i) {
-                    final t = tasks[i];
-                    return ListTile(
-                      title: Text(t.title),
-                      onTap: () {
-                        Navigator.pop(context);
-                        onTaskTap(t);
-                      },
-                    );
-                  },
-                ),
-              ),
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('关闭'),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

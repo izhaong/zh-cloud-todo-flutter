@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/features/task/views/calendar_view.dart';
 
-/// M11-B3 c5 日历视图：纯函数 + 4 模式渲染。
+/// M11-B3 c5 日历视图：纯函数 + 5 模式渲染。
 void main() {
   group('resolveTaskDate', () {
     final base = DateTime(2026, 6, 15, 18, 30);
@@ -128,6 +128,43 @@ void main() {
     expect(find.text('列表'), findsOneWidget);
     // 6 月 20 日应被标记"1 项"
     expect(find.text('1 项'), findsOneWidget);
+  });
+
+  testWidgets('月视图点击日期进入当日日程视图', (tester) async {
+    final now = DateTime(2026, 6, 15, 12);
+    final task = TodoTask(
+      id: 'agenda-task',
+      listId: '1',
+      title: '日程会议',
+      completed: false,
+      cancelled: false,
+      priority: 0,
+      isPinned: false,
+      sortOrder: 0,
+      startAt: DateTime(2026, 6, 20, 9),
+      endAt: DateTime(2026, 6, 20, 10),
+      dueAt: DateTime(2026, 6, 20, 10),
+      allDay: false,
+      fixedTimezone: false,
+      updatedAt: now,
+      createdAt: now,
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: CalendarView(tasks: [task], now: now),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('20'));
+    await tester.pumpAndSettle();
+
+    expect(_selectedCalendarMode(tester), CalendarMode.agenda);
+    expect(find.text('日程会议'), findsOneWidget);
+    expect(find.text('09:00–10:00'), findsOneWidget);
   });
 
   testWidgets('CalendarView 列表模式按日期排序', (tester) async {
@@ -286,6 +323,7 @@ void main() {
         '周': CalendarMode.week,
         '年': CalendarMode.year,
         '列表': CalendarMode.list,
+        '日程': CalendarMode.agenda,
       };
       expect(_selectedCalendarMode(tester), CalendarMode.month);
 

@@ -142,4 +142,27 @@ void main() {
       isTrue,
     );
   });
+
+  test('任务与日历视图偏好可从 Drift 恢复且分别同步', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final repository = TaskViewActionRepository(db, SyncChangeQueue(db));
+
+    expect(await repository.getTaskWorkspaceViewMode(), equals(null));
+    expect(await repository.getCalendarViewMode(), equals(null));
+
+    await repository.saveTaskWorkspaceViewMode('kanban');
+    await repository.saveCalendarViewMode('agenda');
+
+    expect(await repository.getTaskWorkspaceViewMode(), 'kanban');
+    expect(await repository.getCalendarViewMode(), 'agenda');
+    final preferences = await db.select(db.todoViewPreferences).get();
+    final queued = await db.select(db.todoSyncChanges).get();
+    expect(preferences, hasLength(2));
+    expect(queued, hasLength(2));
+    expect(preferences.map((row) => row.sourceType).toSet(), {
+      'task_view',
+      'calendar_view',
+    });
+  });
 }
