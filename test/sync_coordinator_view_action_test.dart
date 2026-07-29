@@ -89,7 +89,7 @@ void main() {
     final change = sentChanges.single;
     expect(change['entityType'], 'task');
     expect(change['payload']?['priority'], 3);
-    expect(change['payload']?['status'], 'done');
+    expect(change['payload']?['status'], 'DONE');
   });
 
   test('拉取看板偏好会映射服务端清单并落入本地表', () async {

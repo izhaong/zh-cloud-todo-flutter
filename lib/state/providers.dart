@@ -1,17 +1,30 @@
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../core/api/sync_api.dart';
 import '../core/api/todo_api.dart';
 import '../core/db/app_database.dart';
+import '../core/notification/local_notification_service.dart';
+import '../core/notification/reminder_notification_poller.dart';
 import '../core/sync/sync_change_queue.dart';
 import '../core/sync/sync_coordinator.dart';
 import '../state/session_state.dart';
 import 'repositories/board_preference_repository.dart';
 import 'repositories/folder_repository.dart';
+import 'repositories/activity_repository.dart';
 import 'repositories/list_repository.dart';
+import 'repositories/reminder_dispatch_action_repository.dart';
+import 'repositories/reminder_inbox_repository.dart';
+import 'repositories/reminder_repository.dart';
+import 'repositories/repeat_rule_repository.dart';
 import 'repositories/tag_repository.dart';
+import 'repositories/task_batch_edit_repository.dart';
+import 'repositories/task_query_repository.dart';
+import 'repositories/template_repository.dart';
+import 'repositories/task_capture_defaults_repository.dart';
 import 'repositories/task_repository.dart';
+import 'repositories/task_sort_preference_repository.dart';
 import 'repositories/task_view_action_repository.dart';
 
 /// UI-facing clock. Production reads the current instant on each rebuild;
@@ -19,6 +32,17 @@ import 'repositories/task_view_action_repository.dart';
 final currentDateTimeProvider = Provider<DateTime Function()>(
   (ref) => DateTime.now,
 );
+
+/// 网络状态变化流。测试和预览夹具可覆盖为空流，避免订阅真实平台通道。
+final connectivityChangesProvider = Provider<Stream<List<ConnectivityResult>>>(
+  (ref) => Connectivity().onConnectivityChanged,
+);
+
+/// 当前连接状态读取，与变化流分开注入，以覆盖离线冷启动后的首次联网恢复。
+final connectivityInitialStateProvider =
+    Provider<Future<List<ConnectivityResult>> Function()>(
+      (ref) => Connectivity().checkConnectivity,
+    );
 
 /// ----- API 客户端 --------------------------------------------------------
 
@@ -56,9 +80,14 @@ final appDatabaseProvider = Provider<AppDatabase?>((ref) {
   ref.watch(sessionProvider);
   final session = ref.watch(sessionProvider);
   if (session == null) return null;
+  const testNamespace = String.fromEnvironment('TODO_E2E_DATABASE_SUFFIX');
   final db = AppDatabase.forUser(
     tenantId: session.tenantId,
     userId: session.userId,
+    testNamespace:
+        const bool.fromEnvironment('FLUTTER_TEST') && testNamespace.isNotEmpty
+        ? testNamespace
+        : null,
   );
   ref.onDispose(db.close);
   return db;
@@ -101,6 +130,21 @@ final taskRepositoryProvider = Provider<TaskRepository?>((ref) {
   return TaskRepository(db, queue);
 });
 
+final taskQueryRepositoryProvider = Provider<TaskQueryRepository?>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  if (db == null) return null;
+  return TaskQueryRepository(db);
+});
+
+final taskBatchEditRepositoryProvider = Provider<TaskBatchEditRepository?>((
+  ref,
+) {
+  final db = ref.watch(appDatabaseProvider);
+  final queue = ref.watch(syncChangeQueueProvider);
+  if (db == null || queue == null) return null;
+  return TaskBatchEditRepository(db, queue);
+});
+
 final taskViewActionRepositoryProvider = Provider<TaskViewActionRepository?>((
   ref,
 ) {
@@ -125,6 +169,74 @@ final boardPreferenceRecoveryAvailableProvider =
       if (repository == null) return false;
       return repository.hasRecoverableFailed(listId: listId);
     });
+
+final reminderRepositoryProvider = Provider<ReminderRepository?>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  final queue = ref.watch(syncChangeQueueProvider);
+  if (db == null || queue == null) return null;
+  return ReminderRepository(db, queue);
+});
+
+final repeatRuleRepositoryProvider = Provider<RepeatRuleRepository?>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  final queue = ref.watch(syncChangeQueueProvider);
+  if (db == null || queue == null) return null;
+  return RepeatRuleRepository(db, queue);
+});
+
+final reminderDispatchActionRepositoryProvider =
+    Provider<ReminderDispatchActionRepository?>((ref) {
+      final queue = ref.watch(syncChangeQueueProvider);
+      if (queue == null) return null;
+      return ReminderDispatchActionRepository(queue);
+    });
+
+final reminderInboxRepositoryProvider = Provider<ReminderInboxRepository>((
+  ref,
+) {
+  return ReminderInboxRepository(ref.watch(todoApiProvider).reminder);
+});
+
+final reminderNotificationPollerProvider =
+    Provider<ReminderNotificationPoller?>((ref) {
+      final database = ref.watch(appDatabaseProvider);
+      if (database == null) return null;
+      return ReminderNotificationPoller(
+        repository: ref.watch(reminderInboxRepositoryProvider),
+        database: database,
+        notifications: ref.watch(localNotificationServiceProvider),
+        now: ref.watch(currentDateTimeProvider),
+      );
+    });
+
+final taskCaptureDefaultsRepositoryProvider =
+    Provider<TaskCaptureDefaultsRepository?>((ref) {
+      final db = ref.watch(appDatabaseProvider);
+      final queue = ref.watch(syncChangeQueueProvider);
+      if (db == null || queue == null) return null;
+      return TaskCaptureDefaultsRepository(db, queue);
+    });
+
+final taskSortPreferenceRepositoryProvider =
+    Provider<TaskSortPreferenceRepository?>((ref) {
+      final db = ref.watch(appDatabaseProvider);
+      final queue = ref.watch(syncChangeQueueProvider);
+      if (db == null || queue == null) return null;
+      return TaskSortPreferenceRepository(db, queue);
+    });
+
+final activityRepositoryProvider = Provider<ActivityRepository?>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  if (db == null) return null;
+  return ActivityRepository(db, ref.watch(todoApiProvider).activity);
+});
+
+final templateRepositoryProvider = Provider<TemplateRepository?>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  final queue = ref.watch(syncChangeQueueProvider);
+  if (db == null || queue == null) return null;
+  return TemplateRepository(db, queue);
+});
 
 // --- 同步 ---------------------------------------------------------------
 
@@ -224,7 +336,7 @@ class TaskStats {
     final todayEnd = todayStart.add(const Duration(days: 1));
     final weekEnd = todayStart.add(const Duration(days: 7));
     for (final t in tasks) {
-      if (t.completed) continue;
+      if (t.completed || t.cancelled) continue;
       all++;
       if (t.listId == 'inbox') inbox++;
       final due = t.dueAt;

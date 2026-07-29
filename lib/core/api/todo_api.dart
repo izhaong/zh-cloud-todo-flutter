@@ -26,6 +26,282 @@ Map<String, dynamic> _unwrapBody(Map<String, dynamic>? body) {
   return body;
 }
 
+void _ensureSuccess(Map<String, dynamic>? body) {
+  if (body == null || !body.containsKey('code')) return;
+  if (body['code'] != 0) {
+    throw DioException(
+      requestOptions: RequestOptions(path: '/app-api/todo'),
+      error: body['msg'] ?? '请求失败',
+    );
+  }
+}
+
+List<dynamic> _unwrapListBody(Map<String, dynamic>? body) {
+  if (body == null) return const [];
+  if (body.containsKey('code')) {
+    final code = body['code'];
+    if (code != 0) {
+      throw DioException(
+        requestOptions: RequestOptions(path: '/app-api/todo'),
+        error: body['msg'] ?? '请求失败',
+      );
+    }
+    return (body['data'] as List?)?.toList(growable: false) ?? const [];
+  }
+  return (body['data'] as List?)?.toList(growable: false) ?? const [];
+}
+
+/// 一条服务端全局搜索结果。UI 不直接消费该类型：工作区继续通过
+/// `TaskQueryRepository` 查询本地 Drift；此 API 供同步后的契约/A-B 对照使用。
+class TodoGlobalSearchResult {
+  const TodoGlobalSearchResult({
+    required this.type,
+    required this.id,
+    required this.title,
+    this.listId,
+  });
+
+  final String type;
+  final int id;
+  final String title;
+  final int? listId;
+
+  factory TodoGlobalSearchResult.fromJson(Map<String, dynamic> json) =>
+      TodoGlobalSearchResult(
+        type: json['type']?.toString() ?? '',
+        id: (json['id'] as num?)?.toInt() ?? 0,
+        title: json['title']?.toString() ?? '',
+        listId: (json['listId'] as num?)?.toInt(),
+      );
+}
+
+/// 服务端稳定分页的搜索页。
+class TodoGlobalSearchPage {
+  const TodoGlobalSearchPage({required this.items, required this.total});
+
+  final List<TodoGlobalSearchResult> items;
+  final int total;
+}
+
+/// `GET /task/global-search` 的契约封装。
+///
+/// 它只属于 API 边界及真实 HTTP A/B Drift 验收；离线 UI 不以网络响应作为
+/// 真相源，避免违反 B3 的 Repository/use-case 约束。
+class TodoGlobalSearchApi {
+  TodoGlobalSearchApi(this._client);
+
+  final ApiClient _client;
+
+  Future<TodoGlobalSearchPage> search({
+    required String keyword,
+    int pageNo = 1,
+    int pageSize = 20,
+  }) async {
+    final normalizedKeyword = keyword.trim();
+    if (normalizedKeyword.isEmpty) {
+      throw ArgumentError.value(keyword, 'keyword', '关键词不能为空');
+    }
+    if (pageNo < 1 || pageSize < 1) {
+      throw ArgumentError('pageNo 和 pageSize 必须为正数');
+    }
+
+    final resp = await _client.get<Map<String, dynamic>>(
+      '/task/global-search',
+      query: {
+        'keyword': normalizedKeyword,
+        'pageNo': pageNo,
+        'pageSize': pageSize,
+      },
+    );
+    final data = _unwrapBody(resp.data);
+    final raw = (data['list'] as List?) ?? const [];
+    return TodoGlobalSearchPage(
+      items: raw
+          .map(
+            (item) => TodoGlobalSearchResult.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList(growable: false),
+      total: (data['total'] as num?)?.toInt() ?? raw.length,
+    );
+  }
+}
+
+/// 服务端已保存过滤器命中的单条任务。
+///
+/// 该模型只描述 `/filter/apply` 的只读分页结果。离线工作区仍通过
+/// `TaskQueryRepository` 查询 Drift，不能用网络结果取代本地真相源。
+class TodoFilterTaskResult {
+  const TodoFilterTaskResult({
+    required this.id,
+    required this.title,
+    required this.priority,
+  });
+
+  final int id;
+  final String title;
+  final int priority;
+
+  factory TodoFilterTaskResult.fromJson(Map<String, dynamic> json) =>
+      TodoFilterTaskResult(
+        id: (json['id'] as num?)?.toInt() ?? 0,
+        title: json['title']?.toString() ?? '',
+        priority: (json['priority'] as num?)?.toInt() ?? 0,
+      );
+}
+
+/// 服务端过滤器应用结果的稳定分页。
+class TodoFilterApplyPage {
+  const TodoFilterApplyPage({required this.items, required this.total});
+
+  final List<TodoFilterTaskResult> items;
+  final int total;
+}
+
+/// `POST /filter/apply` 的契约封装。
+///
+/// 用于真实 HTTP 及同步 A/B 对照，不供 Widget 绕过 Repository/use-case 直连。
+class TodoFilterApplyApi {
+  TodoFilterApplyApi(this._client);
+
+  final ApiClient _client;
+
+  Future<TodoFilterApplyPage> apply({
+    required int filterId,
+    int pageNo = 1,
+    int pageSize = 20,
+  }) async {
+    if (filterId <= 0 || pageNo < 1 || pageSize < 1 || pageSize > 200) {
+      throw ArgumentError('filterId、pageNo 和 pageSize 必须在有效范围内');
+    }
+    final resp = await _client.post<Map<String, dynamic>>(
+      '/filter/apply',
+      data: {'id': filterId, 'pageNo': pageNo, 'pageSize': pageSize},
+    );
+    final data = _unwrapBody(resp.data);
+    final raw = (data['list'] as List?) ?? const [];
+    return TodoFilterApplyPage(
+      items: raw
+          .map(
+            (item) => TodoFilterTaskResult.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList(growable: false),
+      total: (data['total'] as num?)?.toInt() ?? raw.length,
+    );
+  }
+}
+
+/// 一次服务端批量更新的冻结请求。
+///
+/// 与本地 [TaskBatchEditRepository] 的 Drift/outbox 写路径分离：该类型用于
+/// 显式 HTTP 消费、逐项结果显示和可重试幂等契约，绝不替代离线本地写入。
+class TodoTaskBatchUpdateRequest {
+  const TodoTaskBatchUpdateRequest({
+    required this.taskIds,
+    this.listId,
+    this.priority,
+    this.dueAt,
+    this.clearDueAt,
+    this.completed,
+    this.isPinned,
+    this.tagIds,
+    this.deviceId,
+    this.clientMutationId,
+  });
+
+  final List<int> taskIds;
+  final int? listId;
+  final int? priority;
+  final DateTime? dueAt;
+  final bool? clearDueAt;
+  final bool? completed;
+  final bool? isPinned;
+  final List<int>? tagIds;
+  final String? deviceId;
+  final String? clientMutationId;
+
+  bool get hasChanges =>
+      listId != null ||
+      priority != null ||
+      dueAt != null ||
+      clearDueAt == true ||
+      completed != null ||
+      isPinned != null ||
+      tagIds != null;
+
+  Map<String, dynamic> toJson() => {
+    'taskIds': taskIds,
+    'listId': ?listId,
+    'priority': ?priority,
+    'dueAt': ?dueAt?.toIso8601String(),
+    'clearDueAt': ?clearDueAt,
+    'completed': ?completed,
+    'isPinned': ?isPinned,
+    'tagIds': ?tagIds,
+    'deviceId': ?deviceId,
+    'clientMutationId': ?clientMutationId,
+  };
+}
+
+/// 服务端批量更新的一项结果；[errorCode] 可用于失败项重试提示。
+class TodoTaskBatchUpdateResult {
+  const TodoTaskBatchUpdateResult({
+    required this.taskId,
+    required this.status,
+    this.errorCode,
+  });
+
+  final int? taskId;
+  final String status;
+  final String? errorCode;
+
+  factory TodoTaskBatchUpdateResult.fromJson(Map<String, dynamic> json) =>
+      TodoTaskBatchUpdateResult(
+        taskId: (json['taskId'] as num?)?.toInt(),
+        status: json['status']?.toString() ?? 'failed',
+        errorCode: json['errorCode']?.toString(),
+      );
+}
+
+/// `PUT /task/batch-update` 的逐项、可重试 HTTP 契约。
+class TodoTaskBatchApi {
+  TodoTaskBatchApi(this._client);
+
+  final ApiClient _client;
+
+  Future<List<TodoTaskBatchUpdateResult>> update(
+    TodoTaskBatchUpdateRequest request,
+  ) async {
+    if (request.taskIds.isEmpty) {
+      throw ArgumentError.value(request.taskIds, 'taskIds', '任务编号不能为空');
+    }
+    if (!request.hasChanges) {
+      throw ArgumentError.value(request, 'request', '至少提供一个批量修改字段');
+    }
+    final hasDeviceId = (request.deviceId?.trim().isNotEmpty ?? false);
+    final hasMutationId =
+        (request.clientMutationId?.trim().isNotEmpty ?? false);
+    if (hasDeviceId != hasMutationId) {
+      throw ArgumentError('deviceId 和 clientMutationId 必须成对提供');
+    }
+    final resp = await _client.put<Map<String, dynamic>>(
+      '/task/batch-update',
+      data: request.toJson(),
+    );
+    return _unwrapListBody(resp.data)
+        .whereType<Map>()
+        .map(
+          (item) => TodoTaskBatchUpdateResult.fromJson(
+            Map<String, dynamic>.from(item),
+          ),
+        )
+        .toList(growable: false);
+  }
+}
+
 /// 任务动作：完成 / 取消完成 / 重排顺序（直接 REST）。
 class TaskRestApi {
   TaskRestApi(this._client);
@@ -132,18 +408,29 @@ class FolderApi {
 
   final ApiClient _client;
 
-  /// `POST /folder/delete`
-  Future<void> deleteFolder(int serverId) =>
-      _client.post('/folder/delete', data: {'id': serverId});
+  /// `DELETE /folder/delete?id=...`
+  Future<void> deleteFolder(int serverId) async {
+    final response = await _client.raw.delete<Map<String, dynamic>>(
+      '/app-api/todo/folder/delete',
+      queryParameters: {'id': serverId},
+    );
+    _ensureSuccess(response.data);
+  }
 
-  /// `POST /folder/move-list` — 把 [listServerId] 挪到 [folderServerId] 下。
-  Future<void> moveList({
-    required int listServerId,
-    required int folderServerId,
-  }) => _client.post(
-    '/folder/move-list',
-    data: {'listId': listServerId, 'folderId': folderServerId},
-  );
+  /// `POST /folder/move-list` — 批量把清单挪到目标文件夹；传 null 表示移出文件夹。
+  Future<void> moveLists({
+    required List<int> listServerIds,
+    int? folderServerId,
+  }) async {
+    if (listServerIds.isEmpty) {
+      throw ArgumentError.value(listServerIds, 'listServerIds', '清单不能为空');
+    }
+    final response = await _client.post<Map<String, dynamic>>(
+      '/folder/move-list',
+      data: {'listIds': listServerIds, 'folderId': ?folderServerId},
+    );
+    _ensureSuccess(response.data);
+  }
 }
 
 /// NLP 自然语言日期解析（`POST /nlp/parse`）。
@@ -193,6 +480,64 @@ class TagApi {
         '/tag/task-unbind',
         data: {'taskId': taskId, 'tagId': tagServerId},
       );
+}
+
+class TaskActivityRecord {
+  const TaskActivityRecord({
+    required this.id,
+    required this.taskId,
+    required this.action,
+    required this.occurredAt,
+    this.actorUserId,
+    this.actorUserName,
+    this.detail,
+  });
+
+  final int id;
+  final int taskId;
+  final int? actorUserId;
+  final String? actorUserName;
+  final String action;
+  final String? detail;
+  final DateTime occurredAt;
+
+  factory TaskActivityRecord.fromJson(Map<String, dynamic> json) =>
+      TaskActivityRecord(
+        id: (json['id'] as num?)?.toInt() ?? 0,
+        taskId: (json['taskId'] as num?)?.toInt() ?? 0,
+        actorUserId: (json['actorUserId'] as num?)?.toInt(),
+        actorUserName: json['actorUserName']?.toString(),
+        action: json['action']?.toString() ?? 'unknown',
+        detail: json['detail']?.toString(),
+        occurredAt: ReminderActionApi.parseTime(json['createTime']),
+      );
+}
+
+class ActivityApi {
+  ActivityApi(this._client);
+
+  final ApiClient _client;
+
+  Future<List<TaskActivityRecord>> listTask(int taskServerId) async {
+    final response = await _client.get<Map<String, dynamic>>(
+      '/task/$taskServerId/activities',
+      query: {'limit': 100},
+    );
+    final body = response.data ?? const <String, dynamic>{};
+    if (body['code'] != null && body['code'] != 0) {
+      throw DioException(
+        requestOptions: RequestOptions(path: '/task/$taskServerId/activities'),
+        error: body['msg'] ?? '动态加载失败',
+      );
+    }
+    final raw = body['data'] as List? ?? const [];
+    return raw
+        .whereType<Map>()
+        .map(
+          (item) => TaskActivityRecord.fromJson(item.cast<String, dynamic>()),
+        )
+        .toList();
+  }
 }
 
 /// 单个数据导出记录（`/security/export/list` 返回行）。
@@ -288,12 +633,15 @@ class SecurityApi {
 class TodoRestApi {
   TodoRestApi(ApiClient client)
     : task = TaskRestApi(client),
+      taskBatch = TodoTaskBatchApi(client),
+      globalSearch = TodoGlobalSearchApi(client),
+      filter = TodoFilterApplyApi(client),
       checklist = ChecklistApi(client),
       folder = FolderApi(client),
       nlp = NlpApi(client),
       tag = TagApi(client),
+      activity = ActivityApi(client),
       reminder = ReminderActionApi(client),
-      repeatOccurrence = RepeatOccurrenceApi(client),
       listCollaboration = ListCollaborationApi(client),
       taskAssign = TaskAssignApi(client),
       comment = TaskCommentApi(client),
@@ -301,12 +649,15 @@ class TodoRestApi {
       security = SecurityApi(client);
 
   final TaskRestApi task;
+  final TodoTaskBatchApi taskBatch;
+  final TodoGlobalSearchApi globalSearch;
+  final TodoFilterApplyApi filter;
   final ChecklistApi checklist;
   final FolderApi folder;
   final NlpApi nlp;
   final TagApi tag;
+  final ActivityApi activity;
   final ReminderActionApi reminder;
-  final RepeatOccurrenceApi repeatOccurrence;
   final ListCollaborationApi listCollaboration;
   final TaskAssignApi taskAssign;
   final TaskCommentApi comment;
@@ -332,7 +683,11 @@ class ReminderActionApi {
   }
 
   static ReminderInboxItem _item(Map<String, dynamic> j) => ReminderInboxItem(
-    id: (j['id'] as num?)?.toInt() ?? 0,
+    id:
+        (j['reminderDispatchId'] as num?)?.toInt() ??
+        (j['id'] as num?)?.toInt() ??
+        0,
+    reminderId: (j['reminderId'] as num?)?.toInt(),
     taskId: (j['taskId'] as num?)?.toInt() ?? 0,
     taskTitle: (j['taskTitle'] ?? j['title'])?.toString() ?? '',
     remindAt: parseTime(j['remindAt'] ?? j['fireAt']),
@@ -370,7 +725,17 @@ class ReminderActionApi {
     final resp = await _client.get('/reminder-action/inbox');
     final body = resp.data;
     if (body is Map<String, dynamic> && body.containsKey('code')) {
-      return normalize(_unwrapBody(body));
+      final code = body['code'];
+      if (code != 0) {
+        throw DioException(
+          requestOptions: RequestOptions(
+            path: '/app-api/todo/reminder-action/inbox',
+          ),
+          error: body['msg'] ?? '请求失败',
+        );
+      }
+      // 收件箱成功信封的 data 是列表而非通用 REST helper 所假定的 Map。
+      return normalize(body['data']);
     }
     return normalize(body);
   }
@@ -403,9 +768,19 @@ class ReminderActionApi {
         data: {'reminderId': reminderId, 'minutes': minutes},
       );
 
-  /// `POST /reminder-action/{id}/persistent` — 持续响铃（后端标记，仅信息态）。
-  Future<void> persistent(int reminderId) => _client.post<Map<String, dynamic>>(
+  /// `POST /reminder-action/{id}/persistent` — 启用持续提醒。
+  Future<void> persistent(
+    int reminderId, {
+    int intervalMinutes = 30,
+    String? timeZone,
+    bool fixedTimezone = false,
+  }) => _client.post<Map<String, dynamic>>(
     '/reminder-action/$reminderId/persistent',
+    data: {
+      'intervalMinutes': intervalMinutes,
+      'timeZone': ?timeZone,
+      'fixedTimezone': fixedTimezone,
+    },
   );
 }
 
@@ -413,14 +788,19 @@ class ReminderActionApi {
 class ReminderInboxItem {
   const ReminderInboxItem({
     required this.id,
+    int? reminderId,
     required this.taskId,
     required this.taskTitle,
     required this.remindAt,
     this.status = 'PENDING',
-  });
+  }) : reminderId = reminderId ?? id;
 
+  /// 派发记录 ID：用于完成、忽略和稍后动作。
   /// 提醒自身服务端 id。
   final int id;
+
+  /// 提醒规则 ID：用于启用或关闭持续提醒，不能替代 [id]。
+  final int reminderId;
 
   /// 关联任务服务端 id（int）。
   final int taskId;
@@ -434,22 +814,7 @@ class ReminderInboxItem {
   /// PENDING / DISMISSED / DONE 等。
   final String status;
 
-  bool get pending => status == 'PENDING';
-}
-
-/// 重复周期（repeat-occurrence）的跳过 / 追补动作（直达 REST，不走 sync 协议）。
-class RepeatOccurrenceApi {
-  RepeatOccurrenceApi(this._client);
-
-  final ApiClient _client;
-
-  /// `POST /repeat-occurrence/{id}/skip` — 跳过该周期一次发生。
-  Future<void> skip(int id) =>
-      _client.post<Map<String, dynamic>>('/repeat-occurrence/$id/skip');
-
-  /// `POST /repeat-occurrence/{id}/catchup` — 追补该周期一次发生。
-  Future<void> catchup(int id) =>
-      _client.post<Map<String, dynamic>>('/repeat-occurrence/$id/catchup');
+  bool get pending => status == 'PENDING' || status == 'SENT';
 }
 
 /// 清单成员：后端 `members.int` 响应单项。

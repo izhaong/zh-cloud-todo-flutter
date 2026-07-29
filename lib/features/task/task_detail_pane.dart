@@ -1,23 +1,558 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:drift/drift.dart' show OrderingTerm;
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/app_database.dart';
-import '../../core/api/todo_api.dart';
+import '../../core/time/task_time_formatter.dart';
 import '../../core/theme/brand_colors.dart';
 import '../../core/widgets/app_widgets.dart';
+import '../../native/native_intents.dart';
 import '../../state/providers.dart';
+import '../../state/repositories/reminder_repository.dart';
 import '../shell/app_dialog.dart';
 import 'task_quick_add_sheet.dart';
 import '../collaboration/task_comments_page.dart';
 import '../collaboration/task_assign_page.dart';
 import '../collaboration/list_member_page.dart';
 
-/// 收件箱的本地清单 id（synthetic inbox）：listId 为该值的任务视为"未归清单"。
+/// 收集箱的本地清单 id（synthetic inbox）：listId 为该值的任务视为"未归清单"。
 const String kInboxListId = 'inbox';
 
-enum _TaskDetailAction { togglePin, moveToInbox, collaboration, delete }
+enum _TaskDetailAction {
+  previewMarkdown,
+  togglePin,
+  moveToInbox,
+  copy,
+  share,
+  abandon,
+  collaboration,
+  delete,
+}
+
+class _RepeatRuleDraft {
+  const _RepeatRuleDraft({
+    required this.frequency,
+    required this.interval,
+    required this.weekdays,
+    required this.repeatMode,
+    required this.selectedDates,
+    required this.untilAt,
+    required this.countLimit,
+  });
+
+  final String frequency;
+  final int interval;
+  final Set<int> weekdays;
+  final String repeatMode;
+  final Set<DateTime> selectedDates;
+  final DateTime? untilAt;
+  final int? countLimit;
+}
+
+class _ReminderDraft {
+  const _ReminderDraft({
+    required this.fireAt,
+    required this.anchorType,
+    required this.offsetMinutes,
+    required this.persistent,
+    required this.intervalMinutes,
+    required this.timeZone,
+    required this.fixedTimezone,
+  });
+
+  final DateTime fireAt;
+  final String anchorType;
+  final int? offsetMinutes;
+  final bool persistent;
+  final int? intervalMinutes;
+  final String? timeZone;
+  final bool fixedTimezone;
+}
+
+class _TaskReminderSection extends ConsumerWidget {
+  const _TaskReminderSection({required this.taskId});
+
+  final String taskId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final db = ref.watch(appDatabaseProvider);
+    final repository = ref.read(reminderRepositoryProvider);
+    if (db == null) return const SizedBox.shrink();
+    final reminders = db.select(db.todoReminders)
+      ..where((reminder) => reminder.taskId.equals(taskId))
+      ..orderBy([(reminder) => OrderingTerm.asc(reminder.remindAt)]);
+    return StreamBuilder<List<TodoReminder>>(
+      stream: reminders.watch(),
+      builder: (context, snapshot) {
+        final rows = snapshot.data ?? const <TodoReminder>[];
+        return Column(
+          key: const Key('task-reminders'),
+          children: [
+            if (rows.isEmpty)
+              const Align(alignment: Alignment.centerLeft, child: Text('尚无提醒')),
+            for (final reminder in rows)
+              _TaskReminderTile(reminder: reminder, repository: repository),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _TaskReminderTile extends ConsumerWidget {
+  const _TaskReminderTile({required this.reminder, required this.repository});
+
+  final TodoReminder reminder;
+  final ReminderRepository? repository;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final db = ref.watch(appDatabaseProvider);
+    if (db == null) return const SizedBox.shrink();
+    final changes = db.select(db.todoSyncChanges)
+      ..where((change) => change.entity.equals('reminder'))
+      ..where((change) => change.entityLocalId.equals(reminder.id))
+      ..orderBy([(change) => OrderingTerm.desc(change.id)])
+      ..limit(1);
+    return StreamBuilder<List<TodoSyncChange>>(
+      stream: changes.watch(),
+      builder: (context, snapshot) {
+        final rows = snapshot.data ?? const <TodoSyncChange>[];
+        final change = rows.isEmpty ? null : rows.first;
+        final syncMessage = _reminderSyncMessage(change);
+        return ListTile(
+          key: ValueKey('task-reminder-${reminder.id}'),
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.alarm_outlined),
+          title: Text(
+            formatTaskDateTime(
+              reminder.remindAt,
+              allDay: false,
+              fixedTimezone: reminder.fixedTimezone,
+              timeZone: reminder.timeZone,
+            ),
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(_reminderAnchorDescription(reminder)),
+              if (reminder.persistent)
+                Text('持续提醒，每 ${reminder.intervalMinutes ?? 0} 分钟'),
+              if (syncMessage != null)
+                Text(
+                  syncMessage,
+                  key: ValueKey('task-reminder-sync-${reminder.id}'),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+            ],
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (change?.status == 'retryable')
+                IconButton(
+                  key: ValueKey('task-reminder-retry-${reminder.id}'),
+                  tooltip: '立即重试同步',
+                  onPressed: ref.read(syncCoordinatorProvider) == null
+                      ? null
+                      : () => _retrySync(context, ref),
+                  icon: const Icon(Icons.refresh),
+                ),
+              IconButton(
+                key: ValueKey('task-reminder-edit-${reminder.id}'),
+                tooltip: '编辑提醒',
+                onPressed: repository == null
+                    ? null
+                    : () => _editReminder(context, ref),
+                icon: const Icon(Icons.edit_outlined),
+              ),
+              IconButton(
+                key: ValueKey('task-reminder-remove-${reminder.id}'),
+                tooltip: '删除提醒',
+                onPressed: repository == null
+                    ? null
+                    : () async {
+                        final messenger = ScaffoldMessenger.of(context);
+                        await repository!.remove(reminder.id);
+                        if (context.mounted) {
+                          messenger.showSnackBar(
+                            const SnackBar(content: Text('已删除提醒')),
+                          );
+                        }
+                      },
+                icon: const Icon(Icons.delete_outline),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  String _reminderAnchorDescription(TodoReminder reminder) {
+    final offset = reminder.offsetMinutes ?? 0;
+    final prefix = switch (reminder.anchorType) {
+      'START' => '开始',
+      'DUE' => '截止',
+      'END' => '结束',
+      _ => null,
+    };
+    if (prefix == null) return '指定时间提醒';
+    return offset > 0 ? '$prefix前 $offset 分钟' : '$prefix时提醒';
+  }
+
+  Future<void> _editReminder(BuildContext context, WidgetRef ref) async {
+    final db = ref.read(appDatabaseProvider);
+    final reminderRepository = repository;
+    if (db == null || reminderRepository == null) return;
+    final task = await (db.select(
+      db.todoTasks,
+    )..where((task) => task.id.equals(reminder.taskId))).getSingleOrNull();
+    if (!context.mounted) return;
+    if (task == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('提醒所属任务不存在')));
+      return;
+    }
+
+    final draft = await _showReminderEditor(context, task);
+    if (draft == null || !context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await reminderRepository.update(
+        id: reminder.id,
+        fireAt: draft.fireAt,
+        anchorType: draft.anchorType,
+        offsetMinutes: draft.offsetMinutes,
+        persistent: draft.persistent,
+        intervalMinutes: draft.intervalMinutes,
+        timeZone: draft.timeZone,
+        fixedTimezone: draft.fixedTimezone,
+      );
+      if (context.mounted) {
+        messenger.showSnackBar(const SnackBar(content: Text('提醒已更新')));
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('提醒更新失败：${_reminderErrorMessage(error)}')),
+        );
+      }
+    }
+  }
+
+  Future<_ReminderDraft?> _showReminderEditor(
+    BuildContext context,
+    TodoTask task,
+  ) async {
+    const supportedAnchors = {'ABSOLUTE', 'START', 'DUE', 'END'};
+    var anchorType = supportedAnchors.contains(reminder.anchorType)
+        ? reminder.anchorType
+        : 'ABSOLUTE';
+    var fireAt = reminder.remindAt;
+    var persistent = reminder.persistent;
+    var fixedTimezone = reminder.fixedTimezone;
+    var offsetText = reminder.offsetMinutes?.toString() ?? '';
+    var intervalText = reminder.intervalMinutes?.toString() ?? '30';
+    var timeZoneText = reminder.timeZone ?? '';
+    String? validationMessage;
+    return showDialog<_ReminderDraft>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final anchorAt = _reminderAnchorAt(task, anchorType);
+          return AlertDialog(
+            title: const Text('编辑提醒'),
+            content: SingleChildScrollView(
+              child: SizedBox(
+                width: 360,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      key: const Key('task-reminder-anchor'),
+                      initialValue: anchorType,
+                      decoration: const InputDecoration(
+                        labelText: '提醒时间',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          key: Key('task-reminder-anchor-absolute'),
+                          value: 'ABSOLUTE',
+                          child: Text('指定时间'),
+                        ),
+                        DropdownMenuItem(
+                          key: Key('task-reminder-anchor-start'),
+                          value: 'START',
+                          child: Text('开始时'),
+                        ),
+                        DropdownMenuItem(
+                          key: Key('task-reminder-anchor-due'),
+                          value: 'DUE',
+                          child: Text('截止时'),
+                        ),
+                        DropdownMenuItem(
+                          key: Key('task-reminder-anchor-end'),
+                          value: 'END',
+                          child: Text('结束时'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setDialogState(() {
+                          anchorType = value;
+                          validationMessage = null;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    if (anchorType == 'ABSOLUTE')
+                      OutlinedButton.icon(
+                        key: const Key('task-reminder-fire-at'),
+                        onPressed: () async {
+                          final picked = await _pickReminderDateTime(
+                            dialogContext,
+                            fireAt,
+                          );
+                          if (picked != null && dialogContext.mounted) {
+                            setDialogState(() {
+                              fireAt = picked;
+                              validationMessage = null;
+                            });
+                          }
+                        },
+                        icon: const Icon(Icons.schedule_outlined),
+                        label: Text(
+                          formatTaskDateTime(
+                            fireAt,
+                            allDay: false,
+                            fixedTimezone: fixedTimezone,
+                            timeZone: timeZoneText.trim(),
+                          ),
+                        ),
+                      )
+                    else ...[
+                      TextFormField(
+                        key: const Key('task-reminder-offset-minutes'),
+                        initialValue: offsetText,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: '提前分钟数',
+                          hintText: '0',
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (value) => setDialogState(() {
+                          offsetText = value;
+                          validationMessage = null;
+                        }),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        anchorAt == null
+                            ? '当前任务尚未设置所选时间'
+                            : '所选锚点：${formatTaskDateTime(anchorAt, allDay: false, fixedTimezone: task.fixedTimezone, timeZone: task.timeZone)}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    SwitchListTile(
+                      key: const Key('task-reminder-persistent'),
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('持续提醒'),
+                      subtitle: const Text('保持提醒，直到你处理任务'),
+                      value: persistent,
+                      onChanged: (value) => setDialogState(() {
+                        persistent = value;
+                        validationMessage = null;
+                      }),
+                    ),
+                    if (persistent)
+                      TextFormField(
+                        key: const Key('task-reminder-interval-minutes'),
+                        initialValue: intervalText,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: '提醒间隔（分钟）',
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (value) => setDialogState(() {
+                          intervalText = value;
+                          validationMessage = null;
+                        }),
+                      ),
+                    const SizedBox(height: 8),
+                    SwitchListTile(
+                      key: const Key('task-reminder-fixed-timezone'),
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('固定时区'),
+                      value: fixedTimezone,
+                      onChanged: (value) => setDialogState(() {
+                        fixedTimezone = value;
+                        validationMessage = null;
+                      }),
+                    ),
+                    TextFormField(
+                      key: const Key('task-reminder-timezone'),
+                      initialValue: timeZoneText,
+                      decoration: InputDecoration(
+                        labelText: fixedTimezone ? '固定时区（IANA）' : '创建时区（IANA）',
+                        hintText: 'Asia/Shanghai',
+                        border: const OutlineInputBorder(),
+                      ),
+                      onChanged: (value) {
+                        timeZoneText = value;
+                        validationMessage = null;
+                      },
+                    ),
+                    if (validationMessage != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        validationMessage!,
+                        key: const Key('task-reminder-validation-error'),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                key: const Key('task-reminder-save'),
+                onPressed: () {
+                  final normalizedOffset = offsetText.trim();
+                  final offsetMinutes = normalizedOffset.isEmpty
+                      ? 0
+                      : int.tryParse(normalizedOffset);
+                  final normalizedInterval = intervalText.trim();
+                  final intervalMinutes = persistent
+                      ? int.tryParse(normalizedInterval)
+                      : null;
+                  final timeZone = timeZoneText.trim();
+                  String? error;
+                  DateTime resolvedFireAt = fireAt;
+                  if (anchorType != 'ABSOLUTE') {
+                    if (anchorAt == null) {
+                      error = '请先为任务设置所选时间';
+                    } else if (offsetMinutes == null || offsetMinutes < 0) {
+                      error = '提前分钟数必须是非负整数';
+                    } else {
+                      resolvedFireAt = anchorAt.subtract(
+                        Duration(minutes: offsetMinutes),
+                      );
+                    }
+                  }
+                  if (error == null &&
+                      persistent &&
+                      (intervalMinutes == null || intervalMinutes <= 0)) {
+                    error = '持续提醒间隔必须是正整数';
+                  }
+                  if (error == null && fixedTimezone && timeZone.isEmpty) {
+                    error = '固定时区不能为空';
+                  }
+                  if (error != null) {
+                    setDialogState(() => validationMessage = error);
+                    return;
+                  }
+                  Navigator.pop(
+                    dialogContext,
+                    _ReminderDraft(
+                      fireAt: resolvedFireAt,
+                      anchorType: anchorType,
+                      offsetMinutes: anchorType == 'ABSOLUTE'
+                          ? null
+                          : offsetMinutes,
+                      persistent: persistent,
+                      intervalMinutes: intervalMinutes,
+                      timeZone: timeZone.isEmpty ? null : timeZone,
+                      fixedTimezone: fixedTimezone,
+                    ),
+                  );
+                },
+                child: const Text('保存'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  DateTime? _reminderAnchorAt(TodoTask task, String anchorType) {
+    return switch (anchorType) {
+      'START' => task.startAt,
+      'DUE' => task.dueAt,
+      'END' => task.endAt,
+      _ => reminder.remindAt,
+    };
+  }
+
+  Future<DateTime?> _pickReminderDateTime(
+    BuildContext context,
+    DateTime initial,
+  ) async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(initial.year - 1),
+      lastDate: DateTime(initial.year + 5),
+    );
+    if (date == null || !context.mounted) return null;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+    if (time == null) return null;
+    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
+  }
+
+  String _reminderErrorMessage(Object error) {
+    if (error is ArgumentError) return error.message?.toString() ?? '参数无效';
+    if (error is StateError) return error.message;
+    return '请稍后重试';
+  }
+
+  Future<void> _retrySync(BuildContext context, WidgetRef ref) async {
+    final coordinator = ref.read(syncCoordinatorProvider);
+    if (coordinator == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final outcome = await coordinator.syncOnce();
+      if (!context.mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('已同步 ${outcome.pushed} 项本地变更')),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      messenger.showSnackBar(const SnackBar(content: Text('同步暂时不可用，请稍后重试')));
+    }
+  }
+
+  String? _reminderSyncMessage(TodoSyncChange? change) {
+    if (change == null || change.status == 'synced') return null;
+    if (change.status == 'queued') return '等待同步';
+    if (change.status == 'retryable') {
+      return '同步失败，等待重试（已尝试 ${change.attemptCount} 次）';
+    }
+    if (change.status == 'failed') return '同步冲突，保留本地版本待处理';
+    return null;
+  }
+}
 
 /// 可复用的真实任务详情内容：
 /// - 标题 / 描述 / 优先级 / 起止 / due / list / folder / 标签 chips
@@ -49,8 +584,25 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
   late final TextEditingController _title;
   late final TextEditingController _desc;
   int _priority = 0;
+  DateTime? _startAt;
+  DateTime? _endAt;
   bool _loading = true;
+  bool _clearStartAt = false;
+  bool _clearEndAt = false;
   DateTime? _dueAt;
+  bool _allDay = false;
+  String? _timeZone;
+  bool _fixedTimezone = false;
+
+  String _formatScheduleTime(DateTime value) => formatTaskDateTime(
+    value,
+    allDay: _allDay,
+    fixedTimezone: _fixedTimezone,
+    timeZone: _timeZone,
+  );
+  TodoRepeatRule? _repeatRule;
+  bool _repeatOccurrenceSkipped = false;
+  String? _selectedListId;
   String? _listName;
   StreamSubscription<TodoTask?>? _taskSubscription;
   int _loadGeneration = 0;
@@ -87,7 +639,17 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       _title.clear();
       _desc.clear();
       _priority = 0;
+      _startAt = null;
+      _endAt = null;
+      _clearStartAt = false;
+      _clearEndAt = false;
       _dueAt = null;
+      _allDay = false;
+      _timeZone = null;
+      _fixedTimezone = false;
+      _repeatRule = null;
+      _repeatOccurrenceSkipped = false;
+      _selectedListId = null;
       _listName = null;
       _loading = taskId != null;
       _unavailableNotifiedFor = null;
@@ -104,6 +666,14 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
 
     final t = await repo.getById(taskId);
     final listName = t == null ? null : await _resolveListName(t.listId);
+    final repeatRule = t == null ? null : await _repeatRuleForTask(t);
+    final repeatSkipped = t == null || repeatRule == null
+        ? false
+        : await _repeatSkipExists(
+            repeatRule.id,
+            repeatRule.taskId,
+            _repeatOccurrenceAt(t),
+          );
     if (!mounted || generation != _loadGeneration || widget.taskId != taskId) {
       return;
     }
@@ -112,7 +682,15 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       _title.text = t?.title ?? '';
       _desc.text = t?.description ?? '';
       _priority = t?.priority ?? 0;
+      _startAt = t?.startAt;
+      _endAt = t?.endAt;
       _dueAt = t?.dueAt;
+      _allDay = t?.allDay ?? false;
+      _timeZone = t?.timeZone;
+      _fixedTimezone = t?.fixedTimezone ?? false;
+      _repeatRule = repeatRule;
+      _repeatOccurrenceSkipped = repeatSkipped;
+      _selectedListId = t?.listId;
       _listName = listName;
       _loading = false;
     });
@@ -147,21 +725,38 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     final descriptionDirty =
         previous != null && _desc.text != (previous.description ?? '');
     final priorityDirty = previous != null && _priority != previous.priority;
+    final startDirty =
+        previous != null && (_clearStartAt || _startAt != previous.startAt);
+    final endDirty =
+        previous != null && (_clearEndAt || _endAt != previous.endAt);
     final dueDirty = previous != null && _dueAt != previous.dueAt;
+    final allDayDirty = previous != null && _allDay != previous.allDay;
+    final timeZoneDirty = previous != null && _timeZone != previous.timeZone;
+    final fixedTimezoneDirty =
+        previous != null && _fixedTimezone != previous.fixedTimezone;
+    final listDirty = previous != null && _selectedListId != previous.listId;
     setState(() {
       _task = latest;
       if (!titleDirty) _title.text = latest.title;
       if (!descriptionDirty) _desc.text = latest.description ?? '';
       if (!priorityDirty) _priority = latest.priority;
+      if (!startDirty) _startAt = latest.startAt;
+      if (!endDirty) _endAt = latest.endAt;
       if (!dueDirty) _dueAt = latest.dueAt;
-      _listName = listName;
+      if (!allDayDirty) _allDay = latest.allDay;
+      if (!timeZoneDirty) _timeZone = latest.timeZone;
+      if (!fixedTimezoneDirty) _fixedTimezone = latest.fixedTimezone;
+      if (!listDirty) {
+        _selectedListId = latest.listId;
+        _listName = listName;
+      }
       _loading = false;
       _unavailableNotifiedFor = null;
     });
   }
 
   Future<String> _resolveListName(String listId) async {
-    if (listId == kInboxListId) return '收件箱';
+    if (listId == kInboxListId) return '收集箱';
     final repository = ref.read(listRepositoryProvider);
     final lists = await repository?.getAll() ?? const <TodoList>[];
     for (final list in lists) {
@@ -211,18 +806,40 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     if (t == null) return;
     final repo = ref.read(taskRepositoryProvider);
     if (repo == null) return;
-    final updated = await repo.update(
-      t.id,
-      title: _title.text.trim(),
-      description: _desc.text.trim(),
-      priority: _priority,
-      dueAt: _dueAt,
-    );
+    final messenger = ScaffoldMessenger.of(context);
+    TodoTask updated;
+    try {
+      updated = await repo.update(
+        t.id,
+        title: _title.text.trim(),
+        description: _desc.text.trim(),
+        priority: _priority,
+        startAt: _startAt,
+        endAt: _endAt,
+        clearStartAt: _clearStartAt || (_startAt == null && t.startAt != null),
+        clearEndAt: _clearEndAt || (_endAt == null && t.endAt != null),
+        dueAt: _dueAt,
+        clearDueAt: _dueAt == null && t.dueAt != null,
+        allDay: _allDay,
+        timeZone: _fixedTimezone ? (_timeZone ?? 'Asia/Shanghai') : _timeZone,
+        fixedTimezone: _fixedTimezone,
+        listId: _selectedListId == t.listId ? null : _selectedListId,
+      );
+    } on ArgumentError catch (error) {
+      if (_isCurrentTask(t.id)) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(error.message?.toString() ?? '任务时间无效')),
+        );
+      }
+      return;
+    }
     if (mounted && widget.taskId == updated.id) {
-      setState(() => _task = updated);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('已保存')));
+      setState(() {
+        _task = updated;
+        _clearStartAt = false;
+        _clearEndAt = false;
+      });
+      messenger.showSnackBar(const SnackBar(content: Text('已保存')));
     }
   }
 
@@ -283,19 +900,80 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     );
   }
 
-  /// §2.3 收件箱迁移：把任务挪入 synthetic inbox (listId = 'inbox')。
+  /// §2.3 收集箱迁移：把任务挪入 synthetic inbox (listId = 'inbox')。
   Future<void> _moveToInbox(TodoTask t) async {
     final repo = ref.read(taskRepositoryProvider);
     if (repo == null) return;
     final messenger = ScaffoldMessenger.of(context);
     await repo.update(t.id, listId: kInboxListId);
     if (!_isCurrentTask(t.id)) return;
-    messenger.showSnackBar(const SnackBar(content: Text('已移至收件箱')));
+    messenger.showSnackBar(const SnackBar(content: Text('已移至收集箱')));
   }
 
   Future<void> _moveToInboxAndClose(TodoTask t) async {
     await _moveToInbox(t);
     if (_isCurrentTask(t.id)) _close();
+  }
+
+  Future<void> _copy(TodoTask t) async {
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    final copied = await repo.copy(t.id);
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('已创建“${copied.title}”')));
+  }
+
+  Future<void> _share(TodoTask t) async {
+    final body = [
+      t.title,
+      if ((t.description ?? '').trim().isNotEmpty) t.description!.trim(),
+      if (t.dueAt != null)
+        '截止：${formatTaskDateTime(t.dueAt!, allDay: t.allDay, fixedTimezone: t.fixedTimezone, timeZone: t.timeZone)}',
+    ].join('\n');
+    final shared = await NativeIntents.shareText(body, subject: t.title);
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(shared ? '已打开系统分享' : '当前设备不支持系统分享')));
+  }
+
+  Future<void> _previewMarkdown(TodoTask t) async {
+    final description = t.description?.trim();
+    if (description == null || description.isEmpty) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: SingleChildScrollView(
+          child: MarkdownBody(
+            data: description,
+            selectable: true,
+            softLineBreak: true,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _abandon(TodoTask t) async {
+    final confirmed = await AppDialog.confirm(
+      context,
+      title: '放弃任务',
+      content: '放弃后会保留记录，但不会再计入待办。',
+      confirmLabel: '放弃',
+      danger: true,
+    );
+    if (confirmed != true || !_isCurrentTask(t.id)) return;
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    await repo.abandon(t.id);
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('任务已放弃')));
   }
 
   /// P6 协作任务：底部 Sheet 选择（指派 / 评论 / 协作成员）。
@@ -392,10 +1070,959 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     return db.listByLocalId(localListId);
   }
 
+  Future<TodoRepeatRule?> _repeatRuleForTask(TodoTask task) {
+    final db = ref.read(appDatabaseProvider);
+    if (db == null) return Future.value(null);
+    if (task.repeatRuleId != null) {
+      return (db.select(
+        db.todoRepeatRules,
+      )..where((rule) => rule.id.equals(task.repeatRuleId!))).getSingleOrNull();
+    }
+    return (db.select(
+      db.todoRepeatRules,
+    )..where((rule) => rule.taskId.equals(task.id))).getSingleOrNull();
+  }
+
+  DateTime _repeatOccurrenceAt(TodoTask task) =>
+      task.repeatOccurrenceAt ??
+      _dueAt ??
+      _startAt ??
+      task.dueAt ??
+      task.startAt ??
+      DateTime.now();
+
+  Future<bool> _repeatSkipExists(
+    String repeatRuleId,
+    String taskId,
+    DateTime occurrenceAt,
+  ) async {
+    final db = ref.read(appDatabaseProvider);
+    if (db == null) return false;
+    return (await (db.select(db.todoRepeatSkips)
+              ..where((entry) => entry.repeatRuleId.equals(repeatRuleId))
+              ..where((entry) => entry.taskId.equals(taskId))
+              ..where((entry) => entry.occurrenceDate.equals(occurrenceAt)))
+            .getSingleOrNull()) !=
+        null;
+  }
+
   Future<void> _pickDue(TodoTask t) async {
-    final repo = ref.read(taskRepositoryProvider);
-    if (repo == null) return;
     final now = _dueAt ?? t.dueAt ?? DateTime.now();
+    final picked = await _pickDateTime(t, now);
+    if (picked == null) return;
+    setState(() => _dueAt = picked);
+  }
+
+  Future<void> _showScheduleSheet(TodoTask t) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          void update(VoidCallback change) {
+            setState(change);
+            setSheetState(() {});
+          }
+
+          Widget heading(String value) => Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 6),
+            child: Text(value, style: Theme.of(context).textTheme.labelLarge),
+          );
+
+          return SafeArea(
+            child: FractionallySizedBox(
+              heightFactor: 0.9,
+              child: Column(
+                children: [
+                  ListTile(
+                    title: const Text('日期、提醒与重复'),
+                    subtitle: const Text('保存任务提交时间语义；提醒和重复会离线排队同步'),
+                    trailing: IconButton(
+                      key: const Key('task-schedule-close'),
+                      tooltip: '关闭时间设置',
+                      onPressed: () => Navigator.pop(sheetContext),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        heading('截止时间'),
+                        OutlinedButton.icon(
+                          key: const Key('task-due-at'),
+                          onPressed: () async {
+                            await _pickDue(t);
+                            if (sheetContext.mounted) setSheetState(() {});
+                          },
+                          icon: const Icon(Icons.event_outlined),
+                          label: Text(
+                            _dueAt == null
+                                ? '未设置'
+                                : _formatScheduleTime(_dueAt!),
+                          ),
+                        ),
+                        if (_dueAt != null)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              onPressed: () => update(() => _dueAt = null),
+                              icon: const Icon(Icons.clear, size: 16),
+                              label: const Text('清除截止时间'),
+                            ),
+                          ),
+                        const Divider(height: 32),
+                        heading('时间语义'),
+                        OutlinedButton.icon(
+                          key: const Key('task-start-at'),
+                          onPressed: () async {
+                            await _pickStartAt(t);
+                            if (sheetContext.mounted) setSheetState(() {});
+                          },
+                          icon: const Icon(Icons.play_arrow_outlined),
+                          label: Text(
+                            _startAt == null
+                                ? '开始时间未设置'
+                                : '开始：${_formatScheduleTime(_startAt!)}',
+                          ),
+                        ),
+                        if (_startAt != null)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              key: const Key('task-clear-start-at'),
+                              onPressed: () => update(() {
+                                _startAt = null;
+                                _clearStartAt = true;
+                              }),
+                              icon: const Icon(Icons.clear, size: 16),
+                              label: const Text('清除开始时间'),
+                            ),
+                          ),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          key: const Key('task-end-at'),
+                          onPressed: () async {
+                            await _pickEndAt(t);
+                            if (sheetContext.mounted) setSheetState(() {});
+                          },
+                          icon: const Icon(Icons.stop_outlined),
+                          label: Text(
+                            _endAt == null
+                                ? '结束时间未设置'
+                                : '结束：${_formatScheduleTime(_endAt!)}',
+                          ),
+                        ),
+                        if (_endAt != null)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              key: const Key('task-clear-end-at'),
+                              onPressed: () => update(() {
+                                _endAt = null;
+                                _clearEndAt = true;
+                              }),
+                              icon: const Icon(Icons.clear, size: 16),
+                              label: const Text('清除结束时间'),
+                            ),
+                          ),
+                        SwitchListTile(
+                          key: const Key('task-all-day'),
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('全天'),
+                          subtitle: const Text('全天任务按日期范围保存，不绑定具体时分'),
+                          value: _allDay,
+                          onChanged: (value) => update(() => _allDay = value),
+                        ),
+                        SwitchListTile(
+                          key: const Key('task-fixed-timezone'),
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('固定时区'),
+                          subtitle: const Text('固定后按所选时区保留墙上时间'),
+                          value: _fixedTimezone,
+                          onChanged: (value) => update(() {
+                            _fixedTimezone = value;
+                            if (value) _timeZone ??= 'Asia/Shanghai';
+                          }),
+                        ),
+                        if (_fixedTimezone)
+                          DropdownButtonFormField<String>(
+                            key: const Key('task-timezone'),
+                            initialValue: _timeZone ?? 'Asia/Shanghai',
+                            decoration: const InputDecoration(
+                              labelText: '时区',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'Asia/Shanghai',
+                                child: Text('中国标准时间'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'America/Los_Angeles',
+                                child: Text('美国太平洋时间'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'UTC',
+                                child: Text('协调世界时'),
+                              ),
+                            ],
+                            onChanged: (value) =>
+                                update(() => _timeZone = value),
+                          ),
+                        const Divider(height: 32),
+                        heading('提醒'),
+                        OutlinedButton.icon(
+                          key: const Key('task-add-absolute-reminder'),
+                          onPressed: () => _addAbsoluteReminder(t),
+                          icon: const Icon(Icons.add_alarm_outlined),
+                          label: const Text('添加指定时间提醒'),
+                        ),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          key: const Key('task-add-due-reminder'),
+                          onPressed: () => _addDueReminder(t),
+                          icon: const Icon(Icons.alarm_add_outlined),
+                          label: const Text('在截止时提醒'),
+                        ),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          key: const Key('task-add-before-due-reminder'),
+                          onPressed: () =>
+                              _addDueReminder(t, offsetMinutes: 10),
+                          icon: const Icon(Icons.alarm_on_outlined),
+                          label: const Text('截止前 10 分钟提醒'),
+                        ),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          key: const Key('task-add-end-reminder'),
+                          onPressed: () => _addEndTimeReminder(t),
+                          icon: const Icon(Icons.timer_outlined),
+                          label: const Text('在结束时提醒'),
+                        ),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          key: const Key('task-add-persistent-end-reminder'),
+                          onPressed: () => _addDueReminder(
+                            t,
+                            persistent: true,
+                            intervalMinutes: 30,
+                          ),
+                          icon: const Icon(Icons.notifications_active_outlined),
+                          label: const Text('截止时持续提醒（每 30 分钟）'),
+                        ),
+                        const SizedBox(height: 8),
+                        _TaskReminderSection(taskId: t.id),
+                        const Divider(height: 32),
+                        heading('重复'),
+                        OutlinedButton.icon(
+                          key: const Key('task-repeat-rule'),
+                          onPressed: () async {
+                            await _editRepeatRule(t);
+                            if (sheetContext.mounted) setSheetState(() {});
+                          },
+                          icon: const Icon(Icons.repeat_outlined),
+                          label: Text(
+                            _repeatRule == null
+                                ? '不重复'
+                                : _repeatRuleLabel(_repeatRule!),
+                          ),
+                        ),
+                        if (_repeatRule?.enabled == true)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Wrap(
+                              spacing: 4,
+                              children: [
+                                if (_repeatOccurrenceSkipped)
+                                  TextButton.icon(
+                                    key: const Key('task-repeat-catchup'),
+                                    onPressed: () async {
+                                      await _catchupRepeatOccurrence(t);
+                                      if (sheetContext.mounted) {
+                                        setSheetState(() {});
+                                      }
+                                    },
+                                    icon: const Icon(
+                                      Icons.playlist_add_outlined,
+                                      size: 16,
+                                    ),
+                                    label: const Text('补做本次'),
+                                  )
+                                else
+                                  TextButton.icon(
+                                    key: const Key('task-repeat-skip'),
+                                    onPressed: () async {
+                                      await _skipRepeatOccurrence(t);
+                                      if (sheetContext.mounted) {
+                                        setSheetState(() {});
+                                      }
+                                    },
+                                    icon: const Icon(
+                                      Icons.skip_next_outlined,
+                                      size: 16,
+                                    ),
+                                    label: const Text('跳过本次'),
+                                  ),
+                                TextButton.icon(
+                                  key: const Key('task-repeat-disable'),
+                                  onPressed: () async {
+                                    await _disableRepeatRule(t);
+                                    if (sheetContext.mounted) {
+                                      setSheetState(() {});
+                                    }
+                                  },
+                                  icon: const Icon(
+                                    Icons.pause_circle_outline,
+                                    size: 16,
+                                  ),
+                                  label: const Text('停止重复'),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _pickStartAt(TodoTask t) async {
+    final now = _startAt ?? _dueAt ?? t.startAt ?? t.dueAt ?? DateTime.now();
+    final picked = await _pickDateTime(t, now);
+    if (picked == null) return;
+    setState(() {
+      _startAt = picked;
+      _clearStartAt = false;
+    });
+  }
+
+  Future<void> _pickEndAt(TodoTask t) async {
+    final fallback =
+        _startAt ?? t.startAt ?? _dueAt ?? t.dueAt ?? DateTime.now();
+    final now = _endAt ?? t.endAt ?? fallback.add(const Duration(hours: 1));
+    final picked = await _pickDateTime(t, now);
+    if (picked == null) return;
+    setState(() {
+      _endAt = picked;
+      _clearEndAt = false;
+    });
+  }
+
+  Future<DateTime?> _pickDateTime(TodoTask t, DateTime now) async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: now,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 5),
+    );
+    if (date == null || !mounted || widget.taskId != t.id) return null;
+    final timeOfDay = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(now),
+    );
+    if (!_isCurrentTask(t.id)) return null;
+    return DateTime(
+      date.year,
+      date.month,
+      date.day,
+      timeOfDay?.hour ?? now.hour,
+      timeOfDay?.minute ?? now.minute,
+    );
+  }
+
+  Future<void> _addDueReminder(
+    TodoTask t, {
+    int? offsetMinutes,
+    bool persistent = false,
+    int? intervalMinutes,
+  }) async {
+    final dueAt = _dueAt ?? t.dueAt;
+    final messenger = ScaffoldMessenger.of(context);
+    if (dueAt == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('请先设置截止时间')));
+      return;
+    }
+    final reminders = ref.read(reminderRepositoryProvider);
+    if (reminders == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('提醒存储未就绪')));
+      return;
+    }
+    await reminders.create(
+      taskId: t.id,
+      fireAt: dueAt.subtract(Duration(minutes: offsetMinutes ?? 0)),
+      anchorType: 'DUE',
+      offsetMinutes: offsetMinutes,
+      persistent: persistent,
+      intervalMinutes: intervalMinutes,
+      timeZone: _timeZone,
+      fixedTimezone: _fixedTimezone,
+    );
+    if (!_isCurrentTask(t.id)) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          persistent
+              ? '已添加截止时持续提醒'
+              : offsetMinutes == null
+              ? '已添加截止时提醒'
+              : '已添加截止前 $offsetMinutes 分钟提醒',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addEndTimeReminder(TodoTask t) async {
+    final endAt = _endAt ?? t.endAt;
+    final messenger = ScaffoldMessenger.of(context);
+    if (endAt == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('请先设置结束时间')));
+      return;
+    }
+    final reminders = ref.read(reminderRepositoryProvider);
+    if (reminders == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('提醒存储未就绪')));
+      return;
+    }
+    await reminders.create(
+      taskId: t.id,
+      fireAt: endAt,
+      anchorType: 'END',
+      timeZone: _timeZone,
+      fixedTimezone: _fixedTimezone,
+    );
+    if (!_isCurrentTask(t.id)) return;
+    messenger.showSnackBar(const SnackBar(content: Text('已添加结束时提醒')));
+  }
+
+  Future<void> _addAbsoluteReminder(TodoTask t) async {
+    final initial =
+        _dueAt ?? t.dueAt ?? DateTime.now().add(const Duration(hours: 1));
+    final fireAt = await _pickDateTime(t, initial);
+    if (fireAt == null || !mounted || !_isCurrentTask(t.id)) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final reminders = ref.read(reminderRepositoryProvider);
+    if (reminders == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('提醒存储未就绪')));
+      return;
+    }
+    await reminders.create(
+      taskId: t.id,
+      fireAt: fireAt,
+      timeZone: _timeZone,
+      fixedTimezone: _fixedTimezone,
+    );
+    if (!_isCurrentTask(t.id)) return;
+    messenger.showSnackBar(const SnackBar(content: Text('已添加指定时间提醒')));
+  }
+
+  Future<void> _editRepeatRule(TodoTask t) async {
+    final repository = ref.read(repeatRuleRepositoryProvider);
+    final messenger = ScaffoldMessenger.of(context);
+    if (repository == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('重复规则存储未就绪')));
+      return;
+    }
+
+    final existing = _repeatRule;
+    final draft = await _showRepeatRuleEditor(existing);
+    if (draft == null || !_isCurrentTask(t.id)) return;
+    try {
+      final rule = await repository.save(
+        taskId: t.id,
+        frequency: draft.frequency,
+        intervalValue: draft.interval,
+        weekdays:
+            draft.frequency == 'CUSTOM' &&
+                draft.repeatMode != 'ON_SELECTED_DATES'
+            ? draft.weekdays
+            : null,
+        startAt: existing?.startAt ?? _startAt ?? _dueAt ?? DateTime.now(),
+        untilAt: draft.untilAt,
+        countLimit: draft.countLimit,
+        repeatMode: draft.repeatMode,
+        selectedDates: draft.selectedDates,
+        timeZone: _timeZone,
+        enabled: true,
+      );
+      if (!_isCurrentTask(t.id)) return;
+      setState(() => _repeatRule = rule);
+      messenger.showSnackBar(const SnackBar(content: Text('重复规则已保存')));
+    } on ArgumentError catch (error) {
+      if (_isCurrentTask(t.id)) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(error.message.toString())),
+        );
+      }
+    }
+  }
+
+  Future<void> _disableRepeatRule(TodoTask t) async {
+    final existing = _repeatRule;
+    final repository = ref.read(repeatRuleRepositoryProvider);
+    if (existing == null || repository == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final weekdays = _weekdaysFromText(existing.byDay);
+    final selectedDates = _selectedDatesFromJson(existing.selectedDatesJson);
+    final rule = await repository.save(
+      taskId: t.id,
+      frequency: existing.freq,
+      intervalValue: existing.interval,
+      weekdays:
+          existing.freq == 'CUSTOM' &&
+              existing.repeatMode != 'ON_SELECTED_DATES'
+          ? weekdays
+          : null,
+      monthDay: existing.monthDay,
+      startAt: existing.startAt ?? _startAt ?? _dueAt ?? DateTime.now(),
+      untilAt: existing.until,
+      countLimit: existing.countLimit,
+      repeatMode: existing.repeatMode,
+      selectedDates: selectedDates,
+      timeZone: existing.timeZone,
+      enabled: false,
+    );
+    if (!_isCurrentTask(t.id)) return;
+    setState(() => _repeatRule = rule);
+    messenger.showSnackBar(const SnackBar(content: Text('已停止重复')));
+  }
+
+  Future<void> _skipRepeatOccurrence(TodoTask t) async {
+    final rule = _repeatRule;
+    final repository = ref.read(repeatRuleRepositoryProvider);
+    if (rule == null || !rule.enabled || repository == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await repository.skip(
+        repeatRuleId: rule.id,
+        taskId: rule.taskId,
+        occurrenceAt: _repeatOccurrenceAt(t),
+      );
+      if (_isCurrentTask(t.id)) {
+        setState(() => _repeatOccurrenceSkipped = true);
+        messenger.showSnackBar(const SnackBar(content: Text('已跳过本次重复')));
+      }
+    } on ArgumentError catch (error) {
+      if (_isCurrentTask(t.id)) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(error.message.toString())),
+        );
+      }
+    }
+  }
+
+  Future<void> _catchupRepeatOccurrence(TodoTask t) async {
+    final rule = _repeatRule;
+    final repository = ref.read(repeatRuleRepositoryProvider);
+    if (rule == null || !rule.enabled || repository == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await repository.catchup(
+        repeatRuleId: rule.id,
+        taskId: rule.taskId,
+        occurrenceAt: _repeatOccurrenceAt(t),
+      );
+      if (_isCurrentTask(t.id)) {
+        setState(() => _repeatOccurrenceSkipped = false);
+        messenger.showSnackBar(const SnackBar(content: Text('已安排补做本次重复')));
+      }
+    } on ArgumentError catch (error) {
+      if (_isCurrentTask(t.id)) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(error.message.toString())),
+        );
+      }
+    }
+  }
+
+  Future<_RepeatRuleDraft?> _showRepeatRuleEditor(TodoRepeatRule? existing) {
+    var frequency = existing?.freq ?? 'DAILY';
+    var repeatMode = existing?.repeatMode ?? 'ON_DUE';
+    var intervalText = '${existing?.interval ?? 1}';
+    var endMode = existing?.until != null
+        ? 'until'
+        : (existing?.countLimit != null ? 'count' : 'never');
+    var untilAt = existing?.until;
+    var countText = '${existing?.countLimit ?? 1}';
+    final repeatStart =
+        existing?.startAt ?? _startAt ?? _dueAt ?? DateTime.now();
+    final weekdays = _weekdaysFromText(existing?.byDay);
+    final selectedDates = _selectedDatesFromJson(existing?.selectedDatesJson);
+    if (frequency == 'CUSTOM' &&
+        repeatMode != 'ON_SELECTED_DATES' &&
+        weekdays.isEmpty) {
+      weekdays.add(DateTime.now().weekday);
+    }
+    return showDialog<_RepeatRuleDraft>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('重复规则'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('频率'),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children:
+                      const [
+                            ('DAILY', '每天'),
+                            ('WEEKLY', '每周'),
+                            ('MONTHLY', '每月'),
+                            ('YEARLY', '每年'),
+                            ('WEEKDAY', '工作日'),
+                            ('CUSTOM', '自定义'),
+                          ]
+                          .map(
+                            (option) => ChoiceChip(
+                              key: Key(
+                                'task-repeat-frequency-${option.$1.toLowerCase()}',
+                              ),
+                              label: Text(option.$2),
+                              selected: frequency == option.$1,
+                              onSelected: (_) => setDialogState(() {
+                                frequency = option.$1;
+                                if (repeatMode == 'ON_SELECTED_DATES' &&
+                                    frequency != 'CUSTOM') {
+                                  repeatMode = 'ON_DUE';
+                                  selectedDates.clear();
+                                }
+                                if (frequency == 'CUSTOM' &&
+                                    repeatMode != 'ON_SELECTED_DATES' &&
+                                    weekdays.isEmpty) {
+                                  weekdays.add(DateTime.now().weekday);
+                                }
+                              }),
+                            ),
+                          )
+                          .toList(),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  key: const Key('task-repeat-interval'),
+                  initialValue: intervalText,
+                  onChanged: (value) => intervalText = value,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: '每隔几次',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text('触发方式'),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  children:
+                      const [
+                            ('ON_DUE', '到期后重复'),
+                            ('ON_COMPLETE', '完成后重复'),
+                            ('ON_SELECTED_DATES', '自选日期'),
+                          ]
+                          .map(
+                            (option) => ChoiceChip(
+                              key: Key(
+                                'task-repeat-mode-${option.$1.toLowerCase()}',
+                              ),
+                              label: Text(option.$2),
+                              selected: repeatMode == option.$1,
+                              onSelected: (_) => setDialogState(() {
+                                repeatMode = option.$1;
+                                if (repeatMode == 'ON_SELECTED_DATES') {
+                                  frequency = 'CUSTOM';
+                                  weekdays.clear();
+                                  endMode = 'never';
+                                  untilAt = null;
+                                } else if (frequency == 'CUSTOM' &&
+                                    weekdays.isEmpty) {
+                                  selectedDates.clear();
+                                  weekdays.add(DateTime.now().weekday);
+                                } else {
+                                  selectedDates.clear();
+                                }
+                              }),
+                            ),
+                          )
+                          .toList(),
+                ),
+                if (frequency == 'CUSTOM' &&
+                    repeatMode != 'ON_SELECTED_DATES') ...[
+                  const SizedBox(height: 16),
+                  const Text('重复星期'),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    children: List.generate(7, (index) {
+                      final weekday = index + 1;
+                      const labels = ['一', '二', '三', '四', '五', '六', '日'];
+                      return FilterChip(
+                        key: Key('task-repeat-weekday-$weekday'),
+                        label: Text(labels[index]),
+                        selected: weekdays.contains(weekday),
+                        onSelected: (selected) => setDialogState(() {
+                          if (selected) {
+                            weekdays.add(weekday);
+                          } else {
+                            weekdays.remove(weekday);
+                          }
+                        }),
+                      );
+                    }),
+                  ),
+                ],
+                if (repeatMode == 'ON_SELECTED_DATES') ...[
+                  const SizedBox(height: 16),
+                  const Text('自选日期'),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    key: const Key('task-repeat-selected-date-add'),
+                    onPressed: () async {
+                      final firstDate = DateTime(
+                        repeatStart.year,
+                        repeatStart.month,
+                        repeatStart.day,
+                      );
+                      final lastDate = DateTime(firstDate.year + 20, 12, 31);
+                      final ordered = selectedDates.toList()..sort();
+                      final candidate = ordered.isEmpty
+                          ? firstDate
+                          : ordered.last;
+                      final initialDate = candidate.isBefore(firstDate)
+                          ? firstDate
+                          : (candidate.isAfter(lastDate)
+                                ? lastDate
+                                : candidate);
+                      final picked = await showDatePicker(
+                        context: dialogContext,
+                        initialDate: initialDate,
+                        firstDate: firstDate,
+                        lastDate: lastDate,
+                      );
+                      if (picked == null || !dialogContext.mounted) return;
+                      setDialogState(() {
+                        selectedDates.add(
+                          DateTime(picked.year, picked.month, picked.day),
+                        );
+                      });
+                    },
+                    icon: const Icon(Icons.add),
+                    label: const Text('添加日期'),
+                  ),
+                  if (selectedDates.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: (selectedDates.toList()..sort())
+                          .map(
+                            (date) => InputChip(
+                              key: Key(
+                                'task-repeat-selected-date-${_formatDateOnly(date)}',
+                              ),
+                              label: Text(_formatDateOnly(date)),
+                              onDeleted: () => setDialogState(
+                                () => selectedDates.remove(date),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ],
+                ] else ...[
+                  const SizedBox(height: 12),
+                  const Text('结束重复'),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children:
+                        const [
+                              ('never', '永不'),
+                              ('until', '按日期'),
+                              ('count', '按次数'),
+                            ]
+                            .map(
+                              (option) => ChoiceChip(
+                                key: Key('task-repeat-end-${option.$1}'),
+                                label: Text(option.$2),
+                                selected: endMode == option.$1,
+                                onSelected: (_) =>
+                                    setDialogState(() => endMode = option.$1),
+                              ),
+                            )
+                            .toList(),
+                  ),
+                  if (endMode == 'until') ...[
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      key: const Key('task-repeat-until-date'),
+                      onPressed: () async {
+                        final firstDate = DateTime(
+                          repeatStart.year,
+                          repeatStart.month,
+                          repeatStart.day,
+                        );
+                        final lastDate = DateTime(firstDate.year + 20, 12, 31);
+                        final candidate = untilAt ?? firstDate;
+                        final initialDate = candidate.isBefore(firstDate)
+                            ? firstDate
+                            : (candidate.isAfter(lastDate)
+                                  ? lastDate
+                                  : candidate);
+                        final picked = await showDatePicker(
+                          context: dialogContext,
+                          initialDate: initialDate,
+                          firstDate: firstDate,
+                          lastDate: lastDate,
+                        );
+                        if (picked == null || !dialogContext.mounted) return;
+                        setDialogState(() {
+                          untilAt = DateTime(
+                            picked.year,
+                            picked.month,
+                            picked.day,
+                            23,
+                            59,
+                            59,
+                          );
+                        });
+                      },
+                      icon: const Icon(Icons.event_outlined),
+                      label: Text(
+                        untilAt == null
+                            ? '选择结束日期'
+                            : '结束于 ${_formatDateOnly(untilAt!)}',
+                      ),
+                    ),
+                  ],
+                  if (endMode == 'count') ...[
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      key: const Key('task-repeat-count'),
+                      initialValue: countText,
+                      onChanged: (value) => countText = value,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: '重复次数',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              key: const Key('task-repeat-save'),
+              onPressed: () {
+                final interval = int.tryParse(intervalText.trim());
+                if (interval == null || interval < 1) return;
+                final countLimit = endMode == 'count'
+                    ? int.tryParse(countText.trim())
+                    : null;
+                if (endMode == 'count' &&
+                    (countLimit == null || countLimit < 1)) {
+                  return;
+                }
+                if (endMode == 'until' && untilAt == null) return;
+                if (repeatMode == 'ON_SELECTED_DATES' &&
+                    selectedDates.isEmpty) {
+                  return;
+                }
+                Navigator.pop(
+                  dialogContext,
+                  _RepeatRuleDraft(
+                    frequency: frequency,
+                    interval: interval,
+                    weekdays: weekdays,
+                    repeatMode: repeatMode,
+                    selectedDates: selectedDates,
+                    untilAt:
+                        repeatMode != 'ON_SELECTED_DATES' && endMode == 'until'
+                        ? untilAt
+                        : null,
+                    countLimit: repeatMode == 'ON_SELECTED_DATES'
+                        ? null
+                        : countLimit,
+                  ),
+                );
+              },
+              child: const Text('保存'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Set<int> _weekdaysFromText(String? value) => (value ?? '')
+      .split(',')
+      .map(int.tryParse)
+      .whereType<int>()
+      .where((weekday) => weekday >= 1 && weekday <= 7)
+      .toSet();
+
+  Set<DateTime> _selectedDatesFromJson(String? value) {
+    if (value == null || value.isEmpty) return <DateTime>{};
+    try {
+      final decoded = jsonDecode(value);
+      if (decoded is! List<dynamic>) return <DateTime>{};
+      return decoded
+          .map((item) => DateTime.tryParse(item.toString()))
+          .whereType<DateTime>()
+          .map((date) => DateTime(date.year, date.month, date.day))
+          .toSet();
+    } on FormatException {
+      return <DateTime>{};
+    }
+  }
+
+  String _formatDateOnly(DateTime value) {
+    final month = value.month.toString().padLeft(2, '0');
+    final day = value.day.toString().padLeft(2, '0');
+    return '${value.year}-$month-$day';
+  }
+
+  String _repeatRuleLabel(TodoRepeatRule rule) {
+    const labels = {
+      'DAILY': '每天',
+      'WEEKLY': '每周',
+      'MONTHLY': '每月',
+      'YEARLY': '每年',
+      'WEEKDAY': '工作日',
+      'CUSTOM': '自定义',
+    };
+    final label = labels[rule.freq] ?? rule.freq;
+    if (rule.repeatMode == 'ON_SELECTED_DATES') {
+      final count = _selectedDatesFromJson(rule.selectedDatesJson).length;
+      return rule.enabled ? '自选 $count 个日期' : '已停止：自选 $count 个日期';
+    }
+    final ending = rule.until != null
+        ? '，至 ${_formatDateOnly(rule.until!)}'
+        : (rule.countLimit != null ? '，共 ${rule.countLimit} 次' : '');
+    return rule.enabled ? '$label（每隔 ${rule.interval} 次$ending）' : '已停止：$label';
+  }
+
+  Future<void> _pickSchedule(TodoTask t, {required bool isStart}) async {
+    final current = isStart ? _startAt : _endAt;
+    final now = current ?? (isStart ? t.startAt : t.endAt) ?? DateTime.now();
     final date = await showDatePicker(
       context: context,
       initialDate: now,
@@ -403,19 +2030,24 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       lastDate: DateTime(now.year + 5),
     );
     if (date == null || !mounted || widget.taskId != t.id) return;
-    final timeOfDay = await showTimePicker(
+    final time = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(now),
     );
     if (!_isCurrentTask(t.id)) return;
+    final selected = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time?.hour ?? now.hour,
+      time?.minute ?? now.minute,
+    );
     setState(() {
-      _dueAt = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        timeOfDay?.hour ?? now.hour,
-        timeOfDay?.minute ?? now.minute,
-      );
+      if (isStart) {
+        _startAt = selected;
+      } else {
+        _endAt = selected;
+      }
     });
   }
 
@@ -448,22 +2080,30 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
 
     final body = ListView(
       padding: const EdgeInsets.all(16),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       children: [
-        TextField(
-          controller: _title,
-          decoration: const InputDecoration(
-            labelText: '标题',
-            border: OutlineInputBorder(),
+        Semantics(
+          identifier: 'todo_task_detail_title',
+          child: TextField(
+            controller: _title,
+            decoration: const InputDecoration(
+              labelText: '标题',
+              border: OutlineInputBorder(),
+            ),
           ),
         ),
         const SizedBox(height: 12),
-        TextField(
-          controller: _desc,
-          minLines: 3,
-          maxLines: 6,
-          decoration: const InputDecoration(
-            labelText: '描述',
-            border: OutlineInputBorder(),
+        Semantics(
+          identifier: 'todo_task_detail_description',
+          child: TextField(
+            key: const Key('todo-task-detail-description-input'),
+            controller: _desc,
+            minLines: 3,
+            maxLines: 6,
+            decoration: const InputDecoration(
+              labelText: '描述',
+              border: OutlineInputBorder(),
+            ),
           ),
         ),
         const SizedBox(height: 12),
@@ -486,10 +2126,15 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            AppButton(
-              onPressed: _save,
-              icon: Icons.save_outlined,
-              child: const Text('保存'),
+            Semantics(
+              identifier: 'todo_task_detail_save',
+              button: true,
+              child: AppButton(
+                key: const Key('todo_task_detail_save_button'),
+                onPressed: _save,
+                icon: Icons.save_outlined,
+                child: const Text('保存'),
+              ),
             ),
           ],
         ),
@@ -497,13 +2142,10 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
         sh('截止时间'),
         const SizedBox(height: 8),
         OutlinedButton.icon(
-          onPressed: () => _pickDue(t),
+          key: const Key('task-schedule-options'),
+          onPressed: () => _showScheduleSheet(t),
           icon: const Icon(Icons.event_outlined),
-          label: Text(
-            _dueAt == null
-                ? '未设置'
-                : '${_dueAt!.toLocal().toString().substring(0, 16)} (本地时区)',
-          ),
+          label: Text(_dueAt == null ? '未设置' : _formatScheduleTime(_dueAt!)),
         ),
         if (_dueAt != null) ...[
           const SizedBox(height: 4),
@@ -519,19 +2161,14 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
         const Divider(height: 32),
         sh('清单'),
         const SizedBox(height: 8),
-        Row(
-          children: [
-            Icon(Icons.list_alt_outlined, color: colors.mutedForeground),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                _listName ?? '未知清单',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: colors.foreground),
-              ),
-            ),
-          ],
+        _TaskListPicker(
+          taskId: t.id,
+          selectedListId: _selectedListId ?? t.listId,
+          selectedListName: _listName,
+          onChanged: (listId, listName) => setState(() {
+            _selectedListId = listId;
+            _listName = listName;
+          }),
         ),
         const Divider(height: 32),
         sh('标签'),
@@ -545,6 +2182,27 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
           taskId: t.id,
         ),
         const Divider(height: 32),
+        sh('附件'),
+        const SizedBox(height: 8),
+        _AttachmentSection(
+          key: ValueKey('task-attachments-${t.id}'),
+          taskId: t.id,
+        ),
+        const Divider(height: 32),
+        sh('任务动态'),
+        const SizedBox(height: 8),
+        if (t.serverId == null)
+          const Text('任务同步后可查看动态')
+        else
+          _ActivitySection(
+            key: ValueKey('task-activities-${t.id}'),
+            taskServerId: t.serverId!,
+          ),
+        const Divider(height: 32),
+        sh('模板'),
+        const SizedBox(height: 8),
+        _TemplateSection(key: ValueKey('task-templates-${t.id}'), task: t),
+        const Divider(height: 32),
         Row(
           children: [
             Expanded(child: sh('子任务')),
@@ -556,6 +2214,41 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
           ],
         ),
         _SubtaskList(taskId: t.id, onAdd: () => _addSubtask(t)),
+        const Divider(height: 32),
+        sh('时间段（可选）'),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: () => _pickSchedule(t, isStart: true),
+          icon: const Icon(Icons.play_circle_outline),
+          label: Text(
+            _startAt == null
+                ? '设置开始时间'
+                : '开始：${_formatScheduleTime(_startAt!)}',
+          ),
+        ),
+        if (_startAt != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () => setState(() => _startAt = null),
+              child: const Text('清除开始时间'),
+            ),
+          ),
+        OutlinedButton.icon(
+          onPressed: () => _pickSchedule(t, isStart: false),
+          icon: const Icon(Icons.stop_circle_outlined),
+          label: Text(
+            _endAt == null ? '设置结束时间' : '结束：${_formatScheduleTime(_endAt!)}',
+          ),
+        ),
+        if (_endAt != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () => setState(() => _endAt = null),
+              child: const Text('清除结束时间'),
+            ),
+          ),
       ],
     );
 
@@ -633,7 +2326,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                 ),
               ),
               IconButton(
-                tooltip: '移至收件箱',
+                tooltip: '移至收集箱',
                 onPressed: () => _moveToInboxAndClose(t),
                 icon: const Icon(Icons.move_to_inbox_outlined),
               ),
@@ -660,6 +2353,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
   Widget _buildPage(BuildContext context, TodoTask t, Widget body) {
     final narrow = MediaQuery.sizeOf(context).width < 600;
     return Scaffold(
+      key: const Key('todo_task_detail_page'),
       appBar: AppBar(
         title: const Text('任务详情'),
         actions: narrow
@@ -677,11 +2371,23 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                   tooltip: '更多任务操作',
                   onSelected: (action) {
                     switch (action) {
+                      case _TaskDetailAction.previewMarkdown:
+                        unawaited(_previewMarkdown(t));
+                        return;
                       case _TaskDetailAction.togglePin:
                         unawaited(_togglePin(t));
                         return;
                       case _TaskDetailAction.moveToInbox:
                         unawaited(_moveToInboxAndClose(t));
+                        return;
+                      case _TaskDetailAction.copy:
+                        unawaited(_copy(t));
+                        return;
+                      case _TaskDetailAction.share:
+                        unawaited(_share(t));
+                        return;
+                      case _TaskDetailAction.abandon:
+                        unawaited(_abandon(t));
                         return;
                       case _TaskDetailAction.collaboration:
                         unawaited(_openCollaborationHub(t));
@@ -692,13 +2398,30 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                     }
                   },
                   itemBuilder: (context) => [
+                    if ((t.description ?? '').trim().isNotEmpty)
+                      const PopupMenuItem(
+                        value: _TaskDetailAction.previewMarkdown,
+                        child: Text('Markdown 预览'),
+                      ),
                     PopupMenuItem(
                       value: _TaskDetailAction.togglePin,
                       child: Text(t.isPinned ? '取消置顶' : '置顶'),
                     ),
                     const PopupMenuItem(
                       value: _TaskDetailAction.moveToInbox,
-                      child: Text('移至收件箱'),
+                      child: Text('移至收集箱'),
+                    ),
+                    const PopupMenuItem(
+                      value: _TaskDetailAction.copy,
+                      child: Text('复制任务'),
+                    ),
+                    const PopupMenuItem(
+                      value: _TaskDetailAction.share,
+                      child: Text('分享任务'),
+                    ),
+                    const PopupMenuItem(
+                      value: _TaskDetailAction.abandon,
+                      child: Text('放弃任务'),
                     ),
                     const PopupMenuItem(
                       value: _TaskDetailAction.collaboration,
@@ -729,9 +2452,24 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                   ),
                 ),
                 IconButton(
-                  tooltip: '移至收件箱',
+                  tooltip: '移至收集箱',
                   onPressed: () => _moveToInboxAndClose(t),
                   icon: const Icon(Icons.move_to_inbox_outlined),
+                ),
+                IconButton(
+                  tooltip: '复制任务',
+                  onPressed: () => _copy(t),
+                  icon: const Icon(Icons.copy_outlined),
+                ),
+                IconButton(
+                  tooltip: '分享任务',
+                  onPressed: () => _share(t),
+                  icon: const Icon(Icons.share_outlined),
+                ),
+                IconButton(
+                  tooltip: '放弃任务',
+                  onPressed: t.cancelled ? null : () => _abandon(t),
+                  icon: const Icon(Icons.block_outlined),
                 ),
                 IconButton(
                   tooltip: '协作',
@@ -773,6 +2511,85 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     return Scaffold(
       appBar: AppBar(title: const Text('任务不存在')),
       body: const Center(child: Text('任务不存在或已删除')),
+    );
+  }
+}
+
+class _TaskListPicker extends ConsumerWidget {
+  const _TaskListPicker({
+    required this.taskId,
+    required this.selectedListId,
+    required this.selectedListName,
+    required this.onChanged,
+  });
+
+  final String taskId;
+  final String selectedListId;
+  final String? selectedListName;
+  final void Function(String listId, String listName) onChanged;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final lists = ref.watch(listsStreamProvider).valueOrNull ?? const [];
+    final colors = brandColors(context);
+    return InkWell(
+      key: Key('task-list-$taskId'),
+      borderRadius: BorderRadius.circular(8),
+      onTap: () async {
+        final nextListId = await showModalBottomSheet<String>(
+          context: context,
+          showDragHandle: true,
+          builder: (context) => SafeArea(
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.inbox_outlined),
+                  title: const Text('收集箱'),
+                  trailing: selectedListId == kInboxListId
+                      ? const Icon(Icons.check)
+                      : null,
+                  onTap: () => Navigator.pop(context, kInboxListId),
+                ),
+                for (final list in lists)
+                  if (list.id != kInboxListId)
+                    ListTile(
+                      leading: const Icon(Icons.list_alt_outlined),
+                      title: Text(list.name),
+                      trailing: selectedListId == list.id
+                          ? const Icon(Icons.check)
+                          : null,
+                      onTap: () => Navigator.pop(context, list.id),
+                    ),
+              ],
+            ),
+          ),
+        );
+        if (nextListId == null) return;
+        final nextListName = nextListId == kInboxListId
+            ? '收集箱'
+            : lists
+                      .where((list) => list.id == nextListId)
+                      .map((list) => list.name)
+                      .firstOrNull ??
+                  selectedListName ??
+                  '未知清单';
+        onChanged(nextListId, nextListName);
+      },
+      child: Row(
+        children: [
+          Icon(Icons.list_alt_outlined, color: colors.mutedForeground),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              selectedListName ?? '未知清单',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: colors.foreground),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -903,7 +2720,7 @@ class _TagChipsState extends ConsumerState<_TagChips> {
   }
 }
 
-/// §2.1 内嵌检查事项（checklist）：直接走 [ChecklistApi] REST，实时与后端同步。
+/// §2.1 内嵌检查事项：通过本地 Repository 与 outbox 离线优先同步。
 class _ChecklistSection extends ConsumerStatefulWidget {
   const _ChecklistSection({super.key, required this.taskId});
 
@@ -914,16 +2731,7 @@ class _ChecklistSection extends ConsumerStatefulWidget {
 }
 
 class _ChecklistSectionState extends ConsumerState<_ChecklistSection> {
-  List<ChecklistItem> _items = const [];
-  bool _loading = true;
-  String? _error;
   final _addCtrl = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
 
   @override
   void dispose() {
@@ -931,49 +2739,43 @@ class _ChecklistSectionState extends ConsumerState<_ChecklistSection> {
     super.dispose();
   }
 
-  Future<void> _load() async {
-    try {
-      final api = ref.read(todoApiProvider).checklist;
-      final items = await api.list(widget.taskId);
-      if (!mounted) return;
-      setState(() {
-        _items = items;
-        _loading = false;
-        _error = null;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _items = const [];
-        _loading = false;
-        _error = '检查事项暂不可用';
-      });
-    }
-  }
-
   Future<void> _add() async {
     final text = _addCtrl.text.trim();
     if (text.isEmpty) return;
-    _addCtrl.clear();
-    final api = ref.read(todoApiProvider).checklist;
-    await api.create(taskId: widget.taskId, title: text);
-    await _load();
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    await repo.createChecklistItem(taskId: widget.taskId, title: text);
+    if (mounted) _addCtrl.clear();
   }
 
-  Future<void> _toggle(ChecklistItem it) async {
-    final api = ref.read(todoApiProvider).checklist;
-    await api.update(it.id, completed: !it.completed);
-    await _load();
+  Future<void> _toggle(TodoChecklistItem item) async {
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    await repo.toggleChecklistItem(item.id);
   }
 
-  Future<void> _delete(ChecklistItem it) async {
-    final api = ref.read(todoApiProvider).checklist;
-    await api.delete(it.id);
-    await _load();
+  Future<void> _delete(TodoChecklistItem item) async {
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    await repo.deleteChecklistItem(item.id);
+  }
+
+  Future<void> _edit(TodoChecklistItem item) async {
+    final title = await showDialog<String>(
+      context: context,
+      builder: (_) => _ChecklistEditDialog(initialTitle: item.title),
+    );
+    final normalized = title?.trim();
+    if (normalized == null || normalized.isEmpty) return;
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    await repo.updateChecklistItem(item.id, title: normalized);
   }
 
   @override
   Widget build(BuildContext context) {
+    final repo = ref.watch(taskRepositoryProvider);
+    if (repo == null) return const SizedBox(height: 32);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -997,33 +2799,433 @@ class _ChecklistSectionState extends ConsumerState<_ChecklistSection> {
           ],
         ),
         const SizedBox(height: 8),
-        if (_loading)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8),
-            child: LinearProgressIndicator(),
-          )
-        else if (_error != null)
-          Text('加载失败: $_error')
-        else if (_items.isEmpty)
-          const Text('暂无检查事项')
-        else
-          ..._items.map(
-            (it) => CheckboxListTile(
-              value: it.completed,
-              title: Text(
-                it.title,
-                style: TextStyle(
-                  decoration: it.completed ? TextDecoration.lineThrough : null,
-                ),
-              ),
-              onChanged: (_) => _toggle(it),
-              secondary: IconButton(
-                tooltip: '删除',
-                icon: const Icon(Icons.close),
-                onPressed: () => _delete(it),
-              ),
-            ),
+        StreamBuilder<List<TodoChecklistItem>>(
+          stream: repo.watchChecklistItems(widget.taskId),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: LinearProgressIndicator(),
+              );
+            }
+            final items = snapshot.data!;
+            if (items.isEmpty) return const Text('暂无检查事项');
+            return Column(
+              children: items
+                  .map(
+                    (item) => GestureDetector(
+                      onLongPress: () => _edit(item),
+                      child: CheckboxListTile(
+                        value: item.completed,
+                        title: Text(
+                          item.title,
+                          style: TextStyle(
+                            decoration: item.completed
+                                ? TextDecoration.lineThrough
+                                : null,
+                          ),
+                        ),
+                        onChanged: (_) => _toggle(item),
+                        secondary: IconButton(
+                          tooltip: '删除',
+                          icon: const Icon(Icons.close),
+                          onPressed: () => _delete(item),
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _ChecklistEditDialog extends StatefulWidget {
+  const _ChecklistEditDialog({required this.initialTitle});
+
+  final String initialTitle;
+
+  @override
+  State<_ChecklistEditDialog> createState() => _ChecklistEditDialogState();
+}
+
+class _ChecklistEditDialogState extends State<_ChecklistEditDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialTitle);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('编辑检查事项'),
+    content: TextField(
+      controller: _controller,
+      autofocus: true,
+      decoration: const InputDecoration(
+        labelText: '检查事项',
+        border: OutlineInputBorder(),
+      ),
+      onSubmitted: (value) => Navigator.pop(context, value),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('取消'),
+      ),
+      FilledButton(
+        onPressed: () => Navigator.pop(context, _controller.text),
+        child: const Text('保存'),
+      ),
+    ],
+  );
+}
+
+/// 任务附件始终先进入 Drift + outbox；这里不直接调用后端。
+class _AttachmentSection extends ConsumerStatefulWidget {
+  const _AttachmentSection({super.key, required this.taskId});
+
+  final String taskId;
+
+  @override
+  ConsumerState<_AttachmentSection> createState() => _AttachmentSectionState();
+}
+
+class _AttachmentSectionState extends ConsumerState<_AttachmentSection> {
+  Future<void> _pickAndQueue() async {
+    final result = await FilePicker.pickFiles(allowMultiple: true);
+    if (result == null) return;
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    var queued = 0;
+    for (final file in result.files) {
+      final path = file.path;
+      if (path == null || path.isEmpty) continue;
+      await repo.queueAttachment(
+        taskId: widget.taskId,
+        name: file.name,
+        localPath: path,
+        mimeType: _mimeTypeFor(file.name),
+        size: file.size,
+      );
+      queued++;
+    }
+    if (!mounted || queued == 0) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('已加入 $queued 个附件上传队列')));
+  }
+
+  Future<void> _retry(TodoAttachment attachment) async {
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    await repo.retryAttachment(attachment.id);
+  }
+
+  Future<void> _delete(TodoAttachment attachment) async {
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    await repo.deleteAttachment(attachment.id);
+  }
+
+  String _mimeTypeFor(String fileName) {
+    final normalized = fileName.toLowerCase();
+    if (normalized.endsWith('.pdf')) return 'application/pdf';
+    if (normalized.endsWith('.png')) return 'image/png';
+    if (normalized.endsWith('.jpg') || normalized.endsWith('.jpeg')) {
+      return 'image/jpeg';
+    }
+    if (normalized.endsWith('.txt') || normalized.endsWith('.md')) {
+      return 'text/plain';
+    }
+    return 'application/octet-stream';
+  }
+
+  ({String label, IconData icon, Color color}) _status(
+    BuildContext context,
+    TodoAttachment attachment,
+  ) {
+    final colors = brandColors(context);
+    return switch (attachment.status) {
+      'uploading' => (
+        label: '正在上传',
+        icon: Icons.cloud_upload_outlined,
+        color: colors.mutedForeground,
+      ),
+      'failed' => (
+        label: '上传失败',
+        icon: Icons.error_outline,
+        color: Theme.of(context).colorScheme.error,
+      ),
+      'uploaded' => (
+        label: '已完成',
+        icon: Icons.cloud_done_outlined,
+        color: colors.success,
+      ),
+      _ => (
+        label: '等待上传',
+        icon: Icons.schedule_outlined,
+        color: colors.mutedForeground,
+      ),
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final repo = ref.watch(taskRepositoryProvider);
+    if (repo == null) return const SizedBox(height: 32);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        OutlinedButton.icon(
+          onPressed: _pickAndQueue,
+          icon: const Icon(Icons.attach_file),
+          label: const Text('添加附件'),
+        ),
+        const SizedBox(height: 8),
+        StreamBuilder<List<TodoAttachment>>(
+          stream: repo.watchAttachments(widget.taskId),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const LinearProgressIndicator();
+            }
+            final attachments = snapshot.data!;
+            if (attachments.isEmpty) return const Text('暂无附件');
+            return Column(
+              children: attachments.map((attachment) {
+                final status = _status(context, attachment);
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(status.icon, color: status.color),
+                  title: Text(attachment.name),
+                  subtitle: Text(
+                    attachment.status == 'failed' && attachment.error != null
+                        ? '${status.label}：${attachment.error}'
+                        : status.label,
+                    style: TextStyle(color: status.color),
+                  ),
+                  trailing: Wrap(
+                    spacing: 0,
+                    children: [
+                      if (attachment.status == 'failed')
+                        IconButton(
+                          tooltip: '重试上传',
+                          onPressed: () => _retry(attachment),
+                          icon: const Icon(Icons.refresh),
+                        ),
+                      IconButton(
+                        tooltip: '删除附件',
+                        onPressed: () => _delete(attachment),
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _ActivitySection extends ConsumerStatefulWidget {
+  const _ActivitySection({super.key, required this.taskServerId});
+
+  final int taskServerId;
+
+  @override
+  ConsumerState<_ActivitySection> createState() => _ActivitySectionState();
+}
+
+class _ActivitySectionState extends ConsumerState<_ActivitySection> {
+  String? _refreshError;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_refresh());
+  }
+
+  Future<void> _refresh() async {
+    final repo = ref.read(activityRepositoryProvider);
+    if (repo == null) return;
+    try {
+      await repo.refreshTask(widget.taskServerId);
+      if (mounted) setState(() => _refreshError = null);
+    } catch (_) {
+      if (mounted) setState(() => _refreshError = '离线显示已缓存的动态');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final repo = ref.watch(activityRepositoryProvider);
+    if (repo == null) return const SizedBox(height: 32);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_refreshError != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(_refreshError!),
           ),
+        StreamBuilder<List<TodoActivity>>(
+          stream: repo.watchTask(widget.taskServerId),
+          builder: (context, snapshot) {
+            final activities = snapshot.data ?? const <TodoActivity>[];
+            if (activities.isEmpty) return const Text('暂无任务动态');
+            return Column(
+              children: activities
+                  .map(
+                    (activity) => ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.history_outlined),
+                      title: Text(_activityLabel(activity.action)),
+                      subtitle: Text(
+                        '${activity.actorUserName ?? '成员'} · ${activity.occurredAt.toLocal().toString().substring(0, 16)}',
+                      ),
+                    ),
+                  )
+                  .toList(),
+            );
+          },
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: _refresh,
+            icon: const Icon(Icons.refresh, size: 16),
+            label: const Text('刷新动态'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _activityLabel(String action) => switch (action) {
+    'task_created' => '创建了任务',
+    'task_updated' => '更新了任务',
+    'task_completed' => '完成了任务',
+    'task_uncompleted' => '取消完成任务',
+    'comment_created' => '添加了评论',
+    _ => action,
+  };
+}
+
+class _TemplateSection extends ConsumerWidget {
+  const _TemplateSection({super.key, required this.task});
+
+  final TodoTask task;
+
+  Future<void> _saveCurrent(BuildContext context, WidgetRef ref) async {
+    final templates = ref.read(templateRepositoryProvider);
+    if (templates == null) return;
+    await templates.saveTask(task: task, name: '${task.title} 模板');
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已保存为模板，等待同步')));
+  }
+
+  Future<void> _apply(
+    BuildContext context,
+    WidgetRef ref,
+    TodoTemplate template,
+  ) async {
+    final templates = ref.read(templateRepositoryProvider);
+    final tasks = ref.read(taskRepositoryProvider);
+    if (templates == null || tasks == null) return;
+    final seed = templates.taskSeed(template);
+    await tasks.create(
+      listId: task.listId,
+      title: seed.title,
+      description: seed.description,
+      priority: seed.priority,
+    );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('已应用模板“${template.name}”')));
+  }
+
+  Future<void> _refresh(BuildContext context, WidgetRef ref) async {
+    final coordinator = ref.read(syncCoordinatorProvider);
+    if (coordinator == null) return;
+    try {
+      final outcome = await coordinator.syncOnce();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('同步完成：推送 ${outcome.pushed} 项，拉取 ${outcome.pulled} 项'),
+        ),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('模板同步失败，将继续显示本地缓存')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final repo = ref.watch(templateRepositoryProvider);
+    if (repo == null) return const SizedBox(height: 32);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            OutlinedButton.icon(
+              onPressed: () => _saveCurrent(context, ref),
+              icon: const Icon(Icons.bookmark_add_outlined),
+              label: const Text('保存当前任务为模板'),
+            ),
+            const SizedBox(width: 4),
+            IconButton(
+              tooltip: '刷新模板',
+              onPressed: () => _refresh(context, ref),
+              icon: const Icon(Icons.refresh),
+            ),
+          ],
+        ),
+        StreamBuilder<List<TodoTemplate>>(
+          stream: repo.watchAll(),
+          builder: (context, snapshot) {
+            final templates = snapshot.data ?? const <TodoTemplate>[];
+            if (templates.isEmpty) return const Text('暂无本地模板');
+            return Column(
+              children: templates
+                  .map(
+                    (template) => ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(template.name),
+                      subtitle: Text(
+                        template.status == 'synced' ? '已同步' : '等待同步',
+                      ),
+                      trailing: TextButton(
+                        onPressed: () => _apply(context, ref, template),
+                        child: const Text('应用'),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            );
+          },
+        ),
       ],
     );
   }

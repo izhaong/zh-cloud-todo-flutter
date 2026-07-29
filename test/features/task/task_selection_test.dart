@@ -149,7 +149,56 @@ void main() {
     },
   );
 
-  testWidgets('repository reorder preserves selection by task ID', (
+  testWidgets('advanced keyword filter narrows workspace tasks locally', (
+    tester,
+  ) async {
+    await _pumpWorkspace(tester);
+
+    await tester.tap(find.byKey(const Key('todo-filter-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('todo-filter-advanced')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('task-filter-keyword')),
+      '设计反馈',
+    );
+    await tester.tap(find.text('应用高级筛选'));
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(1000, 100));
+    await tester.pumpAndSettle();
+
+    expect(find.text('回复设计反馈并确认下一步'), findsOneWidget);
+    expect(find.text('确定今天最重要的三件事'), findsNothing);
+  });
+
+  testWidgets('advanced date interval narrows workspace tasks locally', (
+    tester,
+  ) async {
+    await _pumpWorkspace(tester);
+
+    await tester.tap(find.byKey(const Key('todo-filter-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('todo-filter-advanced')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('task-filter-due-at-from')),
+      '2026-07-12',
+    );
+    await tester.enterText(
+      find.byKey(const Key('task-filter-due-at-to')),
+      '2026-07-12',
+    );
+    await tester.tap(find.text('应用高级筛选'));
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(1000, 100));
+    await tester.pumpAndSettle();
+
+    expect(find.text('提交本月报销单'), findsOneWidget);
+    expect(find.text('给家人打电话'), findsOneWidget);
+    expect(find.text('确定今天最重要的三件事'), findsNothing);
+  });
+
+  testWidgets('repository update preserves selection in stable smart order', (
     tester,
   ) async {
     final fixture = await _pumpWorkspace(tester);
@@ -168,8 +217,8 @@ void main() {
     final afterTop = tester.getTopLeft(surface).dy;
     expect(
       afterTop,
-      lessThan(beforeTop),
-      reason: 'repository update must actually move the task in smart order',
+      beforeTop,
+      reason: 'smart order is pinned, manual sort order, then task ID',
     );
     _expectSelectedTask(tester, taskId: taskId, title: selectedTitle);
   });
@@ -222,7 +271,7 @@ void main() {
   ) async {
     await _pumpWorkspace(tester);
     const taskId = 'visual-task-completed';
-    const selectedTitle = '清理收件箱中的旧任务';
+    const selectedTitle = '清理收集箱中的旧任务';
 
     await _tapTask(tester, taskId);
     await tester.pumpAndSettle();

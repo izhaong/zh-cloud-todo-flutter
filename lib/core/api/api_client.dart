@@ -87,10 +87,15 @@ class ApiClient {
     return _dio.put<T>('${ApiConfig.memberPrefix}$path', data: data);
   }
 
-  Future<Response<T>> memberGet<T>(String path, {Map<String, dynamic>? query}) {
+  Future<Response<T>> memberGet<T>(
+    String path, {
+    Map<String, dynamic>? query,
+    Options? options,
+  }) {
     return _dio.get<T>(
       '${ApiConfig.memberPrefix}$path',
       queryParameters: query,
+      options: options,
     );
   }
 }

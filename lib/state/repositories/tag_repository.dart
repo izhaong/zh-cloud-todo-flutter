@@ -37,7 +37,11 @@ class TagRepository {
     )..orderBy([(t) => OrderingTerm(expression: t.createdAt)])).get();
   }
 
-  Future<TodoTag> create({required String name, String? color}) async {
+  Future<TodoTag> create({
+    required String name,
+    String? color,
+    String? parentId,
+  }) async {
     final now = DateTime.now();
     final id = _uuid.v4();
     await _db
@@ -45,6 +49,7 @@ class TagRepository {
         .insert(
           TodoTagsCompanion.insert(
             id: id,
+            parentId: Value(parentId),
             name: name,
             color: Value(color),
             updatedAt: now,
@@ -63,12 +68,18 @@ class TagRepository {
     return row;
   }
 
-  Future<TodoTag> update(String tagId, {String? name, String? color}) async {
+  Future<TodoTag> update(
+    String tagId, {
+    String? name,
+    String? color,
+    required String? parentId,
+  }) async {
     final now = DateTime.now();
     await (_db.update(_db.todoTags)..where((t) => t.id.equals(tagId))).write(
       TodoTagsCompanion(
         name: name == null ? const Value.absent() : Value(name),
         color: color == null ? const Value.absent() : Value(color),
+        parentId: Value(parentId),
         updatedAt: Value(now),
       ),
     );
@@ -86,20 +97,43 @@ class TagRepository {
   }
 
   Future<void> delete(String tagId) async {
-    final row = await (_db.select(
-      _db.todoTags,
-    )..where((t) => t.id.equals(tagId))).getSingleOrNull();
-    await (_db.delete(
-      _db.todoTaskTags,
-    )..where((t) => t.tagId.equals(tagId))).go();
-    await (_db.delete(_db.todoTags)..where((t) => t.id.equals(tagId))).go();
-    await _queue.enqueue(
-      entity: SyncEntities.tag,
-      op: SyncOps.delete,
-      localId: tagId,
-      serverId: row?.serverId,
-      payload: {'id': tagId, 'serverId': row?.serverId},
-    );
+    await _db.transaction(() async {
+      final row = await (_db.select(
+        _db.todoTags,
+      )..where((t) => t.id.equals(tagId))).getSingleOrNull();
+      final children = await (_db.select(
+        _db.todoTags,
+      )..where((tag) => tag.parentId.equals(tagId))).get();
+      final now = DateTime.now();
+      for (final child in children) {
+        await (_db.update(
+          _db.todoTags,
+        )..where((tag) => tag.id.equals(child.id))).write(
+          TodoTagsCompanion(parentId: const Value(null), updatedAt: Value(now)),
+        );
+        final reparented = await (_db.select(
+          _db.todoTags,
+        )..where((tag) => tag.id.equals(child.id))).getSingle();
+        await _queue.enqueue(
+          entity: SyncEntities.tag,
+          op: SyncOps.upsert,
+          localId: child.id,
+          serverId: child.serverId,
+          payload: reparented.toJson(),
+        );
+      }
+      await (_db.delete(
+        _db.todoTaskTags,
+      )..where((t) => t.tagId.equals(tagId))).go();
+      await (_db.delete(_db.todoTags)..where((t) => t.id.equals(tagId))).go();
+      await _queue.enqueue(
+        entity: SyncEntities.tag,
+        op: SyncOps.delete,
+        localId: tagId,
+        serverId: row?.serverId,
+        payload: {'id': tagId, 'serverId': row?.serverId},
+      );
+    });
   }
 
   // --- 任务-标签关联 --------------------------------------------------
@@ -124,22 +158,25 @@ class TagRepository {
   }
 
   Future<void> setTaskTags(String taskId, List<String> tagIds) async {
-    await (_db.delete(
-      _db.todoTaskTags,
-    )..where((t) => t.taskId.equals(taskId))).go();
-    for (final tagId in tagIds.toSet()) {
-      await _db
-          .into(_db.todoTaskTags)
-          .insert(
-            TodoTaskTagsCompanion.insert(taskId: taskId, tagId: tagId),
-            mode: InsertMode.insertOrIgnore,
-          );
-    }
-    await _queue.enqueue(
-      entity: SyncEntities.taskTag,
-      op: SyncOps.upsert,
-      localId: taskId,
-      payload: {'taskId': taskId, 'tagIds': tagIds},
-    );
+    final normalizedTagIds = tagIds.toSet().toList();
+    await _db.transaction(() async {
+      await (_db.delete(
+        _db.todoTaskTags,
+      )..where((t) => t.taskId.equals(taskId))).go();
+      for (final tagId in normalizedTagIds) {
+        await _db
+            .into(_db.todoTaskTags)
+            .insert(
+              TodoTaskTagsCompanion.insert(taskId: taskId, tagId: tagId),
+              mode: InsertMode.insertOrIgnore,
+            );
+      }
+      await _queue.enqueue(
+        entity: SyncEntities.taskTag,
+        op: SyncOps.upsert,
+        localId: taskId,
+        payload: {'taskId': taskId, 'tagIds': normalizedTagIds},
+      );
+    });
   }
 }

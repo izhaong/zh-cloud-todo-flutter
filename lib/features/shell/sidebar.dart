@@ -21,6 +21,7 @@ class Sidebar extends ConsumerWidget {
     required this.onOpenTags,
     required this.onOpenFilters,
     required this.onOpenSettings,
+    this.onOpenReminders,
     this.width = TodoLayoutTokens.wideSidebarWidth,
     this.onNavigationCommitted,
   });
@@ -35,6 +36,7 @@ class Sidebar extends ConsumerWidget {
   final VoidCallback onOpenTags;
   final VoidCallback onOpenFilters;
   final VoidCallback onOpenSettings;
+  final VoidCallback? onOpenReminders;
   final VoidCallback? onNavigationCommitted;
 
   bool _isTasksSelected(Section s) => s == Section.tasks;
@@ -48,7 +50,7 @@ class Sidebar extends ConsumerWidget {
 
     return SizedBox(
       width: width,
-      child: ColoredBox(
+      child: Material(
         color: colors.surface,
         child: SafeArea(
           child: Column(
@@ -254,6 +256,18 @@ class Sidebar extends ConsumerWidget {
                     const SizedBox(height: TodoLayoutTokens.sidebarSectionGap),
                     Divider(height: 1, color: colors.border),
                     const SizedBox(height: TodoLayoutTokens.sidebarSectionGap),
+                    if (onOpenReminders != null)
+                      _NavRow(
+                        rowKey: const Key('todo-reminder-inbox-action'),
+                        icon: Icons.notifications_none,
+                        label: '提醒收件箱',
+                        selected: false,
+                        colors: colors,
+                        onTap: () {
+                          onNavigationCommitted?.call();
+                          onOpenReminders!();
+                        },
+                      ),
                     _NavRow(
                       rowKey: const Key('todo-sidebar-row-settings'),
                       icon: Icons.settings_outlined,
