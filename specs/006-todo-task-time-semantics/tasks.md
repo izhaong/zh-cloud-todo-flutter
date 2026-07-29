@@ -14,7 +14,7 @@
 - [ ] T007 在 `test/sync_coordinator_time_semantics_test.dart` 写 task、reminder、repeatRule、repeatSkip 的 serverId 依赖、拉取顺序与重复 push 失败测试。
 - [ ] T008 修改 `lib/core/sync/sync_coordinator.dart` 使 T007 通过，并断言失败项保持可重试 outbox 状态。
 - [ ] T009 在 `test/features/task/task_time_semantics_test.dart` 写详情的时间、提醒和重复编辑回显失败测试。
-- [ ] T010 修改 `lib/features/task/task_detail_pane.dart` 与 `lib/features/reminder/reminder_inbox_page.dart` 接入 Repository/use-case，使 T009 通过且不直接调用 API。
+- [ ] T010 修改 `lib/features/task/task_detail_pane.dart` 与 `lib/features/reminder/reminder_inbox_page.dart` 接入 Repository/use-case，使 T009 通过且不直接调用 API；App 运行期间的即时通知轮询同样只能经 `ReminderInboxRepository`，并以派发 ID 去重。
 
 ## Phase 3: 证据与交接
 

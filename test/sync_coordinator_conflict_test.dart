@@ -8,6 +8,8 @@ import 'package:zh_cloud_todo_flutter/core/api/sync_api.dart';
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_coordinator.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/reminder_repository.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/repeat_rule_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_repository.dart';
 
 void main() {
@@ -148,6 +150,234 @@ void main() {
         pushedBatches.last.single['clientMutationId'],
       );
       expect(conflicted.status, 'failed');
+    },
+  );
+
+  test(
+    'reminder and repeat conflicts restore server values before new edits replay',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final now = DateTime.utc(2026, 7, 29, 12);
+      await db
+          .into(db.todoLists)
+          .insert(
+            TodoListsCompanion.insert(
+              id: 'list-local',
+              serverId: const Value(101),
+              name: '收集箱',
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      await db
+          .into(db.todoTasks)
+          .insert(
+            TodoTasksCompanion.insert(
+              id: 'task-local',
+              serverId: const Value(201),
+              listId: 'list-local',
+              title: '冲突恢复任务',
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      await db
+          .into(db.todoReminders)
+          .insert(
+            TodoRemindersCompanion.insert(
+              id: 'reminder-local',
+              serverId: const Value(301),
+              taskId: 'task-local',
+              remindAt: now,
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      await db
+          .into(db.todoRepeatRules)
+          .insert(
+            TodoRepeatRulesCompanion.insert(
+              id: 'repeat-local',
+              serverId: const Value(401),
+              taskId: 'task-local',
+              freq: 'DAILY',
+              startAt: Value(now),
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      await db.writeRevision('reminder', 301, 7);
+      await db.writeRevision('repeat_rule', 401, 11);
+
+      final reminders = ReminderRepository(db, SyncChangeQueue(db));
+      final repeats = RepeatRuleRepository(db, SyncChangeQueue(db));
+      await reminders.update(
+        id: 'reminder-local',
+        fireAt: now.add(const Duration(minutes: 10)),
+        anchorType: 'ABSOLUTE',
+        persistent: true,
+        intervalMinutes: 10,
+        fixedTimezone: false,
+      );
+      await repeats.save(
+        taskId: 'task-local',
+        frequency: 'DAILY',
+        startAt: now,
+        countLimit: 2,
+      );
+
+      final pushedBatches = <List<Map<String, dynamic>>>[];
+      var pushCount = 0;
+      final dio = Dio()
+        ..interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (options, handler) {
+              final changes = ((options.data as Map)['changes'] as List)
+                  .cast<Map<String, dynamic>>();
+              pushedBatches.add(changes);
+              pushCount++;
+              handler.resolve(
+                Response<Map<String, dynamic>>(
+                  requestOptions: options,
+                  data: {
+                    'code': 0,
+                    'data': {
+                      'ok': pushCount == 2,
+                      'accepted': pushCount == 2
+                          ? [
+                              for (final change in changes)
+                                {
+                                  'clientMutationId':
+                                      change['clientMutationId'],
+                                  'entityType': change['entityType'],
+                                  'entityId': change['entityType'] == 'reminder'
+                                      ? 301
+                                      : 401,
+                                  'operation': 'upsert',
+                                  'revision': change['entityType'] == 'reminder'
+                                      ? 9
+                                      : 13,
+                                },
+                            ]
+                          : const <Map<String, dynamic>>[],
+                      'conflicts': pushCount == 1
+                          ? [
+                              for (final change in changes)
+                                {
+                                  'clientMutationId':
+                                      change['clientMutationId'],
+                                  'entityType': change['entityType'],
+                                  'entityId': change['entityType'] == 'reminder'
+                                      ? 301
+                                      : 401,
+                                  'reason': 'REVISION_CONFLICT',
+                                  'serverRevision':
+                                      change['entityType'] == 'reminder'
+                                      ? 8
+                                      : 12,
+                                  'serverValue':
+                                      change['entityType'] == 'reminder'
+                                      ? {
+                                          'taskId': 201,
+                                          'fireAt': now
+                                              .add(const Duration(hours: 1))
+                                              .toIso8601String(),
+                                          'anchorType': 'ON_DUE',
+                                          'offsetMinutes': -15,
+                                          'status': 'PENDING',
+                                          'persistent': true,
+                                          'intervalMinutes': 30,
+                                          'timeZone': 'Asia/Shanghai',
+                                          'fixedTimezone': true,
+                                        }
+                                      : {
+                                          'taskId': 201,
+                                          'frequency': 'WEEKLY',
+                                          'intervalValue': 2,
+                                          'weekdays': '1,3',
+                                          'startAt': now.toIso8601String(),
+                                          'untilAt': now
+                                              .add(const Duration(days: 30))
+                                              .toIso8601String(),
+                                          'countLimit': 4,
+                                          'enabled': true,
+                                          'repeatMode': 'ON_DUE',
+                                          'timeZone': 'Asia/Shanghai',
+                                        },
+                                },
+                            ]
+                          : const <Map<String, dynamic>>[],
+                    },
+                  },
+                ),
+              );
+            },
+          ),
+        );
+      final client = ApiClient(dio: dio);
+      final coordinator = SyncCoordinator(
+        db: db,
+        api: SyncApi(client, clientId: 'test-client', deviceId: 'device-b'),
+        todoApi: client,
+      );
+
+      expect(await coordinator.push(), 0);
+      final restoredReminder = await (db.select(
+        db.todoReminders,
+      )..where((row) => row.serverId.equals(301))).getSingle();
+      final restoredRepeat = await (db.select(
+        db.todoRepeatRules,
+      )..where((row) => row.serverId.equals(401))).getSingle();
+      expect(restoredReminder.id, 'reminder-local');
+      expect(restoredReminder.anchorType, 'ON_DUE');
+      expect(restoredReminder.intervalMinutes, 30);
+      expect(restoredReminder.fixedTimezone, isTrue);
+      expect(restoredRepeat.id, 'repeat-local');
+      expect(restoredRepeat.freq, 'WEEKLY');
+      expect(restoredRepeat.interval, 2);
+      expect(restoredRepeat.byDay, '1,3');
+      expect(restoredRepeat.countLimit, 4);
+      expect(await db.readRevision('reminder', 301), 8);
+      expect(await db.readRevision('repeat_rule', 401), 12);
+      expect(
+        await (db.select(
+          db.todoSyncChanges,
+        )..where((change) => change.status.equals('failed'))).get(),
+        hasLength(2),
+      );
+
+      await reminders.update(
+        id: 'reminder-local',
+        fireAt: now.add(const Duration(hours: 2)),
+        anchorType: 'ON_DUE',
+        offsetMinutes: -30,
+        persistent: true,
+        intervalMinutes: 30,
+        timeZone: 'Asia/Shanghai',
+        fixedTimezone: true,
+      );
+      await repeats.save(
+        taskId: 'task-local',
+        frequency: 'WEEKLY',
+        intervalValue: 2,
+        weekdays: const [1, 3],
+        startAt: now,
+        untilAt: now.add(const Duration(days: 30)),
+        countLimit: 3,
+        timeZone: 'Asia/Shanghai',
+      );
+
+      expect(await coordinator.push(), 2);
+      expect(pushedBatches, hasLength(2));
+      final replayBaseRevisions = {
+        for (final change in pushedBatches.last)
+          change['entityType']: change['baseRevision'],
+      };
+      expect(replayBaseRevisions['reminder'], 8);
+      expect(replayBaseRevisions['repeat_rule'], 12);
+      expect(await db.readRevision('reminder', 301), 9);
+      expect(await db.readRevision('repeat_rule', 401), 13);
     },
   );
 }

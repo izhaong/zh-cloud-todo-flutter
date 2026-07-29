@@ -193,7 +193,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       },
     );
     if (widget.hideAppBar) {
-      return ColoredBox(color: colors.surface, child: body);
+      return Material(color: colors.surface, child: body);
     }
     return Scaffold(
       backgroundColor: colors.surface,

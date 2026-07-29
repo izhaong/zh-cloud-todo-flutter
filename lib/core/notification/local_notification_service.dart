@@ -45,7 +45,7 @@ class LocalNotificationService {
   /// 初始化本地通知（幂等）。
   Future<void> init() async {
     if (_initialized) return;
-    final plugin = FlutterLocalNotificationsPlugin();
+    final plugin = _plugin ?? FlutterLocalNotificationsPlugin();
     try {
       await plugin.initialize(_settings);
       // Android 13+ 通知权限由 requestPermissions 单独申请。
@@ -62,6 +62,18 @@ class LocalNotificationService {
     try {
       final plugin = _plugin;
       if (plugin == null) return false;
+      final macOS = plugin
+          .resolvePlatformSpecificImplementation<
+            MacOSFlutterLocalNotificationsPlugin
+          >();
+      if (macOS != null) {
+        final ok = await macOS.requestPermissions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+        return ok ?? true;
+      }
       final ios = plugin
           .resolvePlatformSpecificImplementation<
             IOSFlutterLocalNotificationsPlugin
@@ -90,7 +102,18 @@ class LocalNotificationService {
         priority: Priority.high,
         ongoing: true,
       ),
-      iOS: DarwinNotificationDetails(presentAlert: true),
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentBanner: true,
+        presentList: true,
+        presentSound: true,
+      ),
+      macOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentBanner: true,
+        presentList: true,
+        presentSound: true,
+      ),
     ),
   );
 

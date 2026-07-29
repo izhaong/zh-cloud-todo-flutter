@@ -357,8 +357,11 @@ class AppDatabase extends _$AppDatabase {
   /// 多租户隔离构造：按 `tenantId + userId` 命名 SQLite 文件。
   /// 未登录阶段（tenantId/userId 未知）用共享占位库，登录后由
   /// [SessionController] 重建指向用户专属库。
-  AppDatabase.forUser({required String tenantId, required int userId})
-    : super(_open('todo_t${tenantId}_u$userId'));
+  AppDatabase.forUser({
+    required String tenantId,
+    required int userId,
+    String? testNamespace,
+  }) : super(_open(_userDatabaseName(tenantId, userId, testNamespace)));
 
   @override
   int get schemaVersion => 14;
@@ -824,4 +827,10 @@ class AppDatabase extends _$AppDatabase {
   /// 按本地 UUID 主键查清单（任务详情反查清单 serverId 用）。
   Future<TodoList?> listByLocalId(String localId) =>
       (select(todoLists)..where((t) => t.id.equals(localId))).getSingleOrNull();
+}
+
+String _userDatabaseName(String tenantId, int userId, String? testNamespace) {
+  final base = 'todo_t${tenantId}_u$userId';
+  final namespace = testNamespace?.replaceAll(RegExp('[^a-zA-Z0-9_-]'), '_');
+  return namespace == null || namespace.isEmpty ? base : '${base}_$namespace';
 }

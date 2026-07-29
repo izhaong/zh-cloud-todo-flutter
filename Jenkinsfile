@@ -50,7 +50,9 @@ void feishuBuildNotify(String statusEmoji, String title) {
 // 进入 Flutter 镜像执行闭包；统一 user 映射避免 root 写出 _netrc / .pub-cache 之类。
 void flutterInside(String flutterImg, Closure body) {
   def img = docker.image(flutterImg)
-  img.pull()
+  retry(3) {
+    img.pull()
+  }
   String dockerUser = sh(script: 'echo "$(id -u):$(id -g)"', returnStdout: true).trim()
   img.inside("-u ${dockerUser}", body)
 }
@@ -107,12 +109,6 @@ pipeline {
       name: 'DEPLOY_TO_HOST',
       defaultValue: true,
       description: '为 true 时上传 Web 产物并重启远端 compose（PR 构建不部署）'
-    )
-    string(
-      name: 'FLUTTER_DOCKER_IMAGE',
-      defaultValue: 'ghcr.io/cirruslabs/flutter:stable',
-      trim: true,
-      description: 'CI 内执行 flutter 的 Docker 镜像（须 Dart ≥ 3.11，与 pubspec 一致）'
     )
     string(
       name: 'TODO_API_BASE_URL_TEST',
@@ -254,7 +250,7 @@ pipeline {
     stage('Flutter 依赖与质量 + 构建 Web') {
       steps {
         script {
-          String flutterImg = (params.FLUTTER_DOCKER_IMAGE ?: 'ghcr.io/cirruslabs/flutter:stable').trim()
+          String flutterImg = 'ghcr.io/cirruslabs/flutter:3.44.0'
           String apiBase = resolveApiBase(params, env.RESOLVED_ENV ?: 'test')
           if (!apiBase) {
             error('TODO_API_BASE_URL 未解析到，请检查 DEPLOY_ENV 或显式设置 TODO_API_BASE_URL')

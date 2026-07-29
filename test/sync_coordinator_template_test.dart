@@ -98,7 +98,7 @@ void main() {
   );
 
   test(
-    'failed standard template sync retains the local template for retry',
+    'retryable standard template sync retains the local template for retry',
     () async {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(db.close);

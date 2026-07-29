@@ -13,6 +13,7 @@ import '../../state/providers.dart';
 import '../../state/repositories/task_query_repository.dart';
 import '../../state/session_state.dart';
 import '../habit/habit_page.dart';
+import '../reminder/reminder_inbox_page.dart';
 import '../settings/settings_route.dart';
 import '../shell/section.dart';
 import '../shell/quick_add_bar.dart';
@@ -53,9 +54,9 @@ class _HomeShellState extends ConsumerState<HomeShell>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _triggerSync();
     _initNotifications();
     if (!const bool.fromEnvironment('FLUTTER_TEST')) {
+      _triggerSync();
       _connectivityRecoveryTrigger = ConnectivityRecoveryTrigger(
         ref.read(connectivityChangesProvider),
         initialState: ref.read(connectivityInitialStateProvider),
@@ -79,7 +80,10 @@ class _HomeShellState extends ConsumerState<HomeShell>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _triggerSync();
+    if (!const bool.fromEnvironment('FLUTTER_TEST') &&
+        state == AppLifecycleState.resumed) {
+      _triggerSync();
+    }
   }
 
   Future<void> _initNotifications() async {
@@ -92,28 +96,10 @@ class _HomeShellState extends ConsumerState<HomeShell>
 
   Future<void> _pollUpcomingReminders() async {
     if (const bool.fromEnvironment('FLUTTER_TEST')) return;
-    final svc = ref.read(localNotificationServiceProvider);
-    final api = ref.read(todoApiProvider).reminder;
-    final db = ref.read(appDatabaseProvider);
-    if (db == null) return;
+    final poller = ref.read(reminderNotificationPollerProvider);
+    if (poller == null) return;
     try {
-      final items = await api.inbox();
-      final now = DateTime.now();
-      for (final it in items.where((e) => e.pending)) {
-        final diff = it.remindAt.difference(now);
-        if (diff.inSeconds <= 30) {
-          final task = await db.taskByServerId(it.taskId);
-          final taskTitle = (task != null && task.title.isNotEmpty)
-              ? task.title
-              : it.taskTitle;
-          await svc.show(
-            id: it.id,
-            title: taskTitle.isEmpty ? '提醒' : taskTitle,
-            body: '到期提醒',
-            payload: 'reminder:${it.id}',
-          );
-        }
-      }
+      await poller.poll();
     } catch (_) {}
   }
 
@@ -318,6 +304,12 @@ class _HomeShellState extends ConsumerState<HomeShell>
     );
   }
 
+  void _openReminders() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const ReminderInboxPage()));
+  }
+
   Future<void> _quickAdd(QuickAddRequest request) async {
     final repo = ref.read(taskRepositoryProvider);
     if (repo == null) return;
@@ -381,6 +373,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
           ),
           onSelectSection: _selectSection,
           onSync: () => unawaited(_triggerSync()),
+          onOpenReminders: _openReminders,
           syncStatus: _syncStatus,
           onSelectSmart: _selectSmart,
           onSelectList: _selectList,

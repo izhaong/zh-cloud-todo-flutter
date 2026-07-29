@@ -5,6 +5,8 @@ import 'package:uuid/uuid.dart';
 import '../core/api/sync_api.dart';
 import '../core/api/todo_api.dart';
 import '../core/db/app_database.dart';
+import '../core/notification/local_notification_service.dart';
+import '../core/notification/reminder_notification_poller.dart';
 import '../core/sync/sync_change_queue.dart';
 import '../core/sync/sync_coordinator.dart';
 import '../state/session_state.dart';
@@ -76,9 +78,14 @@ final appDatabaseProvider = Provider<AppDatabase?>((ref) {
   ref.watch(sessionProvider);
   final session = ref.watch(sessionProvider);
   if (session == null) return null;
+  const testNamespace = String.fromEnvironment('TODO_E2E_DATABASE_SUFFIX');
   final db = AppDatabase.forUser(
     tenantId: session.tenantId,
     userId: session.userId,
+    testNamespace:
+        const bool.fromEnvironment('FLUTTER_TEST') && testNamespace.isNotEmpty
+        ? testNamespace
+        : null,
   );
   ref.onDispose(db.close);
   return db;
@@ -162,6 +169,18 @@ final reminderInboxRepositoryProvider = Provider<ReminderInboxRepository>((
 ) {
   return ReminderInboxRepository(ref.watch(todoApiProvider).reminder);
 });
+
+final reminderNotificationPollerProvider =
+    Provider<ReminderNotificationPoller?>((ref) {
+      final database = ref.watch(appDatabaseProvider);
+      if (database == null) return null;
+      return ReminderNotificationPoller(
+        repository: ref.watch(reminderInboxRepositoryProvider),
+        database: database,
+        notifications: ref.watch(localNotificationServiceProvider),
+        now: ref.watch(currentDateTimeProvider),
+      );
+    });
 
 final taskCaptureDefaultsRepositoryProvider =
     Provider<TaskCaptureDefaultsRepository?>((ref) {
