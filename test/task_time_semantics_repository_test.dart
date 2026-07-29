@@ -370,26 +370,64 @@ void main() {
     expect(changes[3].entityLocalId, second.id);
   });
 
-  test('queues reminder dispatch actions by dispatch ID', () async {
+  test('queues every reminder dispatch action by dispatch ID', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
     final actions = ReminderDispatchActionRepository(SyncChangeQueue(db));
 
-    final mutationId = await actions.snooze(
+    final snoozeMutationId = await actions.snooze(
       reminderDispatchId: 400,
       minutes: 10,
     );
+    await actions.dismiss(reminderDispatchId: 401);
+    await actions.complete(reminderDispatchId: 402);
+    await actions.startFocus(reminderDispatchId: 403);
 
-    final change = await db.select(db.todoSyncChanges).getSingle();
-    final payload = jsonDecode(change.payloadJson) as Map<String, dynamic>;
-    expect(change.entity, 'reminder_dispatch_action');
-    expect(change.entityServerId, 400);
-    expect(change.clientMutationId, mutationId);
-    expect(payload, {
+    final changes = await db.select(db.todoSyncChanges).get();
+    expect(changes, hasLength(4));
+    expect(
+      changes.every((change) => change.entity == 'reminder_dispatch_action'),
+      isTrue,
+    );
+    expect(changes.map((change) => change.entityServerId), [
+      400,
+      401,
+      402,
+      403,
+    ]);
+    expect(changes.first.clientMutationId, snoozeMutationId);
+    expect(jsonDecode(changes.first.payloadJson), {
       'reminderDispatchId': 400,
       'action': 'snooze',
       'minutes': 10,
     });
+    expect(
+      changes
+          .skip(1)
+          .map(
+            (change) =>
+                (jsonDecode(change.payloadJson)
+                    as Map<String, dynamic>)['action'],
+          ),
+      ['dismiss', 'complete', 'start_focus'],
+    );
+  });
+
+  test('rejects invalid reminder dispatch actions before enqueue', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final actions = ReminderDispatchActionRepository(SyncChangeQueue(db));
+
+    await expectLater(
+      actions.complete(reminderDispatchId: 0),
+      throwsArgumentError,
+    );
+    expect(
+      () => actions.snooze(reminderDispatchId: 400, minutes: 0),
+      throwsArgumentError,
+    );
+
+    expect(await db.select(db.todoSyncChanges).get(), isEmpty);
   });
 
   test(
@@ -462,6 +500,89 @@ void main() {
     expect(rulePayload['frequency'], 'custom');
     expect(rulePayload['weekdays'], '1,3,5');
     expect(skipPayload['repeatRuleId'], rule.id);
+  });
+
+  test(
+    'stores normalized selected-date repeat rule and queues its date list',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final repeats = RepeatRuleRepository(db, SyncChangeQueue(db));
+
+      final rule = await repeats.save(
+        taskId: 'task-1',
+        frequency: 'CUSTOM',
+        startAt: DateTime(2026, 7, 13, 9, 30),
+        repeatMode: 'ON_SELECTED_DATES',
+        selectedDates: [
+          DateTime(2026, 7, 20, 18),
+          DateTime(2026, 7, 15, 8),
+          DateTime(2026, 7, 20, 7),
+        ],
+        timeZone: 'Asia/Shanghai',
+      );
+
+      final change = (await db.select(db.todoSyncChanges).get()).single;
+      final payload = jsonDecode(change.payloadJson) as Map<String, dynamic>;
+      expect(rule.byDay, isNull);
+      expect(rule.until, isNull);
+      expect(rule.countLimit, isNull);
+      expect(rule.selectedDatesJson, '["2026-07-15","2026-07-20"]');
+      expect(payload['repeatMode'], 'ON_SELECTED_DATES');
+      expect(payload['selectedDates'], ['2026-07-15', '2026-07-20']);
+    },
+  );
+
+  test('rejects contradictory selected-date repeat contracts', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final repeats = RepeatRuleRepository(db, SyncChangeQueue(db));
+    final startAt = DateTime(2026, 7, 13, 9, 30);
+    final validDate = DateTime(2026, 7, 15);
+
+    final invalidSaves = <Future<TodoRepeatRule> Function()>[
+      () => repeats.save(
+        taskId: 'task-empty',
+        frequency: 'CUSTOM',
+        startAt: startAt,
+        repeatMode: 'ON_SELECTED_DATES',
+      ),
+      () => repeats.save(
+        taskId: 'task-before',
+        frequency: 'CUSTOM',
+        startAt: startAt,
+        repeatMode: 'ON_SELECTED_DATES',
+        selectedDates: [DateTime(2026, 7, 12)],
+      ),
+      () => repeats.save(
+        taskId: 'task-weekday',
+        frequency: 'CUSTOM',
+        weekdays: const [1, 3],
+        startAt: startAt,
+        repeatMode: 'ON_SELECTED_DATES',
+        selectedDates: [validDate],
+      ),
+      () => repeats.save(
+        taskId: 'task-until',
+        frequency: 'CUSTOM',
+        startAt: startAt,
+        untilAt: DateTime(2026, 7, 31),
+        repeatMode: 'ON_SELECTED_DATES',
+        selectedDates: [validDate],
+      ),
+      () => repeats.save(
+        taskId: 'task-mode',
+        frequency: 'DAILY',
+        startAt: startAt,
+        selectedDates: [validDate],
+      ),
+    ];
+
+    for (final save in invalidSaves) {
+      await expectLater(save(), throwsArgumentError);
+    }
+    expect(await db.select(db.todoRepeatRules).get(), isEmpty);
+    expect(await db.select(db.todoSyncChanges).get(), isEmpty);
   });
 
   test(

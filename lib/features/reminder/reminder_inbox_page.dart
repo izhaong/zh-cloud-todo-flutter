@@ -1,21 +1,28 @@
 import 'dart:async';
 
+import 'package:drift/drift.dart' show OrderingTerm;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/db/app_database.dart' show TodoSyncChange;
+import '../../core/sync/sync_entities.dart' show SyncEntities;
 import '../../state/providers.dart';
 import '../../state/repositories/reminder_inbox_repository.dart'
     show ReminderInboxItem;
+import '../pomodoro/pomodoro_page.dart' show PomodoroPage;
 import '../task/task_detail_page.dart' show TaskDetailPage;
 
 /// 当前收件箱条目（拉取后回写解析好的任务标题）。
 class InboxEntry {
-  InboxEntry(this.item, {this.localTitle});
+  InboxEntry(this.item, {this.localTitle, this.localActionChange});
 
   final ReminderInboxItem item;
 
   /// 本地解析出的任务标题（按 taskId serverId 查不到时回退 item.taskTitle）。
   final String? localTitle;
+
+  /// 当前派发记录最近一次本地动作，用于覆盖尚未刷新的远端待处理状态。
+  final TodoSyncChange? localActionChange;
 
   int get id => item.id;
   String get title => (localTitle != null && localTitle!.isNotEmpty)
@@ -23,7 +30,23 @@ class InboxEntry {
       : item.taskTitle;
   DateTime get remindAt => item.remindAt;
   String get status => item.status;
-  bool get pending => item.pending;
+  bool get pending => localActionChange == null && item.pending;
+
+  String? get localSyncMessage {
+    final change = localActionChange;
+    if (change == null) return null;
+    switch (change.status) {
+      case 'queued':
+        return '操作等待同步';
+      case 'retryable':
+        return '操作同步失败，等待重试（已尝试 ${change.attemptCount} 次）';
+      case 'synced':
+        return '操作已同步';
+      case 'failed':
+        return '操作同步冲突，请刷新确认';
+    }
+    return null;
+  }
 }
 
 /// 收件箱状态：加载中 / 错误 / 数据三类。
@@ -80,6 +103,22 @@ final inboxProvider = FutureProvider.autoDispose<InboxState>((ref) async {
     return InboxState.data([for (final it in items) InboxEntry(it)]);
   }
 
+  final actionChanges =
+      await (db.select(db.todoSyncChanges)
+            ..where(
+              (change) =>
+                  change.entity.equals(SyncEntities.reminderDispatchAction),
+            )
+            ..orderBy([(change) => OrderingTerm.desc(change.id)]))
+          .get();
+  final latestActionByDispatchId = <int, TodoSyncChange>{};
+  for (final change in actionChanges) {
+    final dispatchId = change.entityServerId;
+    if (dispatchId != null) {
+      latestActionByDispatchId.putIfAbsent(dispatchId, () => change);
+    }
+  }
+
   final entries = <InboxEntry>[];
   for (final it in items) {
     String? localTitle;
@@ -89,7 +128,13 @@ final inboxProvider = FutureProvider.autoDispose<InboxState>((ref) async {
     } catch (_) {
       // 解析失败时回退后端冗余标题。
     }
-    entries.add(InboxEntry(it, localTitle: localTitle));
+    entries.add(
+      InboxEntry(
+        it,
+        localTitle: localTitle,
+        localActionChange: latestActionByDispatchId[it.id],
+      ),
+    );
   }
   return InboxState.data(entries);
 });
@@ -97,7 +142,7 @@ final inboxProvider = FutureProvider.autoDispose<InboxState>((ref) async {
 /// 提醒收件箱页面（P4 / Time Loop）。
 ///
 /// - 拉取 `GET /reminder-action/inbox` 并按任务分组；
-/// - 每条可：完成 / 忽略 / 延后 10 分钟（snooze）/ 持续响铃（persistent）；
+/// - 每条可：完成 / 忽略 / 开始专注 / 延后 10 分钟（snooze）/ 持续响铃（persistent）；
 /// - 每个任务组可：全部完成 / 全部忽略 / 一键跳转到任务详情。
 class ReminderInboxPage extends ConsumerWidget {
   const ReminderInboxPage({super.key});
@@ -278,6 +323,18 @@ class _InboxGroupCard extends ConsumerWidget {
                   if (actions == null) throw StateError('同步队列未就绪');
                   return actions.complete(reminderDispatchId: r.id);
                 },
+                onStartFocus: () async {
+                  if (actions == null) throw StateError('同步队列未就绪');
+                  await actions.startFocus(reminderDispatchId: r.id);
+                  if (!context.mounted) return;
+                  unawaited(
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => PomodoroPage(taskId: r.item.taskId),
+                      ),
+                    ),
+                  );
+                },
                 onDismiss: () {
                   if (actions == null) throw StateError('同步队列未就绪');
                   return actions.dismiss(reminderDispatchId: r.id);
@@ -297,6 +354,7 @@ class _ReminderTile extends StatelessWidget {
     required this.onSnooze,
     required this.onPersistent,
     required this.onComplete,
+    required this.onStartFocus,
     required this.onDismiss,
   });
 
@@ -305,6 +363,7 @@ class _ReminderTile extends StatelessWidget {
   final Future<void> Function() onSnooze;
   final Future<void> Function() onPersistent;
   final Future<void> Function() onComplete;
+  final Future<void> Function() onStartFocus;
   final Future<void> Function() onDismiss;
 
   String _fmtRemain(DateTime t) {
@@ -320,6 +379,7 @@ class _ReminderTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final overdue = entry.remindAt.isBefore(DateTime.now());
+    final localSyncMessage = entry.localSyncMessage;
     return ListTile(
       dense: true,
       leading: Icon(
@@ -328,8 +388,19 @@ class _ReminderTile extends StatelessWidget {
         size: 20,
       ),
       title: Text(entry.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text(
-        '${_fmtRemain(entry.remindAt)} · ${entry.remindAt.toLocal().toString().substring(0, 16)}',
+      subtitle: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${_fmtRemain(entry.remindAt)} · ${entry.remindAt.toLocal().toString().substring(0, 16)}',
+          ),
+          if (localSyncMessage != null)
+            Text(
+              localSyncMessage,
+              key: ValueKey('reminder-inbox-sync-${entry.id}'),
+            ),
+        ],
       ),
       trailing: entry.pending
           ? Row(
@@ -349,6 +420,11 @@ class _ReminderTile extends StatelessWidget {
                   tooltip: '完成',
                   icon: const Icon(Icons.check, size: 18),
                   onPressed: () => onAct(onComplete),
+                ),
+                IconButton(
+                  tooltip: '开始专注',
+                  icon: const Icon(Icons.center_focus_strong, size: 18),
+                  onPressed: () => onAct(onStartFocus),
                 ),
                 IconButton(
                   tooltip: '忽略',

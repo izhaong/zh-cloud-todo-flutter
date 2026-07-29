@@ -1,5 +1,7 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
-import 'package:drift/drift.dart' show DatabaseConnection;
+import 'package:drift/drift.dart' show DatabaseConnection, Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,8 +10,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zh_cloud_todo_flutter/core/api/api_client.dart';
 import 'package:zh_cloud_todo_flutter/core/api/todo_api.dart';
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
+import 'package:zh_cloud_todo_flutter/features/pomodoro/pomodoro_page.dart';
 import 'package:zh_cloud_todo_flutter/features/reminder/reminder_inbox_page.dart'
     show ReminderInboxPage, groupByTask, InboxEntry;
+import 'package:zh_cloud_todo_flutter/state/efficiency_providers.dart';
 import 'package:zh_cloud_todo_flutter/state/providers.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/reminder_inbox_repository.dart';
 
@@ -231,5 +235,228 @@ void main() {
     final changes = await database.select(database.todoSyncChanges).get();
     expect(changes, hasLength(1));
     expect(changes.single.entity, 'reminder_dispatch_action');
+  });
+
+  testWidgets('完成提醒入队后以本地状态覆盖未刷新的远端待处理项', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final database = AppDatabase.forTesting(
+      DatabaseConnection(
+        NativeDatabase.memory(),
+        closeStreamsSynchronously: true,
+      ),
+    );
+    addTearDown(database.close);
+    final container = ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(database),
+        reminderInboxRepositoryProvider.overrideWithValue(
+          _FakeReminderInboxRepository([
+            ReminderInboxItem(
+              id: 91,
+              reminderId: 92,
+              taskId: 12,
+              taskTitle: '提交周报',
+              remindAt: DateTime(2026, 7, 16, 9),
+            ),
+          ]),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: ReminderInboxPage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('待处理 1'), findsOneWidget);
+    await tester.tap(find.byTooltip('完成'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('操作等待同步'), findsOneWidget);
+    expect(find.text('待处理 1'), findsNothing);
+    expect(find.byTooltip('完成'), findsNothing);
+    expect(find.byTooltip('忽略'), findsNothing);
+    expect(find.text('全部完成'), findsNothing);
+    expect(find.text('全部忽略'), findsNothing);
+
+    final changes = await database.select(database.todoSyncChanges).get();
+    expect(changes, hasLength(1));
+    final payload =
+        jsonDecode(changes.single.payloadJson) as Map<String, dynamic>;
+    expect(changes.single.entityServerId, 91);
+    expect(payload['reminderDispatchId'], 91);
+    expect(payload['action'], 'complete');
+  });
+
+  testWidgets('提醒动作重试中时展示尝试次数且不允许重复操作', (tester) async {
+    final database = AppDatabase.forTesting(
+      DatabaseConnection(
+        NativeDatabase.memory(),
+        closeStreamsSynchronously: true,
+      ),
+    );
+    addTearDown(database.close);
+    final container = ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(database),
+        reminderInboxRepositoryProvider.overrideWithValue(
+          _FakeReminderInboxRepository([
+            ReminderInboxItem(
+              id: 101,
+              reminderId: 102,
+              taskId: 12,
+              taskTitle: '同步重试',
+              remindAt: DateTime(2026, 7, 16, 9),
+            ),
+          ]),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    await container
+        .read(reminderDispatchActionRepositoryProvider)!
+        .dismiss(reminderDispatchId: 101);
+    await database
+        .update(database.todoSyncChanges)
+        .write(
+          const TodoSyncChangesCompanion(
+            status: Value('retryable'),
+            attemptCount: Value(2),
+          ),
+        );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: ReminderInboxPage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('操作同步失败，等待重试（已尝试 2 次）'), findsOneWidget);
+    expect(find.byTooltip('完成'), findsNothing);
+    expect(find.byTooltip('忽略'), findsNothing);
+  });
+
+  testWidgets('全部忽略为同组每条提醒入队并立即清空待处理计数', (tester) async {
+    final database = AppDatabase.forTesting(
+      DatabaseConnection(
+        NativeDatabase.memory(),
+        closeStreamsSynchronously: true,
+      ),
+    );
+    addTearDown(database.close);
+    final container = ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(database),
+        reminderInboxRepositoryProvider.overrideWithValue(
+          _FakeReminderInboxRepository([
+            ReminderInboxItem(
+              id: 111,
+              reminderId: 112,
+              taskId: 12,
+              taskTitle: '批量处理',
+              remindAt: DateTime(2026, 7, 16, 9),
+            ),
+            ReminderInboxItem(
+              id: 113,
+              reminderId: 114,
+              taskId: 12,
+              taskTitle: '批量处理',
+              remindAt: DateTime(2026, 7, 16, 9, 10),
+            ),
+          ]),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: ReminderInboxPage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('待处理 2'), findsOneWidget);
+    await tester.tap(find.text('全部忽略'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('操作等待同步'), findsNWidgets(2));
+    expect(find.text('待处理 2'), findsNothing);
+    expect(find.text('全部完成'), findsNothing);
+    expect(find.text('全部忽略'), findsNothing);
+    final changes = await database.select(database.todoSyncChanges).get();
+    expect(changes, hasLength(2));
+    expect(changes.map((change) => change.entityServerId), [111, 113]);
+    expect(
+      changes.map(
+        (change) =>
+            (jsonDecode(change.payloadJson) as Map<String, dynamic>)['action'],
+      ),
+      ['dismiss', 'dismiss'],
+    );
+  });
+
+  testWidgets('开始专注入 outbox 并进入关联任务专注页', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final database = AppDatabase.forTesting(
+      DatabaseConnection(
+        NativeDatabase.memory(),
+        closeStreamsSynchronously: true,
+      ),
+    );
+    addTearDown(database.close);
+    final container = ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(database),
+        reminderInboxRepositoryProvider.overrideWithValue(
+          _FakeReminderInboxRepository([
+            ReminderInboxItem(
+              id: 81,
+              reminderId: 82,
+              taskId: 12,
+              taskTitle: '开始写周报',
+              remindAt: DateTime(2026, 7, 16, 9),
+            ),
+          ]),
+        ),
+        pomodoroStatsProvider.overrideWith((ref) async => <String, dynamic>{}),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: ReminderInboxPage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('开始专注'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('番茄专注'), findsOneWidget);
+    expect(tester.widget<PomodoroPage>(find.byType(PomodoroPage)).taskId, 12);
+    final changes = await database.select(database.todoSyncChanges).get();
+    expect(changes, hasLength(1));
+    final payload =
+        jsonDecode(changes.single.payloadJson) as Map<String, dynamic>;
+    expect(payload['reminderDispatchId'], 81);
+    expect(payload['action'], 'start_focus');
   });
 }

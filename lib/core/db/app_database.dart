@@ -215,6 +215,7 @@ class TodoRepeatRules extends Table {
   BoolColumn get enabled => boolean().withDefault(const Constant(true))();
   TextColumn get repeatMode => text().withDefault(const Constant('ON_DUE'))();
   TextColumn get timeZone => text().nullable()();
+  TextColumn get selectedDatesJson => text().nullable()();
   DateTimeColumn get updatedAt => dateTime()();
   DateTimeColumn get createdAt => dateTime()();
 
@@ -364,7 +365,7 @@ class AppDatabase extends _$AppDatabase {
   }) : super(_open(_userDatabaseName(tenantId, userId, testNamespace)));
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -525,6 +526,12 @@ class AppDatabase extends _$AppDatabase {
           await m.addColumn(todoTasks, todoTasks.assigneeUserName);
         }
         await _createAssigneeFilterIndex(m.database);
+      }
+      // B2 与 B3 曾在独立分支分别占用 11 和 14。合并后的新字段必须使用
+      // 全新的 15 号迁移，保证已经升级到 B3 schema 14 的用户也能补齐。
+      if (from < 15 &&
+          !await _columnExists(m, 'todo_repeat_rules', 'selected_dates_json')) {
+        await m.addColumn(todoRepeatRules, todoRepeatRules.selectedDatesJson);
       }
     },
   );

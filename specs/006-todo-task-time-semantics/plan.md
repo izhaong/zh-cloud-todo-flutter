@@ -8,7 +8,7 @@ Flutter/Dart、Drift、Riverpod、dio 与 `SyncCoordinator`。现有时间字段
 
 ## Design
 
-1. 先写 `TaskRepository`、提醒/重复 Repository 与 SyncCoordinator 的失败测试，固定跨午夜、全天、时区、多个提醒、重复规则与 occurrence 动作的本地/载荷语义。
+1. 先写 `TaskRepository`、提醒/重复 Repository 与 SyncCoordinator 的失败测试，固定跨午夜、全天、时区、多个提醒、三类重复模式、selectedDates 与 occurrence 动作的本地/载荷语义。
 2. 用 Drift transaction 将任务时间、完成状态、提醒、规则和跳过/补做各自本地行与 outbox 原子写入；任务完成 payload 显式包含 `status` 与 `completedAt`，pull 将 `completedAt` 与服务端 `repeatParentTaskId`、`repeatRuleId`、`repeatOccurrenceAt` 回填为本地聚合字段；提醒创建必须先确认本地 parent task 存在，避免生成无法解析的 task 引用；让 parent task 与 repeat rule 的 serverId 映射成为 push 前置条件。
 3. 只在既有详情和提醒收件箱入口接入 use-case，展示同步、失败和重试状态；App 运行期间的即时通知同样经 `ReminderInboxRepository` 轮询并按派发 ID 去重，不改 002 工作区布局。
 4. 以 mock Service 契约、文件型 SQLite 重启、同步顺序和 Widget 回显逐层验证；B1 恢复后另行执行跨切片真实设备回放。
@@ -17,7 +17,7 @@ Flutter/Dart、Drift、Riverpod、dio 与 `SyncCoordinator`。现有时间字段
 
 | 文件 | 责任 |
 | --- | --- |
-| `lib/core/db/app_database.dart` | 时间、提醒、重复与 occurrence 动作的 Drift 表与迁移。 |
+| `lib/core/db/app_database.dart` | 时间、提醒、重复、selectedDates 与 occurrence 动作的 Drift 表与迁移。 |
 | `lib/state/repositories/task_repository.dart` | 任务时间字段的原子更新和 task outbox。 |
 | `lib/state/repositories/reminder_repository.dart` | 提醒规则创建、修改、删除和持续提醒确认。 |
 | `lib/state/repositories/reminder_dispatch_action_repository.dart` | 完成、忽略和稍后派发动作的本地状态与 action outbox；不复用提醒规则 ID。 |

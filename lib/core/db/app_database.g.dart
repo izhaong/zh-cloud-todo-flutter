@@ -6155,6 +6155,18 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _selectedDatesJsonMeta = const VerificationMeta(
+    'selectedDatesJson',
+  );
+  @override
+  late final GeneratedColumn<String> selectedDatesJson =
+      GeneratedColumn<String>(
+        'selected_dates_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _updatedAtMeta = const VerificationMeta(
     'updatedAt',
   );
@@ -6192,6 +6204,7 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
     enabled,
     repeatMode,
     timeZone,
+    selectedDatesJson,
     updatedAt,
     createdAt,
   ];
@@ -6288,6 +6301,15 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
         timeZone.isAcceptableOrUnknown(data['time_zone']!, _timeZoneMeta),
       );
     }
+    if (data.containsKey('selected_dates_json')) {
+      context.handle(
+        _selectedDatesJsonMeta,
+        selectedDatesJson.isAcceptableOrUnknown(
+          data['selected_dates_json']!,
+          _selectedDatesJsonMeta,
+        ),
+      );
+    }
     if (data.containsKey('updated_at')) {
       context.handle(
         _updatedAtMeta,
@@ -6365,6 +6387,10 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
         DriftSqlType.string,
         data['${effectivePrefix}time_zone'],
       ),
+      selectedDatesJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}selected_dates_json'],
+      ),
       updatedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}updated_at'],
@@ -6396,6 +6422,7 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
   final bool enabled;
   final String repeatMode;
   final String? timeZone;
+  final String? selectedDatesJson;
   final DateTime updatedAt;
   final DateTime createdAt;
   const TodoRepeatRule({
@@ -6412,6 +6439,7 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
     required this.enabled,
     required this.repeatMode,
     this.timeZone,
+    this.selectedDatesJson,
     required this.updatedAt,
     required this.createdAt,
   });
@@ -6444,6 +6472,9 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
     map['repeat_mode'] = Variable<String>(repeatMode);
     if (!nullToAbsent || timeZone != null) {
       map['time_zone'] = Variable<String>(timeZone);
+    }
+    if (!nullToAbsent || selectedDatesJson != null) {
+      map['selected_dates_json'] = Variable<String>(selectedDatesJson);
     }
     map['updated_at'] = Variable<DateTime>(updatedAt);
     map['created_at'] = Variable<DateTime>(createdAt);
@@ -6479,6 +6510,9 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
       timeZone: timeZone == null && nullToAbsent
           ? const Value.absent()
           : Value(timeZone),
+      selectedDatesJson: selectedDatesJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(selectedDatesJson),
       updatedAt: Value(updatedAt),
       createdAt: Value(createdAt),
     );
@@ -6503,6 +6537,9 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
       enabled: serializer.fromJson<bool>(json['enabled']),
       repeatMode: serializer.fromJson<String>(json['repeatMode']),
       timeZone: serializer.fromJson<String?>(json['timeZone']),
+      selectedDatesJson: serializer.fromJson<String?>(
+        json['selectedDatesJson'],
+      ),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
@@ -6524,6 +6561,7 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
       'enabled': serializer.toJson<bool>(enabled),
       'repeatMode': serializer.toJson<String>(repeatMode),
       'timeZone': serializer.toJson<String?>(timeZone),
+      'selectedDatesJson': serializer.toJson<String?>(selectedDatesJson),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
@@ -6543,6 +6581,7 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
     bool? enabled,
     String? repeatMode,
     Value<String?> timeZone = const Value.absent(),
+    Value<String?> selectedDatesJson = const Value.absent(),
     DateTime? updatedAt,
     DateTime? createdAt,
   }) => TodoRepeatRule(
@@ -6559,6 +6598,9 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
     enabled: enabled ?? this.enabled,
     repeatMode: repeatMode ?? this.repeatMode,
     timeZone: timeZone.present ? timeZone.value : this.timeZone,
+    selectedDatesJson: selectedDatesJson.present
+        ? selectedDatesJson.value
+        : this.selectedDatesJson,
     updatedAt: updatedAt ?? this.updatedAt,
     createdAt: createdAt ?? this.createdAt,
   );
@@ -6581,6 +6623,9 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
           ? data.repeatMode.value
           : this.repeatMode,
       timeZone: data.timeZone.present ? data.timeZone.value : this.timeZone,
+      selectedDatesJson: data.selectedDatesJson.present
+          ? data.selectedDatesJson.value
+          : this.selectedDatesJson,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
@@ -6602,6 +6647,7 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
           ..write('enabled: $enabled, ')
           ..write('repeatMode: $repeatMode, ')
           ..write('timeZone: $timeZone, ')
+          ..write('selectedDatesJson: $selectedDatesJson, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -6623,6 +6669,7 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
     enabled,
     repeatMode,
     timeZone,
+    selectedDatesJson,
     updatedAt,
     createdAt,
   );
@@ -6643,6 +6690,7 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
           other.enabled == this.enabled &&
           other.repeatMode == this.repeatMode &&
           other.timeZone == this.timeZone &&
+          other.selectedDatesJson == this.selectedDatesJson &&
           other.updatedAt == this.updatedAt &&
           other.createdAt == this.createdAt);
 }
@@ -6661,6 +6709,7 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
   final Value<bool> enabled;
   final Value<String> repeatMode;
   final Value<String?> timeZone;
+  final Value<String?> selectedDatesJson;
   final Value<DateTime> updatedAt;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
@@ -6678,6 +6727,7 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
     this.enabled = const Value.absent(),
     this.repeatMode = const Value.absent(),
     this.timeZone = const Value.absent(),
+    this.selectedDatesJson = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -6696,6 +6746,7 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
     this.enabled = const Value.absent(),
     this.repeatMode = const Value.absent(),
     this.timeZone = const Value.absent(),
+    this.selectedDatesJson = const Value.absent(),
     required DateTime updatedAt,
     required DateTime createdAt,
     this.rowid = const Value.absent(),
@@ -6718,6 +6769,7 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
     Expression<bool>? enabled,
     Expression<String>? repeatMode,
     Expression<String>? timeZone,
+    Expression<String>? selectedDatesJson,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
@@ -6736,6 +6788,7 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
       if (enabled != null) 'enabled': enabled,
       if (repeatMode != null) 'repeat_mode': repeatMode,
       if (timeZone != null) 'time_zone': timeZone,
+      if (selectedDatesJson != null) 'selected_dates_json': selectedDatesJson,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
@@ -6756,6 +6809,7 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
     Value<bool>? enabled,
     Value<String>? repeatMode,
     Value<String?>? timeZone,
+    Value<String?>? selectedDatesJson,
     Value<DateTime>? updatedAt,
     Value<DateTime>? createdAt,
     Value<int>? rowid,
@@ -6774,6 +6828,7 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
       enabled: enabled ?? this.enabled,
       repeatMode: repeatMode ?? this.repeatMode,
       timeZone: timeZone ?? this.timeZone,
+      selectedDatesJson: selectedDatesJson ?? this.selectedDatesJson,
       updatedAt: updatedAt ?? this.updatedAt,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
@@ -6822,6 +6877,9 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
     if (timeZone.present) {
       map['time_zone'] = Variable<String>(timeZone.value);
     }
+    if (selectedDatesJson.present) {
+      map['selected_dates_json'] = Variable<String>(selectedDatesJson.value);
+    }
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
@@ -6850,6 +6908,7 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
           ..write('enabled: $enabled, ')
           ..write('repeatMode: $repeatMode, ')
           ..write('timeZone: $timeZone, ')
+          ..write('selectedDatesJson: $selectedDatesJson, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
@@ -12555,6 +12614,7 @@ typedef $$TodoRepeatRulesTableCreateCompanionBuilder =
       Value<bool> enabled,
       Value<String> repeatMode,
       Value<String?> timeZone,
+      Value<String?> selectedDatesJson,
       required DateTime updatedAt,
       required DateTime createdAt,
       Value<int> rowid,
@@ -12574,6 +12634,7 @@ typedef $$TodoRepeatRulesTableUpdateCompanionBuilder =
       Value<bool> enabled,
       Value<String> repeatMode,
       Value<String?> timeZone,
+      Value<String?> selectedDatesJson,
       Value<DateTime> updatedAt,
       Value<DateTime> createdAt,
       Value<int> rowid,
@@ -12650,6 +12711,11 @@ class $$TodoRepeatRulesTableFilterComposer
 
   ColumnFilters<String> get timeZone => $composableBuilder(
     column: $table.timeZone,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get selectedDatesJson => $composableBuilder(
+    column: $table.selectedDatesJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -12738,6 +12804,11 @@ class $$TodoRepeatRulesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get selectedDatesJson => $composableBuilder(
+    column: $table.selectedDatesJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
@@ -12801,6 +12872,11 @@ class $$TodoRepeatRulesTableAnnotationComposer
   GeneratedColumn<String> get timeZone =>
       $composableBuilder(column: $table.timeZone, builder: (column) => column);
 
+  GeneratedColumn<String> get selectedDatesJson => $composableBuilder(
+    column: $table.selectedDatesJson,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 
@@ -12858,6 +12934,7 @@ class $$TodoRepeatRulesTableTableManager
                 Value<bool> enabled = const Value.absent(),
                 Value<String> repeatMode = const Value.absent(),
                 Value<String?> timeZone = const Value.absent(),
+                Value<String?> selectedDatesJson = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -12875,6 +12952,7 @@ class $$TodoRepeatRulesTableTableManager
                 enabled: enabled,
                 repeatMode: repeatMode,
                 timeZone: timeZone,
+                selectedDatesJson: selectedDatesJson,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
                 rowid: rowid,
@@ -12894,6 +12972,7 @@ class $$TodoRepeatRulesTableTableManager
                 Value<bool> enabled = const Value.absent(),
                 Value<String> repeatMode = const Value.absent(),
                 Value<String?> timeZone = const Value.absent(),
+                Value<String?> selectedDatesJson = const Value.absent(),
                 required DateTime updatedAt,
                 required DateTime createdAt,
                 Value<int> rowid = const Value.absent(),
@@ -12911,6 +12990,7 @@ class $$TodoRepeatRulesTableTableManager
                 enabled: enabled,
                 repeatMode: repeatMode,
                 timeZone: timeZone,
+                selectedDatesJson: selectedDatesJson,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
                 rowid: rowid,
