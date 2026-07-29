@@ -440,6 +440,7 @@ class _ListBodyState extends State<_ListBody> {
           bottom: TodoLayoutTokens.mainHorizontalInset,
         ),
         itemCount: entries.length,
+        // ignore: deprecated_member_use
         onReorder: (oldIndex, newIndex) {
           final entry = entries[oldIndex];
           if (entry is! TodoTask) return;
