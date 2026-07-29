@@ -1,3 +1,5 @@
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,23 +18,41 @@ import 'change_password_page.dart';
 /// - `POST /security/2fa/disable?code=...` → Boolean
 /// - `POST /security/export?exportType=FULL` → Long（导出任务 ID）
 /// - `GET /security/export/list` → `List<DataExportItem>`
+/// - `GET /security/export/{id}/download` → 鉴权 JSON 文件
+typedef DataExportSaver = Future<bool> Function(DataExportDownload file);
+
+Future<bool> saveDataExport(DataExportDownload file) async {
+  final savedPath = await FilePicker.saveFile(
+    dialogTitle: '保存 Todo 数据导出',
+    fileName: file.filename,
+    type: FileType.custom,
+    allowedExtensions: const ['json'],
+    bytes: file.bytes,
+  );
+  // Web 的下载由浏览器接管，插件按契约始终返回 null。
+  return kIsWeb || savedPath != null;
+}
+
 class AccountSecurityPage extends ConsumerWidget {
-  const AccountSecurityPage({super.key});
+  const AccountSecurityPage({super.key, this.exportSaver = saveDataExport});
+
+  final DataExportSaver exportSaver;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final api = ref.watch(todoApiProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('账户安全')),
-      body: _Body(api: api),
+      body: _Body(api: api, exportSaver: exportSaver),
     );
   }
 }
 
 class _Body extends ConsumerWidget {
-  const _Body({required this.api});
+  const _Body({required this.api, required this.exportSaver});
 
   final TodoRestApi api;
+  final DataExportSaver exportSaver;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -57,7 +77,7 @@ class _Body extends ConsumerWidget {
         const SizedBox(height: 16),
         _TwoFactorCard(api: api),
         const SizedBox(height: 16),
-        _ExportCard(api: api),
+        _ExportCard(api: api, exportSaver: exportSaver),
       ],
     );
   }
@@ -306,9 +326,10 @@ class _TwoFactorCodeDialogState extends State<_TwoFactorCodeDialog> {
 }
 
 class _ExportCard extends ConsumerStatefulWidget {
-  const _ExportCard({required this.api});
+  const _ExportCard({required this.api, required this.exportSaver});
 
   final TodoRestApi api;
+  final DataExportSaver exportSaver;
 
   @override
   ConsumerState<_ExportCard> createState() => _ExportCardState();
@@ -342,7 +363,7 @@ class _ExportCardState extends ConsumerState<_ExportCard> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('已提交导出请求，请稍后回来下载')));
+        ).showSnackBar(const SnackBar(content: Text('导出已生成，可立即下载')));
       }
       await _load();
     } catch (e) {
@@ -350,6 +371,28 @@ class _ExportCardState extends ConsumerState<_ExportCard> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('导出失败：$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _download(DataExportItem item) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final file = await widget.api.security.downloadExport(item.id);
+      final saved = await widget.exportSaver(file);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(saved ? '已保存 ${file.filename}' : '已取消保存')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('下载失败：$e')));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -392,14 +435,14 @@ class _ExportCardState extends ConsumerState<_ExportCard> {
                   dense: true,
                   leading: const Icon(Icons.insert_drive_file_outlined),
                   title: Text('${e.exportType} · ${e.status}'),
-                  trailing: e.exportUrl.isNotEmpty
+                  trailing: e.status == 'READY'
                       ? IconButton(
-                          icon: const Icon(Icons.open_in_new),
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('下载：${e.exportUrl}')),
-                            );
-                          },
+                          key: ValueKey(
+                            'account-security-export-download-${e.id}',
+                          ),
+                          tooltip: '下载导出文件',
+                          icon: const Icon(Icons.download),
+                          onPressed: _busy ? null : () => _download(e),
                         )
                       : null,
                 ),

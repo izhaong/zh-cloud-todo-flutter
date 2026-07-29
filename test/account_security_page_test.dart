@@ -80,18 +80,73 @@ void main() {
       isTrue,
     );
   });
+
+  testWidgets('READY 导出使用鉴权接口下载并保存 JSON 文件', (tester) async {
+    final requests = <RequestOptions>[];
+    DataExportDownload? saved;
+    await _pumpPage(
+      tester,
+      requests: requests,
+      enabled: false,
+      exports: [
+        DataExportItem(
+          id: 88,
+          exportType: 'FULL',
+          exportUrl: '/app-api/todo/security/export/88/download',
+          status: 'READY',
+        ),
+      ],
+      exportSaver: (file) async {
+        saved = file;
+        return true;
+      },
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('account-security-export-download-88')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      requests.any(
+        (request) =>
+            request.path.endsWith('/security/export/88/download') &&
+            request.responseType == ResponseType.bytes,
+      ),
+      isTrue,
+    );
+    expect(saved?.filename, 'todo-export-88.json');
+    expect(saved?.bytes, const [123, 125]);
+    expect(find.text('已保存 todo-export-88.json'), findsOneWidget);
+  });
 }
 
 Future<void> _pumpPage(
   WidgetTester tester, {
   required List<RequestOptions> requests,
   required bool enabled,
+  List<DataExportItem> exports = const [],
+  DataExportSaver? exportSaver,
 }) async {
   final dio = Dio()
     ..interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
           requests.add(options);
+          if (options.path.endsWith('/security/export/88/download')) {
+            handler.resolve(
+              Response<List<int>>(
+                requestOptions: options,
+                data: const [123, 125],
+                headers: Headers.fromMap({
+                  'content-disposition': [
+                    'attachment; filename="todo-export-88.json"',
+                  ],
+                }),
+              ),
+            );
+            return;
+          }
           final dynamic data;
           if (options.path.endsWith('/security/2fa/status')) {
             data = enabled;
@@ -101,7 +156,16 @@ Future<void> _pumpPage(
               'otpauthUri': 'otpauth://totp/zh-cloud',
             };
           } else if (options.path.endsWith('/security/export/list')) {
-            data = <dynamic>[];
+            data = exports
+                .map(
+                  (item) => {
+                    'id': item.id,
+                    'exportType': item.exportType,
+                    'exportUrl': item.exportUrl,
+                    'status': item.status,
+                  },
+                )
+                .toList();
           } else {
             data = true;
           }
@@ -121,7 +185,7 @@ Future<void> _pumpPage(
       ],
       child: MaterialApp(
         theme: ThemeData(useMaterial3: true),
-        home: const AccountSecurityPage(),
+        home: AccountSecurityPage(exportSaver: exportSaver ?? saveDataExport),
       ),
     ),
   );

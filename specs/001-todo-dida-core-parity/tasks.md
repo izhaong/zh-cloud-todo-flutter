@@ -70,7 +70,7 @@
 ## Phase 7: User Story 5 — 协作与账号安全 (P3)
 
 - [ ] T026 [P][US5] `lib/features/collaboration/list_member_page.dart`
-- [ ] T027 [US5] `lib/features/account/{change_password_page,two_factor_page,data_export_page}.dart`
+- [x] T027 [US5] `lib/features/account/{change_password_page,account_security_page}.dart`：改密、RFC 6238 TOTP 注册/确认/关闭与鉴权 JSON 数据导出下载
 
 **Checkpoint**: 共享协作与账号安全可用
 

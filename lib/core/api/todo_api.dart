@@ -1,6 +1,9 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 
 import 'api_client.dart';
+import 'api_config.dart';
 
 export 'api_config.dart' show ApiConfig;
 
@@ -620,6 +623,14 @@ class DataExportItem {
   );
 }
 
+/// 已鉴权下载的数据导出文件。
+class DataExportDownload {
+  const DataExportDownload({required this.filename, required this.bytes});
+
+  final String filename;
+  final Uint8List bytes;
+}
+
 /// 认证器注册所需的 TOTP 密钥与标准 URI。
 class TwoFactorSetup {
   const TwoFactorSetup({required this.secret, required this.otpauthUri});
@@ -716,7 +727,7 @@ class SecurityApi {
   Future<int> requestExport({String exportType = 'FULL'}) async {
     final resp = await _client.post<Map<String, dynamic>>(
       '/security/export',
-      data: {'exportType': exportType},
+      queryParameters: {'exportType': exportType},
     );
     final data = _unwrap(resp.data);
     return (data as num?)?.toInt() ?? 0;
@@ -731,6 +742,45 @@ class SecurityApi {
     final raw = (data is List ? data : <dynamic>[])
         .cast<Map<String, dynamic>>();
     return raw.map(DataExportItem.fromJson).toList();
+  }
+
+  /// `GET /security/export/{id}/download` — 使用当前登录态下载 JSON 快照。
+  Future<DataExportDownload> downloadExport(int id) async {
+    final resp = await _client.raw.get<List<int>>(
+      '${ApiConfig.todoPrefix}/security/export/$id/download',
+      options: Options(responseType: ResponseType.bytes),
+    );
+    final data = resp.data;
+    if (data == null || data.isEmpty) {
+      throw Exception('导出文件为空');
+    }
+    return DataExportDownload(
+      filename: _exportFilename(resp.headers, id),
+      bytes: Uint8List.fromList(data),
+    );
+  }
+
+  String _exportFilename(Headers headers, int id) {
+    final disposition = headers.value('content-disposition') ?? '';
+    final encoded = RegExp(
+      r"filename\*=UTF-8''([^;]+)",
+      caseSensitive: false,
+    ).firstMatch(disposition)?.group(1);
+    if (encoded != null && encoded.isNotEmpty) {
+      try {
+        return Uri.decodeComponent(encoded);
+      } on FormatException {
+        // 响应头编码损坏时使用安全的后备文件名。
+      }
+    }
+    final plain = RegExp(
+      r'filename="?([^";]+)"?',
+      caseSensitive: false,
+    ).firstMatch(disposition)?.group(1);
+    if (plain != null && plain.isNotEmpty) {
+      return plain;
+    }
+    return 'todo-export-$id.json';
   }
 }
 
