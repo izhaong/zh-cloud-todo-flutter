@@ -72,8 +72,14 @@ class TodoAuthSession {
 }
 
 class TodoAuthException implements Exception {
-  const TodoAuthException(this.message);
+  const TodoAuthException(this.message, {this.code});
+
+  static const int twoFactorRequiredCode = 1099110104;
+  static const int twoFactorInvalidCode = 1099110105;
+
   final String message;
+  final int? code;
+
   @override
   String toString() => message;
 }

@@ -61,6 +61,7 @@ class _FakeAuthClient implements AuthGateway {
   Future<TodoAuthSession> passwordLogin({
     required String mobile,
     required String password,
+    String? twoFactorCode,
   }) async {
     return const TodoAuthSession(
       userId: 1,
@@ -81,6 +82,7 @@ class _FakeAuthClient implements AuthGateway {
   Future<TodoAuthSession> smsLogin({
     required String mobile,
     required String code,
+    String? twoFactorCode,
   }) async {
     return const TodoAuthSession(
       userId: 1,
