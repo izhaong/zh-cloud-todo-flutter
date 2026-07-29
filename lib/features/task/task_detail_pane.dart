@@ -51,6 +51,26 @@ class _RepeatRuleDraft {
   final int? countLimit;
 }
 
+class _ReminderDraft {
+  const _ReminderDraft({
+    required this.fireAt,
+    required this.anchorType,
+    required this.offsetMinutes,
+    required this.persistent,
+    required this.intervalMinutes,
+    required this.timeZone,
+    required this.fixedTimezone,
+  });
+
+  final DateTime fireAt;
+  final String anchorType;
+  final int? offsetMinutes;
+  final bool persistent;
+  final int? intervalMinutes;
+  final String? timeZone;
+  final bool fixedTimezone;
+}
+
 class _TaskReminderSection extends ConsumerWidget {
   const _TaskReminderSection({required this.taskId});
 
@@ -118,11 +138,9 @@ class _TaskReminderTile extends ConsumerWidget {
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                reminder.persistent
-                    ? '持续提醒，每 ${reminder.intervalMinutes ?? 0} 分钟'
-                    : (reminder.anchorType == 'END' ? '截止时提醒' : '单次提醒'),
-              ),
+              Text(_reminderAnchorDescription(reminder)),
+              if (reminder.persistent)
+                Text('持续提醒，每 ${reminder.intervalMinutes ?? 0} 分钟'),
               if (syncMessage != null)
                 Text(
                   syncMessage,
@@ -144,6 +162,14 @@ class _TaskReminderTile extends ConsumerWidget {
                   icon: const Icon(Icons.refresh),
                 ),
               IconButton(
+                key: ValueKey('task-reminder-edit-${reminder.id}'),
+                tooltip: '编辑提醒',
+                onPressed: repository == null
+                    ? null
+                    : () => _editReminder(context, ref),
+                icon: const Icon(Icons.edit_outlined),
+              ),
+              IconButton(
                 key: ValueKey('task-reminder-remove-${reminder.id}'),
                 tooltip: '删除提醒',
                 onPressed: repository == null
@@ -164,6 +190,338 @@ class _TaskReminderTile extends ConsumerWidget {
         );
       },
     );
+  }
+
+  String _reminderAnchorDescription(TodoReminder reminder) {
+    final offset = reminder.offsetMinutes ?? 0;
+    final prefix = switch (reminder.anchorType) {
+      'START' => '开始',
+      'DUE' => '截止',
+      'END' => '结束',
+      _ => null,
+    };
+    if (prefix == null) return '指定时间提醒';
+    return offset > 0 ? '$prefix前 $offset 分钟' : '$prefix时提醒';
+  }
+
+  Future<void> _editReminder(BuildContext context, WidgetRef ref) async {
+    final db = ref.read(appDatabaseProvider);
+    final reminderRepository = repository;
+    if (db == null || reminderRepository == null) return;
+    final task = await (db.select(
+      db.todoTasks,
+    )..where((task) => task.id.equals(reminder.taskId))).getSingleOrNull();
+    if (!context.mounted) return;
+    if (task == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('提醒所属任务不存在')));
+      return;
+    }
+
+    final draft = await _showReminderEditor(context, task);
+    if (draft == null || !context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await reminderRepository.update(
+        id: reminder.id,
+        fireAt: draft.fireAt,
+        anchorType: draft.anchorType,
+        offsetMinutes: draft.offsetMinutes,
+        persistent: draft.persistent,
+        intervalMinutes: draft.intervalMinutes,
+        timeZone: draft.timeZone,
+        fixedTimezone: draft.fixedTimezone,
+      );
+      if (context.mounted) {
+        messenger.showSnackBar(const SnackBar(content: Text('提醒已更新')));
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('提醒更新失败：${_reminderErrorMessage(error)}')),
+        );
+      }
+    }
+  }
+
+  Future<_ReminderDraft?> _showReminderEditor(
+    BuildContext context,
+    TodoTask task,
+  ) async {
+    const supportedAnchors = {'ABSOLUTE', 'START', 'DUE', 'END'};
+    var anchorType = supportedAnchors.contains(reminder.anchorType)
+        ? reminder.anchorType
+        : 'ABSOLUTE';
+    var fireAt = reminder.remindAt;
+    var persistent = reminder.persistent;
+    var fixedTimezone = reminder.fixedTimezone;
+    var offsetText = reminder.offsetMinutes?.toString() ?? '';
+    var intervalText = reminder.intervalMinutes?.toString() ?? '30';
+    var timeZoneText = reminder.timeZone ?? '';
+    String? validationMessage;
+    return showDialog<_ReminderDraft>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final anchorAt = _reminderAnchorAt(task, anchorType);
+          return AlertDialog(
+            title: const Text('编辑提醒'),
+            content: SingleChildScrollView(
+              child: SizedBox(
+                width: 360,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      key: const Key('task-reminder-anchor'),
+                      initialValue: anchorType,
+                      decoration: const InputDecoration(
+                        labelText: '提醒时间',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          key: Key('task-reminder-anchor-absolute'),
+                          value: 'ABSOLUTE',
+                          child: Text('指定时间'),
+                        ),
+                        DropdownMenuItem(
+                          key: Key('task-reminder-anchor-start'),
+                          value: 'START',
+                          child: Text('开始时'),
+                        ),
+                        DropdownMenuItem(
+                          key: Key('task-reminder-anchor-due'),
+                          value: 'DUE',
+                          child: Text('截止时'),
+                        ),
+                        DropdownMenuItem(
+                          key: Key('task-reminder-anchor-end'),
+                          value: 'END',
+                          child: Text('结束时'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setDialogState(() {
+                          anchorType = value;
+                          validationMessage = null;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    if (anchorType == 'ABSOLUTE')
+                      OutlinedButton.icon(
+                        key: const Key('task-reminder-fire-at'),
+                        onPressed: () async {
+                          final picked = await _pickReminderDateTime(
+                            dialogContext,
+                            fireAt,
+                          );
+                          if (picked != null && dialogContext.mounted) {
+                            setDialogState(() {
+                              fireAt = picked;
+                              validationMessage = null;
+                            });
+                          }
+                        },
+                        icon: const Icon(Icons.schedule_outlined),
+                        label: Text(
+                          formatTaskDateTime(
+                            fireAt,
+                            allDay: false,
+                            fixedTimezone: fixedTimezone,
+                            timeZone: timeZoneText.trim(),
+                          ),
+                        ),
+                      )
+                    else ...[
+                      TextFormField(
+                        key: const Key('task-reminder-offset-minutes'),
+                        initialValue: offsetText,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: '提前分钟数',
+                          hintText: '0',
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (value) => setDialogState(() {
+                          offsetText = value;
+                          validationMessage = null;
+                        }),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        anchorAt == null
+                            ? '当前任务尚未设置所选时间'
+                            : '所选锚点：${formatTaskDateTime(anchorAt, allDay: false, fixedTimezone: task.fixedTimezone, timeZone: task.timeZone)}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    SwitchListTile(
+                      key: const Key('task-reminder-persistent'),
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('持续提醒'),
+                      subtitle: const Text('保持提醒，直到你处理任务'),
+                      value: persistent,
+                      onChanged: (value) => setDialogState(() {
+                        persistent = value;
+                        validationMessage = null;
+                      }),
+                    ),
+                    if (persistent)
+                      TextFormField(
+                        key: const Key('task-reminder-interval-minutes'),
+                        initialValue: intervalText,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: '提醒间隔（分钟）',
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (value) => setDialogState(() {
+                          intervalText = value;
+                          validationMessage = null;
+                        }),
+                      ),
+                    const SizedBox(height: 8),
+                    SwitchListTile(
+                      key: const Key('task-reminder-fixed-timezone'),
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('固定时区'),
+                      value: fixedTimezone,
+                      onChanged: (value) => setDialogState(() {
+                        fixedTimezone = value;
+                        validationMessage = null;
+                      }),
+                    ),
+                    TextFormField(
+                      key: const Key('task-reminder-timezone'),
+                      initialValue: timeZoneText,
+                      decoration: InputDecoration(
+                        labelText: fixedTimezone ? '固定时区（IANA）' : '创建时区（IANA）',
+                        hintText: 'Asia/Shanghai',
+                        border: const OutlineInputBorder(),
+                      ),
+                      onChanged: (value) {
+                        timeZoneText = value;
+                        validationMessage = null;
+                      },
+                    ),
+                    if (validationMessage != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        validationMessage!,
+                        key: const Key('task-reminder-validation-error'),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                key: const Key('task-reminder-save'),
+                onPressed: () {
+                  final normalizedOffset = offsetText.trim();
+                  final offsetMinutes = normalizedOffset.isEmpty
+                      ? 0
+                      : int.tryParse(normalizedOffset);
+                  final normalizedInterval = intervalText.trim();
+                  final intervalMinutes = persistent
+                      ? int.tryParse(normalizedInterval)
+                      : null;
+                  final timeZone = timeZoneText.trim();
+                  String? error;
+                  DateTime resolvedFireAt = fireAt;
+                  if (anchorType != 'ABSOLUTE') {
+                    if (anchorAt == null) {
+                      error = '请先为任务设置所选时间';
+                    } else if (offsetMinutes == null || offsetMinutes < 0) {
+                      error = '提前分钟数必须是非负整数';
+                    } else {
+                      resolvedFireAt = anchorAt.subtract(
+                        Duration(minutes: offsetMinutes),
+                      );
+                    }
+                  }
+                  if (error == null &&
+                      persistent &&
+                      (intervalMinutes == null || intervalMinutes <= 0)) {
+                    error = '持续提醒间隔必须是正整数';
+                  }
+                  if (error == null && fixedTimezone && timeZone.isEmpty) {
+                    error = '固定时区不能为空';
+                  }
+                  if (error != null) {
+                    setDialogState(() => validationMessage = error);
+                    return;
+                  }
+                  Navigator.pop(
+                    dialogContext,
+                    _ReminderDraft(
+                      fireAt: resolvedFireAt,
+                      anchorType: anchorType,
+                      offsetMinutes: anchorType == 'ABSOLUTE'
+                          ? null
+                          : offsetMinutes,
+                      persistent: persistent,
+                      intervalMinutes: intervalMinutes,
+                      timeZone: timeZone.isEmpty ? null : timeZone,
+                      fixedTimezone: fixedTimezone,
+                    ),
+                  );
+                },
+                child: const Text('保存'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  DateTime? _reminderAnchorAt(TodoTask task, String anchorType) {
+    return switch (anchorType) {
+      'START' => task.startAt,
+      'DUE' => task.dueAt,
+      'END' => task.endAt,
+      _ => reminder.remindAt,
+    };
+  }
+
+  Future<DateTime?> _pickReminderDateTime(
+    BuildContext context,
+    DateTime initial,
+  ) async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(initial.year - 1),
+      lastDate: DateTime(initial.year + 5),
+    );
+    if (date == null || !context.mounted) return null;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+    if (time == null) return null;
+    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
+  }
+
+  String _reminderErrorMessage(Object error) {
+    if (error is ArgumentError) return error.message?.toString() ?? '参数无效';
+    if (error is StateError) return error.message;
+    return '请稍后重试';
   }
 
   Future<void> _retrySync(BuildContext context, WidgetRef ref) async {
@@ -920,8 +1278,8 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                         ),
                         const SizedBox(height: 8),
                         OutlinedButton.icon(
-                          key: const Key('task-add-end-reminder'),
-                          onPressed: () => _addEndReminder(t),
+                          key: const Key('task-add-due-reminder'),
+                          onPressed: () => _addDueReminder(t),
                           icon: const Icon(Icons.alarm_add_outlined),
                           label: const Text('在截止时提醒'),
                         ),
@@ -929,14 +1287,21 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                         OutlinedButton.icon(
                           key: const Key('task-add-before-due-reminder'),
                           onPressed: () =>
-                              _addEndReminder(t, offsetMinutes: 10),
+                              _addDueReminder(t, offsetMinutes: 10),
                           icon: const Icon(Icons.alarm_on_outlined),
                           label: const Text('截止前 10 分钟提醒'),
                         ),
                         const SizedBox(height: 8),
                         OutlinedButton.icon(
+                          key: const Key('task-add-end-reminder'),
+                          onPressed: () => _addEndTimeReminder(t),
+                          icon: const Icon(Icons.timer_outlined),
+                          label: const Text('在结束时提醒'),
+                        ),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
                           key: const Key('task-add-persistent-end-reminder'),
-                          onPressed: () => _addEndReminder(
+                          onPressed: () => _addDueReminder(
                             t,
                             persistent: true,
                             intervalMinutes: 30,
@@ -1070,7 +1435,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     );
   }
 
-  Future<void> _addEndReminder(
+  Future<void> _addDueReminder(
     TodoTask t, {
     int? offsetMinutes,
     bool persistent = false,
@@ -1090,7 +1455,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     await reminders.create(
       taskId: t.id,
       fireAt: dueAt.subtract(Duration(minutes: offsetMinutes ?? 0)),
-      anchorType: 'END',
+      anchorType: 'DUE',
       offsetMinutes: offsetMinutes,
       persistent: persistent,
       intervalMinutes: intervalMinutes,
@@ -1109,6 +1474,29 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
         ),
       ),
     );
+  }
+
+  Future<void> _addEndTimeReminder(TodoTask t) async {
+    final endAt = _endAt ?? t.endAt;
+    final messenger = ScaffoldMessenger.of(context);
+    if (endAt == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('请先设置结束时间')));
+      return;
+    }
+    final reminders = ref.read(reminderRepositoryProvider);
+    if (reminders == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('提醒存储未就绪')));
+      return;
+    }
+    await reminders.create(
+      taskId: t.id,
+      fireAt: endAt,
+      anchorType: 'END',
+      timeZone: _timeZone,
+      fixedTimezone: _fixedTimezone,
+    );
+    if (!_isCurrentTask(t.id)) return;
+    messenger.showSnackBar(const SnackBar(content: Text('已添加结束时提醒')));
   }
 
   Future<void> _addAbsoluteReminder(TodoTask t) async {

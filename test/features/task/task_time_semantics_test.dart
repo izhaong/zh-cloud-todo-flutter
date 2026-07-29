@@ -163,7 +163,7 @@ void main() {
     },
   );
 
-  testWidgets('detail creates an end reminder through reminder repository', (
+  testWidgets('detail creates a due reminder through reminder repository', (
     tester,
   ) async {
     final fixture = await TodoVisualFixture.create();
@@ -186,7 +186,7 @@ void main() {
 
     await _openScheduleOptions(tester);
 
-    final createReminder = find.byKey(const Key('task-add-end-reminder'));
+    final createReminder = find.byKey(const Key('task-add-due-reminder'));
     await tester.scrollUntilVisible(
       createReminder,
       160,
@@ -200,12 +200,58 @@ void main() {
         .get();
     expect(reminders, hasLength(1));
     expect(reminders.single.taskId, _taskId);
-    expect(reminders.single.anchorType, 'END');
+    expect(reminders.single.anchorType, 'DUE');
     final change =
         (await fixture.database.select(fixture.database.todoSyncChanges).get())
             .last;
     expect(change.entity, 'reminder');
   });
+
+  testWidgets(
+    'detail creates an end-time reminder through reminder repository',
+    (tester) async {
+      final fixture = await TodoVisualFixture.create();
+      addTearDown(fixture.dispose);
+      final endAt = DateTime(2026, 7, 11, 11, 30);
+      await (fixture.database.update(fixture.database.todoTasks)
+            ..where((task) => task.id.equals(_taskId)))
+          .write(TodoTasksCompanion(endAt: Value(endAt)));
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: fixture.container,
+          child: MaterialApp(
+            theme: ThemeData.light().copyWith(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            home: const Scaffold(
+              body: TaskDetailPane(taskId: _taskId, embedded: true),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _openScheduleOptions(tester);
+
+      final createReminder = find.byKey(const Key('task-add-end-reminder'));
+      await tester.scrollUntilVisible(
+        createReminder,
+        160,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.ensureVisible(createReminder);
+      await tester.pumpAndSettle();
+      await tester.tap(createReminder);
+      await tester.pumpAndSettle();
+
+      final reminder = await fixture.database
+          .select(fixture.database.todoReminders)
+          .getSingle();
+      expect(reminder.taskId, _taskId);
+      expect(reminder.anchorType, 'END');
+      expect(reminder.remindAt, endAt);
+    },
+  );
 
   testWidgets('detail displays a retryable reminder sync state', (
     tester,
@@ -309,7 +355,7 @@ void main() {
   );
 
   testWidgets(
-    'detail queues an end-offset reminder and a persistent end reminder',
+    'detail queues a due-offset reminder and a persistent due reminder',
     (tester) async {
       final fixture = await TodoVisualFixture.create();
       addTearDown(fixture.dispose);
@@ -354,14 +400,14 @@ void main() {
       expect(
         reminders.any(
           (reminder) =>
-              reminder.anchorType == 'END' && reminder.offsetMinutes == 10,
+              reminder.anchorType == 'DUE' && reminder.offsetMinutes == 10,
         ),
         isTrue,
       );
       expect(
         reminders.any(
           (reminder) =>
-              reminder.anchorType == 'END' &&
+              reminder.anchorType == 'DUE' &&
               reminder.persistent &&
               reminder.intervalMinutes == 30,
         ),
@@ -376,6 +422,168 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'detail edits an existing reminder anchor and persistent settings',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(360, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final fixture = await TodoVisualFixture.create();
+      addTearDown(fixture.dispose);
+      final dueAt = DateTime(2026, 7, 12, 10);
+      await (fixture.database.update(fixture.database.todoTasks)
+            ..where((task) => task.id.equals(_taskId)))
+          .write(TodoTasksCompanion(dueAt: Value(dueAt)));
+      final repository = fixture.container.read(reminderRepositoryProvider)!;
+      final reminder = await repository.create(
+        taskId: _taskId,
+        fireAt: DateTime(2026, 7, 11, 9, 10),
+        timeZone: 'Asia/Shanghai',
+        fixedTimezone: true,
+      );
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: fixture.container,
+          child: MaterialApp(
+            theme: ThemeData.light().copyWith(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            home: const Scaffold(
+              body: TaskDetailPane(taskId: _taskId, embedded: true),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _openScheduleOptions(tester);
+
+      final reminderList = find.byKey(const Key('task-reminders'));
+      await tester.scrollUntilVisible(
+        reminderList,
+        160,
+        scrollable: find.byType(Scrollable).last,
+      );
+      final editReminder = find.byKey(
+        ValueKey('task-reminder-edit-${reminder.id}'),
+      );
+      await tester.ensureVisible(editReminder);
+      await tester.pumpAndSettle();
+      await tester.tap(editReminder);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('task-reminder-anchor')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('截止时').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('task-reminder-offset-minutes')),
+        '15',
+      );
+      await tester.tap(find.byKey(const Key('task-reminder-persistent')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('task-reminder-interval-minutes')),
+        '20',
+      );
+      await tester.tap(find.byKey(const Key('task-reminder-save')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('截止前 15 分钟'), findsOneWidget);
+      expect(find.text('持续提醒，每 20 分钟'), findsOneWidget);
+      final updated = await fixture.database
+          .select(fixture.database.todoReminders)
+          .getSingle();
+      expect(updated.id, reminder.id);
+      expect(updated.anchorType, 'DUE');
+      expect(updated.offsetMinutes, 15);
+      expect(updated.remindAt, DateTime(2026, 7, 12, 9, 45));
+      expect(updated.persistent, isTrue);
+      expect(updated.intervalMinutes, 20);
+      expect(updated.timeZone, 'Asia/Shanghai');
+      expect(updated.fixedTimezone, isTrue);
+
+      final change =
+          (await fixture.database
+                  .select(fixture.database.todoSyncChanges)
+                  .get())
+              .last;
+      final payload = jsonDecode(change.payloadJson) as Map<String, dynamic>;
+      expect(change.entity, 'reminder');
+      expect(change.entityLocalId, reminder.id);
+      expect(payload['anchorType'], 'DUE');
+      expect(payload['offsetMinutes'], 15);
+      expect(payload['persistent'], isTrue);
+      expect(payload['intervalMinutes'], 20);
+      expect(payload['timeZone'], 'Asia/Shanghai');
+      expect(payload['fixedTimezone'], isTrue);
+    },
+  );
+
+  testWidgets('detail edits an existing absolute reminder time', (
+    tester,
+  ) async {
+    final fixture = await TodoVisualFixture.create();
+    addTearDown(fixture.dispose);
+    await (fixture.database.update(
+      fixture.database.todoTasks,
+    )..where((task) => task.id.equals(_taskId))).write(
+      const TodoTasksCompanion(timeZone: Value('Asia/Shanghai')),
+    );
+    final repository = fixture.container.read(reminderRepositoryProvider)!;
+    final reminder = await repository.create(
+      taskId: _taskId,
+      fireAt: DateTime(2026, 7, 11, 9, 10),
+    );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: fixture.container,
+        child: MaterialApp(
+          theme: ThemeData.light().copyWith(
+            extensions: const [AppThemeExtension(AppColors.light)],
+          ),
+          home: const Scaffold(
+            body: TaskDetailPane(taskId: _taskId, embedded: true),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _openScheduleOptions(tester);
+
+    final reminderList = find.byKey(const Key('task-reminders'));
+    await tester.scrollUntilVisible(
+      reminderList,
+      160,
+      scrollable: find.byType(Scrollable).last,
+    );
+    final editReminder = find.byKey(
+      ValueKey('task-reminder-edit-${reminder.id}'),
+    );
+    await tester.ensureVisible(editReminder);
+    await tester.pumpAndSettle();
+    await tester.tap(editReminder);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('task-reminder-fire-at')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('12').last);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('task-reminder-save')));
+    await tester.pumpAndSettle();
+
+    final updated = await fixture.database
+        .select(fixture.database.todoReminders)
+        .getSingle();
+    expect(updated.id, reminder.id);
+    expect(updated.anchorType, 'ABSOLUTE');
+    expect(updated.remindAt, DateTime(2026, 7, 12, 9, 10));
+    expect(updated.timeZone, isNull);
+    expect(updated.fixedTimezone, isFalse);
+  });
 
   testWidgets(
     'detail exposes start and end time editing through task repository',
@@ -562,6 +770,8 @@ void main() {
         160,
         scrollable: detailScroll,
       );
+      await tester.ensureVisible(repeatRule);
+      await tester.pumpAndSettle();
       await tester.tap(repeatRule);
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('task-repeat-end-count')));
@@ -611,6 +821,8 @@ void main() {
     final detailScroll = find.byType(Scrollable).last;
     final repeatRule = find.byKey(const Key('task-repeat-rule'));
     await tester.scrollUntilVisible(repeatRule, 160, scrollable: detailScroll);
+    await tester.ensureVisible(repeatRule);
+    await tester.pumpAndSettle();
     await tester.tap(repeatRule);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('task-repeat-end-until')));
