@@ -631,6 +631,161 @@ class DataExportDownload {
   final Uint8List bytes;
 }
 
+/// 便携 JSON 中可提交给 `/import-health/tasks` 的单个任务。
+class PortableTaskImportTask {
+  const PortableTaskImportTask({
+    this.sourceTaskId,
+    required this.title,
+    this.description,
+    this.dueAt,
+    this.priority = 0,
+    this.completed = false,
+  });
+
+  final String? sourceTaskId;
+  final String title;
+  final String? description;
+  final DateTime? dueAt;
+  final int priority;
+  final bool completed;
+
+  Map<String, dynamic> toJson() => {
+    if (sourceTaskId != null) 'sourceTaskId': sourceTaskId,
+    'title': title,
+    if (description != null) 'description': description,
+    if (dueAt != null) 'dueAt': dueAt!.toIso8601String(),
+    'priority': priority,
+    'completed': completed,
+  };
+}
+
+/// 当前用户的一条任务导入批次。
+class TodoTaskImportBatch {
+  const TodoTaskImportBatch({
+    required this.batchId,
+    required this.requestId,
+    required this.source,
+    required this.targetListId,
+    required this.status,
+    required this.importedCount,
+    required this.rolledBackCount,
+    required this.idempotentReplay,
+    this.createTime,
+    this.updateTime,
+  });
+
+  factory TodoTaskImportBatch.fromJson(Map<String, dynamic> json) =>
+      TodoTaskImportBatch(
+        batchId: (json['batchId'] as num?)?.toInt() ?? 0,
+        requestId: json['requestId']?.toString() ?? '',
+        source: json['source']?.toString() ?? 'PORTABLE_JSON',
+        targetListId: (json['targetListId'] as num?)?.toInt() ?? 0,
+        status: json['status']?.toString() ?? 'IMPORTED',
+        importedCount: (json['importedCount'] as num?)?.toInt() ?? 0,
+        rolledBackCount: (json['rolledBackCount'] as num?)?.toInt() ?? 0,
+        idempotentReplay: json['idempotentReplay'] == true,
+        createTime: DateTime.tryParse(json['createTime']?.toString() ?? ''),
+        updateTime: DateTime.tryParse(json['updateTime']?.toString() ?? ''),
+      );
+
+  final int batchId;
+  final String requestId;
+  final String source;
+  final int targetListId;
+  final String status;
+  final int importedCount;
+  final int rolledBackCount;
+  final bool idempotentReplay;
+  final DateTime? createTime;
+  final DateTime? updateTime;
+}
+
+/// 导入接口业务异常；保留业务码用于区分“相同请求处理中”等可重试状态。
+class TodoTaskImportException implements Exception {
+  const TodoTaskImportException(this.code, this.message);
+
+  final int code;
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+/// 可追踪任务导入、批次历史与回滚 REST。
+class TodoTaskImportApi {
+  TodoTaskImportApi(this._client);
+
+  static const int busyCode = 1032022006;
+
+  final ApiClient _client;
+
+  dynamic _unwrap(Map<String, dynamic>? body) {
+    if (body == null) {
+      throw const TodoTaskImportException(-1, '导入服务响应为空');
+    }
+    if (body.containsKey('code')) {
+      final code = (body['code'] as num?)?.toInt() ?? -1;
+      if (code != 0) {
+        throw TodoTaskImportException(
+          code,
+          body['msg']?.toString() ?? '任务导入失败',
+        );
+      }
+      return body['data'];
+    }
+    return body;
+  }
+
+  Future<TodoTaskImportBatch> importTasks({
+    required String requestId,
+    required int targetListId,
+    required List<PortableTaskImportTask> tasks,
+    String source = 'PORTABLE_JSON',
+  }) async {
+    final response = await _client.post<Map<String, dynamic>>(
+      '/import-health/tasks',
+      data: {
+        'requestId': requestId,
+        'source': source,
+        'targetListId': targetListId,
+        'tasks': tasks.map((task) => task.toJson()).toList(growable: false),
+      },
+    );
+    final data = _unwrap(response.data);
+    if (data is! Map) {
+      throw const TodoTaskImportException(-1, '任务导入响应格式无效');
+    }
+    return TodoTaskImportBatch.fromJson(Map<String, dynamic>.from(data));
+  }
+
+  Future<List<TodoTaskImportBatch>> listBatches() async {
+    final response = await _client.get<Map<String, dynamic>>(
+      '/import-health/task-batches',
+    );
+    final data = _unwrap(response.data);
+    if (data is! List) return const [];
+    return data
+        .whereType<Map>()
+        .map(
+          (item) =>
+              TodoTaskImportBatch.fromJson(Map<String, dynamic>.from(item)),
+        )
+        .toList(growable: false);
+  }
+
+  Future<TodoTaskImportBatch> rollback(int batchId) async {
+    final response = await _client.post<Map<String, dynamic>>(
+      '/import-health/rollback',
+      queryParameters: {'batchId': batchId},
+    );
+    final data = _unwrap(response.data);
+    if (data is! Map) {
+      throw const TodoTaskImportException(-1, '任务回滚响应格式无效');
+    }
+    return TodoTaskImportBatch.fromJson(Map<String, dynamic>.from(data));
+  }
+}
+
 /// 认证器注册所需的 TOTP 密钥与标准 URI。
 class TwoFactorSetup {
   const TwoFactorSetup({required this.secret, required this.otpauthUri});
@@ -803,6 +958,7 @@ class TodoRestApi {
       comment = TaskCommentApi(client),
       note = NoteApi(client),
       calSubscription = CalendarSubscriptionApi(client),
+      taskImport = TodoTaskImportApi(client),
       security = SecurityApi(client);
 
   final TaskRestApi task;
@@ -821,6 +977,7 @@ class TodoRestApi {
   final TaskCommentApi comment;
   final NoteApi note;
   final CalendarSubscriptionApi calSubscription;
+  final TodoTaskImportApi taskImport;
   final SecurityApi security;
 }
 
@@ -1016,7 +1173,8 @@ class ListCollaborationApi {
   List<ListMember> _list(Map<String, dynamic> body) {
     if (body.containsKey('code')) {
       // data 字段可能是 List（直接成员数组）或 Map（含 members/list/items 任一）。
-      final dynamic data = _unwrapBody(body);
+      _ensureSuccess(body);
+      final dynamic data = body['data'];
       if (data is List) {
         return data
             .map((e) => _m(Map<String, dynamic>.from(e as Map)))
@@ -1062,6 +1220,12 @@ class ListCollaborationApi {
     final body = resp.data;
     if (body is Map<String, dynamic>) return _list(body);
     return _listFromArray(body);
+  }
+
+  /// 当前用户是否为清单所有者；任务批量导入只允许选择本人拥有的清单。
+  Future<bool> isOwner({required int listId, required int userId}) async {
+    final members = await list(listId);
+    return members.any((member) => member.userId == userId && member.isOwner);
   }
 
   /// `POST /list/{listId}/members` body `{userId, role}`。
