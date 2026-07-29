@@ -9,6 +9,7 @@ import '../../state/repositories/task_capture_defaults_repository.dart';
 import '../../state/session_state.dart';
 import '../account/account_security_page.dart';
 import '../calendar_sub/calendar_subscription_page.dart';
+import '../import/task_import_page.dart';
 import '../shell/app_theme_controller.dart';
 
 /// 设置页：分组列表（账户/主题/关于）+ 账户安全入口。
@@ -87,6 +88,16 @@ class SettingsRoute extends ConsumerWidget {
                     MaterialPageRoute(
                       builder: (_) => const CalendarSubscriptionPage(),
                     ),
+                  ),
+                ),
+                _Tile(
+                  icon: Icons.upload_file_outlined,
+                  title: '任务导入',
+                  subtitle: '从 JSON 导入任务、查看批次并按批回滚',
+                  trailing: Icons.chevron_right,
+                  colors: colors,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const TaskImportPage()),
                   ),
                 ),
               ],

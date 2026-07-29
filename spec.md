@@ -13,6 +13,7 @@ zh-cloud 平台 Todo 产品的 **唯一 C 端客户端**（**Web / H5**、iOS、
 - `specs/001-todo-dida-core-parity/{spec,plan,tasks}.md`：功能能力事实源，定义任务、清单、同步、多视图、日历、效率、提醒、协作与账号能力。
 - `specs/002-todo-visual-fidelity/{spec,plan,tasks}.md`：视觉与响应式事实源，定义工作区结构、视觉状态、布局档位、验收视口与 golden 基准。
 - `specs/006-todo-task-time-semantics/{spec,plan,tasks}.md`：任务时间、提醒、三类重复模式（含自选日期）与 occurrence 动作的当前实现契约，定义 Drift/outbox、时区、锚点和提醒派发边界。
+- `specs/010-todo-portable-task-import/{spec,plan,tasks}.md`：便携 JSON 任务导入、稳定请求 ID、批次历史与按批回滚的当前实现契约。
 - 两套规格按职责互补；视觉规格不得改写账号、数据、同步、接口或权限语义，功能规格不得复制视觉契约正文。
 
 ### 1.2 桌面母版与响应式档位
@@ -68,6 +69,7 @@ pubspec.yaml
 - 表单支持密码显示/隐藏、手机号/密码/验证码自动填充提示、键盘焦点、动态错误播报，以及 320px / 200% 文本缩放 / 深色主题无溢出回归。设计与验收见 [`specs/003-todo-auth-visual-polish/`](specs/003-todo-auth-visual-polish/)。
 - 账号启用 RFC 6238 TOTP 后，密码与短信登录会根据后端业务码展示独立的 6 位动态码字段并保留原表单内容；账户安全页通过 `setup → confirm` 完成认证器绑定，关闭时必须提交当前动态码。
 - 账户安全页可生成服务端不可变 JSON 数据快照；READY 记录通过当前会员登录态和租户头下载字节，再交给系统保存对话框落盘，不暴露或跳转无鉴权裸链接。
+- 设置页可选择上述导出文件或根级 `tasks` 便携 JSON，将标题、说明、截止时间、优先级与完成状态导入到本人已同步清单；同一文件的忙碌重试复用请求 ID，并提供当前用户批次历史与按批回滚。
 
 ### 4.2 离线同步与 LWW（目标）
 
@@ -83,7 +85,7 @@ pubspec.yaml
 ## 5. 对外契约
 
 - 登录：`/app-api/todo-member/auth/{login,sms-login,send-sms-code,logout}`、`/app-api/todo-member/user/reset-password`；已启用双重验证的登录请求携带可选 `twoFactorCode`。
-- 业务：`/app-api/todo/**`；效率域成就墙使用 `/achievement/wall`；双重验证使用 `/security/2fa/{status,setup,confirm,disable}`，setup 返回 Base32 密钥与标准 `otpauth` URI；数据导出使用 `/security/export`、`/security/export/list`、`/security/export/{id}/download`，下载请求复用会话鉴权。
+- 业务：`/app-api/todo/**`；效率域成就墙使用 `/achievement/wall`；双重验证使用 `/security/2fa/{status,setup,confirm,disable}`，setup 返回 Base32 密钥与标准 `otpauth` URI；数据导出使用 `/security/export`、`/security/export/list`、`/security/export/{id}/download`，下载请求复用会话鉴权；任务导入使用 `/import-health/tasks`、`/import-health/task-batches` 与 `/import-health/rollback`。
 - 同步：`/app-api/todo/sync/{pull,push}`。
 - 默认 API `http://127.0.0.1:48080`、租户 `1`，可用 `--dart-define=TODO_API_BASE_URL`、`--dart-define=TODO_TENANT_ID` 覆盖。
 - 后端契约变更须在 `zh-cloud-service`（`service-dev`）配套 PR 并互链。
