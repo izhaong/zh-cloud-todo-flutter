@@ -29,26 +29,37 @@ class _FakeApiClient extends ApiClient {
   }
 
   @override
-  Future<Response<T>> post<T>(String path, {Object? data}) async => Response<T>(
+  Future<Response<T>> post<T>(
+    String path, {
+    Object? data,
+    Map<String, dynamic>? queryParameters,
+  }) async => Response<T>(
     data: const {'code': 0, 'data': <String, Object>{}} as T,
     statusCode: 200,
     requestOptions: RequestOptions(path: path),
   );
 
   @override
-  Future<Response<T>> put<T>(String path, {Object? data}) async => Response<T>(
+  Future<Response<T>> put<T>(
+    String path, {
+    Object? data,
+    Map<String, dynamic>? queryParameters,
+  }) async => Response<T>(
     data: const {'code': 0, 'data': <String, Object>{}} as T,
     statusCode: 200,
     requestOptions: RequestOptions(path: path),
   );
 
   @override
-  Future<Response<T>> delete<T>(String path, {Object? data}) async =>
-      Response<T>(
-        data: const {'code': 0, 'data': <String, Object>{}} as T,
-        statusCode: 200,
-        requestOptions: RequestOptions(path: path),
-      );
+  Future<Response<T>> delete<T>(
+    String path, {
+    Object? data,
+    Map<String, dynamic>? queryParameters,
+  }) async => Response<T>(
+    data: const {'code': 0, 'data': <String, Object>{}} as T,
+    statusCode: 200,
+    requestOptions: RequestOptions(path: path),
+  );
 }
 
 class _FakeSession extends SessionController {

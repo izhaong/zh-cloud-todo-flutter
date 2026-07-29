@@ -475,16 +475,25 @@ class _NoNetworkApiClient extends ApiClient {
   }
 
   @override
-  Future<Response<T>> post<T>(String path, {Object? data}) =>
-      _blocked('POST', path);
+  Future<Response<T>> post<T>(
+    String path, {
+    Object? data,
+    Map<String, dynamic>? queryParameters,
+  }) => _blocked('POST', path);
 
   @override
-  Future<Response<T>> put<T>(String path, {Object? data}) =>
-      _blocked('PUT', path);
+  Future<Response<T>> put<T>(
+    String path, {
+    Object? data,
+    Map<String, dynamic>? queryParameters,
+  }) => _blocked('PUT', path);
 
   @override
-  Future<Response<T>> delete<T>(String path, {Object? data}) =>
-      _blocked('DELETE', path);
+  Future<Response<T>> delete<T>(
+    String path, {
+    Object? data,
+    Map<String, dynamic>? queryParameters,
+  }) => _blocked('DELETE', path);
 
   @override
   Future<Response<T>> memberGet<T>(

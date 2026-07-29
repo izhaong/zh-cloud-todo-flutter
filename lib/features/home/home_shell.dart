@@ -14,6 +14,7 @@ import '../../state/providers.dart';
 import '../../state/repositories/task_query_repository.dart';
 import '../../state/session_state.dart';
 import '../habit/habit_page.dart';
+import '../note/note_page.dart';
 import '../reminder/reminder_inbox_page.dart';
 import '../settings/settings_route.dart';
 import '../shell/section.dart';
@@ -350,6 +351,12 @@ class _HomeShellState extends ConsumerState<HomeShell>
     ).push(MaterialPageRoute(builder: (_) => const ReminderInboxPage()));
   }
 
+  void _openNotes() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const NotePage()));
+  }
+
   Future<void> _quickAdd(QuickAddRequest request) async {
     final repo = ref.read(taskRepositoryProvider);
     if (repo == null) return;
@@ -455,6 +462,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
           onOpenTags: _openTags,
           onOpenFilters: _openFilters,
           onOpenSettings: _openSettings,
+          onOpenNotes: _openNotes,
           onSearchResultSelected: _handleSearchResult,
           scaffoldKey: _workspaceScaffoldKey,
           onDetailDrawerChanged: _handleDetailDrawerChanged,
