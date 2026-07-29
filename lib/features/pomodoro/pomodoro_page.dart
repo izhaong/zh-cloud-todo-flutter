@@ -29,10 +29,16 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
   static const _modes = [
     ('MODE_25_5', '25+5', 25),
     ('MODE_50_10', '50+10', 50),
-    ('MODE_FREE', '自由', 25),
+    ('FREE', '自由', 25),
   ];
 
   String _mode = 'MODE_25_5';
+
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.microtask(_restoreActiveSession);
+  }
 
   @override
   void dispose() {
@@ -54,14 +60,44 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
       mode: _mode,
       plannedMinutes: _plannedMinutes,
     );
+    if (!mounted) return;
     ref.invalidate(pomodoroStatsProvider);
+    _activateSession(session, secondsLeft: _plannedMinutes * 60);
+  }
+
+  Future<void> _restoreActiveSession() async {
+    PomodoroSessionDto? session;
+    try {
+      session = await ref.read(pomodoroApiProvider).active();
+    } catch (_) {
+      return;
+    }
+    if (!mounted || session == null) return;
+    final plannedSeconds = (session.plannedMinutes ?? 25) * 60;
+    final elapsed = session.startedAt == null
+        ? 0
+        : DateTime.now().difference(session.startedAt!).inSeconds -
+              session.pausedSeconds;
+    _activateSession(
+      session,
+      secondsLeft: (plannedSeconds - elapsed).clamp(0, plannedSeconds),
+    );
+  }
+
+  void _activateSession(
+    PomodoroSessionDto session, {
+    required int secondsLeft,
+  }) {
+    ref.read(activePomodoroIdProvider.notifier).state = session.id;
     setState(() {
       _session = session;
-      _paused = false;
-      _secondsLeft = (_plannedMinutes) * 60;
+      _mode = session.mode;
+      _paused = session.status == 'PAUSED';
+      _secondsLeft = secondsLeft;
     });
     _ticker?.cancel();
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
       setState(() {
         if (!_paused && _secondsLeft > 0) _secondsLeft--;
       });
@@ -209,7 +245,7 @@ class _ModeSelector extends StatelessWidget {
       segments: const [
         ButtonSegment(value: 'MODE_25_5', label: Text('25+5')),
         ButtonSegment(value: 'MODE_50_10', label: Text('50+10')),
-        ButtonSegment(value: 'MODE_FREE', label: Text('自由')),
+        ButtonSegment(value: 'FREE', label: Text('自由')),
       ],
       selected: {mode},
       onSelectionChanged: enabled

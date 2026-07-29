@@ -47,11 +47,11 @@
 
 ## Phase 5: User Story 3 — 四象限/番茄/习惯/倒数 (P2)
 
-- [ ] T018 [P][US3] `lib/core/api/todo_efficiency_api.dart`：`/app-api/todo/{quadrant,pomodoro,habit,countdown,achievement}` 封装
-- [ ] T019 [US3] `lib/features/quadrant/quadrant_page.dart`
-- [ ] T020 [US3] `lib/features/focus/{focus_timer_page,focus_stats_page}.dart`
-- [ ] T021 [US3] `lib/features/habit/{habit_list_page,habit_stats_page}.dart`
-- [ ] T022 [US3] `lib/features/countdown/countdown_page.dart`
+- [x] T018 [P][US3] `lib/core/api/todo_efficiency_api.dart`：`/app-api/todo/{quadrant,pomodoro,habit,countdown,achievement}` 封装
+- [x] T019 [US3] `lib/features/quadrant/quadrant_page.dart`
+- [x] T020 [US3] `lib/features/focus/{focus_timer_page,focus_stats_page}.dart`
+- [x] T021 [US3] `lib/features/habit/{habit_list_page,habit_stats_page}.dart`
+- [x] T022 [US3] `lib/features/countdown/countdown_page.dart`
 
 **Checkpoint**: 效率工具全部为真实后端数据
 
@@ -78,7 +78,7 @@
 
 ## Phase 8: User Story 6 — ICS 订阅最小生态 (P3)
 
-- [ ] T028 [US6] `lib/features/calendar_sub/calendar_subscription_page.dart`：添加 ICS URL 订阅 + 展示导出订阅链接
+- [x] T028 [US6] `lib/features/calendar_sub/calendar_subscription_page.dart`：添加 ICS URL 订阅 + 展示导出订阅链接
 
 **Checkpoint**: 最小生态闭环
 
