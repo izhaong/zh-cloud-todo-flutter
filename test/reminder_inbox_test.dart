@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:drift/drift.dart' show DatabaseConnection;
 import 'package:drift/native.dart';
@@ -8,8 +10,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zh_cloud_todo_flutter/core/api/api_client.dart';
 import 'package:zh_cloud_todo_flutter/core/api/todo_api.dart';
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
+import 'package:zh_cloud_todo_flutter/features/pomodoro/pomodoro_page.dart';
 import 'package:zh_cloud_todo_flutter/features/reminder/reminder_inbox_page.dart'
     show ReminderInboxPage, groupByTask, InboxEntry;
+import 'package:zh_cloud_todo_flutter/state/efficiency_providers.dart';
 import 'package:zh_cloud_todo_flutter/state/providers.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/reminder_inbox_repository.dart';
 
@@ -231,5 +235,58 @@ void main() {
     final changes = await database.select(database.todoSyncChanges).get();
     expect(changes, hasLength(1));
     expect(changes.single.entity, 'reminder_dispatch_action');
+  });
+
+  testWidgets('开始专注入 outbox 并进入关联任务专注页', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final database = AppDatabase.forTesting(
+      DatabaseConnection(
+        NativeDatabase.memory(),
+        closeStreamsSynchronously: true,
+      ),
+    );
+    addTearDown(database.close);
+    final container = ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(database),
+        reminderInboxRepositoryProvider.overrideWithValue(
+          _FakeReminderInboxRepository([
+            ReminderInboxItem(
+              id: 81,
+              reminderId: 82,
+              taskId: 12,
+              taskTitle: '开始写周报',
+              remindAt: DateTime(2026, 7, 16, 9),
+            ),
+          ]),
+        ),
+        pomodoroStatsProvider.overrideWith((ref) async => <String, dynamic>{}),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: ReminderInboxPage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('开始专注'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('番茄专注'), findsOneWidget);
+    expect(tester.widget<PomodoroPage>(find.byType(PomodoroPage)).taskId, 12);
+    final changes = await database.select(database.todoSyncChanges).get();
+    expect(changes, hasLength(1));
+    final payload =
+        jsonDecode(changes.single.payloadJson) as Map<String, dynamic>;
+    expect(payload['reminderDispatchId'], 81);
+    expect(payload['action'], 'start_focus');
   });
 }

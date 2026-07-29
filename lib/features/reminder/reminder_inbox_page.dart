@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../state/providers.dart';
 import '../../state/repositories/reminder_inbox_repository.dart'
     show ReminderInboxItem;
+import '../pomodoro/pomodoro_page.dart' show PomodoroPage;
 import '../task/task_detail_page.dart' show TaskDetailPage;
 
 /// 当前收件箱条目（拉取后回写解析好的任务标题）。
@@ -97,7 +98,7 @@ final inboxProvider = FutureProvider.autoDispose<InboxState>((ref) async {
 /// 提醒收件箱页面（P4 / Time Loop）。
 ///
 /// - 拉取 `GET /reminder-action/inbox` 并按任务分组；
-/// - 每条可：完成 / 忽略 / 延后 10 分钟（snooze）/ 持续响铃（persistent）；
+/// - 每条可：完成 / 忽略 / 开始专注 / 延后 10 分钟（snooze）/ 持续响铃（persistent）；
 /// - 每个任务组可：全部完成 / 全部忽略 / 一键跳转到任务详情。
 class ReminderInboxPage extends ConsumerWidget {
   const ReminderInboxPage({super.key});
@@ -278,6 +279,18 @@ class _InboxGroupCard extends ConsumerWidget {
                   if (actions == null) throw StateError('同步队列未就绪');
                   return actions.complete(reminderDispatchId: r.id);
                 },
+                onStartFocus: () async {
+                  if (actions == null) throw StateError('同步队列未就绪');
+                  await actions.startFocus(reminderDispatchId: r.id);
+                  if (!context.mounted) return;
+                  unawaited(
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => PomodoroPage(taskId: r.item.taskId),
+                      ),
+                    ),
+                  );
+                },
                 onDismiss: () {
                   if (actions == null) throw StateError('同步队列未就绪');
                   return actions.dismiss(reminderDispatchId: r.id);
@@ -297,6 +310,7 @@ class _ReminderTile extends StatelessWidget {
     required this.onSnooze,
     required this.onPersistent,
     required this.onComplete,
+    required this.onStartFocus,
     required this.onDismiss,
   });
 
@@ -305,6 +319,7 @@ class _ReminderTile extends StatelessWidget {
   final Future<void> Function() onSnooze;
   final Future<void> Function() onPersistent;
   final Future<void> Function() onComplete;
+  final Future<void> Function() onStartFocus;
   final Future<void> Function() onDismiss;
 
   String _fmtRemain(DateTime t) {
@@ -349,6 +364,11 @@ class _ReminderTile extends StatelessWidget {
                   tooltip: '完成',
                   icon: const Icon(Icons.check, size: 18),
                   onPressed: () => onAct(onComplete),
+                ),
+                IconButton(
+                  tooltip: '开始专注',
+                  icon: const Icon(Icons.center_focus_strong, size: 18),
+                  onPressed: () => onAct(onStartFocus),
                 ),
                 IconButton(
                   tooltip: '忽略',
