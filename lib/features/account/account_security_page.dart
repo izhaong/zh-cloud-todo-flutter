@@ -4,8 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/todo_api.dart';
 import '../../state/providers.dart';
 import '../../state/session_state.dart';
+import 'change_password_page.dart';
 
-/// 账户安全页：2FA 双重验证 + 数据导出（P6 Account/Security，service /security/*）。
+/// 账户安全页：修改密码 + 2FA 双重验证 + 数据导出。
 ///
 /// service 契约：
 /// - `GET /security/2fa/status` → bool（当前 2FA 是否开启）
@@ -38,6 +39,19 @@ class _Body extends ConsumerWidget {
       padding: const EdgeInsets.all(16),
       children: [
         _SignedInAs(mobile: session?.mobile ?? ''),
+        const SizedBox(height: 16),
+        Card(
+          child: ListTile(
+            key: const ValueKey('account-security-change-password'),
+            leading: const Icon(Icons.password_outlined),
+            title: const Text('修改密码'),
+            subtitle: const Text('短信验证后设置新的登录密码'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ChangePasswordPage()),
+            ),
+          ),
+        ),
         const SizedBox(height: 16),
         _TwoFactorCard(api: api),
         const SizedBox(height: 16),
