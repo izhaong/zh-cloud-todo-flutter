@@ -1,4 +1,6 @@
 // M11-B4 效率域 API client（番茄专注 / 习惯 / 倒数日）
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 
 import 'api_config.dart';
@@ -101,6 +103,198 @@ DateTime? _parseDate(Object? v) {
   if (v is String) return DateTime.tryParse(v);
   if (v is num) return DateTime.fromMillisecondsSinceEpoch(v.toInt() * 1000);
   return null;
+}
+
+enum QuadrantRuleType { priorityTime, priorityOnly, custom }
+
+extension QuadrantRuleTypeX on QuadrantRuleType {
+  String get wireName => switch (this) {
+    QuadrantRuleType.priorityTime => 'PRIORITY_TIME',
+    QuadrantRuleType.priorityOnly => 'PRIORITY_ONLY',
+    QuadrantRuleType.custom => 'CUSTOM',
+  };
+
+  String get label => switch (this) {
+    QuadrantRuleType.priorityTime => '优先级 + 截止时间',
+    QuadrantRuleType.priorityOnly => '仅按优先级',
+    QuadrantRuleType.custom => '自定义条件',
+  };
+
+  static QuadrantRuleType parse(Object? value) {
+    return switch (value?.toString().toUpperCase()) {
+      'PRIORITY_ONLY' => QuadrantRuleType.priorityOnly,
+      'CUSTOM' => QuadrantRuleType.custom,
+      _ => QuadrantRuleType.priorityTime,
+    };
+  }
+}
+
+class QuadrantDefinitionDto {
+  const QuadrantDefinitionDto({required this.key, required this.condition});
+
+  final String key;
+  final String condition;
+
+  factory QuadrantDefinitionDto.fromJson(Map<String, dynamic> json) {
+    return QuadrantDefinitionDto(
+      key: json['key']?.toString() ?? '',
+      condition: json['condition']?.toString() ?? '',
+    );
+  }
+}
+
+class QuadrantRuleDto {
+  const QuadrantRuleDto({
+    required this.id,
+    required this.name,
+    required this.type,
+    required this.isDefault,
+    this.quadrantsJson,
+  });
+
+  final int id;
+  final String name;
+  final QuadrantRuleType type;
+  final bool isDefault;
+  final String? quadrantsJson;
+
+  factory QuadrantRuleDto.fromJson(Map<String, dynamic> json) {
+    return QuadrantRuleDto(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      name: json['name']?.toString() ?? '',
+      type: QuadrantRuleTypeX.parse(json['ruleType']),
+      isDefault: json['isDefault'] == true,
+      quadrantsJson: json['quadrantsJson']?.toString(),
+    );
+  }
+
+  List<QuadrantDefinitionDto> get definitions {
+    final source = quadrantsJson;
+    if (source == null || source.trim().isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(source);
+      if (decoded is! List) return const [];
+      return decoded
+          .whereType<Map>()
+          .map(
+            (item) =>
+                QuadrantDefinitionDto.fromJson(Map<String, dynamic>.from(item)),
+          )
+          .where(
+            (definition) =>
+                definition.key.isNotEmpty && definition.condition.isNotEmpty,
+          )
+          .toList(growable: false);
+    } on FormatException {
+      return const [];
+    }
+  }
+}
+
+/// 四象限规则与服务端分组。
+class QuadrantApi {
+  QuadrantApi(this._dio);
+
+  final Dio _dio;
+
+  Future<List<QuadrantRuleDto>> listRules() async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '${ApiConfig.todoPrefix}/quadrant/list',
+    );
+    final data = _unwrapData(response.data);
+    if (data is! List) return const [];
+    return data
+        .whereType<Map>()
+        .map(
+          (item) => QuadrantRuleDto.fromJson(Map<String, dynamic>.from(item)),
+        )
+        .toList(growable: false);
+  }
+
+  Future<int> createRule({
+    required String name,
+    required QuadrantRuleType ruleType,
+    String? quadrantsJson,
+    required bool isDefault,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '${ApiConfig.todoPrefix}/quadrant/create',
+      data: _rulePayload(
+        name: name,
+        ruleType: ruleType,
+        quadrantsJson: quadrantsJson,
+        isDefault: isDefault,
+      ),
+    );
+    final data = _unwrapData(response.data);
+    return data is num ? data.toInt() : int.parse(data.toString());
+  }
+
+  Future<void> updateRule({
+    required int id,
+    required String name,
+    required QuadrantRuleType ruleType,
+    String? quadrantsJson,
+    required bool isDefault,
+  }) async {
+    final response = await _dio.put<Map<String, dynamic>>(
+      '${ApiConfig.todoPrefix}/quadrant/update',
+      data: {
+        'id': id,
+        ..._rulePayload(
+          name: name,
+          ruleType: ruleType,
+          quadrantsJson: quadrantsJson,
+          isDefault: isDefault,
+        ),
+      },
+    );
+    _unwrapData(response.data);
+  }
+
+  Future<void> deleteRule(int id) async {
+    final response = await _dio.delete<Map<String, dynamic>>(
+      '${ApiConfig.todoPrefix}/quadrant/delete',
+      queryParameters: {'id': id},
+    );
+    _unwrapData(response.data);
+  }
+
+  Future<Map<String, Set<int>>> board({
+    required int ruleId,
+    int? listId,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '${ApiConfig.todoPrefix}/quadrant/board',
+      data: {'ruleId': ruleId, 'listId': listId, 'pageNo': 1, 'pageSize': 200},
+    );
+    final data = _unwrapData(response.data);
+    if (data is! Map) return const {};
+    return {
+      for (final entry in data.entries)
+        entry.key.toString(): {
+          for (final item
+              in entry.value is List ? entry.value as List : const <dynamic>[])
+            if (item is Map && item['id'] is num) (item['id'] as num).toInt(),
+        },
+    };
+  }
+
+  static Map<String, dynamic> _rulePayload({
+    required String name,
+    required QuadrantRuleType ruleType,
+    required String? quadrantsJson,
+    required bool isDefault,
+  }) {
+    return {
+      'name': name,
+      'ruleType': ruleType.wireName,
+      'quadrantsJson': ruleType == QuadrantRuleType.custom
+          ? quadrantsJson
+          : null,
+      'isDefault': isDefault,
+    };
+  }
 }
 
 /// 番茄专注：start / pause / resume / complete / cancel / backfill / page / stats

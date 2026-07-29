@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/api/efficiency_api.dart';
 import '../../../core/db/app_database.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/brand_colors.dart';
+import '../../../state/efficiency_providers.dart';
+import '../../../state/session_state.dart';
 import '../task_detail_page.dart';
 
 /// M11-B3 四象限 (Eisenhower) 视图。
@@ -39,7 +42,18 @@ class EisenhowerView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final now = _effectiveNow;
-    final quadrants = _buildQuadrants(tasks, now);
+    final localQuadrants = _buildQuadrants(tasks, now);
+    final session = ref.watch(sessionProvider);
+    final rules = session == null
+        ? const <QuadrantRuleDto>[]
+        : ref.watch(quadrantRulesProvider).valueOrNull ?? const [];
+    final activeRule = _activeRule(rules);
+    final remoteBoard = activeRule == null
+        ? null
+        : ref.watch(quadrantBoardProvider(activeRule.id)).valueOrNull;
+    final quadrants = activeRule == null || remoteBoard == null
+        ? localQuadrants
+        : _buildRemoteQuadrants(tasks, now, activeRule, remoteBoard);
     final brightness = Theme.of(context).brightness;
     final q1Palette = _quadrantPalette(Quadrant.q1, brightness);
     final q2Palette = _quadrantPalette(Quadrant.q2, brightness);
@@ -50,6 +64,24 @@ class EisenhowerView extends ConsumerWidget {
       padding: const EdgeInsets.all(8),
       child: Column(
         children: [
+          if (activeRule != null && remoteBoard != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.cloud_done_outlined, size: 16),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '服务端规则：${activeRule.name}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelMedium,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           Expanded(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -130,8 +162,124 @@ class EisenhowerView extends ConsumerWidget {
     }
     return {
       for (final q in Quadrant.values)
-        q: _QuadrantData(quadrant: q, tasks: map[q]!),
+        q: _QuadrantData(
+          quadrant: q,
+          label: q.label,
+          hint: q.hint,
+          tasks: map[q]!,
+        ),
     };
+  }
+
+  static QuadrantRuleDto? _activeRule(List<QuadrantRuleDto> rules) {
+    if (rules.isEmpty) return null;
+    for (final rule in rules) {
+      if (rule.isDefault) return rule;
+    }
+    return rules.first;
+  }
+
+  static Map<Quadrant, _QuadrantData> _buildRemoteQuadrants(
+    List<TodoTask> tasks,
+    DateTime now,
+    QuadrantRuleDto rule,
+    Map<String, Set<int>> board,
+  ) {
+    final keys = _ruleKeys(rule);
+    final keyToQuadrant = <String, Quadrant>{};
+    for (final entry in keys.take(4).indexed) {
+      keyToQuadrant[entry.$2] = Quadrant.values[entry.$1];
+    }
+    if (keys.length > 4) {
+      for (final key in keys.skip(4)) {
+        keyToQuadrant[key] = Quadrant.q4;
+      }
+    }
+    keyToQuadrant['UNCLASSIFIED'] = Quadrant.q4;
+    final serverKeyByTaskId = <int, String>{
+      for (final entry in board.entries)
+        for (final taskId in entry.value) taskId: entry.key,
+    };
+    final grouped = <Quadrant, List<TodoTask>>{
+      for (final quadrant in Quadrant.values) quadrant: [],
+    };
+    for (final task in tasks) {
+      if (task.completed) continue;
+      final serverKey = task.serverId == null
+          ? null
+          : serverKeyByTaskId[task.serverId];
+      final quadrant =
+          keyToQuadrant[serverKey] ?? classifyEisenhower(task, now);
+      grouped[quadrant]!.add(task);
+    }
+
+    final customDefinitions = {
+      for (final definition in rule.definitions)
+        definition.key: definition.condition,
+    };
+    return {
+      for (final quadrant in Quadrant.values)
+        quadrant: _QuadrantData(
+          quadrant: quadrant,
+          label: _remoteLabel(rule, quadrant, keys),
+          hint: _remoteHint(rule, quadrant, keys, customDefinitions),
+          tasks: grouped[quadrant]!,
+        ),
+    };
+  }
+
+  static List<String> _ruleKeys(QuadrantRuleDto rule) {
+    switch (rule.type) {
+      case QuadrantRuleType.priorityTime:
+        return const [
+          'Q1_URGENT_IMPORTANT',
+          'Q2_NOT_URGENT_IMPORTANT',
+          'Q3_URGENT_NOT_IMPORTANT',
+          'Q4_NOT_URGENT_NOT_IMPORTANT',
+        ];
+      case QuadrantRuleType.priorityOnly:
+        return const ['P3', 'P2', 'P1', 'P0'];
+      case QuadrantRuleType.custom:
+        final keys = rule.definitions
+            .map((definition) => definition.key)
+            .take(4)
+            .toList();
+        while (keys.length < 3) {
+          keys.add('__EMPTY_${keys.length}');
+        }
+        if (keys.length < 4) keys.add('UNCLASSIFIED');
+        return keys;
+    }
+  }
+
+  static String _remoteLabel(
+    QuadrantRuleDto rule,
+    Quadrant quadrant,
+    List<String> keys,
+  ) {
+    if (rule.type == QuadrantRuleType.priorityTime) return quadrant.label;
+    final index = quadrant.index;
+    if (index >= keys.length) return quadrant.label;
+    final key = keys[index];
+    if (rule.type == QuadrantRuleType.priorityOnly) {
+      return '$key · 优先级 ${key.substring(1)}';
+    }
+    if (key.startsWith('__EMPTY_')) return '自定义象限 ${index + 1}';
+    return key == 'UNCLASSIFIED' ? '未分类' : key;
+  }
+
+  static String _remoteHint(
+    QuadrantRuleDto rule,
+    Quadrant quadrant,
+    List<String> keys,
+    Map<String, String> customDefinitions,
+  ) {
+    if (rule.type != QuadrantRuleType.custom) return quadrant.hint;
+    final index = quadrant.index;
+    if (index >= keys.length) return quadrant.hint;
+    final key = keys[index];
+    if (key.startsWith('__EMPTY_')) return '尚未配置条件';
+    return customDefinitions[key] ?? '未匹配自定义条件';
   }
 }
 
@@ -245,8 +393,15 @@ Quadrant classifyEisenhower(TodoTask task, DateTime now) {
 }
 
 class _QuadrantData {
-  const _QuadrantData({required this.quadrant, required this.tasks});
+  const _QuadrantData({
+    required this.quadrant,
+    required this.label,
+    required this.hint,
+    required this.tasks,
+  });
   final Quadrant quadrant;
+  final String label;
+  final String hint;
   final List<TodoTask> tasks;
 }
 
@@ -267,6 +422,7 @@ class _QuadrantTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = brandColors(context);
     return Material(
+      key: ValueKey('quadrant-${data.quadrant.name}'),
       color: color,
       borderRadius: BorderRadius.circular(AppRadius.lg),
       clipBehavior: Clip.antiAlias,
@@ -279,7 +435,7 @@ class _QuadrantTile extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    data.quadrant.label,
+                    data.label,
                     style: TextStyle(
                       fontSize: 13,
                       color: accent,
@@ -309,7 +465,7 @@ class _QuadrantTile extends StatelessWidget {
               ],
             ),
             Text(
-              data.quadrant.hint,
+              data.hint,
               style: TextStyle(
                 fontSize: 11,
                 color: accent.withValues(alpha: 0.8),

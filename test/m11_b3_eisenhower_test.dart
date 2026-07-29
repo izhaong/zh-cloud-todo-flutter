@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zh_cloud_todo_flutter/core/api/efficiency_api.dart';
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/core/theme/app_theme.dart';
 import 'package:zh_cloud_todo_flutter/features/task/view_mode.dart';
 import 'package:zh_cloud_todo_flutter/features/task/views/eisenhower_view.dart';
 import 'package:zh_cloud_todo_flutter/features/task/views/task_view_mode_tabs.dart';
+import 'package:zh_cloud_todo_flutter/state/efficiency_providers.dart';
+import 'package:zh_cloud_todo_flutter/state/session_state.dart';
 
 /// M11-B3 c3 测试：四象限 Eisenhower 分类纯函数 + 视图 tab 渲染。
 void main() {
@@ -193,6 +196,67 @@ void main() {
     }
   });
 
+  testWidgets('EisenhowerView 登录后按服务端默认规则分组', (tester) async {
+    final now = DateTime(2026, 6, 20, 12);
+    final task = TodoTask(
+      id: 'local-101',
+      serverId: 101,
+      listId: '1',
+      allDay: false,
+      fixedTimezone: false,
+      title: '服务端任务',
+      priority: 0,
+      isPinned: false,
+      sortOrder: 0,
+      completed: false,
+      cancelled: false,
+      updatedAt: now,
+      createdAt: now,
+    );
+    const rule = QuadrantRuleDto(
+      id: 7,
+      name: '远端默认规则',
+      type: QuadrantRuleType.priorityTime,
+      isDefault: true,
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sessionProvider.overrideWith(_TestSessionController.new),
+          quadrantRulesProvider.overrideWith((ref) async => const [rule]),
+          quadrantBoardProvider(7).overrideWith(
+            (ref) async => const {
+              'Q1_URGENT_IMPORTANT': {101},
+            },
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: EisenhowerView(tasks: [task], now: now),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('服务端规则：远端默认规则'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('quadrant-q1')),
+        matching: find.text('服务端任务'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('quadrant-q4')),
+        matching: find.text('服务端任务'),
+      ),
+      findsNothing,
+    );
+  });
+
   testWidgets(
     'EisenhowerView dark quadrants keep title and body contrast at least 4.5',
     (tester) async {
@@ -250,6 +314,19 @@ void main() {
       );
     },
   );
+}
+
+class _TestSessionController extends SessionController {
+  @override
+  TodoAuthSession? build() {
+    return const TodoAuthSession(
+      userId: 1,
+      accessToken: 'test-token',
+      refreshToken: 'test-refresh',
+      tenantId: '1',
+      mobile: '13800000000',
+    );
+  }
 }
 
 List<TodoTask> _quadrantTasks(DateTime now) {
