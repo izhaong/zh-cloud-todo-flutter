@@ -191,6 +191,52 @@ void main() {
     expect(earlier.dy < later.dy, isTrue);
   });
 
+  testWidgets('外部订阅事件显示来源并保持只读', (tester) async {
+    final now = DateTime(2026, 7, 30, 8);
+    String? selectedTaskId;
+    final externalEvent = TodoTask(
+      id: 'external:9:meeting-1',
+      listId: 'external:团队日历',
+      title: '团队周会',
+      description: '只读事件',
+      completed: false,
+      cancelled: false,
+      priority: 0,
+      isPinned: false,
+      sortOrder: 0,
+      startAt: DateTime(2026, 7, 30, 9),
+      endAt: DateTime(2026, 7, 30, 10),
+      dueAt: DateTime(2026, 7, 30, 9),
+      allDay: false,
+      fixedTimezone: false,
+      updatedAt: now,
+      createdAt: now,
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: CalendarView(
+              tasks: [externalEvent],
+              now: now,
+              onTaskSelected: (id) => selectedTaskId = id,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('列表'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('团队周会'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('来源：团队日历'), findsOneWidget);
+    expect(find.text('只读订阅事件'), findsOneWidget);
+    expect(find.text('只读事件'), findsOneWidget);
+    expect(selectedTaskId, isNull);
+  });
+
   testWidgets(
     'CalendarView 360x800 at 1.3x has no toolbar overflow and all modes are reachable',
     (tester) async {

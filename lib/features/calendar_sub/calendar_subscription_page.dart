@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/todo_api.dart';
@@ -28,10 +29,10 @@ final calSubscriptionProvider = FutureProvider.autoDispose<CalSubState>((
 });
 
 /// ICS 订阅管理页：
-/// - 订阅：POST /cal-sub/create (url, name, enabled)
-/// - 删除：POST /cal-sub/delete (id)
+/// - 订阅：POST /cal-sub/create (sourceUrl, name)
+/// - 删除：DELETE /cal-sub/delete?id=...
 /// - 列表：GET /cal-sub/list
-/// - 导出 own ICS feed：GET /cal-sub/export-ics（后端入口，预留）
+/// - 导出 own ICS feed：GET /cal-sub/export-url
 class CalendarSubscriptionPage extends ConsumerStatefulWidget {
   const CalendarSubscriptionPage({super.key});
 
@@ -203,11 +204,13 @@ class _CalendarSubscriptionPageState
                 ),
                 title: Text(it.name),
                 subtitle: Text(
-                  '${it.url}${it.lastSyncAt != null ? '\n同步于 ${it.lastSyncAt!.toLocal().toString().substring(0, 16)}' : ''}',
-                  maxLines: 2,
+                  '${it.url}'
+                  '${it.status == 'ERROR' ? '\n同步失败，请检查订阅地址' : ''}'
+                  '${it.lastSyncAt != null ? '\n同步于 ${it.lastSyncAt!.toLocal().toString().substring(0, 16)}' : ''}',
+                  maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                 ),
-                isThreeLine: it.lastSyncAt != null,
+                isThreeLine: it.lastSyncAt != null || it.status == 'ERROR',
                 trailing: IconButton(
                   tooltip: '删除',
                   icon: const Icon(Icons.delete_outline),
@@ -220,13 +223,16 @@ class _CalendarSubscriptionPageState
     );
   }
 
-  // 导出自己的 ICS 入口：后端约定 GET /cal-sub/export-ics 返回
-  // `{feedUrl}` 或用户专属 token；真实分享可在本方法中调用 Link.share /
-  // Clipboard.setData，目前仅作为入口示意。
   Future<void> _exportOwnFeed(BuildContext context) async {
-    const snackBar = SnackBar(
-      content: Text('导出自己的 ICS 链接：GET /cal-sub/export-ics（由后端生成）'),
-    );
-    ScaffoldMessenger.of(context).showSnackBar(snackBar);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final url = await ref.read(todoApiProvider).calSubscription.exportUrl();
+      if (!mounted) return;
+      await Clipboard.setData(ClipboardData(text: url));
+      messenger.showSnackBar(const SnackBar(content: Text('任务 ICS 订阅链接已复制')));
+    } catch (error) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text('生成订阅链接失败: $error')));
+    }
   }
 }

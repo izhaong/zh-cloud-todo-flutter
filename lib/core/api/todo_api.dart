@@ -1260,6 +1260,7 @@ class CalSubscription {
     this.enabled = true,
     this.lastSyncAt,
     this.syncToken,
+    this.status = 'ACTIVE',
   });
 
   final int id;
@@ -1268,6 +1269,46 @@ class CalSubscription {
   final bool enabled;
   final DateTime? lastSyncAt;
   final String? syncToken;
+  final String status;
+}
+
+/// 外部 ICS 中的只读事件。
+class CalendarExternalEvent {
+  const CalendarExternalEvent({
+    required this.subscriptionId,
+    required this.sourceName,
+    required this.uid,
+    required this.title,
+    required this.description,
+    required this.startAt,
+    required this.endAt,
+    required this.allDay,
+    required this.readOnly,
+  });
+
+  factory CalendarExternalEvent.fromJson(Map<String, dynamic> json) {
+    return CalendarExternalEvent(
+      subscriptionId: (json['subscriptionId'] as num?)?.toInt() ?? 0,
+      sourceName: json['sourceName']?.toString() ?? '',
+      uid: json['uid']?.toString() ?? '',
+      title: json['title']?.toString() ?? '无标题事件',
+      description: json['description']?.toString() ?? '',
+      startAt: DateTime.parse(json['startAt'].toString()),
+      endAt: DateTime.parse(json['endAt'].toString()),
+      allDay: json['allDay'] == true,
+      readOnly: json['readOnly'] != false,
+    );
+  }
+
+  final int subscriptionId;
+  final String sourceName;
+  final String uid;
+  final String title;
+  final String description;
+  final DateTime startAt;
+  final DateTime endAt;
+  final bool allDay;
+  final bool readOnly;
 }
 
 /// ICS 订阅助手：创建 / 删除 / 列表。
@@ -1278,17 +1319,27 @@ class CalendarSubscriptionApi {
 
   CalSubscription _s(Map<String, dynamic> j) => CalSubscription(
     id: (j['id'] as num?)?.toInt() ?? 0,
-    url: j['url']?.toString() ?? '',
-    name: j['name']?.toString() ?? (j['url']?.toString() ?? ''),
-    enabled: j['enabled'] != false,
-    lastSyncAt: ReminderActionApi.parseTime(j['lastSyncAt']),
-    syncToken: j['syncToken']?.toString(),
+    url: j['sourceUrl']?.toString() ?? j['url']?.toString() ?? '',
+    name:
+        j['name']?.toString() ??
+        j['sourceUrl']?.toString() ??
+        j['url']?.toString() ??
+        '',
+    enabled:
+        (j['status']?.toString().toUpperCase() ?? 'ACTIVE') == 'ACTIVE' &&
+        j['enabled'] != false,
+    lastSyncAt: j['lastSyncedAt'] == null && j['lastSyncAt'] == null
+        ? null
+        : ReminderActionApi.parseTime(j['lastSyncedAt'] ?? j['lastSyncAt']),
+    syncToken: j['subscribeToken']?.toString() ?? j['syncToken']?.toString(),
+    status: j['status']?.toString().toUpperCase() ?? 'ACTIVE',
   );
 
   List<CalSubscription> _list(Map<String, dynamic> body) {
     final List raw;
     if (body.containsKey('code')) {
-      final dynamic data = _unwrapBody(body);
+      _ensureSuccess(body);
+      final dynamic data = body['data'];
       if (data is List) {
         raw = data;
       } else if (data is Map) {
@@ -1314,21 +1365,72 @@ class CalendarSubscriptionApi {
     return const [];
   }
 
-  /// `POST /cal-sub/create` body `{url,name?,enabled?}`。
-  Future<int> create({
-    required String url,
-    String? name,
-    bool enabled = true,
-  }) async {
+  /// `POST /cal-sub/create` body `{sourceUrl,name}`。
+  Future<int> create({required String url, String? name}) async {
+    final resolvedName = name?.trim().isNotEmpty == true
+        ? name!.trim()
+        : (Uri.tryParse(url)?.host ?? url);
     final resp = await _client.post<Map<String, dynamic>>(
       '/cal-sub/create',
-      data: {'url': url, 'name': ?name, 'enabled': enabled},
+      data: {'sourceUrl': url, 'name': resolvedName},
     );
-    final data = _unwrapBody(resp.data);
-    return (data['id'] as num?)?.toInt() ?? 0;
+    _ensureSuccess(resp.data);
+    final dynamic data = resp.data?.containsKey('code') == true
+        ? resp.data!['data']
+        : (resp.data?['id'] ?? resp.data?['data']);
+    if (data is num) return data.toInt();
+    if (data is Map) return (data['id'] as num?)?.toInt() ?? 0;
+    return int.tryParse(data?.toString() ?? '') ?? 0;
   }
 
-  /// `POST /cal-sub/delete` body `{id}`。
-  Future<void> delete(int id) =>
-      _client.delete('/cal-sub/delete', data: {'id': id});
+  /// `DELETE /cal-sub/delete?id=...`。
+  Future<void> delete(int id) async {
+    final response = await _client.delete<Map<String, dynamic>>(
+      '/cal-sub/delete',
+      queryParameters: {'id': id},
+    );
+    _ensureSuccess(response.data);
+  }
+
+  /// 获取当前账号可供第三方日历订阅的任务 ICS 地址。
+  Future<String> exportUrl() async {
+    final response = await _client.get<Map<String, dynamic>>(
+      '/cal-sub/export-url',
+    );
+    _ensureSuccess(response.data);
+    final dynamic data = response.data?.containsKey('code') == true
+        ? response.data!['data']
+        : response.data?['url'];
+    return data?.toString() ?? '';
+  }
+
+  /// 读取时间窗口内的外部只读事件。
+  Future<List<CalendarExternalEvent>> events({
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    final response = await _client.get<Map<String, dynamic>>(
+      '/cal-sub/events',
+      query: {'start': _dateOnly(start), 'end': _dateOnly(end)},
+    );
+    final body = response.data;
+    if (body == null) return const [];
+    _ensureSuccess(body);
+    final dynamic data = body.containsKey('code')
+        ? body['data']
+        : body['items'];
+    if (data is! List) return const [];
+    return data
+        .map(
+          (item) => CalendarExternalEvent.fromJson(
+            Map<String, dynamic>.from(item as Map),
+          ),
+        )
+        .toList();
+  }
+
+  static String _dateOnly(DateTime value) {
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${value.year}-${two(value.month)}-${two(value.day)}';
+  }
 }

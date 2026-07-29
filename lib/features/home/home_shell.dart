@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/todo_api.dart';
 import '../../core/db/app_database.dart';
 import '../../core/notification/local_notification_service.dart';
 import '../../core/sync/connectivity_recovery_trigger.dart';
@@ -599,12 +600,43 @@ class _CalendarHost extends ConsumerWidget {
     if (repo == null) {
       return const Center(child: CircularProgressIndicator());
     }
+    final now = DateTime.now();
+    final window = (
+      start: DateTime(now.year - 1),
+      end: DateTime(now.year + 2).subtract(const Duration(days: 1)),
+    );
+    final externalEvents = ref.watch(externalCalendarEventsProvider(window));
     return StreamBuilder<List<TodoTask>>(
       stream: repo.watchAll(),
       builder: (ctx, snap) {
-        final tasks = snap.data ?? const <TodoTask>[];
+        final tasks = <TodoTask>[
+          ...snap.data ?? const <TodoTask>[],
+          ...externalEvents.valueOrNull?.map(_externalEventAsTask) ??
+              const <TodoTask>[],
+        ];
         return CalendarView(tasks: tasks);
       },
+    );
+  }
+
+  TodoTask _externalEventAsTask(CalendarExternalEvent event) {
+    return TodoTask(
+      id: 'external:${event.subscriptionId}:${event.uid}',
+      listId: 'external:${event.sourceName}',
+      title: event.title,
+      description: event.description,
+      completed: false,
+      cancelled: false,
+      priority: 0,
+      isPinned: false,
+      sortOrder: 0,
+      startAt: event.startAt.toLocal(),
+      endAt: event.endAt.toLocal(),
+      dueAt: event.startAt.toLocal(),
+      allDay: event.allDay,
+      fixedTimezone: false,
+      updatedAt: event.startAt,
+      createdAt: event.startAt,
     );
   }
 }
