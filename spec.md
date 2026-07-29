@@ -14,6 +14,7 @@ zh-cloud 平台 Todo 产品的 **唯一 C 端客户端**（**Web / H5**、iOS、
 - `specs/002-todo-visual-fidelity/{spec,plan,tasks}.md`：视觉与响应式事实源，定义工作区结构、视觉状态、布局档位、验收视口与 golden 基准。
 - `specs/006-todo-task-time-semantics/{spec,plan,tasks}.md`：任务时间、提醒、三类重复模式（含自选日期）与 occurrence 动作的当前实现契约，定义 Drift/outbox、时区、锚点和提醒派发边界。
 - `specs/010-todo-portable-task-import/{spec,plan,tasks}.md`：便携 JSON 任务导入、稳定请求 ID、批次历史与按批回滚的当前实现契约。
+- `specs/011-todo-persistent-reminder-scheduling/{spec,plan,tasks}.md`：系统级持久提醒调度、改期撤销与 Android 重启恢复契约。
 - 两套规格按职责互补；视觉规格不得改写账号、数据、同步、接口或权限语义，功能规格不得复制视觉契约正文。
 
 ### 1.2 桌面母版与响应式档位
@@ -76,6 +77,7 @@ pubspec.yaml
 - 当前：本地状态变更入 `_SyncQueueItem` 同步队列雏形，随状态一并持久化。
 - 目标：Drift 本地库 + outbox，由 `SyncCoordinator` 驱动 `/app-api/todo/sync/{pull,push}` 增量同步；临时网络失败保留原 `clientMutationId`，以最早 outbox mutation 作为稳定批次 `idempotency_key` 并标记为 `retryable`，在下次同步继续推送；冲突按 **LWW（Last-Write-Wins，以更新时间为准）** 合并并保持 `failed` 供用户恢复。任务完成统一以 `status` 与 `completedAt` 推送；拉取将 `completedAt`、重复父任务、重复规则和 occurrence 映射为本地 UUID，离线完成后能回放 `ON_COMPLETE` 生成的下一实例。
 - 提醒规则由 `ReminderRepository` 在同一 Drift 事务中写本地规则与 `reminder` outbox；详情页可编辑已有规则并保持 UUID，四类锚点严格区分指定时间 `ABSOLUTE`、开始 `START`、截止 `DUE` 和时间段结束 `END`。相对提醒以任务锚点减去提前分钟数计算 `fireAt`，派发后的完成、忽略、开始专注和稍后动作使用独立 outbox 实体；收件箱以同一派发 ID 的最新本地动作覆盖远端旧待处理状态，避免离线期间重复提交。
+- 提醒收件箱中的未来派发由操作系统持久调度；同一派发 ID 的时间变化会覆盖旧调度，派发撤销会取消本地通知。Android 注册开机恢复接收器，设备重启或应用升级后由通知插件恢复尚未触发的提醒。
 
 ### 4.3 效率工具
 

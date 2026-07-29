@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -40,6 +42,7 @@ void main() {
             ),
           );
       final notifications = _RecordingNotificationService();
+      final stateStore = _MemoryReminderNotificationStateStore();
       final poller = ReminderNotificationPoller(
         repository: _FakeReminderInboxRepository([
           ReminderInboxItem(
@@ -64,38 +67,335 @@ void main() {
         ]),
         database: db,
         notifications: notifications,
+        stateStore: stateStore,
+        notificationScope: 'tenant_user',
         now: () => now,
       );
 
       expect(await poller.poll(), 1);
-      expect(await poller.poll(), 0);
+      final restartedPoller = ReminderNotificationPoller(
+        repository: _FakeReminderInboxRepository([
+          ReminderInboxItem(
+            id: 301,
+            taskId: 201,
+            taskTitle: '服务端旧标题',
+            remindAt: now.subtract(const Duration(minutes: 1)),
+          ),
+        ]),
+        database: db,
+        notifications: notifications,
+        stateStore: stateStore,
+        notificationScope: 'tenant_user',
+        now: () => now,
+      );
+      expect(await restartedPoller.poll(), 0);
       expect(notifications.shown, [
-        (id: 301, title: '本地任务标题', body: '到期提醒', payload: 'reminder:301'),
+        (
+          id: 301,
+          title: '本地任务标题',
+          body: '到期提醒',
+          payload:
+              'reminder:301:tenant_user:'
+              '${now.subtract(const Duration(minutes: 1)).millisecondsSinceEpoch}',
+        ),
       ]);
     },
   );
+
+  test(
+    'poll persistently schedules, reschedules and cancels future dispatch',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final now = DateTime.utc(2026, 7, 29, 12);
+      final repository = _FakeReminderInboxRepository([
+        ReminderInboxItem(
+          id: 401,
+          taskId: 204,
+          taskTitle: '未来任务',
+          remindAt: now.add(const Duration(minutes: 5)),
+        ),
+      ]);
+      final notifications = _RecordingNotificationService();
+      final stateStore = _MemoryReminderNotificationStateStore();
+      final poller = ReminderNotificationPoller(
+        repository: repository,
+        database: db,
+        notifications: notifications,
+        stateStore: stateStore,
+        notificationScope: 'tenant_user',
+        now: () => now,
+      );
+
+      expect(await poller.poll(), 0);
+      expect(await poller.poll(), 0);
+      expect(notifications.scheduled, hasLength(1));
+      expect(notifications.scheduled.single.id, 401);
+
+      repository.items = [
+        ReminderInboxItem(
+          id: 401,
+          taskId: 204,
+          taskTitle: '未来任务',
+          remindAt: now.add(const Duration(minutes: 10)),
+        ),
+      ];
+      await poller.poll();
+      expect(notifications.scheduled, hasLength(2));
+      expect(
+        notifications.scheduled.last.fireAt,
+        now.add(const Duration(minutes: 10)),
+      );
+
+      repository.items = [
+        ReminderInboxItem(
+          id: 401,
+          taskId: 204,
+          taskTitle: '未来任务',
+          remindAt: now.add(const Duration(minutes: 10)),
+          status: 'DISMISSED',
+        ),
+      ];
+      await poller.poll();
+      expect(notifications.cancelled, [401]);
+    },
+  );
+
+  test('restart keeps an unchanged future dispatch idempotent', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final now = DateTime.utc(2026, 7, 29, 12);
+    final repository = _FakeReminderInboxRepository([
+      ReminderInboxItem(
+        id: 451,
+        taskId: 205,
+        taskTitle: '未来任务',
+        remindAt: now.add(const Duration(minutes: 5)),
+      ),
+    ]);
+    final notifications = _RecordingNotificationService();
+    final stateStore = _MemoryReminderNotificationStateStore();
+
+    await ReminderNotificationPoller(
+      repository: repository,
+      database: db,
+      notifications: notifications,
+      stateStore: stateStore,
+      notificationScope: 'tenant_user',
+      now: () => now,
+    ).poll();
+    await ReminderNotificationPoller(
+      repository: repository,
+      database: db,
+      notifications: notifications,
+      stateStore: stateStore,
+      notificationScope: 'tenant_user',
+      now: () => now,
+    ).poll();
+
+    expect(notifications.scheduled, hasLength(1));
+  });
+
+  test('poll cancels stale persisted reminder after app restart', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final notifications = _RecordingNotificationService();
+    final stateStore = _MemoryReminderNotificationStateStore();
+    notifications.systemSchedules[501] = DateTime.utc(2026, 7, 29, 12, 5);
+    final poller = ReminderNotificationPoller(
+      repository: _FakeReminderInboxRepository([]),
+      database: db,
+      notifications: notifications,
+      stateStore: stateStore,
+      notificationScope: 'tenant_user',
+      now: () => DateTime.utc(2026, 7, 29, 12),
+    );
+
+    expect(await poller.poll(), 0);
+    expect(notifications.cancelled, [501]);
+  });
+
+  test('failed system scheduling is retried by the next poll', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final now = DateTime.utc(2026, 7, 29, 12);
+    final notifications = _RecordingNotificationService()
+      ..scheduleSucceeds = false;
+    final poller = ReminderNotificationPoller(
+      repository: _FakeReminderInboxRepository([
+        ReminderInboxItem(
+          id: 551,
+          taskId: 207,
+          taskTitle: '重试提醒',
+          remindAt: now.add(const Duration(minutes: 5)),
+        ),
+      ]),
+      database: db,
+      notifications: notifications,
+      stateStore: _MemoryReminderNotificationStateStore(),
+      notificationScope: 'tenant_user',
+      now: () => now,
+    );
+
+    expect(await poller.poll(), 0);
+    notifications.scheduleSucceeds = true;
+    expect(await poller.poll(), 0);
+    expect(notifications.scheduleAttempts, 2);
+    expect(notifications.scheduled, hasLength(1));
+  });
+
+  test('failed state persistence is retried by the next poll', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final now = DateTime.utc(2026, 7, 29, 12);
+    final stateStore = _MemoryReminderNotificationStateStore()
+      ..writeSucceeds = false;
+    final poller = ReminderNotificationPoller(
+      repository: _FakeReminderInboxRepository([
+        ReminderInboxItem(
+          id: 575,
+          taskId: 208,
+          taskTitle: '落盘重试',
+          remindAt: now.add(const Duration(minutes: 5)),
+        ),
+      ]),
+      database: db,
+      notifications: _RecordingNotificationService(),
+      stateStore: stateStore,
+      notificationScope: 'tenant_user',
+      now: () => now,
+    );
+
+    await poller.poll();
+    await poller.poll();
+    expect(stateStore.writeAttempts, 2);
+  });
+
+  test('concurrent polls share one in-flight operation', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final now = DateTime.utc(2026, 7, 29, 12);
+    final blocker = Completer<void>();
+    final repository = _FakeReminderInboxRepository([
+      ReminderInboxItem(
+        id: 601,
+        taskId: 206,
+        taskTitle: '并发提醒',
+        remindAt: now.add(const Duration(minutes: 5)),
+      ),
+    ])..blocker = blocker;
+    final notifications = _RecordingNotificationService();
+    final poller = ReminderNotificationPoller(
+      repository: repository,
+      database: db,
+      notifications: notifications,
+      stateStore: _MemoryReminderNotificationStateStore(),
+      notificationScope: 'tenant_user',
+      now: () => now,
+    );
+
+    final first = poller.poll();
+    final second = poller.poll();
+    await Future<void>.delayed(Duration.zero);
+    expect(repository.listCalls, 1);
+    blocker.complete();
+    expect(await Future.wait([first, second]), [0, 0]);
+    expect(notifications.scheduled, hasLength(1));
+  });
 }
 
 class _FakeReminderInboxRepository extends ReminderInboxRepository {
   _FakeReminderInboxRepository(this.items)
     : super(ReminderActionApi(ApiClient()));
 
-  final List<ReminderInboxItem> items;
+  List<ReminderInboxItem> items;
+  Completer<void>? blocker;
+  int listCalls = 0;
 
   @override
-  Future<List<ReminderInboxItem>> list() async => items;
+  Future<List<ReminderInboxItem>> list() async {
+    listCalls++;
+    await blocker?.future;
+    return items;
+  }
+}
+
+class _MemoryReminderNotificationStateStore
+    implements ReminderNotificationStateStore {
+  Map<int, DateTime> state = {};
+  bool writeSucceeds = true;
+  int writeAttempts = 0;
+
+  @override
+  Future<Map<int, DateTime>> read() async => Map.of(state);
+
+  @override
+  Future<bool> write(Map<int, DateTime> value) async {
+    writeAttempts++;
+    if (!writeSucceeds) return false;
+    state = Map.of(value);
+    return true;
+  }
 }
 
 class _RecordingNotificationService extends LocalNotificationService {
   final shown = <({int id, String title, String? body, String? payload})>[];
+  final scheduled =
+      <
+        ({int id, String title, String? body, DateTime fireAt, String? payload})
+      >[];
+  final cancelled = <int>[];
+  bool scheduleSucceeds = true;
+  int scheduleAttempts = 0;
+  final systemSchedules = <int, DateTime>{};
+  final systemActiveIds = <int>{};
 
   @override
-  Future<void> show({
+  Future<Map<int, DateTime>> pendingReminderSchedules(String scope) async =>
+      Map.of(systemSchedules);
+
+  @override
+  Future<Set<int>> activeReminderIds(String scope) async =>
+      Set.of(systemActiveIds);
+
+  @override
+  Future<bool> show({
     required int id,
     required String title,
     String? body,
     String? payload,
+    String? tag,
   }) async {
     shown.add((id: id, title: title, body: body, payload: payload));
+    return true;
+  }
+
+  @override
+  Future<bool> schedule({
+    required int id,
+    required String title,
+    String? body,
+    required DateTime fireAt,
+    String? payload,
+    String? tag,
+  }) async {
+    scheduleAttempts++;
+    if (!scheduleSucceeds) return false;
+    scheduled.add((
+      id: id,
+      title: title,
+      body: body,
+      fireAt: fireAt,
+      payload: payload,
+    ));
+    return true;
+  }
+
+  @override
+  Future<bool> cancel(int id, {String? tag}) async {
+    cancelled.add(id);
+    systemSchedules.remove(id);
+    systemActiveIds.remove(id);
+    return true;
   }
 }

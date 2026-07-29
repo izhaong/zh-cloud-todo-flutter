@@ -1,19 +1,15 @@
 /// 本地通知服务封装（`flutter_local_notifications` ^18）。
 ///
-/// 负责：初始化、权限请求、即时展示、延迟展示、取消。
+/// 负责：初始化、权限请求、即时展示、系统级定时展示、取消。
 ///
 /// **测试安全**：所有平台通道调用均用 `try/catch` 包裹；在测试环境（无
-/// no-op 实现）下任何调用都不会抛异常、也不调度真实定时器。
+/// no-op 实现）下任何调用都不会抛异常。
 library;
-
-/// **延迟展示的实现取舍**：持久化跨重启的 OS 级定时需要引入 `timezone` 包
-/// （TZDateTime）；本轮最小交付版本采用内存 `Timer` 延迟触发，App 仍在前台
-/// 或短期后台期间有效。若需真正跨重启调度，补装 `timezone` 后改为
-/// `zonedSchedule` 即可，接口不变。
-import 'dart:async';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:timezone/data/latest.dart' as timezone_data;
+import 'package:timezone/timezone.dart' as timezone;
 
 /// 提醒频道。
 class ReminderChannel {
@@ -31,6 +27,7 @@ class LocalNotificationService {
   /// null 表示不支持 / 未初始化；后续所有操作对此短路返回。
   FlutterLocalNotificationsPlugin? _plugin;
   bool _initialized = false;
+  static bool _timeZonesInitialized = false;
 
   static const _settings = InitializationSettings(
     android: AndroidInitializationSettings('@mipmap/ic_launcher'),
@@ -45,6 +42,10 @@ class LocalNotificationService {
   /// 初始化本地通知（幂等）。
   Future<void> init() async {
     if (_initialized) return;
+    if (!_timeZonesInitialized) {
+      timezone_data.initializeTimeZones();
+      _timeZonesInitialized = true;
+    }
     final plugin = _plugin ?? FlutterLocalNotificationsPlugin();
     try {
       await plugin.initialize(_settings);
@@ -62,6 +63,13 @@ class LocalNotificationService {
     try {
       final plugin = _plugin;
       if (plugin == null) return false;
+      final android = plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      if (android != null) {
+        return await android.requestNotificationsPermission() ?? true;
+      }
       final macOS = plugin
           .resolvePlatformSpecificImplementation<
             MacOSFlutterLocalNotificationsPlugin
@@ -92,8 +100,8 @@ class LocalNotificationService {
     }
   }
 
-  Future<NotificationDetails> get _details => Future.value(
-    const NotificationDetails(
+  Future<NotificationDetails> _details({String? tag}) => Future.value(
+    NotificationDetails(
       android: AndroidNotificationDetails(
         ReminderChannel.id,
         ReminderChannel.name,
@@ -101,14 +109,15 @@ class LocalNotificationService {
         importance: Importance.max,
         priority: Priority.high,
         ongoing: true,
+        tag: tag,
       ),
-      iOS: DarwinNotificationDetails(
+      iOS: const DarwinNotificationDetails(
         presentAlert: true,
         presentBanner: true,
         presentList: true,
         presentSound: true,
       ),
-      macOS: DarwinNotificationDetails(
+      macOS: const DarwinNotificationDetails(
         presentAlert: true,
         presentBanner: true,
         presentList: true,
@@ -118,54 +127,136 @@ class LocalNotificationService {
   );
 
   /// 立即展示一条提醒通知。[id] 通常取服务端 reminderId，保证可去重。
-  Future<void> show({
+  Future<bool> show({
     required int id,
     required String title,
     String? body,
     String? payload,
+    String? tag,
   }) async {
     await _guard();
     final plugin = _plugin;
-    if (plugin == null) return;
+    if (plugin == null) return false;
     try {
-      await plugin.show(id, title, body, await _details, payload: payload);
+      await plugin.show(
+        id,
+        title,
+        body,
+        await _details(tag: tag),
+        payload: payload,
+      );
+      return true;
     } catch (_) {
       // 通知展示失败不阻塞业务。
+      return false;
     }
   }
 
-  /// 延迟展示（最小交付版：内存 Timer；跨重启需 TZDateTime，见文件头）。
-  Timer? schedule({
+  /// 由操作系统持久调度提醒；同一 [id] 再次调度会覆盖旧时间。
+  Future<bool> schedule({
     required int id,
     required String title,
     String? body,
     required DateTime fireAt,
     String? payload,
-  }) {
-    final delay = fireAt.difference(DateTime.now());
-    if (delay.isNegative) {
-      show(id: id, title: title, body: body, payload: payload);
-      return null;
+    String? tag,
+  }) async {
+    await _guard();
+    if (!fireAt.isAfter(DateTime.now())) {
+      return show(id: id, title: title, body: body, payload: payload, tag: tag);
     }
     final plugin = _plugin;
-    if (plugin == null) return null;
+    if (plugin == null) return false;
     try {
-      return Timer(delay, () {
-        show(id: id, title: title, body: body, payload: payload);
-      });
+      await plugin.zonedSchedule(
+        id,
+        title,
+        body,
+        timezone.TZDateTime.from(fireAt.toUtc(), timezone.UTC),
+        await _details(tag: tag),
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        payload: payload,
+      );
+      return true;
     } catch (_) {
-      return null;
+      // 系统调度失败不阻塞业务。
+      return false;
     }
   }
 
   /// 取消一条通知。
-  Future<void> cancel(int id) async {
+  Future<bool> cancel(int id, {String? tag}) async {
     await _guard();
     final plugin = _plugin;
-    if (plugin == null) return;
+    if (plugin == null) return false;
     try {
-      await plugin.cancel(id);
-    } catch (_) {}
+      await plugin.cancel(id, tag: tag);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 返回指定用户范围内尚未触发的提醒及其调度时间。
+  Future<Map<int, DateTime>> pendingReminderSchedules(String scope) async {
+    await _guard();
+    final plugin = _plugin;
+    if (plugin == null) return {};
+    try {
+      return {
+        for (final request in await plugin.pendingNotificationRequests())
+          if (_parseReminderPayload(request.payload, scope) case (
+            id: final id,
+            fireAt: final fireAt,
+          ))
+            id: fireAt,
+      };
+    } catch (_) {
+      return {};
+    }
+  }
+
+  /// 返回指定用户范围内当前仍展示的提醒 ID。
+  Future<Set<int>> activeReminderIds(String scope) async {
+    await _guard();
+    final plugin = _plugin;
+    if (plugin == null) return {};
+    final tag = reminderTag(scope);
+    try {
+      return {
+        for (final notification in await plugin.getActiveNotifications())
+          if (notification.id case final id?)
+            if (notification.tag == tag ||
+                _parseReminderPayload(notification.payload, scope) != null)
+              id,
+      };
+    } catch (_) {
+      return {};
+    }
+  }
+
+  static String reminderTag(String scope) => 'todo_reminder_$scope';
+
+  static ({int id, DateTime fireAt})? _parseReminderPayload(
+    String? payload,
+    String scope,
+  ) {
+    final parts = payload?.split(':');
+    if (parts == null ||
+        parts.length != 4 ||
+        parts[0] != 'reminder' ||
+        parts[2] != scope) {
+      return null;
+    }
+    final id = int.tryParse(parts[1]);
+    final timestamp = int.tryParse(parts[3]);
+    if (id == null || timestamp == null) return null;
+    return (
+      id: id,
+      fireAt: DateTime.fromMillisecondsSinceEpoch(timestamp, isUtc: true),
+    );
   }
 
   Future<void> _guard() async {
