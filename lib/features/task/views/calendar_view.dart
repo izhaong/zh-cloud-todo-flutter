@@ -109,6 +109,10 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
   }
 
   void _openDetail(BuildContext context, TodoTask t) {
+    if (isExternalCalendarTask(t)) {
+      showExternalCalendarEventDialog(context, t);
+      return;
+    }
     final callback = widget.onTaskSelected;
     if (callback != null) {
       callback(t.id);
@@ -130,7 +134,7 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
       builder: (_) => _DayTasksSheet(
         day: day,
         tasks: dayTasks,
-        onTaskSelected: widget.onTaskSelected,
+        onTaskTap: (task) => _openDetail(context, task),
       ),
     );
   }
@@ -157,6 +161,44 @@ DateTime? resolveTaskDate(TodoTask t) {
   final d = t.dueAt ?? t.endAt ?? t.startAt;
   if (d == null) return null;
   return DateTime(d.year, d.month, d.day);
+}
+
+bool isExternalCalendarTask(TodoTask task) {
+  return task.id.startsWith('external:');
+}
+
+Future<void> showExternalCalendarEventDialog(
+  BuildContext context,
+  TodoTask task,
+) {
+  final source = task.listId.startsWith('external:')
+      ? task.listId.substring('external:'.length)
+      : '订阅日历';
+  return showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(task.title),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('来源：$source'),
+          const SizedBox(height: 8),
+          const Text('只读订阅事件'),
+          if (task.description?.isNotEmpty == true) ...[
+            const SizedBox(height: 8),
+            Text(task.description!),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('关闭'),
+        ),
+      ],
+    ),
+  );
 }
 
 /// 月模式网格：6 行 × 7 列（周一起），包含 anchor 月的所有日期及上下月填充。
@@ -650,11 +692,11 @@ class _DayTasksSheet extends StatelessWidget {
   const _DayTasksSheet({
     required this.day,
     required this.tasks,
-    this.onTaskSelected,
+    required this.onTaskTap,
   });
   final DateTime day;
   final List<TodoTask> tasks;
-  final ValueChanged<String>? onTaskSelected;
+  final ValueChanged<TodoTask> onTaskTap;
 
   @override
   Widget build(BuildContext context) {
@@ -689,12 +731,7 @@ class _DayTasksSheet extends StatelessWidget {
                       title: Text(t.title),
                       onTap: () {
                         Navigator.pop(context);
-                        final callback = onTaskSelected;
-                        if (callback != null) {
-                          callback(t.id);
-                        } else {
-                          showTaskDetailSheet(context, t.id);
-                        }
+                        onTaskTap(t);
                       },
                     );
                   },

@@ -8,6 +8,7 @@ import '../../state/providers.dart';
 import '../../state/repositories/task_capture_defaults_repository.dart';
 import '../../state/session_state.dart';
 import '../account/account_security_page.dart';
+import '../calendar_sub/calendar_subscription_page.dart';
 import '../shell/app_theme_controller.dart';
 
 /// 设置页：分组列表（账户/主题/关于）+ 2FA 开关（复用 AccountSecurityPage）。
@@ -62,17 +63,33 @@ class SettingsRoute extends ConsumerWidget {
           _Section(title: '任务'),
           AppCard(
             padding: EdgeInsets.zero,
-            child: _Tile(
-              icon: Icons.playlist_add_check_outlined,
-              title: '新任务默认值',
-              subtitle: '默认清单与优先级；离线保存后自动同步',
-              trailing: Icons.chevron_right,
-              colors: colors,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const _TaskCaptureDefaultsPage(),
+            child: Column(
+              children: [
+                _Tile(
+                  icon: Icons.playlist_add_check_outlined,
+                  title: '新任务默认值',
+                  subtitle: '默认清单与优先级；离线保存后自动同步',
+                  trailing: Icons.chevron_right,
+                  colors: colors,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const _TaskCaptureDefaultsPage(),
+                    ),
+                  ),
                 ),
-              ),
+                _Tile(
+                  icon: Icons.calendar_month_outlined,
+                  title: '日历订阅',
+                  subtitle: '订阅外部 ICS，或导出自己的任务日历',
+                  trailing: Icons.chevron_right,
+                  colors: colors,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const CalendarSubscriptionPage(),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 16),

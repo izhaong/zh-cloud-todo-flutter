@@ -68,6 +68,17 @@ final todoApiProvider = Provider<TodoRestApi>((ref) {
   return TodoRestApi(ref.watch(apiClientProvider));
 });
 
+typedef CalendarEventWindow = ({DateTime start, DateTime end});
+
+/// 订阅日历是服务端只读投影，不写入本地任务库。
+final externalCalendarEventsProvider = FutureProvider.autoDispose
+    .family<List<CalendarExternalEvent>, CalendarEventWindow>((ref, window) {
+      return ref
+          .watch(todoApiProvider)
+          .calSubscription
+          .events(start: window.start, end: window.end);
+    });
+
 /// ----- 本地库（多租户隔离）-----------------------------------------------
 
 /// 设备唯一标识（持久化，跨启动稳定，供 sync `device_id` 用）。
