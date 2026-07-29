@@ -239,11 +239,17 @@ final reminderInboxRepositoryProvider = Provider<ReminderInboxRepository>((
 final reminderNotificationPollerProvider =
     Provider<ReminderNotificationPoller?>((ref) {
       final database = ref.watch(appDatabaseProvider);
-      if (database == null) return null;
+      final session = ref.watch(sessionProvider);
+      if (database == null || session == null) return null;
+      final notificationScope = '${session.tenantId}_${session.userId}';
       return ReminderNotificationPoller(
         repository: ref.watch(reminderInboxRepositoryProvider),
         database: database,
         notifications: ref.watch(localNotificationServiceProvider),
+        stateStore: SharedPreferencesReminderNotificationStateStore(
+          namespace: notificationScope,
+        ),
+        notificationScope: notificationScope,
         now: ref.watch(currentDateTimeProvider),
       );
     });
