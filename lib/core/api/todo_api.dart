@@ -620,7 +620,7 @@ class DataExportItem {
   );
 }
 
-/// 账户安全 REST（`/security/**`）：2FA 状态 / 开关 + 数据导出，直连 REST。
+/// 账户安全 REST：会员改密 + Todo 2FA 状态 / 开关与数据导出。
 class SecurityApi {
   SecurityApi(this._client);
 
@@ -637,6 +637,21 @@ class SecurityApi {
       return body['data'];
     }
     return body;
+  }
+
+  /// `PUT /app-api/todo-member/user/update-password` — 验证短信后修改密码。
+  Future<void> changePassword({
+    required String code,
+    required String password,
+  }) async {
+    final resp = await _client.memberPut<Map<String, dynamic>>(
+      '/user/update-password',
+      data: {'code': code, 'password': password},
+    );
+    final data = _unwrap(resp.data);
+    if (data != true) {
+      throw Exception('修改密码失败');
+    }
   }
 
   /// `GET /security/2fa/status` — 当前用户 2FA 是否开启。

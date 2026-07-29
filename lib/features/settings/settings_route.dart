@@ -11,7 +11,7 @@ import '../account/account_security_page.dart';
 import '../calendar_sub/calendar_subscription_page.dart';
 import '../shell/app_theme_controller.dart';
 
-/// 设置页：分组列表（账户/主题/关于）+ 2FA 开关（复用 AccountSecurityPage）。
+/// 设置页：分组列表（账户/主题/关于）+ 账户安全入口。
 class SettingsRoute extends ConsumerWidget {
   const SettingsRoute({super.key, this.signedInMobile});
 
@@ -40,7 +40,7 @@ class SettingsRoute extends ConsumerWidget {
                 _Tile(
                   icon: Icons.verified_user_outlined,
                   title: '账户安全',
-                  subtitle: '双重验证（2FA）与数据导出',
+                  subtitle: '修改密码、双重验证（2FA）与数据导出',
                   trailing: Icons.chevron_right,
                   colors: colors,
                   onTap: () => Navigator.of(context).push(
