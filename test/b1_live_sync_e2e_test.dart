@@ -335,9 +335,9 @@ void main() {
         expect(await coordinatorB.push(), 0);
         final restoredB = await tasksB.getById(taskB.id);
         expect(restoredB?.title, 'B2 conflict server $suffix');
-        final failed = await (dbB.select(dbB.todoSyncChanges)
-              ..where((row) => row.status.equals('failed')))
-            .get();
+        final failed = await (dbB.select(
+          dbB.todoSyncChanges,
+        )..where((row) => row.status.equals('failed'))).get();
         expect(failed, hasLength(1));
 
         stage = 'replay a new edit from restored revision';
@@ -348,7 +348,9 @@ void main() {
         expect(convergedA?.title, 'B2 conflict recovered $suffix');
       } catch (error, stackTrace) {
         Error.throwWithStackTrace(
-          StateError('B2 live conflict recovery failed at stage: $stage; $error'),
+          StateError(
+            'B2 live conflict recovery failed at stage: $stage; $error',
+          ),
           stackTrace,
         );
       } finally {
@@ -440,7 +442,9 @@ void main() {
         expect(synced.endAt!.toUtc().isAfter(synced.startAt!.toUtc()), isTrue);
       } catch (error, stackTrace) {
         Error.throwWithStackTrace(
-          StateError('B2 cross-midnight live sync failed at stage: $stage; $error'),
+          StateError(
+            'B2 cross-midnight live sync failed at stage: $stage; $error',
+          ),
           stackTrace,
         );
       } finally {
@@ -1021,6 +1025,144 @@ void main() {
   );
 
   test(
+    'B2 live sync enforces until and count limits on both devices',
+    () async {
+      expect(_mobile, isNotEmpty, reason: 'TODO_B1_E2E_MOBILE is required');
+      expect(_password, isNotEmpty, reason: 'TODO_B1_E2E_PASSWORD is required');
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+
+      final now = DateTime.now().toUtc();
+      final startAt = DateTime.utc(now.year, now.month, now.day, 12);
+      final untilAt = startAt.add(const Duration(days: 1, hours: 11));
+      final sessionA = await _login();
+      final sessionB = await _login();
+      final dbA = AppDatabase.forTesting(NativeDatabase.memory());
+      final dbB = AppDatabase.forTesting(NativeDatabase.memory());
+      final coordinatorA = _coordinator(
+        dbA,
+        _client(sessionA.accessToken),
+        'b2-limit-live-device-a',
+      );
+      final coordinatorB = _coordinator(
+        dbB,
+        _client(sessionB.accessToken),
+        'b2-limit-live-device-b',
+      );
+      final listsA = ListRepository(dbA, SyncChangeQueue(dbA));
+      final tasksA = TaskRepository(dbA, SyncChangeQueue(dbA));
+      final repeatsA = RepeatRuleRepository(dbA, SyncChangeQueue(dbA));
+      final suffix = DateTime.now().microsecondsSinceEpoch;
+      final list = await listsA.create(name: 'B2 limit live $suffix');
+      final taskIds = <String, String>{};
+      final generatedTaskIds = <String>[];
+      var stage = 'push list';
+
+      try {
+        await coordinatorA.push();
+        for (final limit in const ['until', 'count']) {
+          final task = await tasksA.create(
+            listId: list.id,
+            title: 'B2 $limit limit $suffix',
+            dueAt: startAt,
+            timeZone: 'Asia/Shanghai',
+            fixedTimezone: true,
+          );
+          taskIds[limit] = task.id;
+        }
+        stage = 'push limit templates';
+        await coordinatorA.push();
+
+        await repeatsA.save(
+          taskId: taskIds['until']!,
+          frequency: 'DAILY',
+          startAt: startAt,
+          untilAt: untilAt,
+          repeatMode: 'ON_DUE',
+          timeZone: 'Asia/Shanghai',
+        );
+        await repeatsA.save(
+          taskId: taskIds['count']!,
+          frequency: 'DAILY',
+          startAt: startAt,
+          countLimit: 2,
+          repeatMode: 'ON_DUE',
+          timeZone: 'Asia/Shanghai',
+        );
+        stage = 'push until and count rules';
+        await coordinatorA.push();
+        stage = 'pull bounded occurrences on both devices';
+        await coordinatorA.pull();
+        await coordinatorB.pull();
+
+        for (final limit in const ['until', 'count']) {
+          final taskA = await tasksA.getById(taskIds[limit]!);
+          expect(taskA?.serverId, isPositive, reason: limit);
+          final ruleA = await (dbA.select(
+            dbA.todoRepeatRules,
+          )..where((row) => row.taskId.equals(taskIds[limit]!))).getSingle();
+          expect(ruleA.serverId, isPositive, reason: limit);
+          final childrenA =
+              await (dbA.select(dbA.todoTasks)..where(
+                    (row) => row.repeatParentTaskId.equals(taskIds[limit]!),
+                  ))
+                  .get();
+          final taskB = await dbB.taskByServerId(taskA!.serverId!);
+          expect(taskB, isNotNull, reason: limit);
+          final ruleB = await (dbB.select(
+            dbB.todoRepeatRules,
+          )..where((row) => row.serverId.equals(ruleA.serverId!))).getSingle();
+          final childrenB = await (dbB.select(
+            dbB.todoTasks,
+          )..where((row) => row.repeatParentTaskId.equals(taskB!.id))).get();
+
+          generatedTaskIds.addAll(childrenA.map((task) => task.id));
+          expect(childrenA, hasLength(2), reason: limit);
+          expect(childrenB, hasLength(2), reason: limit);
+          expect(
+            childrenB.map((task) => task.serverId).toSet(),
+            childrenA.map((task) => task.serverId).toSet(),
+            reason: limit,
+          );
+          if (limit == 'until') {
+            expect(ruleA.until, untilAt);
+            expect(ruleB.until, untilAt);
+            expect(ruleA.countLimit, isNull);
+            expect(ruleB.countLimit, isNull);
+          } else {
+            expect(ruleA.until, isNull);
+            expect(ruleB.until, isNull);
+            expect(ruleA.countLimit, 2);
+            expect(ruleB.countLimit, 2);
+          }
+        }
+      } catch (error, stackTrace) {
+        Error.throwWithStackTrace(
+          StateError('B2 limit live sync failed at stage: $stage; $error'),
+          stackTrace,
+        );
+      } finally {
+        for (final generatedTaskId in generatedTaskIds) {
+          await tasksA.delete(generatedTaskId);
+        }
+        if (generatedTaskIds.isNotEmpty) {
+          await coordinatorA.push();
+        }
+        for (final taskId in taskIds.values) {
+          await tasksA.delete(taskId);
+        }
+        if (taskIds.isNotEmpty) {
+          await coordinatorA.push();
+        }
+        await listsA.delete(list.id);
+        await coordinatorA.push();
+        await dbA.close();
+        await dbB.close();
+      }
+    },
+    skip: _b2Enabled ? false : 'set --dart-define=TODO_B2_LIVE=true to run',
+  );
+
+  test(
     'B2 live END reminder syncs the end anchor and dispatches it',
     () async {
       expect(_mobile, isNotEmpty, reason: 'TODO_B1_E2E_MOBILE is required');
@@ -1169,7 +1311,9 @@ void main() {
       final actionsA = ReminderDispatchActionRepository(SyncChangeQueue(dbA));
       final inboxA = ReminderInboxRepository(TodoRestApi(apiA).reminder);
       final suffix = DateTime.now().microsecondsSinceEpoch;
-      final list = await listsA.create(name: 'B2 complete reminder live $suffix');
+      final list = await listsA.create(
+        name: 'B2 complete reminder live $suffix',
+      );
       String? taskId;
       var stage = 'push list';
 
@@ -1262,7 +1406,11 @@ void main() {
       final dbA = AppDatabase.forTesting(NativeDatabase.memory());
       final dbB = AppDatabase.forTesting(NativeDatabase.memory());
       final apiA = _client(sessionA.accessToken);
-      final coordinatorA = _coordinator(dbA, apiA, 'b2-reminder-dismiss-live-a');
+      final coordinatorA = _coordinator(
+        dbA,
+        apiA,
+        'b2-reminder-dismiss-live-a',
+      );
       final coordinatorB = _coordinator(
         dbB,
         _client(sessionB.accessToken),
@@ -1274,7 +1422,9 @@ void main() {
       final actionsA = ReminderDispatchActionRepository(SyncChangeQueue(dbA));
       final inboxA = ReminderInboxRepository(TodoRestApi(apiA).reminder);
       final suffix = DateTime.now().microsecondsSinceEpoch;
-      final list = await listsA.create(name: 'B2 dismiss reminder live $suffix');
+      final list = await listsA.create(
+        name: 'B2 dismiss reminder live $suffix',
+      );
       String? taskId;
       var stage = 'push list';
 
@@ -1336,7 +1486,9 @@ void main() {
         expect(dismissed.status.toLowerCase(), 'cancelled');
       } catch (error, stackTrace) {
         Error.throwWithStackTrace(
-          StateError('B2 reminder dismiss live sync failed at stage: $stage; $error'),
+          StateError(
+            'B2 reminder dismiss live sync failed at stage: $stage; $error',
+          ),
           stackTrace,
         );
       } finally {
