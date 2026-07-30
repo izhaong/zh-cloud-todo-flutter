@@ -357,6 +357,18 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           onScaleChanged: _changeTimelineScale,
           onGroupCollapsedChanged: _changeTimelineGroupCollapsed,
           onTaskSelected: widget.onTaskSelected,
+          onCreateTask: (request) async {
+            final repository = ref.read(taskRepositoryProvider);
+            if (repository == null) return;
+            await repository.create(
+              listId: _selectedListId ?? kInboxListId,
+              title: request.title,
+              startAt: request.startAt,
+              endAt: request.endAt,
+              dueAt: request.dueAt,
+              allDay: request.allDay,
+            );
+          },
           onTaskTimeChange:
               (task, {required startAt, required endAt, required dueAt}) async {
                 final repository = ref.read(taskViewActionRepositoryProvider);

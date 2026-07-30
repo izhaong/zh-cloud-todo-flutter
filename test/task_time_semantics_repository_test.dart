@@ -117,6 +117,40 @@ void main() {
     expect(payload['allDay'], isFalse);
   });
 
+  test('时间线空白创建会原子保存时段并写入任务 outbox', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final repository = TaskRepository(db, SyncChangeQueue(db));
+    final startAt = DateTime(2026, 7, 15, 10);
+    final endAt = DateTime(2026, 7, 15, 11);
+
+    final task = await repository.create(
+      listId: 'inbox',
+      title: '时间线创建',
+      startAt: startAt,
+      endAt: endAt,
+      dueAt: endAt,
+    );
+    final payload =
+        jsonDecode(
+              (await (db.select(db.todoSyncChanges)
+                        ..where((change) => change.entity.equals('task'))
+                        ..where(
+                          (change) => change.entityLocalId.equals(task.id),
+                        ))
+                      .getSingle())
+                  .payloadJson,
+            )
+            as Map<String, dynamic>;
+
+    expect(task.startAt, startAt);
+    expect(task.endAt, endAt);
+    expect(task.dueAt, endAt);
+    expect(payload['startAt'], startAt.millisecondsSinceEpoch);
+    expect(payload['endAt'], endAt.millisecondsSinceEpoch);
+    expect(payload['dueAt'], endAt.millisecondsSinceEpoch);
+  });
+
   test(
     'rolls back task creation when its outbox mutation cannot be enqueued',
     () async {
