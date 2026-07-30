@@ -438,11 +438,13 @@ void main() {
     await repository.saveTaskTimelinePreference(
       sourceKey: 'list:inbox',
       zoom: 1.25,
+      scale: 'month',
       collapsedGroupIds: const {'overdue', 'later'},
     );
     await repository.saveTaskTimelinePreference(
       sourceKey: 'list:work',
       zoom: 0.75,
+      scale: 'day',
       collapsedGroupIds: const {'today'},
     );
 
@@ -454,9 +456,11 @@ void main() {
     );
     expect(inbox.viewType, 'timeline');
     expect(inbox.timelineZoom, 1.25);
+    expect(inbox.timelineScale, 'month');
     expect(inbox.collapsedTimelineGroupIds, {'overdue', 'later'});
     expect(work.viewType, 'list');
     expect(work.timelineZoom, 0.75);
+    expect(work.timelineScale, 'day');
     expect(work.collapsedTimelineGroupIds, {'today'});
 
     final changes = await db.select(db.todoSyncChanges).get();
@@ -468,6 +472,10 @@ void main() {
     expect(
       jsonDecode(latestInbox['valueJson'] as String),
       containsPair('timelineZoom', 1.25),
+    );
+    expect(
+      jsonDecode(latestInbox['valueJson'] as String),
+      containsPair('timelineScale', 'month'),
     );
   });
 

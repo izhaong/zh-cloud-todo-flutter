@@ -28,9 +28,9 @@
 ## Functional Requirements
 
 - **FR-001**: 列表、看板和时间线只调用共享 Repository/use-case；Widget 不得直接调用 Todo HTTP API 或复制 B2 时间算法。
-- **FR-002**: 任务视图的选择、分组、排序、缩放和折叠偏好按用户、source type 与 source key 持久化；切换清单不得串用偏好。
+- **FR-002**: 任务视图的选择、分组、排序、时间线日/周/月尺度、缩放和折叠偏好按用户、source type 与 source key 持久化；切换清单不得串用偏好。
 - **FR-003**: 任务移动、重排、批量和时间编辑必须在 Drift transaction 内完成本地写入与 outbox 入队；失败、重试、冲突和只读反馈可见。
-- **FR-004**: 看板跨列产生明确任务字段 mutation；列内排序使用独立拖拽手柄，不能与整卡长按跨列手势竞争。时间线移动/缩放产生 B2 兼容的时间字段 mutation，不以仅前端坐标作为真相。
+- **FR-004**: 看板跨列产生明确任务字段 mutation；列内排序使用独立拖拽手柄，不能与整卡长按跨列手势竞争。时间线移动/缩放产生 B2 兼容的时间字段 mutation，不以仅前端坐标作为真相；日尺度下非全天任务移动按小时解释，周/月尺度与全天任务按天解释。
 - **FR-005**: 列表/看板/时间线对同一任务 UUID 保持选择和刷新规则；智能清单或筛选结果中的禁止结构操作有解释，不静默失败。
 - **FR-006**: 不重做 `specs/002-todo-visual-fidelity/` 的工作区结构或九张基准；视觉变化需明确批准。
 - **FR-007**: `PUT /task/reorder` 的直连契约仅用于 API 契约/真实 HTTP 对照，请求体固定为 `listId + items[{id, sortOrder}]`；Widget 的核心重排写路径仍必须经过共享 Repository/use-case 与 outbox。

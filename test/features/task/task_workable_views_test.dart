@@ -487,6 +487,85 @@ void main() {
     await tester.pumpAndSettle();
     expect(requestedCollapse, ('today', true));
   });
+
+  testWidgets('时间线日周月尺度通过偏好回调切换', (tester) async {
+    TimelineScale? requestedScale;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TimelineView(
+            tasks: const [],
+            now: DateTime(2026, 7, 15, 9),
+            scale: TimelineScale.week,
+            onScaleChanged: (scale) async => requestedScale = scale,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('日'));
+    await tester.pumpAndSettle();
+
+    expect(requestedScale, TimelineScale.day);
+  });
+
+  testWidgets('时间线日尺度拖动任务本体会按小时移动', (tester) async {
+    final now = DateTime(2026, 7, 15, 9);
+    final task = _viewTask(
+      id: 'timeline-day-scale',
+      title: '日尺度任务',
+      startAt: DateTime(2026, 7, 16, 9),
+      endAt: DateTime(2026, 7, 16, 10),
+    );
+    (DateTime, DateTime, DateTime)? request;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TimelineView(
+            tasks: [task],
+            now: now,
+            scale: TimelineScale.day,
+            onTaskTimeChange:
+                (_, {required startAt, required endAt, required dueAt}) async {
+                  request = (startAt, endAt, dueAt);
+                },
+          ),
+        ),
+      ),
+    );
+
+    await tester.drag(
+      find.byKey(const ValueKey('timeline-task-drag-timeline-day-scale')),
+      const Offset(24, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(request, (
+      DateTime(2026, 7, 16, 10),
+      DateTime(2026, 7, 16, 11),
+      DateTime(2026, 7, 16, 11),
+    ));
+  });
+
+  testWidgets('时间线尺度与缩放工具栏在窄屏不会溢出', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(280, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TimelineView(
+            tasks: const [],
+            now: DateTime(2026, 7, 15, 9),
+            onScaleChanged: (_) async {},
+            onZoomChanged: (_) async {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+  });
 }
 
 TodoTask _viewTask({

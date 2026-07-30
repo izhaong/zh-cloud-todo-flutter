@@ -69,6 +69,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   TaskViewMode _mode = TaskViewMode.list;
   TaskSort _sort = TaskSort.smart;
   double _timelineZoom = 1;
+  TimelineScale _timelineScale = TimelineScale.week;
   Set<String> _collapsedTimelineGroupIds = const {};
   TaskRepository? _streamRepository;
   String? _streamListId;
@@ -122,6 +123,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         }
         _mode = TaskViewMode.list;
         _timelineZoom = 1;
+        _timelineScale = TimelineScale.week;
         _collapsedTimelineGroupIds = const {};
       });
     }
@@ -349,8 +351,10 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         return TimelineView(
           tasks: items,
           zoom: _timelineZoom,
+          scale: _timelineScale,
           collapsedGroupIds: _collapsedTimelineGroupIds,
           onZoomChanged: _changeTimelineZoom,
+          onScaleChanged: _changeTimelineScale,
           onGroupCollapsedChanged: _changeTimelineGroupCollapsed,
           onTaskSelected: widget.onTaskSelected,
           onTaskTimeChange:
@@ -407,6 +411,11 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     setState(() {
       _mode = restoredMode ?? TaskViewMode.list;
       _timelineZoom = preference?.timelineZoom ?? 1;
+      _timelineScale =
+          TimelineScale.values
+              .where((scale) => scale.name == preference?.timelineScale)
+              .firstOrNull ??
+          TimelineScale.week;
       _collapsedTimelineGroupIds =
           preference?.collapsedTimelineGroupIds ?? const {};
     });
@@ -460,6 +469,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           ?.saveTaskTimelinePreference(
             sourceKey: sourceKey,
             zoom: zoom,
+            scale: _timelineScale.name,
             collapsedGroupIds: _collapsedTimelineGroupIds,
           );
     } catch (_) {
@@ -472,6 +482,33 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('时间线缩放保存失败，请重试')));
+    }
+  }
+
+  Future<void> _changeTimelineScale(TimelineScale scale) async {
+    final revision = ++_viewRestoreRevision;
+    final sourceKey = _viewPreferenceSourceKey;
+    final previousScale = _timelineScale;
+    setState(() => _timelineScale = scale);
+    try {
+      await ref
+          .read(taskViewActionRepositoryProvider)
+          ?.saveTaskTimelinePreference(
+            sourceKey: sourceKey,
+            zoom: _timelineZoom,
+            scale: scale.name,
+            collapsedGroupIds: _collapsedTimelineGroupIds,
+          );
+    } catch (_) {
+      if (!mounted ||
+          sourceKey != _viewPreferenceSourceKey ||
+          revision != _viewRestoreRevision) {
+        return;
+      }
+      setState(() => _timelineScale = previousScale);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('时间线尺度保存失败，请重试')));
     }
   }
 
@@ -516,6 +553,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           ?.saveTaskTimelinePreference(
             sourceKey: sourceKey,
             zoom: _timelineZoom,
+            scale: _timelineScale.name,
             collapsedGroupIds: next,
           );
     } catch (_) {
