@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -156,7 +158,69 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
   });
+
+  testWidgets('刷新进行中复用同一请求并在完成后允许再次刷新', (tester) async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    await db
+        .into(db.todoRecommendations)
+        .insert(
+          TodoRecommendationsCompanion.insert(
+            taskServerId: const Value(7),
+            title: '缓存任务',
+            reasonCode: 'DUE_SOON',
+            reason: '即将到期',
+            score: 900,
+            refreshedAt: DateTime.utc(2026, 7, 16),
+          ),
+        );
+    final api = _BlockingRecommendationApi();
+    final repository = RecommendationRepository(db, api);
+
+    try {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            recommendationRepositoryProvider.overrideWithValue(repository),
+          ],
+          child: MaterialApp(
+            home: Scaffold(body: RecommendationPanel(onTaskSelected: (_) {})),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(api.calls, 1);
+
+      await tester.tap(find.byTooltip('刷新推荐任务'));
+      await tester.tap(find.byTooltip('刷新推荐任务'));
+      await tester.pump();
+
+      expect(api.calls, 1);
+      api.completeNext(_recommendations);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('刷新推荐任务'));
+      await tester.pump();
+      expect(api.calls, 2);
+      api.completeNext(_recommendations);
+      await tester.pumpAndSettle();
+    } finally {
+      api.completeAll(_recommendations);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    }
+  });
 }
+
+const _recommendations = [
+  RecommendationTask(
+    taskServerId: 8,
+    title: '已刷新的任务',
+    reasonCode: 'RECENTLY_ADDED',
+    reason: '最近添加',
+    score: 700,
+  ),
+];
 
 class _OfflineRecommendationApi extends RecommendationApi {
   _OfflineRecommendationApi() : super(ApiClient());
@@ -184,5 +248,31 @@ class _RecoveringRecommendationApi extends RecommendationApi {
         score: 700,
       ),
     ];
+  }
+}
+
+class _BlockingRecommendationApi extends RecommendationApi {
+  _BlockingRecommendationApi() : super(ApiClient());
+
+  final _pending = <Completer<List<RecommendationTask>>>[];
+  var calls = 0;
+
+  @override
+  Future<List<RecommendationTask>> list({int limit = 10}) {
+    calls++;
+    final request = Completer<List<RecommendationTask>>();
+    _pending.add(request);
+    return request.future;
+  }
+
+  void completeNext(List<RecommendationTask> recommendations) {
+    _pending.removeAt(0).complete(recommendations);
+  }
+
+  void completeAll(List<RecommendationTask> recommendations) {
+    for (final request in _pending) {
+      if (!request.isCompleted) request.complete(recommendations);
+    }
+    _pending.clear();
   }
 }
