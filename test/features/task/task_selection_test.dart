@@ -301,6 +301,17 @@ Future<void> _tapTask(WidgetTester tester, String taskId) async {
   final surface = find.byKey(Key('task-row-surface-$taskId'));
   expect(surface, findsOneWidget);
   await tester.ensureVisible(surface);
+  final viewportHeight =
+      tester.view.physicalSize.height / tester.view.devicePixelRatio;
+  final bottomOverflow = tester.getBottomRight(surface).dy - viewportHeight;
+  if (bottomOverflow >= 0) {
+    final taskList = find.descendant(
+      of: find.byKey(const Key('todo-task-list-scroll')),
+      matching: find.byType(Scrollable),
+    );
+    await tester.drag(taskList, Offset(0, -bottomOverflow - 24));
+    await tester.pumpAndSettle();
+  }
   await tester.tap(surface);
   await tester.pumpAndSettle();
 }

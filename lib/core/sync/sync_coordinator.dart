@@ -175,11 +175,12 @@ class SyncCoordinator {
   int _compareSyncChanges(TodoSyncChange left, TodoSyncChange right) {
     final priority = {
       SyncEntities.list: 0,
-      SyncEntities.tag: 1,
-      SyncEntities.task: 2,
-      SyncEntities.reminder: 3,
-      SyncEntities.repeatRule: 3,
-      SyncEntities.repeatSkip: 4,
+      SyncEntities.taskSection: 1,
+      SyncEntities.tag: 2,
+      SyncEntities.task: 3,
+      SyncEntities.reminder: 4,
+      SyncEntities.repeatRule: 4,
+      SyncEntities.repeatSkip: 5,
     };
     final byEntity = (priority[left.entity] ?? 9).compareTo(
       priority[right.entity] ?? 9,
@@ -590,6 +591,7 @@ class SyncCoordinator {
       }
     }
     if ((entity == SyncEntities.task ||
+            entity == SyncEntities.taskSection ||
             entity == SyncEntities.boardPreference) &&
         resolved.containsKey('listId')) {
       final localListId = resolved['listId']?.toString();
@@ -625,6 +627,17 @@ class SyncCoordinator {
         resolved['parentTaskId'] =
             parent?.serverId ??
             _temporaryEntityId(SyncEntities.task, localParentId);
+      }
+    }
+    if (entity == SyncEntities.task && resolved.containsKey('sectionId')) {
+      final localSectionId = resolved['sectionId']?.toString();
+      if (localSectionId != null && localSectionId.isNotEmpty) {
+        final section = await (db.select(
+          db.todoTaskSections,
+        )..where((row) => row.id.equals(localSectionId))).getSingleOrNull();
+        resolved['sectionId'] =
+            section?.serverId ??
+            _temporaryEntityId(SyncEntities.taskSection, localSectionId);
       }
     }
     if (entity == SyncEntities.tag && resolved.containsKey('parentId')) {
@@ -841,6 +854,13 @@ class SyncCoordinator {
           accepted.clientMutationId,
           accepted.entityId!,
         );
+      case SyncEntities.taskSection:
+        await _bindServerId(
+          db.todoTaskSections,
+          db.todoTaskSections.serverId,
+          accepted.clientMutationId,
+          accepted.entityId!,
+        );
       case SyncEntities.task:
         if (await _isChecklistMutation(accepted.clientMutationId)) {
           await _bindServerId(
@@ -981,6 +1001,8 @@ class SyncCoordinator {
         await _upsertLocalTask(conflict.entityId!, serverValue);
       case SyncEntities.list:
         await _upsertLocalList(conflict.entityId!, serverValue);
+      case SyncEntities.taskSection:
+        await _upsertLocalTaskSection(conflict.entityId!, serverValue);
       case SyncEntities.tag:
         await _upsertLocalTag(conflict.entityId!, serverValue);
       case SyncEntities.reminder:
@@ -1012,20 +1034,41 @@ class SyncCoordinator {
     var applied = 0;
     var cursor = (await db.readSyncCursor())?.cursor;
     var hasMore = true;
+    var deferredTaskSections = <SyncChangeDto>[];
     while (hasMore) {
       final result = await api.pull(cursor: cursor, limit: limit);
-      for (final change in _orderPulledChanges(result.changes)) {
+      final candidates = <SyncChangeDto>[
+        ...deferredTaskSections,
+        ...result.changes,
+      ];
+      deferredTaskSections = <SyncChangeDto>[];
+      for (final change in _orderPulledChanges(candidates)) {
+        if (change.entityType == SyncEntities.taskSection &&
+            !await _taskSectionParentAvailable(change)) {
+          deferredTaskSections.add(change);
+          continue;
+        }
         await _applyPulledChange(change);
         applied++;
       }
       for (final tombstone in result.tombstones) {
+        if (tombstone.entityType == SyncEntities.taskSection) {
+          deferredTaskSections.removeWhere(
+            (change) => change.entityId == tombstone.entityId,
+          );
+        }
         await _applyTombstone(tombstone);
         applied++;
       }
       cursor = result.nextCursor;
       hasMore = result.hasMore;
-      await db.writeSyncCursor(cursor);
       if (result.changes.isEmpty && result.tombstones.isEmpty) break;
+    }
+    // Section 可能位于父清单之前的分页。只有整轮分页成功且所有父清单都已
+    // 解析后才推进游标；否则保留旧游标，让下一轮重放幂等页面，避免服务端
+    // 稍后补到父清单时已经永久越过这条 Section 变更。
+    if (deferredTaskSections.isEmpty) {
+      await db.writeSyncCursor(cursor);
     }
     // folder 是 REST 特例，不在 /sync change feed。每次 pull 后从同一用户的
     // folder/list 补齐到 Drift，确保第二设备不会只恢复 list/task 而丢失组织层。
@@ -1175,28 +1218,38 @@ class SyncCoordinator {
 
   int _pulledChangePriority(SyncChangeDto change) {
     if (change.entityType == SyncEntities.list) return 0;
+    if (change.entityType == SyncEntities.taskSection) return 1;
     if (change.entityType == SyncEntities.task) {
-      if (change.payload?['isChecklistItem'] == true) return 5;
+      if (change.payload?['isChecklistItem'] == true) return 6;
       // 完成后物化的实例同时依赖父任务和 repeat_rule。普通顶层任务
       // 没有 parentTaskId，不能仅以该字段判定优先级；否则空白第二设备
       // 会在规则落库前写入实例，永久丢失本地 repeatRuleId 映射。
-      if (change.payload?['repeatParentTaskId'] != null) return 4;
-      return change.payload?['parentTaskId'] == null ? 1 : 2;
+      if (change.payload?['repeatParentTaskId'] != null) return 5;
+      return change.payload?['parentTaskId'] == null ? 2 : 3;
     }
     // 任务动态依赖服务端任务 ID；即使服务端返回时动态在前，也要让任务
     // 先成为本地聚合的一部分，再通知订阅该任务活动的 UI。
     if (change.entityType == SyncEntities.repeatRule ||
         change.entityType == SyncEntities.activity ||
         change.entityType == SyncEntities.tag) {
-      return 3;
+      return 4;
     }
-    if (change.entityType == SyncEntities.taskTag) return 6;
+    if (change.entityType == SyncEntities.taskTag) return 7;
     if (change.entityType == SyncEntities.reminder ||
         change.entityType == SyncEntities.repeatSkip ||
         change.entityType == SyncEntities.repeatOccurrenceAction) {
-      return 4;
+      return 5;
     }
-    return 4;
+    return 5;
+  }
+
+  Future<bool> _taskSectionParentAvailable(SyncChangeDto change) async {
+    final rawListId = change.payload?['listId'] ?? change.payload?['list_id'];
+    final listServerId = rawListId is num
+        ? rawListId.toInt()
+        : int.tryParse(rawListId?.toString() ?? '');
+    return listServerId != null &&
+        await db.listByServerId(listServerId) != null;
   }
 
   Future<void> _applyPulledChange(SyncChangeDto change) async {
@@ -1209,6 +1262,8 @@ class SyncCoordinator {
     switch (change.entityType) {
       case SyncEntities.list:
         await _upsertLocalList(entityId, payload);
+      case SyncEntities.taskSection:
+        await _upsertLocalTaskSection(entityId, payload);
       case SyncEntities.task:
         await _upsertLocalTask(entityId, payload);
       case SyncEntities.tag:
@@ -1247,6 +1302,16 @@ class SyncCoordinator {
         await (db.delete(
           db.todoLists,
         )..where((t) => t.serverId.equals(tombstone.entityId))).go();
+      case SyncEntities.taskSection:
+        final section = await db.taskSectionByServerId(tombstone.entityId);
+        if (section != null) {
+          await (db.update(db.todoTasks)
+                ..where((task) => task.sectionId.equals(section.id)))
+              .write(const TodoTasksCompanion(sectionId: Value(null)));
+          await (db.delete(
+            db.todoTaskSections,
+          )..where((row) => row.id.equals(section.id))).go();
+        }
       case SyncEntities.task:
         await (db.delete(
           db.todoTasks,
@@ -1457,6 +1522,34 @@ class SyncCoordinator {
     }
   }
 
+  Future<void> _upsertLocalTaskSection(
+    int serverId,
+    Map<String, dynamic> payload,
+  ) async {
+    final localListId = await _localListIdForServerId(
+      (payload['listId'] as num?)?.toInt(),
+    );
+    if (localListId == null) return;
+    final existing = await db.taskSectionByServerId(serverId);
+    final now = DateTime.now();
+    final companion = TodoTaskSectionsCompanion(
+      id: Value(existing?.id ?? _uuid.v4()),
+      serverId: Value(serverId),
+      listId: Value(localListId),
+      name: Value(payload['name']?.toString() ?? existing?.name ?? ''),
+      sortOrder: Value((payload['sortOrder'] as num?)?.toInt() ?? 0),
+      updatedAt: Value(now),
+      createdAt: Value(existing?.createdAt ?? now),
+    );
+    if (existing == null) {
+      await db.into(db.todoTaskSections).insert(companion);
+    } else {
+      await (db.update(
+        db.todoTaskSections,
+      )..where((row) => row.id.equals(existing.id))).write(companion);
+    }
+  }
+
   Future<void> _upsertLocalFolder(
     int serverId,
     Map<String, dynamic> payload, {
@@ -1508,6 +1601,10 @@ class SyncCoordinator {
     final localListId = await _localListIdForServerId(
       (payload['listId'] as num?)?.toInt(),
     );
+    final localSectionId = await _localTaskSectionIdForServerId(
+      (payload['sectionId'] as num?)?.toInt() ??
+          (payload['section_id'] as num?)?.toInt(),
+    );
     final localParentId = await _localTaskIdForServerId(
       (payload['parentTaskId'] as num?)?.toInt(),
     );
@@ -1523,6 +1620,7 @@ class SyncCoordinator {
       id: Value(existing?.id ?? _uuid.v4()),
       serverId: Value(serverId),
       listId: Value(localListId ?? existing?.listId ?? ''),
+      sectionId: Value(localSectionId),
       parentTaskId: Value(localParentId ?? existing?.parentTaskId),
       title: Value(payload['title']?.toString() ?? existing?.title ?? ''),
       description: Value(payload['description']?.toString()),
@@ -2017,6 +2115,11 @@ class SyncCoordinator {
   Future<String?> _localTaskIdForServerId(int? serverId) async {
     if (serverId == null || serverId <= 0) return null;
     return (await db.taskByServerId(serverId))?.id;
+  }
+
+  Future<String?> _localTaskSectionIdForServerId(int? serverId) async {
+    if (serverId == null || serverId <= 0) return null;
+    return (await db.taskSectionByServerId(serverId))?.id;
   }
 
   Future<String?> _localTagIdForServerId(int? serverId) async {

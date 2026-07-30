@@ -251,7 +251,10 @@ void main() {
         await tester.scrollUntilVisible(
           lastTask,
           160,
-          scrollable: find.byType(Scrollable).first,
+          scrollable: find.descendant(
+            of: find.byKey(const Key('todo-task-list-scroll')),
+            matching: find.byType(Scrollable),
+          ),
         );
         await tester.pumpAndSettle();
 

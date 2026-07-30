@@ -73,6 +73,7 @@ class TaskRepository {
   Future<TodoTask> create({
     required String listId,
     required String title,
+    String? sectionId,
     String? description,
     int priority = 0,
     DateTime? startAt,
@@ -97,6 +98,7 @@ class TaskRepository {
     await _db.transaction(() async {
       await _ensureInboxList(listId, now);
       await _requireWritableList(listId);
+      await _requireSectionInList(listId, sectionId);
       await _assertParentChainDoesNotContain(null, listId, parentTaskId);
       await _db
           .into(_db.todoTasks)
@@ -104,6 +106,7 @@ class TaskRepository {
             TodoTasksCompanion.insert(
               id: id,
               listId: listId,
+              sectionId: Value(sectionId),
               parentTaskId: Value(parentTaskId),
               title: normalizedTitle,
               description: Value(description),
@@ -189,6 +192,7 @@ class TaskRepository {
     )..where((task) => task.id.equals(taskId))).getSingle();
     return create(
       listId: original.listId,
+      sectionId: original.sectionId,
       parentTaskId: original.parentTaskId,
       title: '${original.title}（副本）',
       description: original.description,
@@ -283,6 +287,8 @@ class TaskRepository {
     String? timeZone,
     bool? fixedTimezone,
     String? listId,
+    String? sectionId,
+    bool clearSectionId = false,
     bool? isPinned,
   }) async {
     final now = DateTime.now();
@@ -299,6 +305,11 @@ class TaskRepository {
         throw ArgumentError.value(nextEndAt, 'endAt', '结束时间必须晚于开始时间');
       }
       if (listId != null) await _ensureInboxList(listId, now);
+      final targetListId = listId ?? current.listId;
+      final targetSectionId = clearSectionId
+          ? null
+          : sectionId ?? current.sectionId;
+      await _requireSectionInList(targetListId, targetSectionId);
       await (_db.update(
         _db.todoTasks,
       )..where((t) => t.id.equals(taskId))).write(
@@ -330,6 +341,11 @@ class TaskRepository {
               ? const Value.absent()
               : Value(fixedTimezone),
           listId: listId == null ? const Value.absent() : Value(listId),
+          sectionId: clearSectionId
+              ? const Value(null)
+              : sectionId == null
+              ? const Value.absent()
+              : Value(sectionId),
           updatedAt: Value(now),
         ),
       );
@@ -944,6 +960,19 @@ class TaskRepository {
     )..where((row) => row.id.equals(taskId))).getSingleOrNull();
     if (task == null) throw StateError('任务不存在');
     return task;
+  }
+
+  Future<void> _requireSectionInList(
+    String listId,
+    String? sectionId,
+  ) async {
+    if (sectionId == null) return;
+    final section = await (_db.select(
+      _db.todoTaskSections,
+    )..where((row) => row.id.equals(sectionId))).getSingleOrNull();
+    if (section == null || section.listId != listId) {
+      throw ArgumentError.value(sectionId, 'sectionId', '分组必须属于任务所在清单');
+    }
   }
 
   Future<void> _reparentWithinTransaction(

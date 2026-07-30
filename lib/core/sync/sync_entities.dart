@@ -2,6 +2,7 @@
 /// 保持一致的小写下划线命名（`folder` 例外，见下）。
 class SyncEntities {
   static const list = 'list';
+  static const taskSection = 'task_section';
   static const task = 'task';
   static const reminder = 'reminder';
   static const reminderDispatchAction = 'reminder_dispatch_action';
@@ -27,6 +28,7 @@ class SyncEntities {
   /// 走 `/app-api/todo/sync/push` 的实体集合（folder 例外）。
   static const syncable = {
     list,
+    taskSection,
     task,
     reminder,
     reminderDispatchAction,
