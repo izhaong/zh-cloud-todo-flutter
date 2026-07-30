@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/db/app_database.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/brand_colors.dart';
+import '../../../core/time/task_time_formatter.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../task_detail_page.dart';
 import '../task_quick_add_sheet.dart';
@@ -516,7 +517,14 @@ class _KanbanCard extends StatelessWidget {
               const Spacer(),
               if (task.dueAt != null)
                 Text(
-                  df.format(task.dueAt!),
+                  df.format(
+                    taskWallClockDateTime(
+                      task.dueAt!,
+                      allDay: task.allDay,
+                      fixedTimezone: task.fixedTimezone,
+                      timeZone: task.timeZone,
+                    ),
+                  ),
                   style: TextStyle(fontSize: 11, color: colors.mutedForeground),
                 ),
               if (reorderIndex != null) const SizedBox(width: 22),

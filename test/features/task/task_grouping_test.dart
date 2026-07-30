@@ -1,6 +1,8 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/features/home/home_shell.dart';
 import 'package:zh_cloud_todo_flutter/features/task/widgets/task_row_host.dart';
 
@@ -59,6 +61,39 @@ void main() {
     );
 
     expect(find.byType(TaskRowHost), findsAtLeastNWidgets(10));
+  });
+
+  testWidgets('desktop list groups fixed timezone task by wall-clock date', (
+    tester,
+  ) async {
+    final fixture = await pumpTodoVisualScenario(
+      tester,
+      viewport: TodoVisualViewports.wide,
+      fixtureSet: TodoVisualFixtureSet.empty,
+      child: const HomeShell(),
+    );
+    final now = fixture.fixedNow;
+    await fixture.database
+        .into(fixture.database.todoTasks)
+        .insert(
+          TodoTasksCompanion.insert(
+            id: 'fixed-zone-group',
+            listId: 'inbox',
+            title: '洛杉矶今天任务',
+            allDay: const Value(false),
+            timeZone: const Value('America/Los_Angeles'),
+            fixedTimezone: const Value(true),
+            dueAt: Value(DateTime.utc(2026, 7, 12, 2)),
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    await tester.pumpAndSettle();
+
+    final todayGroup = find.byKey(const Key('todo-task-group-today'));
+    expect(todayGroup, findsOneWidget);
+    expect(find.text('洛杉矶今天任务'), findsOneWidget);
+    expect(find.byKey(const Key('todo-task-group-upcoming')), findsNothing);
   });
 }
 

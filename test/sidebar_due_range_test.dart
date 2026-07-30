@@ -10,7 +10,7 @@ void main() {
   final tasks = [
     _task('today', DateTime(2026, 7, 30, 18)),
     _task('tomorrow', DateTime(2026, 7, 31, 9)),
-    _task('day-seven', DateTime(2026, 8, 6, 0)),
+    _task('day-seven', DateTime(2026, 8, 6, 18)),
     _task('past', DateTime(2026, 7, 29, 9)),
     _task('later', DateTime(2026, 8, 7, 9)),
   ];
@@ -42,9 +42,58 @@ void main() {
       ['tomorrow', 'day-seven'],
     );
   });
+
+  test(
+    'fixed timezone wall-clock date aligns sidebar counters and filters',
+    () {
+      final fixedZoneTasks = [
+        _task(
+          'los-angeles-today',
+          DateTime.utc(2026, 7, 31, 2),
+          fixedTimezone: true,
+          timeZone: 'America/Los_Angeles',
+        ),
+        _task(
+          'all-day-tomorrow',
+          DateTime.utc(2026, 7, 31),
+          fixedTimezone: true,
+          timeZone: 'America/Los_Angeles',
+          allDay: true,
+        ),
+      ];
+
+      final stats = TaskStats.fromTasks(fixedZoneTasks, now: now);
+      expect(stats.today, 1);
+      expect(stats.tomorrow, 1);
+      expect(
+        applyTaskFilter(
+          fixedZoneTasks,
+          TaskFilter(dueRange: 'today'),
+          null,
+          now,
+        ).map((task) => task.id),
+        ['los-angeles-today'],
+      );
+      expect(
+        applyTaskFilter(
+          fixedZoneTasks,
+          TaskFilter(dueRange: 'tomorrow'),
+          null,
+          now,
+        ).map((task) => task.id),
+        ['all-day-tomorrow'],
+      );
+    },
+  );
 }
 
-TodoTask _task(String id, DateTime dueAt) {
+TodoTask _task(
+  String id,
+  DateTime dueAt, {
+  bool fixedTimezone = false,
+  String? timeZone,
+  bool allDay = false,
+}) {
   final stamp = DateTime(2026, 7, 1);
   return TodoTask(
     id: id,
@@ -56,8 +105,9 @@ TodoTask _task(String id, DateTime dueAt) {
     isPinned: false,
     sortOrder: 0,
     dueAt: dueAt,
-    allDay: false,
-    fixedTimezone: false,
+    allDay: allDay,
+    timeZone: timeZone,
+    fixedTimezone: fixedTimezone,
     updatedAt: stamp,
     createdAt: stamp,
   );

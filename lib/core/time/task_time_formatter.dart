@@ -41,6 +41,37 @@ DateTime taskDisplayDateTime(
   return timezone.TZDateTime.from(instant.toUtc(), location);
 }
 
+/// Returns a timezone-neutral wall-clock value for task UI comparison.
+///
+/// [DateTime.compareTo] compares instants even for [timezone.TZDateTime], so
+/// callers that group or sort by what the user sees must compare the copied
+/// calendar fields instead. All-day values intentionally keep their stored
+/// pure-date semantics and never shift through a timezone.
+DateTime taskWallClockDateTime(
+  DateTime instant, {
+  required bool allDay,
+  required bool fixedTimezone,
+  required String? timeZone,
+}) {
+  final display = allDay
+      ? instant
+      : taskDisplayDateTime(
+          instant,
+          fixedTimezone: fixedTimezone,
+          timeZone: timeZone,
+        );
+  return DateTime(
+    display.year,
+    display.month,
+    display.day,
+    display.hour,
+    display.minute,
+    display.second,
+    display.millisecond,
+    display.microsecond,
+  );
+}
+
 /// Moves an instant to [day] while preserving its presented wall-clock time.
 DateTime taskDateTimeForDisplayDay(
   DateTime instant,

@@ -260,22 +260,11 @@ enum TimelineBucket { overdue, today, tomorrow, thisWeek, nextWeek, later }
 DateTime? _timelineDueDisplay(TodoTask task) {
   final due = task.dueAt;
   if (due == null) return null;
-  final display = task.allDay
-      ? due
-      : taskDisplayDateTime(
-          due,
-          fixedTimezone: task.fixedTimezone,
-          timeZone: task.timeZone,
-        );
-  return DateTime(
-    display.year,
-    display.month,
-    display.day,
-    display.hour,
-    display.minute,
-    display.second,
-    display.millisecond,
-    display.microsecond,
+  return taskWallClockDateTime(
+    due,
+    allDay: task.allDay,
+    fixedTimezone: task.fixedTimezone,
+    timeZone: task.timeZone,
   );
 }
 
@@ -522,9 +511,7 @@ class _TimelineTaskTileState extends State<_TimelineTaskTile> {
         subtitle: widget.task.dueAt == null
             ? null
             : Text(
-                widget.dueDateFormat.format(
-                  _timelineDueDisplay(widget.task)!,
-                ),
+                widget.dueDateFormat.format(_timelineDueDisplay(widget.task)!),
                 style: TextStyle(color: colors.mutedForeground),
               ),
         trailing: widget.onTaskTimeChange == null

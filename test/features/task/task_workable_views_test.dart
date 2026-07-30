@@ -125,6 +125,33 @@ void main() {
     expect(find.text('重试'), findsNothing);
   });
 
+  testWidgets('看板截止日期按任务固定时区墙钟显示', (tester) async {
+    final task = TodoTask(
+      id: 'fixed-zone-board',
+      listId: 'list-inbox',
+      title: '洛杉矶看板任务',
+      completed: false,
+      cancelled: false,
+      allDay: false,
+      timeZone: 'America/Los_Angeles',
+      fixedTimezone: true,
+      priority: 0,
+      isPinned: false,
+      sortOrder: 0,
+      dueAt: DateTime.utc(2026, 7, 12, 2),
+      updatedAt: DateTime.utc(2026, 7, 11),
+      createdAt: DateTime.utc(2026, 7, 11),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: KanbanView(tasks: [task])),
+      ),
+    );
+
+    expect(find.text('07-11'), findsOneWidget);
+  });
+
   testWidgets('看板显示当前清单失败偏好的恢复入口', (tester) async {
     var recoveries = 0;
     await tester.pumpWidget(
