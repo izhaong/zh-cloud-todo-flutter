@@ -2,9 +2,9 @@
 
 ## Phase 1: 本地契约与查询
 
-- [ ] T001 在 `test/task_organize_search_repository_test.dart` 写 1,000 条固定 UUID fixture 的任务、清单、文件夹、标签与 task-tag 数据，并断言关键词搜索、组合过滤、多键排序和结果 UUID 稳定。
-- [ ] T002 在 `lib/core/db/app_database.dart` 增加可重建的本地搜索索引、批量结果所需数据模型与升级迁移，使 T001 的文件型数据库重启断言通过。
-- [ ] T003 新建 `lib/state/repositories/task_query_repository.dart`，实现任务/清单/标签搜索、普通/高级过滤、智能清单读取与冻结的稳定排序，使 T001 的查询断言通过。
+- [x] T001 在 `test/task_organize_search_repository_test.dart` 写 1,000 条固定 UUID fixture 的任务、清单、文件夹、标签与 task-tag 数据，并断言关键词搜索、组合过滤、多键排序和结果 UUID 稳定。
+- [x] T002 在 `lib/core/db/app_database.dart` 增加可重建的本地搜索索引、批量结果所需数据模型与升级迁移，使 T001 的文件型数据库重启断言通过。
+- [x] T003 新建 `lib/state/repositories/task_query_repository.dart`，实现任务/清单/标签搜索、普通/高级过滤、智能清单读取与冻结的稳定排序，使 T001 的查询断言通过。
 - [ ] T004 在 `test/task_organize_search_repository_test.dart` 写自引用、循环、六级层级、跨账户/只读任务和智能清单结构重排的失败测试。
 - [ ] T005 修改 `lib/state/repositories/task_repository.dart`，实现五级层级验证、缩进、反缩进、移动、解除关联和手动排序的 Drift transaction 与 task outbox，使 T004 通过。
 
@@ -25,6 +25,7 @@
 
 ## 执行证据
 
+- 2026-07-30：将 B3 的 1,000 条固定 UUID 基础 fixture 补齐为任务、清单、文件夹、标签与 task-tag 五类关联数据；关键词搜索稳定返回 task/list/tag，组合过滤复用真实 task-tag，多键排序以置顶、手工顺序和 UUID 冻结。现有 FTS5 索引、触发器、可重建迁移与 `TaskQueryRepository` 已覆盖普通/高级过滤、固定时区日期、负责人、倒置区间拒绝及文件型数据库重启后的稳定 UUID 定位，T001–T003 结项；Repository、文件型重启与迁移定向组 32 项通过。
 - 2026-07-30：批量编辑逐项结果补齐三态断言：有效任务返回 `success`，重复 UUID 返回 `skipped/重复任务`，不存在任务返回 `failed/任务不存在`，后续有效项不受前两项影响；仅两个成功任务更新清单/优先级/标签/日期/完成/置顶相关字段并形成对应 task/task_tag outbox。结合既有部分失败保留、清空日期、非法清单和 Widget 可见重试测试，T006/T007 结项；Repository 与 Widget 定向组 45 项通过。
 - 2026-07-16：T004 的一个可独立回滚增量已验证——对不存在的子任务执行 `reparent` 会在任何 Drift 写入或 task outbox 入队前以 `StateError('任务不存在')` 拒绝。`nice -n 19 flutter test --concurrency=1 test/task_organize_search_repository_test.dart` 通过 15 项，`nice -n 19 flutter analyze` 无问题。T004 仍保持未勾选：跨账户/只读任务、智能清单结构重排和交互反馈尚未验证。
 - 2026-07-19：T008/T009 的 folder REST 特例新增可回滚增量：`pull()` 在同步白名单实体后用 `/folder/list` 补水 Drift；create 遇业务错误或缺少 server ID 时不再把 outbox 误记为 synced。`test/sync_coordinator_folder_pull_test.dart` 通过，`flutter analyze` 无问题；受 `TODO_B3_LIVE` 保护的 A/B 用例在测试环境证明 A 创建+push、REST list 可见、B 空 Drift pull 后按 server ID/名称恢复。T008/T009 仍未勾选：folder 更新/删除、权限、离线重启、失败恢复及与 list 移动的完整回放尚未验证。
