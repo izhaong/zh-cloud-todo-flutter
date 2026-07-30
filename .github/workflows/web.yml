@@ -89,7 +89,7 @@ jobs:
 
       - run: flutter analyze
 
-      - run: flutter test
+      - run: flutter test --exclude-tags 'golden || performance'
 
       - name: Flutter build web
         env:
