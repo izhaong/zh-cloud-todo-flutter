@@ -407,6 +407,7 @@ class _KanbanColumn extends StatelessWidget {
                   )
                 : ReorderableListView.builder(
                     padding: const EdgeInsets.all(8),
+                    buildDefaultDragHandles: false,
                     itemCount: data.tasks.length,
                     onReorder: onTasksReordered == null
                         ? (_, _) {}
@@ -424,6 +425,7 @@ class _KanbanColumn extends StatelessWidget {
                       child: _KanbanCard(
                         task: data.tasks[i],
                         accent: data.color,
+                        reorderIndex: onTasksReordered == null ? null : i,
                         onTap: () => onCardTap(data.tasks[i]),
                       ),
                     ),
@@ -475,11 +477,13 @@ class _KanbanCard extends StatelessWidget {
   const _KanbanCard({
     required this.task,
     required this.accent,
+    required this.reorderIndex,
     required this.onTap,
   });
 
   final TodoTask task;
   final Color accent;
+  final int? reorderIndex;
   final VoidCallback onTap;
 
   @override
@@ -515,21 +519,45 @@ class _KanbanCard extends StatelessWidget {
                   df.format(task.dueAt!),
                   style: TextStyle(fontSize: 11, color: colors.mutedForeground),
                 ),
+              if (reorderIndex != null) const SizedBox(width: 22),
             ],
           ),
         ],
       ),
     );
-    return LongPressDraggable<TodoTask>(
-      data: task,
-      feedback: Material(
-        color: Colors.transparent,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 220),
-          child: Text(task.title, style: const TextStyle(fontSize: 14)),
+    return Stack(
+      children: [
+        LongPressDraggable<TodoTask>(
+          data: task,
+          feedback: Material(
+            color: Colors.transparent,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 220),
+              child: Text(task.title, style: const TextStyle(fontSize: 14)),
+            ),
+          ),
+          child: card,
         ),
-      ),
-      child: card,
+        if (reorderIndex != null)
+          Positioned(
+            right: 10,
+            bottom: 10,
+            child: Tooltip(
+              message: '拖动排序',
+              child: ReorderableDragStartListener(
+                index: reorderIndex!,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.grab,
+                  child: Icon(
+                    Icons.drag_indicator,
+                    size: 18,
+                    color: colors.mutedForeground,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
