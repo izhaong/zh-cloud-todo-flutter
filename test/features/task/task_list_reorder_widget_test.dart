@@ -96,6 +96,22 @@ void main() {
       ),
     );
   });
+
+  testWidgets('桌面智能清单不提供结构重排容器和拖拽入口', (tester) async {
+    late final _RecordingTaskViewActionRepository repository;
+    await _pumpList(
+      tester,
+      initialListId: null,
+      overridesBuilder: (db) {
+        repository = _RecordingTaskViewActionRepository(db);
+        return [taskViewActionRepositoryProvider.overrideWithValue(repository)];
+      },
+    );
+
+    expect(find.byType(ReorderableListView), findsNothing);
+    expect(find.byTooltip('拖动排序'), findsNothing);
+    expect(repository.requests, isEmpty);
+  });
 }
 
 class _RecordingTaskViewActionRepository extends TaskViewActionRepository {
@@ -116,6 +132,7 @@ class _RecordingTaskViewActionRepository extends TaskViewActionRepository {
 
 Future<TodoVisualFixture> _pumpList(
   WidgetTester tester, {
+  String? initialListId = TodoVisualFixture.inboxListId,
   required List<Override> Function(AppDatabase database) overridesBuilder,
 }) async {
   final fixture = await TodoVisualFixture.create(
@@ -135,9 +152,9 @@ Future<TodoVisualFixture> _pumpList(
         theme: ThemeData(
           extensions: const [AppThemeExtension(AppColors.light)],
         ),
-        home: const Scaffold(
+        home: Scaffold(
           body: TasksByListPage(
-            initialListId: TodoVisualFixture.inboxListId,
+            initialListId: initialListId,
             lockedListId: true,
             hideAppBar: true,
           ),
