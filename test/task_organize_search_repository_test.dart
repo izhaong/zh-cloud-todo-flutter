@@ -278,6 +278,28 @@ void main() {
     expect(await db.select(db.todoSyncChanges).get(), isEmpty);
   });
 
+  test('重设父任务拒绝只读清单且不写任务或 outbox', () async {
+    await (db.update(db.todoLists)..where((row) => row.id.equals('list-inbox')))
+        .write(const TodoListsCompanion(writable: Value(false)));
+
+    await expectLater(
+      taskRepository.reparent('task-2', 'task-1'),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          '当前清单为只读，无法修改任务',
+        ),
+      ),
+    );
+
+    final task = await (db.select(
+      db.todoTasks,
+    )..where((row) => row.id.equals('task-2'))).getSingle();
+    expect(task.parentTaskId, isNull);
+    expect(await db.select(db.todoSyncChanges).get(), isEmpty);
+  });
+
   test('新建子任务拒绝跨清单父任务且不写数据', () async {
     await db
         .into(db.todoTasks)
@@ -367,6 +389,37 @@ void main() {
       taskRepository.reparent('task-7', 'task-6'),
       throwsA(isA<StateError>()),
     );
+  });
+
+  test('移动已有子树拒绝让最深后代超过五级且不写 outbox', () async {
+    await taskRepository.reparent('task-2', 'task-1');
+    await taskRepository.reparent('task-3', 'task-2');
+    await taskRepository.reparent('task-11', 'task-10');
+    await taskRepository.reparent('task-12', 'task-11');
+    await taskRepository.reparent('task-13', 'task-12');
+    await taskRepository.reparent('task-14', 'task-13');
+    await db.delete(db.todoSyncChanges).go();
+
+    await expectLater(
+      taskRepository.reparent('task-2', 'task-14'),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          '任务层级不能超过五级',
+        ),
+      ),
+    );
+
+    final subtreeRoot = await (db.select(
+      db.todoTasks,
+    )..where((row) => row.id.equals('task-2'))).getSingle();
+    final descendant = await (db.select(
+      db.todoTasks,
+    )..where((row) => row.id.equals('task-3'))).getSingle();
+    expect(subtreeRoot.parentTaskId, 'task-1');
+    expect(descendant.parentTaskId, 'task-2');
+    expect(await db.select(db.todoSyncChanges).get(), isEmpty);
   });
 
   test('过滤组合状态、清单、优先级和标签', () async {
