@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/db/app_database.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/brand_colors.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../task_detail_page.dart';
@@ -28,6 +29,10 @@ class KanbanView extends ConsumerWidget {
     this.onTaskMove,
     this.hasRecoverablePreference = false,
     this.onRecoverPreference,
+    this.orderedColumnIds = const ['todo', 'doing', 'urgent', 'archive'],
+    this.collapsedColumnIds = const {},
+    this.onColumnOrderChanged,
+    this.onColumnCollapsedChanged,
   });
 
   /// 渲染用的任务列表（已应用 list/filter 的客户端过滤结果）。
@@ -38,11 +43,18 @@ class KanbanView extends ConsumerWidget {
   onTaskMove;
   final bool hasRecoverablePreference;
   final Future<bool> Function()? onRecoverPreference;
+  final List<String> orderedColumnIds;
+  final Set<String> collapsedColumnIds;
+  final Future<void> Function(List<String> orderedColumnIds)?
+  onColumnOrderChanged;
+  final Future<void> Function(String columnId, bool collapsed)?
+  onColumnCollapsedChanged;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final columns = <_KanbanColumnData>[
       _KanbanColumnData(
+        id: 'todo',
         key: const ValueKey('col-todo'),
         title: '未开始',
         color: Colors.blueGrey,
@@ -51,6 +63,7 @@ class KanbanView extends ConsumerWidget {
         tasks: tasks.where((t) => t.priority == 0 && !t.completed).toList(),
       ),
       _KanbanColumnData(
+        id: 'doing',
         key: const ValueKey('col-doing'),
         title: '进行中',
         color: Colors.blue,
@@ -59,6 +72,7 @@ class KanbanView extends ConsumerWidget {
         tasks: tasks.where((t) => t.priority == 1 && !t.completed).toList(),
       ),
       _KanbanColumnData(
+        id: 'urgent',
         key: const ValueKey('col-urgent'),
         title: '紧急',
         color: Colors.deepOrange,
@@ -67,6 +81,7 @@ class KanbanView extends ConsumerWidget {
         tasks: tasks.where((t) => t.priority == 2 && !t.completed).toList(),
       ),
       _KanbanColumnData(
+        id: 'archive',
         key: const ValueKey('col-archive'),
         title: '归档',
         color: Colors.grey,
@@ -74,6 +89,11 @@ class KanbanView extends ConsumerWidget {
         completed: true,
         tasks: tasks.where((t) => t.completed || t.priority >= 3).toList(),
       ),
+    ];
+    final byId = {for (final column in columns) column.id: column};
+    final ordered = <_KanbanColumnData>[
+      for (final id in orderedColumnIds) ?byId.remove(id),
+      ...byId.values,
     ];
 
     return Column(
@@ -95,22 +115,37 @@ class KanbanView extends ConsumerWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                for (final col in columns)
+                for (var index = 0; index < ordered.length; index++)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: _KanbanColumn(
-                      data: col,
+                      data: ordered[index],
+                      collapsed: collapsedColumnIds.contains(ordered[index].id),
+                      onCollapsedChanged: onColumnCollapsedChanged == null
+                          ? null
+                          : (collapsed) => onColumnCollapsedChanged!(
+                              ordered[index].id,
+                              collapsed,
+                            ),
+                      onMoveLeft: onColumnOrderChanged == null || index == 0
+                          ? null
+                          : () => _moveColumn(ordered, index, -1),
+                      onMoveRight:
+                          onColumnOrderChanged == null ||
+                              index == ordered.length - 1
+                          ? null
+                          : () => _moveColumn(ordered, index, 1),
                       onCardTap: (t) => _openDetail(context, t),
                       onCardMove: onTaskMove == null
                           ? null
                           : (task) => _moveTask(
                               context,
                               task,
-                              priority: col.priority,
-                              completed: col.completed,
+                              priority: ordered[index].priority,
+                              completed: ordered[index].completed,
                             ),
                       onAdd:
-                          col.key == const ValueKey('col-todo') &&
+                          ordered[index].key == const ValueKey('col-todo') &&
                               listId != null
                           ? () => _quickAdd(context, ref, listId!)
                           : null,
@@ -122,6 +157,18 @@ class KanbanView extends ConsumerWidget {
         ),
       ],
     );
+  }
+
+  Future<void> _moveColumn(
+    List<_KanbanColumnData> columns,
+    int index,
+    int delta,
+  ) {
+    final next = columns.map((column) => column.id).toList();
+    final target = index + delta;
+    final moved = next.removeAt(index);
+    next.insert(target, moved);
+    return onColumnOrderChanged!(next);
   }
 
   Future<void> _recoverPreference(BuildContext context) async {
@@ -189,6 +236,7 @@ class KanbanView extends ConsumerWidget {
 
 class _KanbanColumnData {
   const _KanbanColumnData({
+    required this.id,
     required this.key,
     required this.title,
     required this.color,
@@ -196,6 +244,7 @@ class _KanbanColumnData {
     required this.completed,
     required this.tasks,
   });
+  final String id;
   final Key key;
   final String title;
   final Color color;
@@ -207,13 +256,21 @@ class _KanbanColumnData {
 class _KanbanColumn extends StatelessWidget {
   const _KanbanColumn({
     required this.data,
+    required this.collapsed,
     required this.onCardTap,
+    this.onCollapsedChanged,
+    this.onMoveLeft,
+    this.onMoveRight,
     this.onCardMove,
     this.onAdd,
   });
 
   final _KanbanColumnData data;
+  final bool collapsed;
   final ValueChanged<TodoTask> onCardTap;
+  final Future<void> Function(bool collapsed)? onCollapsedChanged;
+  final Future<void> Function()? onMoveLeft;
+  final Future<void> Function()? onMoveRight;
   final Future<void> Function(TodoTask task)? onCardMove;
   final VoidCallback? onAdd;
 
@@ -221,90 +278,147 @@ class _KanbanColumn extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = brandColors(context);
     return SizedBox(
-      width: 260,
+      width: collapsed ? 72 : 260,
       child: AppCard(
         margin: EdgeInsets.zero,
         padding: EdgeInsets.zero,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 8, 6),
-              child: Row(
+        child: collapsed
+            ? Column(
                 children: [
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: data.color,
-                      shape: BoxShape.circle,
-                    ),
+                  IconButton(
+                    tooltip: '展开${data.title}',
+                    icon: const Icon(Icons.keyboard_arrow_right),
+                    onPressed: onCollapsedChanged == null
+                        ? null
+                        : () => onCollapsedChanged!(false),
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    data.title,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: colors.foreground,
-                    ),
-                  ),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: data.color.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
+                  const SizedBox(height: 8),
+                  RotatedBox(
+                    quarterTurns: 1,
                     child: Text(
-                      '${data.tasks.length}',
+                      '${data.title}  ${data.tasks.length}',
                       style: TextStyle(
-                        fontSize: 11,
-                        color: colors.mutedForeground,
+                        color: colors.foreground,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
-                  if (onAdd != null)
-                    IconButton(
-                      tooltip: '新建任务',
-                      icon: const Icon(Icons.add, size: 18),
-                      onPressed: onAdd,
-                    ),
                 ],
+              )
+            : _buildExpanded(context, colors),
+      ),
+    );
+  }
+
+  Widget _buildExpanded(BuildContext context, AppColors colors) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 8, 6),
+          child: Row(
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: data.color,
+                  shape: BoxShape.circle,
+                ),
               ),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: DragTarget<TodoTask>(
-                onWillAcceptWithDetails: (details) => onCardMove != null,
-                onAcceptWithDetails: (details) => onCardMove!(details.data),
-                builder: (context, candidateData, rejectedData) =>
-                    data.tasks.isEmpty
-                    ? Center(
-                        child: Text(
-                          '空',
-                          style: TextStyle(
-                            color: Theme.of(context).disabledColor,
-                          ),
-                        ),
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.all(8),
-                        itemCount: data.tasks.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 8),
-                        itemBuilder: (_, i) => _KanbanCard(
-                          task: data.tasks[i],
-                          accent: data.color,
-                          onTap: () => onCardTap(data.tasks[i]),
-                        ),
-                      ),
+              const SizedBox(width: 8),
+              Text(
+                data.title,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: colors.foreground,
+                ),
               ),
-            ),
-          ],
+              const Spacer(),
+              _ColumnCount(count: data.tasks.length, color: data.color),
+              PopupMenuButton<String>(
+                tooltip: '调整${data.title}列',
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: 'left',
+                    enabled: onMoveLeft != null,
+                    child: Text('左移${data.title}'),
+                  ),
+                  PopupMenuItem(
+                    value: 'right',
+                    enabled: onMoveRight != null,
+                    child: Text('右移${data.title}'),
+                  ),
+                  PopupMenuItem(
+                    value: 'collapse',
+                    enabled: onCollapsedChanged != null,
+                    child: Text('折叠${data.title}'),
+                  ),
+                ],
+                onSelected: (value) {
+                  if (value == 'left') onMoveLeft?.call();
+                  if (value == 'right') onMoveRight?.call();
+                  if (value == 'collapse') onCollapsedChanged?.call(true);
+                },
+              ),
+              if (onAdd != null)
+                IconButton(
+                  tooltip: '新建任务',
+                  icon: const Icon(Icons.add, size: 18),
+                  onPressed: onAdd,
+                ),
+            ],
+          ),
         ),
+        const Divider(height: 1),
+        Expanded(
+          child: DragTarget<TodoTask>(
+            onWillAcceptWithDetails: (details) => onCardMove != null,
+            onAcceptWithDetails: (details) => onCardMove!(details.data),
+            builder: (context, candidateData, rejectedData) =>
+                data.tasks.isEmpty
+                ? Center(
+                    child: Text(
+                      '空',
+                      style: TextStyle(color: Theme.of(context).disabledColor),
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.all(8),
+                    itemCount: data.tasks.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
+                    itemBuilder: (_, i) => _KanbanCard(
+                      task: data.tasks[i],
+                      accent: data.color,
+                      onTap: () => onCardTap(data.tasks[i]),
+                    ),
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ColumnCount extends StatelessWidget {
+  const _ColumnCount({required this.count, required this.color});
+
+  final int count;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = brandColors(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        '$count',
+        style: TextStyle(fontSize: 11, color: colors.mutedForeground),
       ),
     );
   }
