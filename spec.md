@@ -34,50 +34,55 @@ zh-cloud 平台 Todo 产品的 **唯一 C 端客户端**（**Web / H5**、iOS、
 
 ## 2. 技术栈
 
-| 维度          | 当前（`pubspec.yaml`）                  | 目标（规划，尚未引入）     |
-| ------------- | --------------------------------------- | -------------------------- |
-| 运行时        | Flutter，Dart SDK `^3.11.4`，Material 3 | 同左                       |
-| 状态管理      | `StatefulWidget` State                  | Riverpod                   |
-| 路由          | `MaterialApp` home                      | `go_router`                |
-| 网络          | `http` + Bearer + `tenant-id`           | `dio` + 拦截器             |
-| 本地存储      | `shared_preferences`                    | Drift（SQLite）+ outbox    |
-| 模型/代码生成 | 手写                                    | `freezed` + `build_runner` |
-| 测试          | `flutter_test` + `flutter_lints`        | 同左                       |
+| 维度          | 当前实现                                                   |
+| ------------- | ---------------------------------------------------------- |
+| 运行时        | Flutter，Dart SDK `^3.11.4`，Material 3                    |
+| 状态管理      | Riverpod Provider / Notifier                               |
+| 路由          | `go_router` + 响应式详情容器                               |
+| 网络          | dio + Bearer + `tenant-id` 拦截器                          |
+| 本地存储      | Drift（SQLite）+ 原子 outbox；账号会话使用安全/偏好存储    |
+| 模型/代码生成 | Drift generator、`freezed`、`json_serializable`、build_runner |
+| 测试          | `flutter_test`、内存/文件 Drift、Fake API 与受保护真实环境用例 |
 
 ## 3. 目录结构
 
 ```
 lib/
-  main.dart                     # 入口 + TodoHomePage（日历/效率/系统入口、本地状态与同步队列雏形）
-  todo_member_auth_client.dart  # todo-member 登录网关与会话模型
-  efficiency_dashboard.dart     # 效率工具（四象限 / 番茄 / 习惯 / 倒数）
-  system_entry_dashboard.dart   # 系统入口面板
+  main.dart                     # bootstrap
+  app.dart                      # ProviderScope、go_router 与生命周期
+  core/
+    api/                        # dio 客户端与 REST 契约
+    db/                         # Drift 表、迁移与查询
+    notification/               # 本地通知与持久调度
+    storage/                    # 会话存储
+    sync/                       # outbox、pull/push、冲突恢复
+  features/                     # task/list/tag/filter/calendar/efficiency 等功能
+  state/
+    providers.dart              # 依赖装配
+    repositories/               # 离线优先业务写链路
 test/
-  widget_test.dart              # widget 测试（Fake 网关 + 内存版 SharedPreferences）
+  ...                           # 单元、Widget、迁移、同步与受保护真实环境测试
 web/                            # Web / H5（index.html、manifest、PWA 图标）
 pubspec.yaml
 ```
-
-- **目标结构**（随功能迭代逐步落地，尚未建立）：`lib/features/{auth,task,list,calendar,focus,habit,...}`、`lib/core/{api,db,sync,storage}`。
 
 ## 4. 关键流程
 
 ### 4.1 登录（todo-member）
 
-- `TodoMemberAuthClient`（实现 `TodoMemberAuthGateway`）支持：密码登录、发送短信验证码、短信登录、重置密码、登出。
+- `AuthGatewayImpl`（实现 `AuthGateway`，复用 dio `ApiClient`）支持：密码登录、发送短信验证码、短信登录、重置密码、登出与会话校验。
 - 请求头：`Content-Type: application/json`、`tenant-id`、登录时附 `terminal: 30`，鉴权接口附 `Authorization: Bearer <token>`。
 - 响应信封 `{code,msg,data}`，`code != 0` 抛 `TodoMemberAuthException`；登录成功解析出 `TodoAuthSession`（userId / accessToken / refreshToken / expiresTime / mobile）。
-- 会话当前以 `shared_preferences` 持久化（键 `zh_cloud_todo_flutter_state_v2`），已登录不重复弹登录表单。
+- 会话通过 `SessionStore` 持久化并由 Riverpod 会话控制器恢复；业务 Drift 数据库按 tenant/user 隔离，已登录不重复弹登录表单。
 - 登录表现层按 900px 断点适配：宽屏使用“今日节奏 + 表单”双栏并垂直居中，窄屏使用表单优先单栏；密码、验证码、注册与重置密码四种模式保持同一卡片层级。
 - 表单支持密码显示/隐藏、手机号/密码/验证码自动填充提示、键盘焦点、动态错误播报，以及 320px / 200% 文本缩放 / 深色主题无溢出回归。设计与验收见 [`specs/003-todo-auth-visual-polish/`](specs/003-todo-auth-visual-polish/)。
 - 账号启用 RFC 6238 TOTP 后，密码与短信登录会根据后端业务码展示独立的 6 位动态码字段并保留原表单内容；账户安全页通过 `setup → confirm` 完成认证器绑定，关闭时必须提交当前动态码。
 - 账户安全页可生成服务端不可变 JSON 数据快照；READY 记录通过当前会员登录态和租户头下载字节，再交给系统保存对话框落盘，不暴露或跳转无鉴权裸链接。
 - 设置页可选择上述导出文件或根级 `tasks` 便携 JSON，将标题、说明、截止时间、优先级与完成状态导入到本人已同步清单；同一文件的忙碌重试复用请求 ID，并提供当前用户批次历史与按批回滚。
 
-### 4.2 离线同步与 LWW（目标）
+### 4.2 离线同步与 LWW
 
-- 当前：本地状态变更入 `_SyncQueueItem` 同步队列雏形，随状态一并持久化。
-- 目标：Drift 本地库 + outbox，由 `SyncCoordinator` 驱动 `/app-api/todo/sync/{pull,push}` 增量同步；临时网络失败保留原 `clientMutationId`，以最早 outbox mutation 作为稳定批次 `idempotency_key` 并标记为 `retryable`，在下次同步继续推送；冲突按 **LWW（Last-Write-Wins，以更新时间为准）** 合并并保持 `failed` 供用户恢复。任务完成统一以 `status` 与 `completedAt` 推送；拉取将 `completedAt`、重复父任务、重复规则和 occurrence 映射为本地 UUID，离线完成后能回放 `ON_COMPLETE` 生成的下一实例。
+- Drift 本地库 + outbox 已落地，由 `SyncCoordinator` 驱动 `/app-api/todo/sync/{pull,push}` 增量同步；临时网络失败保留原 `clientMutationId`，以最早 outbox mutation 作为稳定批次 `idempotency_key` 并标记为 `retryable`，在下次同步继续推送；冲突按 **LWW（Last-Write-Wins，以更新时间为准）** 合并并保持 `failed` 供用户恢复。任务完成统一以 `status` 与 `completedAt` 推送；拉取将 `completedAt`、重复父任务、重复规则和 occurrence 映射为本地 UUID，离线完成后能回放 `ON_COMPLETE` 生成的下一实例。
 - 提醒规则由 `ReminderRepository` 在同一 Drift 事务中写本地规则与 `reminder` outbox；详情页可编辑已有规则并保持 UUID，四类锚点严格区分指定时间 `ABSOLUTE`、开始 `START`、截止 `DUE` 和时间段结束 `END`。相对提醒以任务锚点减去提前分钟数计算 `fireAt`，派发后的完成、忽略、开始专注和稍后动作使用独立 outbox 实体；收件箱以同一派发 ID 的最新本地动作覆盖远端旧待处理状态，避免离线期间重复提交。
 - 提醒收件箱中的未来派发由操作系统持久调度；同一派发 ID 的时间变化会覆盖旧调度，派发撤销会取消本地通知。Android 注册开机恢复接收器，设备重启或应用升级后由通知插件恢复尚未触发的提醒。
 - 任务工作区的视图模式以 `list:<local UUID>` 或稳定智能来源键隔离保存；Widget 只上报选择，由 `TaskViewActionRepository` 在同一 Drift 事务写入 `view_preference` 与 outbox。切换清单或智能来源时先恢复该来源偏好，不复用其它来源的看板、时间线或列表模式。
@@ -116,7 +121,7 @@ pubspec.yaml
 ## 6. 构建与发布
 
 - 常用命令：`flutter pub get`、`flutter analyze`、`flutter test`、`flutter run -d chrome|macos|windows|linux|<device>`；发布构建含 `flutter build web`（产物 `build/web/`）。
-- 引入 `freezed` / `drift` 后改注解须跑 `dart run build_runner build --delete-conflicting-outputs`（当前未启用）。
+- 修改 Drift 表或生成模型后，运行 `dart run build_runner build --delete-conflicting-outputs` 并提交生成文件。
 - 分支：`develop` 集成、`main` 发布；合并只走 PR，禁止直推主干；commit 用中文 Conventional Commits。
 
 ## 7. 相关文档入口
