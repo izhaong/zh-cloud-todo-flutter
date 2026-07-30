@@ -2,7 +2,7 @@
 
 **Feature Branch**: `feat/99-todo-reliability-closeout`  
 **Created**: 2026-07-15  
-**Status**: 执行中；T001 审计已完成，后续增量已有局部测试证据；T002–T005 尚未达到完整验收门槛。
+**Status**: 执行中；T001–T003 本地契约与自动化证据已完成；T004 固定旅程与 T005 最终 DoD 尚未达到完整验收门槛。
 **Input**: 总控 B5、Flutter #99、Service #187、Docs #55。
 
 ## Requirements
