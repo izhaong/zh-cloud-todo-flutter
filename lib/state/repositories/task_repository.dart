@@ -855,7 +855,15 @@ class TaskRepository {
       if (task == null) {
         throw StateError('任务不存在');
       }
+      await _requireWritableList(task.listId);
       await _assertParentChainDoesNotContain(taskId, task.listId, newParentId);
+      final newTaskDepth = newParentId == null
+          ? 0
+          : await depthOf(newParentId) + 1;
+      final subtreeDepth = await _maxDescendantDepth(taskId);
+      if (newTaskDepth + subtreeDepth > 5) {
+        throw StateError('任务层级不能超过五级');
+      }
       await _db.reparentTask(taskId, newParentId);
       final row = await (_db.select(
         _db.todoTasks,
@@ -869,6 +877,25 @@ class TaskRepository {
       );
     },
   );
+
+  Future<int> _maxDescendantDepth(String taskId) async {
+    var maximumDepth = 0;
+    final pending = <(String, int)>[(taskId, 0)];
+    final visited = <String>{};
+    var nextIndex = 0;
+    while (nextIndex < pending.length) {
+      final current = pending[nextIndex++];
+      if (!visited.add(current.$1)) {
+        throw StateError('任务父子关系形成循环');
+      }
+      if (current.$2 > maximumDepth) {
+        maximumDepth = current.$2;
+      }
+      final children = await _db.childrenOf(current.$1);
+      pending.addAll(children.map((child) => (child.id, current.$2 + 1)));
+    }
+    return maximumDepth;
+  }
 
   Future<void> _assertParentChainDoesNotContain(
     String? taskId,
