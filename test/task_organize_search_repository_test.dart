@@ -337,6 +337,37 @@ void main() {
     expect(await db.select(db.todoSyncChanges).get(), isEmpty);
   });
 
+  test('新建子任务拒绝只读清单且不写任务或 outbox', () async {
+    await (db.update(
+      db.todoLists,
+    )..where((row) => row.id.equals('list-inbox'))).write(
+      const TodoListsCompanion(writable: Value(false)),
+    );
+
+    await expectLater(
+      taskRepository.create(
+        listId: 'list-inbox',
+        title: '只读清单子任务',
+        parentTaskId: 'task-1',
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          '当前清单为只读，无法修改任务',
+        ),
+      ),
+    );
+
+    expect(
+      await (db.select(
+        db.todoTasks,
+      )..where((row) => row.title.equals('只读清单子任务'))).get(),
+      isEmpty,
+    );
+    expect(await db.select(db.todoSyncChanges).get(), isEmpty);
+  });
+
   test('新建子任务拒绝超过五级且不写数据', () async {
     for (var index = 2; index <= 6; index++) {
       await taskRepository.reparent('task-$index', 'task-${index - 1}');
