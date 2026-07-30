@@ -50,7 +50,18 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('推荐任务'), findsOneWidget);
-    expect(find.bySemanticsLabel(RegExp('推荐任务')), findsOneWidget);
+    final panelSemanticsFinder = find.byWidgetPredicate(
+      (widget) => widget is Semantics && widget.properties.label == '推荐任务',
+    );
+    expect(panelSemanticsFinder, findsOneWidget);
+    expect(find.byTooltip('刷新推荐任务'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('即将到期的任务')), findsOneWidget);
+    final panelNode = tester.getSemantics(panelSemanticsFinder);
+    final refreshNode = tester.getSemantics(find.byType(IconButton));
+    final taskNode = tester.getSemantics(find.text('即将到期的任务'));
+    expect(refreshNode.id, isNot(panelNode.id));
+    expect(taskNode.id, isNot(panelNode.id));
+    expect(taskNode.id, isNot(refreshNode.id));
     expect(find.text('即将到期的任务'), findsOneWidget);
     expect(find.text('即将到期'), findsOneWidget);
     await tester.tap(find.text('即将到期的任务'));
@@ -58,6 +69,92 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
     semantics.dispose();
+  });
+
+  testWidgets('刷新失败时保留缓存并通过 live region 说明恢复状态', (tester) async {
+    final semantics = tester.ensureSemantics();
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    await db
+        .into(db.todoRecommendations)
+        .insert(
+          TodoRecommendationsCompanion.insert(
+            taskServerId: const Value(7),
+            title: '即将到期的任务',
+            reasonCode: 'DUE_SOON',
+            reason: '即将到期',
+            score: 900,
+            refreshedAt: DateTime.utc(2026, 7, 16),
+          ),
+        );
+    final repository = RecommendationRepository(
+      db,
+      _OfflineRecommendationApi(),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          recommendationRepositoryProvider.overrideWithValue(repository),
+        ],
+        child: MaterialApp(
+          home: Scaffold(body: RecommendationPanel(onTaskSelected: (_) {})),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('即将到期的任务'), findsOneWidget);
+    expect(find.text('刷新推荐任务失败，已保留上次结果'), findsOneWidget);
+    expect(
+      tester.getSemantics(find.text('刷新推荐任务失败，已保留上次结果')),
+      matchesSemantics(label: '刷新推荐任务失败，已保留上次结果', isLiveRegion: true),
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+    semantics.dispose();
+  });
+
+  testWidgets('重试成功后清除刷新失败状态', (tester) async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    await db
+        .into(db.todoRecommendations)
+        .insert(
+          TodoRecommendationsCompanion.insert(
+            taskServerId: const Value(7),
+            title: '缓存任务',
+            reasonCode: 'DUE_SOON',
+            reason: '即将到期',
+            score: 900,
+            refreshedAt: DateTime.utc(2026, 7, 16),
+          ),
+        );
+    final repository = RecommendationRepository(
+      db,
+      _RecoveringRecommendationApi(),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          recommendationRepositoryProvider.overrideWithValue(repository),
+        ],
+        child: MaterialApp(
+          home: Scaffold(body: RecommendationPanel(onTaskSelected: (_) {})),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('刷新推荐任务失败，已保留上次结果'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('刷新推荐任务'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('刷新推荐任务失败，已保留上次结果'), findsNothing);
+    expect(find.text('已恢复的任务'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
   });
 }
 
@@ -67,4 +164,25 @@ class _OfflineRecommendationApi extends RecommendationApi {
   @override
   Future<List<RecommendationTask>> list({int limit = 10}) =>
       Future<List<RecommendationTask>>.error(StateError('offline'));
+}
+
+class _RecoveringRecommendationApi extends RecommendationApi {
+  _RecoveringRecommendationApi() : super(ApiClient());
+
+  var _calls = 0;
+
+  @override
+  Future<List<RecommendationTask>> list({int limit = 10}) async {
+    _calls++;
+    if (_calls == 1) throw StateError('offline');
+    return const [
+      RecommendationTask(
+        taskServerId: 8,
+        title: '已恢复的任务',
+        reasonCode: 'RECENTLY_ADDED',
+        reason: '最近添加',
+        score: 700,
+      ),
+    ];
+  }
 }

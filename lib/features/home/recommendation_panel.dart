@@ -21,6 +21,8 @@ class RecommendationPanel extends ConsumerStatefulWidget {
 }
 
 class _RecommendationPanelState extends ConsumerState<RecommendationPanel> {
+  var _refreshFailed = false;
+
   @override
   void initState() {
     super.initState();
@@ -30,8 +32,14 @@ class _RecommendationPanelState extends ConsumerState<RecommendationPanel> {
   Future<void> _refresh() async {
     try {
       await ref.read(recommendationRepositoryProvider)?.refresh();
+      if (mounted && _refreshFailed) {
+        setState(() => _refreshFailed = false);
+      }
     } catch (_) {
       // 保留 Drift 中上一次成功响应；同步恢复后会再次刷新。
+      if (mounted && !_refreshFailed) {
+        setState(() => _refreshFailed = true);
+      }
     }
   }
 
@@ -48,6 +56,7 @@ class _RecommendationPanelState extends ConsumerState<RecommendationPanel> {
         final accent = colors?.accent ?? Theme.of(context).colorScheme.primary;
         return Semantics(
           container: true,
+          explicitChildNodes: true,
           label: '推荐任务',
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -84,6 +93,22 @@ class _RecommendationPanelState extends ConsumerState<RecommendationPanel> {
                       ],
                     ),
                   ),
+                  if (_refreshFailed)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+                      child: Semantics(
+                        label: '刷新推荐任务失败，已保留上次结果',
+                        liveRegion: true,
+                        excludeSemantics: true,
+                        child: Text(
+                          '刷新推荐任务失败，已保留上次结果',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
                   for (final item in recommendations.take(3))
                     Material(
                       type: MaterialType.transparency,
