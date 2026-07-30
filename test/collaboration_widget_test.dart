@@ -18,6 +18,9 @@ class _FakeApiClient extends ApiClient {
   _FakeApiClient({this.body = const {'code': 0, 'data': <String, Object>{}}});
 
   final Map<String, Object> body;
+  String? lastMethod;
+  String? lastPath;
+  Object? lastData;
 
   @override
   Future<Response<T>> get<T>(String path, {Map<String, dynamic>? query}) async {
@@ -33,22 +36,48 @@ class _FakeApiClient extends ApiClient {
     String path, {
     Object? data,
     Map<String, dynamic>? queryParameters,
-  }) async => Response<T>(
-    data: const {'code': 0, 'data': <String, Object>{}} as T,
-    statusCode: 200,
-    requestOptions: RequestOptions(path: path),
-  );
+  }) async {
+    lastMethod = 'POST';
+    lastPath = path;
+    lastData = data;
+    return Response<T>(
+      data: const {'code': 0, 'data': <String, Object>{}} as T,
+      statusCode: 200,
+      requestOptions: RequestOptions(path: path),
+    );
+  }
 
   @override
   Future<Response<T>> put<T>(
     String path, {
     Object? data,
     Map<String, dynamic>? queryParameters,
-  }) async => Response<T>(
-    data: const {'code': 0, 'data': <String, Object>{}} as T,
-    statusCode: 200,
-    requestOptions: RequestOptions(path: path),
-  );
+  }) async {
+    lastMethod = 'PUT';
+    lastPath = path;
+    lastData = data;
+    return Response<T>(
+      data: const {'code': 0, 'data': <String, Object>{}} as T,
+      statusCode: 200,
+      requestOptions: RequestOptions(path: path),
+    );
+  }
+
+  @override
+  Future<Response<T>> patch<T>(
+    String path, {
+    Object? data,
+    Map<String, dynamic>? queryParameters,
+  }) async {
+    lastMethod = 'PATCH';
+    lastPath = path;
+    lastData = data;
+    return Response<T>(
+      data: const {'code': 0, 'data': <String, Object>{}} as T,
+      statusCode: 200,
+      requestOptions: RequestOptions(path: path),
+    );
+  }
 
   @override
   Future<Response<T>> delete<T>(
@@ -126,6 +155,108 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('暂无成员，邀请伙伴加入吧'), findsOneWidget);
+  });
+
+  testWidgets('owner 按手机号和 editor 权限邀请成员', (tester) async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    final client = _FakeApiClient(
+      body: {
+        'code': 0,
+        'data': {
+          'members': [
+            {
+              'userId': 1,
+              'userName': '所有者',
+              'role': 'owner',
+              'status': 'active',
+            },
+            {
+              'userId': 2,
+              'userName': '只读成员',
+              'userEmail': 'viewer@example.com',
+              'role': 'viewer',
+              'status': 'invited',
+            },
+          ],
+        },
+      },
+    );
+    final container = _containerWith(client, db);
+    addTearDown(() async {
+      container.dispose();
+      await db.close();
+    });
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: ListMemberPage(listServerId: 12)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('collaboration-invite-mobile')),
+      findsOneWidget,
+    );
+    expect(find.text('可编辑'), findsOneWidget);
+    expect(find.text('只读'), findsOneWidget);
+    expect(find.text('待接受'), findsOneWidget);
+    expect(find.textContaining('viewer@example.com'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const Key('collaboration-invite-mobile')),
+      '18800000001',
+    );
+    await tester.tap(find.byKey(const Key('collaboration-invite-submit')));
+    await tester.pumpAndSettle();
+
+    expect(client.lastMethod, 'POST');
+    expect(client.lastPath, '/list/12/members');
+    expect(client.lastData, {'userMobile': '18800000001', 'role': 'editor'});
+
+    await tester.tap(find.byTooltip('管理成员'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(CheckedPopupMenuItem<String>, '可编辑'));
+    await tester.pumpAndSettle();
+
+    expect(client.lastMethod, 'PATCH');
+    expect(client.lastPath, '/list/12/members/2');
+    expect(client.lastData, {'role': 'editor'});
+  });
+
+  testWidgets('受邀 viewer 只显示接受邀请，不显示 owner 管理入口', (tester) async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    final client = _FakeApiClient(
+      body: {
+        'code': 0,
+        'data': {
+          'members': [
+            {
+              'userId': 1,
+              'userName': '当前用户',
+              'role': 'viewer',
+              'status': 'invited',
+            },
+          ],
+        },
+      },
+    );
+    final container = _containerWith(client, db);
+    addTearDown(() async {
+      container.dispose();
+      await db.close();
+    });
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: ListMemberPage(listServerId: 12)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('接受邀请'), findsOneWidget);
+    expect(find.text('退出协作'), findsNothing);
+    expect(find.byKey(const Key('collaboration-invite-mobile')), findsNothing);
   });
 
   testWidgets('TaskCommentsPage 渲染 - 空列表显示提示', (tester) async {

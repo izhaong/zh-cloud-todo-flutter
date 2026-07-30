@@ -70,7 +70,7 @@
 
 ## Phase 7: User Story 5 — 协作与账号安全 (P3)
 
-- [ ] T026 [P][US5] `lib/features/collaboration/list_member_page.dart`
+- [x] T026 [P][US5] `lib/features/collaboration/list_member_page.dart`：owner 按手机号邀请 editor/viewer，成员角色与邀请状态可见，角色修改使用 PATCH，受邀成员接受邀请且 active 非 owner 可退出
 - [x] T027 [US5] `lib/features/account/{change_password_page,account_security_page}.dart`：改密、RFC 6238 TOTP 注册/确认/关闭与鉴权 JSON 数据导出下载
 
 **Checkpoint**: 共享协作与账号安全可用
@@ -94,3 +94,7 @@
 ## Dependencies & Execution Order
 
 Setup → Foundational（阻塞） → US1（MVP） → US2 → US3 → US4 → US5 → US6 → Polish。US2–US6 在 Foundational 完成后原则上可并行，本轮单人按优先级顺序交付。
+
+## 执行证据
+
+- 2026-07-30：T026 按 JDK 25 `zh-cloud-service/develop` 现行协作契约收口。旧 Flutter 使用数字 `userId` 邀请、`owner/member` 角色与 `PUT` 更新，无法匹配服务端 `userMobile + editor/viewer + PATCH`；现已按手机号邀请、显示角色和成员状态、限制 owner 管理入口，并区分接受邀请与主动退出。Dart MCP 定向 11 项与全量 585 项测试通过，25 项受保护真实环境测试按条件跳过，全量静态分析无错误；Service 以 Corretto 25.0.3 执行 `TodoListMemberServiceSyncTest`，4 项通过。真实双账号邀请/权限旅程与 Jenkins 未执行，不把它们记作通过。
