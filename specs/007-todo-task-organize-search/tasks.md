@@ -21,7 +21,7 @@
 - [ ] T011 修改 `lib/features/task/tasks_by_list_page.dart`、`lib/features/filter/filter_bar.dart`、`lib/features/tag/tag_page.dart` 与 `lib/state/providers.dart` 接入 query/batch use-case，使 T010 通过且 Widget 不直接调用 API。
 - [ ] T012 运行 `plan.md` 的低资源命令，把实际命令、fixture 规模、性能测量、失败恢复与未运行的双端旅程写入 Docs #51；未验证条目保持 `partial`。
 - [ ] T013 与 Service #183 对齐请求/响应、分页、排序键、层级错误、批量逐项结果和 mutation 幂等键，并在 Docs #51 链接双方 PR。
-- [ ] T014 补齐总控 B3 的负责人过滤合同：Drift 保存 `assigneeUserId` 与可空展示名，sync pull 可回放，Repository 与高级筛选 UI 可按稳定用户 ID 过滤；Service #183 必须同步返回并校验同一字段后才能结项。
+- [x] T014 补齐总控 B3 的负责人过滤合同：Drift 保存 `assigneeUserId` 与可空展示名，sync pull 可回放，Repository 与高级筛选 UI 可按稳定用户 ID 过滤；Service #183 必须同步返回并校验同一字段后才能结项。
 
 ## 执行证据
 
@@ -42,4 +42,5 @@
 - 2026-07-27：系统化复现后校正两条过期测试契约：智能排序的冻结键为置顶、手工 `sortOrder`、UUID，`updatedAt` 不会使任务移动；标准 `/sync/push` 网络异常进入 `retryable`，`failed` 只用于冲突。两项先单独通过，再执行 `nice -n 19 flutter test --concurrency=1`，实际输出 `348` 项通过、`23` 项受保护 live 用例跳过、`All tests passed!`；未更新 golden。完整本地测试门槛现已满足，但 Jenkins 新构建、移动真机、性能与完整固定 GUI 仍未满足，T012/T013 继续未勾选，B3 保持 `partial/in_progress`。
 - 2026-07-27：T012 补入本机 macOS 文件型 SQLite 的 1,000 条固定任务性能证据。搜索首个结果、优先级过滤排序和三项批量反馈各执行三次，实际为搜索 `1/1/1ms`、过滤 `17/17/17ms`、批量 `14/15/14ms`，均低于 B0 本地优先 `300ms` 预算；测试断言稳定结果、逐项成功及每项上限。完整组织/检索 Repository 21 项、`flutter analyze`、差异检查通过。此条不替代移动端渲染、网络或 Service P95，T012/T013 仍保持未勾选，B3 继续 `partial/in_progress`。
 - 2026-07-30：T014 的 Flutter 可独立回滚增量按红绿闭环补齐：Drift schema 14 保存稳定 `assigneeUserId` 与可空展示名，13→14 文件型迁移保留既有任务；sync pull 兼容驼峰/下划线负责人字段，Repository 与高级筛选 UI 均按稳定用户 ID 过滤。负责人 Repository、sync、Widget 与迁移 47 项通过；随后 `flutter test --fail-fast -r expanded` 实际输出 `353` 项通过、`23` 项受保护 live 用例跳过、`All tests passed!`，未更新 golden。Service #183 尚未返回并消费同一字段，Gitea/PR/Jenkins 与真实双端同步也未验证，因此 T014、T012、T013 保持未勾选，B3 继续 `partial/in_progress`。
+- 2026-07-30：在 JDK 25 `zh-cloud-service/develop` 复核 Service #183 的后续合并结果：PR #184 已把 `assigneeUserId` 纳入 task sync payload，push 兼容 camelCase/snake_case，允许清单 owner、active member 与显式清空，并拒绝非 active 成员。执行 `./mvnw -pl yudao-module-todo -am -Dtest=TodoSyncServiceHierarchyTest -Dsurefire.failIfNoSpecifiedTests=false test`，JDK 25 reactor 21 个模块成功，10 项测试通过；Flutter 负责人 Repository、sync、Widget 与迁移定向组 59 项通过。至此 Flutter 与 Service 的稳定负责人 ID 返回、校验、缓存、回放和筛选合同均满足，T014 结项；Service #183 的其它 B3 范围及 T012/T013 外部旅程仍保持未完成。
 - 2026-07-30：高级截止日期过滤与 `dueDate` 排序补充固定时区红绿测试。日期范围按任务 IANA 墙钟的日历日做包含式比较，排序按用户实际看到的墙钟时刻稳定执行；不再用原始 UTC 瞬时与日期选择器的本地零点直接比较。此增量不替代真实双端同步、移动设备和 Service 查询契约，T012/T013 保持未勾选。
