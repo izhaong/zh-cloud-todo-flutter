@@ -845,39 +845,134 @@ class TaskRepository {
     return result;
   }
 
-  Future<void> reparent(String taskId, String? newParentId) => _db.transaction(
-    () async {
-      if (taskId == newParentId) {
-        throw ArgumentError.value(newParentId, 'newParentId', '任务不能引用自身');
+  Future<void> reparent(String taskId, String? newParentId) =>
+      _db.transaction(() => _reparentWithinTransaction(taskId, newParentId));
+
+  /// 将任务缩进为同层前序任务的直接子任务。
+  Future<void> indent(String taskId, String previousSiblingId) =>
+      _db.transaction(() async {
+        final task = await _taskOrThrow(taskId);
+        final previousSibling = await _taskOrThrow(previousSiblingId);
+        if (task.listId != previousSibling.listId ||
+            task.parentTaskId != previousSibling.parentTaskId) {
+          throw StateError('缩进目标必须是同层任务');
+        }
+        await _reparentWithinTransaction(taskId, previousSiblingId);
+      });
+
+  /// 将任务提升一级，成为原父任务的同层任务。
+  Future<void> outdent(String taskId) => _db.transaction(() async {
+    final task = await _taskOrThrow(taskId);
+    final parentId = task.parentTaskId;
+    if (parentId == null) {
+      throw StateError('顶层任务不能反缩进');
+    }
+    final parent = await _taskOrThrow(parentId);
+    await _reparentWithinTransaction(taskId, parent.parentTaskId);
+  });
+
+  /// 解除任务与父任务的关联；顶层任务调用时保持无副作用。
+  Future<void> detach(String taskId) => _db.transaction(() async {
+    final task = await _taskOrThrow(taskId);
+    if (task.parentTaskId == null) return;
+    await _reparentWithinTransaction(taskId, null);
+  });
+
+  /// 对同一清单、同一父节点下的全部直接子任务做确定性手工排序。
+  Future<void> reorderSiblings({
+    required String listId,
+    required String? parentTaskId,
+    required List<String> orderedTaskIds,
+  }) async {
+    if (orderedTaskIds.toSet().length != orderedTaskIds.length) {
+      throw ArgumentError.value(orderedTaskIds, 'orderedTaskIds', '不能包含重复任务');
+    }
+    await _db.transaction(() async {
+      await _requireWritableList(listId);
+      if (parentTaskId != null) {
+        final parent = await _taskOrThrow(parentTaskId);
+        if (parent.listId != listId) {
+          throw ArgumentError.value(
+            parentTaskId,
+            'parentTaskId',
+            '父任务必须属于同一清单',
+          );
+        }
       }
-      final task = await (_db.select(
-        _db.todoTasks,
-      )..where((row) => row.id.equals(taskId))).getSingleOrNull();
-      if (task == null) {
-        throw StateError('任务不存在');
+      final query = _db.select(_db.todoTasks)
+        ..where((row) {
+          final sameList = row.listId.equals(listId);
+          final sameParent = parentTaskId == null
+              ? row.parentTaskId.isNull()
+              : row.parentTaskId.equals(parentTaskId);
+          return sameList & sameParent;
+        });
+      final siblings = await query.get();
+      final siblingIds = siblings.map((task) => task.id).toSet();
+      if (orderedTaskIds.length != siblings.length ||
+          !siblingIds.containsAll(orderedTaskIds)) {
+        throw ArgumentError.value(
+          orderedTaskIds,
+          'orderedTaskIds',
+          '必须包含同一父任务下的全部直接子任务',
+        );
       }
-      await _requireWritableList(task.listId);
-      await _assertParentChainDoesNotContain(taskId, task.listId, newParentId);
-      final newTaskDepth = newParentId == null
-          ? 0
-          : await depthOf(newParentId) + 1;
-      final subtreeDepth = await _maxDescendantDepth(taskId);
-      if (newTaskDepth + subtreeDepth > 5) {
-        throw StateError('任务层级不能超过五级');
+      final byId = {for (final sibling in siblings) sibling.id: sibling};
+      final now = DateTime.now();
+      for (final entry in orderedTaskIds.indexed) {
+        final task = byId[entry.$2]!;
+        await (_db.update(
+          _db.todoTasks,
+        )..where((row) => row.id.equals(task.id))).write(
+          TodoTasksCompanion(sortOrder: Value(entry.$1), updatedAt: Value(now)),
+        );
+        final updated = task.copyWith(sortOrder: entry.$1, updatedAt: now);
+        await _queue.enqueue(
+          entity: SyncEntities.task,
+          op: SyncOps.upsert,
+          localId: updated.id,
+          serverId: updated.serverId,
+          payload: _taskPayload(updated),
+        );
       }
-      await _db.reparentTask(taskId, newParentId);
-      final row = await (_db.select(
-        _db.todoTasks,
-      )..where((t) => t.id.equals(taskId))).getSingle();
-      await _queue.enqueue(
-        entity: SyncEntities.task,
-        op: SyncOps.upsert,
-        localId: taskId,
-        serverId: row.serverId,
-        payload: _taskPayload(row),
-      );
-    },
-  );
+    });
+  }
+
+  Future<TodoTask> _taskOrThrow(String taskId) async {
+    final task = await (_db.select(
+      _db.todoTasks,
+    )..where((row) => row.id.equals(taskId))).getSingleOrNull();
+    if (task == null) throw StateError('任务不存在');
+    return task;
+  }
+
+  Future<void> _reparentWithinTransaction(
+    String taskId,
+    String? newParentId,
+  ) async {
+    if (taskId == newParentId) {
+      throw ArgumentError.value(newParentId, 'newParentId', '任务不能引用自身');
+    }
+    final task = await _taskOrThrow(taskId);
+    await _requireWritableList(task.listId);
+    await _assertParentChainDoesNotContain(taskId, task.listId, newParentId);
+    final newTaskDepth = newParentId == null
+        ? 0
+        : await depthOf(newParentId) + 1;
+    final subtreeDepth = await _maxDescendantDepth(taskId);
+    if (newTaskDepth + subtreeDepth > 5) {
+      throw StateError('任务层级不能超过五级');
+    }
+    await _db.reparentTask(taskId, newParentId);
+    final row = await _taskOrThrow(taskId);
+    await _queue.enqueue(
+      entity: SyncEntities.task,
+      op: SyncOps.upsert,
+      localId: taskId,
+      serverId: row.serverId,
+      payload: _taskPayload(row),
+    );
+  }
 
   Future<int> _maxDescendantDepth(String taskId) async {
     var maximumDepth = 0;

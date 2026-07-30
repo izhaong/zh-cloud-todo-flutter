@@ -957,7 +957,10 @@ class AppDatabase extends _$AppDatabase {
   Future<List<TodoTask>> childrenOf(String parentTaskId) {
     return (select(todoTasks)
           ..where((t) => t.parentTaskId.equals(parentTaskId))
-          ..orderBy([(t) => OrderingTerm(expression: t.createdAt)]))
+          ..orderBy([
+            (t) => OrderingTerm(expression: t.sortOrder),
+            (t) => OrderingTerm(expression: t.id),
+          ]))
         .get();
   }
 
@@ -965,7 +968,10 @@ class AppDatabase extends _$AppDatabase {
   Stream<List<TodoTask>> watchChildrenOf(String parentTaskId) {
     return (select(todoTasks)
           ..where((t) => t.parentTaskId.equals(parentTaskId))
-          ..orderBy([(t) => OrderingTerm(expression: t.createdAt)]))
+          ..orderBy([
+            (t) => OrderingTerm(expression: t.sortOrder),
+            (t) => OrderingTerm(expression: t.id),
+          ]))
         .watch();
   }
 
