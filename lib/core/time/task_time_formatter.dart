@@ -72,6 +72,41 @@ DateTime taskWallClockDateTime(
   );
 }
 
+/// Converts a user-selected wall clock back to the stored task instant.
+///
+/// Fixed IANA zones return UTC so DST offsets are resolved by the timezone
+/// database. Floating or invalid historical zones remain device-local.
+DateTime taskDateTimeFromWallClock(
+  DateTime wallClock, {
+  required bool fixedTimezone,
+  required String? timeZone,
+}) {
+  final location = _fixedLocation(fixedTimezone, timeZone);
+  if (location != null) {
+    return timezone.TZDateTime(
+      location,
+      wallClock.year,
+      wallClock.month,
+      wallClock.day,
+      wallClock.hour,
+      wallClock.minute,
+      wallClock.second,
+      wallClock.millisecond,
+      wallClock.microsecond,
+    ).toUtc();
+  }
+  return DateTime(
+    wallClock.year,
+    wallClock.month,
+    wallClock.day,
+    wallClock.hour,
+    wallClock.minute,
+    wallClock.second,
+    wallClock.millisecond,
+    wallClock.microsecond,
+  );
+}
+
 /// Moves an instant to [day] while preserving its presented wall-clock time.
 DateTime taskDateTimeForDisplayDay(
   DateTime instant,
