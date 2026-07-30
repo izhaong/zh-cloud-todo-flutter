@@ -616,7 +616,9 @@ class SyncCoordinator {
           final tag = await (db.select(
             db.todoTags,
           )..where((t) => t.id.equals(localTagId))).getSingleOrNull();
-          resolvedTagIds.add(tag?.serverId ?? -(++_tempIdSeq));
+          resolvedTagIds.add(
+            tag?.serverId ?? _temporaryEntityId(SyncEntities.tag, localTagId),
+          );
         }
         resolved['tagIds'] = resolvedTagIds;
       }

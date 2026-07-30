@@ -10,8 +10,10 @@ import 'package:zh_cloud_todo_flutter/core/api/sync_api.dart';
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_coordinator.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/list_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/tag_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_query_repository.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/task_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_sort_preference_repository.dart';
 
 void main() {
@@ -94,6 +96,80 @@ void main() {
       expect(change['entityType'], 'task_tag');
       expect(change['payload']?['taskId'], 101);
       expect(change['payload']?['tagIds'], [201]);
+    },
+  );
+
+  test(
+    'same batch task-tag reuses unsynced task and tag temporary IDs',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final queue = SyncChangeQueue(db);
+      final list = await ListRepository(db, queue).create(name: '项目');
+      final task = await TaskRepository(
+        db,
+        queue,
+      ).create(listId: list.id, title: '整理项目标签');
+      final tag = await TagRepository(db, queue).create(name: '工作');
+      await TagRepository(db, queue).setTaskTags(task.id, [tag.id]);
+
+      List<Map<String, dynamic>> sentChanges = const [];
+      final dio = Dio()
+        ..interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (options, handler) {
+              sentChanges = ((options.data as Map)['changes'] as List)
+                  .cast<Map>()
+                  .map((entry) => entry.cast<String, dynamic>())
+                  .toList();
+              handler.resolve(
+                Response<Map<String, dynamic>>(
+                  requestOptions: options,
+                  data: {
+                    'code': 0,
+                    'data': {
+                      'ok': true,
+                      'accepted': [
+                        for (final change in sentChanges)
+                          {
+                            'entityType': change['entityType'],
+                            'entityId': switch (change['entityType']) {
+                              'list' => 101,
+                              'tag' => 201,
+                              'task' => 301,
+                              _ => 401,
+                            },
+                            'operation': change['operation'],
+                            'clientMutationId': change['clientMutationId'],
+                          },
+                      ],
+                      'conflicts': const [],
+                    },
+                  },
+                ),
+              );
+            },
+          ),
+        );
+      final client = ApiClient(dio: dio);
+      final coordinator = SyncCoordinator(
+        db: db,
+        api: SyncApi(client, clientId: 'device-a', deviceId: 'device-a'),
+        todoApi: client,
+      );
+
+      expect(await coordinator.push(), 4);
+      final taskChange = sentChanges.singleWhere(
+        (change) => change['entityType'] == 'task',
+      );
+      final tagChange = sentChanges.singleWhere(
+        (change) => change['entityType'] == 'tag',
+      );
+      final taskTagChange = sentChanges.singleWhere(
+        (change) => change['entityType'] == 'task_tag',
+      );
+      expect(taskTagChange['payload']['taskId'], taskChange['entityId']);
+      expect(taskTagChange['payload']['tagIds'], [tagChange['entityId']]);
     },
   );
 
