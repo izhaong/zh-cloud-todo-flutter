@@ -6,12 +6,32 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
+import 'package:zh_cloud_todo_flutter/core/time/task_time_formatter.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/reminder_dispatch_action_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/reminder_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/repeat_rule_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_repository.dart';
 
 void main() {
+  test('fixed timezone wall clock converts through the active DST offset', () {
+    expect(
+      taskDateTimeFromWallClock(
+        DateTime(2026, 10, 31, 9),
+        fixedTimezone: true,
+        timeZone: 'America/Los_Angeles',
+      ),
+      DateTime.utc(2026, 10, 31, 16),
+    );
+    expect(
+      taskDateTimeFromWallClock(
+        DateTime(2026, 11, 1, 9),
+        fixedTimezone: true,
+        timeZone: 'America/Los_Angeles',
+      ),
+      DateTime.utc(2026, 11, 1, 17),
+    );
+  });
+
   test('rejects an end time that is not after the start time', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);

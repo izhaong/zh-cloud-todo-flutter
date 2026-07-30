@@ -163,6 +163,74 @@ void main() {
     },
   );
 
+  testWidgets(
+    'detail fixed timezone picker round-trips the configured wall clock',
+    (tester) async {
+      final fixture = await TodoVisualFixture.create();
+      addTearDown(fixture.dispose);
+      final originalDueAt = DateTime.utc(2026, 7, 11, 16, 30);
+      await (fixture.database.update(
+        fixture.database.todoTasks,
+      )..where((task) => task.id.equals(_taskId))).write(
+        TodoTasksCompanion(
+          dueAt: Value(originalDueAt),
+          timeZone: const Value('America/Los_Angeles'),
+          fixedTimezone: const Value(true),
+        ),
+      );
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: fixture.container,
+          child: MaterialApp(
+            theme: ThemeData.light().copyWith(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(alwaysUse24HourFormat: true),
+              child: child!,
+            ),
+            home: const Scaffold(
+              body: TaskDetailPane(taskId: _taskId, embedded: true),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _openScheduleOptions(tester);
+
+      await tester.tap(find.byKey(const Key('task-due-at')));
+      await tester.pumpAndSettle();
+      expect(find.byType(DatePickerDialog), findsOneWidget);
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TimePickerDialog), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(TimePickerDialog),
+          matching: find.text('09'),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+
+      await _closeScheduleOptions(tester);
+      final detailScroll = find.byType(Scrollable).last;
+      await tester.drag(detailScroll, const Offset(0, 1000));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('保存'));
+      await tester.pumpAndSettle();
+
+      final task = await fixture.container
+          .read(taskRepositoryProvider)!
+          .getById(_taskId);
+      expect(task?.dueAt?.isAtSameMomentAs(originalDueAt), isTrue);
+    },
+  );
+
   testWidgets('detail creates a due reminder through reminder repository', (
     tester,
   ) async {

@@ -1449,24 +1449,38 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
   }
 
   Future<DateTime?> _pickDateTime(TodoTask t, DateTime now) async {
+    final initialWallClock = taskWallClockDateTime(
+      now,
+      allDay: _allDay,
+      fixedTimezone: _fixedTimezone,
+      timeZone: _timeZone,
+    );
     final date = await showDatePicker(
       context: context,
-      initialDate: now,
-      firstDate: DateTime(now.year - 1),
-      lastDate: DateTime(now.year + 5),
+      initialDate: initialWallClock,
+      firstDate: DateTime(initialWallClock.year - 1),
+      lastDate: DateTime(initialWallClock.year + 5),
     );
     if (date == null || !mounted || widget.taskId != t.id) return null;
+    if (_allDay) {
+      return DateTime(date.year, date.month, date.day);
+    }
     final timeOfDay = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay.fromDateTime(now),
+      initialTime: TimeOfDay.fromDateTime(initialWallClock),
     );
     if (!_isCurrentTask(t.id)) return null;
-    return DateTime(
+    final wallClock = DateTime(
       date.year,
       date.month,
       date.day,
-      timeOfDay?.hour ?? now.hour,
-      timeOfDay?.minute ?? now.minute,
+      timeOfDay?.hour ?? initialWallClock.hour,
+      timeOfDay?.minute ?? initialWallClock.minute,
+    );
+    return taskDateTimeFromWallClock(
+      wallClock,
+      fixedTimezone: _fixedTimezone,
+      timeZone: _timeZone,
     );
   }
 
