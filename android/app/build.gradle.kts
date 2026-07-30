@@ -41,7 +41,8 @@ android {
 }
 
 dependencies {
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:1.2.2")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+    testImplementation(kotlin("test"))
 }
 
 flutter {

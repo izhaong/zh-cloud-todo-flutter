@@ -1,7 +1,7 @@
 /// 原生增强的 Dart 侧 platform channel 契约与安全降级入口。
 ///
-/// Android / iOS 等平台侧 handler 尚未注册，因此当前调用会返回“不支持”
-/// 或空结果；原生实现接入后必须继续保持这里的参数与返回值契约。
+/// Android 已实现冷启动 URL Scheme、系统分享与可用时创建系统便签；
+/// iOS、锁屏任务和真实桌面小组件等尚未接入的能力仍返回“不支持”或空结果。
 library;
 
 import 'package:flutter/services.dart';

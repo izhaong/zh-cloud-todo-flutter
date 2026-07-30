@@ -8,6 +8,7 @@
 
 ## 执行证据
 
+- 2026-07-31：T004 增加 Android 原生通道局部闭环。先新增 `NativeIntentContractTest`，在 JDK 17 下确认因合同实现缺失而编译失败；最小实现后又由非法 URI 触发 `URISyntaxException` 的失败测试发现并修正异常边界。Lint 随后识别出 `ACTION_CREATE_NOTE` 仅适用于 API 34+，新增失败测试并让旧系统明确降级。Flutter 引擎源码审查又确认默认 deep-link 接管为 `true`，会与自定义通道重复消费，新增 Manifest 失败测试后显式关闭默认接管。最终 4 项 JVM 合同测试与 1 项 Manifest 合同测试通过。Android `MainActivity` 现注册 `zh_cloud_todo/native`，消费一次合法 `zhcloudtodo://task/add` 冷启动链接，支持非空文本系统分享，并仅在 API 34+ 且系统可解析便签 action 时创建便签；Manifest 已注册精确 Scheme/host/path。Android Lint 还发现 compileSdk 35+ 与旧 `desugar_jdk_libs:1.2.2` 组合存在运行时崩溃风险，已按诊断升级至 2.1.5；复跑 Lint 为 0 error（保留 2 个既有 warning），debug APK 构建成功。锁屏任务和桌面小组件继续 `notImplemented`，没有伪造成功。T004/T005 保持未勾选：尚无 Android 设备旅程、热启动事件回传、真实 Widget/锁屏 renderer、iOS handler、固定多端无障碍与完整视觉验收。
 - 2026-07-30：T004 的推荐并发刷新可靠性增量完成红绿闭环。可控阻塞 API 的 Widget 失败测试先复现初始化刷新未结束时连续点击会把请求数从 1 增至 3，存在旧响应覆盖新缓存/状态的风险；实现后同一 `RecommendationPanel` 复用进行中的刷新 Future，请求完成才释放下一次刷新，测试同时证明完成后仍可正常发起第 2 次请求。T004 保持未勾选：桌面/移动人工无障碍、真实断网、第二设备和完整固定旅程尚未执行。
 - 2026-07-30：T004 的推荐恢复反馈与语义隔离增量完成红绿闭环。旧实现刷新失败仅静默保留 Drift 缓存，面板容器还会把标题、刷新按钮、失败状态和任务项合并成单一可点击语义节点；新增失败测试先分别复现“无恢复反馈”和“语义节点合并”。实现后刷新失败会继续显示缓存，并用独立 live region 播报“刷新推荐任务失败，已保留上次结果”；重试成功清除失败状态。面板声明显式子语义节点，刷新按钮和每条推荐任务可独立导航。`recommendation_panel_test.dart` 3 项通过。T004 仍未勾选：桌面/移动人工无障碍、真实断网、第二设备和完整固定旅程尚未执行。
 - 2026-07-30：清理不可达的原生增强演示页并从设置页提供真实入口；今日、重要和置顶任务改为消费当前账号 Drift 数据，锁屏通道只接收已同步的服务端 ID，离线重要任务只显示数量而不伪造 ID。平台通道未注册时五类调用安全降级。Dart MCP 定向 5 项和全量 582 项测试通过，25 项受保护真实环境测试按条件跳过；全量静态分析无错误。Android/iOS 等平台侧真实 Widget、Share 与 URL Scheme handler 仍未实现，因此本次不把原生系统能力计作完成，T004/T005 保持未勾选。
