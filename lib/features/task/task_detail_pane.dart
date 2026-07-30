@@ -1878,6 +1878,14 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                                 'task-repeat-selected-date-${_formatDateOnly(date)}',
                               ),
                               label: Text(_formatDateOnly(date)),
+                              deleteIcon: Icon(
+                                Icons.cancel,
+                                key: Key(
+                                  'task-repeat-selected-date-delete-${_formatDateOnly(date)}',
+                                ),
+                              ),
+                              deleteButtonTooltipMessage:
+                                  '删除 ${_formatDateOnly(date)}',
                               onDeleted: () => setDialogState(
                                 () => selectedDates.remove(date),
                               ),
