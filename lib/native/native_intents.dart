@@ -142,4 +142,24 @@ class NativeIntents {
       return const [];
     }
   }
+
+  /// 把 Flutter 当前账号 Drift 中的真实今日任务投影写入原生桌面小组件。
+  static Future<bool> updateTodayWidgetSnapshot(Iterable<String> titles) async {
+    final tasks = titles
+        .map((title) => title.trim())
+        .where((title) => title.isNotEmpty)
+        .take(5)
+        .map((title) => {'title': title})
+        .toList(growable: false);
+    try {
+      await _channel.invokeMethod('updateTodayWidgetSnapshot', {
+        'tasks': tasks,
+      });
+      return true;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
 }

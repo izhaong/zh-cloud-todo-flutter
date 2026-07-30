@@ -231,6 +231,17 @@ class _NativeEntryPageState extends ConsumerState<NativeEntryPage> {
               ),
               const SizedBox(height: 24),
               _SectionTitle('桌面小组件数据预览'),
+              FilledButton.icon(
+                icon: const Icon(Icons.widgets_outlined),
+                label: Text('更新桌面小组件（${projection.todayTasks.length}）'),
+                onPressed: () async {
+                  final ok = await NativeIntents.updateTodayWidgetSnapshot(
+                    projection.todayTasks.map((task) => task.title),
+                  );
+                  _toast(ok ? '桌面小组件已更新' : '不支持当前平台');
+                },
+              ),
+              const SizedBox(height: 8),
               if (projection.todayTasks.isEmpty)
                 const Padding(padding: EdgeInsets.all(8), child: Text('今天暂无任务'))
               else

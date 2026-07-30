@@ -1,12 +1,15 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zh_cloud_todo_flutter/state/session_state.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   const persistedSession = TodoAuthSession(
     userId: 1,
     accessToken: 'persisted-access-token',
@@ -44,22 +47,24 @@ void main() {
     },
   );
 
-  test('bootstrap can construct the production auth gateway without a cycle',
-      () async {
-    final store = _MemorySessionStore(persistedSession);
-    final container = ProviderContainer(
-      overrides: [
-        sessionStoreProvider.overrideWithValue(store),
-        sessionValidationTimeoutProvider.overrideWithValue(Duration.zero),
-      ],
-    );
-    addTearDown(container.dispose);
+  test(
+    'bootstrap can construct the production auth gateway without a cycle',
+    () async {
+      final store = _MemorySessionStore(persistedSession);
+      final container = ProviderContainer(
+        overrides: [
+          sessionStoreProvider.overrideWithValue(store),
+          sessionValidationTimeoutProvider.overrideWithValue(Duration.zero),
+        ],
+      );
+      addTearDown(container.dispose);
 
-    await container.read(sessionProvider.notifier).bootstrap();
+      await container.read(sessionProvider.notifier).bootstrap();
 
-    expect(container.read(sessionProvider), persistedSession);
-    expect(store.cleared, isFalse);
-  });
+      expect(container.read(sessionProvider), persistedSession);
+      expect(store.cleared, isFalse);
+    },
+  );
 
   test(
     'a stalled validation releases the persisted session for offline boot',
@@ -99,6 +104,33 @@ void main() {
     expect(container.read(sessionProvider), isNull);
     expect(store.cleared, isTrue);
     expect(container.read(sessionBootstrappedProvider), isTrue);
+  });
+
+  test('sign out clears the persisted native widget snapshot', () async {
+    const channel = MethodChannel('zh_cloud_todo/native');
+    MethodCall? received;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          received = call;
+          return null;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        sessionStoreProvider.overrideWithValue(_MemorySessionStore()),
+        authGatewayProvider.overrideWithValue(_FakeAuthGateway()),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await container.read(sessionProvider.notifier).setSession(persistedSession);
+    await container.read(sessionProvider.notifier).signOut();
+
+    expect(received?.method, 'updateTodayWidgetSnapshot');
+    expect(received?.arguments, {'tasks': <Object>[]});
   });
 }
 
@@ -154,7 +186,7 @@ class _FakeAuthGateway implements AuthGateway {
 }
 
 class _MemorySessionStore extends SessionStore {
-  _MemorySessionStore(this.session);
+  _MemorySessionStore([this.session]);
 
   TodoAuthSession? session;
   bool cleared = false;

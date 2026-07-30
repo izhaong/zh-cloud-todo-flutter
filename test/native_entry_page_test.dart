@@ -66,6 +66,7 @@ void main() {
     expect(await NativeIntents.setStickyNote('今日重点'), isFalse);
     expect(await NativeIntents.pushLockScreenTasks([101]), isFalse);
     expect(await NativeIntents.widgetTodaySnapshot(), isEmpty);
+    expect(await NativeIntents.updateTodayWidgetSnapshot(['今日任务']), isFalse);
   });
 
   test('今日投影按任务固定时区的墙上日期归组', () {
@@ -131,6 +132,56 @@ void main() {
     expect(received?.method, 'pushLockScreenTasks');
     expect(received?.arguments, {
       'ids': [201],
+    });
+  });
+
+  testWidgets('原生增强页把真实今日任务快照更新到桌面小组件', (tester) async {
+    const channel = MethodChannel('zh_cloud_todo/native');
+    MethodCall? received;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+      call,
+    ) async {
+      received = call;
+      return null;
+    });
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        null,
+      ),
+    );
+
+    final tasks = [
+      _task(
+        id: 'today-widget',
+        title: '更新桌面小组件',
+        dueAt: DateTime(2026, 7, 30, 18),
+      ),
+    ];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          currentDateTimeProvider.overrideWithValue(
+            () => DateTime(2026, 7, 30, 9),
+          ),
+        ],
+        child: MaterialApp(
+          home: NativeEntryPage(taskStream: Stream.value(tasks)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(ListView), const Offset(0, -1000));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '更新桌面小组件（1）'));
+    await tester.pumpAndSettle();
+
+    expect(received?.method, 'updateTodayWidgetSnapshot');
+    expect(received?.arguments, {
+      'tasks': [
+        {'title': '更新桌面小组件'},
+      ],
     });
   });
 

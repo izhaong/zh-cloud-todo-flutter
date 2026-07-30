@@ -54,9 +54,25 @@ class MainActivity : FlutterActivity() {
                     }
                 }
 
-                "pushLockScreenTasks",
-                "widgetTodaySnapshot",
-                -> result.notImplemented()
+                "updateTodayWidgetSnapshot" -> {
+                    val tasks = NativeIntentContract.todayWidgetTasks(call.arguments)
+                    if (tasks == null) {
+                        result.error("invalid_arguments", "桌面小组件任务快照无效", null)
+                    } else {
+                        TodayTasksWidgetStore.save(this, tasks)
+                        TodayTasksWidgetProvider.updateAll(this)
+                        result.success(null)
+                    }
+                }
+
+                "widgetTodaySnapshot" ->
+                    result.success(
+                        TodayTasksWidgetStore
+                            .load(this)
+                            .map { mapOf("title" to it.title) },
+                    )
+
+                "pushLockScreenTasks" -> result.notImplemented()
 
                 else -> result.notImplemented()
             }
