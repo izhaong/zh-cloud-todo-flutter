@@ -78,6 +78,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   bool _batchApplying = false;
   String? _batchSelectionAnchorTaskId;
   final Set<String> _batchSelectedTaskIds = <String>{};
+  int _viewRestoreRevision = 0;
 
   @override
   void initState() {
@@ -94,24 +95,34 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   @override
   void didUpdateWidget(covariant TasksByListPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.lockedListId &&
-        widget.initialListId != oldWidget.initialListId) {
+    final listSourceChanged =
+        widget.lockedListId && widget.initialListId != oldWidget.initialListId;
+    final filterSourceChanged =
+        widget.initialDueRange != oldWidget.initialDueRange ||
+        widget.initialCompleted != oldWidget.initialCompleted;
+    if (listSourceChanged || filterSourceChanged) {
+      _viewRestoreRevision++;
       setState(() {
-        _selectedListId = widget.initialListId;
-        _batchSelectionActive = false;
-        _batchSelectionAnchorTaskId = null;
-        _batchSelectedTaskIds.clear();
+        if (listSourceChanged) {
+          _selectedListId = widget.initialListId;
+          _batchSelectionActive = false;
+          _batchSelectionAnchorTaskId = null;
+          _batchSelectedTaskIds.clear();
+        }
+        if (filterSourceChanged) {
+          _filter = TaskFilter(
+            dueRange: widget.initialDueRange,
+            completed: widget.initialCompleted,
+          );
+        }
+        _mode = TaskViewMode.list;
       });
+    }
+    if (listSourceChanged) {
       Future<void>.microtask(_restoreSortPreference);
     }
-    if (widget.initialDueRange != oldWidget.initialDueRange ||
-        widget.initialCompleted != oldWidget.initialCompleted) {
-      setState(() {
-        _filter = TaskFilter(
-          dueRange: widget.initialDueRange,
-          completed: widget.initialCompleted,
-        );
-      });
+    if (listSourceChanged || filterSourceChanged) {
+      Future<void>.microtask(_restoreViewPreference);
     }
   }
 
@@ -326,15 +337,21 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   }
 
   Future<void> _restoreViewPreference() async {
+    final revision = ++_viewRestoreRevision;
     final repository = ref.read(taskViewActionRepositoryProvider);
-    final savedMode = await repository?.getTaskWorkspaceViewMode();
-    if (!mounted || savedMode == null) return;
-    for (final mode in TaskViewMode.values) {
-      if (mode.name == savedMode) {
-        setState(() => _mode = mode);
-        return;
-      }
+    final sourceKey = _viewPreferenceSourceKey;
+    final savedMode = await repository?.getTaskWorkspaceViewMode(
+      sourceKey: sourceKey,
+    );
+    if (!mounted ||
+        sourceKey != _viewPreferenceSourceKey ||
+        revision != _viewRestoreRevision) {
+      return;
     }
+    final restoredMode = TaskViewMode.values
+        .where((mode) => mode.name == savedMode)
+        .firstOrNull;
+    setState(() => _mode = restoredMode ?? TaskViewMode.list);
   }
 
   Future<void> _changeSort(TaskSort sort) async {
@@ -352,6 +369,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   }
 
   Future<void> _changeMode(TaskViewMode mode) async {
+    _viewRestoreRevision++;
     setState(() {
       _mode = mode;
       _batchSelectionActive = false;
@@ -361,13 +379,25 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     final repository = ref.read(taskViewActionRepositoryProvider);
     if (repository == null) return;
     try {
-      await repository.saveTaskWorkspaceViewMode(mode.name);
+      await repository.saveTaskWorkspaceViewMode(
+        sourceKey: _viewPreferenceSourceKey,
+        viewType: mode.name,
+      );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('视图设置保存失败，请重试')));
     }
+  }
+
+  String get _viewPreferenceSourceKey {
+    final listId = _selectedListId;
+    if (listId != null) return 'list:$listId';
+    if (widget.initialCompleted == true) return 'smart:completed';
+    final dueRange = widget.initialDueRange;
+    if (dueRange != null && dueRange.isNotEmpty) return 'smart:due:$dueRange';
+    return 'smart:all';
   }
 
   void _toggleBatchSelection() {

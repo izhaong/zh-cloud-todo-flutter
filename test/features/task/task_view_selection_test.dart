@@ -1,10 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
+import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
 import 'package:zh_cloud_todo_flutter/core/theme/app_theme.dart';
 import 'package:zh_cloud_todo_flutter/features/home/home_shell.dart';
 import 'package:zh_cloud_todo_flutter/features/task/view_mode.dart';
+import 'package:zh_cloud_todo_flutter/state/providers.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/task_view_action_repository.dart';
 
 import '../../support/todo_visual_fixture.dart';
 import '../../support/todo_visual_test_harness.dart';
@@ -41,7 +47,7 @@ void main() {
           .where(
             (row) =>
                 row.sourceType == 'task_view' &&
-                row.sourceKey == 'tasks_by_list',
+                row.sourceKey == 'list:${TodoVisualFixture.inboxListId}',
           )
           .firstOrNull;
       final queued = await (fixture.database.select(
@@ -54,6 +60,50 @@ void main() {
       expect(queued.single.entityLocalId, preference.id);
     },
   );
+
+  testWidgets('workspace view mode is isolated by list source', (tester) async {
+    await _pumpWorkspace(tester);
+
+    await _switchWorkspaceMode(tester, TaskViewMode.kanban);
+    expect(find.text('未开始'), findsOneWidget);
+
+    final personalList = find.byKey(
+      const ValueKey('todo-sidebar-list-${TodoVisualFixture.personalListId}'),
+    );
+    await tester.scrollUntilVisible(
+      personalList,
+      300,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const Key('todo-sidebar')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.tap(personalList);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ReorderableListView), findsOneWidget);
+    expect(find.text('未开始'), findsNothing);
+
+    await _switchWorkspaceMode(tester, TaskViewMode.timeline);
+    final inbox = find.byKey(const Key('todo-sidebar-row-inbox'));
+    await tester.scrollUntilVisible(
+      inbox,
+      -300,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const Key('todo-sidebar')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.tap(inbox);
+    await tester.pumpAndSettle();
+
+    expect(find.text('未开始'), findsOneWidget);
+    expect(find.byType(ReorderableListView), findsNothing);
+  });
 
   testWidgets('workspace restores the persisted mode after remount', (
     tester,
@@ -79,6 +129,81 @@ void main() {
 
     expect(find.text('未开始'), findsOneWidget);
     expect(find.byKey(const Key('task-list-reorderable')), findsNothing);
+  });
+
+  testWidgets('stale A restore cannot overwrite the latest A after A-B-A', (
+    tester,
+  ) async {
+    late final _DelayedTaskViewActionRepository repository;
+    final fixture = await TodoVisualFixture.create(
+      set: TodoVisualFixtureSet.populated,
+      overridesBuilder: (db) {
+        repository = _DelayedTaskViewActionRepository(db);
+        return [taskViewActionRepositoryProvider.overrideWithValue(repository)];
+      },
+    );
+    addTearDown(fixture.dispose);
+    tester.view.physicalSize = TodoVisualViewports.wide;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: fixture.container,
+        child: MaterialApp(
+          theme: ThemeData(
+            extensions: const [AppThemeExtension(AppColors.light)],
+          ),
+          home: const HomeShell(),
+        ),
+      ),
+    );
+    await tester.pump();
+    final firstInboxRestore = repository.takeRequest(
+      'list:${TodoVisualFixture.inboxListId}',
+    );
+
+    final personalList = find.byKey(
+      const ValueKey('todo-sidebar-list-${TodoVisualFixture.personalListId}'),
+    );
+    await tester.scrollUntilVisible(
+      personalList,
+      300,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const Key('todo-sidebar')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.tap(personalList);
+    await tester.pump();
+    repository.takeRequest('list:${TodoVisualFixture.personalListId}');
+
+    final inbox = find.byKey(const Key('todo-sidebar-row-inbox'));
+    await tester.scrollUntilVisible(
+      inbox,
+      -300,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const Key('todo-sidebar')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.tap(inbox);
+    await tester.pump();
+    final latestInboxRestore = repository.takeRequest(
+      'list:${TodoVisualFixture.inboxListId}',
+    );
+
+    latestInboxRestore.complete('kanban');
+    await tester.pump();
+    expect(find.text('未开始'), findsOneWidget);
+
+    firstInboxRestore.complete('timeline');
+    await tester.pump();
+    expect(find.text('未开始'), findsOneWidget);
   });
 
   for (final mode in const [
@@ -121,6 +246,41 @@ void main() {
         );
       },
     );
+  }
+}
+
+class _DelayedTaskViewActionRepository extends TaskViewActionRepository {
+  _DelayedTaskViewActionRepository(AppDatabase db)
+    : super(db, SyncChangeQueue(db));
+
+  final Map<String, List<Completer<String?>>> _requests = {};
+
+  @override
+  Future<String?> getTaskWorkspaceViewMode({required String sourceKey}) {
+    final completer = Completer<String?>();
+    _requests.putIfAbsent(sourceKey, () => []).add(completer);
+    return completer.future;
+  }
+
+  @override
+  Future<void> saveTaskWorkspaceViewMode({
+    required String sourceKey,
+    required String viewType,
+  }) async {}
+
+  Completer<String?> takeRequest(String sourceKey) {
+    final requests = _requests[sourceKey];
+    expect(
+      requests,
+      isNotNull,
+      reason: 'missing restore request for $sourceKey',
+    );
+    expect(
+      requests,
+      isNotEmpty,
+      reason: 'missing restore request for $sourceKey',
+    );
+    return requests!.removeAt(0);
   }
 }
 

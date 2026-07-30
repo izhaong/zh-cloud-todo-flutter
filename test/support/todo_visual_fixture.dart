@@ -57,6 +57,7 @@ class TodoVisualFixture {
 
   static Future<TodoVisualFixture> create({
     TodoVisualFixtureSet set = TodoVisualFixtureSet.populated,
+    List<Override> Function(AppDatabase database)? overridesBuilder,
   }) async {
     final fixedNow = DateTime(2026, 7, 11, 9);
     final database = AppDatabase.forTesting(
@@ -86,6 +87,7 @@ class TodoVisualFixture {
           localNotificationServiceProvider.overrideWithValue(
             _NoopLocalNotificationService(),
           ),
+          ...?overridesBuilder?.call(database),
         ],
       );
       return TodoVisualFixture._(

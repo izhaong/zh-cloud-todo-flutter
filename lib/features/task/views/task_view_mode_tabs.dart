@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/brand_colors.dart';
-import '../../../state/providers.dart';
 import '../view_mode.dart';
 
 /// M11-B3 视图切换 5 tab。
@@ -10,8 +8,8 @@ import '../view_mode.dart';
 /// - 5 个 [TaskViewMode] 等宽分布
 /// - 选中态高亮 + 当前模式文本加粗
 /// - 移动端窄屏用 [shortLabel]，长于 5 字保留全称
-/// - 切换后通过 [SyncChangeQueue] 写入 `view_preference` 同步实体（本地 + 跨端）
-class TaskViewModeTabs extends ConsumerStatefulWidget {
+/// - 只上报选择；偏好持久化由父级 Repository/use-case 统一处理
+class TaskViewModeTabs extends StatelessWidget {
   const TaskViewModeTabs({
     super.key,
     required this.mode,
@@ -20,26 +18,6 @@ class TaskViewModeTabs extends ConsumerStatefulWidget {
 
   final TaskViewMode mode;
   final ValueChanged<TaskViewMode> onChanged;
-
-  @override
-  ConsumerState<TaskViewModeTabs> createState() => _TaskViewModeTabsState();
-}
-
-class _TaskViewModeTabsState extends ConsumerState<TaskViewModeTabs> {
-  /// 写入视图偏好到 view_preference 同步实体（sourceType='task_view'）。
-  void _persist(TaskViewMode mode) {
-    final queue = ref.read(syncChangeQueueProvider);
-    if (queue == null) return;
-    queue.enqueue(
-      entity: 'view_preference',
-      op: 'upsert',
-      payload: {
-        'sourceType': 'task_view',
-        'sourceKey': 'tasks_by_list',
-        'viewType': mode.name,
-      },
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,11 +29,8 @@ class _TaskViewModeTabsState extends ConsumerState<TaskViewModeTabs> {
             Expanded(
               child: _TabButton(
                 label: m.label,
-                selected: m == widget.mode,
-                onTap: () {
-                  widget.onChanged(m);
-                  _persist(m);
-                },
+                selected: m == mode,
+                onTap: () => onChanged(m),
               ),
             ),
         ],

@@ -15,6 +15,8 @@ class TaskViewActionRepository {
   TaskViewActionRepository(this._db, this._queue, {Uuid? uuid})
     : _uuid = uuid ?? const Uuid();
 
+  static const _legacyTaskWorkspaceSourceKey = 'tasks_by_list';
+
   final AppDatabase _db;
   final SyncChangeQueue _queue;
   final Uuid _uuid;
@@ -23,18 +25,26 @@ class TaskViewActionRepository {
   ///
   /// 视图切换同样属于离线优先写链路：先以 source type/key 落入 Drift，
   /// 再引用同一条本地记录入队，不能由 Widget 直接拼 outbox payload。
-  Future<void> saveTaskWorkspaceViewMode(String viewType) async {
+  Future<void> saveTaskWorkspaceViewMode({
+    required String sourceKey,
+    required String viewType,
+  }) async {
     return _saveViewPreference(
       sourceType: 'task_view',
-      sourceKey: 'tasks_by_list',
+      sourceKey: sourceKey,
       viewType: viewType,
     );
   }
 
-  Future<String?> getTaskWorkspaceViewMode() {
+  Future<String?> getTaskWorkspaceViewMode({required String sourceKey}) async {
+    final scoped = await _getViewPreference(
+      sourceType: 'task_view',
+      sourceKey: sourceKey,
+    );
+    if (scoped != null || sourceKey != 'list:inbox') return scoped;
     return _getViewPreference(
       sourceType: 'task_view',
-      sourceKey: 'tasks_by_list',
+      sourceKey: _legacyTaskWorkspaceSourceKey,
     );
   }
 
@@ -58,6 +68,9 @@ class TaskViewActionRepository {
     required String sourceKey,
     required String viewType,
   }) async {
+    if (sourceKey.trim().isEmpty) {
+      throw ArgumentError.value(sourceKey, 'sourceKey', '来源不能为空');
+    }
     if (viewType.trim().isEmpty) {
       throw ArgumentError.value(viewType, 'viewType', '视图类型不能为空');
     }

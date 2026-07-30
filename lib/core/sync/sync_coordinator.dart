@@ -515,6 +515,20 @@ class SyncCoordinator {
             _temporaryEntityId(SyncEntities.list, localListId);
       }
     }
+    if (entity == SyncEntities.viewPreference &&
+        resolved['sourceType'] == 'task_view') {
+      final sourceKey = resolved['sourceKey']?.toString();
+      if (sourceKey != null &&
+          sourceKey.startsWith('list:') &&
+          sourceKey != 'list:inbox') {
+        final localListId = sourceKey.substring('list:'.length);
+        final list = await (db.select(
+          db.todoLists,
+        )..where((row) => row.id.equals(localListId))).getSingleOrNull();
+        if (list?.serverId == null) return null;
+        resolved['sourceKey'] = 'list-server:${list!.serverId}';
+      }
+    }
     if (entity == SyncEntities.task && resolved.containsKey('parentTaskId')) {
       final localParentId = resolved['parentTaskId']?.toString();
       if (localParentId != null && localParentId.isNotEmpty) {
@@ -1612,8 +1626,21 @@ class SyncCoordinator {
   ) async {
     final payloadSourceType =
         payload['sourceType']?.toString() ?? payload['source_type']?.toString();
-    final payloadSourceKey =
+    var payloadSourceKey =
         payload['sourceKey']?.toString() ?? payload['source_key']?.toString();
+    final localPayload = Map<String, dynamic>.from(payload);
+    if (payloadSourceType == 'task_view' &&
+        payloadSourceKey != null &&
+        payloadSourceKey.startsWith('list-server:')) {
+      final listServerId = int.tryParse(
+        payloadSourceKey.substring('list-server:'.length),
+      );
+      final localListId = await _localListIdForServerId(listServerId);
+      if (localListId == null) return;
+      payloadSourceKey = 'list:$localListId';
+      localPayload['sourceKey'] = payloadSourceKey;
+      localPayload.remove('source_key');
+    }
     // 历史服务端可能只返回 `{id}`。不能将所有这类记录折叠到
     // `default/default`，否则第二条 pull 会覆盖第一条；按 server ID
     // 隔离它们，保留诊断和后续服务端修复所需的映射。
@@ -1624,7 +1651,6 @@ class SyncCoordinator {
         payloadSourceKey.trim().isNotEmpty;
     final sourceType = hasSourceIdentity ? payloadSourceType : 'LEGACY_SERVER';
     final sourceKey = hasSourceIdentity ? payloadSourceKey : '$serverId';
-    final localPayload = Map<String, dynamic>.from(payload);
     final nestedValue = localPayload['valueJson'];
     if (sourceType == 'TASK_CAPTURE' &&
         sourceKey == 'defaults' &&
