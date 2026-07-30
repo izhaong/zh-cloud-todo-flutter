@@ -8,6 +8,10 @@ data class NativeShareRequest(
     val subject: String?,
 )
 
+data class TodayWidgetTask(
+    val title: String,
+)
+
 object NativeIntentContract {
     const val SYSTEM_NOTE_ACTION = "android.intent.action.CREATE_NOTE"
 
@@ -15,6 +19,8 @@ object NativeIntentContract {
     private const val TASK_HOST = "task"
     private const val TASK_ADD_PATH = "/add"
     private const val SYSTEM_NOTE_MIN_API = 34
+    private const val TODAY_WIDGET_MAX_TASKS = 5
+    private const val TODAY_WIDGET_MAX_TITLE_LENGTH = 80
 
     fun acceptedIncomingLink(rawLink: String?): String? {
         val uri =
@@ -40,6 +46,22 @@ object NativeIntentContract {
     fun stickyNoteContent(arguments: Any?): String? {
         val map = arguments as? Map<*, *> ?: return null
         return (map["content"] as? String)?.trim()?.takeIf(String::isNotEmpty)
+    }
+
+    fun todayWidgetTasks(arguments: Any?): List<TodayWidgetTask>? {
+        val map = arguments as? Map<*, *> ?: return null
+        val values = map["tasks"] as? List<*> ?: return null
+        val tasks = mutableListOf<TodayWidgetTask>()
+        for (value in values.take(TODAY_WIDGET_MAX_TASKS)) {
+            val task = value as? Map<*, *> ?: return null
+            val title =
+                (task["title"] as? String)
+                    ?.trim()
+                    ?.takeIf(String::isNotEmpty)
+                    ?: return null
+            tasks += TodayWidgetTask(title.take(TODAY_WIDGET_MAX_TITLE_LENGTH))
+        }
+        return tasks
     }
 
     fun supportsSystemNote(apiLevel: Int): Boolean = apiLevel >= SYSTEM_NOTE_MIN_API

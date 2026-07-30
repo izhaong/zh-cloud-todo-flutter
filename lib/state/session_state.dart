@@ -7,6 +7,7 @@ import '../core/api/api_client.dart';
 import '../core/api/api_config.dart';
 import '../core/auth/auth_gateway.dart';
 import '../core/storage/session_store.dart';
+import '../native/native_intents.dart';
 
 /// 新架构入口类型的再导出，方便下游 provider / 页面直接 import 本文件即可。
 export '../core/auth/auth_session.dart' show TodoAuthSession;
@@ -56,6 +57,7 @@ class SessionController extends Notifier<TodoAuthSession?> {
     try {
       final session = await store.readSession();
       if (session == null) {
+        _clearNativeWidgetSnapshot();
         ref.read(sessionBootstrappedProvider.notifier).state = true;
         return;
       }
@@ -76,15 +78,23 @@ class SessionController extends Notifier<TodoAuthSession?> {
         state = session;
       } else {
         await store.clearSession();
+        _clearNativeWidgetSnapshot();
       }
     } catch (_) {
       await store.clearSession();
+      _clearNativeWidgetSnapshot();
     } finally {
       ref.read(sessionBootstrappedProvider.notifier).state = true;
     }
   }
 
   Future<void> setSession(TodoAuthSession session) async {
+    final current = state;
+    if (current != null &&
+        (current.userId != session.userId ||
+            current.tenantId != session.tenantId)) {
+      _clearNativeWidgetSnapshot();
+    }
     state = session;
     final store = ref.read(sessionStoreProvider);
     await store.writeSession(session);
@@ -96,10 +106,15 @@ class SessionController extends Notifier<TodoAuthSession?> {
     state = null;
     final store = ref.read(sessionStoreProvider);
     await store.clearSession();
+    _clearNativeWidgetSnapshot();
     try {
       await ref.read(authGatewayProvider).logout(current.accessToken);
     } catch (_) {
       // 登出失败（如已离线）不阻塞本地清理。
     }
+  }
+
+  void _clearNativeWidgetSnapshot() {
+    unawaited(NativeIntents.updateTodayWidgetSnapshot(const []));
   }
 }
