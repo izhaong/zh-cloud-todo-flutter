@@ -450,6 +450,34 @@ class _TimelineTaskTile extends StatefulWidget {
 class _TimelineTaskTileState extends State<_TimelineTaskTile> {
   bool _saving = false;
 
+  DateTime _shiftByDisplayDays(DateTime instant, int days) {
+    if (widget.task.allDay) {
+      return DateTime(
+        instant.year,
+        instant.month,
+        instant.day,
+        instant.hour,
+        instant.minute,
+        instant.second,
+        instant.millisecond,
+        instant.microsecond,
+      ).add(Duration(days: days));
+    }
+    final display = taskWallClockDateTime(
+      instant,
+      allDay: false,
+      fixedTimezone: widget.task.fixedTimezone,
+      timeZone: widget.task.timeZone,
+    );
+    final targetDay = DateTime(display.year, display.month, display.day + days);
+    return taskDateTimeForDisplayDay(
+      instant,
+      targetDay,
+      fixedTimezone: widget.task.fixedTimezone,
+      timeZone: widget.task.timeZone,
+    );
+  }
+
   Future<void> _apply({required bool extend}) async {
     final callback = widget.onTaskTimeChange;
     final startAt = widget.task.startAt;
@@ -461,10 +489,14 @@ class _TimelineTaskTileState extends State<_TimelineTaskTile> {
       ).showSnackBar(const SnackBar(content: Text('请先在任务详情中设置开始和结束时间')));
       return;
     }
-    final change = extend ? const Duration(hours: 1) : const Duration(days: 1);
-    final nextStartAt = extend ? startAt : startAt.add(change);
-    final nextEndAt = endAt.add(change);
-    final nextDueAt = (widget.task.dueAt ?? endAt).add(change);
+    final nextStartAt = extend ? startAt : _shiftByDisplayDays(startAt, 1);
+    final nextEndAt = extend
+        ? endAt.add(const Duration(hours: 1))
+        : _shiftByDisplayDays(endAt, 1);
+    final dueAt = widget.task.dueAt ?? endAt;
+    final nextDueAt = extend
+        ? dueAt.add(const Duration(hours: 1))
+        : _shiftByDisplayDays(dueAt, 1);
     setState(() => _saving = true);
     try {
       await callback(
