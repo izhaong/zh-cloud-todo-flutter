@@ -162,7 +162,7 @@ jobs:
           test -s "${OUT_DIR}/todo-flutter-${VERSION_NAME}-x86_64.deb"
           ls -la "$OUT_DIR"
 
-      - uses: actions/upload-artifact@v4
+      - uses: https://github.com/christopherHX/gitea-upload-artifact@81f940d004763f986ba3582c007fd842dd5cb0d7
         with:
           name: desktop-linux
           if-no-files-found: error
@@ -212,7 +212,7 @@ jobs:
           test -s "$dmg"
           ls -la "$OUT_DIR"
 
-      - uses: actions/upload-artifact@v4
+      - uses: https://github.com/christopherHX/gitea-upload-artifact@81f940d004763f986ba3582c007fd842dd5cb0d7
         with:
           name: desktop-macos
           if-no-files-found: error
@@ -294,7 +294,7 @@ jobs:
         shell: pwsh
         run: Get-ChildItem -Recurse .gha-dist/desktop
 
-      - uses: actions/upload-artifact@v4
+      - uses: https://github.com/christopherHX/gitea-upload-artifact@81f940d004763f986ba3582c007fd842dd5cb0d7
         with:
           name: desktop-windows
           if-no-files-found: error
@@ -312,17 +312,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/download-artifact@v4
+      - uses: https://github.com/christopherHX/gitea-download-artifact@75635f32b4c1c41c4b3d64e8f85210112ed4c9c7
         with:
           name: desktop-linux
           path: dist/desktop
 
-      - uses: actions/download-artifact@v4
+      - uses: https://github.com/christopherHX/gitea-download-artifact@75635f32b4c1c41c4b3d64e8f85210112ed4c9c7
         with:
           name: desktop-macos
           path: dist/desktop
 
-      - uses: actions/download-artifact@v4
+      - uses: https://github.com/christopherHX/gitea-download-artifact@75635f32b4c1c41c4b3d64e8f85210112ed4c9c7
         continue-on-error: true
         with:
           name: desktop-windows
