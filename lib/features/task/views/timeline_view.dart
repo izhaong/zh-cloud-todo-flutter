@@ -24,8 +24,10 @@ class TimelineView extends ConsumerWidget {
     this.onTaskSelected,
     this.onTaskTimeChange,
     this.zoom = 1,
+    this.scale = TimelineScale.week,
     this.collapsedGroupIds = const {},
     this.onZoomChanged,
+    this.onScaleChanged,
     this.onGroupCollapsedChanged,
   }) : _now = now;
 
@@ -33,8 +35,10 @@ class TimelineView extends ConsumerWidget {
   final List<TodoTask> tasks;
   final ValueChanged<String>? onTaskSelected;
   final double zoom;
+  final TimelineScale scale;
   final Set<String> collapsedGroupIds;
   final Future<void> Function(double zoom)? onZoomChanged;
+  final Future<void> Function(TimelineScale scale)? onScaleChanged;
   final Future<void> Function(String groupId, bool collapsed)?
   onGroupCollapsedChanged;
   final Future<void> Function(
@@ -51,36 +55,40 @@ class TimelineView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final now = _effectiveNow;
     final groups = _buildGroups(tasks, now);
-    if (groups.every((g) => g.items.isEmpty)) {
-      return const Center(child: Text('暂无任务'));
-    }
+    final empty = groups.every((g) => g.items.isEmpty);
     final normalizedZoom = zoom.clamp(0.75, 1.5).toDouble();
     return Column(
       children: [
         _TimelineZoomToolbar(
           zoom: normalizedZoom,
+          scale: scale,
           onZoomChanged: onZoomChanged,
+          onScaleChanged: onScaleChanged,
         ),
         Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            itemCount: groups.length,
-            itemBuilder: (_, i) {
-              final group = groups[i];
-              if (group.items.isEmpty) return const SizedBox.shrink();
-              final collapsed = collapsedGroupIds.contains(group.id);
-              return _TimelineSection(
-                data: group,
-                zoom: normalizedZoom,
-                collapsed: collapsed,
-                onCollapsedChanged: onGroupCollapsedChanged == null
-                    ? null
-                    : (value) => onGroupCollapsedChanged!(group.id, value),
-                onTaskTap: (task) => _openDetail(context, task),
-                onTaskTimeChange: onTaskTimeChange,
-              );
-            },
-          ),
+          child: empty
+              ? const Center(child: Text('暂无任务'))
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  itemCount: groups.length,
+                  itemBuilder: (_, i) {
+                    final group = groups[i];
+                    if (group.items.isEmpty) return const SizedBox.shrink();
+                    final collapsed = collapsedGroupIds.contains(group.id);
+                    return _TimelineSection(
+                      data: group,
+                      zoom: normalizedZoom,
+                      scale: scale,
+                      collapsed: collapsed,
+                      onCollapsedChanged: onGroupCollapsedChanged == null
+                          ? null
+                          : (value) =>
+                                onGroupCollapsedChanged!(group.id, value),
+                      onTaskTap: (task) => _openDetail(context, task),
+                      onTaskTimeChange: onTaskTimeChange,
+                    );
+                  },
+                ),
         ),
       ],
     );
@@ -201,60 +209,87 @@ class TimelineView extends ConsumerWidget {
 }
 
 class _TimelineZoomToolbar extends StatelessWidget {
-  const _TimelineZoomToolbar({required this.zoom, this.onZoomChanged});
+  const _TimelineZoomToolbar({
+    required this.zoom,
+    required this.scale,
+    this.onZoomChanged,
+    this.onScaleChanged,
+  });
 
   static const _step = 0.25;
 
   final double zoom;
+  final TimelineScale scale;
   final Future<void> Function(double zoom)? onZoomChanged;
+  final Future<void> Function(TimelineScale scale)? onScaleChanged;
 
   @override
   Widget build(BuildContext context) {
     final colors = brandColors(context);
-    return Align(
-      alignment: Alignment.centerRight,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: colors.muted,
-            borderRadius: BorderRadius.circular(10),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          SegmentedButton<TimelineScale>(
+            key: const Key('timeline-scale-selector'),
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(value: TimelineScale.day, label: Text('日')),
+              ButtonSegment(value: TimelineScale.week, label: Text('周')),
+              ButtonSegment(value: TimelineScale.month, label: Text('月')),
+            ],
+            selected: {scale},
+            onSelectionChanged: onScaleChanged == null
+                ? null
+                : (selection) => onScaleChanged!(selection.single),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                tooltip: '缩小时间线',
-                icon: const Icon(Icons.remove, size: 18),
-                onPressed: onZoomChanged == null || zoom <= 0.75
-                    ? null
-                    : () => onZoomChanged!((zoom - _step).clamp(0.75, 1.5)),
-              ),
-              Semantics(
-                liveRegion: true,
-                label: '时间线缩放 ${(zoom * 100).round()}%',
-                child: Text(
-                  '${(zoom * 100).round()}%',
-                  style: TextStyle(
-                    color: colors.foreground,
-                    fontWeight: FontWeight.w600,
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: colors.muted,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: '缩小时间线',
+                  icon: const Icon(Icons.remove, size: 18),
+                  onPressed: onZoomChanged == null || zoom <= 0.75
+                      ? null
+                      : () => onZoomChanged!((zoom - _step).clamp(0.75, 1.5)),
+                ),
+                Semantics(
+                  liveRegion: true,
+                  label: '时间线缩放 ${(zoom * 100).round()}%',
+                  child: Text(
+                    '${(zoom * 100).round()}%',
+                    style: TextStyle(
+                      color: colors.foreground,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-              ),
-              IconButton(
-                tooltip: '放大时间线',
-                icon: const Icon(Icons.add, size: 18),
-                onPressed: onZoomChanged == null || zoom >= 1.5
-                    ? null
-                    : () => onZoomChanged!((zoom + _step).clamp(0.75, 1.5)),
-              ),
-            ],
+                IconButton(
+                  tooltip: '放大时间线',
+                  icon: const Icon(Icons.add, size: 18),
+                  onPressed: onZoomChanged == null || zoom >= 1.5
+                      ? null
+                      : () => onZoomChanged!((zoom + _step).clamp(0.75, 1.5)),
+                ),
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
 }
+
+enum TimelineScale { day, week, month }
 
 enum TimelineBucket { overdue, today, tomorrow, thisWeek, nextWeek, later }
 
@@ -328,6 +363,7 @@ class _TimelineSection extends StatelessWidget {
   const _TimelineSection({
     required this.data,
     required this.zoom,
+    required this.scale,
     required this.collapsed,
     required this.onTaskTap,
     this.onCollapsedChanged,
@@ -335,6 +371,7 @@ class _TimelineSection extends StatelessWidget {
   });
   final _TimelineGroup data;
   final double zoom;
+  final TimelineScale scale;
   final bool collapsed;
   final ValueChanged<TodoTask> onTaskTap;
   final Future<void> Function(bool collapsed)? onCollapsedChanged;
@@ -405,6 +442,7 @@ class _TimelineSection extends StatelessWidget {
                 _TimelineTaskTile(
                   task: t,
                   zoom: zoom,
+                  scale: scale,
                   dueDateFormat: tf,
                   onTaskTap: onTaskTap,
                   onTaskTimeChange: onTaskTimeChange,
@@ -427,6 +465,7 @@ class _TimelineTaskTile extends StatefulWidget {
   const _TimelineTaskTile({
     required this.task,
     required this.zoom,
+    required this.scale,
     required this.dueDateFormat,
     required this.onTaskTap,
     this.onTaskTimeChange,
@@ -434,6 +473,7 @@ class _TimelineTaskTile extends StatefulWidget {
 
   final TodoTask task;
   final double zoom;
+  final TimelineScale scale;
   final DateFormat dueDateFormat;
   final ValueChanged<TodoTask> onTaskTap;
   final Future<void> Function(
@@ -497,6 +537,42 @@ class _TimelineTaskTileState extends State<_TimelineTaskTile> {
       endAt: _shiftByDisplayDays(endAt!, days),
       dueAt: _shiftByDisplayDays(dueAt!, days),
     );
+  }
+
+  Future<void> _moveByHours(int hours) async {
+    final callback = widget.onTaskTimeChange;
+    final startAt = widget.task.startAt;
+    final endAt = widget.task.endAt;
+    if (callback == null) return;
+    if (!_hasEditableRange(startAt, endAt)) return;
+    final dueAt = widget.task.dueAt ?? endAt;
+    DateTime shift(DateTime instant) {
+      final display = taskWallClockDateTime(
+        instant,
+        allDay: false,
+        fixedTimezone: widget.task.fixedTimezone,
+        timeZone: widget.task.timeZone,
+      );
+      return taskDateTimeFromWallClock(
+        display.add(Duration(hours: hours)),
+        fixedTimezone: widget.task.fixedTimezone,
+        timeZone: widget.task.timeZone,
+      );
+    }
+
+    await _commitTimeChange(
+      callback,
+      startAt: shift(startAt!),
+      endAt: shift(endAt!),
+      dueAt: shift(dueAt!),
+    );
+  }
+
+  Future<void> _moveByScaleUnits(int units) {
+    if (widget.scale == TimelineScale.day && !widget.task.allDay) {
+      return _moveByHours(units);
+    }
+    return _moveByDays(units);
   }
 
   Future<void> _resizeByUnits(int units) async {
@@ -563,9 +639,12 @@ class _TimelineTaskTileState extends State<_TimelineTaskTile> {
   }
 
   Future<void> _finishMoveDrag() async {
-    final days = (_moveDragDistance / (_dayDragExtent * widget.zoom)).round();
+    final extent = widget.scale == TimelineScale.day && !widget.task.allDay
+        ? _hourResizeExtent
+        : _dayDragExtent;
+    final units = (_moveDragDistance / (extent * widget.zoom)).round();
     _moveDragDistance = 0;
-    if (days != 0) await _moveByDays(days);
+    if (units != 0) await _moveByScaleUnits(units);
   }
 
   Future<void> _finishResizeDrag() async {
@@ -633,9 +712,12 @@ class _TimelineTaskTileState extends State<_TimelineTaskTile> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    tooltip: '顺延一天',
+                    tooltip:
+                        widget.scale == TimelineScale.day && !widget.task.allDay
+                        ? '顺延一小时'
+                        : '顺延一天',
                     icon: const Icon(Icons.calendar_today_outlined, size: 18),
-                    onPressed: _saving ? null : () => _moveByDays(1),
+                    onPressed: _saving ? null : () => _moveByScaleUnits(1),
                   ),
                   IconButton(
                     tooltip: widget.task.allDay ? '延长一天' : '延长一小时',

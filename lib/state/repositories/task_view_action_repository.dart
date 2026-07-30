@@ -11,11 +11,13 @@ class TaskWorkspacePreference {
   const TaskWorkspacePreference({
     this.viewType,
     this.timelineZoom = 1,
+    this.timelineScale = 'week',
     this.collapsedTimelineGroupIds = const {},
   });
 
   final String? viewType;
   final double timelineZoom;
+  final String timelineScale;
   final Set<String> collapsedTimelineGroupIds;
 }
 
@@ -72,6 +74,7 @@ class TaskViewActionRepository {
     );
     if (scoped.viewType != null ||
         scoped.timelineZoom != 1 ||
+        scoped.timelineScale != 'week' ||
         scoped.collapsedTimelineGroupIds.isNotEmpty ||
         sourceKey != 'list:inbox') {
       return scoped;
@@ -85,10 +88,14 @@ class TaskViewActionRepository {
   Future<void> saveTaskTimelinePreference({
     required String sourceKey,
     required double zoom,
+    String scale = 'week',
     required Set<String> collapsedGroupIds,
   }) {
     if (zoom < 0.75 || zoom > 1.5) {
       throw ArgumentError.value(zoom, 'zoom', '必须介于 0.75 和 1.5');
+    }
+    if (!const {'day', 'week', 'month'}.contains(scale)) {
+      throw ArgumentError.value(scale, 'scale', '必须为 day、week 或 month');
     }
     final normalizedGroupIds =
         collapsedGroupIds
@@ -102,6 +109,7 @@ class TaskViewActionRepository {
       sourceKey: sourceKey,
       preferencePatch: {
         'timelineZoom': zoom,
+        'timelineScale': scale,
         'collapsedTimelineGroupIds': normalizedGroupIds,
       },
     );
@@ -206,6 +214,10 @@ class TaskViewActionRepository {
     final viewType = value['viewType']?.toString();
     final zoomValue = value['timelineZoom'];
     final zoom = zoomValue is num ? zoomValue.toDouble() : 1.0;
+    final scaleValue = value['timelineScale']?.toString();
+    final scale = const {'day', 'week', 'month'}.contains(scaleValue)
+        ? scaleValue!
+        : 'week';
     final collapsed = (value['collapsedTimelineGroupIds'] as List? ?? const [])
         .map((groupId) => groupId.toString())
         .where((groupId) => groupId.isNotEmpty)
@@ -215,6 +227,7 @@ class TaskViewActionRepository {
           ? viewType
           : null,
       timelineZoom: zoom >= 0.75 && zoom <= 1.5 ? zoom : 1,
+      timelineScale: scale,
       collapsedTimelineGroupIds: collapsed,
     );
   }

@@ -367,6 +367,7 @@ void main() {
               'valueJson': jsonEncode({
                 'viewType': 'timeline',
                 'timelineZoom': 1.25,
+                'timelineScale': 'week',
                 'collapsedTimelineGroupIds': ['later'],
               }),
             }),
@@ -387,6 +388,7 @@ void main() {
         'valueJson': jsonEncode({
           'viewType': 'timeline',
           'timelineZoom': 1.25,
+          'timelineScale': 'week',
           'collapsedTimelineGroupIds': ['later'],
         }),
       },
@@ -425,6 +427,7 @@ void main() {
                             'valueJson': jsonEncode({
                               'viewType': 'timeline',
                               'timelineZoom': 0.75,
+                              'timelineScale': 'month',
                               'collapsedTimelineGroupIds': ['today'],
                             }),
                           },
@@ -473,12 +476,14 @@ void main() {
       sourceKey: 'list:list-local',
     );
     expect(serverPreference.timelineZoom, 0.75);
+    expect(serverPreference.timelineScale, 'month');
     expect(serverPreference.collapsedTimelineGroupIds, {'today'});
     expect((await db.select(db.todoSyncChanges).getSingle()).status, 'failed');
 
     await repository.saveTaskTimelinePreference(
       sourceKey: 'list:list-local',
       zoom: 1.5,
+      scale: 'day',
       collapsedGroupIds: const {'tomorrow'},
     );
     expect(await coordinator.push(), 1);
@@ -487,6 +492,10 @@ void main() {
     expect(
       jsonDecode(replayed?['payload']?['valueJson'] as String),
       containsPair('timelineZoom', 1.5),
+    );
+    expect(
+      jsonDecode(replayed?['payload']?['valueJson'] as String),
+      containsPair('timelineScale', 'day'),
     );
   });
 
