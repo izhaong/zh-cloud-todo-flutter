@@ -1049,10 +1049,29 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
         ).showSnackBar(const SnackBar(content: Text('任务尚未同步，无法指派')));
         return;
       }
+      final db = ref.read(appDatabaseProvider);
+      if (db == null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('请先登录')));
+        return;
+      }
+      final list = await _resolveList(db, t.listId);
+      if (!mounted || widget.taskId != t.id) return;
+      final listServerId = list?.serverId;
+      if (listServerId == null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('清单尚未同步，无法选择执行人')));
+        return;
+      }
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) =>
-              TaskAssignPage(taskServerId: taskServerId, taskTitle: t.title),
+          builder: (_) => TaskAssignPage(
+            taskServerId: taskServerId,
+            listServerId: listServerId,
+            taskTitle: t.title,
+          ),
         ),
       );
       return;
