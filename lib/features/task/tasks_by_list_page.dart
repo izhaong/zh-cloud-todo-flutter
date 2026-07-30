@@ -261,11 +261,13 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           now: now,
           selectedTaskId: widget.selectedTaskId,
           onTaskSelected: widget.onTaskSelected,
-          onTasksReordered: (taskIds) async {
-            final repository = ref.read(taskViewActionRepositoryProvider);
-            if (repository == null) return;
-            await repository.reorderListTasks(taskIds);
-          },
+          onTasksReordered: _selectedListId == null
+              ? null
+              : (taskIds) async {
+                  final repository = ref.read(taskViewActionRepositoryProvider);
+                  if (repository == null) return;
+                  await repository.reorderListTasks(taskIds);
+                },
           batchSelectionActive: _batchSelectionActive,
           batchSelectedTaskIds: _batchSelectedTaskIds,
           onBatchSelectionChanged: _updateBatchSelection,
@@ -1243,7 +1245,7 @@ class _ListBodyState extends State<_ListBody> {
         .map((task) => task.id)
         .toList(growable: false);
 
-    if (widget.desktopMode) {
+    if (widget.desktopMode && widget.onTasksReordered != null) {
       return ReorderableListView.builder(
         buildDefaultDragHandles: false,
         padding: const EdgeInsets.only(
@@ -1344,7 +1346,9 @@ class _ListBodyState extends State<_ListBody> {
         final task = entry as TodoTask;
         return TaskRowHost(
           task: task,
-          enableSwipeGestures: !widget.batchSelectionActive,
+          desktopMode: widget.desktopMode,
+          enableSwipeGestures:
+              !widget.desktopMode && !widget.batchSelectionActive,
           selected: widget.selectedTaskId == task.id,
           onTap: (taskId) => _handleTaskActivation(taskId, visibleTaskIds),
           batchSelectionActive: widget.batchSelectionActive,
