@@ -89,12 +89,15 @@ void main() {
             createdAt: now,
             status: const Value('failed'),
           ),
-    );
+        );
 
     final repository = BoardPreferenceRepository(db, SyncChangeQueue(db));
     expect(await repository.hasRecoverableFailed(listId: 'list-local'), isTrue);
     expect(await repository.recoverLatestFailed(listId: 'list-local'), isTrue);
-    expect(await repository.hasRecoverableFailed(listId: 'list-local'), isFalse);
+    expect(
+      await repository.hasRecoverableFailed(listId: 'list-local'),
+      isFalse,
+    );
 
     final preference = await db.select(db.todoBoardPreferences).getSingle();
     final changes = await db.select(db.todoSyncChanges).get();
@@ -108,6 +111,45 @@ void main() {
       'listId': 101,
       'groupDimension': 'LOCAL',
       'columnsJson': '["LOCAL"]',
+    });
+  });
+
+  test('看板列顺序与折叠状态按清单保存并可恢复', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final now = DateTime.utc(2026, 7, 30, 9);
+    for (final id in ['list-a', 'list-b']) {
+      await db
+          .into(db.todoLists)
+          .insert(
+            TodoListsCompanion.insert(
+              id: id,
+              name: id,
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+    }
+    final repository = BoardPreferenceRepository(db, SyncChangeQueue(db));
+
+    await repository.saveLayout(
+      listId: 'list-a',
+      orderedColumnIds: const ['urgent', 'doing', 'todo', 'archive'],
+      collapsedColumnIds: const {'archive', 'todo'},
+    );
+
+    final a = await repository.get('list-a');
+    final b = await repository.get('list-b');
+    expect(a.orderedColumnIds, ['urgent', 'doing', 'todo', 'archive']);
+    expect(a.collapsedColumnIds, {'archive', 'todo'});
+    expect(b.orderedColumnIds, BoardViewPreference.defaultColumnIds);
+    expect(b.collapsedColumnIds, isEmpty);
+    final change = await db.select(db.todoSyncChanges).getSingle();
+    final payload = jsonDecode(change.payloadJson) as Map<String, dynamic>;
+    expect(payload['groupDimension'], 'PRIORITY');
+    expect(jsonDecode(payload['columnsJson'] as String), {
+      'order': ['urgent', 'doing', 'todo', 'archive'],
+      'collapsed': ['archive', 'todo'],
     });
   });
 }

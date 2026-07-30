@@ -209,6 +209,15 @@ final boardPreferenceRecoveryAvailableProvider =
       return repository.hasRecoverableFailed(listId: listId);
     });
 
+final boardViewPreferenceProvider = StreamProvider.autoDispose
+    .family<BoardViewPreference, String>((ref, listId) {
+      final repository = ref.watch(boardPreferenceRepositoryProvider);
+      if (repository == null) {
+        return Stream.value(const BoardViewPreference());
+      }
+      return repository.watch(listId);
+    });
+
 final reminderRepositoryProvider = Provider<ReminderRepository?>((ref) {
   final db = ref.watch(appDatabaseProvider);
   final queue = ref.watch(syncChangeQueueProvider);

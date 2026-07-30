@@ -144,6 +144,38 @@ void main() {
     expect(find.text('已恢复上次看板设置，等待同步'), findsOneWidget);
   });
 
+  testWidgets('看板列折叠与顺序调整只通过偏好回调', (tester) async {
+    List<String>? requestedOrder;
+    (String, bool)? requestedCollapse;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: KanbanView(
+            tasks: const [],
+            orderedColumnIds: const ['todo', 'doing', 'urgent', 'archive'],
+            collapsedColumnIds: const {},
+            onColumnOrderChanged: (order) async => requestedOrder = order,
+            onColumnCollapsedChanged: (columnId, collapsed) async {
+              requestedCollapse = (columnId, collapsed);
+            },
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('调整未开始列'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('折叠未开始'));
+    await tester.pumpAndSettle();
+    expect(requestedCollapse, ('todo', true));
+
+    await tester.tap(find.byTooltip('调整未开始列'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('右移未开始'));
+    await tester.pumpAndSettle();
+    expect(requestedOrder, ['doing', 'todo', 'urgent', 'archive']);
+  });
+
   testWidgets('时间线顺延一天会请求共享任务时间 mutation', (tester) async {
     final now = DateTime.utc(2026, 7, 15, 9);
     final startAt = DateTime.utc(2026, 7, 16, 9);

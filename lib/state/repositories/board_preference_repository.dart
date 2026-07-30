@@ -7,6 +7,18 @@ import '../../core/db/app_database.dart';
 import '../../core/sync/sync_change_queue.dart';
 import '../../core/sync/sync_entities.dart';
 
+class BoardViewPreference {
+  const BoardViewPreference({
+    this.orderedColumnIds = defaultColumnIds,
+    this.collapsedColumnIds = const {},
+  });
+
+  static const defaultColumnIds = ['todo', 'doing', 'urgent', 'archive'];
+
+  final List<String> orderedColumnIds;
+  final Set<String> collapsedColumnIds;
+}
+
 /// B4 看板偏好本地优先写链路。
 class BoardPreferenceRepository {
   BoardPreferenceRepository(this._db, this._queue, {Uuid? uuid})
@@ -15,6 +27,44 @@ class BoardPreferenceRepository {
   final AppDatabase _db;
   final SyncChangeQueue _queue;
   final Uuid _uuid;
+
+  Future<BoardViewPreference> get(String listId) async {
+    final row =
+        await (_db.select(_db.todoBoardPreferences)
+              ..where((preference) => preference.listId.equals(listId)))
+            .getSingleOrNull();
+    return _decodeLayout(row?.columnsJson);
+  }
+
+  Stream<BoardViewPreference> watch(String listId) {
+    return (_db.select(_db.todoBoardPreferences)
+          ..where((preference) => preference.listId.equals(listId)))
+        .watchSingleOrNull()
+        .map((row) => _decodeLayout(row?.columnsJson));
+  }
+
+  Future<void> saveLayout({
+    required String listId,
+    required List<String> orderedColumnIds,
+    required Set<String> collapsedColumnIds,
+  }) async {
+    final existing =
+        await (_db.select(_db.todoBoardPreferences)
+              ..where((preference) => preference.listId.equals(listId)))
+            .getSingleOrNull();
+    final order = _normalizeOrder(orderedColumnIds);
+    final collapsed =
+        collapsedColumnIds
+            .where(BoardViewPreference.defaultColumnIds.contains)
+            .toSet()
+            .toList()
+          ..sort();
+    await save(
+      listId: listId,
+      groupDimension: existing?.groupDimension ?? 'PRIORITY',
+      columnsJson: jsonEncode({'order': order, 'collapsed': collapsed}),
+    );
+  }
 
   Future<void> save({
     required String listId,
@@ -157,5 +207,65 @@ class BoardPreferenceRepository {
         'columnsJson': saved.columnsJson,
       },
     );
+  }
+
+  BoardViewPreference _decodeLayout(String? columnsJson) {
+    if (columnsJson == null || columnsJson.trim().isEmpty) {
+      return const BoardViewPreference();
+    }
+    try {
+      final decoded = jsonDecode(columnsJson);
+      if (decoded is Map<String, dynamic>) {
+        final order = _normalizeOrder(
+          (decoded['order'] as List? ?? const [])
+              .map((value) => value.toString())
+              .toList(),
+        );
+        final collapsed = (decoded['collapsed'] as List? ?? const [])
+            .map((value) => value.toString())
+            .where(BoardViewPreference.defaultColumnIds.contains)
+            .toSet();
+        return BoardViewPreference(
+          orderedColumnIds: order,
+          collapsedColumnIds: collapsed,
+        );
+      }
+      if (decoded is List) {
+        return BoardViewPreference(
+          orderedColumnIds: _normalizeOrder(
+            decoded.map((value) => _legacyColumnId(value.toString())).toList(),
+          ),
+        );
+      }
+    } on FormatException {
+      // 损坏的历史偏好安全降级为默认布局，不阻塞看板任务。
+    } on TypeError {
+      // 非对象/非数组或字段类型异常同样降级。
+    }
+    return const BoardViewPreference();
+  }
+
+  List<String> _normalizeOrder(List<String> values) {
+    final order = <String>[];
+    for (final value in values) {
+      if (BoardViewPreference.defaultColumnIds.contains(value) &&
+          !order.contains(value)) {
+        order.add(value);
+      }
+    }
+    for (final value in BoardViewPreference.defaultColumnIds) {
+      if (!order.contains(value)) order.add(value);
+    }
+    return order;
+  }
+
+  String _legacyColumnId(String value) {
+    return switch (value.toUpperCase()) {
+      'TODO' => 'todo',
+      'DOING' => 'doing',
+      'URGENT' => 'urgent',
+      'DONE' || 'ARCHIVE' => 'archive',
+      _ => value,
+    };
   }
 }

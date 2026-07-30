@@ -10,6 +10,7 @@ import '../../core/theme/todo_layout_tokens.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../state/nlp_date.dart';
 import '../../state/providers.dart';
+import '../../state/repositories/board_preference_repository.dart';
 import '../../state/repositories/task_batch_edit_repository.dart';
 import '../../state/repositories/task_query_repository.dart';
 import '../../state/repositories/task_repository.dart';
@@ -271,6 +272,10 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         );
       case TaskViewMode.kanban:
         final listId = _selectedListId;
+        final boardPreference = listId == null
+            ? const BoardViewPreference()
+            : ref.watch(boardViewPreferenceProvider(listId)).valueOrNull ??
+                  const BoardViewPreference();
         final hasRecoverablePreference =
             listId != null &&
             (ref
@@ -280,6 +285,32 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         return KanbanView(
           tasks: items,
           listId: listId,
+          orderedColumnIds: boardPreference.orderedColumnIds,
+          collapsedColumnIds: boardPreference.collapsedColumnIds,
+          onColumnOrderChanged: listId == null
+              ? null
+              : (order) => _saveBoardLayout(
+                  listId: listId,
+                  order: order,
+                  collapsed: boardPreference.collapsedColumnIds,
+                ),
+          onColumnCollapsedChanged: listId == null
+              ? null
+              : (columnId, collapsed) {
+                  final next = Set<String>.from(
+                    boardPreference.collapsedColumnIds,
+                  );
+                  if (collapsed) {
+                    next.add(columnId);
+                  } else {
+                    next.remove(columnId);
+                  }
+                  return _saveBoardLayout(
+                    listId: listId,
+                    order: boardPreference.orderedColumnIds,
+                    collapsed: next,
+                  );
+                },
           hasRecoverablePreference: hasRecoverablePreference,
           onRecoverPreference: !hasRecoverablePreference
               ? null
@@ -428,6 +459,27 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('时间线缩放保存失败，请重试')));
+    }
+  }
+
+  Future<void> _saveBoardLayout({
+    required String listId,
+    required List<String> order,
+    required Set<String> collapsed,
+  }) async {
+    try {
+      await ref
+          .read(boardPreferenceRepositoryProvider)
+          ?.saveLayout(
+            listId: listId,
+            orderedColumnIds: order,
+            collapsedColumnIds: collapsed,
+          );
+    } catch (_) {
+      if (!mounted || listId != _selectedListId) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('看板布局保存失败，请重试')));
     }
   }
 
