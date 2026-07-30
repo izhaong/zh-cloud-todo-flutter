@@ -265,7 +265,27 @@ void main() {
 
   testWidgets('TaskCommentsPage 渲染 - 空列表显示提示', (tester) async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
-    final container = _containerWith(_FakeApiClient(), db);
+    final container = _containerWith(
+      _FakeApiClient(
+        bodyByPath: {
+          '/task/1/comments': {'code': 0, 'data': <Object>[]},
+          '/list/7/members': {
+            'code': 0,
+            'data': {
+              'members': [
+                {
+                  'userId': 1,
+                  'userName': '当前用户',
+                  'role': 'owner',
+                  'status': 'active',
+                },
+              ],
+            },
+          },
+        },
+      ),
+      db,
+    );
     addTearDown(() async {
       container.dispose();
       await db.close();
@@ -273,11 +293,139 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const MaterialApp(home: TaskCommentsPage(taskServerId: 1)),
+        child: const MaterialApp(
+          home: TaskCommentsPage(taskServerId: 1, listServerId: 7),
+        ),
       ),
     );
     await tester.pumpAndSettle();
     expect(find.text('暂无评论，来说两句吧'), findsOneWidget);
+    expect(find.byTooltip('发送'), findsOneWidget);
+  });
+
+  testWidgets('评论显示真实作者，viewer 只能阅读', (tester) async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    final container = _containerWith(
+      _FakeApiClient(
+        bodyByPath: {
+          '/task/1/comments': {
+            'code': 0,
+            'data': [
+              {
+                'id': 11,
+                'listId': 7,
+                'taskId': 1,
+                'userId': 2,
+                'userName': '真实作者',
+                'userEmail': 'author@example.com',
+                'content': '评论正文',
+                'createTime': '2026-07-30T10:20:00',
+                'updateTime': '2026-07-30T10:20:00',
+              },
+            ],
+          },
+          '/list/7/members': {
+            'code': 0,
+            'data': {
+              'members': [
+                {
+                  'userId': 1,
+                  'userName': '只读当前用户',
+                  'role': 'viewer',
+                  'status': 'active',
+                },
+              ],
+            },
+          },
+        },
+      ),
+      db,
+    );
+    addTearDown(() async {
+      container.dispose();
+      await db.close();
+    });
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          home: TaskCommentsPage(taskServerId: 1, listServerId: 7),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('真实作者'), findsOneWidget);
+    expect(find.textContaining('author@example.com'), findsOneWidget);
+    expect(find.text('评论正文'), findsOneWidget);
+    expect(find.textContaining('2026-07-30 10:20'), findsOneWidget);
+    expect(find.textContaining('当前清单为只读'), findsOneWidget);
+    expect(find.byTooltip('发送'), findsNothing);
+    expect(find.widgetWithText(TextButton, '编辑'), findsNothing);
+    expect(find.widgetWithText(TextButton, '删除'), findsNothing);
+  });
+
+  testWidgets('editor 只能编辑和删除自己的评论', (tester) async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    final container = _containerWith(
+      _FakeApiClient(
+        bodyByPath: {
+          '/task/1/comments': {
+            'code': 0,
+            'data': [
+              {
+                'id': 11,
+                'listId': 7,
+                'taskId': 1,
+                'userId': 1,
+                'userName': '当前用户',
+                'content': '自己的评论',
+                'createTime': '2026-07-30T10:20:00',
+              },
+              {
+                'id': 12,
+                'listId': 7,
+                'taskId': 1,
+                'userId': 2,
+                'userName': '其他成员',
+                'content': '别人的评论',
+                'createTime': '2026-07-30T10:21:00',
+              },
+            ],
+          },
+          '/list/7/members': {
+            'code': 0,
+            'data': {
+              'members': [
+                {
+                  'userId': 1,
+                  'userName': '当前用户',
+                  'role': 'editor',
+                  'status': 'active',
+                },
+              ],
+            },
+          },
+        },
+      ),
+      db,
+    );
+    addTearDown(() async {
+      container.dispose();
+      await db.close();
+    });
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          home: TaskCommentsPage(taskServerId: 1, listServerId: 7),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(TextButton, '编辑'), findsOneWidget);
+    expect(find.widgetWithText(TextButton, '删除'), findsOneWidget);
   });
 
   testWidgets('TaskAssignPage 从 active 清单成员选择执行人', (tester) async {

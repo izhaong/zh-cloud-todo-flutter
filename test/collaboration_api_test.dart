@@ -64,19 +64,48 @@ void main() {
   });
 
   group('TaskComment 构造', () {
-    test('字段透传（不含 parseTime 重构）', () {
-      final c = TaskComment(
-        id: 1,
-        taskId: 100,
-        content: 'hello',
-        userId: 5,
-        createdAt: DateTime(2026, 7, 7),
+    test('解析服务端评论用户资料与 createTime/updateTime', () async {
+      final client = _RecordingApiClient(
+        getBody: {
+          'code': 0,
+          'data': [
+            {
+              'id': 1,
+              'listId': 10,
+              'taskId': 100,
+              'content': 'hello',
+              'userId': 5,
+              'userName': '评论人',
+              'userEmail': 'author@example.com',
+              'createTime': '2026-07-07T08:30:00',
+              'updateTime': '2026-07-07T09:45:00',
+            },
+          ],
+        },
       );
+      final api = TaskCommentApi(client);
+      final comments = await api.list(100);
+      final c = comments.single;
+
       expect(c.id, 1);
+      expect(c.listId, 10);
       expect(c.taskId, 100);
       expect(c.content, 'hello');
       expect(c.userId, 5);
-      expect(c.createdAt, DateTime(2026, 7, 7));
+      expect(c.userName, '评论人');
+      expect(c.userEmail, 'author@example.com');
+      expect(c.createdAt, DateTime(2026, 7, 7, 8, 30));
+      expect(c.updatedAt, DateTime(2026, 7, 7, 9, 45));
+
+      await api.delete(taskId: 100, commentId: 1);
+      expect(
+        client.requests.last,
+        const _RecordedRequest(
+          method: 'DELETE',
+          path: '/task/100/comments/1',
+          data: null,
+        ),
+      );
     });
   });
 
@@ -109,6 +138,44 @@ void main() {
           data: {'assigneeUserId': 100},
         ),
       );
+    });
+  });
+
+  group('TaskActivityRecord', () {
+    test('按后端动作全集生成中文标签，用户名缺失时回退邮箱', () {
+      final record = TaskActivityRecord.fromJson({
+        'id': 8,
+        'taskId': 100,
+        'actorUserId': 5,
+        'actorUserEmail': 'actor@example.com',
+        'action': 'comment_updated',
+        'createTime': '2026-07-30T10:20:00',
+      });
+      expect(record.actorUserName, 'actor@example.com');
+      expect(record.actionLabel, '修改了评论');
+
+      const labels = {
+        'task_created': '创建了任务',
+        'task_updated': '更新了任务',
+        'task_due_rescheduled': '调整了任务时间',
+        'task_deleted': '删除了任务',
+        'task_completed': '完成了任务',
+        'task_uncompleted': '取消完成任务',
+        'task_assignee_set': '设置了执行人',
+        'task_assignee_cleared': '移除了执行人',
+        'comment_created': '添加了评论',
+        'comment_updated': '修改了评论',
+        'comment_deleted': '删除了评论',
+      };
+      for (final entry in labels.entries) {
+        final activity = TaskActivityRecord(
+          id: 1,
+          taskId: 100,
+          action: entry.key,
+          occurredAt: DateTime(2026),
+        );
+        expect(activity.actionLabel, entry.value);
+      }
     });
   });
 
@@ -213,6 +280,16 @@ class _RecordingApiClient extends ApiClient {
     Map<String, dynamic>? queryParameters,
   }) async {
     requests.add(_RecordedRequest(method: 'PUT', path: path, data: data));
+    return _response<T>(path);
+  }
+
+  @override
+  Future<Response<T>> delete<T>(
+    String path, {
+    Object? data,
+    Map<String, dynamic>? queryParameters,
+  }) async {
+    requests.add(_RecordedRequest(method: 'DELETE', path: path, data: data));
     return _response<T>(path);
   }
 
