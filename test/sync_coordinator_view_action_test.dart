@@ -751,6 +751,112 @@ void main() {
     expect(await coordinator.push(), 1);
     expect(resentChanges.single['baseRevision'], 7);
   });
+
+  test('任务与视图偏好按稳定顺序和原幂等键成批重试且成功后不重复发送', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final now = DateTime.utc(2026, 7, 30, 9);
+    await db
+        .into(db.todoLists)
+        .insert(
+          TodoListsCompanion.insert(
+            id: 'list-local',
+            serverId: const Value(101),
+            name: '项目',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    await db
+        .into(db.todoTasks)
+        .insert(
+          TodoTasksCompanion.insert(
+            id: 'task-local',
+            serverId: const Value(201),
+            listId: 'list-local',
+            title: '同批视图任务',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    final repository = TaskViewActionRepository(db, SyncChangeQueue(db));
+    await repository.moveKanbanTask('task-local', priority: 3, completed: true);
+    await repository.saveTaskWorkspaceViewMode(
+      sourceKey: 'list:list-local',
+      viewType: 'kanban',
+    );
+    final api = _TransientThenAcceptingViewSyncApi();
+    final coordinator = SyncCoordinator(db: db, api: api, todoApi: ApiClient());
+
+    expect(await coordinator.push(), 0);
+    final retryable = await db.select(db.todoSyncChanges).get();
+    expect(retryable.map((change) => change.status).toSet(), {'retryable'});
+    expect(retryable.map((change) => change.attemptCount).toSet(), {1});
+    expect(api.entityOrders.single, ['task', 'view_preference']);
+
+    await db
+        .update(db.todoSyncChanges)
+        .write(
+          TodoSyncChangesCompanion(
+            nextAttemptAt: Value(
+              DateTime.now().subtract(const Duration(seconds: 1)),
+            ),
+          ),
+        );
+    expect(await coordinator.push(), 2);
+    expect(api.idempotencyKeys, hasLength(2));
+    expect(api.idempotencyKeys.first, api.idempotencyKeys.last);
+    expect(api.mutationBatches, hasLength(2));
+    expect(api.mutationBatches.first, api.mutationBatches.last);
+    expect(api.entityOrders.last, ['task', 'view_preference']);
+    expect(
+      (await db.select(db.todoSyncChanges).get())
+          .map((change) => change.status)
+          .toSet(),
+      {'synced'},
+    );
+
+    expect(await coordinator.push(), 0);
+    expect(api.attempts, 2);
+  });
+}
+
+class _TransientThenAcceptingViewSyncApi extends SyncApi {
+  _TransientThenAcceptingViewSyncApi()
+    : super(ApiClient(), clientId: 'test', deviceId: 'test');
+
+  int attempts = 0;
+  final idempotencyKeys = <String>[];
+  final mutationBatches = <List<String?>>[];
+  final entityOrders = <List<String>>[];
+
+  @override
+  Future<SyncPushResult> push({
+    required String idempotencyKey,
+    required List<SyncChangeDto> changes,
+  }) async {
+    attempts++;
+    idempotencyKeys.add(idempotencyKey);
+    mutationBatches.add(
+      changes.map((change) => change.clientMutationId).toList(),
+    );
+    entityOrders.add(changes.map((change) => change.entityType).toList());
+    if (attempts == 1) throw StateError('offline');
+    return SyncPushResult(
+      ok: true,
+      accepted: [
+        for (final change in changes)
+          SyncChangeDto(
+            entityType: change.entityType,
+            entityId: change.entityType == 'task' ? 201 : 401,
+            operation: change.operation,
+            clientMutationId: change.clientMutationId,
+          ),
+      ],
+      conflicts: const [],
+      nextCursor: null,
+    );
+  }
 }
 
 Future<TodoList> _listById(AppDatabase db, String id) {
