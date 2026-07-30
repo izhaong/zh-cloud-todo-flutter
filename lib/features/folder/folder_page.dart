@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/app_database.dart';
 import '../../state/providers.dart';
+import '../shell/sidebar_hierarchy.dart';
 
 /// M11-B2 文件夹管理页（独立页面）。
 class FolderPage extends ConsumerWidget {
@@ -17,60 +18,98 @@ class FolderPage extends ConsumerWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: () => _create(context, ref),
+            onPressed: () =>
+                _create(context, ref, foldersAsync.valueOrNull ?? const []),
           ),
         ],
       ),
       body: foldersAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('加载文件夹失败: $e')),
-        data: (folders) => folders.isEmpty
-            ? const Center(child: Text('暂无文件夹'))
-            : ListView.builder(
-                itemCount: folders.length,
-                itemBuilder: (_, i) {
-                  final f = folders[i];
-                  return ListTile(
-                    leading: const Icon(Icons.folder),
-                    title: Text(f.name),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.edit_outlined),
-                          onPressed: () => _rename(context, ref, f),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline),
-                          onPressed: () => _delete(context, ref, f),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
+        data: (folders) {
+          final entries = flattenSidebarHierarchy(
+            folders,
+            idOf: (folder) => folder.id,
+            parentIdOf: (folder) => folder.parentId,
+          );
+          return folders.isEmpty
+              ? const Center(child: Text('暂无文件夹'))
+              : ListView.builder(
+                  itemCount: entries.length,
+                  itemBuilder: (_, i) {
+                    final entry = entries[i];
+                    final f = entry.node;
+                    return ListTile(
+                      key: ValueKey('folder-row-${f.id}'),
+                      contentPadding: EdgeInsets.only(
+                        left: 16 + entry.depth * 24,
+                        right: 8,
+                      ),
+                      leading: const Icon(Icons.folder),
+                      title: Text(f.name),
+                      subtitle: f.parentId == null
+                          ? null
+                          : Text(_folderPath(f, folders)),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit_outlined),
+                            onPressed: () => _edit(context, ref, f, folders),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline),
+                            onPressed: () => _delete(context, ref, f),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                );
+        },
       ),
     );
   }
 
-  Future<void> _create(BuildContext context, WidgetRef ref) async {
-    final name = await _promptName(context, '新建文件夹');
-    if (name == null || name.isEmpty) return;
+  Future<void> _create(
+    BuildContext context,
+    WidgetRef ref,
+    List<TodoFolder> folders,
+  ) async {
+    final result = await _promptFolder(context, folders: folders);
+    if (result == null) return;
     final repo = ref.read(folderRepositoryProvider);
     if (repo == null) return;
-    await repo.create(name);
+    await repo.create(result.$1, parentId: result.$2);
   }
 
-  Future<void> _rename(
+  Future<void> _edit(
     BuildContext context,
     WidgetRef ref,
     TodoFolder folder,
+    List<TodoFolder> folders,
   ) async {
-    final name = await _promptName(context, '重命名文件夹', initial: folder.name);
-    if (name == null || name.isEmpty) return;
+    final result = await _promptFolder(
+      context,
+      folders: folders,
+      editingFolderId: folder.id,
+      initialName: folder.name,
+      initialParentId: folder.parentId,
+    );
+    if (result == null) return;
     final repo = ref.read(folderRepositoryProvider);
     if (repo == null) return;
-    await repo.rename(folder.id, name);
+    try {
+      await repo.rename(folder.id, result.$1);
+      if (result.$2 != folder.parentId) {
+        await repo.moveToParent(folder.id, result.$2);
+      }
+    } on StateError catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
   }
 
   Future<void> _delete(
@@ -82,7 +121,10 @@ class FolderPage extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('删除文件夹'),
-        content: Text('确认删除"${folder.name}"？\n其下清单将移至"未分组"。'),
+        content: Text(
+          '确认删除"${folder.name}"？\n'
+          '其下清单将移至"未分组"，直接子文件夹将提升为顶层。',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -102,32 +144,111 @@ class FolderPage extends ConsumerWidget {
     }
   }
 
-  Future<String?> _promptName(
-    BuildContext context,
-    String title, {
-    String? initial,
+  Future<(String, String?)?> _promptFolder(
+    BuildContext context, {
+    required List<TodoFolder> folders,
+    String? editingFolderId,
+    String? initialName,
+    String? initialParentId,
   }) async {
-    final ctrl = TextEditingController(text: initial ?? '');
-    return showDialog<String>(
+    final ctrl = TextEditingController(text: initialName ?? '');
+    String? parentId = initialParentId;
+    final parentChoices = folders
+        .where((folder) => _canUseAsParent(folder, editingFolderId, folders))
+        .toList(growable: false);
+    return showDialog<(String, String?)>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: const InputDecoration(border: OutlineInputBorder()),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: Text(editingFolderId == null ? '新建文件夹' : '编辑文件夹'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: ctrl,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: '文件夹名',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              InputDecorator(
+                decoration: const InputDecoration(
+                  labelText: '父文件夹',
+                  border: OutlineInputBorder(),
+                ),
+                child: DropdownButton<String>(
+                  key: const Key('folder-parent-picker'),
+                  value: parentId ?? _rootParentValue,
+                  isExpanded: true,
+                  underline: const SizedBox.shrink(),
+                  items: [
+                    const DropdownMenuItem(
+                      value: _rootParentValue,
+                      child: Text('顶层文件夹'),
+                    ),
+                    ...parentChoices.map(
+                      (folder) => DropdownMenuItem(
+                        value: folder.id,
+                        child: Text(_folderPath(folder, folders)),
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) => setState(
+                    () => parentId = value == _rootParentValue ? null : value,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final name = ctrl.text.trim();
+                if (name.isNotEmpty) Navigator.pop(ctx, (name, parentId));
+              },
+              child: const Text('保存'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-            child: const Text('保存'),
-          ),
-        ],
       ),
     );
   }
+
+  bool _canUseAsParent(
+    TodoFolder candidate,
+    String? editingFolderId,
+    List<TodoFolder> folders,
+  ) {
+    if (editingFolderId == null) return true;
+    if (candidate.id == editingFolderId) return false;
+    final byId = {for (final folder in folders) folder.id: folder};
+    final visited = <String>{};
+    TodoFolder? current = candidate;
+    while (current != null && visited.add(current.id)) {
+      if (current.parentId == editingFolderId) return false;
+      current = current.parentId == null ? null : byId[current.parentId!];
+    }
+    return true;
+  }
+
+  String _folderPath(TodoFolder folder, List<TodoFolder> folders) {
+    final byId = {for (final item in folders) item.id: item};
+    final names = <String>[];
+    final visited = <String>{};
+    TodoFolder? current = folder;
+    while (current != null && visited.add(current.id)) {
+      names.add(current.name);
+      current = current.parentId == null ? null : byId[current.parentId!];
+    }
+    return names.reversed.join(' / ');
+  }
+
+  static const _rootParentValue = '__root__';
 }

@@ -13,6 +13,40 @@ import 'package:zh_cloud_todo_flutter/core/sync/sync_coordinator.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/folder_repository.dart';
 
 void main() {
+  test('offline folder reparent coalesces before REST create', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    var createCount = 0;
+    final createdPayloads = <Map<String, dynamic>>[];
+    final dio = Dio()
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            expect(options.path, '/app-api/todo/folder/create');
+            createCount++;
+            createdPayloads.add(Map<String, dynamic>.from(options.data as Map));
+            handler.resolve(
+              Response<Map<String, dynamic>>(
+                requestOptions: options,
+                data: {'code': 0, 'data': 70 + createCount},
+              ),
+            );
+          },
+        ),
+      );
+    final repository = FolderRepository(db, SyncChangeQueue(db));
+    final parent = await repository.create('项目');
+    final child = await repository.create('后端', parentId: parent.id);
+    await repository.moveToParent(child.id, null);
+
+    final pending = await db.select(db.todoSyncChanges).get();
+    expect(pending, hasLength(2), reason: '子文件夹创建与改父级应合并为一个最终 upsert');
+    expect(await _coordinator(db, dio).push(), 2);
+    expect(createCount, 2, reason: '父子两个本地实体只能各创建一次');
+    expect(createdPayloads.last['name'], '后端');
+    expect(createdPayloads.last['parentId'], isNull);
+  });
+
   test(
     'failed folder REST change survives restart and retries automatically',
     () async {

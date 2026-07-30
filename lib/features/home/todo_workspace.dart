@@ -47,6 +47,10 @@ class TodoWorkspace extends StatelessWidget {
     required this.onOpenTags,
     required this.onOpenFilters,
     required this.onOpenSettings,
+    required this.onOpenPomodoro,
+    required this.onOpenHabit,
+    required this.onOpenCountdown,
+    this.onSelectTag,
     this.onOpenNotes,
     this.onSearchResultSelected,
     this.scaffoldKey,
@@ -68,6 +72,10 @@ class TodoWorkspace extends StatelessWidget {
   final VoidCallback onOpenTags;
   final VoidCallback onOpenFilters;
   final VoidCallback onOpenSettings;
+  final VoidCallback onOpenPomodoro;
+  final VoidCallback onOpenHabit;
+  final VoidCallback onOpenCountdown;
+  final ValueChanged<String>? onSelectTag;
   final VoidCallback? onOpenNotes;
   final ValueChanged<TaskSearchResult>? onSearchResultSelected;
   final GlobalKey<ScaffoldState>? scaffoldKey;
@@ -140,6 +148,10 @@ class TodoWorkspace extends StatelessWidget {
             onOpenTags: onOpenTags,
             onOpenFilters: onOpenFilters,
             onOpenSettings: onOpenSettings,
+            onSelectTag: onSelectTag,
+            onOpenPomodoro: onOpenPomodoro,
+            onOpenHabit: onOpenHabit,
+            onOpenCountdown: onOpenCountdown,
             onOpenNotes: onOpenNotes,
           ),
           _WorkspaceDivider(color: colors.border),
@@ -184,6 +196,10 @@ class TodoWorkspace extends StatelessWidget {
             onOpenTags: onOpenTags,
             onOpenFilters: onOpenFilters,
             onOpenSettings: onOpenSettings,
+            onSelectTag: onSelectTag,
+            onOpenPomodoro: onOpenPomodoro,
+            onOpenHabit: onOpenHabit,
+            onOpenCountdown: onOpenCountdown,
             onOpenNotes: onOpenNotes,
           ),
           _WorkspaceDivider(color: colors.border),
@@ -268,6 +284,10 @@ class TodoWorkspace extends StatelessWidget {
           onOpenTags: onOpenTags,
           onOpenFilters: onOpenFilters,
           onOpenSettings: onOpenSettings,
+          onSelectTag: onSelectTag,
+          onOpenPomodoro: onOpenPomodoro,
+          onOpenHabit: onOpenHabit,
+          onOpenCountdown: onOpenCountdown,
           onOpenNotes: onOpenNotes,
           onOpenReminders: onOpenReminders,
           onNavigationCommitted: () => Scaffold.of(drawerContext).closeDrawer(),

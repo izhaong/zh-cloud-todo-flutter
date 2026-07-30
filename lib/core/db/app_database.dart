@@ -80,6 +80,9 @@ class TodoTasks extends Table {
 class TodoFolders extends Table {
   TextColumn get id => text()();
   IntColumn get serverId => integer().nullable()();
+
+  /// 本地 UUID，指向上级文件夹；REST 时转换为服务端整数 ID。
+  TextColumn get parentId => text().nullable()();
   TextColumn get name => text()();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
   DateTimeColumn get updatedAt => dateTime()();
@@ -402,7 +405,7 @@ class AppDatabase extends _$AppDatabase {
   }) : super(_open(_userDatabaseName(tenantId, userId, testNamespace)));
 
   @override
-  int get schemaVersion => 17;
+  int get schemaVersion => 18;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -592,6 +595,11 @@ class AppDatabase extends _$AppDatabase {
         }
         if (!await _tableExists(m, todoRecommendations.actualTableName)) {
           await m.createTable(todoRecommendations);
+        }
+      }
+      if (from < 18) {
+        if (!await _columnExists(m, 'todo_folders', 'parent_id')) {
+          await m.addColumn(todoFolders, todoFolders.parentId);
         }
       }
     },

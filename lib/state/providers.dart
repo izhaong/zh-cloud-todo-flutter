@@ -347,7 +347,7 @@ final tagsStreamProvider = StreamProvider<List<TodoTag>>((ref) {
   return repo.watchAll();
 });
 
-/// 任务统计（all / inbox / today / upcoming），供 Sidebar 徽章计数。
+/// 任务统计（all / inbox / today / tomorrow / upcoming），供 Sidebar 徽章计数。
 /// 完全基于本地 Drift watchAll()，离线可用。
 final taskStatsProvider = StreamProvider<TaskStats>((ref) {
   final repo = ref.watch(taskRepositoryProvider);
@@ -362,16 +362,23 @@ final taskStatsProvider = StreamProvider<TaskStats>((ref) {
 /// - today: 截止日 = 今天 的未完成任务
 /// - upcoming: 截止日在 (今天, +7天] 的未完成任务
 class TaskStats {
-  const TaskStats(this.all, this.inbox, this.today, this.upcoming);
+  const TaskStats(
+    this.all,
+    this.inbox,
+    this.today,
+    this.tomorrow,
+    this.upcoming,
+  );
   final int all;
   final int inbox;
   final int today;
+  final int tomorrow;
   final int upcoming;
 
-  static const empty = TaskStats(0, 0, 0, 0);
+  static const empty = TaskStats(0, 0, 0, 0, 0);
 
   static TaskStats fromTasks(List tasks, {DateTime? now}) {
-    var all = 0, inbox = 0, today = 0, upcoming = 0;
+    var all = 0, inbox = 0, today = 0, tomorrow = 0, upcoming = 0;
     final effectiveNow = now ?? DateTime.now();
     final todayStart = DateTime(
       effectiveNow.year,
@@ -379,6 +386,7 @@ class TaskStats {
       effectiveNow.day,
     );
     final todayEnd = todayStart.add(const Duration(days: 1));
+    final tomorrowEnd = todayEnd.add(const Duration(days: 1));
     final weekEnd = todayStart.add(const Duration(days: 7));
     for (final t in tasks) {
       if (t.completed || t.cancelled) continue;
@@ -388,11 +396,14 @@ class TaskStats {
       if (due != null) {
         if (due.isBefore(todayEnd) && !due.isBefore(todayStart)) {
           today++;
-        } else if (due.isAfter(todayStart) && !due.isAfter(weekEnd)) {
+        } else if (!due.isBefore(todayEnd) && due.isBefore(tomorrowEnd)) {
+          tomorrow++;
+          upcoming++;
+        } else if (!due.isBefore(tomorrowEnd) && !due.isAfter(weekEnd)) {
           upcoming++;
         }
       }
     }
-    return TaskStats(all, inbox, today, upcoming);
+    return TaskStats(all, inbox, today, tomorrow, upcoming);
   }
 }

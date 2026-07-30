@@ -20,7 +20,8 @@ void main() {
     expect(find.text('智能清单'), findsOneWidget);
     expect(find.text('收集箱'), findsOneWidget);
     expect(find.text('今天'), findsOneWidget);
-    expect(find.text('最近7天'), findsOneWidget);
+    expect(find.text('明天'), findsOneWidget);
+    expect(find.text('未来7天'), findsOneWidget);
     expect(find.text('全部'), findsOneWidget);
     expect(find.text('已完成'), findsOneWidget);
     expect(find.text('垃圾桶'), findsOneWidget);
@@ -28,9 +29,22 @@ void main() {
     expect(find.text('日历'), findsOneWidget);
     expect(find.text('标签'), findsOneWidget);
     expect(find.text('筛选器'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('新建清单'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('清单'), findsOneWidget);
     expect(find.text('新建清单'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('设置'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('设置'), findsOneWidget);
+    expect(find.text('番茄'), findsOneWidget);
+    expect(find.text('习惯'), findsOneWidget);
+    expect(find.text('倒数日'), findsOneWidget);
   });
 
   testWidgets('Sidebar navigation rows use the fixed 40px density', (
@@ -60,10 +74,14 @@ void main() {
       final row = find.byKey(
         const ValueKey('todo-sidebar-list-${TodoVisualFixture.readingListId}'),
       );
-      expect(row, findsOneWidget);
-      await tester.ensureVisible(row);
+      await tester.scrollUntilVisible(
+        row,
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.pump();
 
+      expect(row, findsOneWidget);
       expect(tester.takeException(), isNull, reason: '长清单名不应导致布局溢出');
       expect(tester.getSize(row).height, 40);
       final label = tester.widget<Text>(find.text(longListName));
@@ -275,6 +293,9 @@ class _TestSidebar extends StatelessWidget {
         onOpenTags: _noopVoid,
         onOpenFilters: _noopVoid,
         onOpenSettings: _noopVoid,
+        onOpenPomodoro: _noopVoid,
+        onOpenHabit: _noopVoid,
+        onOpenCountdown: _noopVoid,
       ),
     );
   }

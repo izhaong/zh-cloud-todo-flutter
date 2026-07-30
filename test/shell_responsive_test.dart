@@ -27,11 +27,12 @@ void main() {
   });
 
   group('SmartList 枚举', () {
-    test('6 个智能清单文案', () {
+    test('7 个智能清单文案', () {
       expect(SmartList.values.map((s) => s.label).toList(), [
         '收集箱',
         '今天',
-        '最近7天',
+        '明天',
+        '未来7天',
         '全部',
         '已完成',
         '垃圾桶',
@@ -56,7 +57,8 @@ void main() {
       expect(find.text('智能清单'), findsOneWidget);
       expect(find.text('收集箱'), findsOneWidget);
       expect(find.text('今天'), findsOneWidget);
-      expect(find.text('最近7天'), findsOneWidget);
+      expect(find.text('明天'), findsOneWidget);
+      expect(find.text('未来7天'), findsOneWidget);
       expect(find.text('全部'), findsOneWidget);
       expect(find.text('已完成'), findsOneWidget);
       expect(find.text('垃圾桶'), findsOneWidget);
@@ -66,22 +68,74 @@ void main() {
       expect(find.text('标签'), findsOneWidget);
       expect(find.text('筛选器'), findsOneWidget);
       // 清单树
+      await tester.scrollUntilVisible(
+        find.text('新建清单'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.text('清单'), findsOneWidget);
       expect(find.text('新建清单'), findsOneWidget);
       // 设置
+      await tester.scrollUntilVisible(
+        find.text('设置'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.text('设置'), findsOneWidget);
+      expect(find.text('番茄'), findsOneWidget);
+      expect(find.text('习惯'), findsOneWidget);
+      expect(find.text('倒数日'), findsOneWidget);
 
       // 点击智能清单触发回调
+      await tester.scrollUntilVisible(
+        find.text('今天'),
+        -300,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.tap(find.text('今天'));
       expect(tapped, '今天');
+    });
+
+    testWidgets('底部效率入口触发各自回调', (tester) async {
+      var opened = '';
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            theme: ThemeData.light().copyWith(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            home: _TestSidebar(
+              onSelectSmart: (_) {},
+              onOpenPomodoro: () => opened = 'pomodoro',
+              onOpenHabit: () => opened = 'habit',
+              onOpenCountdown: () => opened = 'countdown',
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('番茄'));
+      expect(opened, 'pomodoro');
+      await tester.tap(find.text('习惯'));
+      expect(opened, 'habit');
+      await tester.tap(find.text('倒数日'));
+      expect(opened, 'countdown');
     });
   });
 }
 
 /// 用最小参数渲染真实 [Sidebar]（不依赖 provider 数据通路的字段给空 list）。
 class _TestSidebar extends StatelessWidget {
-  const _TestSidebar({required this.onSelectSmart});
+  const _TestSidebar({
+    required this.onSelectSmart,
+    this.onOpenPomodoro,
+    this.onOpenHabit,
+    this.onOpenCountdown,
+  });
   final ValueChanged<SmartList> onSelectSmart;
+  final VoidCallback? onOpenPomodoro;
+  final VoidCallback? onOpenHabit;
+  final VoidCallback? onOpenCountdown;
 
   @override
   Widget build(BuildContext context) {
@@ -96,6 +150,9 @@ class _TestSidebar extends StatelessWidget {
         onOpenTags: () {},
         onOpenFilters: () {},
         onOpenSettings: () {},
+        onOpenPomodoro: onOpenPomodoro,
+        onOpenHabit: onOpenHabit,
+        onOpenCountdown: onOpenCountdown,
       ),
     );
   }
