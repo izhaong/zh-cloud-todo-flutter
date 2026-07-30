@@ -9,13 +9,14 @@
 
 ## Phase 2: 真实视图交互
 
-- [ ] T005 写列表、看板和时间线 Widget 失败测试，断言拖拽产生共享 use-case mutation 与可见反馈。
-- [ ] T006 最小修改既有视图接入 use-case，不改变已批准工作区结构，使 T005 通过。
+- [x] T005 写列表、看板和时间线 Widget 失败测试，断言拖拽产生共享 use-case mutation 与可见反馈。
+- [x] T006 最小修改既有视图接入 use-case，不改变已批准工作区结构，使 T005 通过。
 - [ ] T007 与 Service #185 完成契约/权限/幂等对齐，记录双方定向命令和 API 结果。
 - [ ] T008 执行固定桌面、移动、离线恢复与视觉基准旅程，把实际证据写入 Docs #53；未执行项保持未勾选。
 
 ## 执行证据
 
+- 2026-07-30：T005/T006 的时间线真实拖拽完成红绿闭环，并与既有列表、看板真实手势证据合并结项。先新增 Widget 失败测试，分别因缺少 `timeline-task-drag-*` 与 `timeline-task-resize-*` 入口失败；实现后任务本体每 `72px × zoom` 横向拖动一个显示日，复用 B2 固定时区/跨 DST 墙钟换算，右边缘每 `24px × zoom` 调整非全天任务一小时、全天任务一天，非法区间仍由共享 Repository 拒绝。拖拽和按钮均只调用 `onTaskTimeChange → TaskViewActionRepository → Drift/outbox`，失败沿用可见反馈，按钮保留为键盘与无障碍替代入口。该行为对齐滴答清单官方“拖任务修改时间、拖边缘修改时长”说明；时间线/共享 Repository/分桶定向组 40 项通过，全量测试 563 项通过、25 项受保护环境条件跳过，全量静态分析无错误；清空 entitlement 后的本机临时签名 macOS 构建退出码为 0，但不替代正式开发证书签名与固定设备验收。T005/T006 完成；T007 的真实 HTTP/双设备和 T008 固定设备旅程继续保持未完成。
 - 2026-07-30：补齐 task mutation 与 view preference 的同批失败恢复旅程：发送顺序固定为 `task → view_preference`，首次网络失败后两项均进入 `retryable` 且 attempt 为 1；到达退避时间后复用原 batch `idempotencyKey` 与两个 `clientMutationId`，成功回写后第三次 push 不再发送。结合既有 task 冲突采用服务端 revision 后重新编辑、时间线/看板偏好冲突覆盖与最新 revision 重放、清单临时 ID 依赖测试，T004 的顺序、重试、冲突与回放均闭环；相关 SyncCoordinator 定向组 12 项通过，全量 analyze 无错误，全量测试 534 项通过、25 项受保护环境条件跳过。
 - 2026-07-30：补齐共享视图写链路的非法输入回归：时间线拒绝结束时间不晚于开始时间、看板拒绝 0–3 之外的优先级、列表重排拒绝重复任务 UUID，三类拒绝均保持原任务字段与排序且不创建 outbox。结合既有列表重排、看板跨列、时间调整、只读清单、跨清单事务拒绝、偏好来源隔离和 Drift/outbox 原子写测试，T002/T003 的独立契约已完整覆盖；`task_view_action_repository_test.dart` 16 项通过，全量 analyze 无错误，全量测试 533 项通过、25 项受保护环境条件跳过。T004、三个视图完整 Widget 旅程、Service/真实 HTTP 和固定设备证据继续保持未完成。
 - 2026-07-30：T002/T003 的来源隔离增量完成红绿闭环。旧实现固定写入 `task_view/tasks_by_list`，切换清单会继承上一来源的视图模式；现在按 `list:<local UUID>` 或稳定智能来源键经 `TaskViewActionRepository → Drift + view_preference outbox` 保存和恢复，并为默认收集箱保留旧键只读回退。SyncCoordinator 在协议边界把普通清单键转换为 `list-server:<server ID>`，入站再映射回本地 UUID，避免跨设备泄漏本机标识；单调恢复 revision 阻止 A→B→A 快速切换时旧异步结果覆盖新状态。遗留 `TaskViewModeTabs` 已改为纯展示/回调组件，不再由 Widget 直接写同步队列。来源隔离、兼容读取、跨端映射、竞态与既有任务视图定向测试均通过；T002/T003 仍未勾选，因为只读/非法任务 mutation、完整偏好字段和其余 B4 门槛尚未全部验证。

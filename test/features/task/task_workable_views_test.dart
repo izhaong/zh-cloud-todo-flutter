@@ -261,6 +261,121 @@ void main() {
     ));
   });
 
+  testWidgets('时间线拖动任务本体会按日期移动共享任务时间', (tester) async {
+    final now = DateTime(2026, 7, 15, 9);
+    final task = _viewTask(
+      id: 'timeline-drag',
+      title: '拖动时间线任务',
+      startAt: DateTime(2026, 7, 16, 9),
+      endAt: DateTime(2026, 7, 16, 10),
+    );
+    (DateTime, DateTime, DateTime)? request;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TimelineView(
+            tasks: [task],
+            now: now,
+            onTaskTimeChange:
+                (_, {required startAt, required endAt, required dueAt}) async {
+                  request = (startAt, endAt, dueAt);
+                },
+          ),
+        ),
+      ),
+    );
+
+    await tester.drag(
+      find.byKey(const ValueKey('timeline-task-drag-timeline-drag')),
+      const Offset(72, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(request, (
+      DateTime(2026, 7, 17, 9),
+      DateTime(2026, 7, 17, 10),
+      DateTime(2026, 7, 17, 10),
+    ));
+  });
+
+  testWidgets('时间线拖动任务右边缘会调整时长', (tester) async {
+    final now = DateTime(2026, 7, 15, 9);
+    final task = _viewTask(
+      id: 'timeline-resize',
+      title: '调整时间线时长',
+      startAt: DateTime(2026, 7, 16, 9),
+      endAt: DateTime(2026, 7, 16, 10),
+    );
+    (DateTime, DateTime, DateTime)? request;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TimelineView(
+            tasks: [task],
+            now: now,
+            onTaskTimeChange:
+                (_, {required startAt, required endAt, required dueAt}) async {
+                  request = (startAt, endAt, dueAt);
+                },
+          ),
+        ),
+      ),
+    );
+
+    await tester.drag(
+      find.byKey(const ValueKey('timeline-task-resize-timeline-resize')),
+      const Offset(24, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(request, (
+      DateTime(2026, 7, 16, 9),
+      DateTime(2026, 7, 16, 11),
+      DateTime(2026, 7, 16, 11),
+    ));
+  });
+
+  testWidgets('时间线全天任务使用按天调整时长的无障碍说明', (tester) async {
+    final now = DateTime(2026, 7, 15, 9);
+    final task = TodoTask(
+      id: 'timeline-all-day',
+      listId: 'list-inbox',
+      title: '全天时间线任务',
+      completed: false,
+      cancelled: false,
+      allDay: true,
+      fixedTimezone: false,
+      priority: 0,
+      isPinned: false,
+      sortOrder: 0,
+      startAt: DateTime(2026, 7, 16),
+      endAt: DateTime(2026, 7, 17),
+      dueAt: DateTime(2026, 7, 17),
+      updatedAt: now,
+      createdAt: now,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TimelineView(
+            tasks: [task],
+            now: now,
+            onTaskTimeChange:
+                (
+                  _, {
+                  required startAt,
+                  required endAt,
+                  required dueAt,
+                }) async {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byTooltip('延长一天'), findsOneWidget);
+    expect(find.byTooltip('拖动右边缘按天调整时长'), findsOneWidget);
+  });
+
   testWidgets('时间线固定时区跨夏令时顺延保持墙钟时刻', (tester) async {
     final now = DateTime.utc(2026, 10, 30, 12);
     final task = TodoTask(

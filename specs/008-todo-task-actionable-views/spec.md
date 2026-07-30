@@ -2,7 +2,7 @@
 
 **Feature Branch**: `feat/97-todo-workable-views`
 **Created**: 2026-07-15
-**Status**: 执行中；来源隔离、共享清单只读写链路与任务重排 REST 契约已完成独立红绿闭环，B4 仍为 partial。
+**Status**: 执行中；列表、看板与时间线的本地真实拖拽、来源隔离、共享清单只读写链路与任务重排 REST 契约已完成独立红绿闭环；真实 HTTP、双设备与固定设备旅程仍使 B4 保持 partial。
 **Input**: 父仓 B4、B0 能力矩阵、Flutter #97、Service #185、Docs #53。
 
 ## User Scenarios & Testing

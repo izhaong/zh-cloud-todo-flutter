@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -448,7 +449,12 @@ class _TimelineTaskTile extends StatefulWidget {
 }
 
 class _TimelineTaskTileState extends State<_TimelineTaskTile> {
+  static const _dayDragExtent = 72.0;
+  static const _hourResizeExtent = 24.0;
+
   bool _saving = false;
+  double _moveDragDistance = 0;
+  double _resizeDragDistance = 0;
 
   DateTime _shiftByDisplayDays(DateTime instant, int days) {
     if (widget.task.allDay) {
@@ -478,33 +484,71 @@ class _TimelineTaskTileState extends State<_TimelineTaskTile> {
     );
   }
 
-  Future<void> _apply({required bool extend}) async {
+  Future<void> _moveByDays(int days) async {
     final callback = widget.onTaskTimeChange;
     final startAt = widget.task.startAt;
     final endAt = widget.task.endAt;
     if (callback == null) return;
-    if (startAt == null || endAt == null) {
+    if (!_hasEditableRange(startAt, endAt)) return;
+    final dueAt = widget.task.dueAt ?? endAt;
+    await _commitTimeChange(
+      callback,
+      startAt: _shiftByDisplayDays(startAt!, days),
+      endAt: _shiftByDisplayDays(endAt!, days),
+      dueAt: _shiftByDisplayDays(dueAt!, days),
+    );
+  }
+
+  Future<void> _resizeByUnits(int units) async {
+    final callback = widget.onTaskTimeChange;
+    final startAt = widget.task.startAt;
+    final endAt = widget.task.endAt;
+    if (callback == null) return;
+    if (!_hasEditableRange(startAt, endAt)) return;
+    final dueAt = widget.task.dueAt ?? endAt;
+    final nextEndAt = widget.task.allDay
+        ? _shiftByDisplayDays(endAt!, units)
+        : endAt!.add(Duration(hours: units));
+    final nextDueAt = widget.task.allDay
+        ? _shiftByDisplayDays(dueAt!, units)
+        : dueAt!.add(Duration(hours: units));
+    if (!nextEndAt.isAfter(startAt!)) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('请先在任务详情中设置开始和结束时间')));
+      ).showSnackBar(const SnackBar(content: Text('结束时间必须晚于开始时间')));
       return;
     }
-    final nextStartAt = extend ? startAt : _shiftByDisplayDays(startAt, 1);
-    final nextEndAt = extend
-        ? endAt.add(const Duration(hours: 1))
-        : _shiftByDisplayDays(endAt, 1);
-    final dueAt = widget.task.dueAt ?? endAt;
-    final nextDueAt = extend
-        ? dueAt.add(const Duration(hours: 1))
-        : _shiftByDisplayDays(dueAt, 1);
+    await _commitTimeChange(
+      callback,
+      startAt: startAt,
+      endAt: nextEndAt,
+      dueAt: nextDueAt,
+    );
+  }
+
+  bool _hasEditableRange(DateTime? startAt, DateTime? endAt) {
+    if (startAt != null && endAt != null) return true;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('请先在任务详情中设置开始和结束时间')));
+    return false;
+  }
+
+  Future<void> _commitTimeChange(
+    Future<void> Function(
+      TodoTask task, {
+      required DateTime startAt,
+      required DateTime endAt,
+      required DateTime dueAt,
+    })
+    callback, {
+    required DateTime startAt,
+    required DateTime endAt,
+    required DateTime dueAt,
+  }) async {
     setState(() => _saving = true);
     try {
-      await callback(
-        widget.task,
-        startAt: nextStartAt,
-        endAt: nextEndAt,
-        dueAt: nextDueAt,
-      );
+      await callback(widget.task, startAt: startAt, endAt: endAt, dueAt: dueAt);
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -516,6 +560,19 @@ class _TimelineTaskTileState extends State<_TimelineTaskTile> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Future<void> _finishMoveDrag() async {
+    final days = (_moveDragDistance / (_dayDragExtent * widget.zoom)).round();
+    _moveDragDistance = 0;
+    if (days != 0) await _moveByDays(days);
+  }
+
+  Future<void> _finishResizeDrag() async {
+    final extent = widget.task.allDay ? _dayDragExtent : _hourResizeExtent;
+    final units = (_resizeDragDistance / (extent * widget.zoom)).round();
+    _resizeDragDistance = 0;
+    if (units != 0) await _resizeByUnits(units);
   }
 
   @override
@@ -531,21 +588,45 @@ class _TimelineTaskTileState extends State<_TimelineTaskTile> {
           size: 18 * widget.zoom,
           color: colors.mutedForeground,
         ),
-        title: Text(
-          widget.task.title,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: colors.foreground,
-            fontSize: 14 * widget.zoom,
+        title: GestureDetector(
+          key: ValueKey('timeline-task-drag-${widget.task.id}'),
+          behavior: HitTestBehavior.opaque,
+          dragStartBehavior: DragStartBehavior.down,
+          onHorizontalDragStart: _saving ? null : (_) => _moveDragDistance = 0,
+          onHorizontalDragUpdate: _saving
+              ? null
+              : (details) => _moveDragDistance += details.delta.dx,
+          onHorizontalDragEnd: _saving ? null : (_) => _finishMoveDrag(),
+          child: MouseRegion(
+            cursor: _saving
+                ? SystemMouseCursors.basic
+                : SystemMouseCursors.grab,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.task.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: colors.foreground,
+                      fontSize: 14 * widget.zoom,
+                    ),
+                  ),
+                  if (widget.task.dueAt != null)
+                    Text(
+                      widget.dueDateFormat.format(
+                        _timelineDueDisplay(widget.task)!,
+                      ),
+                      style: TextStyle(color: colors.mutedForeground),
+                    ),
+                ],
+              ),
+            ),
           ),
         ),
-        subtitle: widget.task.dueAt == null
-            ? null
-            : Text(
-                widget.dueDateFormat.format(_timelineDueDisplay(widget.task)!),
-                style: TextStyle(color: colors.mutedForeground),
-              ),
         trailing: widget.onTaskTimeChange == null
             ? null
             : Row(
@@ -554,12 +635,42 @@ class _TimelineTaskTileState extends State<_TimelineTaskTile> {
                   IconButton(
                     tooltip: '顺延一天',
                     icon: const Icon(Icons.calendar_today_outlined, size: 18),
-                    onPressed: _saving ? null : () => _apply(extend: false),
+                    onPressed: _saving ? null : () => _moveByDays(1),
                   ),
                   IconButton(
-                    tooltip: '延长一小时',
+                    tooltip: widget.task.allDay ? '延长一天' : '延长一小时',
                     icon: const Icon(Icons.more_time, size: 19),
-                    onPressed: _saving ? null : () => _apply(extend: true),
+                    onPressed: _saving ? null : () => _resizeByUnits(1),
+                  ),
+                  Tooltip(
+                    message: widget.task.allDay
+                        ? '拖动右边缘按天调整时长'
+                        : '拖动右边缘按小时调整时长',
+                    child: GestureDetector(
+                      key: ValueKey('timeline-task-resize-${widget.task.id}'),
+                      behavior: HitTestBehavior.opaque,
+                      dragStartBehavior: DragStartBehavior.down,
+                      onHorizontalDragStart: _saving
+                          ? null
+                          : (_) => _resizeDragDistance = 0,
+                      onHorizontalDragUpdate: _saving
+                          ? null
+                          : (details) =>
+                                _resizeDragDistance += details.delta.dx,
+                      onHorizontalDragEnd: _saving
+                          ? null
+                          : (_) => _finishResizeDrag(),
+                      child: MouseRegion(
+                        cursor: _saving
+                            ? SystemMouseCursors.basic
+                            : SystemMouseCursors.resizeLeftRight,
+                        child: const SizedBox(
+                          width: 24,
+                          height: 40,
+                          child: Icon(Icons.drag_handle, size: 18),
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
