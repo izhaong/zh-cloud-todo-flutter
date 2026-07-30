@@ -10,6 +10,7 @@ import 'package:zh_cloud_todo_flutter/core/api/sync_api.dart';
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_coordinator.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/folder_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/list_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/tag_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_query_repository.dart';
@@ -636,6 +637,83 @@ void main() {
             .toSet(),
         {'synced'},
       );
+    },
+  );
+
+  test(
+    'same push creates an offline folder before its associated list',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final queue = SyncChangeQueue(db);
+      final folder = await FolderRepository(db, queue).create('离线项目');
+      final list = await ListRepository(
+        db,
+        queue,
+      ).create(name: '离线清单', folderLocalId: folder.id);
+
+      Map<String, dynamic>? pushedList;
+      final requestOrder = <String>[];
+      final dio = Dio()
+        ..interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (options, handler) {
+              if (options.path.endsWith('/folder/create')) {
+                requestOrder.add('folder');
+                handler.resolve(
+                  Response<Map<String, dynamic>>(
+                    requestOptions: options,
+                    data: {'code': 0, 'data': 88},
+                  ),
+                );
+                return;
+              }
+              requestOrder.add('sync');
+              final changes = ((options.data as Map)['changes'] as List)
+                  .cast<Map>()
+                  .map((entry) => entry.cast<String, dynamic>())
+                  .toList();
+              pushedList = changes.singleWhere(
+                (change) => change['entityType'] == 'list',
+              );
+              handler.resolve(
+                Response<Map<String, dynamic>>(
+                  requestOptions: options,
+                  data: {
+                    'code': 0,
+                    'data': {
+                      'ok': true,
+                      'accepted': [
+                        {
+                          'entityType': 'list',
+                          'entityId': 101,
+                          'operation': 'upsert',
+                          'clientMutationId': pushedList!['clientMutationId'],
+                        },
+                      ],
+                      'conflicts': const [],
+                    },
+                  },
+                ),
+              );
+            },
+          ),
+        );
+      final client = ApiClient(dio: dio);
+      final coordinator = SyncCoordinator(
+        db: db,
+        api: SyncApi(client, clientId: 'device-a', deviceId: 'device-a'),
+        todoApi: client,
+      );
+
+      expect(await coordinator.push(), 2);
+      expect(requestOrder, ['folder', 'sync']);
+      expect(pushedList!['payload']['folderId'], 88);
+      expect(pushedList!['payload'], isNot(contains('folderLocalId')));
+      final syncedList = await db.listByLocalId(list.id);
+      expect(syncedList?.folderLocalId, folder.id);
+      expect(syncedList?.folderId, 88);
+      expect(syncedList?.serverId, 101);
     },
   );
 }

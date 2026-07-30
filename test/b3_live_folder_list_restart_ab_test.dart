@@ -33,7 +33,9 @@ void main() {
       driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
       final sessionA = await _login();
       final sessionB = await _login();
-      final directory = await Directory.systemTemp.createTemp('todo-b3-folder-');
+      final directory = await Directory.systemTemp.createTemp(
+        'todo-b3-folder-',
+      );
       final databaseFile = File('${directory.path}/todo.sqlite');
       var dbA = AppDatabase.forTesting(NativeDatabase(databaseFile));
       final dbB = AppDatabase.forTesting(NativeDatabase.memory());
@@ -49,7 +51,10 @@ void main() {
           queue,
         ).create('B3 restart folder $suffix');
         final lists = ListRepository(dbA, queue);
-        final list = await lists.create(name: 'B3 restart list $suffix');
+        final list = await lists.create(
+          name: 'B3 restart list $suffix',
+          folderLocalId: folder.id,
+        );
         await _coordinator(dbA, apiA, 'b3-restart-a-$suffix').push();
         expect(await _pendingOrFailedCount(dbA), 0);
         folderServerId =
@@ -65,21 +70,25 @@ void main() {
         if (folderId == null || listId == null) {
           fail('folder/list push did not return server IDs');
         }
+        final associated = await dbA.listByLocalId(list.id);
+        expect(associated?.folderLocalId, folder.id);
+        expect(associated?.folderId, folderId);
 
         await FolderApi(
           apiA,
         ).moveLists(listServerIds: [listId], folderServerId: folderId);
         await _coordinator(dbA, apiA, 'b3-restart-a-$suffix').pull();
-        await ListRepository(dbA, SyncChangeQueue(dbA)).moveToFolder(
-          list.id,
-          null,
-        );
+        await ListRepository(
+          dbA,
+          SyncChangeQueue(dbA),
+        ).moveToFolder(list.id, null);
         expect(await _pendingOrFailedCount(dbA), 1);
 
         await dbA.close();
         dbA = AppDatabase.forTesting(NativeDatabase(databaseFile));
         final restarted = await dbA.listByLocalId(list.id);
         expect(restarted?.folderId, isNull);
+        expect(restarted?.folderLocalId, isNull);
         expect(await _pendingOrFailedCount(dbA), 1);
 
         await _coordinator(dbA, apiA, 'b3-restart-a-$suffix').push();
@@ -89,6 +98,7 @@ void main() {
           dbB.todoLists,
         )..where((row) => row.serverId.equals(listId))).getSingleOrNull();
         expect(restoredB?.folderId, isNull);
+        expect(restoredB?.folderLocalId, isNull);
       } finally {
         await _deleteIfPresent(apiA, '/app-api/todo/list/delete', listServerId);
         await _deleteIfPresent(

@@ -38,6 +38,17 @@ class $TodoListsTable extends TodoLists
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _folderLocalIdMeta = const VerificationMeta(
+    'folderLocalId',
+  );
+  @override
+  late final GeneratedColumn<String> folderLocalId = GeneratedColumn<String>(
+    'folder_local_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _folderIdMeta = const VerificationMeta(
     'folderId',
   );
@@ -115,6 +126,7 @@ class $TodoListsTable extends TodoLists
     id,
     serverId,
     name,
+    folderLocalId,
     folderId,
     sortOrder,
     accessRole,
@@ -152,6 +164,15 @@ class $TodoListsTable extends TodoLists
       );
     } else if (isInserting) {
       context.missing(_nameMeta);
+    }
+    if (data.containsKey('folder_local_id')) {
+      context.handle(
+        _folderLocalIdMeta,
+        folderLocalId.isAcceptableOrUnknown(
+          data['folder_local_id']!,
+          _folderLocalIdMeta,
+        ),
+      );
     }
     if (data.containsKey('folder_id')) {
       context.handle(
@@ -214,6 +235,10 @@ class $TodoListsTable extends TodoLists
         DriftSqlType.string,
         data['${effectivePrefix}name'],
       )!,
+      folderLocalId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}folder_local_id'],
+      ),
       folderId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}folder_id'],
@@ -251,6 +276,11 @@ class TodoList extends DataClass implements Insertable<TodoList> {
   final String id;
   final int? serverId;
   final String name;
+
+  /// 本地 UUID，指向 [TodoFolders.id]；UI、Repository 与离线关联只使用此列。
+  final String? folderLocalId;
+
+  /// folder REST 服务端整数 ID 缓存，仅供同步协议和旧数据迁移使用。
   final int? folderId;
   final int sortOrder;
   final String accessRole;
@@ -261,6 +291,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
     required this.id,
     this.serverId,
     required this.name,
+    this.folderLocalId,
     this.folderId,
     required this.sortOrder,
     required this.accessRole,
@@ -276,6 +307,9 @@ class TodoList extends DataClass implements Insertable<TodoList> {
       map['server_id'] = Variable<int>(serverId);
     }
     map['name'] = Variable<String>(name);
+    if (!nullToAbsent || folderLocalId != null) {
+      map['folder_local_id'] = Variable<String>(folderLocalId);
+    }
     if (!nullToAbsent || folderId != null) {
       map['folder_id'] = Variable<int>(folderId);
     }
@@ -294,6 +328,9 @@ class TodoList extends DataClass implements Insertable<TodoList> {
           ? const Value.absent()
           : Value(serverId),
       name: Value(name),
+      folderLocalId: folderLocalId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(folderLocalId),
       folderId: folderId == null && nullToAbsent
           ? const Value.absent()
           : Value(folderId),
@@ -314,6 +351,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
       id: serializer.fromJson<String>(json['id']),
       serverId: serializer.fromJson<int?>(json['serverId']),
       name: serializer.fromJson<String>(json['name']),
+      folderLocalId: serializer.fromJson<String?>(json['folderLocalId']),
       folderId: serializer.fromJson<int?>(json['folderId']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
       accessRole: serializer.fromJson<String>(json['accessRole']),
@@ -329,6 +367,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
       'id': serializer.toJson<String>(id),
       'serverId': serializer.toJson<int?>(serverId),
       'name': serializer.toJson<String>(name),
+      'folderLocalId': serializer.toJson<String?>(folderLocalId),
       'folderId': serializer.toJson<int?>(folderId),
       'sortOrder': serializer.toJson<int>(sortOrder),
       'accessRole': serializer.toJson<String>(accessRole),
@@ -342,6 +381,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
     String? id,
     Value<int?> serverId = const Value.absent(),
     String? name,
+    Value<String?> folderLocalId = const Value.absent(),
     Value<int?> folderId = const Value.absent(),
     int? sortOrder,
     String? accessRole,
@@ -352,6 +392,9 @@ class TodoList extends DataClass implements Insertable<TodoList> {
     id: id ?? this.id,
     serverId: serverId.present ? serverId.value : this.serverId,
     name: name ?? this.name,
+    folderLocalId: folderLocalId.present
+        ? folderLocalId.value
+        : this.folderLocalId,
     folderId: folderId.present ? folderId.value : this.folderId,
     sortOrder: sortOrder ?? this.sortOrder,
     accessRole: accessRole ?? this.accessRole,
@@ -364,6 +407,9 @@ class TodoList extends DataClass implements Insertable<TodoList> {
       id: data.id.present ? data.id.value : this.id,
       serverId: data.serverId.present ? data.serverId.value : this.serverId,
       name: data.name.present ? data.name.value : this.name,
+      folderLocalId: data.folderLocalId.present
+          ? data.folderLocalId.value
+          : this.folderLocalId,
       folderId: data.folderId.present ? data.folderId.value : this.folderId,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
       accessRole: data.accessRole.present
@@ -381,6 +427,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
           ..write('id: $id, ')
           ..write('serverId: $serverId, ')
           ..write('name: $name, ')
+          ..write('folderLocalId: $folderLocalId, ')
           ..write('folderId: $folderId, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('accessRole: $accessRole, ')
@@ -396,6 +443,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
     id,
     serverId,
     name,
+    folderLocalId,
     folderId,
     sortOrder,
     accessRole,
@@ -410,6 +458,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
           other.id == this.id &&
           other.serverId == this.serverId &&
           other.name == this.name &&
+          other.folderLocalId == this.folderLocalId &&
           other.folderId == this.folderId &&
           other.sortOrder == this.sortOrder &&
           other.accessRole == this.accessRole &&
@@ -422,6 +471,7 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
   final Value<String> id;
   final Value<int?> serverId;
   final Value<String> name;
+  final Value<String?> folderLocalId;
   final Value<int?> folderId;
   final Value<int> sortOrder;
   final Value<String> accessRole;
@@ -433,6 +483,7 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
     this.name = const Value.absent(),
+    this.folderLocalId = const Value.absent(),
     this.folderId = const Value.absent(),
     this.sortOrder = const Value.absent(),
     this.accessRole = const Value.absent(),
@@ -445,6 +496,7 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
     required String id,
     this.serverId = const Value.absent(),
     required String name,
+    this.folderLocalId = const Value.absent(),
     this.folderId = const Value.absent(),
     this.sortOrder = const Value.absent(),
     this.accessRole = const Value.absent(),
@@ -460,6 +512,7 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
     Expression<String>? id,
     Expression<int>? serverId,
     Expression<String>? name,
+    Expression<String>? folderLocalId,
     Expression<int>? folderId,
     Expression<int>? sortOrder,
     Expression<String>? accessRole,
@@ -472,6 +525,7 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
       if (id != null) 'id': id,
       if (serverId != null) 'server_id': serverId,
       if (name != null) 'name': name,
+      if (folderLocalId != null) 'folder_local_id': folderLocalId,
       if (folderId != null) 'folder_id': folderId,
       if (sortOrder != null) 'sort_order': sortOrder,
       if (accessRole != null) 'access_role': accessRole,
@@ -486,6 +540,7 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
     Value<String>? id,
     Value<int?>? serverId,
     Value<String>? name,
+    Value<String?>? folderLocalId,
     Value<int?>? folderId,
     Value<int>? sortOrder,
     Value<String>? accessRole,
@@ -498,6 +553,7 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
       id: id ?? this.id,
       serverId: serverId ?? this.serverId,
       name: name ?? this.name,
+      folderLocalId: folderLocalId ?? this.folderLocalId,
       folderId: folderId ?? this.folderId,
       sortOrder: sortOrder ?? this.sortOrder,
       accessRole: accessRole ?? this.accessRole,
@@ -519,6 +575,9 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
     }
     if (name.present) {
       map['name'] = Variable<String>(name.value);
+    }
+    if (folderLocalId.present) {
+      map['folder_local_id'] = Variable<String>(folderLocalId.value);
     }
     if (folderId.present) {
       map['folder_id'] = Variable<int>(folderId.value);
@@ -550,6 +609,7 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
           ..write('id: $id, ')
           ..write('serverId: $serverId, ')
           ..write('name: $name, ')
+          ..write('folderLocalId: $folderLocalId, ')
           ..write('folderId: $folderId, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('accessRole: $accessRole, ')
@@ -10888,6 +10948,7 @@ typedef $$TodoListsTableCreateCompanionBuilder =
       required String id,
       Value<int?> serverId,
       required String name,
+      Value<String?> folderLocalId,
       Value<int?> folderId,
       Value<int> sortOrder,
       Value<String> accessRole,
@@ -10901,6 +10962,7 @@ typedef $$TodoListsTableUpdateCompanionBuilder =
       Value<String> id,
       Value<int?> serverId,
       Value<String> name,
+      Value<String?> folderLocalId,
       Value<int?> folderId,
       Value<int> sortOrder,
       Value<String> accessRole,
@@ -10931,6 +10993,11 @@ class $$TodoListsTableFilterComposer
 
   ColumnFilters<String> get name => $composableBuilder(
     column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get folderLocalId => $composableBuilder(
+    column: $table.folderLocalId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10989,6 +11056,11 @@ class $$TodoListsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get folderLocalId => $composableBuilder(
+    column: $table.folderLocalId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get folderId => $composableBuilder(
     column: $table.folderId,
     builder: (column) => ColumnOrderings(column),
@@ -11037,6 +11109,11 @@ class $$TodoListsTableAnnotationComposer
 
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get folderLocalId => $composableBuilder(
+    column: $table.folderLocalId,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<int> get folderId =>
       $composableBuilder(column: $table.folderId, builder: (column) => column);
@@ -11090,6 +11167,7 @@ class $$TodoListsTableTableManager
                 Value<String> id = const Value.absent(),
                 Value<int?> serverId = const Value.absent(),
                 Value<String> name = const Value.absent(),
+                Value<String?> folderLocalId = const Value.absent(),
                 Value<int?> folderId = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<String> accessRole = const Value.absent(),
@@ -11101,6 +11179,7 @@ class $$TodoListsTableTableManager
                 id: id,
                 serverId: serverId,
                 name: name,
+                folderLocalId: folderLocalId,
                 folderId: folderId,
                 sortOrder: sortOrder,
                 accessRole: accessRole,
@@ -11114,6 +11193,7 @@ class $$TodoListsTableTableManager
                 required String id,
                 Value<int?> serverId = const Value.absent(),
                 required String name,
+                Value<String?> folderLocalId = const Value.absent(),
                 Value<int?> folderId = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<String> accessRole = const Value.absent(),
@@ -11125,6 +11205,7 @@ class $$TodoListsTableTableManager
                 id: id,
                 serverId: serverId,
                 name: name,
+                folderLocalId: folderLocalId,
                 folderId: folderId,
                 sortOrder: sortOrder,
                 accessRole: accessRole,

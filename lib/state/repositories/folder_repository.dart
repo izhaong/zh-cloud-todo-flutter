@@ -28,97 +28,125 @@ class FolderRepository {
   }
 
   Future<TodoFolder> create(String name, {String? parentId}) async {
-    final now = DateTime.now();
-    final id = _uuid.v4();
-    await _validateParent(folderId: id, parentId: parentId);
-    await _db
-        .into(_db.todoFolders)
-        .insert(
-          TodoFoldersCompanion.insert(
-            id: id,
-            parentId: Value(parentId),
-            name: name,
-            updatedAt: now,
-            createdAt: now,
-          ),
-        );
-    final row = await (_db.select(
-      _db.todoFolders,
-    )..where((t) => t.id.equals(id))).getSingle();
-    await _enqueueUpsert(row);
-    return row;
+    return _db.transaction(() async {
+      final now = DateTime.now();
+      final id = _uuid.v4();
+      await _validateParent(folderId: id, parentId: parentId);
+      await _db
+          .into(_db.todoFolders)
+          .insert(
+            TodoFoldersCompanion.insert(
+              id: id,
+              parentId: Value(parentId),
+              name: name,
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      final row = await (_db.select(
+        _db.todoFolders,
+      )..where((t) => t.id.equals(id))).getSingle();
+      await _enqueueUpsert(row);
+      return row;
+    });
   }
 
   Future<TodoFolder> rename(String folderId, String newName) async {
-    final now = DateTime.now();
-    await (_db.update(
-      _db.todoFolders,
-    )..where((t) => t.id.equals(folderId))).write(
-      TodoFoldersCompanion(name: Value(newName), updatedAt: Value(now)),
-    );
-    final row = await (_db.select(
-      _db.todoFolders,
-    )..where((t) => t.id.equals(folderId))).getSingle();
-    await _enqueueUpsert(row);
-    return row;
+    return _db.transaction(() async {
+      final now = DateTime.now();
+      await (_db.update(
+        _db.todoFolders,
+      )..where((t) => t.id.equals(folderId))).write(
+        TodoFoldersCompanion(name: Value(newName), updatedAt: Value(now)),
+      );
+      final row = await (_db.select(
+        _db.todoFolders,
+      )..where((t) => t.id.equals(folderId))).getSingle();
+      await _enqueueUpsert(row);
+      return row;
+    });
   }
 
   Future<TodoFolder> moveToParent(String folderId, String? parentId) async {
-    await _validateParent(folderId: folderId, parentId: parentId);
-    final now = DateTime.now();
-    await (_db.update(
-      _db.todoFolders,
-    )..where((t) => t.id.equals(folderId))).write(
-      TodoFoldersCompanion(parentId: Value(parentId), updatedAt: Value(now)),
-    );
-    final row = await (_db.select(
-      _db.todoFolders,
-    )..where((t) => t.id.equals(folderId))).getSingle();
-    await _enqueueUpsert(row);
-    return row;
+    return _db.transaction(() async {
+      await _validateParent(folderId: folderId, parentId: parentId);
+      final now = DateTime.now();
+      await (_db.update(
+        _db.todoFolders,
+      )..where((t) => t.id.equals(folderId))).write(
+        TodoFoldersCompanion(parentId: Value(parentId), updatedAt: Value(now)),
+      );
+      final row = await (_db.select(
+        _db.todoFolders,
+      )..where((t) => t.id.equals(folderId))).getSingle();
+      await _enqueueUpsert(row);
+      return row;
+    });
   }
 
   Future<void> delete(String folderId) async {
-    // folder 走 REST：本地主键为 String id；todo_lists.folderId 引用的是文件夹
-    // 的服务端整数 id (serverId)。删除时按 serverId 找到指向该 folder 的清单，
-    // 将其 folderId 置 null（未同步的 folder 尚未有 serverId，无需处理）。
-    final row = await (_db.select(
-      _db.todoFolders,
-    )..where((t) => t.id.equals(folderId))).getSingleOrNull();
-    final serverId = row?.serverId;
-    if (serverId != null) {
-      await (_db.update(_db.todoLists)
-            ..where((t) => t.folderId.equals(serverId)))
-          .write(const TodoListsCompanion(folderId: Value(null)));
-    }
-    final children = await (_db.select(
-      _db.todoFolders,
-    )..where((folder) => folder.parentId.equals(folderId))).get();
-    final now = DateTime.now();
-    for (final child in children) {
-      await (_db.update(
+    return _db.transaction(() async {
+      // list 的权威关联是本地 UUID；兼容迁移前仅保存 serverId 的行时，同时
+      // 匹配两列并一起清空。
+      final row = await (_db.select(
         _db.todoFolders,
-      )..where((folder) => folder.id.equals(child.id))).write(
-        TodoFoldersCompanion(
-          parentId: const Value(null),
-          updatedAt: Value(now),
-        ),
+      )..where((t) => t.id.equals(folderId))).getSingleOrNull();
+      final serverId = row?.serverId;
+      await (_db.update(_db.todoLists)..where(
+            (list) =>
+                list.folderLocalId.equals(folderId) |
+                (serverId == null
+                    ? const Constant(false)
+                    : list.folderId.equals(serverId)),
+          ))
+          .write(
+            const TodoListsCompanion(
+              folderLocalId: Value(null),
+              folderId: Value(null),
+            ),
+          );
+      final children = await (_db.select(
+        _db.todoFolders,
+      )..where((folder) => folder.parentId.equals(folderId))).get();
+      final now = DateTime.now();
+      for (final child in children) {
+        await (_db.update(
+          _db.todoFolders,
+        )..where((folder) => folder.id.equals(child.id))).write(
+          TodoFoldersCompanion(
+            parentId: const Value(null),
+            updatedAt: Value(now),
+          ),
+        );
+        final promoted = await (_db.select(
+          _db.todoFolders,
+        )..where((folder) => folder.id.equals(child.id))).getSingle();
+        await _enqueueUpsert(promoted);
+      }
+      await (_db.delete(
+        _db.todoFolders,
+      )..where((t) => t.id.equals(folderId))).go();
+      if (serverId == null) {
+        // 从未到达服务端的文件夹无需发送 delete；同时取消其待重试 create，
+        // 否则同一轮会先创建一个本地已删除的孤儿文件夹。
+        await (_db.delete(_db.todoSyncChanges)..where(
+              (change) =>
+                  change.entity.equals(SyncEntities.folder) &
+                  change.entityLocalId.equals(folderId) &
+                  change.entityServerId.isNull() &
+                  change.status.equals('synced').not(),
+            ))
+            .go();
+        return;
+      }
+      await _queue.enqueue(
+        entity: SyncEntities.folder,
+        op: SyncOps.delete,
+        localId: folderId,
+        serverId: serverId,
+        payload: {'id': folderId, 'serverId': serverId},
       );
-      final promoted = await (_db.select(
-        _db.todoFolders,
-      )..where((folder) => folder.id.equals(child.id))).getSingle();
-      await _enqueueUpsert(promoted);
-    }
-    await (_db.delete(
-      _db.todoFolders,
-    )..where((t) => t.id.equals(folderId))).go();
-    await _queue.enqueue(
-      entity: SyncEntities.folder,
-      op: SyncOps.delete,
-      localId: folderId,
-      serverId: row?.serverId,
-      payload: {'id': folderId, 'serverId': row?.serverId},
-    );
+    });
   }
 
   Future<void> _validateParent({

@@ -298,7 +298,7 @@ class Sidebar extends ConsumerWidget {
                         folder: entry.node,
                         depth: entry.depth,
                         lists: lists
-                            .where((l) => l.folderId == entry.node.serverId)
+                            .where((l) => l.folderLocalId == entry.node.id)
                             .toList(),
                         selectedListId: selectedListId,
                         colors: colors,
@@ -310,7 +310,7 @@ class Sidebar extends ConsumerWidget {
                       ),
                     ),
                     ...lists
-                        .where((list) => list.folderId == null)
+                        .where((list) => list.folderLocalId == null)
                         .map(
                           (list) => _ListRow(
                             list: list,

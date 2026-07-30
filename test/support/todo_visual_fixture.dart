@@ -133,6 +133,7 @@ class TodoVisualFixture {
         TodoListsCompanion.insert(
           id: workListId,
           name: '工作',
+          folderLocalId: const Value('visual-folder-projects'),
           folderId: Value(projectFolderServerId),
           sortOrder: const Value(0),
           updatedAt: now,

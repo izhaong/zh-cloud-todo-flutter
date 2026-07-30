@@ -27,7 +27,12 @@ class TodoLists extends Table {
   TextColumn get id => text()(); // UUID-v4 本地主键
   IntColumn get serverId => integer().nullable()(); // 后端整数主键（sync 映射用）
   TextColumn get name => text()();
-  IntColumn get folderId => integer().nullable()(); // folder 走 REST，保留 int 外键
+
+  /// 本地 UUID，指向 [TodoFolders.id]；UI、Repository 与离线关联只使用此列。
+  TextColumn get folderLocalId => text().nullable()();
+
+  /// folder REST 服务端整数 ID 缓存，仅供同步协议和旧数据迁移使用。
+  IntColumn get folderId => integer().nullable()();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
   TextColumn get accessRole =>
       text().withDefault(const Constant('owner'))(); // owner/editor/viewer
@@ -408,7 +413,7 @@ class AppDatabase extends _$AppDatabase {
   }) : super(_open(_userDatabaseName(tenantId, userId, testNamespace)));
 
   @override
-  int get schemaVersion => 19;
+  int get schemaVersion => 20;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -612,6 +617,21 @@ class AppDatabase extends _$AppDatabase {
         if (!await _columnExists(m, 'todo_lists', 'writable')) {
           await m.addColumn(todoLists, todoLists.writable);
         }
+      }
+      if (from < 20) {
+        if (!await _columnExists(m, 'todo_lists', 'folder_local_id')) {
+          await m.addColumn(todoLists, todoLists.folderLocalId);
+        }
+        await m.database.customStatement('''
+          UPDATE todo_lists
+          SET folder_local_id = (
+            SELECT todo_folders.id
+            FROM todo_folders
+            WHERE todo_folders.server_id = todo_lists.folder_id
+            LIMIT 1
+          )
+          WHERE folder_id IS NOT NULL AND folder_local_id IS NULL
+        ''');
       }
     },
   );
