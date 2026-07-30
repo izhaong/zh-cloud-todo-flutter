@@ -209,9 +209,9 @@ void main() {
   });
 
   testWidgets('时间线顺延一天会请求共享任务时间 mutation', (tester) async {
-    final now = DateTime.utc(2026, 7, 15, 9);
-    final startAt = DateTime.utc(2026, 7, 16, 9);
-    final endAt = DateTime.utc(2026, 7, 16, 10);
+    final now = DateTime(2026, 7, 15, 9);
+    final startAt = DateTime(2026, 7, 16, 9);
+    final endAt = DateTime(2026, 7, 16, 10);
     final task = TodoTask(
       id: 'task-timeline-1',
       listId: 'list-inbox',
@@ -255,9 +255,55 @@ void main() {
 
     expect(request, (
       'task-timeline-1',
-      DateTime.utc(2026, 7, 17, 9),
-      DateTime.utc(2026, 7, 17, 10),
-      DateTime.utc(2026, 7, 17, 10),
+      DateTime(2026, 7, 17, 9),
+      DateTime(2026, 7, 17, 10),
+      DateTime(2026, 7, 17, 10),
+    ));
+  });
+
+  testWidgets('时间线固定时区跨夏令时顺延保持墙钟时刻', (tester) async {
+    final now = DateTime.utc(2026, 10, 30, 12);
+    final task = TodoTask(
+      id: 'task-timeline-dst',
+      listId: 'list-inbox',
+      title: '跨夏令时时间线',
+      completed: false,
+      cancelled: false,
+      allDay: false,
+      timeZone: 'America/Los_Angeles',
+      fixedTimezone: true,
+      priority: 0,
+      isPinned: false,
+      sortOrder: 0,
+      startAt: DateTime.utc(2026, 10, 31, 16),
+      endAt: DateTime.utc(2026, 10, 31, 17),
+      dueAt: DateTime.utc(2026, 10, 31, 17),
+      updatedAt: now,
+      createdAt: now,
+    );
+    (DateTime, DateTime, DateTime)? request;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TimelineView(
+            tasks: [task],
+            now: now,
+            onTaskTimeChange:
+                (_, {required startAt, required endAt, required dueAt}) async {
+                  request = (startAt, endAt, dueAt);
+                },
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('顺延一天'));
+    await tester.pumpAndSettle();
+
+    expect(request, (
+      DateTime.utc(2026, 11, 1, 17),
+      DateTime.utc(2026, 11, 1, 18),
+      DateTime.utc(2026, 11, 1, 18),
     ));
   });
 
