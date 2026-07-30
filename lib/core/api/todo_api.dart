@@ -323,11 +323,11 @@ class TaskRestApi {
 
   /// `POST /task/complete`
   Future<void> complete(int serverId) =>
-      _client.post('/task/complete', data: {'id': serverId});
+      _client.post('/task/complete', queryParameters: {'id': serverId});
 
   /// `POST /task/uncomplete`
   Future<void> uncomplete(int serverId) =>
-      _client.post('/task/uncomplete', data: {'id': serverId});
+      _client.post('/task/uncomplete', queryParameters: {'id': serverId});
 
   /// `PUT /task/reorder` — 请求体与服务端
   /// `AppTodoTaskReorderReqVO(listId, items)` 保持一致。
