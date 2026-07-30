@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
@@ -333,6 +335,159 @@ void main() {
     final preference = await db.select(db.todoViewPreferences).getSingle();
     expect(preference.sourceKey, 'list:${list.id}');
     expect(preference.valueJson, contains('"sourceKey":"list:${list.id}"'));
+  });
+
+  test('任务时间线偏好冲突采用服务端值并以最新 revision 重放本地选择', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final now = DateTime.utc(2026, 7, 30, 9);
+    await db
+        .into(db.todoLists)
+        .insert(
+          TodoListsCompanion.insert(
+            id: 'list-local',
+            serverId: const Value(101),
+            name: '项目',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    await db
+        .into(db.todoViewPreferences)
+        .insert(
+          TodoViewPreferencesCompanion.insert(
+            id: 'preference-local',
+            serverId: const Value(401),
+            sourceType: 'task_view',
+            sourceKey: 'list:list-local',
+            valueJson: jsonEncode({
+              'sourceType': 'task_view',
+              'sourceKey': 'list:list-local',
+              'viewType': 'timeline',
+              'valueJson': jsonEncode({
+                'viewType': 'timeline',
+                'timelineZoom': 1.25,
+                'collapsedTimelineGroupIds': ['later'],
+              }),
+            }),
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    final queue = SyncChangeQueue(db);
+    await queue.enqueue(
+      entity: 'view_preference',
+      op: 'upsert',
+      localId: 'preference-local',
+      serverId: 401,
+      payload: {
+        'sourceType': 'task_view',
+        'sourceKey': 'list:list-local',
+        'viewType': 'timeline',
+        'valueJson': jsonEncode({
+          'viewType': 'timeline',
+          'timelineZoom': 1.25,
+          'collapsedTimelineGroupIds': ['later'],
+        }),
+      },
+    );
+
+    var pushCount = 0;
+    Map<String, dynamic>? replayed;
+    final dio = Dio()
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            final change =
+                (((options.data as Map)['changes'] as List).single as Map)
+                    .cast<String, dynamic>();
+            pushCount++;
+            if (pushCount == 1) {
+              handler.resolve(
+                Response(
+                  requestOptions: options,
+                  data: {
+                    'code': 0,
+                    'data': {
+                      'ok': true,
+                      'accepted': const [],
+                      'conflicts': [
+                        {
+                          'entityType': 'view_preference',
+                          'entityId': 401,
+                          'operation': 'upsert',
+                          'clientMutationId': change['clientMutationId'],
+                          'serverRevision': 7,
+                          'serverValue': {
+                            'sourceType': 'task_view',
+                            'sourceKey': 'list-server:101',
+                            'viewType': 'timeline',
+                            'valueJson': jsonEncode({
+                              'viewType': 'timeline',
+                              'timelineZoom': 0.75,
+                              'collapsedTimelineGroupIds': ['today'],
+                            }),
+                          },
+                        },
+                      ],
+                    },
+                  },
+                ),
+              );
+              return;
+            }
+            replayed = change;
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                data: {
+                  'code': 0,
+                  'data': {
+                    'ok': true,
+                    'accepted': [
+                      {
+                        'entityType': 'view_preference',
+                        'entityId': 401,
+                        'operation': 'upsert',
+                        'clientMutationId': change['clientMutationId'],
+                      },
+                    ],
+                    'conflicts': const [],
+                  },
+                },
+              ),
+            );
+          },
+        ),
+      );
+    final client = ApiClient(dio: dio);
+    final coordinator = SyncCoordinator(
+      db: db,
+      api: SyncApi(client, clientId: 'test', deviceId: 'device-1'),
+      todoApi: client,
+    );
+    final repository = TaskViewActionRepository(db, queue);
+
+    expect(await coordinator.push(), 0);
+    final serverPreference = await repository.getTaskWorkspacePreference(
+      sourceKey: 'list:list-local',
+    );
+    expect(serverPreference.timelineZoom, 0.75);
+    expect(serverPreference.collapsedTimelineGroupIds, {'today'});
+    expect((await db.select(db.todoSyncChanges).getSingle()).status, 'failed');
+
+    await repository.saveTaskTimelinePreference(
+      sourceKey: 'list:list-local',
+      zoom: 1.5,
+      collapsedGroupIds: const {'tomorrow'},
+    );
+    expect(await coordinator.push(), 1);
+    expect(replayed?['baseRevision'], 7);
+    expect(replayed?['payload']?['sourceKey'], 'list-server:101');
+    expect(
+      jsonDecode(replayed?['payload']?['valueJson'] as String),
+      containsPair('timelineZoom', 1.5),
+    );
   });
 
   test('拉取看板偏好会映射服务端清单并落入本地表', () async {

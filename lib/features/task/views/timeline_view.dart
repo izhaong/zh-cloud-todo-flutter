@@ -21,11 +21,20 @@ class TimelineView extends ConsumerWidget {
     DateTime? now,
     this.onTaskSelected,
     this.onTaskTimeChange,
+    this.zoom = 1,
+    this.collapsedGroupIds = const {},
+    this.onZoomChanged,
+    this.onGroupCollapsedChanged,
   }) : _now = now;
 
   final DateTime? _now;
   final List<TodoTask> tasks;
   final ValueChanged<String>? onTaskSelected;
+  final double zoom;
+  final Set<String> collapsedGroupIds;
+  final Future<void> Function(double zoom)? onZoomChanged;
+  final Future<void> Function(String groupId, bool collapsed)?
+  onGroupCollapsedChanged;
   final Future<void> Function(
     TodoTask task, {
     required DateTime startAt,
@@ -43,18 +52,35 @@ class TimelineView extends ConsumerWidget {
     if (groups.every((g) => g.items.isEmpty)) {
       return const Center(child: Text('暂无任务'));
     }
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: groups.length,
-      itemBuilder: (_, i) {
-        final g = groups[i];
-        if (g.items.isEmpty) return const SizedBox.shrink();
-        return _TimelineSection(
-          data: g,
-          onTaskTap: (t) => _openDetail(context, t),
-          onTaskTimeChange: onTaskTimeChange,
-        );
-      },
+    final normalizedZoom = zoom.clamp(0.75, 1.5).toDouble();
+    return Column(
+      children: [
+        _TimelineZoomToolbar(
+          zoom: normalizedZoom,
+          onZoomChanged: onZoomChanged,
+        ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            itemCount: groups.length,
+            itemBuilder: (_, i) {
+              final group = groups[i];
+              if (group.items.isEmpty) return const SizedBox.shrink();
+              final collapsed = collapsedGroupIds.contains(group.id);
+              return _TimelineSection(
+                data: group,
+                zoom: normalizedZoom,
+                collapsed: collapsed,
+                onCollapsedChanged: onGroupCollapsedChanged == null
+                    ? null
+                    : (value) => onGroupCollapsedChanged!(group.id, value),
+                onTaskTap: (task) => _openDetail(context, task),
+                onTaskTimeChange: onTaskTimeChange,
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -132,13 +158,99 @@ class TimelineView extends ConsumerWidget {
     later.sort(cmp);
 
     return [
-      _TimelineGroup(label: '已过期', accent: Colors.red, items: overdue),
-      _TimelineGroup(label: '今天', accent: Colors.orange, items: today),
-      _TimelineGroup(label: '明天', accent: Colors.amber, items: tomorrow),
-      _TimelineGroup(label: '本周', accent: Colors.blue, items: thisWeek),
-      _TimelineGroup(label: '下周', accent: Colors.indigo, items: nextWeek),
-      _TimelineGroup(label: '更晚 / 无截止', accent: Colors.grey, items: later),
+      _TimelineGroup(
+        id: 'overdue',
+        label: '已过期',
+        accent: Colors.red,
+        items: overdue,
+      ),
+      _TimelineGroup(
+        id: 'today',
+        label: '今天',
+        accent: Colors.orange,
+        items: today,
+      ),
+      _TimelineGroup(
+        id: 'tomorrow',
+        label: '明天',
+        accent: Colors.amber,
+        items: tomorrow,
+      ),
+      _TimelineGroup(
+        id: 'thisWeek',
+        label: '本周',
+        accent: Colors.blue,
+        items: thisWeek,
+      ),
+      _TimelineGroup(
+        id: 'nextWeek',
+        label: '下周',
+        accent: Colors.indigo,
+        items: nextWeek,
+      ),
+      _TimelineGroup(
+        id: 'later',
+        label: '更晚 / 无截止',
+        accent: Colors.grey,
+        items: later,
+      ),
     ];
+  }
+}
+
+class _TimelineZoomToolbar extends StatelessWidget {
+  const _TimelineZoomToolbar({required this.zoom, this.onZoomChanged});
+
+  static const _step = 0.25;
+
+  final double zoom;
+  final Future<void> Function(double zoom)? onZoomChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = brandColors(context);
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: colors.muted,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                tooltip: '缩小时间线',
+                icon: const Icon(Icons.remove, size: 18),
+                onPressed: onZoomChanged == null || zoom <= 0.75
+                    ? null
+                    : () => onZoomChanged!((zoom - _step).clamp(0.75, 1.5)),
+              ),
+              Semantics(
+                liveRegion: true,
+                label: '时间线缩放 ${(zoom * 100).round()}%',
+                child: Text(
+                  '${(zoom * 100).round()}%',
+                  style: TextStyle(
+                    color: colors.foreground,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: '放大时间线',
+                icon: const Icon(Icons.add, size: 18),
+                onPressed: onZoomChanged == null || zoom >= 1.5
+                    ? null
+                    : () => onZoomChanged!((zoom + _step).clamp(0.75, 1.5)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -188,10 +300,12 @@ TimelineBucket classifyTimelineBucket(
 
 class _TimelineGroup {
   const _TimelineGroup({
+    required this.id,
     required this.label,
     required this.accent,
     required this.items,
   });
+  final String id;
   final String label;
   final Color accent;
   final List<TodoTask> items;
@@ -200,11 +314,17 @@ class _TimelineGroup {
 class _TimelineSection extends StatelessWidget {
   const _TimelineSection({
     required this.data,
+    required this.zoom,
+    required this.collapsed,
     required this.onTaskTap,
+    this.onCollapsedChanged,
     this.onTaskTimeChange,
   });
   final _TimelineGroup data;
+  final double zoom;
+  final bool collapsed;
   final ValueChanged<TodoTask> onTaskTap;
+  final Future<void> Function(bool collapsed)? onCollapsedChanged;
   final Future<void> Function(
     TodoTask task, {
     required DateTime startAt,
@@ -251,18 +371,33 @@ class _TimelineSection extends StatelessWidget {
                     accent: data.accent,
                     colors: colors,
                   ),
+                  IconButton(
+                    tooltip: '${collapsed ? '展开' : '折叠'}${data.label}',
+                    visualDensity: VisualDensity.compact,
+                    icon: Icon(
+                      collapsed
+                          ? Icons.keyboard_arrow_right
+                          : Icons.keyboard_arrow_down,
+                    ),
+                    onPressed: onCollapsedChanged == null
+                        ? null
+                        : () => onCollapsedChanged!(!collapsed),
+                  ),
                 ],
               ),
             ),
-            const Divider(height: 1),
-            for (final t in data.items)
-              _TimelineTaskTile(
-                task: t,
-                dueDateFormat: tf,
-                onTaskTap: onTaskTap,
-                onTaskTimeChange: onTaskTimeChange,
-              ),
-            const SizedBox(height: 4),
+            if (!collapsed) ...[
+              const Divider(height: 1),
+              for (final t in data.items)
+                _TimelineTaskTile(
+                  task: t,
+                  zoom: zoom,
+                  dueDateFormat: tf,
+                  onTaskTap: onTaskTap,
+                  onTaskTimeChange: onTaskTimeChange,
+                ),
+              const SizedBox(height: 4),
+            ],
           ],
         ),
       ),
@@ -278,12 +413,14 @@ class _TimelineSection extends StatelessWidget {
 class _TimelineTaskTile extends StatefulWidget {
   const _TimelineTaskTile({
     required this.task,
+    required this.zoom,
     required this.dueDateFormat,
     required this.onTaskTap,
     this.onTaskTimeChange,
   });
 
   final TodoTask task;
+  final double zoom;
   final DateFormat dueDateFormat;
   final ValueChanged<TodoTask> onTaskTap;
   final Future<void> Function(
@@ -343,13 +480,21 @@ class _TimelineTaskTileState extends State<_TimelineTaskTile> {
     return Material(
       type: MaterialType.transparency,
       child: ListTile(
-        dense: true,
-        leading: Icon(Icons.schedule, size: 18, color: colors.mutedForeground),
+        dense: widget.zoom <= 1,
+        minVerticalPadding: 4 * widget.zoom,
+        leading: Icon(
+          Icons.schedule,
+          size: 18 * widget.zoom,
+          color: colors.mutedForeground,
+        ),
         title: Text(
           widget.task.title,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: colors.foreground),
+          style: TextStyle(
+            color: colors.foreground,
+            fontSize: 14 * widget.zoom,
+          ),
         ),
         subtitle: widget.task.dueAt == null
             ? null

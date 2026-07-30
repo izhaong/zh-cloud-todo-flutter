@@ -225,6 +225,43 @@ void main() {
 
     expect(find.text('当前清单为只读，无法修改任务'), findsOneWidget);
   });
+
+  testWidgets('时间线缩放与折叠通过偏好回调且不会修改任务', (tester) async {
+    final now = DateTime.utc(2026, 7, 15, 9);
+    final task = _viewTask(
+      id: 'timeline-preference',
+      title: '可折叠时间线任务',
+      startAt: DateTime.utc(2026, 7, 15, 9),
+      endAt: DateTime.utc(2026, 7, 15, 10),
+    );
+    double? requestedZoom;
+    (String, bool)? requestedCollapse;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TimelineView(
+            tasks: [task],
+            now: now,
+            zoom: 1,
+            collapsedGroupIds: const {},
+            onZoomChanged: (value) async => requestedZoom = value,
+            onGroupCollapsedChanged: (groupId, collapsed) async {
+              requestedCollapse = (groupId, collapsed);
+            },
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('放大时间线'));
+    await tester.pumpAndSettle();
+    expect(requestedZoom, 1.25);
+
+    await tester.tap(find.byTooltip('折叠今天'));
+    await tester.pumpAndSettle();
+    expect(requestedCollapse, ('today', true));
+  });
 }
 
 TodoTask _viewTask({
