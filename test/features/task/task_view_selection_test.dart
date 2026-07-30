@@ -256,10 +256,12 @@ class _DelayedTaskViewActionRepository extends TaskViewActionRepository {
   final Map<String, List<Completer<String?>>> _requests = {};
 
   @override
-  Future<String?> getTaskWorkspaceViewMode({required String sourceKey}) {
+  Future<TaskWorkspacePreference> getTaskWorkspacePreference({
+    required String sourceKey,
+  }) async {
     final completer = Completer<String?>();
     _requests.putIfAbsent(sourceKey, () => []).add(completer);
-    return completer.future;
+    return TaskWorkspacePreference(viewType: await completer.future);
   }
 
   @override

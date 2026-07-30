@@ -7,6 +7,18 @@ import '../../core/db/app_database.dart';
 import '../../core/sync/sync_change_queue.dart';
 import '../../core/sync/sync_entities.dart';
 
+class TaskWorkspacePreference {
+  const TaskWorkspacePreference({
+    this.viewType,
+    this.timelineZoom = 1,
+    this.collapsedTimelineGroupIds = const {},
+  });
+
+  final String? viewType;
+  final double timelineZoom;
+  final Set<String> collapsedTimelineGroupIds;
+}
+
 /// B4 任务视图共享写操作。
 ///
 /// 列表、看板和时间线只能经此类（或后续同类 use-case）写入任务聚合，
@@ -37,14 +49,60 @@ class TaskViewActionRepository {
   }
 
   Future<String?> getTaskWorkspaceViewMode({required String sourceKey}) async {
-    final scoped = await _getViewPreference(
+    final scoped = await _getTaskWorkspacePreference(
       sourceType: 'task_view',
       sourceKey: sourceKey,
     );
-    if (scoped != null || sourceKey != 'list:inbox') return scoped;
-    return _getViewPreference(
+    if (scoped.viewType != null || sourceKey != 'list:inbox') {
+      return scoped.viewType;
+    }
+    return (await _getTaskWorkspacePreference(
       sourceType: 'task_view',
       sourceKey: _legacyTaskWorkspaceSourceKey,
+    )).viewType;
+  }
+
+  Future<TaskWorkspacePreference> getTaskWorkspacePreference({
+    required String sourceKey,
+  }) async {
+    final scoped = await _getTaskWorkspacePreference(
+      sourceType: 'task_view',
+      sourceKey: sourceKey,
+    );
+    if (scoped.viewType != null ||
+        scoped.timelineZoom != 1 ||
+        scoped.collapsedTimelineGroupIds.isNotEmpty ||
+        sourceKey != 'list:inbox') {
+      return scoped;
+    }
+    return _getTaskWorkspacePreference(
+      sourceType: 'task_view',
+      sourceKey: _legacyTaskWorkspaceSourceKey,
+    );
+  }
+
+  Future<void> saveTaskTimelinePreference({
+    required String sourceKey,
+    required double zoom,
+    required Set<String> collapsedGroupIds,
+  }) {
+    if (zoom < 0.75 || zoom > 1.5) {
+      throw ArgumentError.value(zoom, 'zoom', '必须介于 0.75 和 1.5');
+    }
+    final normalizedGroupIds =
+        collapsedGroupIds
+            .map((groupId) => groupId.trim())
+            .where((groupId) => groupId.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
+    return _saveViewPreference(
+      sourceType: 'task_view',
+      sourceKey: sourceKey,
+      preferencePatch: {
+        'timelineZoom': zoom,
+        'collapsedTimelineGroupIds': normalizedGroupIds,
+      },
     );
   }
 
@@ -66,19 +124,15 @@ class TaskViewActionRepository {
   Future<void> _saveViewPreference({
     required String sourceType,
     required String sourceKey,
-    required String viewType,
+    String? viewType,
+    Map<String, dynamic> preferencePatch = const {},
   }) async {
     if (sourceKey.trim().isEmpty) {
       throw ArgumentError.value(sourceKey, 'sourceKey', '来源不能为空');
     }
-    if (viewType.trim().isEmpty) {
+    if (viewType != null && viewType.trim().isEmpty) {
       throw ArgumentError.value(viewType, 'viewType', '视图类型不能为空');
     }
-    final payload = <String, dynamic>{
-      'sourceType': sourceType,
-      'sourceKey': sourceKey,
-      'viewType': viewType,
-    };
 
     await _db.transaction(() async {
       final existing =
@@ -88,6 +142,19 @@ class TaskViewActionRepository {
                     row.sourceKey.equals(sourceKey),
               ))
               .getSingleOrNull();
+      final preferenceValue = _decodePreferenceValue(existing?.valueJson);
+      preferenceValue.addAll(preferencePatch);
+      if (viewType != null) preferenceValue['viewType'] = viewType;
+      final effectiveViewType =
+          preferenceValue['viewType']?.toString().trim().isNotEmpty == true
+          ? preferenceValue['viewType'].toString()
+          : 'list';
+      final payload = <String, dynamic>{
+        'sourceType': sourceType,
+        'sourceKey': sourceKey,
+        'viewType': effectiveViewType,
+        'valueJson': jsonEncode(preferenceValue),
+      };
       final now = DateTime.now();
       final companion = TodoViewPreferencesCompanion(
         id: Value(existing?.id ?? _uuid.v4()),
@@ -122,7 +189,7 @@ class TaskViewActionRepository {
     });
   }
 
-  Future<String?> _getViewPreference({
+  Future<TaskWorkspacePreference> _getTaskWorkspacePreference({
     required String sourceType,
     required String sourceKey,
   }) async {
@@ -133,14 +200,57 @@ class TaskViewActionRepository {
                   row.sourceKey.equals(sourceKey),
             ))
             .getSingleOrNull();
-    if (preference == null) return null;
+    if (preference == null) return const TaskWorkspacePreference();
+    final value = _decodePreferenceValue(preference.valueJson);
+    final viewType = value['viewType']?.toString();
+    final zoomValue = value['timelineZoom'];
+    final zoom = zoomValue is num ? zoomValue.toDouble() : 1.0;
+    final collapsed = (value['collapsedTimelineGroupIds'] as List? ?? const [])
+        .map((groupId) => groupId.toString())
+        .where((groupId) => groupId.isNotEmpty)
+        .toSet();
+    return TaskWorkspacePreference(
+      viewType: viewType != null && viewType.trim().isNotEmpty
+          ? viewType
+          : null,
+      timelineZoom: zoom >= 0.75 && zoom <= 1.5 ? zoom : 1,
+      collapsedTimelineGroupIds: collapsed,
+    );
+  }
+
+  Future<String?> _getViewPreference({
+    required String sourceType,
+    required String sourceKey,
+  }) async {
+    return (await _getTaskWorkspacePreference(
+      sourceType: sourceType,
+      sourceKey: sourceKey,
+    )).viewType;
+  }
+
+  Map<String, dynamic> _decodePreferenceValue(String? rawValue) {
+    if (rawValue == null) return {};
     try {
-      final value = jsonDecode(preference.valueJson);
-      if (value is! Map<String, dynamic>) return null;
-      final viewType = value['viewType'];
-      return viewType is String && viewType.trim().isNotEmpty ? viewType : null;
+      final decoded = jsonDecode(rawValue);
+      if (decoded is! Map<String, dynamic>) return {};
+      final result = Map<String, dynamic>.from(decoded)
+        ..remove('sourceType')
+        ..remove('sourceKey')
+        ..remove('source_type')
+        ..remove('source_key');
+      final nestedRaw =
+          result.remove('valueJson') ?? result.remove('value_json');
+      if (nestedRaw is String) {
+        final nested = jsonDecode(nestedRaw);
+        if (nested is Map<String, dynamic>) result.addAll(nested);
+      } else if (nestedRaw is Map) {
+        result.addAll(nestedRaw.cast<String, dynamic>());
+      }
+      return result;
     } on FormatException {
-      return null;
+      return {};
+    } on TypeError {
+      return {};
     }
   }
 

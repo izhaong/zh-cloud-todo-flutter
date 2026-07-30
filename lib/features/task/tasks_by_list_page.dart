@@ -66,6 +66,8 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   TaskFilter _filter = TaskFilter();
   TaskViewMode _mode = TaskViewMode.list;
   TaskSort _sort = TaskSort.smart;
+  double _timelineZoom = 1;
+  Set<String> _collapsedTimelineGroupIds = const {};
   TaskRepository? _streamRepository;
   String? _streamListId;
   Stream<List<TodoTask>>? _tasksStream;
@@ -117,6 +119,8 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           );
         }
         _mode = TaskViewMode.list;
+        _timelineZoom = 1;
+        _collapsedTimelineGroupIds = const {};
       });
     }
     if (listSourceChanged) {
@@ -305,6 +309,10 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       case TaskViewMode.timeline:
         return TimelineView(
           tasks: items,
+          zoom: _timelineZoom,
+          collapsedGroupIds: _collapsedTimelineGroupIds,
+          onZoomChanged: _changeTimelineZoom,
+          onGroupCollapsedChanged: _changeTimelineGroupCollapsed,
           onTaskSelected: widget.onTaskSelected,
           onTaskTimeChange:
               (task, {required startAt, required endAt, required dueAt}) async {
@@ -341,7 +349,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     final revision = ++_viewRestoreRevision;
     final repository = ref.read(taskViewActionRepositoryProvider);
     final sourceKey = _viewPreferenceSourceKey;
-    final savedMode = await repository?.getTaskWorkspaceViewMode(
+    final preference = await repository?.getTaskWorkspacePreference(
       sourceKey: sourceKey,
     );
     if (!mounted ||
@@ -350,9 +358,14 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       return;
     }
     final restoredMode = TaskViewMode.values
-        .where((mode) => mode.name == savedMode)
+        .where((mode) => mode.name == preference?.viewType)
         .firstOrNull;
-    setState(() => _mode = restoredMode ?? TaskViewMode.list);
+    setState(() {
+      _mode = restoredMode ?? TaskViewMode.list;
+      _timelineZoom = preference?.timelineZoom ?? 1;
+      _collapsedTimelineGroupIds =
+          preference?.collapsedTimelineGroupIds ?? const {};
+    });
   }
 
   Future<void> _changeSort(TaskSort sort) async {
@@ -389,6 +402,67 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('视图设置保存失败，请重试')));
+    }
+  }
+
+  Future<void> _changeTimelineZoom(double zoom) async {
+    final revision = ++_viewRestoreRevision;
+    final sourceKey = _viewPreferenceSourceKey;
+    final previousZoom = _timelineZoom;
+    setState(() => _timelineZoom = zoom);
+    try {
+      await ref
+          .read(taskViewActionRepositoryProvider)
+          ?.saveTaskTimelinePreference(
+            sourceKey: sourceKey,
+            zoom: zoom,
+            collapsedGroupIds: _collapsedTimelineGroupIds,
+          );
+    } catch (_) {
+      if (!mounted ||
+          sourceKey != _viewPreferenceSourceKey ||
+          revision != _viewRestoreRevision) {
+        return;
+      }
+      setState(() => _timelineZoom = previousZoom);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('时间线缩放保存失败，请重试')));
+    }
+  }
+
+  Future<void> _changeTimelineGroupCollapsed(
+    String groupId,
+    bool collapsed,
+  ) async {
+    final revision = ++_viewRestoreRevision;
+    final sourceKey = _viewPreferenceSourceKey;
+    final previous = _collapsedTimelineGroupIds;
+    final next = Set<String>.from(previous);
+    if (collapsed) {
+      next.add(groupId);
+    } else {
+      next.remove(groupId);
+    }
+    setState(() => _collapsedTimelineGroupIds = next);
+    try {
+      await ref
+          .read(taskViewActionRepositoryProvider)
+          ?.saveTaskTimelinePreference(
+            sourceKey: sourceKey,
+            zoom: _timelineZoom,
+            collapsedGroupIds: next,
+          );
+    } catch (_) {
+      if (!mounted ||
+          sourceKey != _viewPreferenceSourceKey ||
+          revision != _viewRestoreRevision) {
+        return;
+      }
+      setState(() => _collapsedTimelineGroupIds = previous);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('时间线分组设置保存失败，请重试')));
     }
   }
 

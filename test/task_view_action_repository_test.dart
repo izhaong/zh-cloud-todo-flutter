@@ -306,6 +306,100 @@ void main() {
     );
   });
 
+  test('时间线缩放与折叠偏好按来源隔离且不覆盖视图模式', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final repository = TaskViewActionRepository(db, SyncChangeQueue(db));
+
+    await repository.saveTaskWorkspaceViewMode(
+      sourceKey: 'list:inbox',
+      viewType: 'timeline',
+    );
+    await repository.saveTaskTimelinePreference(
+      sourceKey: 'list:inbox',
+      zoom: 1.25,
+      collapsedGroupIds: const {'overdue', 'later'},
+    );
+    await repository.saveTaskTimelinePreference(
+      sourceKey: 'list:work',
+      zoom: 0.75,
+      collapsedGroupIds: const {'today'},
+    );
+
+    final inbox = await repository.getTaskWorkspacePreference(
+      sourceKey: 'list:inbox',
+    );
+    final work = await repository.getTaskWorkspacePreference(
+      sourceKey: 'list:work',
+    );
+    expect(inbox.viewType, 'timeline');
+    expect(inbox.timelineZoom, 1.25);
+    expect(inbox.collapsedTimelineGroupIds, {'overdue', 'later'});
+    expect(work.viewType, 'list');
+    expect(work.timelineZoom, 0.75);
+    expect(work.collapsedTimelineGroupIds, {'today'});
+
+    final changes = await db.select(db.todoSyncChanges).get();
+    final latestInbox = changes
+        .map((change) => jsonDecode(change.payloadJson) as Map<String, dynamic>)
+        .where((payload) => payload['sourceKey'] == 'list:inbox')
+        .last;
+    expect(latestInbox['viewType'], 'timeline');
+    expect(
+      jsonDecode(latestInbox['valueJson'] as String),
+      containsPair('timelineZoom', 1.25),
+    );
+  });
+
+  test('服务端包装的时间线偏好可恢复并在部分更新时保留未知字段', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final now = DateTime.utc(2026, 7, 30, 9);
+    await db
+        .into(db.todoViewPreferences)
+        .insert(
+          TodoViewPreferencesCompanion.insert(
+            id: 'server-view',
+            serverId: const Value(301),
+            sourceType: 'task_view',
+            sourceKey: 'list:inbox',
+            valueJson: jsonEncode({
+              'sourceType': 'task_view',
+              'sourceKey': 'list:inbox',
+              'viewType': 'timeline',
+              'valueJson': jsonEncode({
+                'viewType': 'timeline',
+                'timelineZoom': 1.5,
+                'collapsedTimelineGroupIds': ['tomorrow'],
+                'futureField': 'keep-me',
+              }),
+            }),
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    final repository = TaskViewActionRepository(db, SyncChangeQueue(db));
+
+    final restored = await repository.getTaskWorkspacePreference(
+      sourceKey: 'list:inbox',
+    );
+    expect(restored.viewType, 'timeline');
+    expect(restored.timelineZoom, 1.5);
+    expect(restored.collapsedTimelineGroupIds, {'tomorrow'});
+
+    await repository.saveTaskWorkspaceViewMode(
+      sourceKey: 'list:inbox',
+      viewType: 'kanban',
+    );
+    final change = await db.select(db.todoSyncChanges).getSingle();
+    final payload = jsonDecode(change.payloadJson) as Map<String, dynamic>;
+    final value = jsonDecode(payload['valueJson'] as String);
+    expect(value['viewType'], 'kanban');
+    expect(value['timelineZoom'], 1.5);
+    expect(value['collapsedTimelineGroupIds'], ['tomorrow']);
+    expect(value['futureField'], 'keep-me');
+  });
+
   test('旧任务视图偏好只回退收集箱且读取不产生写操作', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
