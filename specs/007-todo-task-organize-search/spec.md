@@ -2,7 +2,7 @@
 
 **Feature Branch**: `feat/95-todo-task-organize-search`
 **Created**: 2026-07-15
-**Status**: 执行中；本规格冻结 B3 的独立契约与离线链路，尚无交付任务被标记完成。
+**Status**: 本地实现与 Flutter/Service 冻结契约已完成；固定双端 GUI、移动设备性能/弱网 P95 与 Jenkins 外部证据保持 `partial`。
 **Input**: 父仓总控 Plan B3、B0 能力证据矩阵 CAP-25 至 CAP-29、Service #183、Docs #51。
 
 ## User Scenarios & Testing
