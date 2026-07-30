@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/db/app_database.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/brand_colors.dart';
+import '../../../core/time/task_time_formatter.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../task_detail_page.dart';
 import '../task_view_mutation_feedback.dart';
@@ -142,8 +143,8 @@ class TimelineView extends ConsumerWidget {
     }
 
     int cmp(TodoTask a, TodoTask b) {
-      final ad = a.dueAt;
-      final bd = b.dueAt;
+      final ad = _timelineDueDisplay(a);
+      final bd = _timelineDueDisplay(b);
       if (ad == null && bd == null) return 0;
       if (ad == null) return 1;
       if (bd == null) return -1;
@@ -256,6 +257,28 @@ class _TimelineZoomToolbar extends StatelessWidget {
 
 enum TimelineBucket { overdue, today, tomorrow, thisWeek, nextWeek, later }
 
+DateTime? _timelineDueDisplay(TodoTask task) {
+  final due = task.dueAt;
+  if (due == null) return null;
+  final display = task.allDay
+      ? due
+      : taskDisplayDateTime(
+          due,
+          fixedTimezone: task.fixedTimezone,
+          timeZone: task.timeZone,
+        );
+  return DateTime(
+    display.year,
+    display.month,
+    display.day,
+    display.hour,
+    display.minute,
+    display.second,
+    display.millisecond,
+    display.microsecond,
+  );
+}
+
 /// 把单个任务分类到时间桶之一；纯函数可单测。
 ///
 /// - 已完成 -> later（上层不展示，但本函数仍归到 later）
@@ -274,7 +297,7 @@ TimelineBucket classifyTimelineBucket(
   DateTime? nextWeekEnd,
 }) {
   if (task.completed) return TimelineBucket.later;
-  final due = task.dueAt;
+  final due = _timelineDueDisplay(task);
   if (due == null) return TimelineBucket.later;
   final todayStart = DateTime(now.year, now.month, now.day);
   final tomorrowStart = todayStart.add(const Duration(days: 1));
@@ -499,7 +522,9 @@ class _TimelineTaskTileState extends State<_TimelineTaskTile> {
         subtitle: widget.task.dueAt == null
             ? null
             : Text(
-                widget.dueDateFormat.format(widget.task.dueAt!),
+                widget.dueDateFormat.format(
+                  _timelineDueDisplay(widget.task)!,
+                ),
                 style: TextStyle(color: colors.mutedForeground),
               ),
         trailing: widget.onTaskTimeChange == null
