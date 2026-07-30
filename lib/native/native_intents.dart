@@ -1,11 +1,7 @@
-/// M11-B5 原生增强入口：
-/// - 桌面/锁屏小组件数据接口（widget plugin 在 native 端实现，本 Dart 侧只暴露今日任务快照）
-/// - 桌面便签：浮窗
-/// - 快捷指令 / URL Scheme
-/// - 系统分享入口
+/// 原生增强的 Dart 侧 platform channel 契约与安全降级入口。
 ///
-/// 实际 platform channel / widget / share extension 在 Android / iOS 原生层实现；
-/// 本文件提供 Dart 侧的注册与 fallback 入口。
+/// Android / iOS 等平台侧 handler 尚未注册，因此当前调用会返回“不支持”
+/// 或空结果；原生实现接入后必须继续保持这里的参数与返回值契约。
 library;
 
 import 'package:flutter/services.dart';
@@ -27,6 +23,8 @@ class NativeIntents {
       return Uri.tryParse(uri);
     } on PlatformException {
       return null;
+    } on MissingPluginException {
+      return null;
     }
   }
 
@@ -36,6 +34,8 @@ class NativeIntents {
       await _channel.invokeMethod('share', {'text': text, 'subject': ?subject});
       return true;
     } on PlatformException {
+      return false;
+    } on MissingPluginException {
       return false;
     }
   }
@@ -48,6 +48,8 @@ class NativeIntents {
       return true;
     } on PlatformException {
       return false;
+    } on MissingPluginException {
+      return false;
     }
   }
 
@@ -57,6 +59,8 @@ class NativeIntents {
       await _channel.invokeMethod('pushLockScreenTasks', {'ids': taskIds});
       return true;
     } on PlatformException {
+      return false;
+    } on MissingPluginException {
       return false;
     }
   }
@@ -70,6 +74,8 @@ class NativeIntents {
       if (r == null) return const [];
       return r.map((e) => Map<String, dynamic>.from(e as Map)).toList();
     } on PlatformException {
+      return const [];
+    } on MissingPluginException {
       return const [];
     }
   }
