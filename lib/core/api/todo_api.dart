@@ -475,29 +475,53 @@ class FolderApi {
   }
 }
 
-/// NLP 自然语言日期解析（`POST /nlp/parse`）。
+/// NLP 自然语言解析结果，对齐 JDK 25 后端
+/// `AppTodoNlpParseRespVO(planDate, reminderTime, priority)`。
+class NlpParseResult {
+  const NlpParseResult({this.planDate, this.reminderTime, this.priority});
+
+  final DateTime? planDate;
+  final DateTime? reminderTime;
+  final String? priority;
+
+  static DateTime? _parseDateTime(dynamic value) {
+    if (value is String && value.isNotEmpty) return DateTime.tryParse(value);
+    if (value is num) {
+      return DateTime.fromMillisecondsSinceEpoch(value.toInt() * 1000);
+    }
+    return null;
+  }
+
+  factory NlpParseResult.fromJson(Map<String, dynamic> json) => NlpParseResult(
+    planDate: _parseDateTime(json['planDate']),
+    reminderTime: _parseDateTime(json['reminderTime']),
+    priority: json['priority']?.toString(),
+  );
+}
+
+/// NLP 自然语言日期、提醒与优先级解析（`POST /nlp/parse`）。
 class NlpApi {
   NlpApi(this._client);
 
   final ApiClient _client;
 
+  Future<NlpParseResult> parse(String text) async {
+    final normalized = text.trim();
+    if (normalized.isEmpty || normalized.length > 200) {
+      throw ArgumentError.value(text, 'text', '文本长度必须为 1 到 200 个字符');
+    }
+    final response = await _client.post<Map<String, dynamic>>(
+      '/nlp/parse',
+      data: {'text': normalized},
+    );
+    return NlpParseResult.fromJson(_unwrapBody(response.data));
+  }
+
   /// 返回解析出的截止时间；无法解析时返回 null。
   Future<DateTime?> parseDue(Iterable<String> texts) async {
     for (final text in texts.where((t) => t.trim().isNotEmpty)) {
-      final resp = await _client.post<Map<String, dynamic>>(
-        '/nlp/parse',
-        data: {'text': text},
-      );
-      final data = _unwrapBody(resp.data);
-      final dueRaw = data['dueDate'];
-      if (dueRaw is String && dueRaw.isNotEmpty) {
-        final parsed = DateTime.tryParse(dueRaw);
-        if (parsed != null) return parsed;
-      }
-      if (dueRaw is num) {
-        // 兼容后端返回 Unix 秒。
-        return DateTime.fromMillisecondsSinceEpoch(dueRaw.toInt() * 1000);
-      }
+      final result = await parse(text);
+      if (result.planDate != null) return result.planDate;
     }
     return null;
   }
