@@ -880,6 +880,98 @@ void main() {
     },
   );
 
+  testWidgets(
+    'detail edits selected repeat dates with deletion and deduplication',
+    (tester) async {
+      final fixture = await TodoVisualFixture.create();
+      addTearDown(fixture.dispose);
+      await fixture.container
+          .read(repeatRuleRepositoryProvider)!
+          .save(
+            taskId: _taskId,
+            frequency: 'CUSTOM',
+            startAt: DateTime(2026, 7, 11, 9, 30),
+            repeatMode: 'ON_SELECTED_DATES',
+            selectedDates: [
+              DateTime(2026, 7, 20),
+              DateTime(2026, 7, 15),
+              DateTime(2026, 7, 20),
+            ],
+          );
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: fixture.container,
+          child: MaterialApp(
+            theme: ThemeData.light().copyWith(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            home: const Scaffold(
+              body: TaskDetailPane(taskId: _taskId, embedded: true),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _openScheduleOptions(tester);
+
+      final detailScroll = find.byType(Scrollable).last;
+      final repeatRule = find.byKey(const Key('task-repeat-rule'));
+      await tester.scrollUntilVisible(
+        repeatRule,
+        160,
+        scrollable: detailScroll,
+      );
+      await tester.ensureVisible(repeatRule);
+      await tester.pumpAndSettle();
+      await tester.tap(repeatRule);
+      await tester.pumpAndSettle();
+
+      final selectedDateChips = tester
+          .widgetList<InputChip>(find.byType(InputChip))
+          .toList();
+      expect(selectedDateChips.map((chip) => (chip.label as Text).data), [
+        '2026-07-15',
+        '2026-07-20',
+      ]);
+
+      final date15 = find.byKey(
+        const Key('task-repeat-selected-date-2026-07-15'),
+      );
+      expect(find.byTooltip('删除 2026-07-15'), findsOneWidget);
+      tester.widget<InputChip>(date15).onDeleted!.call();
+      await tester.pumpAndSettle();
+      expect(date15, findsNothing);
+
+      final addDate = find.byKey(const Key('task-repeat-selected-date-add'));
+      await tester.tap(addDate);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      expect(find.byType(InputChip), findsOneWidget);
+
+      await tester.tap(addDate);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('25').last);
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('task-repeat-save')));
+      await tester.pumpAndSettle();
+
+      final rule = await fixture.database
+          .select(fixture.database.todoRepeatRules)
+          .getSingle();
+      expect(rule.selectedDatesJson, '["2026-07-20","2026-07-25"]');
+      final change =
+          (await fixture.database
+                  .select(fixture.database.todoSyncChanges)
+                  .get())
+              .last;
+      final payload = jsonDecode(change.payloadJson) as Map<String, dynamic>;
+      expect(payload['selectedDates'], ['2026-07-20', '2026-07-25']);
+    },
+  );
+
   testWidgets('detail can change a selected-date rule back to due mode', (
     tester,
   ) async {
