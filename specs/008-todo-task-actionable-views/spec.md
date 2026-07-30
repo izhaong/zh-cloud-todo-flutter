@@ -35,6 +35,7 @@
 - **FR-006**: 不重做 `specs/002-todo-visual-fidelity/` 的工作区结构或九张基准；视觉变化需明确批准。
 - **FR-007**: `PUT /task/reorder` 的直连契约仅用于 API 契约/真实 HTTP 对照，请求体固定为 `listId + items[{id, sortOrder}]`；Widget 的核心重排写路径仍必须经过共享 Repository/use-case 与 outbox。
 - **FR-008**: 时间线空白时段创建必须产出明确 `startAt/endAt/dueAt/allDay`：日尺度为一小时非全天任务，周/月尺度为一天的全天任务；创建必须复用 `TaskRepository` 的 Drift/outbox 原子写链路。
+- **FR-009**: 无开始、结束和截止日期的任务必须与远期任务分离到“安排任务（无日期）”；拖入时间格后通过共享 view-action Repository 原子写入完整时段、全天语义与 task outbox，只读拒绝不得产生部分写入。
 
 ## Success Criteria
 

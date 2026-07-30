@@ -10,6 +10,58 @@ import 'package:zh_cloud_todo_flutter/core/sync/sync_entities.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_view_action_repository.dart';
 
 void main() {
+  test('未排期任务拖入时间格会原子写入时段、全天语义与 outbox', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final now = DateTime.utc(2026, 7, 15, 9);
+    await db
+        .into(db.todoLists)
+        .insert(
+          TodoListsCompanion.insert(
+            id: 'list-inbox',
+            name: '收集箱',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    await db
+        .into(db.todoTasks)
+        .insert(
+          TodoTasksCompanion.insert(
+            id: 'task-unscheduled',
+            listId: 'list-inbox',
+            title: '尚未安排',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    final repository = TaskViewActionRepository(db, SyncChangeQueue(db));
+    final startAt = DateTime(2026, 7, 16);
+    final endAt = DateTime(2026, 7, 17);
+
+    await repository.scheduleTimelineTask(
+      'task-unscheduled',
+      startAt: startAt,
+      endAt: endAt,
+      dueAt: endAt,
+      allDay: true,
+    );
+
+    final task = await (db.select(
+      db.todoTasks,
+    )..where((row) => row.id.equals('task-unscheduled'))).getSingle();
+    final changes = await db.select(db.todoSyncChanges).get();
+    expect(task.startAt, startAt);
+    expect(task.endAt, endAt);
+    expect(task.dueAt, endAt);
+    expect(task.allDay, isTrue);
+    expect(changes, hasLength(1));
+    expect(
+      jsonDecode(changes.single.payloadJson),
+      containsPair('allDay', true),
+    );
+  });
+
   test('时间线移动在同一离线写链路更新任务并入队', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);

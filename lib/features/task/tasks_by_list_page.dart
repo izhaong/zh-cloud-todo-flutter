@@ -369,6 +369,24 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
               allDay: request.allDay,
             );
           },
+          onTaskSchedule:
+              (
+                task, {
+                required startAt,
+                required endAt,
+                required dueAt,
+                required allDay,
+              }) async {
+                final repository = ref.read(taskViewActionRepositoryProvider);
+                if (repository == null) return;
+                await repository.scheduleTimelineTask(
+                  task.id,
+                  startAt: startAt,
+                  endAt: endAt,
+                  dueAt: dueAt,
+                  allDay: allDay,
+                );
+              },
           onTaskTimeChange:
               (task, {required startAt, required endAt, required dueAt}) async {
                 final repository = ref.read(taskViewActionRepositoryProvider);
