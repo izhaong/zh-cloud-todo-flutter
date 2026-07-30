@@ -631,6 +631,52 @@ void main() {
     expect(request?.dueAt, DateTime(2026, 7, 16));
     expect(request?.allDay, isTrue);
   });
+
+  testWidgets('时间线未排期任务可拖入小时格完成安排', (tester) async {
+    final now = DateTime(2026, 7, 15, 9);
+    final task = _viewTask(id: 'timeline-unscheduled', title: '尚未安排');
+    (String, DateTime, DateTime, DateTime, bool)? request;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TimelineView(
+            tasks: [task],
+            now: now,
+            scale: TimelineScale.day,
+            onTaskSchedule:
+                (
+                  scheduled, {
+                  required startAt,
+                  required endAt,
+                  required dueAt,
+                  required allDay,
+                }) async {
+                  request = (scheduled.id, startAt, endAt, dueAt, allDay);
+                },
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('安排任务（无日期）'), findsOneWidget);
+    final source = find.byKey(
+      const Key('timeline-unscheduled-drag-timeline-unscheduled'),
+    );
+    final target = find.byKey(const Key('timeline-slot-day-1'));
+    await tester.dragFrom(
+      tester.getCenter(source),
+      tester.getCenter(target) - tester.getCenter(source),
+    );
+    await tester.pumpAndSettle();
+
+    expect(request, (
+      'timeline-unscheduled',
+      DateTime(2026, 7, 15, 1),
+      DateTime(2026, 7, 15, 2),
+      DateTime(2026, 7, 15, 2),
+      false,
+    ));
+  });
 }
 
 TodoTask _viewTask({

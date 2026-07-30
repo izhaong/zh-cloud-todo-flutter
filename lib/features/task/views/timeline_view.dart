@@ -39,6 +39,7 @@ class TimelineView extends ConsumerWidget {
     DateTime? now,
     this.onTaskSelected,
     this.onTaskTimeChange,
+    this.onTaskSchedule,
     this.onCreateTask,
     this.zoom = 1,
     this.scale = TimelineScale.week,
@@ -65,6 +66,14 @@ class TimelineView extends ConsumerWidget {
     required DateTime dueAt,
   })?
   onTaskTimeChange;
+  final Future<void> Function(
+    TodoTask task, {
+    required DateTime startAt,
+    required DateTime endAt,
+    required DateTime dueAt,
+    required bool allDay,
+  })?
+  onTaskSchedule;
   final Future<void> Function(TimelineTaskCreateRequest request)? onCreateTask;
 
   DateTime get _effectiveNow => _now ?? DateTime.now();
@@ -90,6 +99,9 @@ class TimelineView extends ConsumerWidget {
           onSlotTap: onCreateTask == null
               ? null
               : (slot) => _openCreateDialog(context, slot),
+          onTaskDropped: onTaskSchedule == null
+              ? null
+              : (task, slot) => _scheduleTaskAtSlot(context, task, slot),
         ),
         Expanded(
           child: empty
@@ -112,6 +124,7 @@ class TimelineView extends ConsumerWidget {
                                 onGroupCollapsedChanged!(group.id, value),
                       onTaskTap: (task) => _openDetail(context, task),
                       onTaskTimeChange: onTaskTimeChange,
+                      onTaskSchedule: onTaskSchedule,
                     );
                   },
                 ),
@@ -200,6 +213,29 @@ class TimelineView extends ConsumerWidget {
     }
   }
 
+  Future<void> _scheduleTaskAtSlot(
+    BuildContext context,
+    TodoTask task,
+    _TimelineSlot slot,
+  ) async {
+    try {
+      await onTaskSchedule!(
+        task,
+        startAt: slot.startAt,
+        endAt: slot.endAt,
+        dueAt: slot.endAt,
+        allDay: slot.allDay,
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(taskViewMutationFailureMessage(error, '安排任务失败，请重试')),
+        ),
+      );
+    }
+  }
+
   /// 把任务分配到 6 个时间桶；返回按显示顺序排好的桶列表。
   static List<_TimelineGroup> _buildGroups(List<TodoTask> tasks, DateTime now) {
     final todayStart = DateTime(now.year, now.month, now.day);
@@ -216,9 +252,14 @@ class TimelineView extends ConsumerWidget {
     final thisWeek = <TodoTask>[];
     final nextWeek = <TodoTask>[];
     final later = <TodoTask>[];
+    final unscheduled = <TodoTask>[];
 
     for (final t in tasks) {
       if (t.completed) continue; // 已完成不展示
+      if (t.startAt == null && t.endAt == null && t.dueAt == null) {
+        unscheduled.add(t);
+        continue;
+      }
       final bucket = classifyTimelineBucket(
         t,
         now,
@@ -263,8 +304,15 @@ class TimelineView extends ConsumerWidget {
     thisWeek.sort(cmp);
     nextWeek.sort(cmp);
     later.sort(cmp);
+    unscheduled.sort(cmp);
 
     return [
+      _TimelineGroup(
+        id: 'unscheduled',
+        label: '安排任务（无日期）',
+        accent: Colors.teal,
+        items: unscheduled,
+      ),
       _TimelineGroup(
         id: 'overdue',
         label: '已过期',
@@ -414,12 +462,14 @@ class _TimelineSlotStrip extends StatelessWidget {
     required this.scale,
     required this.zoom,
     this.onSlotTap,
+    this.onTaskDropped,
   });
 
   final DateTime now;
   final TimelineScale scale;
   final double zoom;
   final ValueChanged<_TimelineSlot>? onSlotTap;
+  final void Function(TodoTask task, _TimelineSlot slot)? onTaskDropped;
 
   @override
   Widget build(BuildContext context) {
@@ -445,35 +495,46 @@ class _TimelineSlotStrip extends StatelessWidget {
                   for (final slot in slots)
                     Padding(
                       padding: const EdgeInsets.only(right: 6),
-                      child: Tooltip(
-                        message: '${slot.description}，点击空白处创建任务',
-                        child: InkWell(
-                          key: Key(
-                            'timeline-slot-${scale.name}-${slot.keySuffix}',
-                          ),
-                          borderRadius: BorderRadius.circular(8),
-                          onTap: onSlotTap == null
-                              ? null
-                              : () => onSlotTap!(slot),
-                          child: Container(
-                            constraints: BoxConstraints(
-                              minWidth:
-                                  (scale == TimelineScale.day ? 58 : 72) * zoom,
+                      child: DragTarget<TodoTask>(
+                        onWillAcceptWithDetails: (details) =>
+                            onTaskDropped != null &&
+                            details.data.startAt == null &&
+                            details.data.endAt == null &&
+                            details.data.dueAt == null,
+                        onAcceptWithDetails: (details) =>
+                            onTaskDropped!(details.data, slot),
+                        builder: (context, candidates, rejected) => Tooltip(
+                          message: '${slot.description}，点击空白处创建任务',
+                          child: InkWell(
+                            key: Key(
+                              'timeline-slot-${scale.name}-${slot.keySuffix}',
                             ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 9,
-                            ),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: colors.border),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              slot.label,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: colors.foreground,
-                                fontSize: 12 * zoom,
+                            borderRadius: BorderRadius.circular(8),
+                            onTap: onSlotTap == null
+                                ? null
+                                : () => onSlotTap!(slot),
+                            child: Container(
+                              constraints: BoxConstraints(
+                                minWidth:
+                                    (scale == TimelineScale.day ? 58 : 72) *
+                                    zoom,
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 9,
+                              ),
+                              decoration: BoxDecoration(
+                                color: candidates.isEmpty ? null : colors.muted,
+                                border: Border.all(color: colors.border),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                slot.label,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: colors.foreground,
+                                  fontSize: 12 * zoom,
+                                ),
                               ),
                             ),
                           ),
@@ -613,6 +674,7 @@ class _TimelineSection extends StatelessWidget {
     required this.onTaskTap,
     this.onCollapsedChanged,
     this.onTaskTimeChange,
+    this.onTaskSchedule,
   });
   final _TimelineGroup data;
   final double zoom;
@@ -627,6 +689,14 @@ class _TimelineSection extends StatelessWidget {
     required DateTime dueAt,
   })?
   onTaskTimeChange;
+  final Future<void> Function(
+    TodoTask task, {
+    required DateTime startAt,
+    required DateTime endAt,
+    required DateTime dueAt,
+    required bool allDay,
+  })?
+  onTaskSchedule;
 
   @override
   Widget build(BuildContext context) {
@@ -691,6 +761,8 @@ class _TimelineSection extends StatelessWidget {
                   dueDateFormat: tf,
                   onTaskTap: onTaskTap,
                   onTaskTimeChange: onTaskTimeChange,
+                  arrangeable:
+                      data.id == 'unscheduled' && onTaskSchedule != null,
                 ),
               const SizedBox(height: 4),
             ],
@@ -713,6 +785,7 @@ class _TimelineTaskTile extends StatefulWidget {
     required this.scale,
     required this.dueDateFormat,
     required this.onTaskTap,
+    required this.arrangeable,
     this.onTaskTimeChange,
   });
 
@@ -721,6 +794,7 @@ class _TimelineTaskTile extends StatefulWidget {
   final TimelineScale scale;
   final DateFormat dueDateFormat;
   final ValueChanged<TodoTask> onTaskTap;
+  final bool arrangeable;
   final Future<void> Function(
     TodoTask task, {
     required DateTime startAt,
@@ -902,6 +976,8 @@ class _TimelineTaskTileState extends State<_TimelineTaskTile> {
   @override
   Widget build(BuildContext context) {
     final colors = brandColors(context);
+    final hasEditableRange =
+        widget.task.startAt != null && widget.task.endAt != null;
     return Material(
       type: MaterialType.transparency,
       child: ListTile(
@@ -951,7 +1027,37 @@ class _TimelineTaskTileState extends State<_TimelineTaskTile> {
             ),
           ),
         ),
-        trailing: widget.onTaskTimeChange == null
+        trailing: !hasEditableRange
+            ? widget.arrangeable
+                  ? Draggable<TodoTask>(
+                      data: widget.task,
+                      feedback: Material(
+                        elevation: 6,
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          child: Text(widget.task.title),
+                        ),
+                      ),
+                      childWhenDragging: const Opacity(
+                        opacity: 0.35,
+                        child: Icon(Icons.drag_indicator),
+                      ),
+                      child: Tooltip(
+                        message: '拖到时间格安排任务',
+                        child: Icon(
+                          Icons.drag_indicator,
+                          key: ValueKey(
+                            'timeline-unscheduled-drag-${widget.task.id}',
+                          ),
+                        ),
+                      ),
+                    )
+                  : null
+            : widget.onTaskTimeChange == null
             ? null
             : Row(
                 mainAxisSize: MainAxisSize.min,

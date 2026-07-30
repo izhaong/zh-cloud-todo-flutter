@@ -303,6 +303,43 @@ class TaskViewActionRepository {
     });
   }
 
+  Future<void> scheduleTimelineTask(
+    String taskId, {
+    required DateTime startAt,
+    required DateTime endAt,
+    required DateTime dueAt,
+    required bool allDay,
+  }) async {
+    if (!endAt.isAfter(startAt)) {
+      throw ArgumentError.value(endAt, 'endAt', '必须晚于开始时间');
+    }
+
+    await _db.transaction(() async {
+      await _requireWritableTask(taskId);
+      await (_db.update(
+        _db.todoTasks,
+      )..where((row) => row.id.equals(taskId))).write(
+        TodoTasksCompanion(
+          startAt: Value(startAt),
+          endAt: Value(endAt),
+          dueAt: Value(dueAt),
+          allDay: Value(allDay),
+          updatedAt: Value(DateTime.now()),
+        ),
+      );
+      final task = await (_db.select(
+        _db.todoTasks,
+      )..where((row) => row.id.equals(taskId))).getSingle();
+      await _queue.enqueue(
+        entity: SyncEntities.task,
+        op: SyncOps.upsert,
+        localId: task.id,
+        serverId: task.serverId,
+        payload: task.toJson(),
+      );
+    });
+  }
+
   Future<void> moveCalendarTask(
     String taskId, {
     required DateTime dueAt,
