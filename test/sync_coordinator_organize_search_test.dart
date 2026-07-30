@@ -475,4 +475,91 @@ void main() {
     expect(await coordinator.push(), 1);
     expect(pushedChange!['payload']['parentId'], 101);
   });
+
+  test(
+    'pushes an unsynced parent folder before a child queued first',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final now = DateTime.utc(2026, 7, 30, 9);
+      await db.batch((batch) {
+        batch.insert(
+          db.todoFolders,
+          TodoFoldersCompanion.insert(
+            id: 'parent-local',
+            name: '项目',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+        batch.insert(
+          db.todoFolders,
+          TodoFoldersCompanion.insert(
+            id: 'child-local',
+            parentId: const Value('parent-local'),
+            name: '客户端',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+      });
+      final queue = SyncChangeQueue(db);
+      final child = await (db.select(
+        db.todoFolders,
+      )..where((row) => row.id.equals('child-local'))).getSingle();
+      final parent = await (db.select(
+        db.todoFolders,
+      )..where((row) => row.id.equals('parent-local'))).getSingle();
+      await queue.enqueue(
+        entity: 'folder',
+        op: 'upsert',
+        localId: child.id,
+        payload: child.toJson(),
+      );
+      await queue.enqueue(
+        entity: 'folder',
+        op: 'upsert',
+        localId: parent.id,
+        payload: parent.toJson(),
+      );
+
+      final createdPayloads = <Map<String, dynamic>>[];
+      final dio = Dio()
+        ..interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (options, handler) {
+              final payload = Map<String, dynamic>.from(options.data as Map);
+              createdPayloads.add(payload);
+              handler.resolve(
+                Response<Map<String, dynamic>>(
+                  requestOptions: options,
+                  data: {
+                    'code': 0,
+                    'data': payload['name'] == '项目' ? 101 : 102,
+                  },
+                ),
+              );
+            },
+          ),
+        );
+      final client = ApiClient(dio: dio);
+      final coordinator = SyncCoordinator(
+        db: db,
+        api: SyncApi(client, clientId: 'device-a', deviceId: 'device-a'),
+        todoApi: client,
+      );
+
+      expect(await coordinator.push(), 2);
+      expect(createdPayloads, [
+        {'name': '项目', 'parentId': null},
+        {'name': '客户端', 'parentId': 101},
+      ]);
+      expect(
+        (await db.select(db.todoSyncChanges).get())
+            .map((change) => change.status)
+            .toSet(),
+        {'synced'},
+      );
+    },
+  );
 }
