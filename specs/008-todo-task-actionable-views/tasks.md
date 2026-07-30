@@ -3,8 +3,8 @@
 ## Phase 1: 审计与共享写链路
 
 - [x] T001 审计现有列表、看板、时间线、拖拽和偏好代码，记录真实字段、直连调用和 B2/B3 依赖到 Docs #53。
-- [ ] T002 在 `test/task_view_action_repository_test.dart` 写列表重排、跨列移动、时间调整、只读/非法输入和偏好隔离的失败测试。
-- [ ] T003 实现共享 Repository/use-case 的 Drift transaction、outbox 与逐项失败语义，使 T002 通过。
+- [x] T002 在 `test/task_view_action_repository_test.dart` 写列表重排、跨列移动、时间调整、只读/非法输入和偏好隔离的失败测试。
+- [x] T003 实现共享 Repository/use-case 的 Drift transaction、outbox 与逐项失败语义，使 T002 通过。
 - [ ] T004 为 view preference 与 task mutation 增加 SyncCoordinator 顺序、重试和冲突测试并实现回放。
 
 ## Phase 2: 真实视图交互
@@ -16,6 +16,7 @@
 
 ## 执行证据
 
+- 2026-07-30：补齐共享视图写链路的非法输入回归：时间线拒绝结束时间不晚于开始时间、看板拒绝 0–3 之外的优先级、列表重排拒绝重复任务 UUID，三类拒绝均保持原任务字段与排序且不创建 outbox。结合既有列表重排、看板跨列、时间调整、只读清单、跨清单事务拒绝、偏好来源隔离和 Drift/outbox 原子写测试，T002/T003 的独立契约已完整覆盖；`task_view_action_repository_test.dart` 16 项通过，全量 analyze 无错误，全量测试 533 项通过、25 项受保护环境条件跳过。T004、三个视图完整 Widget 旅程、Service/真实 HTTP 和固定设备证据继续保持未完成。
 - 2026-07-30：T002/T003 的来源隔离增量完成红绿闭环。旧实现固定写入 `task_view/tasks_by_list`，切换清单会继承上一来源的视图模式；现在按 `list:<local UUID>` 或稳定智能来源键经 `TaskViewActionRepository → Drift + view_preference outbox` 保存和恢复，并为默认收集箱保留旧键只读回退。SyncCoordinator 在协议边界把普通清单键转换为 `list-server:<server ID>`，入站再映射回本地 UUID，避免跨设备泄漏本机标识；单调恢复 revision 阻止 A→B→A 快速切换时旧异步结果覆盖新状态。遗留 `TaskViewModeTabs` 已改为纯展示/回调组件，不再由 Widget 直接写同步队列。来源隔离、兼容读取、跨端映射、竞态与既有任务视图定向测试均通过；T002/T003 仍未勾选，因为只读/非法任务 mutation、完整偏好字段和其余 B4 门槛尚未全部验证。
 - 2026-07-30：T002/T003/T005/T006/T007 的共享清单权限增量完成红绿闭环。Drift schema 19 为清单保存服务端派生的 `accessRole/writable`，18→19 与全部历史迁移路径保留既有数据；SyncCoordinator 只入站保存权限并剥离出站派生字段。`TaskViewActionRepository` 在同一 transaction 内先校验任务存在、同一清单与 `writable`，viewer 的列表重排、看板移动、时间线调整均零本地写入、零 outbox；跨清单重排整笔拒绝。三个视图会回滚乐观排序并显示“当前清单为只读，无法修改任务”，看板不提供无效重试。Service #185 同步返回 `accessRole/membershipStatus/writable`，仅 active owner/editor 可写，角色变化、加入、退出和移除写入成员自己的增量同步流。定向 Flutter 31 项、Service 12 项与静态检查通过；任务仍未勾选，因为完整偏好字段、冲突回放、列表 Widget 专项、OpenAPI 和固定设备旅程尚未完成。
 - 2026-07-30：T002/T004/T005/T006 的时间线偏好增量完成红绿闭环。工作区偏好现在按稳定 source key 原子保存 `viewType/timelineZoom/collapsedTimelineGroupIds`，部分更新会合并服务端 `valueJson` 并保留未知字段，不会因切换视图擦除时间线设置；时间线提供 75%–150% 缩放、分组折叠和失败回滚，跨清单偏好保持隔离。SyncCoordinator 冲突测试实际覆盖服务端 revision 覆盖本地后，用户新选择按最新 revision 重放并维持本地 UUID/服务端清单 ID 映射。定向 44 项与相关静态检查通过；T002/T004/T005/T006 仍未勾选，因为完整看板列偏好、列表 Widget 专项、真实双设备/HTTP、固定设备和视觉基准旅程尚未全部完成。
