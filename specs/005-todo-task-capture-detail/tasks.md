@@ -14,6 +14,7 @@
 ## Phase 3: US2 完整详情
 
 - [x] T006 [US2] 为 Markdown、标签和检查事项离线回显写测试，目标 `test/features/task/task_detail_pane_test.dart`。
+- [x] T006a [US2] 为检查事项补齐专用拖拽手柄和真实指针旅程；`TaskRepository.reorderChecklistItems` 原子校验完整 UUID 顺序、更新 Drift 并逐项入队，只读失败不产生局部写或 outbox，详情页保持原顺序并展示 Repository 原因。
 - [x] T007 [US2] 改造 `lib/features/task/task_detail_pane.dart`，移除核心写直连 API，接入聚合 use-case。
 
 ## Phase 4: US3 附件与活动

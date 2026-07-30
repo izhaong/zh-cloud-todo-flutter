@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:drift/drift.dart' show OrderingTerm;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -195,6 +196,101 @@ void main() {
         fixture.database.todoChecklistItems,
       )..where((entry) => entry.id.equals(item.id))).get();
       expect(items.single.title, '复核数据');
+    },
+  );
+
+  testWidgets(
+    'detail checklist handle performs a real drag and persists the new order',
+    (tester) async {
+      late _RecordingChecklistRepository repository;
+      final fixture = await _pumpDirectPane(
+        tester,
+        taskId: _taskId,
+        repositoryBuilder: (fixture) {
+          repository = _RecordingChecklistRepository(fixture.database);
+          return repository;
+        },
+      );
+      final first = await repository.createChecklistItem(
+        taskId: _taskId,
+        title: '整理数据',
+        sortOrder: 0,
+      );
+      final second = await repository.createChecklistItem(
+        taskId: _taskId,
+        title: '复核数据',
+        sortOrder: 1,
+      );
+      await fixture.database.delete(fixture.database.todoSyncChanges).go();
+      await tester.pumpAndSettle();
+
+      await _dragChecklistItemAfter(
+        tester,
+        sourceItemId: first.id,
+        targetItemId: second.id,
+      );
+
+      expect(repository.reorderRequests, [
+        [second.id, first.id],
+      ]);
+      final items =
+          await (fixture.database.select(fixture.database.todoChecklistItems)
+                ..where((item) => item.taskId.equals(_taskId))
+                ..orderBy([(item) => OrderingTerm(expression: item.sortOrder)]))
+              .get();
+      expect(items.map((item) => item.id), [second.id, first.id]);
+      expect(
+        await fixture.database.select(fixture.database.todoSyncChanges).get(),
+        hasLength(2),
+      );
+    },
+  );
+
+  testWidgets(
+    'read-only checklist drag keeps its order and shows the repository reason',
+    (tester) async {
+      late _RecordingChecklistRepository repository;
+      final fixture = await _pumpDirectPane(
+        tester,
+        taskId: _taskId,
+        repositoryBuilder: (fixture) {
+          repository = _RecordingChecklistRepository(
+            fixture.database,
+            failure: StateError('当前清单为只读，无法修改任务'),
+          );
+          return repository;
+        },
+      );
+      final first = await repository.createChecklistItem(
+        taskId: _taskId,
+        title: '整理数据',
+        sortOrder: 0,
+      );
+      final second = await repository.createChecklistItem(
+        taskId: _taskId,
+        title: '复核数据',
+        sortOrder: 1,
+      );
+      await fixture.database.delete(fixture.database.todoSyncChanges).go();
+      await tester.pumpAndSettle();
+
+      await _dragChecklistItemAfter(
+        tester,
+        sourceItemId: first.id,
+        targetItemId: second.id,
+      );
+
+      expect(find.text('当前清单为只读，无法修改任务'), findsOneWidget);
+      final items =
+          await (fixture.database.select(fixture.database.todoChecklistItems)
+                ..where((item) => item.taskId.equals(_taskId))
+                ..orderBy([(item) => OrderingTerm(expression: item.sortOrder)]))
+              .get();
+      expect(items.map((item) => item.id), [first.id, second.id]);
+      expect(
+        await fixture.database.select(fixture.database.todoSyncChanges).get(),
+        isEmpty,
+      );
     },
   );
 
@@ -446,6 +542,25 @@ Future<void> _selectFixtureTask(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> _dragChecklistItemAfter(
+  WidgetTester tester, {
+  required String sourceItemId,
+  required String targetItemId,
+}) async {
+  final handle = find.byKey(Key('checklist-reorder-$sourceItemId'));
+  final target = find.byKey(Key('checklist-item-$targetItemId'));
+  expect(handle, findsOneWidget);
+  expect(target, findsOneWidget);
+  await tester.ensureVisible(target);
+  await tester.ensureVisible(handle);
+  await tester.pumpAndSettle();
+  await tester.drag(
+    handle,
+    Offset(0, tester.getCenter(target).dy - tester.getCenter(handle).dy),
+  );
+  await tester.pumpAndSettle();
+}
+
 void _expectTodoDetailIdentity({required bool selected}) {
   final key = selected ? 'todo-task-detail-pane' : 'todo-detail-no-selection';
   final label = selected ? '任务详情' : '选择任务以查看详情';
@@ -561,5 +676,24 @@ class _DelayedTogglePinRepository extends TaskRepository {
 
   void release() {
     if (!_release.isCompleted) _release.complete();
+  }
+}
+
+class _RecordingChecklistRepository extends TaskRepository {
+  _RecordingChecklistRepository(AppDatabase database, {this.failure})
+    : super(database, SyncChangeQueue(database));
+
+  final Object? failure;
+  final List<List<String>> reorderRequests = [];
+
+  @override
+  Future<void> reorderChecklistItems(
+    String taskId,
+    List<String> orderedItemIds,
+  ) async {
+    reorderRequests.add(List<String>.of(orderedItemIds));
+    final error = failure;
+    if (error != null) throw error;
+    await super.reorderChecklistItems(taskId, orderedItemIds);
   }
 }
