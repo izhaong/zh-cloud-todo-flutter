@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/app_database.dart';
 import '../../../core/theme/brand_colors.dart';
+import '../../../core/time/task_time_formatter.dart';
 import '../../../state/providers.dart';
 import 'task_row.dart';
 
@@ -110,7 +111,14 @@ class _TaskRowHostState extends ConsumerState<TaskRowHost> {
                   completed: widget.task.completed,
                   isPinned: widget.task.isPinned,
                   priority: widget.task.priority,
-                  dueAt: widget.task.dueAt,
+                  dueAt: widget.task.dueAt == null
+                      ? null
+                      : taskWallClockDateTime(
+                          widget.task.dueAt!,
+                          allDay: widget.task.allDay,
+                          fixedTimezone: widget.task.fixedTimezone,
+                          timeZone: widget.task.timeZone,
+                        ),
                   subtaskCount: childSnapshot.data?.length ?? 0,
                   tagNames: tagNames,
                   listColor: widget.listColor,

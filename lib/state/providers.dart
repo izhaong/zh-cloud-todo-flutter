@@ -9,6 +9,7 @@ import '../core/notification/local_notification_service.dart';
 import '../core/notification/reminder_notification_poller.dart';
 import '../core/sync/sync_change_queue.dart';
 import '../core/sync/sync_coordinator.dart';
+import '../core/time/task_time_formatter.dart';
 import '../state/session_state.dart';
 import 'repositories/board_preference_repository.dart';
 import 'repositories/folder_repository.dart';
@@ -386,7 +387,7 @@ class TaskStats {
 
   static const empty = TaskStats(0, 0, 0, 0, 0);
 
-  static TaskStats fromTasks(List tasks, {DateTime? now}) {
+  static TaskStats fromTasks(List<TodoTask> tasks, {DateTime? now}) {
     var all = 0, inbox = 0, today = 0, tomorrow = 0, upcoming = 0;
     final effectiveNow = now ?? DateTime.now();
     final todayStart = DateTime(
@@ -396,19 +397,28 @@ class TaskStats {
     );
     final todayEnd = todayStart.add(const Duration(days: 1));
     final tomorrowEnd = todayEnd.add(const Duration(days: 1));
-    final weekEnd = todayStart.add(const Duration(days: 7));
+    final weekEndExclusive = todayStart.add(const Duration(days: 8));
     for (final t in tasks) {
       if (t.completed || t.cancelled) continue;
       all++;
       if (t.listId == 'inbox') inbox++;
-      final due = t.dueAt;
+      final dueAt = t.dueAt;
+      final due = dueAt == null
+          ? null
+          : taskWallClockDateTime(
+              dueAt,
+              allDay: t.allDay,
+              fixedTimezone: t.fixedTimezone,
+              timeZone: t.timeZone,
+            );
       if (due != null) {
         if (due.isBefore(todayEnd) && !due.isBefore(todayStart)) {
           today++;
         } else if (!due.isBefore(todayEnd) && due.isBefore(tomorrowEnd)) {
           tomorrow++;
           upcoming++;
-        } else if (!due.isBefore(tomorrowEnd) && !due.isAfter(weekEnd)) {
+        } else if (!due.isBefore(tomorrowEnd) &&
+            due.isBefore(weekEndExclusive)) {
           upcoming++;
         }
       }

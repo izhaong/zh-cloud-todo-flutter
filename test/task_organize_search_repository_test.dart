@@ -424,6 +424,37 @@ void main() {
     expect(results.map((task) => task.id), ['task-1']);
   });
 
+  test('截止日期过滤与排序使用任务固定时区墙钟日期', () async {
+    await (db.update(
+      db.todoTasks,
+    )..where((row) => row.id.equals('task-1'))).write(
+      TodoTasksCompanion(
+        dueAt: Value(DateTime.utc(2026, 7, 21, 2)),
+        timeZone: const Value('America/Los_Angeles'),
+        fixedTimezone: const Value(true),
+      ),
+    );
+    await (db.update(
+      db.todoTasks,
+    )..where((row) => row.id.equals('task-2'))).write(
+      TodoTasksCompanion(
+        dueAt: Value(DateTime.utc(2026, 7, 20, 18)),
+        timeZone: const Value('UTC'),
+        fixedTimezone: const Value(true),
+      ),
+    );
+
+    final results = await repository.filter(
+      TaskQueryFilter(
+        dueAtFrom: DateTime(2026, 7, 20),
+        dueAtTo: DateTime(2026, 7, 20),
+        sort: TaskSort.dueDate,
+      ),
+    );
+
+    expect(results.map((task) => task.id), ['task-2', 'task-1']);
+  });
+
   test('高级过滤按负责人返回稳定结果', () async {
     await (db.update(
       db.todoTasks,

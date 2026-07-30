@@ -1,4 +1,19 @@
 import '../../core/db/app_database.dart';
+import '../../core/time/task_time_formatter.dart';
+
+DateTime? _taskDueWallClock(TodoTask task) {
+  final due = task.dueAt;
+  if (due == null) return null;
+  return taskWallClockDateTime(
+    due,
+    allDay: task.allDay,
+    fixedTimezone: task.fixedTimezone,
+    timeZone: task.timeZone,
+  );
+}
+
+DateTime _dateOnly(DateTime value) =>
+    DateTime(value.year, value.month, value.day);
 
 /// 用户在任务工作区中选择的主排序字段。
 ///
@@ -12,8 +27,8 @@ int compareTodoTasks(TodoTask left, TodoTask right, TaskSort sort) {
   final bySelectedField = switch (sort) {
     TaskSort.smart => 0,
     TaskSort.priorityDesc => right.priority.compareTo(left.priority),
-    TaskSort.dueDate => (left.dueAt ?? DateTime(9999)).compareTo(
-      right.dueAt ?? DateTime(9999),
+    TaskSort.dueDate => (_taskDueWallClock(left) ?? DateTime(9999)).compareTo(
+      _taskDueWallClock(right) ?? DateTime(9999),
     ),
     TaskSort.title => left.title.toLowerCase().compareTo(
       right.title.toLowerCase(),
@@ -123,13 +138,14 @@ class TaskQueryRepository {
             false;
         if (!matchesTitle && !matchesDescription) return false;
       }
-      final dueAt = task.dueAt;
+      final dueAt = _taskDueWallClock(task);
+      final dueDay = dueAt == null ? null : _dateOnly(dueAt);
       if (filter.dueAtFrom != null &&
-          (dueAt == null || dueAt.isBefore(filter.dueAtFrom!))) {
+          (dueDay == null || dueDay.isBefore(_dateOnly(filter.dueAtFrom!)))) {
         return false;
       }
       if (filter.dueAtTo != null &&
-          (dueAt == null || dueAt.isAfter(filter.dueAtTo!))) {
+          (dueDay == null || dueDay.isAfter(_dateOnly(filter.dueAtTo!)))) {
         return false;
       }
       return filter.tagIds.every(

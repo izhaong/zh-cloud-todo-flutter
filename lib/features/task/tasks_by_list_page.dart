@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/db/app_database.dart';
 import '../../core/theme/brand_colors.dart';
 import '../../core/theme/todo_layout_tokens.dart';
+import '../../core/time/task_time_formatter.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../state/nlp_date.dart';
 import '../../state/providers.dart';
@@ -1409,6 +1410,17 @@ class _TaskGroup {
   final List<TodoTask> tasks;
 }
 
+DateTime? _taskDueWallClock(TodoTask task) {
+  final due = task.dueAt;
+  if (due == null) return null;
+  return taskWallClockDateTime(
+    due,
+    allDay: task.allDay,
+    fixedTimezone: task.fixedTimezone,
+    timeZone: task.timeZone,
+  );
+}
+
 List<_TaskGroup> _groupTasks(List<TodoTask> tasks, DateTime now) {
   final startOfDay = DateTime(now.year, now.month, now.day);
   final endOfDay = startOfDay.add(const Duration(days: 1));
@@ -1430,7 +1442,7 @@ List<_TaskGroup> _groupTasks(List<TodoTask> tasks, DateTime now) {
       grouped['pinned']!.add(task);
       continue;
     }
-    final due = task.dueAt;
+    final due = _taskDueWallClock(task);
     if (due == null) {
       grouped['no-date']!.add(task);
     } else if (due.isBefore(startOfDay)) {
@@ -1488,7 +1500,7 @@ List<TodoTask> applyTaskFilter(
       if (!titleMatches && !descriptionMatches) return false;
     }
     if (filter.dueAtFrom != null || filter.dueAtTo != null) {
-      final due = task.dueAt;
+      final due = _taskDueWallClock(task);
       if (due == null) return false;
       final dueDay = DateTime(due.year, due.month, due.day);
       if (filter.dueAtFrom != null && dueDay.isBefore(filter.dueAtFrom!)) {
@@ -1499,7 +1511,7 @@ List<TodoTask> applyTaskFilter(
       }
     }
     if (filter.dueRange != null) {
-      final due = task.dueAt;
+      final due = _taskDueWallClock(task);
       if (due == null) return false;
       switch (filter.dueRange) {
         case 'today':
@@ -1513,8 +1525,10 @@ List<TodoTask> applyTaskFilter(
           final weekStart = startOfDay.subtract(const Duration(days: 7));
           if (due.isBefore(weekStart) || !due.isBefore(todayEnd)) return false;
         case 'next7days':
-          final weekEnd = startOfDay.add(const Duration(days: 7));
-          if (due.isBefore(todayEnd) || due.isAfter(weekEnd)) return false;
+          final weekEndExclusive = startOfDay.add(const Duration(days: 8));
+          if (due.isBefore(todayEnd) || !due.isBefore(weekEndExclusive)) {
+            return false;
+          }
         case 'overdue':
           if (!due.isBefore(startOfDay)) return false;
         case 'future':
