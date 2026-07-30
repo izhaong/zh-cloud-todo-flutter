@@ -22,6 +22,7 @@ class RecommendationPanel extends ConsumerStatefulWidget {
 
 class _RecommendationPanelState extends ConsumerState<RecommendationPanel> {
   var _refreshFailed = false;
+  Future<void>? _refreshInFlight;
 
   @override
   void initState() {
@@ -29,7 +30,19 @@ class _RecommendationPanelState extends ConsumerState<RecommendationPanel> {
     unawaited(_refresh());
   }
 
-  Future<void> _refresh() async {
+  Future<void> _refresh() {
+    final existing = _refreshInFlight;
+    if (existing != null) return existing;
+    final request = _performRefresh();
+    _refreshInFlight = request;
+    return request.whenComplete(() {
+      if (identical(_refreshInFlight, request)) {
+        _refreshInFlight = null;
+      }
+    });
+  }
+
+  Future<void> _performRefresh() async {
     try {
       await ref.read(recommendationRepositoryProvider)?.refresh();
       if (mounted && _refreshFailed) {
