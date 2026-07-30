@@ -57,6 +57,27 @@ void main() {
     test('全空返回 null', () {
       expect(resolveTaskDate(build()), isNull);
     });
+
+    test('固定时区任务按配置时区的墙钟日期落格', () {
+      final task = TodoTask(
+        id: 'fixed-zone-date',
+        listId: '1',
+        title: '洛杉矶晚间任务',
+        completed: false,
+        cancelled: false,
+        priority: 0,
+        isPinned: false,
+        sortOrder: 0,
+        dueAt: DateTime.utc(2026, 7, 12, 2),
+        allDay: false,
+        timeZone: 'America/Los_Angeles',
+        fixedTimezone: true,
+        updatedAt: base,
+        createdAt: base,
+      );
+
+      expect(resolveTaskDate(task), DateTime(2026, 7, 11));
+    });
   });
 
   group('buildMonthGrid', () {
@@ -126,16 +147,43 @@ void main() {
         priority: 0,
         isPinned: false,
         sortOrder: 0,
-        dueAt: DateTime(2026, 6, 20),
+        dueAt: DateTime.utc(2026, 6, 20),
         allDay: true,
-        fixedTimezone: false,
+        timeZone: 'America/Los_Angeles',
+        fixedTimezone: true,
+        updatedAt: now,
+        createdAt: now,
+      );
+
+      expect(resolveTaskDate(task), DateTime(2026, 6, 20));
+      expect(
+        calendarDueAtForDay(task, DateTime(2026, 6, 23)),
+        DateTime(2026, 6, 23),
+      );
+    });
+
+    test('固定时区任务改期保留配置时区墙钟并转换回 UTC', () {
+      final now = DateTime(2026, 6, 15, 12);
+      final task = TodoTask(
+        id: 'move-fixed-zone',
+        listId: '1',
+        title: '固定时区任务',
+        completed: false,
+        cancelled: false,
+        priority: 0,
+        isPinned: false,
+        sortOrder: 0,
+        dueAt: DateTime.utc(2026, 7, 11, 16, 30),
+        allDay: false,
+        timeZone: 'America/Los_Angeles',
+        fixedTimezone: true,
         updatedAt: now,
         createdAt: now,
       );
 
       expect(
-        calendarDueAtForDay(task, DateTime(2026, 6, 23)),
-        DateTime(2026, 6, 23),
+        calendarDueAtForDay(task, DateTime(2026, 11, 10)),
+        DateTime.utc(2026, 11, 10, 17, 30),
       );
     });
   });
