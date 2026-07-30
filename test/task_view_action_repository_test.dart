@@ -167,6 +167,79 @@ void main() {
     );
   });
 
+  test('时间线拒绝非正时间段且不修改任务或 outbox', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    await _seedViewActionList(db);
+    final repository = TaskViewActionRepository(db, SyncChangeQueue(db));
+
+    await expectLater(
+      repository.moveTimelineTask(
+        'task-1',
+        startAt: DateTime.utc(2026, 7, 17, 14),
+        endAt: DateTime.utc(2026, 7, 17, 14),
+        dueAt: DateTime.utc(2026, 7, 17, 14),
+      ),
+      throwsA(
+        isA<ArgumentError>().having(
+          (error) => error.message,
+          'message',
+          '必须晚于开始时间',
+        ),
+      ),
+    );
+
+    final task = await _taskById(db, 'task-1');
+    expect(task.startAt?.toUtc(), DateTime.utc(2026, 7, 16, 9));
+    expect(task.endAt?.toUtc(), DateTime.utc(2026, 7, 16, 10));
+    expect(await db.select(db.todoSyncChanges).get(), isEmpty);
+  });
+
+  test('看板拒绝越界优先级且不修改任务或 outbox', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    await _seedViewActionList(db);
+    final repository = TaskViewActionRepository(db, SyncChangeQueue(db));
+
+    await expectLater(
+      repository.moveKanbanTask('task-1', priority: 4, completed: true),
+      throwsA(
+        isA<ArgumentError>().having(
+          (error) => error.message,
+          'message',
+          '必须介于 0 和 3',
+        ),
+      ),
+    );
+
+    final task = await _taskById(db, 'task-1');
+    expect(task.priority, 0);
+    expect(task.completed, isFalse);
+    expect(await db.select(db.todoSyncChanges).get(), isEmpty);
+  });
+
+  test('列表重排拒绝重复任务且不修改排序或 outbox', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    await _seedViewActionList(db);
+    final repository = TaskViewActionRepository(db, SyncChangeQueue(db));
+
+    await expectLater(
+      repository.reorderListTasks(['task-1', 'task-1']),
+      throwsA(
+        isA<ArgumentError>().having(
+          (error) => error.message,
+          'message',
+          '不能包含重复任务',
+        ),
+      ),
+    );
+
+    expect((await _taskById(db, 'task-1')).sortOrder, 0);
+    expect((await _taskById(db, 'task-2')).sortOrder, 1);
+    expect(await db.select(db.todoSyncChanges).get(), isEmpty);
+  });
+
   test('只读清单拒绝时间线移动且不修改任务或 outbox', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
