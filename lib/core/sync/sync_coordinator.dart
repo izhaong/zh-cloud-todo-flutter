@@ -502,6 +502,12 @@ class SyncCoordinator {
       resolved['status'] = resolved['completed'] == true ? 'DONE' : 'TODO';
       resolved.remove('completed');
     }
+    // 清单角色与写权限由服务端按当前用户派生，只能入站保存，不能由客户端
+    // 反向提交覆盖。
+    if (entity == SyncEntities.list) {
+      resolved.remove('accessRole');
+      resolved.remove('writable');
+    }
     if ((entity == SyncEntities.task ||
             entity == SyncEntities.boardPreference) &&
         resolved.containsKey('listId')) {
@@ -1310,6 +1316,15 @@ class SyncCoordinator {
         hasFolderId ? (rawFolderId as num?)?.toInt() : existing?.folderId,
       ),
       sortOrder: Value((payload['sortOrder'] as num?)?.toInt() ?? 0),
+      accessRole: Value(
+        payload['accessRole']?.toString() ??
+            payload['access_role']?.toString() ??
+            existing?.accessRole ??
+            'owner',
+      ),
+      writable: Value(
+        payload['writable'] as bool? ?? existing?.writable ?? true,
+      ),
       updatedAt: Value(now),
       createdAt: Value(existing?.createdAt ?? now),
     );

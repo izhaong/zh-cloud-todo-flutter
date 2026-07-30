@@ -155,6 +155,7 @@ class TaskViewActionRepository {
     }
 
     await _db.transaction(() async {
+      await _requireWritableTask(taskId);
       await (_db.update(
         _db.todoTasks,
       )..where((row) => row.id.equals(taskId))).write(
@@ -188,6 +189,7 @@ class TaskViewActionRepository {
     }
 
     await _db.transaction(() async {
+      await _requireWritableTask(taskId);
       await (_db.update(
         _db.todoTasks,
       )..where((row) => row.id.equals(taskId))).write(
@@ -214,8 +216,21 @@ class TaskViewActionRepository {
     if (taskIds.toSet().length != taskIds.length) {
       throw ArgumentError.value(taskIds, 'taskIds', '不能包含重复任务');
     }
+    if (taskIds.isEmpty) return;
 
     await _db.transaction(() async {
+      final tasks = await (_db.select(
+        _db.todoTasks,
+      )..where((row) => row.id.isIn(taskIds))).get();
+      if (tasks.length != taskIds.length) {
+        throw StateError('任务不存在');
+      }
+      final listIds = tasks.map((task) => task.listId).toSet();
+      if (listIds.length != 1) {
+        throw ArgumentError.value(taskIds, 'taskIds', '必须属于同一清单');
+      }
+      await _requireWritableList(listIds.single);
+
       for (final entry in taskIds.indexed) {
         final taskId = entry.$2;
         await (_db.update(
@@ -238,5 +253,28 @@ class TaskViewActionRepository {
         );
       }
     });
+  }
+
+  Future<TodoTask> _requireWritableTask(String taskId) async {
+    final task = await (_db.select(
+      _db.todoTasks,
+    )..where((row) => row.id.equals(taskId))).getSingleOrNull();
+    if (task == null) {
+      throw StateError('任务不存在');
+    }
+    await _requireWritableList(task.listId);
+    return task;
+  }
+
+  Future<void> _requireWritableList(String listId) async {
+    final list = await (_db.select(
+      _db.todoLists,
+    )..where((row) => row.id.equals(listId))).getSingleOrNull();
+    if (list == null) {
+      throw StateError('清单不存在');
+    }
+    if (!list.writable) {
+      throw StateError('当前清单为只读，无法修改任务');
+    }
   }
 }

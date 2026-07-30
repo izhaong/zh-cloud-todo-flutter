@@ -7,6 +7,7 @@ import '../../../core/theme/brand_colors.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../task_detail_page.dart';
 import '../task_quick_add_sheet.dart';
+import '../task_view_mutation_feedback.dart';
 
 /// M11-B3 看板视图：4 列横向滚动。
 ///
@@ -148,22 +149,25 @@ class KanbanView extends ConsumerWidget {
   }) async {
     try {
       await onTaskMove!(task, priority, completed);
-    } catch (_) {
+    } catch (error) {
       if (context.mounted) {
+        final readOnly = isTaskViewReadOnlyError(error);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('移动任务失败，请重试'),
-            action: SnackBarAction(
-              label: '重试',
-              onPressed: () {
-                _moveTask(
-                  context,
-                  task,
-                  priority: priority,
-                  completed: completed,
-                );
-              },
-            ),
+            content: Text(taskViewMutationFailureMessage(error, '移动任务失败，请重试')),
+            action: readOnly
+                ? null
+                : SnackBarAction(
+                    label: '重试',
+                    onPressed: () {
+                      _moveTask(
+                        context,
+                        task,
+                        priority: priority,
+                        completed: completed,
+                      );
+                    },
+                  ),
           ),
         );
       }

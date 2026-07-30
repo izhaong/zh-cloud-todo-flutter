@@ -7,6 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/brand_colors.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../task_detail_page.dart';
+import '../task_view_mutation_feedback.dart';
 
 /// M11-B3 时间线 (Timeline) 视图。
 ///
@@ -306,9 +307,9 @@ class _TimelineTaskTileState extends State<_TimelineTaskTile> {
     final endAt = widget.task.endAt;
     if (callback == null) return;
     if (startAt == null || endAt == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请先在任务详情中设置开始和结束时间')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请先在任务详情中设置开始和结束时间')));
       return;
     }
     final change = extend ? const Duration(hours: 1) : const Duration(days: 1);
@@ -323,10 +324,12 @@ class _TimelineTaskTileState extends State<_TimelineTaskTile> {
         endAt: nextEndAt,
         dueAt: nextDueAt,
       );
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('调整时间失败，请重试')),
+          SnackBar(
+            content: Text(taskViewMutationFailureMessage(error, '调整时间失败，请重试')),
+          ),
         );
       }
     } finally {
@@ -341,11 +344,7 @@ class _TimelineTaskTileState extends State<_TimelineTaskTile> {
       type: MaterialType.transparency,
       child: ListTile(
         dense: true,
-        leading: Icon(
-          Icons.schedule,
-          size: 18,
-          color: colors.mutedForeground,
-        ),
+        leading: Icon(Icons.schedule, size: 18, color: colors.mutedForeground),
         title: Text(
           widget.task.title,
           maxLines: 2,

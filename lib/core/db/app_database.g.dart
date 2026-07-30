@@ -61,6 +61,33 @@ class $TodoListsTable extends TodoLists
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _accessRoleMeta = const VerificationMeta(
+    'accessRole',
+  );
+  @override
+  late final GeneratedColumn<String> accessRole = GeneratedColumn<String>(
+    'access_role',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('owner'),
+  );
+  static const VerificationMeta _writableMeta = const VerificationMeta(
+    'writable',
+  );
+  @override
+  late final GeneratedColumn<bool> writable = GeneratedColumn<bool>(
+    'writable',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("writable" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
   static const VerificationMeta _updatedAtMeta = const VerificationMeta(
     'updatedAt',
   );
@@ -90,6 +117,8 @@ class $TodoListsTable extends TodoLists
     name,
     folderId,
     sortOrder,
+    accessRole,
+    writable,
     updatedAt,
     createdAt,
   ];
@@ -134,6 +163,18 @@ class $TodoListsTable extends TodoLists
       context.handle(
         _sortOrderMeta,
         sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('access_role')) {
+      context.handle(
+        _accessRoleMeta,
+        accessRole.isAcceptableOrUnknown(data['access_role']!, _accessRoleMeta),
+      );
+    }
+    if (data.containsKey('writable')) {
+      context.handle(
+        _writableMeta,
+        writable.isAcceptableOrUnknown(data['writable']!, _writableMeta),
       );
     }
     if (data.containsKey('updated_at')) {
@@ -181,6 +222,14 @@ class $TodoListsTable extends TodoLists
         DriftSqlType.int,
         data['${effectivePrefix}sort_order'],
       )!,
+      accessRole: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}access_role'],
+      )!,
+      writable: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}writable'],
+      )!,
       updatedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}updated_at'],
@@ -204,6 +253,8 @@ class TodoList extends DataClass implements Insertable<TodoList> {
   final String name;
   final int? folderId;
   final int sortOrder;
+  final String accessRole;
+  final bool writable;
   final DateTime updatedAt;
   final DateTime createdAt;
   const TodoList({
@@ -212,6 +263,8 @@ class TodoList extends DataClass implements Insertable<TodoList> {
     required this.name,
     this.folderId,
     required this.sortOrder,
+    required this.accessRole,
+    required this.writable,
     required this.updatedAt,
     required this.createdAt,
   });
@@ -227,6 +280,8 @@ class TodoList extends DataClass implements Insertable<TodoList> {
       map['folder_id'] = Variable<int>(folderId);
     }
     map['sort_order'] = Variable<int>(sortOrder);
+    map['access_role'] = Variable<String>(accessRole);
+    map['writable'] = Variable<bool>(writable);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
@@ -243,6 +298,8 @@ class TodoList extends DataClass implements Insertable<TodoList> {
           ? const Value.absent()
           : Value(folderId),
       sortOrder: Value(sortOrder),
+      accessRole: Value(accessRole),
+      writable: Value(writable),
       updatedAt: Value(updatedAt),
       createdAt: Value(createdAt),
     );
@@ -259,6 +316,8 @@ class TodoList extends DataClass implements Insertable<TodoList> {
       name: serializer.fromJson<String>(json['name']),
       folderId: serializer.fromJson<int?>(json['folderId']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      accessRole: serializer.fromJson<String>(json['accessRole']),
+      writable: serializer.fromJson<bool>(json['writable']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
@@ -272,6 +331,8 @@ class TodoList extends DataClass implements Insertable<TodoList> {
       'name': serializer.toJson<String>(name),
       'folderId': serializer.toJson<int?>(folderId),
       'sortOrder': serializer.toJson<int>(sortOrder),
+      'accessRole': serializer.toJson<String>(accessRole),
+      'writable': serializer.toJson<bool>(writable),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
@@ -283,6 +344,8 @@ class TodoList extends DataClass implements Insertable<TodoList> {
     String? name,
     Value<int?> folderId = const Value.absent(),
     int? sortOrder,
+    String? accessRole,
+    bool? writable,
     DateTime? updatedAt,
     DateTime? createdAt,
   }) => TodoList(
@@ -291,6 +354,8 @@ class TodoList extends DataClass implements Insertable<TodoList> {
     name: name ?? this.name,
     folderId: folderId.present ? folderId.value : this.folderId,
     sortOrder: sortOrder ?? this.sortOrder,
+    accessRole: accessRole ?? this.accessRole,
+    writable: writable ?? this.writable,
     updatedAt: updatedAt ?? this.updatedAt,
     createdAt: createdAt ?? this.createdAt,
   );
@@ -301,6 +366,10 @@ class TodoList extends DataClass implements Insertable<TodoList> {
       name: data.name.present ? data.name.value : this.name,
       folderId: data.folderId.present ? data.folderId.value : this.folderId,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      accessRole: data.accessRole.present
+          ? data.accessRole.value
+          : this.accessRole,
+      writable: data.writable.present ? data.writable.value : this.writable,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
@@ -314,6 +383,8 @@ class TodoList extends DataClass implements Insertable<TodoList> {
           ..write('name: $name, ')
           ..write('folderId: $folderId, ')
           ..write('sortOrder: $sortOrder, ')
+          ..write('accessRole: $accessRole, ')
+          ..write('writable: $writable, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -327,6 +398,8 @@ class TodoList extends DataClass implements Insertable<TodoList> {
     name,
     folderId,
     sortOrder,
+    accessRole,
+    writable,
     updatedAt,
     createdAt,
   );
@@ -339,6 +412,8 @@ class TodoList extends DataClass implements Insertable<TodoList> {
           other.name == this.name &&
           other.folderId == this.folderId &&
           other.sortOrder == this.sortOrder &&
+          other.accessRole == this.accessRole &&
+          other.writable == this.writable &&
           other.updatedAt == this.updatedAt &&
           other.createdAt == this.createdAt);
 }
@@ -349,6 +424,8 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
   final Value<String> name;
   final Value<int?> folderId;
   final Value<int> sortOrder;
+  final Value<String> accessRole;
+  final Value<bool> writable;
   final Value<DateTime> updatedAt;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
@@ -358,6 +435,8 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
     this.name = const Value.absent(),
     this.folderId = const Value.absent(),
     this.sortOrder = const Value.absent(),
+    this.accessRole = const Value.absent(),
+    this.writable = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -368,6 +447,8 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
     required String name,
     this.folderId = const Value.absent(),
     this.sortOrder = const Value.absent(),
+    this.accessRole = const Value.absent(),
+    this.writable = const Value.absent(),
     required DateTime updatedAt,
     required DateTime createdAt,
     this.rowid = const Value.absent(),
@@ -381,6 +462,8 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
     Expression<String>? name,
     Expression<int>? folderId,
     Expression<int>? sortOrder,
+    Expression<String>? accessRole,
+    Expression<bool>? writable,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
@@ -391,6 +474,8 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
       if (name != null) 'name': name,
       if (folderId != null) 'folder_id': folderId,
       if (sortOrder != null) 'sort_order': sortOrder,
+      if (accessRole != null) 'access_role': accessRole,
+      if (writable != null) 'writable': writable,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
@@ -403,6 +488,8 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
     Value<String>? name,
     Value<int?>? folderId,
     Value<int>? sortOrder,
+    Value<String>? accessRole,
+    Value<bool>? writable,
     Value<DateTime>? updatedAt,
     Value<DateTime>? createdAt,
     Value<int>? rowid,
@@ -413,6 +500,8 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
       name: name ?? this.name,
       folderId: folderId ?? this.folderId,
       sortOrder: sortOrder ?? this.sortOrder,
+      accessRole: accessRole ?? this.accessRole,
+      writable: writable ?? this.writable,
       updatedAt: updatedAt ?? this.updatedAt,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
@@ -437,6 +526,12 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
     if (sortOrder.present) {
       map['sort_order'] = Variable<int>(sortOrder.value);
     }
+    if (accessRole.present) {
+      map['access_role'] = Variable<String>(accessRole.value);
+    }
+    if (writable.present) {
+      map['writable'] = Variable<bool>(writable.value);
+    }
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
@@ -457,6 +552,8 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
           ..write('name: $name, ')
           ..write('folderId: $folderId, ')
           ..write('sortOrder: $sortOrder, ')
+          ..write('accessRole: $accessRole, ')
+          ..write('writable: $writable, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
@@ -10793,6 +10890,8 @@ typedef $$TodoListsTableCreateCompanionBuilder =
       required String name,
       Value<int?> folderId,
       Value<int> sortOrder,
+      Value<String> accessRole,
+      Value<bool> writable,
       required DateTime updatedAt,
       required DateTime createdAt,
       Value<int> rowid,
@@ -10804,6 +10903,8 @@ typedef $$TodoListsTableUpdateCompanionBuilder =
       Value<String> name,
       Value<int?> folderId,
       Value<int> sortOrder,
+      Value<String> accessRole,
+      Value<bool> writable,
       Value<DateTime> updatedAt,
       Value<DateTime> createdAt,
       Value<int> rowid,
@@ -10840,6 +10941,16 @@ class $$TodoListsTableFilterComposer
 
   ColumnFilters<int> get sortOrder => $composableBuilder(
     column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get accessRole => $composableBuilder(
+    column: $table.accessRole,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get writable => $composableBuilder(
+    column: $table.writable,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10888,6 +10999,16 @@ class $$TodoListsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get accessRole => $composableBuilder(
+    column: $table.accessRole,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get writable => $composableBuilder(
+    column: $table.writable,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
@@ -10922,6 +11043,14 @@ class $$TodoListsTableAnnotationComposer
 
   GeneratedColumn<int> get sortOrder =>
       $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<String> get accessRole => $composableBuilder(
+    column: $table.accessRole,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get writable =>
+      $composableBuilder(column: $table.writable, builder: (column) => column);
 
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
@@ -10963,6 +11092,8 @@ class $$TodoListsTableTableManager
                 Value<String> name = const Value.absent(),
                 Value<int?> folderId = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
+                Value<String> accessRole = const Value.absent(),
+                Value<bool> writable = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -10972,6 +11103,8 @@ class $$TodoListsTableTableManager
                 name: name,
                 folderId: folderId,
                 sortOrder: sortOrder,
+                accessRole: accessRole,
+                writable: writable,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
                 rowid: rowid,
@@ -10983,6 +11116,8 @@ class $$TodoListsTableTableManager
                 required String name,
                 Value<int?> folderId = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
+                Value<String> accessRole = const Value.absent(),
+                Value<bool> writable = const Value.absent(),
                 required DateTime updatedAt,
                 required DateTime createdAt,
                 Value<int> rowid = const Value.absent(),
@@ -10992,6 +11127,8 @@ class $$TodoListsTableTableManager
                 name: name,
                 folderId: folderId,
                 sortOrder: sortOrder,
+                accessRole: accessRole,
+                writable: writable,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
                 rowid: rowid,
