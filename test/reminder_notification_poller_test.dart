@@ -96,7 +96,8 @@ void main() {
           body: '到期提醒',
           payload:
               'reminder:301:tenant_user:'
-              '${now.subtract(const Duration(minutes: 1)).millisecondsSinceEpoch}',
+              '${now.subtract(const Duration(minutes: 1)).millisecondsSinceEpoch}:'
+              '201',
         ),
       ]);
     },

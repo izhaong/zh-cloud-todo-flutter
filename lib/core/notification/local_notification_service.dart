@@ -6,6 +6,9 @@
 /// no-op 实现）下任何调用都不会抛异常。
 library;
 
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timezone/data/latest.dart' as timezone_data;
@@ -19,6 +22,54 @@ class ReminderChannel {
   static const String description = '到期提醒通知';
 }
 
+/// 用户点击提醒通知后，交给应用导航层消费的最小非敏感上下文。
+@immutable
+class ReminderNotificationSelection {
+  const ReminderNotificationSelection({
+    required this.dispatchId,
+    required this.scope,
+    this.taskServerId,
+  });
+
+  final int dispatchId;
+  final String scope;
+  final int? taskServerId;
+
+  static ReminderNotificationSelection? parse(String? payload) {
+    final parts = payload?.split(':');
+    if (parts == null ||
+        (parts.length != 4 && parts.length != 5) ||
+        parts[0] != 'reminder') {
+      return null;
+    }
+    final dispatchId = int.tryParse(parts[1]);
+    final timestamp = int.tryParse(parts[3]);
+    final taskServerId = parts.length == 5 ? int.tryParse(parts[4]) : null;
+    if (dispatchId == null ||
+        parts[2].isEmpty ||
+        timestamp == null ||
+        (parts.length == 5 && taskServerId == null)) {
+      return null;
+    }
+    return ReminderNotificationSelection(
+      dispatchId: dispatchId,
+      scope: parts[2],
+      taskServerId: taskServerId,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ReminderNotificationSelection &&
+          dispatchId == other.dispatchId &&
+          scope == other.scope &&
+          taskServerId == other.taskServerId;
+
+  @override
+  int get hashCode => Object.hash(dispatchId, scope, taskServerId);
+}
+
 /// 本地通知服务单例持有者（通过 [localNotificationServiceProvider] 对外暴露）。
 class LocalNotificationService {
   LocalNotificationService({FlutterLocalNotificationsPlugin? plugin})
@@ -28,6 +79,13 @@ class LocalNotificationService {
   FlutterLocalNotificationsPlugin? _plugin;
   bool _initialized = false;
   static bool _timeZonesInitialized = false;
+  final _reminderSelections =
+      StreamController<ReminderNotificationSelection>.broadcast(sync: true);
+  ReminderNotificationSelection? _pendingReminderSelection;
+  String? _lastDispatchedReminderPayload;
+
+  Stream<ReminderNotificationSelection> get reminderSelections =>
+      _reminderSelections.stream;
 
   static const _settings = InitializationSettings(
     android: AndroidInitializationSettings('@mipmap/ic_launcher'),
@@ -48,14 +106,51 @@ class LocalNotificationService {
     }
     final plugin = _plugin ?? FlutterLocalNotificationsPlugin();
     try {
-      await plugin.initialize(_settings);
+      await plugin.initialize(
+        _settings,
+        onDidReceiveNotificationResponse: _dispatchNotificationResponse,
+      );
       // Android 13+ 通知权限由 requestPermissions 单独申请。
       _plugin = plugin;
+      try {
+        final launchDetails = await plugin.getNotificationAppLaunchDetails();
+        if (launchDetails?.didNotificationLaunchApp ?? false) {
+          final response = launchDetails?.notificationResponse;
+          if (response != null) _dispatchNotificationResponse(response);
+        }
+      } catch (_) {
+        // 启动来源读取失败不影响后续通知展示和点击回调。
+      }
     } catch (_) {
       // 测试 / 不支持平台：保持 _plugin = nullptr，后续调用全部短路。
       _plugin = null;
     }
     _initialized = true;
+  }
+
+  void _dispatchNotificationResponse(NotificationResponse response) {
+    final selection = ReminderNotificationSelection.parse(response.payload);
+    if (selection == null) return;
+    if (response.payload == _lastDispatchedReminderPayload) return;
+    _lastDispatchedReminderPayload = response.payload;
+    if (_reminderSelections.hasListener) {
+      _reminderSelections.add(selection);
+    } else {
+      // UI 尚未就绪时只保留用户最后一次点击，避免启动后连续打开多个页面。
+      _pendingReminderSelection = selection;
+    }
+  }
+
+  @visibleForTesting
+  void dispatchNotificationResponseForTesting(NotificationResponse response) {
+    _dispatchNotificationResponse(response);
+  }
+
+  /// 取出通知冷启动或 UI 尚未订阅时暂存的最后一次点击。
+  ReminderNotificationSelection? takePendingReminderSelection() {
+    final selection = _pendingReminderSelection;
+    _pendingReminderSelection = null;
+    return selection;
   }
 
   /// 申请通知权限（iOS/macOS 弹窗；Android 13+）；返回是否已授权。
@@ -245,7 +340,7 @@ class LocalNotificationService {
   ) {
     final parts = payload?.split(':');
     if (parts == null ||
-        parts.length != 4 ||
+        (parts.length != 4 && parts.length != 5) ||
         parts[0] != 'reminder' ||
         parts[2] != scope) {
       return null;
@@ -262,9 +357,17 @@ class LocalNotificationService {
   Future<void> _guard() async {
     if (!_initialized) await init();
   }
+
+  void dispose() {
+    unawaited(_reminderSelections.close());
+  }
 }
 
 /// 全局本地通知服务单例。
-final localNotificationServiceProvider = Provider<LocalNotificationService>(
-  (ref) => LocalNotificationService(),
-);
+final localNotificationServiceProvider = Provider<LocalNotificationService>((
+  ref,
+) {
+  final service = LocalNotificationService();
+  ref.onDispose(service.dispose);
+  return service;
+});

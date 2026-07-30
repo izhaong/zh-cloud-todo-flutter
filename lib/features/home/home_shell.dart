@@ -51,6 +51,8 @@ class _HomeShellState extends ConsumerState<HomeShell>
   Route<void>? _mobileDetailRoute;
   bool _mobileDetailDismissInProgress = false;
   bool _preserveSelectionWhenMobileRouteCloses = false;
+  StreamSubscription<ReminderNotificationSelection>?
+  _reminderSelectionSubscription;
 
   bool _syncing = false;
   String _syncStatus = '同步尚未执行';
@@ -61,7 +63,11 @@ class _HomeShellState extends ConsumerState<HomeShell>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _initNotifications();
+    final notifications = ref.read(localNotificationServiceProvider);
+    _reminderSelectionSubscription = notifications.reminderSelections.listen(
+      (selection) => unawaited(_handleReminderSelection(selection)),
+    );
+    _initNotifications(notifications);
     if (!const bool.fromEnvironment('FLUTTER_TEST')) {
       _triggerSync();
       _connectivityRecoveryTrigger = ConnectivityRecoveryTrigger(
@@ -80,6 +86,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
   @override
   void dispose() {
     _periodicSync?.cancel();
+    unawaited(_reminderSelectionSubscription?.cancel());
     unawaited(_connectivityRecoveryTrigger?.dispose() ?? Future.value());
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -93,12 +100,45 @@ class _HomeShellState extends ConsumerState<HomeShell>
     }
   }
 
-  Future<void> _initNotifications() async {
-    final svc = ref.read(localNotificationServiceProvider);
+  Future<void> _initNotifications(LocalNotificationService svc) async {
     try {
       await svc.init();
       await svc.requestPermissions();
+      if (!mounted) return;
+      final pendingSelection = svc.takePendingReminderSelection();
+      if (pendingSelection != null) {
+        await _handleReminderSelection(pendingSelection);
+      }
     } catch (_) {}
+  }
+
+  Future<void> _handleReminderSelection(
+    ReminderNotificationSelection selection,
+  ) async {
+    if (!mounted) return;
+    final session = ref.read(sessionProvider);
+    if (session == null ||
+        selection.scope != '${session.tenantId}_${session.userId}') {
+      return;
+    }
+    final taskServerId = selection.taskServerId;
+    final task = taskServerId == null
+        ? null
+        : await ref.read(appDatabaseProvider)?.taskByServerId(taskServerId);
+    if (!mounted) return;
+    if (task == null) {
+      _openReminders();
+      return;
+    }
+    final hadTaskSelection = _selectedTaskId != null;
+    setState(() {
+      _section = Section.tasks;
+      _smart = SmartList.all;
+      _listId = null;
+      _selectedTaskId = null;
+    });
+    if (hadTaskSelection) _dismissDetailPresentation();
+    _selectTask(task.id);
   }
 
   Future<void> _pollUpcomingReminders() async {

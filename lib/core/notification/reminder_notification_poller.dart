@@ -147,7 +147,7 @@ class ReminderNotificationPoller {
           : (remoteTitle.isNotEmpty ? remoteTitle : '提醒');
       final payload =
           'reminder:${item.id}:$_notificationScope:'
-          '${item.remindAt.millisecondsSinceEpoch}';
+          '${item.remindAt.millisecondsSinceEpoch}:${item.taskId}';
       final delivered = isFuture
           ? await _notifications.schedule(
               id: item.id,
