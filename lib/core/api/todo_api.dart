@@ -305,6 +305,16 @@ class TodoTaskBatchApi {
   }
 }
 
+/// 服务端任务排序项。
+class TodoTaskReorderItem {
+  const TodoTaskReorderItem({required this.id, required this.sortOrder});
+
+  final int id;
+  final int sortOrder;
+
+  Map<String, dynamic> toJson() => {'id': id, 'sortOrder': sortOrder};
+}
+
 /// 任务动作：完成 / 取消完成 / 重排顺序（直接 REST）。
 class TaskRestApi {
   TaskRestApi(this._client);
@@ -319,9 +329,27 @@ class TaskRestApi {
   Future<void> uncomplete(int serverId) =>
       _client.post('/task/uncomplete', data: {'id': serverId});
 
-  /// `PUT /task/reorder` — 后端按 [orderedServerId] 重排任务顺序。
-  Future<void> reorder(List<int> orderedServerId) =>
-      _client.put('/task/reorder', data: {'orderedTaskIds': orderedServerId});
+  /// `PUT /task/reorder` — 请求体与服务端
+  /// `AppTodoTaskReorderReqVO(listId, items)` 保持一致。
+  Future<void> reorder({
+    required int listId,
+    required List<TodoTaskReorderItem> items,
+  }) async {
+    if (listId <= 0) {
+      throw ArgumentError.value(listId, 'listId', '清单编号必须为正数');
+    }
+    if (items.isEmpty) {
+      throw ArgumentError.value(items, 'items', '排序项不能为空');
+    }
+    final resp = await _client.put<Map<String, dynamic>>(
+      '/task/reorder',
+      data: {
+        'listId': listId,
+        'items': items.map((item) => item.toJson()).toList(growable: false),
+      },
+    );
+    _ensureSuccess(resp.data);
+  }
 }
 
 /// 单个检查事项。
