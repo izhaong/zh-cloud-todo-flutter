@@ -132,6 +132,36 @@ void main() {
         TimelineBucket.later,
       );
     });
+
+    test('固定时区任务按配置时区墙钟日期分桶', () {
+      final task = TodoTask(
+        id: 'fixed-zone-bucket',
+        listId: '1',
+        title: '洛杉矶晚间任务',
+        completed: false,
+        cancelled: false,
+        priority: 0,
+        isPinned: false,
+        sortOrder: 0,
+        dueAt: DateTime.utc(2026, 6, 16, 2),
+        allDay: false,
+        timeZone: 'America/Los_Angeles',
+        fixedTimezone: true,
+        updatedAt: now,
+        createdAt: now,
+      );
+
+      expect(
+        classifyTimelineBucket(
+          task,
+          now,
+          weekStart: weekStart,
+          weekEnd: weekEnd,
+          nextWeekEnd: nextWeekEnd,
+        ),
+        TimelineBucket.today,
+      );
+    });
   });
 
   testWidgets('TimelineView 按桶分组渲染', (tester) async {
@@ -207,5 +237,58 @@ void main() {
     expect(find.text('昨天的事'), findsOneWidget);
     expect(find.text('今天要完成'), findsOneWidget);
     expect(find.text('本周要做'), findsOneWidget);
+  });
+
+  testWidgets('TimelineView 按固定时区墙钟显示并排序', (tester) async {
+    final now = DateTime(2026, 7, 11, 12);
+    final fixedZoneTask = TodoTask(
+      id: 'fixed-zone-timeline',
+      listId: '1',
+      title: '洛杉矶时间线',
+      completed: false,
+      cancelled: false,
+      priority: 0,
+      isPinned: false,
+      sortOrder: 0,
+      dueAt: DateTime.utc(2026, 7, 11, 16, 30),
+      allDay: false,
+      timeZone: 'America/Los_Angeles',
+      fixedTimezone: true,
+      updatedAt: now,
+      createdAt: now,
+    );
+    final utcTask = TodoTask(
+      id: 'utc-timeline',
+      listId: '1',
+      title: 'UTC 时间线',
+      completed: false,
+      cancelled: false,
+      priority: 0,
+      isPinned: false,
+      sortOrder: 1,
+      dueAt: DateTime.utc(2026, 7, 11, 10),
+      allDay: false,
+      timeZone: 'UTC',
+      fixedTimezone: true,
+      updatedAt: now,
+      createdAt: now,
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: TimelineView(tasks: [utcTask, fixedZoneTask], now: now),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('07-11 09:30'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('洛杉矶时间线')).dy,
+      lessThan(tester.getTopLeft(find.text('UTC 时间线')).dy),
+    );
   });
 }
