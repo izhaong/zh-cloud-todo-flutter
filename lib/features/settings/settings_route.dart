@@ -10,6 +10,7 @@ import '../../state/session_state.dart';
 import '../account/account_security_page.dart';
 import '../calendar_sub/calendar_subscription_page.dart';
 import '../import/task_import_page.dart';
+import '../native/native_entry_page.dart';
 import '../shell/app_theme_controller.dart';
 
 /// 设置页：分组列表（账户/主题/关于）+ 账户安全入口。
@@ -98,6 +99,16 @@ class SettingsRoute extends ConsumerWidget {
                   colors: colors,
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const TaskImportPage()),
+                  ),
+                ),
+                _Tile(
+                  icon: Icons.widgets_outlined,
+                  title: '原生增强',
+                  subtitle: '桌面便签、系统分享、锁屏任务与小组件预览',
+                  trailing: Icons.chevron_right,
+                  colors: colors,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const NativeEntryPage()),
                   ),
                 ),
               ],

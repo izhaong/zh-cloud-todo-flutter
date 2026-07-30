@@ -90,6 +90,12 @@ pubspec.yaml
 - 四象限、番茄专注、习惯打卡、倒数纪念日和成就勋章均消费当前会员的真实 `/app-api/todo/**` 数据，不使用本地演示状态。
 - 成就墙只读展示服务端计算的成就值、等级进度以及已获得和未解锁勋章；加载失败可重试，不在客户端伪造积分或授予规则。
 
+### 4.4 原生增强
+
+- 设置页的“原生增强”入口只消费当前账号 Drift 中的真实任务：今日任务用于应用内小组件预览、系统分享和桌面便签草稿，已完成或已取消任务不参与投影。
+- 锁屏投影包含优先级不低于 2 或已置顶的活动任务；只向平台通道传递已同步的服务端任务 ID，离线任务显示未同步数量且不伪造 ID。
+- 未注册 `zh_cloud_todo/native` 平台通道时，URL Scheme、系统分享、桌面便签、锁屏任务和小组件接口必须安全返回“不支持”或空结果。Android/iOS 等平台侧真实 Widget、Share 与 URL Scheme handler 尚未实现，不计作系统原生能力完成。
+
 ## 5. 对外契约
 
 - 登录：`/app-api/todo-member/auth/{login,sms-login,send-sms-code,logout}`、`/app-api/todo-member/user/reset-password`；已启用双重验证的登录请求携带可选 `twoFactorCode`。
