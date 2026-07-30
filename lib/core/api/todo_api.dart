@@ -377,58 +377,69 @@ class ChecklistApi {
 
   ChecklistItem _fromJson(Map<String, dynamic> j) => ChecklistItem(
     id: (j['id'] as num?)?.toInt() ?? 0,
-    taskId: j['taskId']?.toString(),
+    taskId: (j['taskId'] ?? j['parentTaskId'])?.toString(),
     title: j['title']?.toString() ?? '',
     completed: j['completed'] == true,
     sortOrder: (j['sortOrder'] as num?)?.toInt() ?? 0,
   );
 
-  /// `GET /task/checklist?taskId=...`
-  Future<List<ChecklistItem>> list(String taskId) async {
+  /// `GET /task-hierarchy/checklist?taskId=...`
+  Future<List<ChecklistItem>> list(int taskId) async {
     final resp = await _client.get<Map<String, dynamic>>(
-      '/task/checklist',
+      '/task-hierarchy/checklist',
       query: {'taskId': taskId},
     );
-    final data = _unwrapBody(resp.data);
-    final raw = (data['list'] as List?) ?? (data['items'] as List?) ?? const [];
+    _ensureSuccess(resp.data);
+    final dynamic data = resp.data?.containsKey('code') == true
+        ? resp.data!['data']
+        : resp.data;
+    final raw = data is List
+        ? data
+        : data is Map
+        ? (data['list'] as List?) ?? (data['items'] as List?) ?? const []
+        : const [];
     return raw
         .map((e) => _fromJson((e as Map).cast<String, dynamic>()))
         .toList();
   }
 
-  /// `POST /task/checklist/create`
+  /// `POST /task-hierarchy/checklist/create`
   Future<int> create({
-    required String taskId,
-    required String title,
+    required int taskId,
+    required String name,
+    int? assigneeUserId,
     int sortOrder = 0,
   }) async {
     final resp = await _client.post<Map<String, dynamic>>(
-      '/task/checklist/create',
-      data: {'taskId': taskId, 'title': title, 'sortOrder': sortOrder},
+      '/task-hierarchy/checklist/create',
+      data: {
+        'taskId': taskId,
+        'name': name,
+        'assigneeUserId': ?assigneeUserId,
+        'sortOrder': sortOrder,
+      },
     );
-    final data = _unwrapBody(resp.data);
-    return (data['id'] as num?)?.toInt() ?? 0;
+    _ensureSuccess(resp.data);
+    final dynamic data = resp.data?.containsKey('code') == true
+        ? resp.data!['data']
+        : (resp.data?['id'] ?? resp.data?['data']);
+    if (data is num) return data.toInt();
+    if (data is Map) return (data['id'] as num?)?.toInt() ?? 0;
+    return int.tryParse(data?.toString() ?? '') ?? 0;
   }
 
-  /// `PUT /task/checklist/update`
-  Future<void> update(
-    int checklistId, {
-    String? title,
-    bool? completed,
-    int? sortOrder,
-  }) => _client.put(
-    '/task/checklist/update',
-    data: {
-      'id': checklistId,
-      'title': ?title,
-      'completed': ?completed,
-      'sortOrder': ?sortOrder,
-    },
-  );
+  /// `PUT /task-hierarchy/checklist/update`
+  Future<void> update(int checklistId, {String? name, bool? done}) =>
+      _client.put(
+        '/task-hierarchy/checklist/update',
+        data: {'id': checklistId, 'name': ?name, 'done': ?done},
+      );
 
-  /// `POST /task/checklist/delete`
-  Future<void> delete(int checklistId) =>
-      _client.post('/task/checklist/delete', data: {'id': checklistId});
+  /// `DELETE /task-hierarchy/checklist/delete?id=...`
+  Future<void> delete(int checklistId) => _client.delete(
+    '/task-hierarchy/checklist/delete',
+    queryParameters: {'id': checklistId},
+  );
 }
 
 /// 文件夹 / 清单组织 REST（folder 不在 sync 白名单，走普通 REST）。

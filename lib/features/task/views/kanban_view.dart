@@ -410,6 +410,8 @@ class _KanbanColumn extends StatelessWidget {
                     padding: const EdgeInsets.all(8),
                     buildDefaultDragHandles: false,
                     itemCount: data.tasks.length,
+                    // Flutter 3.41 本地基线尚未提供 onReorderItem；升级基线前保留旧回调。
+                    // ignore: deprecated_member_use
                     onReorder: onTasksReordered == null
                         ? (_, _) {}
                         : (oldIndex, newIndex) {

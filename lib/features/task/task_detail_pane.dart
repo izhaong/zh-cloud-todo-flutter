@@ -2754,6 +2754,8 @@ class _SubtaskList extends ConsumerWidget {
           physics: const NeverScrollableScrollPhysics(),
           buildDefaultDragHandles: false,
           itemCount: items.length,
+          // Flutter 3.41 本地基线尚未提供 onReorderItem；升级基线前保留旧回调。
+          // ignore: deprecated_member_use
           onReorder: (oldIndex, newIndex) async {
             final ids = items.map((task) => task.id).toList();
             final moved = ids.removeAt(oldIndex);
