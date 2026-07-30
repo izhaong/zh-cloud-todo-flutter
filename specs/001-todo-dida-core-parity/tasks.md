@@ -7,16 +7,16 @@
 ## Phase 1: Setup
 
 - [x] T001 初始化 spec-kit（`.specify/` + 本目录）
-- [ ] T002 [P] 在 `pubspec.yaml` 新增依赖：`flutter_riverpod`、`riverpod_annotation`、`go_router`、`dio`、`drift`+`sqlite3_flutter_libs`、`freezed`+`freezed_annotation`、`json_serializable`、`build_runner`、`flutter_local_notifications`、`table_calendar`、`uuid`
-- [ ] T003 [P] 建立 `lib/core/{api,db,sync,storage}` 与 `lib/features/` 目录骨架
+- [x] T002 [P] 在 `pubspec.yaml` 建立当前依赖：`flutter_riverpod`、`go_router`、`dio`、`drift`+`sqlite3_flutter_libs`、`freezed`+`freezed_annotation`、`json_serializable`、`build_runner`、`flutter_local_notifications`、`table_calendar`、`uuid`
+- [x] T003 [P] 建立 `lib/core/{api,db,sync,storage}` 与 `lib/features/` 目录骨架
 
 ## Phase 2: Foundational（阻塞所有 User Story）
 
-- [ ] T004 `lib/core/api/api_client.dart`：dio 实例 + Bearer/tenant-id 拦截器 + 401 会话失效回调
-- [ ] T005 `lib/core/db/app_database.dart`：Drift database 定义 9 类 sync 白名单实体表 + `sync_outbox`/`sync_cursor`
-- [ ] T006 `lib/core/sync/sync_coordinator.dart`：pull（cursor）/push（outbox + idempotency_key + baseRevision）/冲突处理（服务端优先）
-- [ ] T007 迁移 `todo_member_auth_client.dart` 登录到 `lib/features/auth/`，接入新 `ApiClient`；`lib/core/storage/session_store.dart` 替换裸 `shared_preferences` 键值写法
-- [ ] T008 `lib/app.dart`：go_router 路由骨架 + `ProviderScope`；`main.dart` 瘦身为 bootstrap
+- [x] T004 `lib/core/api/api_client.dart`：dio 实例 + Bearer/tenant-id 拦截器 + 401 会话失效回调
+- [x] T005 `lib/core/db/app_database.dart`：Drift database 定义 9 类 sync 白名单实体表 + `sync_outbox`/`sync_cursor`
+- [x] T006 `lib/core/sync/sync_coordinator.dart`：pull（cursor）/push（outbox + idempotency_key + baseRevision）/冲突处理（服务端优先）
+- [x] T007 认证网关迁入 `lib/core/auth/` 并接入新 `ApiClient`；`lib/core/storage/session_store.dart` 统一会话持久化
+- [x] T008 `lib/app.dart`：go_router 路由骨架 + `ProviderScope`；`main.dart` 瘦身为 bootstrap
 
 **Checkpoint**: 基础设施就绪，可开始各 User Story（均可独立验证）
 
@@ -24,12 +24,12 @@
 
 ## Phase 3: User Story 1 — 离线优先任务与清单 (P1) 🎯 MVP
 
-- [ ] T009 [P][US1] `lib/core/db/tables/*`：List/Task/Tag/TaskTag/Filter/ViewPreference/Reminder/RepeatRule/RepeatSkip 表定义
-- [ ] T010 [US1] `lib/core/api/todo_core_api.dart`：`/app-api/todo/{list,task,tag,filter}` REST 封装
-- [ ] T011 [US1] `lib/features/task/task_repository.dart`：本地优先读写 + 写入 outbox
-- [ ] T012 [US1] `lib/features/task/task_list_page.dart` + `task_detail_page.dart`：任务 CRUD/详情/子任务/检查事项 UI
-- [ ] T013 [US1] `lib/features/organize/{list,folder,tag,filter}_page.dart`：清单/文件夹/标签/过滤器 IA
-- [ ] T014 [US1] `test/features/task/task_repository_test.dart`：离线写入 + 同步回放测试
+- [x] T009 [P][US1] `lib/core/db/app_database.dart`：List/Task/Tag/TaskTag/Filter/ViewPreference/Reminder/RepeatRule/RepeatSkip 表定义
+- [x] T010 [US1] `lib/core/api/todo_api.dart`：`/app-api/todo/{list,task,tag,filter}` REST 封装
+- [x] T011 [US1] `lib/state/repositories/task_repository.dart`：本地优先读写 + 写入 outbox
+- [x] T012 [US1] 任务工作区 + `task_detail_page.dart`：任务 CRUD/详情/子任务/检查事项 UI
+- [x] T013 [US1] `lib/features/{list,folder,tag,filter}/`：清单/文件夹/标签/过滤器 IA
+- [x] T014 [US1] `test/` 任务 Repository / 同步用例：离线写入 + 同步回放测试
 
 **Checkpoint**: 任务/清单端到端可用（本地优先 + 同步）
 
@@ -37,7 +37,7 @@
 
 ## Phase 4: User Story 2 — 多视图与日历 (P1)
 
-- [ ] T015 [P][US2] `lib/features/views/{list,board,timeline}_view.dart`
+- [x] T015 [P][US2] 任务列表、`kanban_view.dart` 与 `timeline_view.dart`
 - [x] T016 [US2] `lib/features/task/views/calendar_view.dart`：周/月/年/列表/日程五视图（月网格 + 自绘日程/周/年视图）及月格任务卡片拖拽改期
 - [x] T017 [US2] 视图偏好读写接入 `view_preference` sync 实体
 
@@ -60,9 +60,9 @@
 
 ## Phase 6: User Story 4 — 提醒与重复 (P2)
 
-- [ ] T023 [US4] `lib/core/notification/local_notification_service.dart`：`flutter_local_notifications` 封装
-- [ ] T024 [US4] `lib/features/reminder/reminder_inbox_page.dart`：dismiss/snooze/complete
-- [ ] T025 [US4] `lib/features/repeat/repeat_rule_editor.dart` + occurrence skip
+- [x] T023 [US4] `lib/core/notification/local_notification_service.dart`：`flutter_local_notifications` 封装
+- [x] T024 [US4] `lib/features/reminder/reminder_inbox_page.dart`：dismiss/snooze/complete
+- [x] T025 [US4] 任务详情重复规则编辑器 + occurrence skip/catch-up
 
 **Checkpoint**: 提醒到点通知 + 重复任务闭环
 
@@ -87,8 +87,8 @@
 
 ## Phase 9: Polish
 
-- [ ] T029 [P] 移除/瘦身遗留 `efficiency_dashboard.dart`、`system_entry_dashboard.dart` 中已被 feature 化模块替代的本地演示代码
-- [ ] T030 `flutter analyze` 清零 + `flutter test` 全绿
+- [x] T029 [P] 移除遗留 `efficiency_dashboard.dart`、`system_entry_dashboard.dart` 本地演示实现
+- [x] T030 `flutter analyze` 清零 + `flutter test` 全绿
 - [ ] T031 更新仓库 `README.md`/`spec.md` 与 `zh-cloud-docs/todo` 对照矩阵
 
 ## Dependencies & Execution Order
@@ -100,3 +100,4 @@ Setup → Foundational（阻塞） → US1（MVP） → US2 → US3 → US4 → 
 - 2026-07-30：T026 按 JDK 25 `zh-cloud-service/develop` 现行协作契约收口。旧 Flutter 使用数字 `userId` 邀请、`owner/member` 角色与 `PUT` 更新，无法匹配服务端 `userMobile + editor/viewer + PATCH`；现已按手机号邀请、显示角色和成员状态、限制 owner 管理入口，并区分接受邀请与主动退出。Dart MCP 定向 11 项与全量 585 项测试通过，25 项受保护真实环境测试按条件跳过，全量静态分析无错误；Service 以 Corretto 25.0.3 执行 `TodoListMemberServiceSyncTest`，4 项通过。真实双账号邀请/权限旅程与 Jenkins 未执行，不把它们记作通过。
 - 2026-07-30：继续收口 T026 的任务指派契约。旧 Flutter 错误解析/提交 `userId`，与服务端 `assigneeUserId/assigneeUserName/assigneeUserEmail` 不一致；现已显示真实执行人资料，从当前清单 active 成员中选择，并在客户端按 owner/active editor 与 viewer 权限禁用写入口。详情页先把本地 list UUID 解析为已同步的服务端 list ID，避免向成员接口传本地标识。Dart MCP 定向 37 项与全量 587 项测试通过，25 项受保护真实环境测试按条件跳过，全量静态分析无错误；真实双账号与 Jenkins 仍保持外部门槛，不把它们记作通过。
 - 2026-07-30：继续收口 T026 的评论与任务动态契约。评论列表改为解析服务端数组信封、`userName/userEmail/createTime/updateTime`，按 owner/editor/viewer 和评论作者限制新增、编辑、删除入口，并使用带任务归属校验的 DELETE 路由；任务动态补齐当前后端任务、时间、完成、执行人和评论动作标签，用户名缺失时回退邮箱。Dart MCP 定向 41 项与全量 590 项测试通过，25 项受保护真实环境测试按条件跳过，全量静态分析无错误；Service `develop` 以 Corretto 25.0.3 执行 `TodoSyncServiceActivityTest`，5 项通过。真实双账号评论权限旅程与 Jenkins 未执行，不把它们记作通过。
+- 2026-07-30：按仓库现状回查 T002–T025 与 T029–T030：Riverpod/go_router/dio/Drift/outbox、任务与组织、列表/看板/时间线、系统通知、提醒收件箱、重复规则编辑和 occurrence 动作均已存在并有对应测试，遗留演示文件已删除；同步修正 `AGENTS.md`、`CLAUDE.md` 与 `spec.md` 中仍声称“早期 shared_preferences + http 脚手架”的过期架构描述。T031 保留未完成，等待 `zh-cloud-docs/todo` 对照矩阵在其自身仓库闭环。
