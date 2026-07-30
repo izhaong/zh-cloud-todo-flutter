@@ -1166,20 +1166,43 @@ class ListMember {
   const ListMember({
     required this.userId,
     required this.role,
+    this.status = 'active',
     this.mobile,
     this.displayName,
+    this.email,
   });
 
   final int userId;
 
-  /// `owner` / `member`（后端约定）。
+  /// `owner` / `editor` / `viewer`（后端约定）。
   final String role;
 
-  /// 后端可能冗余（脱敏后）的手机号 / 显示名，仅供 UI 展示；可能为 null。
+  /// `invited` / `active` / `exited` / `removed`。
+  final String status;
+
+  /// 后端可能冗余的用户资料，仅供 UI 展示；可能为 null。
   final String? mobile;
   final String? displayName;
+  final String? email;
 
   bool get isOwner => role == 'owner';
+  bool get isEditor => role == 'editor';
+  bool get isViewer => role == 'viewer';
+
+  String get roleLabel => switch (role) {
+    'owner' => '所有者',
+    'editor' => '可编辑',
+    'viewer' => '只读',
+    _ => role,
+  };
+
+  String get statusLabel => switch (status) {
+    'invited' => '待接受',
+    'active' => '已加入',
+    'exited' => '已退出',
+    'removed' => '已移除',
+    _ => status,
+  };
 }
 
 /// 清单协作助手：成员增删改 + 加入 / 退出。
@@ -1191,9 +1214,14 @@ class ListCollaborationApi {
 
   ListMember _m(Map<String, dynamic> j) => ListMember(
     userId: (j['userId'] as num?)?.toInt() ?? (j['id'] as num?)?.toInt() ?? 0,
-    role: j['role']?.toString() ?? 'member',
+    role: j['role']?.toString() ?? 'viewer',
+    status: j['status']?.toString() ?? 'active',
     mobile: j['mobile']?.toString(),
-    displayName: j['displayName']?.toString() ?? j['name']?.toString(),
+    displayName:
+        j['displayName']?.toString() ??
+        j['userName']?.toString() ??
+        j['name']?.toString(),
+    email: j['userEmail']?.toString() ?? j['email']?.toString(),
   );
 
   /// 兼容 `{code,data:[…]}`, `{code,data:{members:[…]}}`,
@@ -1256,26 +1284,25 @@ class ListCollaborationApi {
     return members.any((member) => member.userId == userId && member.isOwner);
   }
 
-  /// `POST /list/{listId}/members` body `{userId, role}`。
+  /// `POST /list/{listId}/members` body `{userMobile, role}`。
   Future<void> addMember({
     required int listId,
-    required int userId,
-    String role = 'member',
+    required String userMobile,
+    String role = 'editor',
   }) async {
     await _client.post(
       '/list/$listId/members',
-      data: {'userId': userId, 'role': role},
+      data: {'userMobile': userMobile.trim(), 'role': role},
     );
   }
 
-  /// `PUT /list/{listId}/members/{userId}` body `{role}`。
-  /// 备注：ApiClient 仅有 GET/POST/PUT/DELETE，故 PATCH 改用 PUT。
+  /// `PATCH /list/{listId}/members/{userId}` body `{role}`。
   Future<void> updateRole({
     required int listId,
     required int userId,
     required String role,
   }) async {
-    await _client.put('/list/$listId/members/$userId', data: {'role': role});
+    await _client.patch('/list/$listId/members/$userId', data: {'role': role});
   }
 
   /// `DELETE /list/{listId}/members/{userId}`。

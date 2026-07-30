@@ -96,6 +96,12 @@ pubspec.yaml
 - 锁屏投影包含优先级不低于 2 或已置顶的活动任务；只向平台通道传递已同步的服务端任务 ID，离线任务显示未同步数量且不伪造 ID。
 - 未注册 `zh_cloud_todo/native` 平台通道时，URL Scheme、系统分享、桌面便签、锁屏任务和小组件接口必须安全返回“不支持”或空结果。Android/iOS 等平台侧真实 Widget、Share 与 URL Scheme handler 尚未实现，不计作系统原生能力完成。
 
+### 4.5 清单协作
+
+- 清单 owner 按会员手机号邀请成员，并显式选择 `editor`（可编辑）或 `viewer`（只读）；客户端不得把 owner 当作可分配角色，也不得使用本地用户 ID 代替后端 `userMobile` 契约。
+- 成员列表展示后端 `owner/editor/viewer` 角色、`invited/active/exited/removed` 状态以及可用的用户名、邮箱或脱敏手机号。owner 可将非 owner 成员切换为 editor/viewer 或移除。
+- 被邀请成员通过 `/list/{listId}/member/join` 接受邀请；active 非 owner 成员可退出协作。角色更新严格使用后端 `PATCH /list/{listId}/members/{userId}` 契约。
+
 ## 5. 对外契约
 
 - 登录：`/app-api/todo-member/auth/{login,sms-login,send-sms-code,logout}`、`/app-api/todo-member/user/reset-password`；已启用双重验证的登录请求携带可选 `twoFactorCode`。

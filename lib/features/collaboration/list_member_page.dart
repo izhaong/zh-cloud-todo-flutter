@@ -42,9 +42,9 @@ final listMembersProvider = FutureProvider.family
     });
 
 /// 列表成员管理页：
-/// - 展示成员列表（owner/member 角色标签）
-/// - 添加成员（按 userId）/ 移除 / 改角色
-/// - 邀请链接（join 端点）/ 自己退出（exit 端点）
+/// - 展示成员列表（owner/editor/viewer 与邀请状态）
+/// - owner 按手机号邀请 editor/viewer、移除成员或修改权限
+/// - 受邀成员接受邀请，active 非 owner 成员可退出协作
 class ListMemberPage extends ConsumerStatefulWidget {
   const ListMemberPage({super.key, required this.listServerId, this.title});
 
@@ -57,6 +57,7 @@ class ListMemberPage extends ConsumerStatefulWidget {
 
 class _ListMemberPageState extends ConsumerState<ListMemberPage> {
   final _addCtrl = TextEditingController();
+  String _inviteRole = 'editor';
 
   @override
   void dispose() {
@@ -65,33 +66,38 @@ class _ListMemberPageState extends ConsumerState<ListMemberPage> {
   }
 
   /// 调用 [op] 后 invalidate provider 让 UI 从后端重新拉取。
-  Future<void> _act(Future<void> Function() op) async {
+  Future<bool> _act(Future<void> Function() op) async {
     final messenger = ScaffoldMessenger.maybeOf(context);
     try {
       await op();
-      if (!mounted) return;
+      if (!mounted) return true;
       ref.invalidate(listMembersProvider(widget.listServerId));
+      return true;
     } catch (e) {
       messenger?.showSnackBar(SnackBar(content: Text('操作失败: $e')));
+      return false;
     }
   }
 
   Future<void> _add() async {
-    final raw = _addCtrl.text.trim();
-    _addCtrl.clear();
-    final userId = int.tryParse(raw);
-    if (userId == null) {
+    final mobile = _addCtrl.text.trim();
+    if (!RegExp(r'^1\d{10}$').hasMatch(mobile)) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('请输入合法的用户 ID（数字）')));
+      ).showSnackBar(const SnackBar(content: Text('请输入 11 位手机号')));
       return;
     }
-    await _act(
+    final invited = await _act(
       () => ref
           .read(todoApiProvider)
           .listCollaboration
-          .addMember(listId: widget.listServerId, userId: userId),
+          .addMember(
+            listId: widget.listServerId,
+            userMobile: mobile,
+            role: _inviteRole,
+          ),
     );
+    if (invited && mounted) _addCtrl.clear();
   }
 
   Future<void> _remove(ListMember m) async {
@@ -105,24 +111,16 @@ class _ListMemberPageState extends ConsumerState<ListMemberPage> {
     );
   }
 
-  Future<void> _toggleRole(ListMember m) async {
-    // 不能修改自己的角色（避免意外丢失 owner）。
-    final session = ref.read(sessionProvider);
-    if (session != null && session.userId == m.userId) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('不能修改自己的角色')));
-      return;
-    }
-    final next = m.isOwner ? 'member' : 'owner';
+  Future<void> _setRole(ListMember member, String role) async {
+    if (member.isOwner || role == member.role) return;
     await _act(
       () => ref
           .read(todoApiProvider)
           .listCollaboration
           .updateRole(
             listId: widget.listServerId,
-            userId: m.userId,
-            role: next,
+            userId: member.userId,
+            role: role,
           ),
     );
   }
@@ -171,6 +169,14 @@ class _ListMemberPageState extends ConsumerState<ListMemberPage> {
     final s = state.valueOrNull;
 
     final iAmOwner = myUserId != null && (s?.isOwner(myUserId) ?? false);
+    final currentMember = myUserId == null
+        ? null
+        : s?.members.where((member) => member.userId == myUserId).firstOrNull;
+    final canAcceptInvitation = currentMember?.status == 'invited';
+    final canExit =
+        currentMember != null &&
+        !currentMember.isOwner &&
+        currentMember.status == 'active';
 
     return Scaffold(
       appBar: AppBar(
@@ -186,45 +192,87 @@ class _ListMemberPageState extends ConsumerState<ListMemberPage> {
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
+          if (iAmOwner)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextField(
+                    key: const Key('collaboration-invite-mobile'),
                     controller: _addCtrl,
-                    keyboardType: TextInputType.number,
+                    keyboardType: TextInputType.phone,
+                    autofillHints: const [AutofillHints.telephoneNumber],
                     decoration: const InputDecoration(
-                      labelText: '按用户 ID 邀请（数字）',
+                      labelText: '成员手机号',
+                      hintText: '请输入 11 位手机号',
                       border: OutlineInputBorder(),
                     ),
                     onSubmitted: (_) => _add(),
                   ),
-                ),
-                const SizedBox(width: 8),
-                FilledButton(onPressed: _add, child: const Text('邀请')),
-              ],
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          key: const Key('collaboration-invite-role'),
+                          initialValue: _inviteRole,
+                          decoration: const InputDecoration(
+                            labelText: '邀请权限',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'editor',
+                              child: Text('可编辑'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'viewer',
+                              child: Text('只读'),
+                            ),
+                          ],
+                          onChanged: (role) {
+                            if (role != null) {
+                              setState(() => _inviteRole = role);
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton.icon(
+                        key: const Key('collaboration-invite-submit'),
+                        onPressed: _add,
+                        icon: const Icon(Icons.person_add_alt_1),
+                        label: const Text('邀请'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                OutlinedButton.icon(
-                  onPressed: _join,
-                  icon: const Icon(Icons.link),
-                  label: const Text('通过链接加入'),
-                ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  onPressed: _exit,
-                  icon: const Icon(Icons.exit_to_app),
-                  label: const Text('退出协作'),
-                ),
-              ],
+          if (canAcceptInvitation || canExit)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Row(
+                children: [
+                  if (canAcceptInvitation)
+                    FilledButton.icon(
+                      onPressed: _join,
+                      icon: const Icon(Icons.group_add_outlined),
+                      label: const Text('接受邀请'),
+                    ),
+                  if (canAcceptInvitation && canExit) const SizedBox(width: 8),
+                  if (canExit)
+                    OutlinedButton.icon(
+                      onPressed: _exit,
+                      icon: const Icon(Icons.exit_to_app),
+                      label: const Text('退出协作'),
+                    ),
+                ],
+              ),
             ),
-          ),
-          const Divider(height: 16),
+          if (iAmOwner || canAcceptInvitation || canExit)
+            const Divider(height: 16),
           Expanded(child: _content(state, iAmOwner)),
         ],
       ),
@@ -269,32 +317,71 @@ class _ListMemberPageState extends ConsumerState<ListMemberPage> {
                   color: m.isOwner ? Colors.amber : null,
                 ),
                 title: Text(m.displayName ?? '成员 #${m.userId}'),
-                subtitle: Text(
-                  '${m.mobile != null && m.mobile!.isNotEmpty ? '${m.mobile} · ' : ''}ID ${m.userId}',
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Chip(label: Text(m.isOwner ? '所有者' : '成员')),
-                    if (iAmOwner && !m.isOwner) ...[
-                      IconButton(
-                        tooltip: m.isOwner ? '降为成员' : '升为所有者',
-                        icon: const Icon(Icons.swap_horiz),
-                        onPressed: () => _toggleRole(m),
-                      ),
-                      IconButton(
-                        tooltip: '移除',
-                        icon: const Icon(Icons.remove_circle_outline),
-                        onPressed: () => _remove(m),
-                      ),
-                    ],
+                    Text(_memberContact(m)),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        Chip(
+                          visualDensity: VisualDensity.compact,
+                          label: Text(m.roleLabel),
+                        ),
+                        Chip(
+                          visualDensity: VisualDensity.compact,
+                          label: Text(m.statusLabel),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
+                isThreeLine: true,
+                trailing: iAmOwner && !m.isOwner
+                    ? PopupMenuButton<String>(
+                        tooltip: '管理成员',
+                        onSelected: (action) {
+                          if (action == 'remove') {
+                            _remove(m);
+                          } else {
+                            _setRole(m, action);
+                          }
+                        },
+                        itemBuilder: (_) => [
+                          CheckedPopupMenuItem(
+                            value: 'editor',
+                            checked: m.isEditor,
+                            child: const Text('可编辑'),
+                          ),
+                          CheckedPopupMenuItem(
+                            value: 'viewer',
+                            checked: m.isViewer,
+                            child: const Text('只读'),
+                          ),
+                          const PopupMenuDivider(),
+                          const PopupMenuItem(
+                            value: 'remove',
+                            child: Text('移除成员'),
+                          ),
+                        ],
+                      )
+                    : null,
               ),
             );
           },
         );
       },
     );
+  }
+
+  String _memberContact(ListMember member) {
+    final contact = [
+      if (member.mobile != null && member.mobile!.isNotEmpty) member.mobile!,
+      if (member.email != null && member.email!.isNotEmpty) member.email!,
+      'ID ${member.userId}',
+    ];
+    return contact.join(' · ');
   }
 }
