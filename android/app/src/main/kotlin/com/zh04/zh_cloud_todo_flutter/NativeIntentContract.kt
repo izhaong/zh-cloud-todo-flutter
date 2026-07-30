@@ -44,3 +44,29 @@ object NativeIntentContract {
 
     fun supportsSystemNote(apiLevel: Int): Boolean = apiLevel >= SYSTEM_NOTE_MIN_API
 }
+
+class NativeLinkEvents {
+    private var listener: ((String) -> Unit)? = null
+    private var pendingLink: String? = null
+
+    fun publish(rawLink: String?): Boolean {
+        val accepted = NativeIntentContract.acceptedIncomingLink(rawLink) ?: return false
+        val currentListener = listener
+        if (currentListener == null) {
+            pendingLink = accepted
+        } else {
+            currentListener(accepted)
+        }
+        return true
+    }
+
+    fun attach(listener: (String) -> Unit) {
+        this.listener = listener
+        pendingLink?.let(listener)
+        pendingLink = null
+    }
+
+    fun detach() {
+        listener = null
+    }
+}

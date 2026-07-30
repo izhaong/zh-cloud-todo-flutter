@@ -1,6 +1,6 @@
 /// 原生增强的 Dart 侧 platform channel 契约与安全降级入口。
 ///
-/// Android 已实现冷启动 URL Scheme、系统分享与可用时创建系统便签；
+/// Android 已实现冷/热启动 URL Scheme、系统分享与可用时创建系统便签；
 /// iOS、锁屏任务和真实桌面小组件等尚未接入的能力仍返回“不支持”或空结果。
 library;
 
@@ -10,6 +10,9 @@ class NativeIntents {
   NativeIntents._();
 
   static const MethodChannel _channel = MethodChannel('zh_cloud_todo/native');
+  static const EventChannel _linkEvents = EventChannel(
+    'zh_cloud_todo/native_links',
+  );
 
   /// 注册 URL Scheme handler（iOS: CFBundleURLTypes；Android: intent-filter）。
   /// 协议：zhcloudtodo://task/add?title=xxx&due=2026-06-20
@@ -25,6 +28,16 @@ class NativeIntents {
       return null;
     } on MissingPluginException {
       return null;
+    }
+  }
+
+  /// 监听应用已运行时收到的 URL Scheme。平台未注册事件通道时会向订阅者
+  /// 报错，调用方应安全忽略并继续使用应用内功能。
+  static Stream<Uri> incomingUris() async* {
+    await for (final event in _linkEvents.receiveBroadcastStream()) {
+      if (event is! String) continue;
+      final uri = Uri.tryParse(event);
+      if (uri != null) yield uri;
     }
   }
 
