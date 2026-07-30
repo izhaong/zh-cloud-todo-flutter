@@ -231,6 +231,78 @@ void main() {
     },
   );
 
+  testWidgets(
+    'detail all-day picker saves a pure date without opening time picker',
+    (tester) async {
+      final fixture = await TodoVisualFixture.create();
+      addTearDown(fixture.dispose);
+      await (fixture.database.update(
+        fixture.database.todoTasks,
+      )..where((task) => task.id.equals(_taskId))).write(
+        TodoTasksCompanion(
+          dueAt: Value(DateTime(2026, 7, 11)),
+          allDay: const Value(true),
+          timeZone: const Value('America/Los_Angeles'),
+          fixedTimezone: const Value(true),
+        ),
+      );
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: fixture.container,
+          child: MaterialApp(
+            theme: ThemeData.light().copyWith(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            home: const Scaffold(
+              body: TaskDetailPane(taskId: _taskId, embedded: true),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _openScheduleOptions(tester);
+
+      await tester.tap(find.byKey(const Key('task-due-at')));
+      await tester.pumpAndSettle();
+      expect(find.byType(DatePickerDialog), findsOneWidget);
+      await tester.tap(find.text('15').last);
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      expect(find.byType(DatePickerDialog), findsNothing);
+      expect(find.byType(TimePickerDialog), findsNothing);
+
+      await _closeScheduleOptions(tester);
+      final detailScroll = find.byType(Scrollable).last;
+      await tester.drag(detailScroll, const Offset(0, 1000));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('保存'));
+      await tester.pumpAndSettle();
+
+      final task = await fixture.container
+          .read(taskRepositoryProvider)!
+          .getById(_taskId);
+      expect(task?.dueAt, DateTime(2026, 7, 15));
+      expect(task?.dueAt?.isUtc, isFalse);
+      expect(task?.allDay, isTrue);
+      expect(task?.fixedTimezone, isTrue);
+      final payload =
+          jsonDecode(
+                (await fixture.database
+                        .select(fixture.database.todoSyncChanges)
+                        .get())
+                    .last
+                    .payloadJson,
+              )
+              as Map<String, dynamic>;
+      expect(
+        DateTime.fromMillisecondsSinceEpoch(payload['dueAt'] as int),
+        DateTime(2026, 7, 15),
+      );
+      expect(payload['allDay'], isTrue);
+    },
+  );
+
   testWidgets('detail creates a due reminder through reminder repository', (
     tester,
   ) async {
