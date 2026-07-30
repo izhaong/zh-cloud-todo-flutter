@@ -622,6 +622,458 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
   }
 }
 
+class $TodoTaskSectionsTable extends TodoTaskSections
+    with TableInfo<$TodoTaskSectionsTable, TodoTaskSection> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TodoTaskSectionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _serverIdMeta = const VerificationMeta(
+    'serverId',
+  );
+  @override
+  late final GeneratedColumn<int> serverId = GeneratedColumn<int>(
+    'server_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _listIdMeta = const VerificationMeta('listId');
+  @override
+  late final GeneratedColumn<String> listId = GeneratedColumn<String>(
+    'list_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    serverId,
+    listId,
+    name,
+    sortOrder,
+    updatedAt,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'todo_task_sections';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<TodoTaskSection> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('server_id')) {
+      context.handle(
+        _serverIdMeta,
+        serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
+      );
+    }
+    if (data.containsKey('list_id')) {
+      context.handle(
+        _listIdMeta,
+        listId.isAcceptableOrUnknown(data['list_id']!, _listIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_listIdMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  TodoTaskSection map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TodoTaskSection(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      serverId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}server_id'],
+      ),
+      listId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}list_id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $TodoTaskSectionsTable createAlias(String alias) {
+    return $TodoTaskSectionsTable(attachedDatabase, alias);
+  }
+}
+
+class TodoTaskSection extends DataClass implements Insertable<TodoTaskSection> {
+  final String id;
+  final int? serverId;
+  final String listId;
+  final String name;
+  final int sortOrder;
+  final DateTime updatedAt;
+  final DateTime createdAt;
+  const TodoTaskSection({
+    required this.id,
+    this.serverId,
+    required this.listId,
+    required this.name,
+    required this.sortOrder,
+    required this.updatedAt,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    if (!nullToAbsent || serverId != null) {
+      map['server_id'] = Variable<int>(serverId);
+    }
+    map['list_id'] = Variable<String>(listId);
+    map['name'] = Variable<String>(name);
+    map['sort_order'] = Variable<int>(sortOrder);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  TodoTaskSectionsCompanion toCompanion(bool nullToAbsent) {
+    return TodoTaskSectionsCompanion(
+      id: Value(id),
+      serverId: serverId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(serverId),
+      listId: Value(listId),
+      name: Value(name),
+      sortOrder: Value(sortOrder),
+      updatedAt: Value(updatedAt),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory TodoTaskSection.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TodoTaskSection(
+      id: serializer.fromJson<String>(json['id']),
+      serverId: serializer.fromJson<int?>(json['serverId']),
+      listId: serializer.fromJson<String>(json['listId']),
+      name: serializer.fromJson<String>(json['name']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'serverId': serializer.toJson<int?>(serverId),
+      'listId': serializer.toJson<String>(listId),
+      'name': serializer.toJson<String>(name),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  TodoTaskSection copyWith({
+    String? id,
+    Value<int?> serverId = const Value.absent(),
+    String? listId,
+    String? name,
+    int? sortOrder,
+    DateTime? updatedAt,
+    DateTime? createdAt,
+  }) => TodoTaskSection(
+    id: id ?? this.id,
+    serverId: serverId.present ? serverId.value : this.serverId,
+    listId: listId ?? this.listId,
+    name: name ?? this.name,
+    sortOrder: sortOrder ?? this.sortOrder,
+    updatedAt: updatedAt ?? this.updatedAt,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  TodoTaskSection copyWithCompanion(TodoTaskSectionsCompanion data) {
+    return TodoTaskSection(
+      id: data.id.present ? data.id.value : this.id,
+      serverId: data.serverId.present ? data.serverId.value : this.serverId,
+      listId: data.listId.present ? data.listId.value : this.listId,
+      name: data.name.present ? data.name.value : this.name,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TodoTaskSection(')
+          ..write('id: $id, ')
+          ..write('serverId: $serverId, ')
+          ..write('listId: $listId, ')
+          ..write('name: $name, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, serverId, listId, name, sortOrder, updatedAt, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TodoTaskSection &&
+          other.id == this.id &&
+          other.serverId == this.serverId &&
+          other.listId == this.listId &&
+          other.name == this.name &&
+          other.sortOrder == this.sortOrder &&
+          other.updatedAt == this.updatedAt &&
+          other.createdAt == this.createdAt);
+}
+
+class TodoTaskSectionsCompanion extends UpdateCompanion<TodoTaskSection> {
+  final Value<String> id;
+  final Value<int?> serverId;
+  final Value<String> listId;
+  final Value<String> name;
+  final Value<int> sortOrder;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const TodoTaskSectionsCompanion({
+    this.id = const Value.absent(),
+    this.serverId = const Value.absent(),
+    this.listId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  TodoTaskSectionsCompanion.insert({
+    required String id,
+    this.serverId = const Value.absent(),
+    required String listId,
+    required String name,
+    this.sortOrder = const Value.absent(),
+    required DateTime updatedAt,
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       listId = Value(listId),
+       name = Value(name),
+       updatedAt = Value(updatedAt),
+       createdAt = Value(createdAt);
+  static Insertable<TodoTaskSection> custom({
+    Expression<String>? id,
+    Expression<int>? serverId,
+    Expression<String>? listId,
+    Expression<String>? name,
+    Expression<int>? sortOrder,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (serverId != null) 'server_id': serverId,
+      if (listId != null) 'list_id': listId,
+      if (name != null) 'name': name,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  TodoTaskSectionsCompanion copyWith({
+    Value<String>? id,
+    Value<int?>? serverId,
+    Value<String>? listId,
+    Value<String>? name,
+    Value<int>? sortOrder,
+    Value<DateTime>? updatedAt,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return TodoTaskSectionsCompanion(
+      id: id ?? this.id,
+      serverId: serverId ?? this.serverId,
+      listId: listId ?? this.listId,
+      name: name ?? this.name,
+      sortOrder: sortOrder ?? this.sortOrder,
+      updatedAt: updatedAt ?? this.updatedAt,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (serverId.present) {
+      map['server_id'] = Variable<int>(serverId.value);
+    }
+    if (listId.present) {
+      map['list_id'] = Variable<String>(listId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TodoTaskSectionsCompanion(')
+          ..write('id: $id, ')
+          ..write('serverId: $serverId, ')
+          ..write('listId: $listId, ')
+          ..write('name: $name, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $TodoTasksTable extends TodoTasks
     with TableInfo<$TodoTasksTable, TodoTask> {
   @override
@@ -656,6 +1108,17 @@ class $TodoTasksTable extends TodoTasks
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sectionIdMeta = const VerificationMeta(
+    'sectionId',
+  );
+  @override
+  late final GeneratedColumn<String> sectionId = GeneratedColumn<String>(
+    'section_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _parentTaskIdMeta = const VerificationMeta(
     'parentTaskId',
@@ -918,6 +1381,7 @@ class $TodoTasksTable extends TodoTasks
     id,
     serverId,
     listId,
+    sectionId,
     parentTaskId,
     title,
     description,
@@ -971,6 +1435,12 @@ class $TodoTasksTable extends TodoTasks
       );
     } else if (isInserting) {
       context.missing(_listIdMeta);
+    }
+    if (data.containsKey('section_id')) {
+      context.handle(
+        _sectionIdMeta,
+        sectionId.isAcceptableOrUnknown(data['section_id']!, _sectionIdMeta),
+      );
     }
     if (data.containsKey('parent_task_id')) {
       context.handle(
@@ -1158,6 +1628,10 @@ class $TodoTasksTable extends TodoTasks
         DriftSqlType.string,
         data['${effectivePrefix}list_id'],
       )!,
+      sectionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}section_id'],
+      ),
       parentTaskId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}parent_task_id'],
@@ -1259,6 +1733,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
   final String id;
   final int? serverId;
   final String listId;
+  final String? sectionId;
   final String? parentTaskId;
   final String title;
   final String? description;
@@ -1291,6 +1766,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     required this.id,
     this.serverId,
     required this.listId,
+    this.sectionId,
     this.parentTaskId,
     required this.title,
     this.description,
@@ -1322,6 +1798,9 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       map['server_id'] = Variable<int>(serverId);
     }
     map['list_id'] = Variable<String>(listId);
+    if (!nullToAbsent || sectionId != null) {
+      map['section_id'] = Variable<String>(sectionId);
+    }
     if (!nullToAbsent || parentTaskId != null) {
       map['parent_task_id'] = Variable<String>(parentTaskId);
     }
@@ -1378,6 +1857,9 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           ? const Value.absent()
           : Value(serverId),
       listId: Value(listId),
+      sectionId: sectionId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sectionId),
       parentTaskId: parentTaskId == null && nullToAbsent
           ? const Value.absent()
           : Value(parentTaskId),
@@ -1436,6 +1918,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       id: serializer.fromJson<String>(json['id']),
       serverId: serializer.fromJson<int?>(json['serverId']),
       listId: serializer.fromJson<String>(json['listId']),
+      sectionId: serializer.fromJson<String?>(json['sectionId']),
       parentTaskId: serializer.fromJson<String?>(json['parentTaskId']),
       title: serializer.fromJson<String>(json['title']),
       description: serializer.fromJson<String?>(json['description']),
@@ -1471,6 +1954,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       'id': serializer.toJson<String>(id),
       'serverId': serializer.toJson<int?>(serverId),
       'listId': serializer.toJson<String>(listId),
+      'sectionId': serializer.toJson<String?>(sectionId),
       'parentTaskId': serializer.toJson<String?>(parentTaskId),
       'title': serializer.toJson<String>(title),
       'description': serializer.toJson<String?>(description),
@@ -1500,6 +1984,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     String? id,
     Value<int?> serverId = const Value.absent(),
     String? listId,
+    Value<String?> sectionId = const Value.absent(),
     Value<String?> parentTaskId = const Value.absent(),
     String? title,
     Value<String?> description = const Value.absent(),
@@ -1526,6 +2011,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     id: id ?? this.id,
     serverId: serverId.present ? serverId.value : this.serverId,
     listId: listId ?? this.listId,
+    sectionId: sectionId.present ? sectionId.value : this.sectionId,
     parentTaskId: parentTaskId.present ? parentTaskId.value : this.parentTaskId,
     title: title ?? this.title,
     description: description.present ? description.value : this.description,
@@ -1562,6 +2048,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       id: data.id.present ? data.id.value : this.id,
       serverId: data.serverId.present ? data.serverId.value : this.serverId,
       listId: data.listId.present ? data.listId.value : this.listId,
+      sectionId: data.sectionId.present ? data.sectionId.value : this.sectionId,
       parentTaskId: data.parentTaskId.present
           ? data.parentTaskId.value
           : this.parentTaskId,
@@ -1611,6 +2098,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           ..write('id: $id, ')
           ..write('serverId: $serverId, ')
           ..write('listId: $listId, ')
+          ..write('sectionId: $sectionId, ')
           ..write('parentTaskId: $parentTaskId, ')
           ..write('title: $title, ')
           ..write('description: $description, ')
@@ -1642,6 +2130,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     id,
     serverId,
     listId,
+    sectionId,
     parentTaskId,
     title,
     description,
@@ -1672,6 +2161,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           other.id == this.id &&
           other.serverId == this.serverId &&
           other.listId == this.listId &&
+          other.sectionId == this.sectionId &&
           other.parentTaskId == this.parentTaskId &&
           other.title == this.title &&
           other.description == this.description &&
@@ -1700,6 +2190,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
   final Value<String> id;
   final Value<int?> serverId;
   final Value<String> listId;
+  final Value<String?> sectionId;
   final Value<String?> parentTaskId;
   final Value<String> title;
   final Value<String?> description;
@@ -1727,6 +2218,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
     this.listId = const Value.absent(),
+    this.sectionId = const Value.absent(),
     this.parentTaskId = const Value.absent(),
     this.title = const Value.absent(),
     this.description = const Value.absent(),
@@ -1755,6 +2247,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     required String id,
     this.serverId = const Value.absent(),
     required String listId,
+    this.sectionId = const Value.absent(),
     this.parentTaskId = const Value.absent(),
     required String title,
     this.description = const Value.absent(),
@@ -1787,6 +2280,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     Expression<String>? id,
     Expression<int>? serverId,
     Expression<String>? listId,
+    Expression<String>? sectionId,
     Expression<String>? parentTaskId,
     Expression<String>? title,
     Expression<String>? description,
@@ -1815,6 +2309,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
       if (id != null) 'id': id,
       if (serverId != null) 'server_id': serverId,
       if (listId != null) 'list_id': listId,
+      if (sectionId != null) 'section_id': sectionId,
       if (parentTaskId != null) 'parent_task_id': parentTaskId,
       if (title != null) 'title': title,
       if (description != null) 'description': description,
@@ -1847,6 +2342,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     Value<String>? id,
     Value<int?>? serverId,
     Value<String>? listId,
+    Value<String?>? sectionId,
     Value<String?>? parentTaskId,
     Value<String>? title,
     Value<String?>? description,
@@ -1875,6 +2371,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
       id: id ?? this.id,
       serverId: serverId ?? this.serverId,
       listId: listId ?? this.listId,
+      sectionId: sectionId ?? this.sectionId,
       parentTaskId: parentTaskId ?? this.parentTaskId,
       title: title ?? this.title,
       description: description ?? this.description,
@@ -1912,6 +2409,9 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     }
     if (listId.present) {
       map['list_id'] = Variable<String>(listId.value);
+    }
+    if (sectionId.present) {
+      map['section_id'] = Variable<String>(sectionId.value);
     }
     if (parentTaskId.present) {
       map['parent_task_id'] = Variable<String>(parentTaskId.value);
@@ -1993,6 +2493,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
           ..write('id: $id, ')
           ..write('serverId: $serverId, ')
           ..write('listId: $listId, ')
+          ..write('sectionId: $sectionId, ')
           ..write('parentTaskId: $parentTaskId, ')
           ..write('title: $title, ')
           ..write('description: $description, ')
@@ -10885,6 +11386,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $TodoListsTable todoLists = $TodoListsTable(this);
+  late final $TodoTaskSectionsTable todoTaskSections = $TodoTaskSectionsTable(
+    this,
+  );
   late final $TodoTasksTable todoTasks = $TodoTasksTable(this);
   late final $TodoFoldersTable todoFolders = $TodoFoldersTable(this);
   late final $TodoTagsTable todoTags = $TodoTagsTable(this);
@@ -10922,6 +11426,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     todoLists,
+    todoTaskSections,
     todoTasks,
     todoFolders,
     todoTags,
@@ -11236,11 +11741,256 @@ typedef $$TodoListsTableProcessedTableManager =
       TodoList,
       PrefetchHooks Function()
     >;
+typedef $$TodoTaskSectionsTableCreateCompanionBuilder =
+    TodoTaskSectionsCompanion Function({
+      required String id,
+      Value<int?> serverId,
+      required String listId,
+      required String name,
+      Value<int> sortOrder,
+      required DateTime updatedAt,
+      required DateTime createdAt,
+      Value<int> rowid,
+    });
+typedef $$TodoTaskSectionsTableUpdateCompanionBuilder =
+    TodoTaskSectionsCompanion Function({
+      Value<String> id,
+      Value<int?> serverId,
+      Value<String> listId,
+      Value<String> name,
+      Value<int> sortOrder,
+      Value<DateTime> updatedAt,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+
+class $$TodoTaskSectionsTableFilterComposer
+    extends Composer<_$AppDatabase, $TodoTaskSectionsTable> {
+  $$TodoTaskSectionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get serverId => $composableBuilder(
+    column: $table.serverId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get listId => $composableBuilder(
+    column: $table.listId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$TodoTaskSectionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $TodoTaskSectionsTable> {
+  $$TodoTaskSectionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get serverId => $composableBuilder(
+    column: $table.serverId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get listId => $composableBuilder(
+    column: $table.listId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$TodoTaskSectionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $TodoTaskSectionsTable> {
+  $$TodoTaskSectionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get serverId =>
+      $composableBuilder(column: $table.serverId, builder: (column) => column);
+
+  GeneratedColumn<String> get listId =>
+      $composableBuilder(column: $table.listId, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$TodoTaskSectionsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $TodoTaskSectionsTable,
+          TodoTaskSection,
+          $$TodoTaskSectionsTableFilterComposer,
+          $$TodoTaskSectionsTableOrderingComposer,
+          $$TodoTaskSectionsTableAnnotationComposer,
+          $$TodoTaskSectionsTableCreateCompanionBuilder,
+          $$TodoTaskSectionsTableUpdateCompanionBuilder,
+          (
+            TodoTaskSection,
+            BaseReferences<
+              _$AppDatabase,
+              $TodoTaskSectionsTable,
+              TodoTaskSection
+            >,
+          ),
+          TodoTaskSection,
+          PrefetchHooks Function()
+        > {
+  $$TodoTaskSectionsTableTableManager(
+    _$AppDatabase db,
+    $TodoTaskSectionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$TodoTaskSectionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$TodoTaskSectionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$TodoTaskSectionsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<int?> serverId = const Value.absent(),
+                Value<String> listId = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => TodoTaskSectionsCompanion(
+                id: id,
+                serverId: serverId,
+                listId: listId,
+                name: name,
+                sortOrder: sortOrder,
+                updatedAt: updatedAt,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                Value<int?> serverId = const Value.absent(),
+                required String listId,
+                required String name,
+                Value<int> sortOrder = const Value.absent(),
+                required DateTime updatedAt,
+                required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => TodoTaskSectionsCompanion.insert(
+                id: id,
+                serverId: serverId,
+                listId: listId,
+                name: name,
+                sortOrder: sortOrder,
+                updatedAt: updatedAt,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$TodoTaskSectionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $TodoTaskSectionsTable,
+      TodoTaskSection,
+      $$TodoTaskSectionsTableFilterComposer,
+      $$TodoTaskSectionsTableOrderingComposer,
+      $$TodoTaskSectionsTableAnnotationComposer,
+      $$TodoTaskSectionsTableCreateCompanionBuilder,
+      $$TodoTaskSectionsTableUpdateCompanionBuilder,
+      (
+        TodoTaskSection,
+        BaseReferences<_$AppDatabase, $TodoTaskSectionsTable, TodoTaskSection>,
+      ),
+      TodoTaskSection,
+      PrefetchHooks Function()
+    >;
 typedef $$TodoTasksTableCreateCompanionBuilder =
     TodoTasksCompanion Function({
       required String id,
       Value<int?> serverId,
       required String listId,
+      Value<String?> sectionId,
       Value<String?> parentTaskId,
       required String title,
       Value<String?> description,
@@ -11270,6 +12020,7 @@ typedef $$TodoTasksTableUpdateCompanionBuilder =
       Value<String> id,
       Value<int?> serverId,
       Value<String> listId,
+      Value<String?> sectionId,
       Value<String?> parentTaskId,
       Value<String> title,
       Value<String?> description,
@@ -11316,6 +12067,11 @@ class $$TodoTasksTableFilterComposer
 
   ColumnFilters<String> get listId => $composableBuilder(
     column: $table.listId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sectionId => $composableBuilder(
+    column: $table.sectionId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -11454,6 +12210,11 @@ class $$TodoTasksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get sectionId => $composableBuilder(
+    column: $table.sectionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get parentTaskId => $composableBuilder(
     column: $table.parentTaskId,
     builder: (column) => ColumnOrderings(column),
@@ -11583,6 +12344,9 @@ class $$TodoTasksTableAnnotationComposer
   GeneratedColumn<String> get listId =>
       $composableBuilder(column: $table.listId, builder: (column) => column);
 
+  GeneratedColumn<String> get sectionId =>
+      $composableBuilder(column: $table.sectionId, builder: (column) => column);
+
   GeneratedColumn<String> get parentTaskId => $composableBuilder(
     column: $table.parentTaskId,
     builder: (column) => column,
@@ -11699,6 +12463,7 @@ class $$TodoTasksTableTableManager
                 Value<String> id = const Value.absent(),
                 Value<int?> serverId = const Value.absent(),
                 Value<String> listId = const Value.absent(),
+                Value<String?> sectionId = const Value.absent(),
                 Value<String?> parentTaskId = const Value.absent(),
                 Value<String> title = const Value.absent(),
                 Value<String?> description = const Value.absent(),
@@ -11726,6 +12491,7 @@ class $$TodoTasksTableTableManager
                 id: id,
                 serverId: serverId,
                 listId: listId,
+                sectionId: sectionId,
                 parentTaskId: parentTaskId,
                 title: title,
                 description: description,
@@ -11755,6 +12521,7 @@ class $$TodoTasksTableTableManager
                 required String id,
                 Value<int?> serverId = const Value.absent(),
                 required String listId,
+                Value<String?> sectionId = const Value.absent(),
                 Value<String?> parentTaskId = const Value.absent(),
                 required String title,
                 Value<String?> description = const Value.absent(),
@@ -11782,6 +12549,7 @@ class $$TodoTasksTableTableManager
                 id: id,
                 serverId: serverId,
                 listId: listId,
+                sectionId: sectionId,
                 parentTaskId: parentTaskId,
                 title: title,
                 description: description,
@@ -16384,6 +17152,8 @@ class $AppDatabaseManager {
   $AppDatabaseManager(this._db);
   $$TodoListsTableTableManager get todoLists =>
       $$TodoListsTableTableManager(_db, _db.todoLists);
+  $$TodoTaskSectionsTableTableManager get todoTaskSections =>
+      $$TodoTaskSectionsTableTableManager(_db, _db.todoTaskSections);
   $$TodoTasksTableTableManager get todoTasks =>
       $$TodoTasksTableTableManager(_db, _db.todoTasks);
   $$TodoFoldersTableTableManager get todoFolders =>

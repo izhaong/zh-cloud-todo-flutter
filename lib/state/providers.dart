@@ -27,6 +27,7 @@ import 'repositories/task_query_repository.dart';
 import 'repositories/template_repository.dart';
 import 'repositories/task_capture_defaults_repository.dart';
 import 'repositories/task_repository.dart';
+import 'repositories/task_section_repository.dart';
 import 'repositories/task_sort_preference_repository.dart';
 import 'repositories/task_view_action_repository.dart';
 
@@ -152,6 +153,13 @@ final taskRepositoryProvider = Provider<TaskRepository?>((ref) {
   final queue = ref.watch(syncChangeQueueProvider);
   if (db == null || queue == null) return null;
   return TaskRepository(db, queue);
+});
+
+final taskSectionRepositoryProvider = Provider<TaskSectionRepository?>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  final queue = ref.watch(syncChangeQueueProvider);
+  if (db == null || queue == null) return null;
+  return TaskSectionRepository(db, queue);
 });
 
 final noteRepositoryProvider = Provider<NoteRepository>((ref) {
@@ -328,6 +336,13 @@ final tasksByListProvider = StreamProvider.family<List<TodoTask>, String>((
   if (repo == null) return const Stream.empty();
   return repo.watchTopLevelByList(listId);
 });
+
+final taskSectionsByListProvider =
+    StreamProvider.family<List<TodoTaskSection>, String>((ref, listId) {
+      final repo = ref.watch(taskSectionRepositoryProvider);
+      if (repo == null) return const Stream.empty();
+      return repo.watchByList(listId);
+    });
 
 /// 清单列表 stream（不含智能清单）。
 final listsStreamProvider = StreamProvider<List<TodoList>>((ref) {

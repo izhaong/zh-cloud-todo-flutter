@@ -18,7 +18,8 @@ part 'app_database.g.dart';
 ///   SQLite 文件（`todo_t<tenant>_u<user>.sqlite`），切换账号/租户天然隔离。
 ///
 /// 表清单：
-/// - todo_list / todo_task / todo_folder(REST 直连) / todo_tag / todo_task_tag
+/// - todo_list / todo_task_section / todo_task / todo_folder(REST 直连)
+/// - todo_tag / todo_task_tag
 /// - todo_reminder / todo_repeat_rule / todo_repeat_skip
 /// - todo_view_preference / todo_filter
 /// - todo_sync_change（outbox 本地变更队列）/ todo_sync_cursor / todo_entity_revision
@@ -46,10 +47,26 @@ class TodoLists extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+/// 清单内任务分组（Section）。本地 UUID 允许离线创建后立即归组任务。
+class TodoTaskSections extends Table {
+  TextColumn get id => text()();
+  IntColumn get serverId => integer().nullable()();
+  TextColumn get listId => text()(); // 本地 UUID 外键 → todo_list.id
+  TextColumn get name => text()();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+  DateTimeColumn get updatedAt => dateTime()();
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 class TodoTasks extends Table {
   TextColumn get id => text()(); // UUID-v4 本地主键
   IntColumn get serverId => integer().nullable()();
   TextColumn get listId => text()(); // 本地 UUID 外键 → todo_list.id
+  TextColumn get sectionId =>
+      text().nullable()(); // 本地 UUID 外键 → todo_task_section.id
   TextColumn get parentTaskId =>
       text().nullable()(); // 本地 UUID 外键 → todo_task.id
   TextColumn get title => text()();
@@ -381,6 +398,7 @@ class TodoSearchIndexEntry {
 @DriftDatabase(
   tables: [
     TodoLists,
+    TodoTaskSections,
     TodoTasks,
     TodoFolders,
     TodoTags,
@@ -415,7 +433,7 @@ class AppDatabase extends _$AppDatabase {
   }) : super(_open(_userDatabaseName(tenantId, userId, testNamespace)));
 
   @override
-  int get schemaVersion => 21;
+  int get schemaVersion => 22;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -637,6 +655,14 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 21) {
         await _migrateFilterReferencesToLocalIds(m.database);
+      }
+      if (from < 22) {
+        if (!await _tableExists(m, todoTaskSections.actualTableName)) {
+          await m.createTable(todoTaskSections);
+        }
+        if (!await _columnExists(m, 'todo_tasks', 'section_id')) {
+          await m.addColumn(todoTasks, todoTasks.sectionId);
+        }
       }
     },
   );
@@ -1018,6 +1044,9 @@ class AppDatabase extends _$AppDatabase {
   )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
   Future<TodoList?> listByServerId(int serverId) => (select(
     todoLists,
+  )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
+  Future<TodoTaskSection?> taskSectionByServerId(int serverId) => (select(
+    todoTaskSections,
   )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
   Future<TodoTag?> tagByServerId(int serverId) => (select(
     todoTags,

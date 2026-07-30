@@ -21,6 +21,7 @@ class TaskRowHost extends ConsumerStatefulWidget {
     this.batchSelectionActive = false,
     this.batchSelected = false,
     this.onBatchSelectionChanged,
+    this.taskSections = const [],
   });
 
   final TodoTask task;
@@ -33,6 +34,7 @@ class TaskRowHost extends ConsumerStatefulWidget {
   final bool batchSelectionActive;
   final bool batchSelected;
   final ValueChanged<bool>? onBatchSelectionChanged;
+  final List<TodoTaskSection> taskSections;
 
   @override
   ConsumerState<TaskRowHost> createState() => _TaskRowHostState();
@@ -205,6 +207,16 @@ class _TaskRowHostState extends ConsumerState<TaskRowHost> {
               title: const Text('移动到清单'),
               onTap: () => Navigator.pop(sheetContext),
             ),
+            if (widget.taskSections.isNotEmpty)
+              ListTile(
+                key: Key('todo-task-move-section-${widget.task.id}'),
+                leading: Icon(Icons.view_agenda_outlined, color: colors.accent),
+                title: const Text('移动到分组'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _showSectionMenu();
+                },
+              ),
             ListTile(
               leading: Icon(Icons.alarm_add_outlined, color: colors.accent),
               title: const Text('设置提醒'),
@@ -219,6 +231,63 @@ class _TaskRowHostState extends ConsumerState<TaskRowHost> {
         ),
       ),
     );
+  }
+
+  Future<void> _showSectionMenu() async {
+    final selectedSectionId = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(
+                '移动到分组',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+            ),
+            ListTile(
+              key: const Key('todo-task-section-ungrouped'),
+              leading: Icon(
+                widget.task.sectionId == null
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
+              ),
+              title: const Text('未分组'),
+              onTap: () => Navigator.of(sheetContext).pop(''),
+            ),
+            for (final section in widget.taskSections)
+              ListTile(
+                key: Key('todo-task-section-${section.id}'),
+                leading: Icon(
+                  widget.task.sectionId == section.id
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_unchecked,
+                ),
+                title: Text(section.name),
+                onTap: () => Navigator.of(sheetContext).pop(section.id),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (selectedSectionId == null || !mounted) return;
+    try {
+      await ref
+          .read(taskRepositoryProvider)
+          ?.update(
+            widget.task.id,
+            sectionId: selectedSectionId.isEmpty ? null : selectedSectionId,
+            clearSectionId: selectedSectionId.isEmpty,
+          );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('任务移动分组失败，请重试')));
+    }
   }
 }
 

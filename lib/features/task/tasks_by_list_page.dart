@@ -147,6 +147,11 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     final desktopMode = viewportWidth >= TodoLayoutTokens.compactMinWidth;
     final showQuickAdd = viewportWidth >= TodoLayoutTokens.tabletMinWidth;
     final mobileMode = viewportWidth < TodoLayoutTokens.tabletMinWidth;
+    final listId = _selectedListId;
+    final taskSections = listId == null
+        ? const <TodoTaskSection>[]
+        : ref.watch(taskSectionsByListProvider(listId)).valueOrNull ??
+              const <TodoTaskSection>[];
 
     if (taskRepo == null) {
       return const Center(child: CircularProgressIndicator());
@@ -167,7 +172,12 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
             _batchSelectionActive && _batchSelectedTaskIds.isNotEmpty;
         final modeBody = snapshot.connectionState == ConnectionState.waiting
             ? const Center(child: CircularProgressIndicator())
-            : _buildModeBody(items, desktopMode: desktopMode, now: now);
+            : _buildModeBody(
+                items,
+                taskSections: taskSections,
+                desktopMode: desktopMode,
+                now: now,
+              );
         final workspace = Column(
           children: [
             if (widget.hideAppBar)
@@ -185,6 +195,14 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
               ),
             if (showQuickAdd && !_batchSelectionActive)
               QuickAddBar(onSubmit: _submitQuickAdd, tagOptions: tagOptions),
+            if (_mode == TaskViewMode.list && listId != null)
+              _TaskSectionManagerBar(
+                sections: taskSections,
+                onCreate: _createTaskSection,
+                onRename: _renameTaskSection,
+                onDelete: _deleteTaskSection,
+                onMove: _moveTaskSection,
+              ),
             Expanded(
               child: Padding(
                 padding: EdgeInsets.only(
@@ -251,6 +269,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
 
   Widget _buildModeBody(
     List<TodoTask> items, {
+    required List<TodoTaskSection> taskSections,
     required bool desktopMode,
     required DateTime now,
   }) {
@@ -258,12 +277,13 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       case TaskViewMode.list:
         return _ListBody(
           items: items,
+          sections: taskSections,
           sort: _sort,
           desktopMode: desktopMode,
           now: now,
           selectedTaskId: widget.selectedTaskId,
           onTaskSelected: widget.onTaskSelected,
-          onTasksReordered: _selectedListId == null
+          onTasksReordered: _selectedListId == null || taskSections.isNotEmpty
               ? null
               : (taskIds) async {
                   final repository = ref.read(taskViewActionRepositoryProvider);
@@ -1174,6 +1194,131 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     }
   }
 
+  Future<void> _createTaskSection() async {
+    final listId = _selectedListId;
+    if (listId == null) return;
+    final name = await _requestSectionName(title: '新建分组');
+    if (name == null || !mounted) return;
+    try {
+      await ref
+          .read(taskSectionRepositoryProvider)
+          ?.create(listId: listId, name: name);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('分组创建失败，请重试')));
+    }
+  }
+
+  Future<void> _renameTaskSection(TodoTaskSection section) async {
+    final name = await _requestSectionName(
+      title: '重命名分组',
+      initialValue: section.name,
+    );
+    if (name == null || !mounted) return;
+    try {
+      await ref
+          .read(taskSectionRepositoryProvider)
+          ?.rename(section.id, name);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('分组重命名失败，请重试')));
+    }
+  }
+
+  Future<void> _deleteTaskSection(TodoTaskSection section) async {
+    final confirmed = await AppDialog.confirm(
+      context,
+      title: '删除“${section.name}”？',
+      content: '分组内任务不会删除，将回到“未分组”。此操作会同步到其他设备。',
+      confirmLabel: '删除',
+      danger: true,
+    );
+    if (!confirmed || !mounted) return;
+    try {
+      await ref.read(taskSectionRepositoryProvider)?.delete(section.id);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('分组删除失败，请重试')));
+    }
+  }
+
+  Future<void> _moveTaskSection(
+    TodoTaskSection section,
+    int direction,
+  ) async {
+    final listId = _selectedListId;
+    if (listId == null) return;
+    final sections =
+        ref.read(taskSectionsByListProvider(listId)).valueOrNull ?? const [];
+    final currentIndex = sections.indexWhere((item) => item.id == section.id);
+    final targetIndex = currentIndex + direction;
+    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= sections.length) {
+      return;
+    }
+    final ordered = sections.map((item) => item.id).toList();
+    final moved = ordered.removeAt(currentIndex);
+    ordered.insert(targetIndex, moved);
+    try {
+      await ref
+          .read(taskSectionRepositoryProvider)
+          ?.reorder(listId: listId, orderedSectionIds: ordered);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('分组排序失败，请重试')));
+    }
+  }
+
+  Future<String?> _requestSectionName({
+    required String title,
+    String initialValue = '',
+  }) async {
+    var value = initialValue;
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title),
+        content: TextFormField(
+          key: const Key('todo-section-name-field'),
+          initialValue: initialValue,
+          autofocus: true,
+          maxLength: 255,
+          decoration: const InputDecoration(hintText: '分组名称'),
+          onChanged: (nextValue) => value = nextValue,
+          onFieldSubmitted: (nextValue) {
+            final normalized = nextValue.trim();
+            if (normalized.isNotEmpty) {
+              Navigator.of(dialogContext).pop(normalized);
+            }
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            key: const Key('todo-section-name-confirm'),
+            onPressed: () {
+              final normalized = value.trim();
+              if (normalized.isNotEmpty) {
+                Navigator.of(dialogContext).pop(normalized);
+              }
+            },
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _openFilterPanel(List<TodoTask> tasks) async {
     var draft = _filter;
     final assigneesById = <int, TaskAssigneeOption>{};
@@ -1230,6 +1375,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
 class _ListBody extends StatefulWidget {
   const _ListBody({
     required this.items,
+    required this.sections,
     required this.sort,
     required this.desktopMode,
     required this.now,
@@ -1243,6 +1389,7 @@ class _ListBody extends StatefulWidget {
   });
 
   final List<TodoTask> items;
+  final List<TodoTaskSection> sections;
   final TaskSort sort;
   final bool desktopMode;
   final DateTime now;
@@ -1304,7 +1451,9 @@ class _ListBodyState extends State<_ListBody> {
             .map((id) => byId[id])
             .whereType<TodoTask>()
             .toList(growable: false);
-    final groups = _groupTasks(ordered, widget.now);
+    final groups = widget.sections.isEmpty
+        ? _groupTasks(ordered, widget.now)
+        : _groupTasksBySection(ordered, widget.sections);
     final entries = <Object>[
       for (final group in groups) ...[group, ...group.tasks],
     ];
@@ -1315,6 +1464,7 @@ class _ListBodyState extends State<_ListBody> {
 
     if (widget.desktopMode && widget.onTasksReordered != null) {
       return ReorderableListView.builder(
+        key: const Key('todo-task-list-scroll'),
         buildDefaultDragHandles: false,
         padding: const EdgeInsets.only(
           bottom: TodoLayoutTokens.mainHorizontalInset,
@@ -1382,6 +1532,7 @@ class _ListBodyState extends State<_ListBody> {
             key: ValueKey(task.id),
             child: TaskRowHost(
               task: task,
+              taskSections: widget.sections,
               desktopMode: true,
               enableSwipeGestures: false,
               reorderIndex: widget.batchSelectionActive ? null : index,
@@ -1398,6 +1549,7 @@ class _ListBodyState extends State<_ListBody> {
     }
 
     return ListView.builder(
+      key: const Key('todo-task-list-scroll'),
       padding: const EdgeInsets.only(
         bottom: TodoLayoutTokens.mainHorizontalInset,
       ),
@@ -1414,6 +1566,7 @@ class _ListBodyState extends State<_ListBody> {
         final task = entry as TodoTask;
         return TaskRowHost(
           task: task,
+          taskSections: widget.sections,
           desktopMode: widget.desktopMode,
           enableSwipeGestures:
               !widget.desktopMode && !widget.batchSelectionActive,
@@ -1468,6 +1621,89 @@ class _BatchDeleteGroup {
 
   final String rootTaskId;
   final List<String> selectedTaskIds;
+}
+
+class _TaskSectionManagerBar extends StatelessWidget {
+  const _TaskSectionManagerBar({
+    required this.sections,
+    required this.onCreate,
+    required this.onRename,
+    required this.onDelete,
+    required this.onMove,
+  });
+
+  final List<TodoTaskSection> sections;
+  final VoidCallback onCreate;
+  final ValueChanged<TodoTaskSection> onRename;
+  final ValueChanged<TodoTaskSection> onDelete;
+  final void Function(TodoTaskSection section, int direction) onMove;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = brandColors(context);
+    return SizedBox(
+      height: 44,
+      child: ListView(
+        key: const Key('todo-section-manager'),
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(
+          horizontal: TodoLayoutTokens.mainHorizontalInset,
+          vertical: 4,
+        ),
+        children: [
+          ActionChip(
+            key: const Key('todo-section-create'),
+            avatar: const Icon(Icons.add, size: 17),
+            label: const Text('分组'),
+            onPressed: onCreate,
+          ),
+          for (final entry in sections.indexed) ...[
+            const SizedBox(width: 8),
+            PopupMenuButton<String>(
+              key: Key('todo-section-menu-${entry.$2.id}'),
+              tooltip: '管理分组 ${entry.$2.name}',
+              onSelected: (action) {
+                switch (action) {
+                  case 'rename':
+                    onRename(entry.$2);
+                  case 'up':
+                    onMove(entry.$2, -1);
+                  case 'down':
+                    onMove(entry.$2, 1);
+                  case 'delete':
+                    onDelete(entry.$2);
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(value: 'rename', child: Text('重命名')),
+                PopupMenuItem(
+                  value: 'up',
+                  enabled: entry.$1 > 0,
+                  child: const Text('向前移动'),
+                ),
+                PopupMenuItem(
+                  value: 'down',
+                  enabled: entry.$1 < sections.length - 1,
+                  child: const Text('向后移动'),
+                ),
+                PopupMenuItem(
+                  value: 'delete',
+                  child: Text(
+                    '删除',
+                    style: TextStyle(color: colors.destructive),
+                  ),
+                ),
+              ],
+              child: Chip(
+                label: Text(entry.$2.name),
+                avatar: const Icon(Icons.drag_indicator, size: 16),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class _TaskGroup {
@@ -1539,6 +1775,34 @@ List<_TaskGroup> _groupTasks(List<TodoTask> tasks, DateTime now) {
       if (grouped[id]!.isNotEmpty)
         _TaskGroup(id: id, title: title, tasks: grouped[id]!),
   ];
+}
+
+List<_TaskGroup> _groupTasksBySection(
+  List<TodoTask> tasks,
+  List<TodoTaskSection> sections,
+) {
+  final tasksBySection = <String?, List<TodoTask>>{};
+  for (final task in tasks) {
+    tasksBySection.putIfAbsent(task.sectionId, () => []).add(task);
+  }
+  final groups = <_TaskGroup>[
+    for (final section in sections)
+      _TaskGroup(
+        id: 'section-${section.id}',
+        title: section.name,
+        tasks: tasksBySection.remove(section.id) ?? const [],
+      ),
+  ];
+  final ungrouped = <TodoTask>[
+    ...?tasksBySection.remove(null),
+    for (final orphaned in tasksBySection.values) ...orphaned,
+  ];
+  if (ungrouped.isNotEmpty || groups.isEmpty) {
+    groups.add(
+      _TaskGroup(id: 'section-ungrouped', title: '未分组', tasks: ungrouped),
+    );
+  }
+  return groups;
 }
 
 List<TodoTask> applyTaskFilter(
