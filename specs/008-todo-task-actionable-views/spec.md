@@ -2,7 +2,7 @@
 
 **Feature Branch**: `feat/97-todo-workable-views`
 **Created**: 2026-07-15
-**Status**: 执行中；仅冻结 B4 的独立契约与审计入口，未完成任何交付任务。
+**Status**: 执行中；来源隔离与共享清单只读写链路已完成独立红绿闭环，B4 仍为 partial。
 **Input**: 父仓 B4、B0 能力矩阵、Flutter #97、Service #185、Docs #53。
 
 ## User Scenarios & Testing

@@ -29,6 +29,9 @@ class TodoLists extends Table {
   TextColumn get name => text()();
   IntColumn get folderId => integer().nullable()(); // folder 走 REST，保留 int 外键
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+  TextColumn get accessRole =>
+      text().withDefault(const Constant('owner'))(); // owner/editor/viewer
+  BoolColumn get writable => boolean().withDefault(const Constant(true))();
   DateTimeColumn get updatedAt => dateTime()();
   DateTimeColumn get createdAt => dateTime()();
 
@@ -405,7 +408,7 @@ class AppDatabase extends _$AppDatabase {
   }) : super(_open(_userDatabaseName(tenantId, userId, testNamespace)));
 
   @override
-  int get schemaVersion => 18;
+  int get schemaVersion => 19;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -600,6 +603,14 @@ class AppDatabase extends _$AppDatabase {
       if (from < 18) {
         if (!await _columnExists(m, 'todo_folders', 'parent_id')) {
           await m.addColumn(todoFolders, todoFolders.parentId);
+        }
+      }
+      if (from < 19) {
+        if (!await _columnExists(m, 'todo_lists', 'access_role')) {
+          await m.addColumn(todoLists, todoLists.accessRole);
+        }
+        if (!await _columnExists(m, 'todo_lists', 'writable')) {
+          await m.addColumn(todoLists, todoLists.writable);
         }
       }
     },

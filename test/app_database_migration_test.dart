@@ -9,6 +9,55 @@ import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 
 void main() {
   test(
+    'upgrades schema 18 with list access defaults and preserves lists',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'zh_cloud_todo_b4_schema18_',
+      );
+      final databaseFile = File('${directory.path}/todo.sqlite');
+      addTearDown(() async {
+        if (await directory.exists()) {
+          await directory.delete(recursive: true);
+        }
+      });
+
+      final beforeUpgrade = AppDatabase.forTesting(
+        NativeDatabase(databaseFile),
+      );
+      final now = DateTime.utc(2026, 7, 30, 9);
+      await beforeUpgrade
+          .into(beforeUpgrade.todoLists)
+          .insert(
+            TodoListsCompanion.insert(
+              id: 'list-before-access-role',
+              name: '迁移前清单',
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      await beforeUpgrade.close();
+      _downgradeToSchema18WithoutListAccess(databaseFile);
+
+      final upgraded = AppDatabase.forTesting(NativeDatabase(databaseFile));
+      addTearDown(upgraded.close);
+      final version = await upgraded
+          .customSelect('PRAGMA user_version')
+          .getSingle();
+      final access = await upgraded
+          .customSelect(
+            'SELECT id, access_role, writable FROM todo_lists '
+            "WHERE id = 'list-before-access-role'",
+          )
+          .getSingle();
+
+      expect(version.data['user_version'], 19);
+      expect(access.data['id'], 'list-before-access-role');
+      expect(access.data['access_role'], 'owner');
+      expect(access.data['writable'], 1);
+    },
+  );
+
+  test(
     'upgrades schema 13 with assignee columns and preserves tasks',
     () async {
       final directory = await Directory.systemTemp.createTemp(
@@ -44,7 +93,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 18);
+      expect(version.data['user_version'], 19);
       final task = await upgraded.select(upgraded.todoTasks).getSingle();
       expect(task.title, '迁移前任务');
       expect(task.assigneeUserId, isNull);
@@ -72,7 +121,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 18);
+      expect(version.data['user_version'], 19);
 
       final taskColumns = await upgraded
           .customSelect('PRAGMA table_info(todo_tasks)')
@@ -208,7 +257,7 @@ void main() {
           .getSingle();
       final rule = await upgraded.select(upgraded.todoRepeatRules).getSingle();
 
-      expect(version.data['user_version'], 18);
+      expect(version.data['user_version'], 19);
       expect(rule.id, 'repeat-rule-before-b2-b3-merge');
       expect(rule.byDay, '1,3,5');
       expect(rule.selectedDatesJson, isNull);
@@ -253,7 +302,7 @@ void main() {
         .getSingle();
     final rule = await upgraded.select(upgraded.todoRepeatRules).getSingle();
 
-    expect(version.data['user_version'], 18);
+    expect(version.data['user_version'], 19);
     expect(rule.freq, 'CUSTOM');
     expect(rule.byDay, '1,3,5');
     expect(rule.repeatMode, 'ON_DUE');
@@ -340,7 +389,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 18);
+      expect(version.data['user_version'], 19);
       await upgraded.close();
 
       final reopened = AppDatabase.forTesting(NativeDatabase(databaseFile));
@@ -432,7 +481,7 @@ void main() {
           )
           .getSingle();
 
-      expect(version.data['user_version'], 18);
+      expect(version.data['user_version'], 19);
       expect(task.title, '迁移前看板任务');
       expect(boardTable.data['name'], 'todo_board_preferences');
     },
@@ -497,7 +546,7 @@ void main() {
           )
           .getSingle();
 
-      expect(version.data['user_version'], 18);
+      expect(version.data['user_version'], 19);
       expect(task.title, '迁移前可靠性任务');
       expect(change.status, 'queued');
       expect(change.nextAttemptAt, isNull);
@@ -505,6 +554,37 @@ void main() {
       expect(recommendationTable.data['name'], 'todo_recommendations');
     },
   );
+}
+
+void _downgradeToSchema18WithoutListAccess(File databaseFile) {
+  final database = sqlite.sqlite3.open(databaseFile.path);
+  try {
+    database.execute('PRAGMA foreign_keys = OFF');
+    database.execute('ALTER TABLE todo_lists RENAME TO todo_lists_schema19');
+    database.execute('''
+      CREATE TABLE todo_lists (
+        id TEXT NOT NULL PRIMARY KEY,
+        server_id INTEGER NULL,
+        name TEXT NOT NULL,
+        folder_id INTEGER NULL,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      )
+    ''');
+    database.execute('''
+      INSERT INTO todo_lists (
+        id, server_id, name, folder_id, sort_order, updated_at, created_at
+      )
+      SELECT
+        id, server_id, name, folder_id, sort_order, updated_at, created_at
+      FROM todo_lists_schema19
+    ''');
+    database.execute('DROP TABLE todo_lists_schema19');
+    database.execute('PRAGMA user_version = 18');
+  } finally {
+    database.dispose();
+  }
 }
 
 void _downgradeToSchema10(File databaseFile) {

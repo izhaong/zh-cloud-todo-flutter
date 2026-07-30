@@ -16,6 +16,7 @@ import '../../state/repositories/task_repository.dart';
 import '../filter/filter_bar.dart';
 import '../shell/app_dialog.dart';
 import '../shell/quick_add_bar.dart';
+import 'task_view_mutation_feedback.dart';
 import 'view_mode.dart';
 import 'views/calendar_view.dart';
 import 'views/eisenhower_view.dart';
@@ -1145,15 +1146,19 @@ class _ListBodyState extends State<_ListBody> {
           });
           try {
             await widget.onTasksReordered?.call(reordered);
-          } catch (_) {
+          } catch (error) {
             if (!context.mounted) return;
             setState(() {
               _orderedIds = previousOrder;
               _hasCustomOrder = previousHasCustomOrder;
             });
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(const SnackBar(content: Text('排序保存失败，请重试')));
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  taskViewMutationFailureMessage(error, '排序保存失败，请重试'),
+                ),
+              ),
+            );
           }
         },
         itemBuilder: (context, index) {

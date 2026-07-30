@@ -93,6 +93,33 @@ void main() {
     expect(attempts, 2);
   });
 
+  testWidgets('看板只读拒绝显示明确原因且不提供无效重试', (tester) async {
+    final task = _viewTask(id: 'task-viewer', title: '只读任务');
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: KanbanView(
+            tasks: [task],
+            onTaskMove: (_, _, _) async {
+              throw StateError('当前清单为只读，无法修改任务');
+            },
+          ),
+        ),
+      ),
+    );
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('只读任务')),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    await gesture.moveTo(tester.getCenter(find.text('空').first));
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(find.text('当前清单为只读，无法修改任务'), findsOneWidget);
+    expect(find.text('重试'), findsNothing);
+  });
+
   testWidgets('看板显示当前清单失败偏好的恢复入口', (tester) async {
     var recoveries = 0;
     await tester.pumpWidget(
@@ -169,4 +196,59 @@ void main() {
       DateTime.utc(2026, 7, 17, 10),
     ));
   });
+
+  testWidgets('时间线只读拒绝显示明确原因', (tester) async {
+    final now = DateTime.utc(2026, 7, 15, 9);
+    final task = _viewTask(
+      id: 'timeline-viewer',
+      title: '只读时间线任务',
+      startAt: DateTime.utc(2026, 7, 16, 9),
+      endAt: DateTime.utc(2026, 7, 16, 10),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TimelineView(
+            tasks: [task],
+            now: now,
+            onTaskTimeChange:
+                (_, {required startAt, required endAt, required dueAt}) async {
+                  throw StateError('当前清单为只读，无法修改任务');
+                },
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('顺延一天'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('当前清单为只读，无法修改任务'), findsOneWidget);
+  });
+}
+
+TodoTask _viewTask({
+  required String id,
+  required String title,
+  DateTime? startAt,
+  DateTime? endAt,
+}) {
+  final now = DateTime.utc(2026, 7, 15, 9);
+  return TodoTask(
+    id: id,
+    listId: 'list-inbox',
+    title: title,
+    completed: false,
+    cancelled: false,
+    allDay: false,
+    fixedTimezone: false,
+    priority: 0,
+    isPinned: false,
+    sortOrder: 0,
+    startAt: startAt,
+    endAt: endAt,
+    dueAt: endAt,
+    updatedAt: now,
+    createdAt: now,
+  );
 }

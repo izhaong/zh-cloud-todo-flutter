@@ -92,6 +92,114 @@ void main() {
     expect(change['payload']?['status'], 'DONE');
   });
 
+  test('共享清单入站保存 viewer 角色与只读能力', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final dio = Dio()
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                data: {
+                  'code': 0,
+                  'data': {
+                    'changes': [
+                      {
+                        'entityType': 'list',
+                        'entityId': 101,
+                        'operation': 'upsert',
+                        'revision': 1,
+                        'payload': {
+                          'name': '只读项目',
+                          'sortOrder': 0,
+                          'accessRole': 'viewer',
+                          'writable': false,
+                        },
+                      },
+                    ],
+                    'tombstones': const [],
+                    'nextCursor': '1',
+                    'hasMore': false,
+                  },
+                },
+              ),
+            );
+          },
+        ),
+      );
+    final client = ApiClient(dio: dio);
+    final coordinator = SyncCoordinator(
+      db: db,
+      api: SyncApi(client, clientId: 'test', deviceId: 'device-viewer'),
+      todoApi: client,
+    );
+
+    expect(await coordinator.pull(), 1);
+    final list = await db.listByServerId(101);
+    expect(list?.accessRole, 'viewer');
+    expect(list?.writable, isFalse);
+  });
+
+  test('清单出站不发送服务端派生的访问角色与写权限', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final queue = SyncChangeQueue(db);
+    final list = await ListRepository(db, queue).create(name: '离线项目');
+    await (db.update(
+      db.todoLists,
+    )..where((row) => row.id.equals(list.id))).write(
+      const TodoListsCompanion(
+        accessRole: Value('viewer'),
+        writable: Value(false),
+      ),
+    );
+
+    Map<String, dynamic>? sentChange;
+    final dio = Dio()
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            sentChange =
+                ((((options.data as Map)['changes'] as List).single) as Map)
+                    .cast<String, dynamic>();
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                data: {
+                  'code': 0,
+                  'data': {
+                    'ok': true,
+                    'accepted': [
+                      {
+                        'entityType': 'list',
+                        'entityId': 101,
+                        'operation': 'upsert',
+                        'clientMutationId': sentChange!['clientMutationId'],
+                      },
+                    ],
+                    'conflicts': const [],
+                  },
+                },
+              ),
+            );
+          },
+        ),
+      );
+    final client = ApiClient(dio: dio);
+    final coordinator = SyncCoordinator(
+      db: db,
+      api: SyncApi(client, clientId: 'test', deviceId: 'device-owner'),
+      todoApi: client,
+    );
+
+    expect(await coordinator.push(), 1);
+    final payload = sentChange!['payload'] as Map<String, dynamic>;
+    expect(payload, isNot(contains('accessRole')));
+    expect(payload, isNot(contains('writable')));
+  });
+
   test('任务视图偏好出站把本地清单 UUID 映射为稳定服务端键', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
