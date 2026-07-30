@@ -103,7 +103,7 @@ pubspec.yaml
 
 - 设置页的“原生增强”入口只消费当前账号 Drift 中的真实任务：今日任务用于应用内小组件预览、系统分享和桌面便签草稿，已完成或已取消任务不参与投影。
 - 锁屏投影包含优先级不低于 2 或已置顶的活动任务；只向平台通道传递已同步的服务端任务 ID，离线任务显示未同步数量且不伪造 ID。
-- 未注册 `zh_cloud_todo/native` 平台通道时，URL Scheme、系统分享、桌面便签、锁屏任务和小组件接口必须安全返回“不支持”或空结果。Android/iOS 等平台侧真实 Widget、Share 与 URL Scheme handler 尚未实现，不计作系统原生能力完成。
+- 未注册 `zh_cloud_todo/native` 平台通道时，URL Scheme、系统分享、桌面便签、锁屏任务和小组件接口必须安全返回“不支持”或空结果。Android 关闭 Flutter 默认 deep-link 接管，由自定义通道单独消费且只接受 `zhcloudtodo://task/add` 冷启动链接；支持系统分享，并在 API 34+ 且系统存在便签处理器时创建便签。非法参数、错误 Scheme/路径和缺失系统能力不得崩溃或伪造成功。iOS handler、Android 热启动事件回传、锁屏 renderer 与真实桌面小组件仍未实现，不计作系统原生能力完成。
 
 ### 4.5 清单协作
 
