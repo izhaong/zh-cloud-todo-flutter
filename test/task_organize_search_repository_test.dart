@@ -570,7 +570,7 @@ void main() {
 
     final results = await batchRepository.apply(
       const TaskBatchEditCommand(
-        taskIds: ['task-1', 'task-missing', 'task-2'],
+        taskIds: ['task-1', 'task-1', 'task-missing', 'task-2'],
         priority: 3,
         completed: true,
         isPinned: true,
@@ -579,10 +579,12 @@ void main() {
 
     expect(results.map((result) => result.status), [
       TaskBatchEditStatus.success,
+      TaskBatchEditStatus.skipped,
       TaskBatchEditStatus.failed,
       TaskBatchEditStatus.success,
     ]);
-    expect(results[1].reason, '任务不存在');
+    expect(results[1].reason, '重复任务');
+    expect(results[2].reason, '任务不存在');
 
     final changed = await (db.select(
       db.todoTasks,
