@@ -6,6 +6,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/theme/brand_colors.dart';
 import '../../core/theme/todo_layout_tokens.dart';
 import '../../state/providers.dart';
+import '../list/list_editor_sheet.dart';
 import 'section.dart';
 import 'sidebar_hierarchy.dart';
 
@@ -887,20 +888,13 @@ class _Badge extends StatelessWidget {
   }
 }
 
-/// 新建清单底部弹窗（内联极简版，避免引入额外页面依赖）。
+/// 新建清单底部弹窗。
 class _CreateListSheet {
   static Future<void> show(BuildContext context) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => const Padding(
-        padding: EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Expanded(child: Text('新建清单', style: TextStyle(fontSize: 16))),
-          ],
-        ),
-      ),
+      builder: (_) => const ListEditorSheet(),
     );
   }
 }
