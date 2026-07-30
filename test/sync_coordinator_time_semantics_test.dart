@@ -9,6 +9,7 @@ import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_coordinator.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/reminder_dispatch_action_repository.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/reminder_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/repeat_rule_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_repository.dart';
 
@@ -416,6 +417,196 @@ void main() {
     expect((await db.select(db.todoRepeatRules).getSingle()).serverId, 701);
     expect((await db.select(db.todoRepeatSkips).getSingle()).serverId, 702);
   });
+
+  test(
+    'retries task reminder selected dates and skip with stable dependencies',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final now = DateTime.utc(2026, 7, 15, 9);
+      await db
+          .into(db.todoLists)
+          .insert(
+            TodoListsCompanion.insert(
+              id: 'list-1',
+              serverId: const Value(101),
+              name: '收集箱',
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      final queue = SyncChangeQueue(db);
+      final task = await TaskRepository(
+        db,
+        queue,
+      ).create(listId: 'list-1', title: '离线时间语义任务');
+      await ReminderRepository(db, queue).create(taskId: task.id, fireAt: now);
+      final repeats = RepeatRuleRepository(db, queue);
+      final rule = await repeats.save(
+        taskId: task.id,
+        frequency: 'CUSTOM',
+        startAt: now,
+        repeatMode: 'ON_SELECTED_DATES',
+        selectedDates: [
+          DateTime.utc(2026, 7, 20),
+          DateTime.utc(2026, 7, 18),
+          DateTime.utc(2026, 7, 20),
+        ],
+      );
+      await repeats.skip(
+        repeatRuleId: rule.id,
+        taskId: task.id,
+        occurrenceAt: DateTime.utc(2026, 7, 18, 9),
+      );
+
+      var requests = 0;
+      List<Map<String, dynamic>> sentChanges = const [];
+      final sentBatches = <List<Map<String, dynamic>>>[];
+      final sentBatchKeys = <String?>[];
+      final dio = Dio();
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            requests++;
+            final changes = ((options.data as Map)['changes'] as List)
+                .cast<Map>()
+                .map((entry) => entry.cast<String, dynamic>())
+                .toList();
+            sentBatches.add(changes);
+            sentBatchKeys.add(
+              (options.data as Map)['idempotency_key'] as String?,
+            );
+            if (requests == 1) {
+              handler.reject(
+                DioException(
+                  requestOptions: options,
+                  type: DioExceptionType.connectionError,
+                ),
+              );
+              return;
+            }
+            sentChanges = changes;
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                data: {
+                  'code': 0,
+                  'data': {
+                    'ok': true,
+                    'accepted': [
+                      for (final change in sentChanges)
+                        {
+                          'entityType': change['entityType'],
+                          'entityId': switch (change['entityType']) {
+                            'task' => 201,
+                            'reminder' => 301,
+                            'repeat_rule' => 401,
+                            'repeat_skip' => 501,
+                            _ => throw StateError(
+                              'Unexpected entity ${change['entityType']}',
+                            ),
+                          },
+                          'operation': change['operation'],
+                          'clientMutationId': change['clientMutationId'],
+                        },
+                    ],
+                    'conflicts': const [],
+                  },
+                },
+              ),
+            );
+          },
+        ),
+      );
+      final client = ApiClient(dio: dio);
+      final coordinator = SyncCoordinator(
+        db: db,
+        api: SyncApi(client, clientId: 'test', deviceId: 'device-1'),
+        todoApi: client,
+      );
+
+      expect(await coordinator.push(), 0);
+      expect(requests, 1);
+      final retryableChanges = await db.select(db.todoSyncChanges).get();
+      expect(retryableChanges.map((change) => change.status).toSet(), {
+        'retryable',
+      });
+      expect(retryableChanges.map((change) => change.attemptCount).toSet(), {
+        1,
+      });
+      await db
+          .update(db.todoSyncChanges)
+          .write(
+            TodoSyncChangesCompanion(
+              nextAttemptAt: Value(
+                DateTime.now().subtract(const Duration(seconds: 1)),
+              ),
+            ),
+          );
+
+      expect(await coordinator.push(), 4);
+      expect(requests, 2);
+      expect(
+        sentBatches[1].map((change) => change['clientMutationId']).toList(),
+        sentBatches[0].map((change) => change['clientMutationId']).toList(),
+      );
+      expect(
+        sentBatches[1].map((change) => change['entityId']).toList(),
+        sentBatches[0].map((change) => change['entityId']).toList(),
+      );
+      expect(
+        sentBatches[1].map((change) => change['payload']).toList(),
+        sentBatches[0].map((change) => change['payload']).toList(),
+      );
+      expect(sentBatchKeys[1], sentBatchKeys[0]);
+      final taskChange = sentChanges.singleWhere(
+        (change) => change['entityType'] == 'task',
+      );
+      final reminderChange = sentChanges.singleWhere(
+        (change) => change['entityType'] == 'reminder',
+      );
+      final ruleChange = sentChanges.singleWhere(
+        (change) => change['entityType'] == 'repeat_rule',
+      );
+      final skipChange = sentChanges.singleWhere(
+        (change) => change['entityType'] == 'repeat_skip',
+      );
+      expect(taskChange['entityId'], isNegative);
+      expect(reminderChange['payload']?['taskId'], taskChange['entityId']);
+      expect(ruleChange['payload']?['taskId'], taskChange['entityId']);
+      expect(skipChange['payload']?['taskId'], taskChange['entityId']);
+      expect(skipChange['payload']?['repeatRuleId'], ruleChange['entityId']);
+      expect(ruleChange['payload']?['selectedDates'], [
+        '2026-07-18',
+        '2026-07-20',
+      ]);
+      expect(
+        sentChanges.indexOf(taskChange),
+        lessThan(sentChanges.indexOf(ruleChange)),
+      );
+      expect(
+        sentChanges.indexOf(taskChange),
+        lessThan(sentChanges.indexOf(reminderChange)),
+      );
+      expect(
+        sentChanges.indexOf(ruleChange),
+        lessThan(sentChanges.indexOf(skipChange)),
+      );
+      expect((await db.taskByServerId(201))?.id, task.id);
+      expect((await db.select(db.todoReminders).getSingle()).serverId, 301);
+      expect((await db.select(db.todoRepeatRules).getSingle()).serverId, 401);
+      expect((await db.select(db.todoRepeatSkips).getSingle()).serverId, 501);
+
+      expect(await coordinator.push(), 0);
+      expect(requests, 2);
+      expect(
+        (await db.select(db.todoSyncChanges).get())
+            .map((change) => change.status)
+            .toSet(),
+        {'synced'},
+      );
+    },
+  );
 
   test(
     'pushes a repeat catchup action after resolving task and rule IDs',

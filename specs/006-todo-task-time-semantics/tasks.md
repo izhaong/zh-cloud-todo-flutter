@@ -11,8 +11,8 @@
 
 ## Phase 2: 同步与界面
 
-- [ ] T007 在 `test/sync_coordinator_time_semantics_test.dart` 写 task、reminder、repeatRule（含 selectedDates）、repeatSkip 的 serverId 依赖、拉取顺序与重复 push 失败测试。
-- [ ] T008 修改 `lib/core/sync/sync_coordinator.dart` 使 T007 通过，并断言失败项保持可重试 outbox 状态。
+- [x] T007 在 `test/sync_coordinator_time_semantics_test.dart` 写 task、reminder、repeatRule（含 selectedDates）、repeatSkip 的 serverId 依赖、拉取顺序与重复 push 失败测试。现已覆盖同批临时 task/rule ID 依赖、乱序 pull 先规则后跳过、网络失败后稳定 mutation/批幂等键重试，以及成功后的重复 push 空操作。
+- [x] T008 修改 `lib/core/sync/sync_coordinator.dart` 使 T007 通过，并断言失败项保持可重试 outbox 状态。现有协调器实现通过完整集成用例：首轮连接失败后四类 outbox 均为 `retryable` 且 attemptCount 为 1，重试成功后分别回写 serverId 并全部转为 `synced`。
 - [ ] T009 在 `test/features/task/task_time_semantics_test.dart` 写详情的时间、提醒和重复编辑回显失败测试。已覆盖按次数结束与按日期结束，其中日期结束规范化为截止日 `23:59:59` 的包含式上界；自选日期已覆盖新增、删除、排序去重、再次保存，以及切回到期模式时清空有限日期集合。提醒已覆盖独立的 `DUE/dueAt` 截止入口、`END/endAt` 结束入口、绝对时间修改，以及已有规则的 `DUE` 派生、提前量、持续间隔、时区保留、规则 UUID 不变与 outbox 载荷。其余 B2 设备/测试环境旅程尚未结项，保持未勾选。
 - [ ] T010 修改 `lib/features/task/task_detail_pane.dart` 与 `lib/features/reminder/reminder_inbox_page.dart` 接入 Repository/use-case，使 T009 通过且不直接调用 API；App 运行期间的即时通知轮询同样只能经 `ReminderInboxRepository`，并以派发 ID 去重。详情中的重复结束条件已通过 `RepeatRuleRepository` 写入 Drift/outbox，已有提醒编辑已通过 `ReminderRepository.update` 保持同一规则 UUID 并重算相对触发时间，截止提醒已从错误的 `END` 对齐为后端 `DUE` 契约，且补回了真正绑定时间段 `endAt` 的 `END` 入口；提醒收件箱的四种派发动作均经 `ReminderDispatchActionRepository` 入队，开始专注进入关联任务番茄专注页，最新本地动作状态覆盖同一 dispatch ID 的远端旧待处理项并禁止重复提交。其余外部验收仍未结项，保持未勾选。
 
@@ -28,3 +28,4 @@
 - 2026-07-30：时间线“顺延一天”补充跨 DST 红绿测试。旧实现固定增加 24 小时，使 `America/Los_Angeles` 09:00 在夏令时结束后变为 08:00；现在开始、结束与截止分别按任务展示日期顺延并转换回 UTC，墙钟 09:00/10:00 保持不变，实际瞬时间隔可为 23 或 25 小时。浮动任务夹具同步改为本地墙钟值，延长一小时仍按真实持续时间增加。真实固定端拖放旅程仍未执行，T009–T012 保持未勾选。
 - 2026-07-30：详情日期/时间选择器固定时区编辑完成红绿闭环。失败测试证明旧实现会把原始 UTC `16:30` 直接交给选择器，而不是显示 `America/Los_Angeles` 墙钟 `09:30`；现在选择器先按任务 IANA 时区生成初始墙钟，用户确认后再通过时区数据库和当日 DST 偏移转换为 UTC 瞬时。全天任务跳过时间选择并保持纯日期；非法历史时区继续安全降级为设备本地语义。定向详情、日历、工作视图和时间语义仓储测试通过；真实跨设备时区切换与固定端 GUI 仍未执行，T009–T012 保持未勾选。
 - 2026-07-30：详情自选日期重复编辑旅程补齐。现有新增两日和切回到期模式基础上，新增用例从乱序且重复的输入验证按日期排序去重回显，删除一个日期、重复选择已有日期不产生副本，再新增日期并保存；Drift 与 outbox 最终均为排序后的 `["2026-07-20","2026-07-25"]`。自选日期 Chip 同时提供明确的删除图标 key 与中文 tooltip，方便自动化和辅助语义定位。真实固定端删除热区与跨设备同步仍未执行，T009–T012 保持未勾选。
+- 2026-07-30：时间语义依赖批次与失败恢复闭环。新增集成用例把一个未同步 task、reminder、自选日期 repeatRule 和 repeatSkip 放入同批，断言后三者引用同一个临时 task ID、skip 引用同一个临时 rule ID，且 selectedDates 保持排序去重。首轮网络失败后四条 outbox 均保持可重试，第二轮沿用原 mutation、临时实体 ID 与批幂等键成功回写 `201/301/401/501`，第三轮 push 不再发送；既有乱序 pull 用例继续保证 repeatRule 先于 repeatSkip 应用。T007–T008 已完成。
