@@ -118,9 +118,7 @@ class TaskRow extends StatelessWidget {
               ),
             ),
             child: InkWell(
-              onTap: batchSelectionActive
-                  ? () => onBatchSelectionChanged?.call(!batchSelected)
-                  : onTap,
+              onTap: onTap,
               hoverColor: Colors.transparent,
               borderRadius: BorderRadius.circular(
                 TodoLayoutTokens.selectedRowRadius,

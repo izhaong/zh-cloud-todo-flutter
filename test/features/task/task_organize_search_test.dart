@@ -20,6 +20,17 @@ Future<void> enterBatchEdit(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> modifiedTaskTap(
+  WidgetTester tester, {
+  required String taskId,
+  required LogicalKeyboardKey modifier,
+}) async {
+  await tester.sendKeyDownEvent(modifier);
+  await tester.tap(find.byKey(Key('task-row-surface-$taskId')));
+  await tester.sendKeyUpEvent(modifier);
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets(
     'global search reads task, list and tag results from local query repository',
@@ -232,6 +243,223 @@ void main() {
     },
   );
 
+  testWidgets('command and control clicks toggle non-adjacent visible tasks', (
+    tester,
+  ) async {
+    await pumpTodoVisualScenario(
+      tester,
+      viewport: TodoVisualViewports.wide,
+      fixtureSet: TodoVisualFixtureSet.populated,
+      child: const Scaffold(body: TasksByListPage(hideAppBar: true)),
+    );
+
+    await modifiedTaskTap(
+      tester,
+      taskId: TodoVisualFixture.pinnedTaskId,
+      modifier: LogicalKeyboardKey.metaLeft,
+    );
+    await modifiedTaskTap(
+      tester,
+      taskId: TodoVisualFixture.secondaryTodayTaskId,
+      modifier: LogicalKeyboardKey.controlLeft,
+    );
+
+    expect(find.byKey(const Key('todo-batch-actionbar')), findsOneWidget);
+    expect(find.text('2 已选'), findsOneWidget);
+    expect(
+      tester
+          .widget<Checkbox>(
+            find.byKey(
+              Key('task-batch-select-${TodoVisualFixture.pinnedTaskId}'),
+            ),
+          )
+          .value,
+      isTrue,
+    );
+    expect(
+      tester
+          .widget<Checkbox>(
+            find.byKey(
+              Key(
+                'task-batch-select-${TodoVisualFixture.secondaryTodayTaskId}',
+              ),
+            ),
+          )
+          .value,
+      isTrue,
+    );
+    expect(
+      tester
+          .widget<Checkbox>(
+            find.byKey(
+              Key('task-batch-select-${TodoVisualFixture.todayTaskId}'),
+            ),
+          )
+          .value,
+      isFalse,
+    );
+  });
+
+  testWidgets(
+    'shift click selects an inclusive range from the latest selection anchor',
+    (tester) async {
+      await pumpTodoVisualScenario(
+        tester,
+        viewport: TodoVisualViewports.wide,
+        fixtureSet: TodoVisualFixtureSet.populated,
+        child: const Scaffold(body: TasksByListPage(hideAppBar: true)),
+      );
+
+      await modifiedTaskTap(
+        tester,
+        taskId: TodoVisualFixture.pinnedTaskId,
+        modifier: LogicalKeyboardKey.controlLeft,
+      );
+      await modifiedTaskTap(
+        tester,
+        taskId: TodoVisualFixture.secondaryTodayTaskId,
+        modifier: LogicalKeyboardKey.shiftLeft,
+      );
+
+      expect(find.text('3 已选'), findsOneWidget);
+      for (final taskId in [
+        TodoVisualFixture.pinnedTaskId,
+        TodoVisualFixture.todayTaskId,
+        TodoVisualFixture.secondaryTodayTaskId,
+      ]) {
+        expect(
+          tester
+              .widget<Checkbox>(find.byKey(Key('task-batch-select-$taskId')))
+              .value,
+          isTrue,
+        );
+      }
+    },
+  );
+
+  testWidgets(
+    'compact selection dock exposes primary actions without overflow',
+    (tester) async {
+      await pumpTodoVisualScenario(
+        tester,
+        viewport: TodoVisualViewports.mobileMin,
+        fixtureSet: TodoVisualFixtureSet.populated,
+        child: const Scaffold(body: TasksByListPage(hideAppBar: true)),
+      );
+
+      await enterBatchEdit(tester);
+      await tester.tap(
+        find.byKey(Key('task-batch-select-${TodoVisualFixture.pinnedTaskId}')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('todo-batch-actionbar')), findsOneWidget);
+      expect(find.byKey(const Key('todo-batch-due')), findsOneWidget);
+      expect(find.byKey(const Key('todo-batch-priority')), findsOneWidget);
+      expect(find.byKey(const Key('todo-batch-move')), findsOneWidget);
+      expect(find.byKey(const Key('todo-batch-delete')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    '320dp selection dock keeps primary actions reachable without overflow',
+    (tester) async {
+      await pumpTodoVisualScenario(
+        tester,
+        viewport: const Size(320, 700),
+        fixtureSet: TodoVisualFixtureSet.populated,
+        child: const Scaffold(body: TasksByListPage(hideAppBar: true)),
+      );
+
+      await enterBatchEdit(tester);
+      await tester.tap(
+        find.byKey(Key('task-batch-select-${TodoVisualFixture.pinnedTaskId}')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('todo-batch-due')), findsOneWidget);
+      expect(find.byKey(const Key('todo-batch-priority')), findsOneWidget);
+      expect(find.byKey(const Key('todo-batch-move')), findsOneWidget);
+      expect(find.byKey(const Key('todo-batch-delete')), findsOneWidget);
+      expect(find.byKey(const Key('todo-batch-complete')), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.byKey(const Key('todo-batch-more')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('todo-batch-action-complete')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'batch delete requires confirmation and reuses cascade delete outbox',
+    (tester) async {
+      final fixture = await pumpTodoVisualScenario(
+        tester,
+        viewport: TodoVisualViewports.wide,
+        fixtureSet: TodoVisualFixtureSet.populated,
+        child: const Scaffold(body: TasksByListPage(hideAppBar: true)),
+      );
+
+      await enterBatchEdit(tester);
+      await tester.tap(
+        find.byKey(
+          Key('task-batch-select-${TodoVisualFixture.metadataTaskId}'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('todo-batch-delete')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('删除所选任务？'), findsOneWidget);
+      expect(find.textContaining('子任务也会被一并删除'), findsOneWidget);
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
+      expect(
+        await (fixture.database.select(fixture.database.todoTasks)..where(
+              (task) => task.id.equals(TodoVisualFixture.metadataTaskId),
+            ))
+            .getSingleOrNull(),
+        isNotNull,
+      );
+
+      await tester.tap(find.byKey(const Key('todo-batch-delete')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '删除'));
+      await tester.pumpAndSettle();
+
+      final remaining = await fixture.database
+          .select(fixture.database.todoTasks)
+          .get();
+      expect(
+        remaining.map((task) => task.id),
+        isNot(
+          containsAll([
+            TodoVisualFixture.metadataTaskId,
+            'visual-task-metadata-child-1',
+            'visual-task-metadata-child-2',
+          ]),
+        ),
+      );
+      final changes = await fixture.database
+          .select(fixture.database.todoSyncChanges)
+          .get();
+      expect(
+        changes.where(
+          (change) =>
+              change.entity == 'task' &&
+              change.entityLocalId == TodoVisualFixture.metadataTaskId &&
+              change.op == 'delete',
+        ),
+        hasLength(1),
+      );
+      expect(find.text('已删除 1 项；失败 0 项'), findsOneWidget);
+    },
+  );
+
   testWidgets(
     'batch completion reports per-task results from the local use-case',
     (tester) async {
@@ -307,7 +535,7 @@ void main() {
         await tester.tap(find.byKey(Key('task-batch-select-$taskId')));
       }
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('todo-batch-more')));
+      await tester.tap(find.byKey(const Key('todo-batch-priority')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('设为高优先级'));
       await tester.pumpAndSettle();
@@ -360,7 +588,7 @@ void main() {
     )..where((task) => task.id.equals(TodoVisualFixture.todayTaskId))).go();
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('todo-batch-more')));
+    await tester.tap(find.byKey(const Key('todo-batch-priority')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('设为高优先级'));
     await tester.pumpAndSettle();
@@ -399,7 +627,7 @@ void main() {
     )..where((task) => task.id.equals(TodoVisualFixture.todayTaskId))).go();
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('todo-batch-more')));
+    await tester.tap(find.byKey(const Key('todo-batch-priority')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('设为高优先级'));
     await tester.pumpAndSettle();
@@ -566,9 +794,7 @@ void main() {
       find.byKey(Key('task-batch-select-${TodoVisualFixture.metadataTaskId}')),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('todo-batch-more')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('todo-batch-action-moveToList')));
+    await tester.tap(find.byKey(const Key('todo-batch-move')));
     await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(Key('todo-batch-list-${TodoVisualFixture.workListId}')),
@@ -689,9 +915,7 @@ void main() {
       find.byKey(Key('task-batch-select-${TodoVisualFixture.todayTaskId}')),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('todo-batch-more')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('todo-batch-action-setDueAt')));
+    await tester.tap(find.byKey(const Key('todo-batch-due')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('20').last);
     await tester.tap(find.text('OK'));
