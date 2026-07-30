@@ -8,6 +8,7 @@ import '../../../core/theme/brand_colors.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../state/providers.dart';
 import '../task_detail_page.dart';
+import '../task_view_mutation_feedback.dart';
 
 /// M11-B3 日历视图：周 / 月 / 年 / 列表 / 日程 5 模式。
 ///
@@ -27,11 +28,13 @@ class CalendarView extends ConsumerStatefulWidget {
     required this.tasks,
     DateTime? now,
     this.onTaskSelected,
+    this.onTaskDateChanged,
   }) : _now = now;
 
   final DateTime? _now;
   final List<TodoTask> tasks;
   final ValueChanged<String>? onTaskSelected;
+  final Future<void> Function(TodoTask task, DateTime dueAt)? onTaskDateChanged;
 
   @override
   ConsumerState<CalendarView> createState() => _CalendarViewState();
@@ -67,6 +70,7 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
             CalendarMode.month => _MonthGrid(
               anchor: _anchor,
               tasks: widget.tasks,
+              onTaskDateChanged: widget.onTaskDateChanged,
               onDayTap: (day) {
                 setState(() => _anchor = day);
                 _changeMode(CalendarMode.agenda);
@@ -183,6 +187,26 @@ DateTime? resolveTaskDate(TodoTask t) {
   final d = t.dueAt ?? t.endAt ?? t.startAt;
   if (d == null) return null;
   return DateTime(d.year, d.month, d.day);
+}
+
+DateTime calendarDueAtForDay(TodoTask task, DateTime day) {
+  if (task.allDay) {
+    return DateTime(day.year, day.month, day.day);
+  }
+  final source = task.dueAt ?? task.endAt ?? task.startAt;
+  if (source == null) {
+    return DateTime(day.year, day.month, day.day);
+  }
+  return DateTime(
+    day.year,
+    day.month,
+    day.day,
+    source.hour,
+    source.minute,
+    source.second,
+    source.millisecond,
+    source.microsecond,
+  );
 }
 
 bool isExternalCalendarTask(TodoTask task) {
@@ -336,11 +360,13 @@ class _MonthGrid extends StatelessWidget {
     required this.anchor,
     required this.tasks,
     required this.onDayTap,
+    this.onTaskDateChanged,
   });
 
   final DateTime anchor;
   final List<TodoTask> tasks;
   final ValueChanged<DateTime> onDayTap;
+  final Future<void> Function(TodoTask task, DateTime dueAt)? onTaskDateChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -380,6 +406,7 @@ class _MonthGrid extends StatelessWidget {
                             tasksByDay['${d.year}-${d.month}-${d.day}'] ??
                             const [],
                         onTap: () => onDayTap(d),
+                        onTaskDateChanged: onTaskDateChanged,
                       ),
                     ),
                 ],
@@ -420,11 +447,13 @@ class _DayCell extends StatelessWidget {
     required this.anchor,
     required this.tasks,
     required this.onTap,
+    this.onTaskDateChanged,
   });
   final DateTime day;
   final DateTime anchor;
   final List<TodoTask> tasks;
   final VoidCallback onTap;
+  final Future<void> Function(TodoTask task, DateTime dueAt)? onTaskDateChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -435,80 +464,97 @@ class _DayCell extends StatelessWidget {
         day.year == today.year &&
         day.month == today.month &&
         day.day == today.day;
-    return Padding(
-      padding: const EdgeInsets.all(2),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        child: Container(
-          decoration: BoxDecoration(
-            color: isToday
-                ? colors.accent.withValues(alpha: 0.12)
-                : (isCurrentMonth ? colors.surface : colors.background),
-            borderRadius: BorderRadius.circular(AppRadius.sm),
-            border: Border.all(
-              color: isToday ? colors.accent : colors.border,
-              width: isToday ? 1.5 : 0.5,
-            ),
-          ),
-          padding: const EdgeInsets.all(4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '${day.day}',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: isToday
-                      ? colors.accent
-                      : isCurrentMonth
-                      ? colors.foreground
-                      : colors.mutedForeground,
-                  fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-                ),
+    return DragTarget<TodoTask>(
+      key: ValueKey('calendar-day-${day.year}-${day.month}-${day.day}'),
+      onWillAcceptWithDetails: (details) =>
+          onTaskDateChanged != null &&
+          !isExternalCalendarTask(details.data) &&
+          resolveTaskDate(details.data) != day,
+      onAcceptWithDetails: (details) => _moveTask(context, details.data),
+      builder: (context, candidates, _) => Padding(
+        padding: const EdgeInsets.all(2),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          child: Container(
+            decoration: BoxDecoration(
+              color: candidates.isNotEmpty
+                  ? colors.accent.withValues(alpha: 0.2)
+                  : isToday
+                  ? colors.accent.withValues(alpha: 0.12)
+                  : (isCurrentMonth ? colors.surface : colors.background),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              border: Border.all(
+                color: candidates.isNotEmpty || isToday
+                    ? colors.accent
+                    : colors.border,
+                width: candidates.isNotEmpty || isToday ? 1.5 : 0.5,
               ),
-              if (tasks.isNotEmpty)
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 彩色任务点（颜色 = 任务最高优先级）
-                      Wrap(
-                        spacing: 2,
-                        runSpacing: 2,
-                        children: tasks
-                            .take(3)
-                            .map(
-                              (t) => Container(
-                                width: 5,
-                                height: 5,
-                                decoration: BoxDecoration(
-                                  color: _priorityColor(t.priority, colors),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                            )
-                            .toList(),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          '${tasks.length} 项',
-                          style: TextStyle(
-                            fontSize: 9,
-                            color: colors.mutedForeground,
-                          ),
-                        ),
-                      ),
-                    ],
+            ),
+            padding: const EdgeInsets.all(4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${day.day}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isToday
+                        ? colors.accent
+                        : isCurrentMonth
+                        ? colors.foreground
+                        : colors.mutedForeground,
+                    fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
                   ),
                 ),
-            ],
+                if (tasks.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Expanded(
+                    child: ListView.separated(
+                      padding: EdgeInsets.zero,
+                      itemCount: tasks.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 2),
+                      itemBuilder: (context, index) {
+                        final task = tasks[index];
+                        return _CalendarTaskChip(
+                          task: task,
+                          color: _priorityColor(task.priority, colors),
+                          draggable:
+                              onTaskDateChanged != null &&
+                              !isExternalCalendarTask(task),
+                        );
+                      },
+                    ),
+                  ),
+                  Text(
+                    '${tasks.length} 项',
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: colors.mutedForeground,
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _moveTask(BuildContext context, TodoTask task) async {
+    final callback = onTaskDateChanged;
+    if (callback == null) return;
+    try {
+      await callback(task, calendarDueAtForDay(task, day));
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(taskViewMutationFailureMessage(error, '日历改期失败，请重试')),
+        ),
+      );
+    }
   }
 
   /// 任务优先级色点，沿用 Todo 产品的语义色层级。
@@ -523,6 +569,51 @@ class _DayCell extends StatelessWidget {
       default:
         return colors.accent;
     }
+  }
+}
+
+class _CalendarTaskChip extends StatelessWidget {
+  const _CalendarTaskChip({
+    required this.task,
+    required this.color,
+    required this.draggable,
+  });
+
+  final TodoTask task;
+  final Color color;
+  final bool draggable;
+
+  @override
+  Widget build(BuildContext context) {
+    final chip = Container(
+      constraints: const BoxConstraints(minHeight: 18),
+      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(3),
+        border: Border(left: BorderSide(color: color, width: 2)),
+      ),
+      child: Text(
+        task.title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(color: brandColors(context).foreground, fontSize: 9),
+      ),
+    );
+    if (!draggable) return chip;
+    return Draggable<TodoTask>(
+      key: ValueKey('calendar-task-drag-${task.id}'),
+      data: task,
+      feedback: Material(
+        color: Colors.transparent,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 180),
+          child: chip,
+        ),
+      ),
+      childWhenDragging: Opacity(opacity: 0.35, child: chip),
+      child: chip,
+    );
   }
 }
 

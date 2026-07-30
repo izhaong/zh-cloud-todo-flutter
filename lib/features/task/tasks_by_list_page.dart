@@ -371,6 +371,11 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         return CalendarView(
           tasks: items,
           onTaskSelected: widget.onTaskSelected,
+          onTaskDateChanged: (task, dueAt) async {
+            final repository = ref.read(taskViewActionRepositoryProvider);
+            if (repository == null) return;
+            await repository.moveCalendarTask(task.id, dueAt: dueAt);
+          },
         );
     }
   }

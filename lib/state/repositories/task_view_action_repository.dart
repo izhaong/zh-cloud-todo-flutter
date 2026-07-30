@@ -290,6 +290,33 @@ class TaskViewActionRepository {
     });
   }
 
+  Future<void> moveCalendarTask(
+    String taskId, {
+    required DateTime dueAt,
+  }) async {
+    await _db.transaction(() async {
+      await _requireWritableTask(taskId);
+      await (_db.update(
+        _db.todoTasks,
+      )..where((row) => row.id.equals(taskId))).write(
+        TodoTasksCompanion(
+          dueAt: Value(dueAt),
+          updatedAt: Value(DateTime.now()),
+        ),
+      );
+      final task = await (_db.select(
+        _db.todoTasks,
+      )..where((row) => row.id.equals(taskId))).getSingle();
+      await _queue.enqueue(
+        entity: SyncEntities.task,
+        op: SyncOps.upsert,
+        localId: task.id,
+        serverId: task.serverId,
+        payload: task.toJson(),
+      );
+    });
+  }
+
   Future<void> moveKanbanTask(
     String taskId, {
     required int priority,
