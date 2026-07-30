@@ -101,6 +101,7 @@ pubspec.yaml
 - 清单 owner 按会员手机号邀请成员，并显式选择 `editor`（可编辑）或 `viewer`（只读）；客户端不得把 owner 当作可分配角色，也不得使用本地用户 ID 代替后端 `userMobile` 契约。
 - 成员列表展示后端 `owner/editor/viewer` 角色、`invited/active/exited/removed` 状态以及可用的用户名、邮箱或脱敏手机号。owner 可将非 owner 成员切换为 editor/viewer 或移除。
 - 被邀请成员通过 `/list/{listId}/member/join` 接受邀请；active 非 owner 成员可退出协作。角色更新严格使用后端 `PATCH /list/{listId}/members/{userId}` 契约。
+- 任务指派查询解析服务端 `assigneeUserId/assigneeUserName/assigneeUserEmail`，设置时提交 `{assigneeUserId}`；界面只列出所属清单的 active 成员，且仅 owner 或 active editor 可修改或移除执行人。
 
 ## 5. 对外契约
 

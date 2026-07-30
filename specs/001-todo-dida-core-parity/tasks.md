@@ -98,3 +98,4 @@ Setup → Foundational（阻塞） → US1（MVP） → US2 → US3 → US4 → 
 ## 执行证据
 
 - 2026-07-30：T026 按 JDK 25 `zh-cloud-service/develop` 现行协作契约收口。旧 Flutter 使用数字 `userId` 邀请、`owner/member` 角色与 `PUT` 更新，无法匹配服务端 `userMobile + editor/viewer + PATCH`；现已按手机号邀请、显示角色和成员状态、限制 owner 管理入口，并区分接受邀请与主动退出。Dart MCP 定向 11 项与全量 585 项测试通过，25 项受保护真实环境测试按条件跳过，全量静态分析无错误；Service 以 Corretto 25.0.3 执行 `TodoListMemberServiceSyncTest`，4 项通过。真实双账号邀请/权限旅程与 Jenkins 未执行，不把它们记作通过。
+- 2026-07-30：继续收口 T026 的任务指派契约。旧 Flutter 错误解析/提交 `userId`，与服务端 `assigneeUserId/assigneeUserName/assigneeUserEmail` 不一致；现已显示真实执行人资料，从当前清单 active 成员中选择，并在客户端按 owner/active editor 与 viewer 权限禁用写入口。详情页先把本地 list UUID 解析为已同步的服务端 list ID，避免向成员接口传本地标识。Dart MCP 定向 37 项与全量 587 项测试通过，25 项受保护真实环境测试按条件跳过，全量静态分析无错误；真实双账号与 Jenkins 仍保持外部门槛，不把它们记作通过。

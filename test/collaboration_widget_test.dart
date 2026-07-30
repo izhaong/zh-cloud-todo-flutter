@@ -15,9 +15,13 @@ import 'package:zh_cloud_todo_flutter/state/session_state.dart';
 
 /// 用于测试的 ApiClient：避免真实网络，返回预配置好的响应。
 class _FakeApiClient extends ApiClient {
-  _FakeApiClient({this.body = const {'code': 0, 'data': <String, Object>{}}});
+  _FakeApiClient({
+    this.body = const {'code': 0, 'data': <String, Object>{}},
+    this.bodyByPath = const {},
+  });
 
   final Map<String, Object> body;
+  final Map<String, Object> bodyByPath;
   String? lastMethod;
   String? lastPath;
   Object? lastData;
@@ -25,7 +29,7 @@ class _FakeApiClient extends ApiClient {
   @override
   Future<Response<T>> get<T>(String path, {Map<String, dynamic>? query}) async {
     return Response<T>(
-      data: body as T,
+      data: (bodyByPath[path] ?? body) as T,
       statusCode: 200,
       requestOptions: RequestOptions(path: path),
     );
@@ -276,9 +280,39 @@ void main() {
     expect(find.text('暂无评论，来说两句吧'), findsOneWidget);
   });
 
-  testWidgets('TaskAssignPage 渲染 - 未指派显示提示', (tester) async {
+  testWidgets('TaskAssignPage 从 active 清单成员选择执行人', (tester) async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
-    final container = _containerWith(_FakeApiClient(), db);
+    final client = _FakeApiClient(
+      bodyByPath: {
+        '/task/1/assignee': {'code': 0, 'data': <String, Object>{}},
+        '/list/7/members': {
+          'code': 0,
+          'data': {
+            'members': [
+              {
+                'userId': 1,
+                'userName': '清单所有者',
+                'role': 'owner',
+                'status': 'active',
+              },
+              {
+                'userId': 2,
+                'userName': '活跃编辑者',
+                'role': 'editor',
+                'status': 'active',
+              },
+              {
+                'userId': 3,
+                'userName': '待接受成员',
+                'role': 'viewer',
+                'status': 'invited',
+              },
+            ],
+          },
+        },
+      },
+    );
+    final container = _containerWith(client, db);
     addTearDown(() async {
       container.dispose();
       await db.close();
@@ -286,11 +320,88 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const MaterialApp(home: TaskAssignPage(taskServerId: 1)),
+        child: const MaterialApp(
+          home: TaskAssignPage(taskServerId: 1, listServerId: 7),
+        ),
       ),
     );
     await tester.pumpAndSettle();
+
     expect(find.text('尚未指派'), findsOneWidget);
+    expect(find.textContaining('userId'), findsNothing);
+
+    await tester.tap(find.byType(DropdownButtonFormField<int>));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('活跃编辑者'), findsOneWidget);
+    expect(find.textContaining('待接受成员'), findsNothing);
+    await tester.tap(find.textContaining('活跃编辑者').last);
+    await tester.pumpAndSettle();
+
+    expect(client.lastMethod, 'PUT');
+    expect(client.lastPath, '/task/1/assignee');
+    expect(client.lastData, {'assigneeUserId': 2});
+  });
+
+  testWidgets('active viewer 只能查看执行人，不能重新指派', (tester) async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    final client = _FakeApiClient(
+      bodyByPath: {
+        '/task/1/assignee': {
+          'code': 0,
+          'data': {
+            'taskId': 1,
+            'assigneeUserId': 2,
+            'assigneeUserName': '当前执行人',
+          },
+        },
+        '/list/7/members': {
+          'code': 0,
+          'data': {
+            'members': [
+              {
+                'userId': 1,
+                'userName': '只读当前用户',
+                'role': 'viewer',
+                'status': 'active',
+              },
+              {
+                'userId': 2,
+                'userName': '当前执行人',
+                'role': 'editor',
+                'status': 'active',
+              },
+            ],
+          },
+        },
+      },
+    );
+    final container = _containerWith(client, db);
+    addTearDown(() async {
+      container.dispose();
+      await db.close();
+    });
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          home: TaskAssignPage(taskServerId: 1, listServerId: 7),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('当前执行人'), findsOneWidget);
+    expect(find.textContaining('当前清单为只读'), findsOneWidget);
+    final picker = tester.widget<DropdownButtonFormField<int>>(
+      find.byType(DropdownButtonFormField<int>),
+    );
+    expect(picker.onChanged, isNull);
+    expect(
+      tester
+          .widget<OutlinedButton>(find.widgetWithText(OutlinedButton, '移除执行人'))
+          .onPressed,
+      isNull,
+    );
   });
 
   testWidgets('CalendarSubscriptionPage 渲染 - 空列表显示提示', (tester) async {

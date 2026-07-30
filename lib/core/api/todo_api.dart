@@ -1318,33 +1318,39 @@ class ListCollaborationApi {
 }
 
 /// 任务协作者：指派 / 移除执行人。
+class TaskAssignee {
+  const TaskAssignee({required this.userId, this.displayName, this.email});
+
+  final int userId;
+  final String? displayName;
+  final String? email;
+}
+
 class TaskAssignApi {
   TaskAssignApi(this._client);
 
   final ApiClient _client;
 
-  /// `GET /task/{taskId}/assignee` — 返回 null 或 `int`（userId）。
-  Future<int?> assignee(int taskId) async {
+  /// `GET /task/{taskId}/assignee`。
+  Future<TaskAssignee?> assignee(int taskId) async {
     final resp = await _client.get('/task/$taskId/assignee');
     final body = resp.data;
     if (body is Map<String, dynamic>) {
-      if (body.containsKey('code')) {
-        final data = _unwrapBody(body);
-        if (data.isEmpty) return null;
-        return (data['userId'] as num?)?.toInt() ?? data['id'] as int?;
-      }
-      if (body.containsKey('userId')) {
-        return (body['userId'] as num?)?.toInt();
-      }
-      return null;
+      final data = body.containsKey('code') ? _unwrapBody(body) : body;
+      final userId = (data['assigneeUserId'] as num?)?.toInt();
+      if (userId == null) return null;
+      return TaskAssignee(
+        userId: userId,
+        displayName: data['assigneeUserName']?.toString(),
+        email: data['assigneeUserEmail']?.toString(),
+      );
     }
-    if (body is num) return body.toInt();
     return null;
   }
 
-  /// `PUT /task/{taskId}/assignee` body `{userId}`（null 表示移除）。
-  Future<void> setAssignee({required int taskId, required int? userId}) =>
-      _client.put('/task/$taskId/assignee', data: {'userId': userId});
+  /// `PUT /task/{taskId}/assignee` body `{assigneeUserId}`。
+  Future<void> setAssignee({required int taskId, required int userId}) =>
+      _client.put('/task/$taskId/assignee', data: {'assigneeUserId': userId});
 
   Future<void> removeAssignee(int taskId) =>
       _client.delete('/task/$taskId/assignee');

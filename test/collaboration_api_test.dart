@@ -80,6 +80,38 @@ void main() {
     });
   });
 
+  group('TaskAssignApi', () {
+    test('解析服务端执行人资料并按 assigneeUserId 提交', () async {
+      final client = _RecordingApiClient(
+        getBody: {
+          'code': 0,
+          'data': {
+            'taskId': 12,
+            'assigneeUserId': 99,
+            'assigneeUserName': '执行人',
+            'assigneeUserEmail': 'assignee@example.com',
+          },
+        },
+      );
+      final api = TaskAssignApi(client);
+
+      final assignee = await api.assignee(12);
+      expect(assignee?.userId, 99);
+      expect(assignee?.displayName, '执行人');
+      expect(assignee?.email, 'assignee@example.com');
+
+      await api.setAssignee(taskId: 12, userId: 100);
+      expect(
+        client.requests.last,
+        const _RecordedRequest(
+          method: 'PUT',
+          path: '/task/12/assignee',
+          data: {'assigneeUserId': 100},
+        ),
+      );
+    });
+  });
+
   group('CalSubscription 构造', () {
     test('字段透传', () {
       const s = CalSubscription(
@@ -139,7 +171,20 @@ bool _mapEquals(Object? left, Object? right) {
 }
 
 class _RecordingApiClient extends ApiClient {
+  _RecordingApiClient({this.getBody});
+
+  final Object? getBody;
   final List<_RecordedRequest> requests = [];
+
+  @override
+  Future<Response<T>> get<T>(String path, {Map<String, dynamic>? query}) async {
+    requests.add(_RecordedRequest(method: 'GET', path: path, data: null));
+    return Response<T>(
+      data: getBody as T,
+      statusCode: 200,
+      requestOptions: RequestOptions(path: path),
+    );
+  }
 
   @override
   Future<Response<T>> post<T>(
