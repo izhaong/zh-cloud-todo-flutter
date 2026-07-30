@@ -75,8 +75,16 @@ void main() {
     final personalList = find.byKey(
       const ValueKey('todo-sidebar-list-${TodoVisualFixture.personalListId}'),
     );
-    expect(personalList, findsOneWidget);
-    await tester.ensureVisible(personalList);
+    await tester.scrollUntilVisible(
+      personalList,
+      300,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const Key('todo-sidebar')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     await tester.tap(personalList);
     await tester.pumpAndSettle();
 

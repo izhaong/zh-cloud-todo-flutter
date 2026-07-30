@@ -15,7 +15,9 @@ import '../../state/providers.dart';
 import '../../state/repositories/task_query_repository.dart';
 import '../../state/session_state.dart';
 import '../habit/habit_page.dart';
+import '../countdown/countdown_page.dart';
 import '../note/note_page.dart';
+import '../pomodoro/pomodoro_page.dart';
 import '../reminder/reminder_inbox_page.dart';
 import '../settings/settings_route.dart';
 import '../shell/section.dart';
@@ -358,6 +360,24 @@ class _HomeShellState extends ConsumerState<HomeShell>
     ).push(MaterialPageRoute(builder: (_) => const NotePage()));
   }
 
+  void _openPomodoro() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const PomodoroPage()));
+  }
+
+  void _openHabit() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const HabitPage()));
+  }
+
+  void _openCountdown() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const CountdownPage()));
+  }
+
   Future<void> _quickAdd(QuickAddRequest request) async {
     final repo = ref.read(taskRepositoryProvider);
     if (repo == null) return;
@@ -461,8 +481,12 @@ class _HomeShellState extends ConsumerState<HomeShell>
           onSelectSmart: _selectSmart,
           onSelectList: _selectList,
           onOpenTags: _openTags,
+          onSelectTag: (tagId) => _openTags(initialTagId: tagId),
           onOpenFilters: _openFilters,
           onOpenSettings: _openSettings,
+          onOpenPomodoro: _openPomodoro,
+          onOpenHabit: _openHabit,
+          onOpenCountdown: _openCountdown,
           onOpenNotes: _openNotes,
           onSearchResultSelected: _handleSearchResult,
           scaffoldKey: _workspaceScaffoldKey,
@@ -476,8 +500,10 @@ class _HomeShellState extends ConsumerState<HomeShell>
     switch (_smart) {
       case SmartList.today:
         return 'today';
+      case SmartList.tomorrow:
+        return 'tomorrow';
       case SmartList.upcoming:
-        return 'last7days';
+        return 'next7days';
       default:
         return null;
     }
@@ -490,6 +516,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
       case SmartList.all:
         return _listId;
       case SmartList.today:
+      case SmartList.tomorrow:
       case SmartList.upcoming:
       case SmartList.completed:
       case SmartList.trash:

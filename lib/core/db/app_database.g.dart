@@ -1890,6 +1890,17 @@ class $TodoFoldersTable extends TodoFolders
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _parentIdMeta = const VerificationMeta(
+    'parentId',
+  );
+  @override
+  late final GeneratedColumn<String> parentId = GeneratedColumn<String>(
+    'parent_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _nameMeta = const VerificationMeta('name');
   @override
   late final GeneratedColumn<String> name = GeneratedColumn<String>(
@@ -1937,6 +1948,7 @@ class $TodoFoldersTable extends TodoFolders
   List<GeneratedColumn> get $columns => [
     id,
     serverId,
+    parentId,
     name,
     sortOrder,
     updatedAt,
@@ -1963,6 +1975,12 @@ class $TodoFoldersTable extends TodoFolders
       context.handle(
         _serverIdMeta,
         serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
+      );
+    }
+    if (data.containsKey('parent_id')) {
+      context.handle(
+        _parentIdMeta,
+        parentId.isAcceptableOrUnknown(data['parent_id']!, _parentIdMeta),
       );
     }
     if (data.containsKey('name')) {
@@ -2012,6 +2030,10 @@ class $TodoFoldersTable extends TodoFolders
         DriftSqlType.int,
         data['${effectivePrefix}server_id'],
       ),
+      parentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}parent_id'],
+      ),
       name: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}name'],
@@ -2040,6 +2062,9 @@ class $TodoFoldersTable extends TodoFolders
 class TodoFolder extends DataClass implements Insertable<TodoFolder> {
   final String id;
   final int? serverId;
+
+  /// 本地 UUID，指向上级文件夹；REST 时转换为服务端整数 ID。
+  final String? parentId;
   final String name;
   final int sortOrder;
   final DateTime updatedAt;
@@ -2047,6 +2072,7 @@ class TodoFolder extends DataClass implements Insertable<TodoFolder> {
   const TodoFolder({
     required this.id,
     this.serverId,
+    this.parentId,
     required this.name,
     required this.sortOrder,
     required this.updatedAt,
@@ -2058,6 +2084,9 @@ class TodoFolder extends DataClass implements Insertable<TodoFolder> {
     map['id'] = Variable<String>(id);
     if (!nullToAbsent || serverId != null) {
       map['server_id'] = Variable<int>(serverId);
+    }
+    if (!nullToAbsent || parentId != null) {
+      map['parent_id'] = Variable<String>(parentId);
     }
     map['name'] = Variable<String>(name);
     map['sort_order'] = Variable<int>(sortOrder);
@@ -2072,6 +2101,9 @@ class TodoFolder extends DataClass implements Insertable<TodoFolder> {
       serverId: serverId == null && nullToAbsent
           ? const Value.absent()
           : Value(serverId),
+      parentId: parentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parentId),
       name: Value(name),
       sortOrder: Value(sortOrder),
       updatedAt: Value(updatedAt),
@@ -2087,6 +2119,7 @@ class TodoFolder extends DataClass implements Insertable<TodoFolder> {
     return TodoFolder(
       id: serializer.fromJson<String>(json['id']),
       serverId: serializer.fromJson<int?>(json['serverId']),
+      parentId: serializer.fromJson<String?>(json['parentId']),
       name: serializer.fromJson<String>(json['name']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
@@ -2099,6 +2132,7 @@ class TodoFolder extends DataClass implements Insertable<TodoFolder> {
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
       'serverId': serializer.toJson<int?>(serverId),
+      'parentId': serializer.toJson<String?>(parentId),
       'name': serializer.toJson<String>(name),
       'sortOrder': serializer.toJson<int>(sortOrder),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
@@ -2109,6 +2143,7 @@ class TodoFolder extends DataClass implements Insertable<TodoFolder> {
   TodoFolder copyWith({
     String? id,
     Value<int?> serverId = const Value.absent(),
+    Value<String?> parentId = const Value.absent(),
     String? name,
     int? sortOrder,
     DateTime? updatedAt,
@@ -2116,6 +2151,7 @@ class TodoFolder extends DataClass implements Insertable<TodoFolder> {
   }) => TodoFolder(
     id: id ?? this.id,
     serverId: serverId.present ? serverId.value : this.serverId,
+    parentId: parentId.present ? parentId.value : this.parentId,
     name: name ?? this.name,
     sortOrder: sortOrder ?? this.sortOrder,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -2125,6 +2161,7 @@ class TodoFolder extends DataClass implements Insertable<TodoFolder> {
     return TodoFolder(
       id: data.id.present ? data.id.value : this.id,
       serverId: data.serverId.present ? data.serverId.value : this.serverId,
+      parentId: data.parentId.present ? data.parentId.value : this.parentId,
       name: data.name.present ? data.name.value : this.name,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
@@ -2137,6 +2174,7 @@ class TodoFolder extends DataClass implements Insertable<TodoFolder> {
     return (StringBuffer('TodoFolder(')
           ..write('id: $id, ')
           ..write('serverId: $serverId, ')
+          ..write('parentId: $parentId, ')
           ..write('name: $name, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('updatedAt: $updatedAt, ')
@@ -2146,14 +2184,22 @@ class TodoFolder extends DataClass implements Insertable<TodoFolder> {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, serverId, name, sortOrder, updatedAt, createdAt);
+  int get hashCode => Object.hash(
+    id,
+    serverId,
+    parentId,
+    name,
+    sortOrder,
+    updatedAt,
+    createdAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is TodoFolder &&
           other.id == this.id &&
           other.serverId == this.serverId &&
+          other.parentId == this.parentId &&
           other.name == this.name &&
           other.sortOrder == this.sortOrder &&
           other.updatedAt == this.updatedAt &&
@@ -2163,6 +2209,7 @@ class TodoFolder extends DataClass implements Insertable<TodoFolder> {
 class TodoFoldersCompanion extends UpdateCompanion<TodoFolder> {
   final Value<String> id;
   final Value<int?> serverId;
+  final Value<String?> parentId;
   final Value<String> name;
   final Value<int> sortOrder;
   final Value<DateTime> updatedAt;
@@ -2171,6 +2218,7 @@ class TodoFoldersCompanion extends UpdateCompanion<TodoFolder> {
   const TodoFoldersCompanion({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
+    this.parentId = const Value.absent(),
     this.name = const Value.absent(),
     this.sortOrder = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -2180,6 +2228,7 @@ class TodoFoldersCompanion extends UpdateCompanion<TodoFolder> {
   TodoFoldersCompanion.insert({
     required String id,
     this.serverId = const Value.absent(),
+    this.parentId = const Value.absent(),
     required String name,
     this.sortOrder = const Value.absent(),
     required DateTime updatedAt,
@@ -2192,6 +2241,7 @@ class TodoFoldersCompanion extends UpdateCompanion<TodoFolder> {
   static Insertable<TodoFolder> custom({
     Expression<String>? id,
     Expression<int>? serverId,
+    Expression<String>? parentId,
     Expression<String>? name,
     Expression<int>? sortOrder,
     Expression<DateTime>? updatedAt,
@@ -2201,6 +2251,7 @@ class TodoFoldersCompanion extends UpdateCompanion<TodoFolder> {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (serverId != null) 'server_id': serverId,
+      if (parentId != null) 'parent_id': parentId,
       if (name != null) 'name': name,
       if (sortOrder != null) 'sort_order': sortOrder,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -2212,6 +2263,7 @@ class TodoFoldersCompanion extends UpdateCompanion<TodoFolder> {
   TodoFoldersCompanion copyWith({
     Value<String>? id,
     Value<int?>? serverId,
+    Value<String?>? parentId,
     Value<String>? name,
     Value<int>? sortOrder,
     Value<DateTime>? updatedAt,
@@ -2221,6 +2273,7 @@ class TodoFoldersCompanion extends UpdateCompanion<TodoFolder> {
     return TodoFoldersCompanion(
       id: id ?? this.id,
       serverId: serverId ?? this.serverId,
+      parentId: parentId ?? this.parentId,
       name: name ?? this.name,
       sortOrder: sortOrder ?? this.sortOrder,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -2237,6 +2290,9 @@ class TodoFoldersCompanion extends UpdateCompanion<TodoFolder> {
     }
     if (serverId.present) {
       map['server_id'] = Variable<int>(serverId.value);
+    }
+    if (parentId.present) {
+      map['parent_id'] = Variable<String>(parentId.value);
     }
     if (name.present) {
       map['name'] = Variable<String>(name.value);
@@ -2261,6 +2317,7 @@ class TodoFoldersCompanion extends UpdateCompanion<TodoFolder> {
     return (StringBuffer('TodoFoldersCompanion(')
           ..write('id: $id, ')
           ..write('serverId: $serverId, ')
+          ..write('parentId: $parentId, ')
           ..write('name: $name, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('updatedAt: $updatedAt, ')
@@ -11557,6 +11614,7 @@ typedef $$TodoFoldersTableCreateCompanionBuilder =
     TodoFoldersCompanion Function({
       required String id,
       Value<int?> serverId,
+      Value<String?> parentId,
       required String name,
       Value<int> sortOrder,
       required DateTime updatedAt,
@@ -11567,6 +11625,7 @@ typedef $$TodoFoldersTableUpdateCompanionBuilder =
     TodoFoldersCompanion Function({
       Value<String> id,
       Value<int?> serverId,
+      Value<String?> parentId,
       Value<String> name,
       Value<int> sortOrder,
       Value<DateTime> updatedAt,
@@ -11590,6 +11649,11 @@ class $$TodoFoldersTableFilterComposer
 
   ColumnFilters<int> get serverId => $composableBuilder(
     column: $table.serverId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get parentId => $composableBuilder(
+    column: $table.parentId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -11633,6 +11697,11 @@ class $$TodoFoldersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get parentId => $composableBuilder(
+    column: $table.parentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get name => $composableBuilder(
     column: $table.name,
     builder: (column) => ColumnOrderings(column),
@@ -11668,6 +11737,9 @@ class $$TodoFoldersTableAnnotationComposer
 
   GeneratedColumn<int> get serverId =>
       $composableBuilder(column: $table.serverId, builder: (column) => column);
+
+  GeneratedColumn<String> get parentId =>
+      $composableBuilder(column: $table.parentId, builder: (column) => column);
 
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
@@ -11715,6 +11787,7 @@ class $$TodoFoldersTableTableManager
               ({
                 Value<String> id = const Value.absent(),
                 Value<int?> serverId = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -11723,6 +11796,7 @@ class $$TodoFoldersTableTableManager
               }) => TodoFoldersCompanion(
                 id: id,
                 serverId: serverId,
+                parentId: parentId,
                 name: name,
                 sortOrder: sortOrder,
                 updatedAt: updatedAt,
@@ -11733,6 +11807,7 @@ class $$TodoFoldersTableTableManager
               ({
                 required String id,
                 Value<int?> serverId = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
                 required String name,
                 Value<int> sortOrder = const Value.absent(),
                 required DateTime updatedAt,
@@ -11741,6 +11816,7 @@ class $$TodoFoldersTableTableManager
               }) => TodoFoldersCompanion.insert(
                 id: id,
                 serverId: serverId,
+                parentId: parentId,
                 name: name,
                 sortOrder: sortOrder,
                 updatedAt: updatedAt,

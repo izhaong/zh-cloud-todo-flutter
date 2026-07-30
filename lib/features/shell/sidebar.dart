@@ -7,6 +7,7 @@ import '../../core/theme/brand_colors.dart';
 import '../../core/theme/todo_layout_tokens.dart';
 import '../../state/providers.dart';
 import 'section.dart';
+import 'sidebar_hierarchy.dart';
 
 /// Compact Todo navigation for smart lists, browsing, user lists, and settings.
 class Sidebar extends ConsumerWidget {
@@ -21,6 +22,10 @@ class Sidebar extends ConsumerWidget {
     required this.onOpenTags,
     required this.onOpenFilters,
     required this.onOpenSettings,
+    this.onSelectTag,
+    this.onOpenPomodoro,
+    this.onOpenHabit,
+    this.onOpenCountdown,
     this.onOpenNotes,
     this.onOpenReminders,
     this.width = TodoLayoutTokens.wideSidebarWidth,
@@ -37,6 +42,10 @@ class Sidebar extends ConsumerWidget {
   final VoidCallback onOpenTags;
   final VoidCallback onOpenFilters;
   final VoidCallback onOpenSettings;
+  final ValueChanged<String>? onSelectTag;
+  final VoidCallback? onOpenPomodoro;
+  final VoidCallback? onOpenHabit;
+  final VoidCallback? onOpenCountdown;
   final VoidCallback? onOpenNotes;
   final VoidCallback? onOpenReminders;
   final VoidCallback? onNavigationCommitted;
@@ -49,6 +58,17 @@ class Sidebar extends ConsumerWidget {
     final stats = ref.watch(taskStatsProvider).valueOrNull ?? TaskStats.empty;
     final lists = ref.watch(listsStreamProvider).valueOrNull ?? const [];
     final folders = ref.watch(foldersStreamProvider).valueOrNull ?? const [];
+    final tags = ref.watch(tagsStreamProvider).valueOrNull ?? const [];
+    final folderEntries = flattenSidebarHierarchy(
+      folders,
+      idOf: (folder) => folder.id,
+      parentIdOf: (folder) => folder.parentId,
+    );
+    final tagEntries = flattenSidebarHierarchy(
+      tags,
+      idOf: (tag) => tag.id,
+      parentIdOf: (tag) => tag.parentId,
+    );
 
     return SizedBox(
       width: width,
@@ -94,6 +114,21 @@ class Sidebar extends ConsumerWidget {
                       onTap: () {
                         onSelectSection(Section.tasks);
                         onSelectSmart(SmartList.today);
+                        onNavigationCommitted?.call();
+                      },
+                    ),
+                    _SmartRow(
+                      rowKey: const Key('todo-sidebar-row-tomorrow'),
+                      icon: SmartList.tomorrow.icon,
+                      label: SmartList.tomorrow.label,
+                      badge: stats.tomorrow,
+                      selected:
+                          _isTasksSelected(selectedSection) &&
+                          selectedSmart == SmartList.tomorrow,
+                      colors: colors,
+                      onTap: () {
+                        onSelectSection(Section.tasks);
+                        onSelectSmart(SmartList.tomorrow);
                         onNavigationCommitted?.call();
                       },
                     ),
@@ -177,7 +212,26 @@ class Sidebar extends ConsumerWidget {
                       label: '标签',
                       selected: false,
                       colors: colors,
-                      onTap: onOpenTags,
+                      onTap: () {
+                        onNavigationCommitted?.call();
+                        onOpenTags();
+                      },
+                    ),
+                    ...tagEntries.map(
+                      (entry) => _TagRow(
+                        tag: entry.node,
+                        depth: entry.depth,
+                        colors: colors,
+                        onTap: () {
+                          onNavigationCommitted?.call();
+                          final selectTag = onSelectTag;
+                          if (selectTag != null) {
+                            selectTag(entry.node.id);
+                          } else {
+                            onOpenTags();
+                          }
+                        },
+                      ),
                     ),
                     _NavRow(
                       rowKey: const Key('todo-sidebar-row-filters'),
@@ -185,7 +239,10 @@ class Sidebar extends ConsumerWidget {
                       label: '筛选器',
                       selected: false,
                       colors: colors,
-                      onTap: onOpenFilters,
+                      onTap: () {
+                        onNavigationCommitted?.call();
+                        onOpenFilters();
+                      },
                     ),
                     if (onOpenNotes != null)
                       _NavRow(
@@ -236,11 +293,12 @@ class Sidebar extends ConsumerWidget {
                         ),
                       ),
                     ),
-                    ...folders.map(
-                      (folder) => _FolderGroup(
-                        folder: folder,
+                    ...folderEntries.map(
+                      (entry) => _FolderGroup(
+                        folder: entry.node,
+                        depth: entry.depth,
                         lists: lists
-                            .where((l) => l.folderId == folder.serverId)
+                            .where((l) => l.folderId == entry.node.serverId)
                             .toList(),
                         selectedListId: selectedListId,
                         colors: colors,
@@ -288,11 +346,29 @@ class Sidebar extends ConsumerWidget {
                       label: '设置',
                       selected: selectedSection == Section.mine,
                       colors: colors,
-                      onTap: onOpenSettings,
+                      onTap: () {
+                        onNavigationCommitted?.call();
+                        onOpenSettings();
+                      },
                     ),
                     const SizedBox(height: TodoLayoutTokens.sidebarFooterGap),
                   ],
                 ),
+              ),
+              _EfficiencyDock(
+                colors: colors,
+                onOpenPomodoro: () {
+                  onNavigationCommitted?.call();
+                  onOpenPomodoro?.call();
+                },
+                onOpenHabit: () {
+                  onNavigationCommitted?.call();
+                  onOpenHabit?.call();
+                },
+                onOpenCountdown: () {
+                  onNavigationCommitted?.call();
+                  onOpenCountdown?.call();
+                },
               ),
             ],
           ),
@@ -433,6 +509,7 @@ class _NavRow extends StatelessWidget {
 class _FolderGroup extends StatelessWidget {
   const _FolderGroup({
     required this.folder,
+    required this.depth,
     required this.lists,
     required this.selectedListId,
     required this.colors,
@@ -440,6 +517,7 @@ class _FolderGroup extends StatelessWidget {
   });
 
   final TodoFolder folder;
+  final int depth;
   final List<TodoList> lists;
   final String? selectedListId;
   final AppColors colors;
@@ -458,9 +536,14 @@ class _FolderGroup extends StatelessWidget {
         dense: true,
         visualDensity: VisualDensity.compact,
         minTileHeight: TodoLayoutTokens.sidebarRowHeight,
-        tilePadding: const EdgeInsets.symmetric(
-          horizontal: TodoLayoutTokens.sidebarRowContentInset,
-        ),
+        tilePadding:
+            const EdgeInsets.symmetric(
+              horizontal: TodoLayoutTokens.sidebarRowContentInset,
+            ).copyWith(
+              left:
+                  TodoLayoutTokens.sidebarRowContentInset +
+                  depth * TodoLayoutTokens.sidebarIconGap,
+            ),
         childrenPadding: const EdgeInsets.symmetric(
           horizontal: TodoLayoutTokens.sidebarOuterInset,
         ),
@@ -485,6 +568,33 @@ class _FolderGroup extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+class _TagRow extends StatelessWidget {
+  const _TagRow({
+    required this.tag,
+    required this.depth,
+    required this.colors,
+    required this.onTap,
+  });
+
+  final TodoTag tag;
+  final int depth;
+  final AppColors colors;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SidebarRow(
+      rowKey: ValueKey('todo-sidebar-tag-${tag.id}'),
+      icon: Icons.label_outline,
+      label: tag.name,
+      selected: false,
+      colors: colors,
+      contentIndent: depth * TodoLayoutTokens.sidebarIconGap,
+      onTap: onTap,
     );
   }
 }
@@ -524,6 +634,7 @@ class _SidebarRow extends StatefulWidget {
     required this.colors,
     required this.onTap,
     this.trailing,
+    this.contentIndent = 0,
   });
 
   final Key rowKey;
@@ -533,6 +644,7 @@ class _SidebarRow extends StatefulWidget {
   final AppColors colors;
   final VoidCallback onTap;
   final Widget? trailing;
+  final double contentIndent;
 
   @override
   State<_SidebarRow> createState() => _SidebarRowState();
@@ -577,8 +689,11 @@ class _SidebarRowState extends State<_SidebarRow> {
               ),
               onTap: widget.onTap,
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: TodoLayoutTokens.sidebarRowContentInset,
+                padding: EdgeInsets.only(
+                  left:
+                      TodoLayoutTokens.sidebarRowContentInset +
+                      widget.contentIndent,
+                  right: TodoLayoutTokens.sidebarRowContentInset,
                 ),
                 child: Row(
                   children: [
@@ -608,6 +723,136 @@ class _SidebarRowState extends State<_SidebarRow> {
                   ],
                 ),
               ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EfficiencyDock extends StatelessWidget {
+  const _EfficiencyDock({
+    required this.colors,
+    required this.onOpenPomodoro,
+    required this.onOpenHabit,
+    required this.onOpenCountdown,
+  });
+
+  final AppColors colors;
+  final VoidCallback onOpenPomodoro;
+  final VoidCallback onOpenHabit;
+  final VoidCallback onOpenCountdown;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(top: BorderSide(color: colors.border)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: _EfficiencyButton(
+                label: '番茄',
+                tooltip: '番茄专注',
+                icon: Icons.timer_outlined,
+                colors: colors,
+                onTap: onOpenPomodoro,
+              ),
+            ),
+            Expanded(
+              child: _EfficiencyButton(
+                label: '习惯',
+                tooltip: '习惯打卡',
+                icon: Icons.autorenew,
+                colors: colors,
+                onTap: onOpenHabit,
+              ),
+            ),
+            Expanded(
+              child: _EfficiencyButton(
+                label: '倒数日',
+                tooltip: '倒数纪念日',
+                icon: Icons.event_available_outlined,
+                colors: colors,
+                onTap: onOpenCountdown,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EfficiencyButton extends StatefulWidget {
+  const _EfficiencyButton({
+    required this.label,
+    required this.tooltip,
+    required this.icon,
+    required this.colors,
+    required this.onTap,
+  });
+
+  final String label;
+  final String tooltip;
+  final IconData icon;
+  final AppColors colors;
+  final VoidCallback onTap;
+
+  @override
+  State<_EfficiencyButton> createState() => _EfficiencyButtonState();
+}
+
+class _EfficiencyButtonState extends State<_EfficiencyButton> {
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: widget.tooltip,
+      child: Tooltip(
+        message: widget.tooltip,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(
+            TodoLayoutTokens.selectedRowRadius,
+          ),
+          onTap: widget.onTap,
+          onFocusChange: (focused) => setState(() => _focused = focused),
+          child: Container(
+            height: 46,
+            decoration: BoxDecoration(
+              border: _focused
+                  ? Border.all(color: widget.colors.accent, width: 1.5)
+                  : null,
+              borderRadius: BorderRadius.circular(
+                TodoLayoutTokens.selectedRowRadius,
+              ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  widget.icon,
+                  size: 18,
+                  color: widget.colors.mutedForeground,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  widget.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: widget.colors.mutedForeground,
+                  ),
+                ),
+              ],
             ),
           ),
         ),

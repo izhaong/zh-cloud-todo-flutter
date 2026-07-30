@@ -138,7 +138,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       stream: tasksStream,
       builder: (context, snapshot) {
         final raw = snapshot.data ?? const <TodoTask>[];
-        final items = _applyFilter(raw, _filter, _selectedListId, now);
+        final items = applyTaskFilter(raw, _filter, _selectedListId, now);
         if (snapshot.hasData) {
           _reportInvalidSelection(items);
         }
@@ -1286,7 +1286,7 @@ List<_TaskGroup> _groupTasks(List<TodoTask> tasks, DateTime now) {
   ];
 }
 
-List<TodoTask> _applyFilter(
+List<TodoTask> applyTaskFilter(
   List<TodoTask> source,
   TaskFilter filter,
   String? selectedListId,
@@ -1341,6 +1341,9 @@ List<TodoTask> _applyFilter(
         case 'last7days':
           final weekStart = startOfDay.subtract(const Duration(days: 7));
           if (due.isBefore(weekStart) || !due.isBefore(todayEnd)) return false;
+        case 'next7days':
+          final weekEnd = startOfDay.add(const Duration(days: 7));
+          if (due.isBefore(todayEnd) || due.isAfter(weekEnd)) return false;
         case 'overdue':
           if (!due.isBefore(startOfDay)) return false;
         case 'future':

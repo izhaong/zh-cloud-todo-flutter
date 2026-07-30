@@ -163,6 +163,16 @@ void main() {
       final personalListRow = find.byKey(
         const ValueKey('todo-sidebar-list-${TodoVisualFixture.personalListId}'),
       );
+      await tester.scrollUntilVisible(
+        personalListRow,
+        300,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const Key('todo-sidebar')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
       await tester.tap(personalListRow);
       await tester.pumpAndSettle();
 

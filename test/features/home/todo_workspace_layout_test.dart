@@ -90,7 +90,20 @@ void main() {
         await tester.tap(find.byTooltip('菜单'));
         await tester.pumpAndSettle();
       }
-      await tester.tap(find.byKey(const Key('todo-reminder-inbox-action')));
+      final sidebarSurface = scenario.name == 'mobile'
+          ? find.byKey(const Key('todo-sidebar-drawer'))
+          : find.byKey(const Key('todo-sidebar'));
+      final reminderAction = find.byKey(
+        const Key('todo-reminder-inbox-action'),
+      );
+      await tester.scrollUntilVisible(
+        reminderAction,
+        300,
+        scrollable: find
+            .descendant(of: sidebarSurface, matching: find.byType(Scrollable))
+            .first,
+      );
+      await tester.tap(reminderAction);
       await tester.pumpAndSettle();
 
       expect(find.text('提醒收件箱'), findsOneWidget);
@@ -316,13 +329,7 @@ void main() {
   ) async {
     await _pumpWorkspace(tester, TodoVisualViewports.wide);
 
-    final personalList = find.byKey(
-      const ValueKey('todo-sidebar-list-${TodoVisualFixture.personalListId}'),
-    );
-    expect(personalList, findsOneWidget);
-    await tester.ensureVisible(personalList);
-    await tester.tap(personalList);
-    await tester.pumpAndSettle();
+    await _selectPersonalList(tester);
     expect(_contentText(_personalTaskTitle), findsOneWidget);
 
     await _tapTask(tester, _personalTaskId);
@@ -349,6 +356,7 @@ void main() {
       reason: 'task selection must remain attached to its stable task ID',
     );
     expect(_detailText(_personalTaskTitle), findsOneWidget);
+    await _revealPersonalList(tester);
     expect(
       find.byKey(
         const ValueKey('todo-sidebar-list-${TodoVisualFixture.personalListId}'),
@@ -459,11 +467,10 @@ Future<void> _selectPersonalList(WidgetTester tester) async {
     await tester.pumpAndSettle();
   }
 
+  await _revealPersonalList(tester);
   final personalList = find.byKey(
     const ValueKey('todo-sidebar-list-${TodoVisualFixture.personalListId}'),
   );
-  expect(personalList, findsOneWidget);
-  await tester.ensureVisible(personalList);
   await tester.tap(personalList);
   await tester.pump();
 
@@ -472,6 +479,25 @@ Future<void> _selectPersonalList(WidgetTester tester) async {
     scaffold.closeDrawer();
   }
   await tester.pumpAndSettle();
+}
+
+Future<void> _revealPersonalList(WidgetTester tester) async {
+  final profile = _currentProfile();
+  final sidebarSurface =
+      profile == _WorkspaceProfile.tablet || profile == _WorkspaceProfile.mobile
+      ? find.byKey(const Key('todo-sidebar-drawer'))
+      : find.byKey(const Key('todo-sidebar'));
+  final personalList = find.byKey(
+    const ValueKey('todo-sidebar-list-${TodoVisualFixture.personalListId}'),
+  );
+  await tester.scrollUntilVisible(
+    personalList,
+    300,
+    scrollable: find
+        .descendant(of: sidebarSurface, matching: find.byType(Scrollable))
+        .first,
+  );
+  expect(personalList, findsOneWidget);
 }
 
 ScaffoldState _workspaceScaffoldState(WidgetTester tester) {

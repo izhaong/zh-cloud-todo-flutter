@@ -368,9 +368,10 @@ class SyncCoordinator {
             _throwIfFolderRestFailed(response, '文件夹删除失败');
           }
         } else if (change.entityServerId == null) {
+          final parentServerId = await _folderParentServerId(payload);
           final resp = await todoApi.post<Map<String, dynamic>>(
             '/folder/create',
-            data: {'name': payload['name']},
+            data: {'name': payload['name'], 'parentId': parentServerId},
           );
           if (resp.data?['code'] != null && resp.data?['code'] != 0) {
             throw DioException(
@@ -397,9 +398,14 @@ class SyncCoordinator {
                 .write(TodoFoldersCompanion(serverId: Value(serverId)));
           }
         } else {
+          final parentServerId = await _folderParentServerId(payload);
           final response = await todoApi.put<Map<String, dynamic>>(
             '/folder/update',
-            data: {'id': change.entityServerId, 'name': payload['name']},
+            data: {
+              'id': change.entityServerId,
+              'name': payload['name'],
+              'parentId': parentServerId,
+            },
           );
           _throwIfFolderRestFailed(response, '文件夹更新失败');
         }
@@ -422,6 +428,19 @@ class SyncCoordinator {
       }
     }
     return count;
+  }
+
+  Future<int?> _folderParentServerId(Map<String, dynamic> payload) async {
+    final localParentId = payload['parentId']?.toString();
+    if (localParentId == null || localParentId.isEmpty) return null;
+    final parent = await (db.select(
+      db.todoFolders,
+    )..where((folder) => folder.id.equals(localParentId))).getSingleOrNull();
+    final serverId = parent?.serverId;
+    if (serverId == null) {
+      throw StateError('父文件夹尚未同步');
+    }
+    return serverId;
   }
 
   /// 把一条 outbox 变更转为后端 `SyncChangeDto`。
@@ -920,8 +939,14 @@ class SyncCoordinator {
         final serverId = (payload['id'] as num?)?.toInt();
         if (serverId == null) continue;
         serverFolderIds.add(serverId);
-        await _upsertLocalFolder(serverId, payload);
+        await _upsertLocalFolder(serverId, payload, hydrateParent: false);
         hydrated++;
+      }
+      for (final item in raw.whereType<Map>()) {
+        final payload = Map<String, dynamic>.from(item);
+        final serverId = (payload['id'] as num?)?.toInt();
+        if (serverId == null) continue;
+        await _upsertLocalFolder(serverId, payload, hydrateParent: true);
       }
       final localSyncedFolders = await (db.select(
         db.todoFolders,
@@ -1285,15 +1310,29 @@ class SyncCoordinator {
 
   Future<void> _upsertLocalFolder(
     int serverId,
-    Map<String, dynamic> payload,
-  ) async {
+    Map<String, dynamic> payload, {
+    required bool hydrateParent,
+  }) async {
     final existing = await (db.select(
       db.todoFolders,
     )..where((row) => row.serverId.equals(serverId))).getSingleOrNull();
     final now = DateTime.now();
+    String? localParentId = existing?.parentId;
+    if (hydrateParent &&
+        (payload.containsKey('parentId') || payload.containsKey('parent_id'))) {
+      final rawParentId = payload['parentId'] ?? payload['parent_id'];
+      final parentServerId = (rawParentId as num?)?.toInt();
+      final parent = parentServerId == null
+          ? null
+          : await (db.select(db.todoFolders)
+                  ..where((row) => row.serverId.equals(parentServerId)))
+                .getSingleOrNull();
+      localParentId = parent?.id;
+    }
     final companion = TodoFoldersCompanion(
       id: Value(existing?.id ?? _uuid.v4()),
       serverId: Value(serverId),
+      parentId: Value(localParentId),
       name: Value(payload['name']?.toString() ?? existing?.name ?? ''),
       sortOrder: Value((payload['sortOrder'] as num?)?.toInt() ?? 0),
       updatedAt: Value(now),
