@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:drift/drift.dart' show Value;
+import 'package:drift/drift.dart' show OrderingTerm, Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -290,6 +290,31 @@ void main() {
     },
   );
 
+  test('checklist creation appends after the current local order', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final repository = TaskRepository(db, SyncChangeQueue(db));
+    final task = await repository.create(listId: 'inbox', title: '撰写周报');
+
+    final first = await repository.createChecklistItem(
+      taskId: task.id,
+      title: '整理数据',
+    );
+    final second = await repository.createChecklistItem(
+      taskId: task.id,
+      title: '复核数据',
+    );
+
+    expect(first.sortOrder, 0);
+    expect(second.sortOrder, 1);
+    final items =
+        await (db.select(db.todoChecklistItems)
+              ..where((item) => item.taskId.equals(task.id))
+              ..orderBy([(item) => OrderingTerm(expression: item.sortOrder)]))
+            .get();
+    expect(items.map((item) => item.id), [first.id, second.id]);
+  });
+
   test(
     'offline checklist edits and deletion stay local and enqueue task mutations',
     () async {
@@ -344,6 +369,102 @@ void main() {
         repository.updateChecklistItem(item.id, title: '   '),
         throwsArgumentError,
       );
+    },
+  );
+
+  test(
+    'offline checklist bulk reorder is atomic and enqueues every item',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final repository = TaskRepository(db, SyncChangeQueue(db));
+      final task = await repository.create(listId: 'inbox', title: '撰写周报');
+      final first = await repository.createChecklistItem(
+        taskId: task.id,
+        title: '整理数据',
+        sortOrder: 0,
+      );
+      final second = await repository.createChecklistItem(
+        taskId: task.id,
+        title: '复核数据',
+        sortOrder: 1,
+      );
+      await db.delete(db.todoSyncChanges).go();
+
+      await repository.reorderChecklistItems(task.id, [second.id, first.id]);
+
+      final items =
+          await (db.select(db.todoChecklistItems)
+                ..where((item) => item.taskId.equals(task.id))
+                ..orderBy([(item) => OrderingTerm(expression: item.sortOrder)]))
+              .get();
+      expect(items.map((item) => item.id), [second.id, first.id]);
+      expect(items.map((item) => item.sortOrder), [0, 1]);
+
+      final changes = await db.select(db.todoSyncChanges).get();
+      expect(changes, hasLength(2));
+      expect(
+        changes.map(
+          (change) =>
+              (jsonDecode(change.payloadJson)
+                  as Map<String, dynamic>)['sortOrder'],
+        ),
+        [0, 1],
+      );
+
+      await expectLater(
+        repository.reorderChecklistItems(task.id, [first.id]),
+        throwsArgumentError,
+      );
+      final unchanged =
+          await (db.select(db.todoChecklistItems)
+                ..where((item) => item.taskId.equals(task.id))
+                ..orderBy([(item) => OrderingTerm(expression: item.sortOrder)]))
+              .get();
+      expect(unchanged.map((item) => item.id), [second.id, first.id]);
+      expect(await db.select(db.todoSyncChanges).get(), hasLength(2));
+    },
+  );
+
+  test(
+    'read-only checklist reorder has no local or outbox side effects',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final repository = TaskRepository(db, SyncChangeQueue(db));
+      final task = await repository.create(listId: 'inbox', title: '撰写周报');
+      final first = await repository.createChecklistItem(
+        taskId: task.id,
+        title: '整理数据',
+        sortOrder: 0,
+      );
+      final second = await repository.createChecklistItem(
+        taskId: task.id,
+        title: '复核数据',
+        sortOrder: 1,
+      );
+      await (db.update(db.todoLists)..where((list) => list.id.equals('inbox')))
+          .write(const TodoListsCompanion(writable: Value(false)));
+      await db.delete(db.todoSyncChanges).go();
+
+      await expectLater(
+        repository.reorderChecklistItems(task.id, [second.id, first.id]),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            '当前清单为只读，无法修改任务',
+          ),
+        ),
+      );
+
+      final items =
+          await (db.select(db.todoChecklistItems)
+                ..where((item) => item.taskId.equals(task.id))
+                ..orderBy([(item) => OrderingTerm(expression: item.sortOrder)]))
+              .get();
+      expect(items.map((item) => item.id), [first.id, second.id]);
+      expect(await db.select(db.todoSyncChanges).get(), isEmpty);
     },
   );
 }

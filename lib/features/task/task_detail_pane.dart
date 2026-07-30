@@ -2821,6 +2821,36 @@ class _ChecklistSectionState extends ConsumerState<_ChecklistSection> {
     await repo.updateChecklistItem(item.id, title: normalized);
   }
 
+  Future<void> _moveChecklistItem(
+    List<TodoChecklistItem> items,
+    String sourceItemId,
+    String targetItemId,
+  ) async {
+    final oldIndex = items.indexWhere((item) => item.id == sourceItemId);
+    final newIndex = items.indexWhere((item) => item.id == targetItemId);
+    if (oldIndex < 0 || newIndex < 0 || oldIndex == newIndex) return;
+    final orderedIds = items.map((item) => item.id).toList();
+    final movedId = orderedIds.removeAt(oldIndex);
+    orderedIds.insert(newIndex, movedId);
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    try {
+      await repo.reorderChecklistItems(widget.taskId, orderedIds);
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {});
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_checklistErrorMessage(error))));
+    }
+  }
+
+  String _checklistErrorMessage(Object error) {
+    if (error is ArgumentError) return error.message?.toString() ?? '检查事项顺序无效';
+    if (error is StateError) return error.message;
+    return '检查事项排序失败，请稍后重试';
+  }
+
   @override
   Widget build(BuildContext context) {
     final repo = ref.watch(taskRepositoryProvider);
@@ -2860,30 +2890,81 @@ class _ChecklistSectionState extends ConsumerState<_ChecklistSection> {
             final items = snapshot.data!;
             if (items.isEmpty) return const Text('暂无检查事项');
             return Column(
-              children: items
-                  .map(
-                    (item) => GestureDetector(
-                      onLongPress: () => _edit(item),
-                      child: CheckboxListTile(
-                        value: item.completed,
-                        title: Text(
-                          item.title,
-                          style: TextStyle(
-                            decoration: item.completed
-                                ? TextDecoration.lineThrough
-                                : null,
-                          ),
-                        ),
-                        onChanged: (_) => _toggle(item),
-                        secondary: IconButton(
-                          tooltip: '删除',
-                          icon: const Icon(Icons.close),
-                          onPressed: () => _delete(item),
-                        ),
+              children: items.map((item) {
+                return DragTarget<String>(
+                  key: Key('checklist-item-${item.id}'),
+                  onWillAcceptWithDetails: (details) => details.data != item.id,
+                  onAcceptWithDetails: (details) =>
+                      _moveChecklistItem(items, details.data, item.id),
+                  builder: (context, candidateData, rejectedData) {
+                    return DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: candidateData.isEmpty
+                            ? Colors.transparent
+                            : Theme.of(context).colorScheme.primaryContainer
+                                  .withValues(alpha: 0.35),
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                    ),
-                  )
-                  .toList(),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              onLongPress: () => _edit(item),
+                              child: CheckboxListTile(
+                                value: item.completed,
+                                title: Text(
+                                  item.title,
+                                  style: TextStyle(
+                                    decoration: item.completed
+                                        ? TextDecoration.lineThrough
+                                        : null,
+                                  ),
+                                ),
+                                onChanged: (_) => _toggle(item),
+                                secondary: IconButton(
+                                  tooltip: '删除',
+                                  icon: const Icon(Icons.close),
+                                  onPressed: () => _delete(item),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Draggable<String>(
+                            data: item.id,
+                            feedback: Material(
+                              key: Key('checklist-drag-feedback-${item.id}'),
+                              elevation: 4,
+                              borderRadius: BorderRadius.circular(8),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                child: Text(item.title),
+                              ),
+                            ),
+                            childWhenDragging: const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: Icon(
+                                Icons.drag_handle,
+                                color: Colors.grey,
+                              ),
+                            ),
+                            child: Tooltip(
+                              message: '拖动检查事项',
+                              child: Padding(
+                                key: Key('checklist-reorder-${item.id}'),
+                                padding: const EdgeInsets.all(12),
+                                child: const Icon(Icons.drag_handle),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              }).toList(),
             );
           },
         ),

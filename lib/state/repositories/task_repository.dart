@@ -350,11 +350,14 @@ class TaskRepository {
   Future<TodoChecklistItem> createChecklistItem({
     required String taskId,
     required String title,
-    int sortOrder = 0,
+    int? sortOrder,
   }) async {
     final normalizedTitle = title.trim();
     if (normalizedTitle.isEmpty) {
       throw ArgumentError.value(title, 'title', '检查事项标题不能为空');
+    }
+    if (sortOrder != null && sortOrder < 0) {
+      throw ArgumentError.value(sortOrder, 'sortOrder', '检查事项顺序不能为负数');
     }
     final now = DateTime.now();
     final id = _uuid.v4();
@@ -365,6 +368,19 @@ class TaskRepository {
       if (parent == null) {
         throw StateError('检查事项所属任务不存在');
       }
+      final lastItem =
+          await (_db.select(_db.todoChecklistItems)
+                ..where((item) => item.taskId.equals(taskId))
+                ..orderBy([
+                  (item) => OrderingTerm(
+                    expression: item.sortOrder,
+                    mode: OrderingMode.desc,
+                  ),
+                ])
+                ..limit(1))
+              .getSingleOrNull();
+      final effectiveSortOrder =
+          sortOrder ?? (lastItem == null ? 0 : lastItem.sortOrder + 1);
       await _db
           .into(_db.todoChecklistItems)
           .insert(
@@ -372,7 +388,7 @@ class TaskRepository {
               id: id,
               taskId: taskId,
               title: normalizedTitle,
-              sortOrder: Value(sortOrder),
+              sortOrder: Value(effectiveSortOrder),
               updatedAt: now,
               createdAt: now,
             ),
@@ -492,6 +508,84 @@ class TaskRepository {
       );
     });
     return next;
+  }
+
+  /// 原子重排同一任务的全部检查事项，并逐项写入 task outbox。
+  Future<void> reorderChecklistItems(
+    String taskId,
+    List<String> orderedItemIds,
+  ) async {
+    if (orderedItemIds.toSet().length != orderedItemIds.length) {
+      throw ArgumentError.value(orderedItemIds, 'orderedItemIds', '不能包含重复检查事项');
+    }
+
+    await _db.transaction(() async {
+      final parent = await (_db.select(
+        _db.todoTasks,
+      )..where((task) => task.id.equals(taskId))).getSingleOrNull();
+      if (parent == null) {
+        throw StateError('检查事项所属任务不存在');
+      }
+      await _requireWritableList(parent.listId);
+
+      final items = await (_db.select(
+        _db.todoChecklistItems,
+      )..where((item) => item.taskId.equals(taskId))).get();
+      final currentIds = items.map((item) => item.id).toSet();
+      if (orderedItemIds.length != items.length ||
+          !currentIds.containsAll(orderedItemIds)) {
+        throw ArgumentError.value(
+          orderedItemIds,
+          'orderedItemIds',
+          '必须包含任务的全部检查事项',
+        );
+      }
+      final itemById = {for (final item in items) item.id: item};
+      final now = DateTime.now();
+      for (final entry in orderedItemIds.indexed) {
+        final item = itemById[entry.$2]!;
+        await (_db.update(
+          _db.todoChecklistItems,
+        )..where((row) => row.id.equals(item.id))).write(
+          TodoChecklistItemsCompanion(
+            sortOrder: Value(entry.$1),
+            updatedAt: Value(now),
+          ),
+        );
+        final updated = item.copyWith(sortOrder: entry.$1, updatedAt: now);
+        await _queue.enqueue(
+          entity: SyncEntities.task,
+          op: SyncOps.upsert,
+          localId: updated.id,
+          serverId: updated.serverId,
+          payload: {
+            'listId': parent.listId,
+            'parentTaskId': updated.taskId,
+            'title': updated.title,
+            'isChecklistItem': true,
+            'status': updated.completed ? 'DONE' : 'TODO',
+            'priority': 0,
+            'sortOrder': updated.sortOrder,
+            'completedAt': updated.completed
+                ? updated.updatedAt.toIso8601String()
+                : null,
+          },
+        );
+      }
+    });
+  }
+
+  Future<void> _requireWritableList(String listId) async {
+    final list = await (_db.select(
+      _db.todoLists,
+    )..where((row) => row.id.equals(listId))).getSingleOrNull();
+    if (list == null && listId == _inboxListId) return;
+    if (list == null) {
+      throw StateError('清单不存在');
+    }
+    if (!list.writable) {
+      throw StateError('当前清单为只读，无法修改任务');
+    }
   }
 
   Future<TodoAttachment> queueAttachment({
