@@ -6,7 +6,7 @@
 - [x] T002 在 `lib/core/db/app_database.dart` 增加可重建的本地搜索索引、批量结果所需数据模型与升级迁移，使 T001 的文件型数据库重启断言通过。
 - [x] T003 新建 `lib/state/repositories/task_query_repository.dart`，实现任务/清单/标签搜索、普通/高级过滤、智能清单读取与冻结的稳定排序，使 T001 的查询断言通过。
 - [x] T004 在 `test/task_organize_search_repository_test.dart` 写自引用、循环、六级层级、跨账户/只读任务和智能清单结构重排的失败测试。
-- [ ] T005 修改 `lib/state/repositories/task_repository.dart`，实现五级层级验证、缩进、反缩进、移动、解除关联和手动排序的 Drift transaction 与 task outbox，使 T004 通过。
+- [x] T005 修改 `lib/state/repositories/task_repository.dart`，实现五级层级验证、缩进、反缩进、移动、解除关联和手动排序的 Drift transaction 与 task outbox，使 T004 通过。
 
 ## Phase 2: 批量与同步
 
@@ -53,3 +53,4 @@
 - 2026-07-30：T008/T009 的 task-tag 同批临时 ID 补入红绿证据：list、task、tag 与 task_tag 全部首次同步时，旧实现给 tag 分配 `-2`，却在 task_tag 的 `tagIds` 中另造 `-5`，导致服务端无法解析关联；修复后所有 task/tag 引用统一复用本批实体临时 ID 映射。组织 sync、filter 延后和 checklist 父依赖定向组 15 项通过；未同步 folder 与 list 的本地 UUID 关联仍需继续审计，T008/T009 保持未勾选。
 - 2026-07-30：T008/T009 的 folder-list 本地关联补齐 schema 20 红绿闭环：`todo_lists.folderLocalId` 成为 UI/Repository 的 UUID 真相源，19→20 文件迁移按现有 serverId 回填且保留旧数据；同一轮离线创建 folder+list 时先经 REST 回写 folder serverId，再解析 list payload，folder 创建失败则 list 保持 queued；pull 在 REST folder 补水后把 server folderId 还原为本地 UUID。另修复“未同步 folder 删除后仍先 create 再发送无效 delete”的孤儿数据问题，改为取消待创建变更并把关联 list 回放为顶层。相关定向 31 项通过、2 项受保护 live 跳过；Flutter 全量 545 项通过、25 项受保护 live 跳过，`flutter analyze` 无错误。受保护的新版同批 folder-list 真实 HTTP、完整部分失败矩阵与固定 GUI 反馈仍未本轮执行，T008/T009 保持未勾选。
 - 2026-07-30：T008/T009 的 filter/view preference 依赖与跨实体部分失败矩阵结项。实际发送批次只使用首个已发送 mutation 作为幂等键，网络失败只把已发送项标为 `retryable`，父实体未同步的 filter 继续排队；损坏 JSON 或缺失本地 list/tag 关联的 filter 仅自身以 `LOCAL_PAYLOAD_INVALID` 失败，不再阻断有效 view preference。filter pull 会把服务端 list/tag ID 还原为本地 UUID，schema 20→21 迁移同样转换既有过滤条件并保留无法完整解析的旧值。相关 27 项通过、1 项受保护 live 跳过；Flutter 全量 551 项通过、25 项受保护 live 跳过，`flutter analyze` 无错误。结合既有 folder/list/tag/task/task_tag/task/filter/view_preference 排序、依赖、离线重启与失败恢复证据，T008/T009 结项；真实 HTTP 合同、固定 GUI 和 Jenkins 仍归 T012/T013，不在此处宣称通过。
+- 2026-07-30：T005 的任务层级语义操作结项。`TaskRepository` 在既有同清单、只读、循环与五级子树校验上新增同层缩进、逐级反缩进、解除父关联和同父级完整手工排序；所有本地变更与 task outbox 保持同一 Drift transaction，排序拒绝重复、缺项或混入其它父节点的 UUID。直接子任务读取按 `sortOrder + UUID` 稳定返回，文件型数据库重启后仍保留父关系、顺序和 queued outbox。层级/组织/详情及看板回归 48 项通过；Flutter 全量 555 项通过、25 项受保护 live 跳过，`flutter analyze` 无错误。T005 结项；五级层级 Widget 入口与固定 GUI 仍归 T010/T011/T012，不在此处宣称完成。
