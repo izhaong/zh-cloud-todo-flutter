@@ -84,6 +84,7 @@ pubspec.yaml
 ### 4.2 离线同步与 LWW
 
 - Drift 本地库 + outbox 已落地，由 `SyncCoordinator` 驱动 `/app-api/todo/sync/{pull,push}` 增量同步；临时网络失败保留原 `clientMutationId`，以最早 outbox mutation 作为稳定批次 `idempotency_key` 并标记为 `retryable`，在下次同步继续推送；冲突按 **LWW（Last-Write-Wins，以更新时间为准）** 合并并保持 `failed` 供用户恢复。任务完成统一以 `status` 与 `completedAt` 推送；拉取将 `completedAt`、重复父任务、重复规则和 occurrence 映射为本地 UUID，离线完成后能回放 `ON_COMPLETE` 生成的下一实例。
+- 侧栏“新建清单”复用完整 `ListEditorSheet`，提交时通过 `ListRepository` 在同一事务写入 Drift 清单与 list outbox；入口不得退化为仅展示标题的占位弹窗。
 - 真实清单支持有序 Section：分组与任务先写 Drift 和 outbox，push 固定按清单→分组→任务解析同批临时 ID；pull 按清单→分组→任务落库，并暂存跨分页先于父清单到达的分组。删除分组不会删除任务，任务原子回到未分组并同步到其他设备；Section 仅走通用 sync 协议，不另建 REST CRUD。
 - 提醒规则由 `ReminderRepository` 在同一 Drift 事务中写本地规则与 `reminder` outbox；详情页可编辑已有规则并保持 UUID，四类锚点严格区分指定时间 `ABSOLUTE`、开始 `START`、截止 `DUE` 和时间段结束 `END`。相对提醒以任务锚点减去提前分钟数计算 `fireAt`，派发后的完成、忽略、开始专注和稍后动作使用独立 outbox 实体；收件箱以同一派发 ID 的最新本地动作覆盖远端旧待处理状态，避免离线期间重复提交。
 - 提醒收件箱中的未来派发由操作系统持久调度；同一派发 ID 的时间变化会覆盖旧调度，派发撤销会取消本地通知。Android 注册开机恢复接收器，设备重启或应用升级后由通知插件恢复尚未触发的提醒。

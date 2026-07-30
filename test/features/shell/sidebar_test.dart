@@ -57,6 +57,50 @@ void main() {
     expect(tester.getSize(inboxRow).height, 40);
   });
 
+  testWidgets('Sidebar new-list entry opens an actionable editor', (
+    tester,
+  ) async {
+    final fixture = await _pumpSidebar(tester);
+    const listName = '侧栏创建清单';
+    final initialChanges = await fixture.database
+        .select(fixture.database.todoSyncChanges)
+        .get();
+
+    await tester.scrollUntilVisible(
+      find.text('新建清单'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('新建清单'));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(TextField, '清单名'), findsOneWidget);
+    expect(find.text('保存'), findsOneWidget);
+    await tester.enterText(find.widgetWithText(TextField, '清单名'), listName);
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('保存'), findsNothing);
+    expect(find.text(listName), findsOneWidget);
+    final lists = await fixture.database
+        .select(fixture.database.todoLists)
+        .get();
+    final createdList = lists.singleWhere((list) => list.name == listName);
+    final changes = await fixture.database
+        .select(fixture.database.todoSyncChanges)
+        .get();
+    expect(changes, hasLength(initialChanges.length + 1));
+    expect(
+      changes.where(
+        (change) =>
+            change.entity == 'list' &&
+            change.op == 'upsert' &&
+            change.entityLocalId == createdList.id,
+      ),
+      hasLength(1),
+    );
+  });
+
   testWidgets(
     'Sidebar long-content list stays one 40px line with ellipsis at 1.3x text',
     (tester) async {
