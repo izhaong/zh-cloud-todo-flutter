@@ -1164,23 +1164,25 @@ class ReminderActionApi {
     return normalize(body is Map<String, dynamic> ? _unwrapBody(body) : body);
   }
 
-  /// `POST /reminder-action/complete` body `{reminderId}`。
-  Future<void> complete(int reminderId) => _client.post<Map<String, dynamic>>(
-    '/reminder-action/complete',
-    data: {'reminderId': reminderId},
-  );
+  /// `POST /reminder-action/complete` body `{reminderDispatchId}`。
+  Future<void> complete(int reminderDispatchId) =>
+      _client.post<Map<String, dynamic>>(
+        '/reminder-action/complete',
+        data: {'reminderDispatchId': reminderDispatchId},
+      );
 
-  /// `POST /reminder-action/dismiss` body `{reminderId}`。
-  Future<void> dismiss(int reminderId) => _client.post<Map<String, dynamic>>(
-    '/reminder-action/dismiss',
-    data: {'reminderId': reminderId},
-  );
+  /// `POST /reminder-action/dismiss` body `{reminderDispatchId}`。
+  Future<void> dismiss(int reminderDispatchId) =>
+      _client.post<Map<String, dynamic>>(
+        '/reminder-action/dismiss',
+        data: {'reminderDispatchId': reminderDispatchId},
+      );
 
-  /// `POST /reminder-action/snooze` body `{reminderId, minutes}`。
-  Future<void> snooze(int reminderId, {int minutes = 10}) =>
+  /// `POST /reminder-action/snooze` body `{reminderDispatchId, minutes}`。
+  Future<void> snooze(int reminderDispatchId, {int minutes = 10}) =>
       _client.post<Map<String, dynamic>>(
         '/reminder-action/snooze',
-        data: {'reminderId': reminderId, 'minutes': minutes},
+        data: {'reminderDispatchId': reminderDispatchId, 'minutes': minutes},
       );
 
   /// `POST /reminder-action/{id}/persistent` — 启用持续提醒。

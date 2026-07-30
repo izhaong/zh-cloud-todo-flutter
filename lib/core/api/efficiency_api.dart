@@ -508,13 +508,13 @@ class ReminderActionApi {
   ReminderActionApi(this._dio);
   final Dio _dio;
 
-  Future<void> dismiss(int reminderId) => _dio.post(
+  Future<void> dismiss(int reminderDispatchId) => _dio.post(
     '${ApiConfig.todoPrefix}/reminder-action/dismiss',
-    data: {'reminderId': reminderId},
+    data: {'reminderDispatchId': reminderDispatchId},
   );
 
-  Future<void> snooze(int reminderId, {int minutes = 10}) => _dio.post(
+  Future<void> snooze(int reminderDispatchId, {int minutes = 10}) => _dio.post(
     '${ApiConfig.todoPrefix}/reminder-action/snooze',
-    data: {'reminderId': reminderId, 'minutes': minutes},
+    data: {'reminderDispatchId': reminderDispatchId, 'minutes': minutes},
   );
 }
