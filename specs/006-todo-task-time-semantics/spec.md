@@ -2,7 +2,7 @@
 
 **Feature Branch**: `feat/93-todo-task-time-semantics`
 **Created**: 2026-07-13
-**Status**: 执行中；独立契约与本地链路可并行，B1 真实双端集成仍保持未完成。
+**Status**: 执行中；本地契约、JDK 25 Service 契约与真实 A/B 同步证据已对齐；固定桌面、移动与系统级 GUI 旅程仍保持未完成。
 **Input**: 总控 Plan B2、B0 冻结的 `Schedule` 边界、Docs `todo/00_项目管理/项目计划与排期/执行计划/04.M2-B2 时间提醒重复.md`。
 
 ## User Scenarios & Testing
@@ -50,6 +50,6 @@
 
 ## Assumptions and Boundaries
 
-- B1 的详情保存、附件和第二设备回放仍在独立 Draft PR 中；本规格只使用 B0 已冻结的任务 UUID、serverId、revision 与 mutation 边界。
+- B1 的详情保存、附件和第二设备回放已有独立合并证据；本规格继续只使用 B0 已冻结的任务 UUID、serverId、revision 与 mutation 边界。
 - OS 级跨重启通知调度、位置提醒、日历 OAuth、语音、手表和小组件不属于 B2；B2 只覆盖 App 运行期间由服务端派发读模型驱动的即时通知。
 - Gitea Actions runner 当前不可执行；`queued` 不是通过或阻塞结论，所有 B2 结论必须引用本地命令、mock 契约测试或测试环境 API 结果。
