@@ -24,10 +24,21 @@ void main() {
 
     await db.batch((batch) {
       batch.insert(
+        db.todoFolders,
+        TodoFoldersCompanion.insert(
+          id: 'folder-work',
+          serverId: const Value(88),
+          name: '工作',
+          updatedAt: now,
+          createdAt: now,
+        ),
+      );
+      batch.insert(
         db.todoLists,
         TodoListsCompanion.insert(
           id: 'list-inbox',
           name: '收集箱',
+          folderId: const Value(88),
           updatedAt: now,
           createdAt: now,
         ),
@@ -74,6 +85,13 @@ void main() {
           ),
         );
       }
+      batch.insert(
+        db.todoTaskTags,
+        TodoTaskTagsCompanion.insert(
+          taskId: 'task-700',
+          tagId: 'tag-collection',
+        ),
+      );
     });
   });
 
@@ -352,14 +370,6 @@ void main() {
   });
 
   test('过滤组合状态、清单、优先级和标签', () async {
-    await db
-        .into(db.todoTaskTags)
-        .insert(
-          TodoTaskTagsCompanion.insert(
-            taskId: 'task-700',
-            tagId: 'tag-collection',
-          ),
-        );
     await db
         .into(db.todoTasks)
         .insert(
@@ -705,7 +715,9 @@ void main() {
       TaskBatchEditStatus.success,
       TaskBatchEditStatus.success,
     ]);
-    final taskTags = await db.select(db.todoTaskTags).get();
+    final taskTags = await (db.select(
+      db.todoTaskTags,
+    )..where((row) => row.taskId.isIn(const ['task-1', 'task-2']))).get();
     expect(taskTags.map((row) => '${row.taskId}:${row.tagId}').toSet(), {
       'task-1:tag-target',
       'task-2:tag-target',
