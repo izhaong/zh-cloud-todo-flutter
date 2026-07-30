@@ -81,6 +81,7 @@ pubspec.yaml
 - 提醒规则由 `ReminderRepository` 在同一 Drift 事务中写本地规则与 `reminder` outbox；详情页可编辑已有规则并保持 UUID，四类锚点严格区分指定时间 `ABSOLUTE`、开始 `START`、截止 `DUE` 和时间段结束 `END`。相对提醒以任务锚点减去提前分钟数计算 `fireAt`，派发后的完成、忽略、开始专注和稍后动作使用独立 outbox 实体；收件箱以同一派发 ID 的最新本地动作覆盖远端旧待处理状态，避免离线期间重复提交。
 - 提醒收件箱中的未来派发由操作系统持久调度；同一派发 ID 的时间变化会覆盖旧调度，派发撤销会取消本地通知。Android 注册开机恢复接收器，设备重启或应用升级后由通知插件恢复尚未触发的提醒。
 - 任务工作区的视图模式以 `list:<local UUID>` 或稳定智能来源键隔离保存；Widget 只上报选择，由 `TaskViewActionRepository` 在同一 Drift 事务写入 `view_preference` 与 outbox。切换清单或智能来源时先恢复该来源偏好，不复用其它来源的看板、时间线或列表模式。
+- 看板整卡长按用于跨列移动，独立“拖动排序”手柄用于列内顺序；两个命中区域不得互相竞争，列内结果仍通过共享 Repository 写入 Drift 与 outbox。
 
 ### 4.3 效率工具
 
