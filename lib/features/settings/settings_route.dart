@@ -314,16 +314,19 @@ class _Tile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fg = destructive ? colors.destructive : colors.foreground;
-    return ListTile(
-      leading: Icon(icon, color: fg),
-      title: Text(title, style: TextStyle(color: fg)),
-      subtitle: subtitle == null
-          ? null
-          : Text(subtitle!, style: TextStyle(color: colors.mutedForeground)),
-      trailing: trailing == null
-          ? null
-          : Icon(trailing, color: colors.mutedForeground),
-      onTap: onTap,
+    return Material(
+      type: MaterialType.transparency,
+      child: ListTile(
+        leading: Icon(icon, color: fg),
+        title: Text(title, style: TextStyle(color: fg)),
+        subtitle: subtitle == null
+            ? null
+            : Text(subtitle!, style: TextStyle(color: colors.mutedForeground)),
+        trailing: trailing == null
+            ? null
+            : Icon(trailing, color: colors.mutedForeground),
+        onTap: onTap,
+      ),
     );
   }
 }

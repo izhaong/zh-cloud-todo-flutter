@@ -85,20 +85,23 @@ class _RecommendationPanelState extends ConsumerState<RecommendationPanel> {
                     ),
                   ),
                   for (final item in recommendations.take(3))
-                    ListTile(
-                      dense: true,
-                      title: Text(
-                        item.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                    Material(
+                      type: MaterialType.transparency,
+                      child: ListTile(
+                        dense: true,
+                        title: Text(
+                          item.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          item.reason,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => widget.onTaskSelected(item.taskServerId),
                       ),
-                      subtitle: Text(
-                        item.reason,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => widget.onTaskSelected(item.taskServerId),
                     ),
                 ],
               ),
