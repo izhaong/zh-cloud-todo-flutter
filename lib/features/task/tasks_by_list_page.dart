@@ -336,6 +336,11 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
               completed: completed,
             );
           },
+          onColumnTasksReordered: (taskIds) async {
+            final repository = ref.read(taskViewActionRepositoryProvider);
+            if (repository == null) return;
+            await repository.reorderListTasks(taskIds);
+          },
         );
       case TaskViewMode.timeline:
         return TimelineView(

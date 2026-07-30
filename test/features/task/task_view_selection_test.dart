@@ -102,7 +102,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('未开始'), findsOneWidget);
-    expect(find.byType(ReorderableListView), findsNothing);
+    expect(find.byKey(const ValueKey('col-todo')), findsOneWidget);
   });
 
   testWidgets('workspace restores the persisted mode after remount', (
