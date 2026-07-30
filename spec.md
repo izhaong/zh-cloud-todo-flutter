@@ -125,7 +125,7 @@ pubspec.yaml
 
 - 常用命令：`flutter pub get`、`flutter analyze`、`flutter test`、`flutter run -d chrome|macos|windows|linux|<device>`；发布构建含 `flutter build web`（产物 `build/web/`）。
 - Gitea 共享 runner 的功能门禁执行 `flutter test --exclude-tags 'golden || performance'`；golden 与文件型 SQLite 微基准在匹配的本地/专用环境单独执行，避免共享机器负载把绝对耗时阈值变成随机门禁。
-- Web 发布工作流复用同一共享 runner 测试门禁；Web 与 Desktop 跨 job 制品传递使用 Gitea artifact v4 兼容 action，避免 GitHub 官方 v4 action 的 GHES 阻断，并将第三方 action 固定到完整提交 SHA；Linux 桌面 runner 需安装 Flutter secure storage CMake 配置依赖 `libsecret-1-dev`。
+- Web 发布工作流复用同一共享 runner 测试门禁，并在同一个 Linux job 内完成构建、打包与可选 SSH 部署，直接复用 `.gha-dist`，不依赖 runner 当前不可达的 Gitea artifact blob endpoint；Desktop 跨平台制品传递仍使用固定完整提交 SHA 的 Gitea artifact v4 兼容 action，Linux 桌面 runner 需安装 Flutter secure storage CMake 配置依赖 `libsecret-1-dev`。
 - 修改 Drift 表或生成模型后，运行 `dart run build_runner build --delete-conflicting-outputs` 并提交生成文件。
 - 分支：`develop` 集成、`main` 发布；合并只走 PR，禁止直推主干；commit 用中文 Conventional Commits。
 
