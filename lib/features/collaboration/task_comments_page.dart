@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/todo_api.dart';
 import '../../state/providers.dart';
+import '../../state/session_state.dart';
+import 'list_member_page.dart';
 
 /// 评论状态：加载中 / 错误 / 列表；附实用工具。
 @immutable
@@ -44,10 +46,12 @@ class TaskCommentsPage extends ConsumerStatefulWidget {
   const TaskCommentsPage({
     super.key,
     required this.taskServerId,
+    required this.listServerId,
     this.taskTitle,
   });
 
   final int taskServerId;
+  final int listServerId;
   final String? taskTitle;
 
   @override
@@ -155,21 +159,47 @@ class _TaskCommentsPageState extends ConsumerState<TaskCommentsPage> {
         ],
       ),
     );
-    if (ok != true) return;
+    if (ok != true || !mounted || _busy) return;
+    setState(() => _busy = true);
     try {
-      await ref.read(todoApiProvider).comment.delete(c.id);
+      await ref
+          .read(todoApiProvider)
+          .comment
+          .delete(taskId: widget.taskServerId, commentId: c.id);
       if (!mounted) return;
       messenger.showSnackBar(const SnackBar(content: Text('已删除')));
       await _reload();
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(SnackBar(content: Text('删除失败: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(taskCommentsProvider(widget.taskServerId));
+    final members = ref.watch(listMembersProvider(widget.listServerId));
+    final currentUserId = ref.watch(sessionProvider)?.userId;
+    final memberState = members.asData?.value;
+    final activeMembers = memberState?.members
+        .where((member) => member.status == 'active')
+        .toList(growable: false);
+    final currentMember = currentUserId == null || activeMembers == null
+        ? null
+        : activeMembers
+              .where((member) => member.userId == currentUserId)
+              .firstOrNull;
+    final canWrite =
+        currentMember != null &&
+        (currentMember.isOwner || currentMember.isEditor);
+    final isOwner = currentMember?.isOwner ?? false;
+    final permissionMessage = members.isLoading
+        ? '正在确认评论权限'
+        : memberState?.status == MembersState.error || members.hasError
+        ? '成员权限加载失败，当前仅可查看评论'
+        : '当前清单为只读，不能添加或修改评论';
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -185,31 +215,46 @@ class _TaskCommentsPageState extends ConsumerState<TaskCommentsPage> {
       ),
       body: Column(
         children: [
-          Expanded(child: _list(state)),
+          Expanded(
+            child: _list(
+              state,
+              currentUserId: currentUserId,
+              canWrite: canWrite,
+              isOwner: isOwner,
+            ),
+          ),
           SafeArea(
             top: false,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _addCtrl,
-                      decoration: const InputDecoration(
-                        labelText: '添加一条评论',
-                        border: OutlineInputBorder(),
-                      ),
-                      onSubmitted: (_) => _add(),
+              child: canWrite
+                  ? Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _addCtrl,
+                            decoration: const InputDecoration(
+                              labelText: '添加一条评论',
+                              border: OutlineInputBorder(),
+                            ),
+                            onSubmitted: (_) => _add(),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton.filled(
+                          tooltip: '发送',
+                          onPressed: _busy ? null : _add,
+                          icon: const Icon(Icons.send),
+                        ),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        const Icon(Icons.lock_outline, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(permissionMessage)),
+                      ],
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton.filled(
-                    tooltip: '发送',
-                    onPressed: _busy ? null : _add,
-                    icon: const Icon(Icons.send),
-                  ),
-                ],
-              ),
             ),
           ),
         ],
@@ -217,7 +262,12 @@ class _TaskCommentsPageState extends ConsumerState<TaskCommentsPage> {
     );
   }
 
-  Widget _list(AsyncValue<TaskCommentsState> state) {
+  Widget _list(
+    AsyncValue<TaskCommentsState> state, {
+    required int? currentUserId,
+    required bool canWrite,
+    required bool isOwner,
+  }) {
     return state.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text('加载失败: $e')),
@@ -250,6 +300,8 @@ class _TaskCommentsPageState extends ConsumerState<TaskCommentsPage> {
             return _CommentTile(
               comment: c,
               isEditing: _editingId == c.id,
+              canEdit: canWrite && c.userId == currentUserId,
+              canDelete: isOwner || (canWrite && c.userId == currentUserId),
               editController: _editCtrl,
               onStartEdit: () => _startEdit(c),
               onCancelEdit: _cancelEdit,
@@ -267,6 +319,8 @@ class _CommentTile extends StatelessWidget {
   const _CommentTile({
     required this.comment,
     required this.isEditing,
+    required this.canEdit,
+    required this.canDelete,
     required this.editController,
     required this.onStartEdit,
     required this.onCancelEdit,
@@ -276,6 +330,8 @@ class _CommentTile extends StatelessWidget {
 
   final TaskComment comment;
   final bool isEditing;
+  final bool canEdit;
+  final bool canDelete;
   final TextEditingController editController;
   final VoidCallback onStartEdit;
   final VoidCallback onCancelEdit;
@@ -293,9 +349,23 @@ class _CommentTile extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: Text(
-                    comment.userId == null ? '自己' : '用户 #${comment.userId}',
-                    style: Theme.of(context).textTheme.titleSmall,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        comment.userName ??
+                            comment.userEmail ??
+                            (comment.userId == null
+                                ? '未知成员'
+                                : '用户 #${comment.userId}'),
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      if (comment.userName != null && comment.userEmail != null)
+                        Text(
+                          comment.userEmail!,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                    ],
                   ),
                 ),
                 Text(
@@ -326,22 +396,26 @@ class _CommentTile extends StatelessWidget {
               ),
             ] else ...[
               Text(comment.content),
-              const SizedBox(height: 6),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton.icon(
-                    onPressed: onStartEdit,
-                    icon: const Icon(Icons.edit, size: 16),
-                    label: const Text('编辑'),
-                  ),
-                  TextButton.icon(
-                    onPressed: onDelete,
-                    icon: const Icon(Icons.delete_outline, size: 16),
-                    label: const Text('删除'),
-                  ),
-                ],
-              ),
+              if (canEdit || canDelete) ...[
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    if (canEdit)
+                      TextButton.icon(
+                        onPressed: onStartEdit,
+                        icon: const Icon(Icons.edit, size: 16),
+                        label: const Text('编辑'),
+                      ),
+                    if (canDelete)
+                      TextButton.icon(
+                        onPressed: onDelete,
+                        icon: const Icon(Icons.delete_outline, size: 16),
+                        label: const Text('删除'),
+                      ),
+                  ],
+                ),
+              ],
             ],
           ],
         ),

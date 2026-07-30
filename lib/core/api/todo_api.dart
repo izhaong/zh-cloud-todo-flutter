@@ -590,12 +590,31 @@ class TaskActivityRecord {
   final String? detail;
   final DateTime occurredAt;
 
+  String get actionLabel => actionLabelFor(action);
+
+  static String actionLabelFor(String action) => switch (action) {
+    'task_created' => '创建了任务',
+    'task_updated' => '更新了任务',
+    'task_due_rescheduled' => '调整了任务时间',
+    'task_deleted' => '删除了任务',
+    'task_completed' => '完成了任务',
+    'task_uncompleted' => '取消完成任务',
+    'task_assignee_set' => '设置了执行人',
+    'task_assignee_cleared' => '移除了执行人',
+    'comment_created' => '添加了评论',
+    'comment_updated' => '修改了评论',
+    'comment_deleted' => '删除了评论',
+    _ => action,
+  };
+
   factory TaskActivityRecord.fromJson(Map<String, dynamic> json) =>
       TaskActivityRecord(
         id: (json['id'] as num?)?.toInt() ?? 0,
         taskId: (json['taskId'] as num?)?.toInt() ?? 0,
         actorUserId: (json['actorUserId'] as num?)?.toInt(),
-        actorUserName: json['actorUserName']?.toString(),
+        actorUserName:
+            json['actorUserName']?.toString() ??
+            json['actorUserEmail']?.toString(),
         action: json['action']?.toString() ?? 'unknown',
         detail: json['detail']?.toString(),
         occurredAt: ReminderActionApi.parseTime(json['createTime']),
@@ -1360,17 +1379,25 @@ class TaskAssignApi {
 class TaskComment {
   const TaskComment({
     required this.id,
+    required this.listId,
     required this.taskId,
     required this.content,
     this.userId,
+    this.userName,
+    this.userEmail,
     this.createdAt,
+    this.updatedAt,
   });
 
   final int id;
+  final int listId;
   final int taskId;
   final String content;
   final int? userId;
+  final String? userName;
+  final String? userEmail;
   final DateTime? createdAt;
+  final DateTime? updatedAt;
 }
 
 /// 任务评论助手：列出 / 添加 / 编辑 / 删除。
@@ -1381,16 +1408,29 @@ class TaskCommentApi {
 
   TaskComment _c(Map<String, dynamic> j) => TaskComment(
     id: (j['id'] as num?)?.toInt() ?? 0,
+    listId: (j['listId'] as num?)?.toInt() ?? 0,
     taskId: (j['taskId'] as num?)?.toInt() ?? 0,
     content: j['content']?.toString() ?? j['text']?.toString() ?? '',
     userId: (j['userId'] as num?)?.toInt(),
-    createdAt: ReminderActionApi.parseTime(j['createdAt']),
+    userName: j['userName']?.toString(),
+    userEmail: j['userEmail']?.toString(),
+    createdAt: _commentTime(j['createTime']),
+    updatedAt: _commentTime(j['updateTime']),
   );
+
+  DateTime? _commentTime(Object? value) {
+    if (value is String && value.isNotEmpty) return DateTime.tryParse(value);
+    if (value is num) {
+      return DateTime.fromMillisecondsSinceEpoch(value.toInt());
+    }
+    return null;
+  }
 
   List<TaskComment> _list(Map<String, dynamic> body) {
     final List raw;
     if (body.containsKey('code')) {
-      final dynamic data = _unwrapBody(body);
+      _ensureSuccess(body);
+      final dynamic data = body['data'];
       if (data is List) {
         raw = data;
       } else if (data is Map) {
@@ -1440,9 +1480,9 @@ class TaskCommentApi {
     );
   }
 
-  /// `POST /comment/delete` body `{id}`。
-  Future<void> delete(int commentId) =>
-      _client.delete('/comment/delete', data: {'id': commentId});
+  /// `DELETE /task/{taskId}/comments/{commentId}`。
+  Future<void> delete({required int taskId, required int commentId}) =>
+      _client.delete('/task/$taskId/comments/$commentId');
 }
 
 /// 一条服务端笔记。

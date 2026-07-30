@@ -102,6 +102,8 @@ pubspec.yaml
 - 成员列表展示后端 `owner/editor/viewer` 角色、`invited/active/exited/removed` 状态以及可用的用户名、邮箱或脱敏手机号。owner 可将非 owner 成员切换为 editor/viewer 或移除。
 - 被邀请成员通过 `/list/{listId}/member/join` 接受邀请；active 非 owner 成员可退出协作。角色更新严格使用后端 `PATCH /list/{listId}/members/{userId}` 契约。
 - 任务指派查询解析服务端 `assigneeUserId/assigneeUserName/assigneeUserEmail`，设置时提交 `{assigneeUserId}`；界面只列出所属清单的 active 成员，且仅 owner 或 active editor 可修改或移除执行人。
+- 评论列表解析后端 `userName/userEmail/createTime/updateTime` 并展示真实作者；owner/active editor 可新增评论，作者可编辑自己的评论，owner 还可删除其他成员评论，viewer 只读。删除使用带任务归属校验的 `DELETE /task/{taskId}/comments/{commentId}`。
+- 任务动态消费后端 `createTime` 与 actor 用户资料，并覆盖任务增删改、时间调整、完成状态、执行人和评论的全部现行动作标签；网络失败时继续展示 Drift 缓存。
 
 ## 5. 对外契约
 

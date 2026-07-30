@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/todo_api.dart';
 import '../../core/db/app_database.dart';
 import '../../core/time/task_time_formatter.dart';
 import '../../core/theme/brand_colors.dart';
@@ -1083,10 +1084,29 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
         ).showSnackBar(const SnackBar(content: Text('任务尚未同步，暂无评论')));
         return;
       }
+      final db = ref.read(appDatabaseProvider);
+      if (db == null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('请先登录')));
+        return;
+      }
+      final list = await _resolveList(db, t.listId);
+      if (!mounted || widget.taskId != t.id) return;
+      final listServerId = list?.serverId;
+      if (listServerId == null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('清单尚未同步，无法查看评论权限')));
+        return;
+      }
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) =>
-              TaskCommentsPage(taskServerId: taskServerId, taskTitle: t.title),
+          builder: (_) => TaskCommentsPage(
+            taskServerId: taskServerId,
+            listServerId: listServerId,
+            taskTitle: t.title,
+          ),
         ),
       );
       return;
@@ -3452,7 +3472,9 @@ class _ActivitySectionState extends ConsumerState<_ActivitySection> {
                     (activity) => ListTile(
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.history_outlined),
-                      title: Text(_activityLabel(activity.action)),
+                      title: Text(
+                        TaskActivityRecord.actionLabelFor(activity.action),
+                      ),
                       subtitle: Text(
                         '${activity.actorUserName ?? '成员'} · ${activity.occurredAt.toLocal().toString().substring(0, 16)}',
                       ),
@@ -3473,15 +3495,6 @@ class _ActivitySectionState extends ConsumerState<_ActivitySection> {
       ],
     );
   }
-
-  String _activityLabel(String action) => switch (action) {
-    'task_created' => '创建了任务',
-    'task_updated' => '更新了任务',
-    'task_completed' => '完成了任务',
-    'task_uncompleted' => '取消完成任务',
-    'comment_created' => '添加了评论',
-    _ => action,
-  };
 }
 
 class _TemplateSection extends ConsumerWidget {
