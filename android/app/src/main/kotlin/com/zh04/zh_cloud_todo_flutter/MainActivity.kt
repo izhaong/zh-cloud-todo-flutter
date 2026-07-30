@@ -6,10 +6,12 @@ import android.os.Build
 import android.os.Bundle
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private var pendingInitialLink: String? = null
+    private val warmLinks = NativeLinkEvents()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         pendingInitialLink = NativeIntentContract.acceptedIncomingLink(intent?.dataString)
@@ -19,8 +21,7 @@ class MainActivity : FlutterActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        pendingInitialLink =
-            NativeIntentContract.acceptedIncomingLink(intent.dataString) ?: pendingInitialLink
+        warmLinks.publish(intent.dataString)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -60,6 +61,23 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+        EventChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            NATIVE_LINK_EVENTS_CHANNEL,
+        ).setStreamHandler(
+            object : EventChannel.StreamHandler {
+                override fun onListen(
+                    arguments: Any?,
+                    events: EventChannel.EventSink,
+                ) {
+                    warmLinks.attach(events::success)
+                }
+
+                override fun onCancel(arguments: Any?) {
+                    warmLinks.detach()
+                }
+            },
+        )
     }
 
     private fun share(
@@ -106,5 +124,6 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         private const val NATIVE_CHANNEL = "zh_cloud_todo/native"
+        private const val NATIVE_LINK_EVENTS_CHANNEL = "zh_cloud_todo/native_links"
     }
 }

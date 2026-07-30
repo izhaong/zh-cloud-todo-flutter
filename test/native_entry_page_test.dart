@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -132,6 +134,62 @@ void main() {
     expect(received?.arguments, {
       'ids': [201],
     });
+  });
+
+  testWidgets('原生增强页接收 Android 热启动 URI 事件', (tester) async {
+    final incomingUris = StreamController<Uri>();
+    addTearDown(incomingUris.close);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: NativeEntryPage(
+            taskStream: const Stream.empty(),
+            incomingUriStream: incomingUris.stream,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    incomingUris.add(
+      Uri.parse('zhcloudtodo://task/add?title=%E7%83%AD%E5%90%AF%E5%8A%A8'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining(
+        'zhcloudtodo://task/add?title=%E7%83%AD%E5%90%AF%E5%8A%A8',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('热启动 URI 不被稍后返回的冷启动值覆盖', (tester) async {
+    final incomingUris = StreamController<Uri>();
+    final initialUri = Completer<Uri?>();
+    addTearDown(incomingUris.close);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: NativeEntryPage(
+            taskStream: const Stream.empty(),
+            incomingUriStream: incomingUris.stream,
+            initialUriLoader: () => initialUri.future,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    incomingUris.add(Uri.parse('zhcloudtodo://task/add?title=latest'));
+    await tester.pumpAndSettle();
+    initialUri.complete(Uri.parse('zhcloudtodo://task/add?title=stale'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('title=latest'), findsOneWidget);
+    expect(find.textContaining('title=stale'), findsNothing);
   });
 
   testWidgets('设置页提供可达的原生增强入口', (tester) async {

@@ -2,7 +2,9 @@ package com.zh04.zh_cloud_todo_flutter
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class NativeIntentContractTest {
     @Test
@@ -48,5 +50,32 @@ class NativeIntentContractTest {
     fun `system note is only offered on Android 14 or newer`() {
         assertEquals(false, NativeIntentContract.supportsSystemNote(apiLevel = 33))
         assertEquals(true, NativeIntentContract.supportsSystemNote(apiLevel = 34))
+    }
+
+    @Test
+    fun `warm links keep only the latest accepted event until Dart listens`() {
+        val events = NativeLinkEvents()
+        val received = mutableListOf<String>()
+
+        assertFalse(events.publish("https://todo.test/task/add"))
+        assertTrue(events.publish("zhcloudtodo://task/add?title=first"))
+        assertTrue(events.publish("zhcloudtodo://task/add?title=latest"))
+
+        events.attach(received::add)
+        assertEquals(listOf("zhcloudtodo://task/add?title=latest"), received)
+
+        assertTrue(events.publish("zhcloudtodo://task/add?title=live"))
+        assertEquals(
+            listOf(
+                "zhcloudtodo://task/add?title=latest",
+                "zhcloudtodo://task/add?title=live",
+            ),
+            received,
+        )
+
+        events.detach()
+        assertTrue(events.publish("zhcloudtodo://task/add?title=resume"))
+        events.attach(received::add)
+        assertEquals("zhcloudtodo://task/add?title=resume", received.last())
     }
 }
