@@ -2,12 +2,12 @@
 
 ## Phase 1: 契约与数据模型
 
-- [ ] T001 在 `test/task_time_semantics_repository_test.dart` 写跨午夜、全天、固定时区和非法结束时间的失败测试。
-- [ ] T002 在 `lib/core/db/app_database.dart` 与 `lib/state/repositories/task_repository.dart` 实现时间字段事务更新和 task outbox；运行 T001 至通过。
+- [x] T001 在 `test/task_time_semantics_repository_test.dart` 写跨午夜、全天、固定时区和非法结束时间的失败测试。已覆盖创建/更新非法区间、跨午夜时段、全天日期范围、固定 IANA 时区、清空时间段及完成/重开时间载荷。
+- [x] T002 在 `lib/core/db/app_database.dart` 与 `lib/state/repositories/task_repository.dart` 实现时间字段事务更新和 task outbox；运行 T001 至通过。创建和更新均验证 Drift/outbox 一致，模拟 enqueue 失败时任务插入或修改完整回滚。
 - [x] T003 在 `test/task_time_semantics_repository_test.dart` 写单提醒、多提醒、结束提醒、持续提醒，以及派发 ID 与提醒规则 ID 分离的稍后/完成/忽略/开始专注失败测试。已验证缺失 parent task 时原子拒绝且不写 reminder/outbox，四种派发动作按各自 dispatch ID 写入独立 outbox，非法 ID/稍后分钟数不入队；`reminder_inbox_test.dart` 覆盖稍后、完成、批量忽略、开始专注与重试状态，其中开始专注进入关联任务专注页。
 - [x] T004 新建 `lib/state/repositories/reminder_repository.dart` 与 `lib/state/repositories/reminder_dispatch_action_repository.dart`，使提醒规则和派发动作分别先写 Drift 再 enqueue；`task_time_semantics_repository_test.dart` 与 `reminder_inbox_test.dart` 定向回归通过。
-- [ ] T005 在 `test/task_time_semantics_repository_test.dart` 写六类频率、三类重复模式、自选日期排序去重/非法边界、跳过、补做和无效规则的失败测试。
-- [ ] T006 扩展 `lib/state/repositories/repeat_rule_repository.dart`，实现 selectedDates、规则与 occurrence 动作的原子写入；运行 T005 至通过。
+- [x] T005 在 `test/task_time_semantics_repository_test.dart` 写六类频率、三类重复模式、自选日期排序去重/非法边界、跳过、补做和无效规则的失败测试。现已覆盖六类频率、`ON_DUE`/`ON_COMPLETE`/`ON_SELECTED_DATES`、selectedDates 排序去重与矛盾边界、字段非法矩阵、跳过和补做。
+- [x] T006 扩展 `lib/state/repositories/repeat_rule_repository.dart`，实现 selectedDates、规则与 occurrence 动作的原子写入；运行 T005 至通过。规则保存、skip 与 catchup 均新增 enqueue 失败回滚断言，确认不会留下半写 Drift 状态或孤立 outbox。
 
 ## Phase 2: 同步与界面
 
@@ -29,3 +29,4 @@
 - 2026-07-30：详情日期/时间选择器固定时区编辑完成红绿闭环。失败测试证明旧实现会把原始 UTC `16:30` 直接交给选择器，而不是显示 `America/Los_Angeles` 墙钟 `09:30`；现在选择器先按任务 IANA 时区生成初始墙钟，用户确认后再通过时区数据库和当日 DST 偏移转换为 UTC 瞬时。全天任务跳过时间选择并保持纯日期；非法历史时区继续安全降级为设备本地语义。定向详情、日历、工作视图和时间语义仓储测试通过；真实跨设备时区切换与固定端 GUI 仍未执行，T009–T012 保持未勾选。
 - 2026-07-30：详情自选日期重复编辑旅程补齐。现有新增两日和切回到期模式基础上，新增用例从乱序且重复的输入验证按日期排序去重回显，删除一个日期、重复选择已有日期不产生副本，再新增日期并保存；Drift 与 outbox 最终均为排序后的 `["2026-07-20","2026-07-25"]`。自选日期 Chip 同时提供明确的删除图标 key 与中文 tooltip，方便自动化和辅助语义定位。真实固定端删除热区与跨设备同步仍未执行，T009–T012 保持未勾选。
 - 2026-07-30：时间语义依赖批次与失败恢复闭环。新增集成用例把一个未同步 task、reminder、自选日期 repeatRule 和 repeatSkip 放入同批，断言后三者引用同一个临时 task ID、skip 引用同一个临时 rule ID，且 selectedDates 保持排序去重。首轮网络失败后四条 outbox 均保持可重试，第二轮沿用原 mutation、临时实体 ID 与批幂等键成功回写 `201/301/401/501`，第三轮 push 不再发送；既有乱序 pull 用例继续保证 repeatRule 先于 repeatSkip 应用。T007–T008 已完成。
+- 2026-07-30：Phase 1 Repository 契约收口。复核既有任务时间测试后确认跨午夜、全天、固定时区、非法区间以及 task/outbox 原子回滚已完整覆盖；重复规则新增三种模式与通用非法字段矩阵，并分别模拟 rule、skip、catchup 在 outbox enqueue 失败时回滚，未留下半写规则、跳过记录或 occurrence action。定向 Repository 测试 28 项通过，T001/T002/T005/T006 已完成。
