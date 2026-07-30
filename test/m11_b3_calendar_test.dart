@@ -265,6 +265,63 @@ void main() {
     expect(find.text('09:00–10:00'), findsOneWidget);
   });
 
+  testWidgets('日程视图按任务固定时区显示墙钟时段', (tester) async {
+    final now = DateTime(2026, 7, 11, 12);
+    final task = TodoTask(
+      id: 'fixed-zone-agenda',
+      listId: '1',
+      title: '洛杉矶日程',
+      completed: false,
+      cancelled: false,
+      priority: 0,
+      isPinned: false,
+      sortOrder: 0,
+      startAt: DateTime.utc(2026, 7, 11, 16, 30),
+      endAt: DateTime.utc(2026, 7, 11, 17, 30),
+      dueAt: DateTime.utc(2026, 7, 11, 17, 30),
+      allDay: false,
+      timeZone: 'America/Los_Angeles',
+      fixedTimezone: true,
+      updatedAt: now,
+      createdAt: now,
+    );
+    final utcTask = TodoTask(
+      id: 'utc-agenda',
+      listId: '1',
+      title: 'UTC 日程',
+      completed: false,
+      cancelled: false,
+      priority: 0,
+      isPinned: false,
+      sortOrder: 1,
+      dueAt: DateTime.utc(2026, 7, 11, 10),
+      allDay: false,
+      timeZone: 'UTC',
+      fixedTimezone: true,
+      updatedAt: now,
+      createdAt: now,
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: CalendarView(tasks: [utcTask, task], now: now),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('日程'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('09:30'), findsOneWidget);
+    expect(find.text('09:30–10:30'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('洛杉矶日程')).dy,
+      lessThan(tester.getTopLeft(find.text('UTC 日程')).dy),
+    );
+  });
+
   testWidgets('月视图直接拖动任务卡到日期格会请求改期', (tester) async {
     final now = DateTime(2026, 6, 15, 12);
     final task = TodoTask(

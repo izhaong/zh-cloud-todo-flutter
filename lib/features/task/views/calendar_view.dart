@@ -812,9 +812,10 @@ class _AgendaView extends StatelessWidget {
             child: Text(
               task.allDay
                   ? '全天'
-                  : DateFormat(
-                      'HH:mm',
-                    ).format(task.startAt ?? task.dueAt ?? task.endAt!),
+                  : _formatClock(
+                      task,
+                      task.startAt ?? task.dueAt ?? task.endAt!,
+                    ),
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.labelMedium,
             ),
@@ -837,17 +838,46 @@ class _AgendaView extends StatelessWidget {
     if (leftTime == null && rightTime == null) return 0;
     if (leftTime == null) return 1;
     if (rightTime == null) return -1;
-    return leftTime.compareTo(rightTime);
+    return _compareWallClock(
+      _displayTime(left, leftTime),
+      _displayTime(right, rightTime),
+    );
   }
 
   static String _formatTime(TodoTask task) {
     if (task.allDay) return '全天';
     final start = task.startAt ?? task.dueAt ?? task.endAt;
     if (start == null) return '未设置时间';
-    final startLabel = DateFormat('HH:mm').format(start);
+    final startLabel = _formatClock(task, start);
     final end = task.endAt;
     if (end == null || !end.isAfter(start)) return startLabel;
-    return '$startLabel–${DateFormat('HH:mm').format(end)}';
+    return '$startLabel–${_formatClock(task, end)}';
+  }
+
+  static String _formatClock(TodoTask task, DateTime instant) {
+    return DateFormat('HH:mm').format(_displayTime(task, instant));
+  }
+
+  static DateTime _displayTime(TodoTask task, DateTime instant) {
+    return taskDisplayDateTime(
+      instant,
+      fixedTimezone: task.fixedTimezone,
+      timeZone: task.timeZone,
+    );
+  }
+
+  static int _compareWallClock(DateTime left, DateTime right) {
+    for (final pair in [
+      (left.hour, right.hour),
+      (left.minute, right.minute),
+      (left.second, right.second),
+      (left.millisecond, right.millisecond),
+      (left.microsecond, right.microsecond),
+    ]) {
+      final compared = pair.$1.compareTo(pair.$2);
+      if (compared != 0) return compared;
+    }
+    return 0;
   }
 }
 
