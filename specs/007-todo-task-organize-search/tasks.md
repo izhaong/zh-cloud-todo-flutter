@@ -12,8 +12,8 @@
 
 - [x] T006 在 `test/task_organize_search_repository_test.dart` 写清单、优先级、标签、日期、完成和置顶的批量编辑测试，并断言每个目标返回 success、skipped 或 failed，成功项均有 outbox。
 - [x] T007 新建 `lib/state/repositories/task_batch_edit_repository.dart`，实现逐项批量编辑和部分失败保留，使 T006 通过。
-- [ ] T008 在 `test/sync_coordinator_organize_search_test.dart` 写 folder、list、tag、task_tag、task、filter 与 view_preference 的 parent serverId 依赖、排序/层级回放和部分失败重试测试。
-- [ ] T009 修改 `lib/core/sync/sync_coordinator.dart`、`folder_repository.dart`、`list_repository.dart` 与 `tag_repository.dart`，使 T008 通过且 folder REST 特例仍经 outbox 可重试。
+- [x] T008 在 `test/sync_coordinator_organize_search_test.dart` 写 folder、list、tag、task_tag、task、filter 与 view_preference 的 parent serverId 依赖、排序/层级回放和部分失败重试测试。
+- [x] T009 修改 `lib/core/sync/sync_coordinator.dart`、`folder_repository.dart`、`list_repository.dart` 与 `tag_repository.dart`，使 T008 通过且 folder REST 特例仍经 outbox 可重试。
 
 ## Phase 3: 交互与证据
 
@@ -52,3 +52,4 @@
 - 2026-07-30：T008/T009 的 folder parent 依赖新增红绿证据：测试故意让未同步子文件夹先于父文件夹进入 outbox，旧实现同轮只成功父项并把子项标为 `retryable`；修复后 REST folder 变更按本地父链深度稳定排序，父创建先回写 serverId，子创建同轮使用该整数 parentId，结构 upsert 仍先于 delete。组织 sync、folder retry/pull 定向组 12 项通过；filter/view preference 延后、跨实体部分失败和完整真实 HTTP 仍需继续审计，T008/T009 保持未勾选。
 - 2026-07-30：T008/T009 的 task-tag 同批临时 ID 补入红绿证据：list、task、tag 与 task_tag 全部首次同步时，旧实现给 tag 分配 `-2`，却在 task_tag 的 `tagIds` 中另造 `-5`，导致服务端无法解析关联；修复后所有 task/tag 引用统一复用本批实体临时 ID 映射。组织 sync、filter 延后和 checklist 父依赖定向组 15 项通过；未同步 folder 与 list 的本地 UUID 关联仍需继续审计，T008/T009 保持未勾选。
 - 2026-07-30：T008/T009 的 folder-list 本地关联补齐 schema 20 红绿闭环：`todo_lists.folderLocalId` 成为 UI/Repository 的 UUID 真相源，19→20 文件迁移按现有 serverId 回填且保留旧数据；同一轮离线创建 folder+list 时先经 REST 回写 folder serverId，再解析 list payload，folder 创建失败则 list 保持 queued；pull 在 REST folder 补水后把 server folderId 还原为本地 UUID。另修复“未同步 folder 删除后仍先 create 再发送无效 delete”的孤儿数据问题，改为取消待创建变更并把关联 list 回放为顶层。相关定向 31 项通过、2 项受保护 live 跳过；Flutter 全量 545 项通过、25 项受保护 live 跳过，`flutter analyze` 无错误。受保护的新版同批 folder-list 真实 HTTP、完整部分失败矩阵与固定 GUI 反馈仍未本轮执行，T008/T009 保持未勾选。
+- 2026-07-30：T008/T009 的 filter/view preference 依赖与跨实体部分失败矩阵结项。实际发送批次只使用首个已发送 mutation 作为幂等键，网络失败只把已发送项标为 `retryable`，父实体未同步的 filter 继续排队；损坏 JSON 或缺失本地 list/tag 关联的 filter 仅自身以 `LOCAL_PAYLOAD_INVALID` 失败，不再阻断有效 view preference。filter pull 会把服务端 list/tag ID 还原为本地 UUID，schema 20→21 迁移同样转换既有过滤条件并保留无法完整解析的旧值。相关 27 项通过、1 项受保护 live 跳过；Flutter 全量 551 项通过、25 项受保护 live 跳过，`flutter analyze` 无错误。结合既有 folder/list/tag/task/task_tag/task/filter/view_preference 排序、依赖、离线重启与失败恢复证据，T008/T009 结项；真实 HTTP 合同、固定 GUI 和 Jenkins 仍归 T012/T013，不在此处宣称通过。

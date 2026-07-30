@@ -215,4 +215,90 @@ void main() {
       });
     },
   );
+
+  test(
+    'pulled filter restores list and tag associations as local UUIDs',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final dio = Dio()
+        ..interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (options, handler) {
+              if (options.path.endsWith('/folder/list')) {
+                handler.resolve(
+                  Response<Map<String, dynamic>>(
+                    requestOptions: options,
+                    data: {'code': 0, 'data': const []},
+                  ),
+                );
+                return;
+              }
+              handler.resolve(
+                Response<Map<String, dynamic>>(
+                  requestOptions: options,
+                  data: {
+                    'code': 0,
+                    'data': {
+                      'changes': [
+                        {
+                          'entityType': 'filter',
+                          'entityId': 301,
+                          'operation': 'upsert',
+                          'revision': 3,
+                          'payload': {
+                            'name': '项目工作',
+                            'conditionsJson': jsonEncode({
+                              'listIds': [101],
+                              'tagIds': [201],
+                              'priorities': [3],
+                            }),
+                          },
+                        },
+                        {
+                          'entityType': 'tag',
+                          'entityId': 201,
+                          'operation': 'upsert',
+                          'revision': 2,
+                          'payload': {'name': '工作'},
+                        },
+                        {
+                          'entityType': 'list',
+                          'entityId': 101,
+                          'operation': 'upsert',
+                          'revision': 1,
+                          'payload': {'name': '项目'},
+                        },
+                      ],
+                      'tombstones': const [],
+                      'nextCursor': '3',
+                      'hasMore': false,
+                    },
+                  },
+                ),
+              );
+            },
+          ),
+        );
+      final client = ApiClient(dio: dio);
+
+      expect(
+        await SyncCoordinator(
+          db: db,
+          api: SyncApi(client, clientId: 'test', deviceId: 'device-b'),
+          todoApi: client,
+        ).pull(),
+        3,
+      );
+
+      final list = await db.listByServerId(101);
+      final tag = await db.tagByServerId(201);
+      final filter = await db.select(db.todoFilters).getSingle();
+      expect(jsonDecode(filter.conditionJson), {
+        'listIds': [list!.id],
+        'tagIds': [tag!.id],
+        'priorities': [3],
+      });
+    },
+  );
 }

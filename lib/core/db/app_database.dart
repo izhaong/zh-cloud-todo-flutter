@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
@@ -413,7 +415,7 @@ class AppDatabase extends _$AppDatabase {
   }) : super(_open(_userDatabaseName(tenantId, userId, testNamespace)));
 
   @override
-  int get schemaVersion => 20;
+  int get schemaVersion => 21;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -633,8 +635,96 @@ class AppDatabase extends _$AppDatabase {
           WHERE folder_id IS NOT NULL AND folder_local_id IS NULL
         ''');
       }
+      if (from < 21) {
+        await _migrateFilterReferencesToLocalIds(m.database);
+      }
     },
   );
+
+  Future<void> _migrateFilterReferencesToLocalIds(
+    GeneratedDatabase database,
+  ) async {
+    final listRows = await database
+        .customSelect(
+          'SELECT id, server_id FROM todo_lists WHERE server_id IS NOT NULL',
+        )
+        .get();
+    final tagRows = await database
+        .customSelect(
+          'SELECT id, server_id FROM todo_tags WHERE server_id IS NOT NULL',
+        )
+        .get();
+    final listIdsByServerId = {
+      for (final row in listRows)
+        row.read<int>('server_id'): row.read<String>('id'),
+    };
+    final tagIdsByServerId = {
+      for (final row in tagRows)
+        row.read<int>('server_id'): row.read<String>('id'),
+    };
+    final localListIds = listIdsByServerId.values.toSet();
+    final localTagIds = tagIdsByServerId.values.toSet();
+    final filters = await database
+        .customSelect('SELECT id, condition_json FROM todo_filters')
+        .get();
+    for (final filter in filters) {
+      final raw = filter.read<String>('condition_json');
+      Object? decoded;
+      try {
+        decoded = jsonDecode(raw);
+      } on FormatException {
+        continue;
+      }
+      if (decoded is! Map) continue;
+      final conditions = Map<String, dynamic>.from(decoded);
+      var changed = false;
+      var complete = true;
+      for (final entry in [
+        (
+          key: 'listIds',
+          localIds: localListIds,
+          idsByServerId: listIdsByServerId,
+        ),
+        (key: 'tagIds', localIds: localTagIds, idsByServerId: tagIdsByServerId),
+      ]) {
+        if (!conditions.containsKey(entry.key)) continue;
+        final refs = conditions[entry.key];
+        if (refs is! List) {
+          complete = false;
+          break;
+        }
+        final localized = <String>[];
+        for (final ref in refs) {
+          if (ref is String && entry.localIds.contains(ref)) {
+            localized.add(ref);
+            continue;
+          }
+          final serverId = ref is num
+              ? ref.toInt()
+              : int.tryParse(ref.toString());
+          final localId = serverId == null
+              ? null
+              : entry.idsByServerId[serverId];
+          if (localId == null) {
+            complete = false;
+            break;
+          }
+          localized.add(localId);
+          changed = true;
+        }
+        if (!complete) break;
+        conditions[entry.key] = localized;
+      }
+      if (!complete || !changed) continue;
+      await database.customUpdate(
+        'UPDATE todo_filters SET condition_json = ? WHERE id = ?',
+        variables: [
+          Variable.withString(jsonEncode(conditions)),
+          Variable.withString(filter.read<String>('id')),
+        ],
+      );
+    }
+  }
 
   Future<void> _createSearchIndex(GeneratedDatabase database) async {
     // trigram 让中文及英文的包含式查询都可命中；不足三个字符时

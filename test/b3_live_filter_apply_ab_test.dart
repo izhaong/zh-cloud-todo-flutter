@@ -13,6 +13,7 @@ import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_coordinator.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_entities.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/filter_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/list_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_repository.dart';
 
@@ -78,39 +79,19 @@ void main() {
         expect(firstTaskServerId, isPositive);
         expect(secondTaskServerId, isPositive);
 
-        filterLocalId = 'b3-filter-$suffix';
-        final conditionsJson = jsonEncode({
-          'listIds': [listServerId],
-          'priorities': [3],
-          'keyword': keyword,
-        });
         const sortOrdersJson = '[{"field":"title","direction":"ASC"}]';
-        final now = DateTime.now();
-        await dbA.transaction(() async {
-          await dbA
-              .into(dbA.todoFilters)
-              .insert(
-                TodoFiltersCompanion.insert(
-                  id: filterLocalId!,
-                  name: '$keyword 高优先级',
-                  conditionJson: conditionsJson,
-                  updatedAt: now,
-                  createdAt: now,
-                ),
-              );
-          await queueA.enqueue(
-            entity: SyncEntities.filter,
-            op: SyncOps.upsert,
-            localId: filterLocalId,
-            payload: {
-              'name': '$keyword 高优先级',
-              'conditionsJson': conditionsJson,
-              'sortOrdersJson': sortOrdersJson,
-              'isSmart': false,
-              'isPinned': false,
-            },
-          );
-        });
+        final filter = await FilterRepository(dbA, queueA).save(
+          name: '$keyword 高优先级',
+          conditions: TodoFilterConditions(
+            listIds: [list.id],
+            priorities: const [3],
+            keyword: keyword,
+          ),
+          sortOrders: const [
+            TodoFilterSortOrder(field: 'title', direction: 'ASC'),
+          ],
+        );
+        filterLocalId = filter.id;
         expect(await coordinatorA.push(), 1);
         filterServerId = await _filterServerId(dbA, filterLocalId);
         expect(filterServerId, isPositive);
@@ -132,8 +113,13 @@ void main() {
         final restored = await (dbB.select(
           dbB.todoFilters,
         )..where((row) => row.serverId.equals(filterServerId!))).getSingle();
+        final restoredList = await dbB.listByServerId(listServerId!);
         expect(restored.name, '$keyword 高优先级');
-        expect(jsonDecode(restored.conditionJson), jsonDecode(conditionsJson));
+        expect(jsonDecode(restored.conditionJson), {
+          'listIds': [restoredList!.id],
+          'priorities': [3],
+          'keyword': keyword,
+        });
         expect(restored.sortOrdersJson, sortOrdersJson);
       } finally {
         if (filterServerId != null && filterLocalId != null) {
