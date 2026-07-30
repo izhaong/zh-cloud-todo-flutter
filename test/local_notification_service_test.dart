@@ -9,11 +9,13 @@ void main() {
 
   const channel = MethodChannel('dexterous.com/flutter/local_notifications');
   final calls = <MethodCall>[];
+  String? launchPayload;
 
   setUp(() {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     MacOSFlutterLocalNotificationsPlugin.registerWith();
     calls.clear();
+    launchPayload = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
           calls.add(call);
@@ -52,6 +54,17 @@ void main() {
                 'payload': 'reminder:14:other_user:1785312300000',
               },
             ];
+          }
+          if (call.method == 'getNotificationAppLaunchDetails') {
+            return {
+              'notificationLaunchedApp': launchPayload != null,
+              if (launchPayload != null)
+                'notificationResponse': {
+                  'notificationId': 15,
+                  'notificationResponseType': 0,
+                  'payload': launchPayload,
+                },
+            };
           }
           return null;
         });
@@ -132,4 +145,92 @@ void main() {
     );
     expect(activeIds, {13});
   });
+
+  test('reminder payload remains compatible and carries task identity', () {
+    expect(
+      ReminderNotificationSelection.parse(
+        'reminder:11:tenant_user:1785312300000:201',
+      ),
+      const ReminderNotificationSelection(
+        dispatchId: 11,
+        scope: 'tenant_user',
+        taskServerId: 201,
+      ),
+    );
+    expect(
+      ReminderNotificationSelection.parse(
+        'reminder:12:tenant_user:1785312300000',
+      ),
+      const ReminderNotificationSelection(dispatchId: 12, scope: 'tenant_user'),
+    );
+    expect(ReminderNotificationSelection.parse('reminder:bad'), isNull);
+  });
+
+  test('notification response publishes a typed reminder selection', () async {
+    final service = LocalNotificationService(
+      plugin: FlutterLocalNotificationsPlugin(),
+    );
+    final selection = service.reminderSelections.first;
+
+    service.dispatchNotificationResponseForTesting(
+      const NotificationResponse(
+        notificationResponseType: NotificationResponseType.selectedNotification,
+        payload: 'reminder:16:tenant_user:1785312300000:206',
+      ),
+    );
+
+    expect(
+      await selection,
+      const ReminderNotificationSelection(
+        dispatchId: 16,
+        scope: 'tenant_user',
+        taskServerId: 206,
+      ),
+    );
+  });
+
+  test('duplicate notification response is dispatched only once', () {
+    final service = LocalNotificationService(
+      plugin: FlutterLocalNotificationsPlugin(),
+    );
+    final selections = <ReminderNotificationSelection>[];
+    service.reminderSelections.listen(selections.add);
+    const response = NotificationResponse(
+      notificationResponseType: NotificationResponseType.selectedNotification,
+      payload: 'reminder:16:tenant_user:1785312300000:206',
+    );
+
+    service.dispatchNotificationResponseForTesting(response);
+    service.dispatchNotificationResponseForTesting(response);
+
+    expect(selections, [
+      const ReminderNotificationSelection(
+        dispatchId: 16,
+        scope: 'tenant_user',
+        taskServerId: 206,
+      ),
+    ]);
+  });
+
+  test(
+    'notification launch selection is retained until UI consumes it',
+    () async {
+      launchPayload = 'reminder:17:tenant_user:1785312300000:207';
+      final service = LocalNotificationService(
+        plugin: FlutterLocalNotificationsPlugin(),
+      );
+
+      await service.init();
+
+      expect(
+        service.takePendingReminderSelection(),
+        const ReminderNotificationSelection(
+          dispatchId: 17,
+          scope: 'tenant_user',
+          taskServerId: 207,
+        ),
+      );
+      expect(service.takePendingReminderSelection(), isNull);
+    },
+  );
 }
