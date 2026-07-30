@@ -9,6 +9,61 @@ import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 
 void main() {
   test(
+    'upgrades schema 19 with local folder UUIDs and backfills existing lists',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'zh_cloud_todo_b3_schema19_',
+      );
+      final databaseFile = File('${directory.path}/todo.sqlite');
+      addTearDown(() async {
+        if (await directory.exists()) {
+          await directory.delete(recursive: true);
+        }
+      });
+
+      final beforeUpgrade = AppDatabase.forTesting(
+        NativeDatabase(databaseFile),
+      );
+      final now = DateTime.utc(2026, 7, 30, 10);
+      await beforeUpgrade.batch((batch) {
+        batch.insert(
+          beforeUpgrade.todoFolders,
+          TodoFoldersCompanion.insert(
+            id: 'folder-before-local-reference',
+            serverId: const Value(88),
+            name: '迁移前文件夹',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+        batch.insert(
+          beforeUpgrade.todoLists,
+          TodoListsCompanion.insert(
+            id: 'list-before-local-reference',
+            name: '迁移前清单',
+            folderId: const Value(88),
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+      });
+      await beforeUpgrade.close();
+      _downgradeToSchema19WithoutFolderLocalId(databaseFile);
+
+      final upgraded = AppDatabase.forTesting(NativeDatabase(databaseFile));
+      addTearDown(upgraded.close);
+      final version = await upgraded
+          .customSelect('PRAGMA user_version')
+          .getSingle();
+      final list = await upgraded.listByLocalId('list-before-local-reference');
+
+      expect(version.data['user_version'], 20);
+      expect(list?.folderId, 88);
+      expect(list?.folderLocalId, 'folder-before-local-reference');
+    },
+  );
+
+  test(
     'upgrades schema 18 with list access defaults and preserves lists',
     () async {
       final directory = await Directory.systemTemp.createTemp(
@@ -50,7 +105,7 @@ void main() {
           )
           .getSingle();
 
-      expect(version.data['user_version'], 19);
+      expect(version.data['user_version'], 20);
       expect(access.data['id'], 'list-before-access-role');
       expect(access.data['access_role'], 'owner');
       expect(access.data['writable'], 1);
@@ -93,7 +148,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 19);
+      expect(version.data['user_version'], 20);
       final task = await upgraded.select(upgraded.todoTasks).getSingle();
       expect(task.title, '迁移前任务');
       expect(task.assigneeUserId, isNull);
@@ -121,7 +176,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 19);
+      expect(version.data['user_version'], 20);
 
       final taskColumns = await upgraded
           .customSelect('PRAGMA table_info(todo_tasks)')
@@ -257,7 +312,7 @@ void main() {
           .getSingle();
       final rule = await upgraded.select(upgraded.todoRepeatRules).getSingle();
 
-      expect(version.data['user_version'], 19);
+      expect(version.data['user_version'], 20);
       expect(rule.id, 'repeat-rule-before-b2-b3-merge');
       expect(rule.byDay, '1,3,5');
       expect(rule.selectedDatesJson, isNull);
@@ -302,7 +357,7 @@ void main() {
         .getSingle();
     final rule = await upgraded.select(upgraded.todoRepeatRules).getSingle();
 
-    expect(version.data['user_version'], 19);
+    expect(version.data['user_version'], 20);
     expect(rule.freq, 'CUSTOM');
     expect(rule.byDay, '1,3,5');
     expect(rule.repeatMode, 'ON_DUE');
@@ -389,7 +444,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 19);
+      expect(version.data['user_version'], 20);
       await upgraded.close();
 
       final reopened = AppDatabase.forTesting(NativeDatabase(databaseFile));
@@ -481,7 +536,7 @@ void main() {
           )
           .getSingle();
 
-      expect(version.data['user_version'], 19);
+      expect(version.data['user_version'], 20);
       expect(task.title, '迁移前看板任务');
       expect(boardTable.data['name'], 'todo_board_preferences');
     },
@@ -546,7 +601,7 @@ void main() {
           )
           .getSingle();
 
-      expect(version.data['user_version'], 19);
+      expect(version.data['user_version'], 20);
       expect(task.title, '迁移前可靠性任务');
       expect(change.status, 'queued');
       expect(change.nextAttemptAt, isNull);
@@ -554,6 +609,41 @@ void main() {
       expect(recommendationTable.data['name'], 'todo_recommendations');
     },
   );
+}
+
+void _downgradeToSchema19WithoutFolderLocalId(File databaseFile) {
+  final database = sqlite.sqlite3.open(databaseFile.path);
+  try {
+    database.execute('PRAGMA foreign_keys = OFF');
+    database.execute('ALTER TABLE todo_lists RENAME TO todo_lists_schema20');
+    database.execute('''
+      CREATE TABLE todo_lists (
+        id TEXT NOT NULL PRIMARY KEY,
+        server_id INTEGER NULL,
+        name TEXT NOT NULL,
+        folder_id INTEGER NULL,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        access_role TEXT NOT NULL DEFAULT 'owner',
+        writable INTEGER NOT NULL DEFAULT 1,
+        updated_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      )
+    ''');
+    database.execute('''
+      INSERT INTO todo_lists (
+        id, server_id, name, folder_id, sort_order, access_role, writable,
+        updated_at, created_at
+      )
+      SELECT
+        id, server_id, name, folder_id, sort_order, access_role, writable,
+        updated_at, created_at
+      FROM todo_lists_schema20
+    ''');
+    database.execute('DROP TABLE todo_lists_schema20');
+    database.execute('PRAGMA user_version = 19');
+  } finally {
+    database.dispose();
+  }
 }
 
 void _downgradeToSchema18WithoutListAccess(File databaseFile) {

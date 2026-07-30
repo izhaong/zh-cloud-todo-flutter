@@ -396,6 +396,10 @@ class SyncCoordinator {
             await (db.update(db.todoFolders)
                   ..where((t) => t.id.equals(change.entityLocalId!)))
                 .write(TodoFoldersCompanion(serverId: Value(serverId)));
+            await (db.update(db.todoLists)..where(
+                  (list) => list.folderLocalId.equals(change.entityLocalId!),
+                ))
+                .write(TodoListsCompanion(folderId: Value(serverId)));
           }
         } else {
           final parentServerId = await _folderParentServerId(payload);
@@ -539,6 +543,24 @@ class SyncCoordinator {
     if (entity == SyncEntities.list) {
       resolved.remove('accessRole');
       resolved.remove('writable');
+      final rawFolderLocalId = resolved.remove('folderLocalId');
+      final folderLocalId = rawFolderLocalId?.toString();
+      if (folderLocalId != null && folderLocalId.isNotEmpty) {
+        final folder = await (db.select(
+          db.todoFolders,
+        )..where((row) => row.id.equals(folderLocalId))).getSingleOrNull();
+        if (folder == null) {
+          // 文件夹已在离线状态被删除时，旧 list outbox 应回放为顶层，
+          // 不能永久等待一个已经不存在的依赖。
+          resolved['folderId'] = null;
+        } else if (folder.serverId == null) {
+          return null;
+        } else {
+          resolved['folderId'] = folder.serverId;
+        }
+      } else if (rawFolderLocalId != null) {
+        resolved['folderId'] = null;
+      }
     }
     if ((entity == SyncEntities.task ||
             entity == SyncEntities.boardPreference) &&
@@ -1002,15 +1024,24 @@ class SyncCoordinator {
         if (serverId == null) continue;
         await _upsertLocalFolder(serverId, payload, hydrateParent: true);
       }
+      await _reconcileListFolderLocalIds();
       final localSyncedFolders = await (db.select(
         db.todoFolders,
       )..where((row) => row.serverId.isNotNull())).get();
       for (final folder in localSyncedFolders) {
         final serverId = folder.serverId;
         if (serverId == null || serverFolderIds.contains(serverId)) continue;
-        await (db.update(db.todoLists)
-              ..where((row) => row.folderId.equals(serverId)))
-            .write(const TodoListsCompanion(folderId: Value(null)));
+        await (db.update(db.todoLists)..where(
+              (row) =>
+                  row.folderId.equals(serverId) |
+                  row.folderLocalId.equals(folder.id),
+            ))
+            .write(
+              const TodoListsCompanion(
+                folderLocalId: Value(null),
+                folderId: Value(null),
+              ),
+            );
         await (db.delete(
           db.todoFolders,
         )..where((row) => row.id.equals(folder.id))).go();
@@ -1019,6 +1050,19 @@ class SyncCoordinator {
     } on DioException {
       // folder REST 不可用不能阻断同步白名单实体；对应 outbox 项会保持可重试。
       return 0;
+    }
+  }
+
+  Future<void> _reconcileListFolderLocalIds() async {
+    final folders = await (db.select(
+      db.todoFolders,
+    )..where((row) => row.serverId.isNotNull())).get();
+    for (final folder in folders) {
+      final serverId = folder.serverId;
+      if (serverId == null) continue;
+      await (db.update(db.todoLists)
+            ..where((row) => row.folderId.equals(serverId)))
+          .write(TodoListsCompanion(folderLocalId: Value(folder.id)));
     }
   }
 
@@ -1341,14 +1385,23 @@ class SyncCoordinator {
     final rawFolderId = payload.containsKey('folderId')
         ? payload['folderId']
         : payload['folder_id'];
+    final resolvedFolderId = hasFolderId
+        ? (rawFolderId as num?)?.toInt()
+        : existing?.folderId;
+    final localFolder = resolvedFolderId == null
+        ? null
+        : await (db.select(db.todoFolders)
+                ..where((row) => row.serverId.equals(resolvedFolderId)))
+              .getSingleOrNull();
     final now = DateTime.now();
     final companion = TodoListsCompanion(
       id: Value(existing?.id ?? (isInbox ? _inboxListId : _uuid.v4())),
       serverId: Value(serverId),
       name: Value(payload['name']?.toString() ?? existing?.name ?? ''),
-      folderId: Value(
-        hasFolderId ? (rawFolderId as num?)?.toInt() : existing?.folderId,
+      folderLocalId: Value(
+        hasFolderId ? localFolder?.id : existing?.folderLocalId,
       ),
+      folderId: Value(resolvedFolderId),
       sortOrder: Value((payload['sortOrder'] as num?)?.toInt() ?? 0),
       accessRole: Value(
         payload['accessRole']?.toString() ??

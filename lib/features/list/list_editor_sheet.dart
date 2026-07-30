@@ -6,9 +6,9 @@ import '../../state/providers.dart';
 
 /// M11-B2 清单创建 / 重命名 / 删除 弹窗。
 class ListEditorSheet extends ConsumerStatefulWidget {
-  const ListEditorSheet({super.key, this.folderId, this.existing});
+  const ListEditorSheet({super.key, this.folderLocalId, this.existing});
 
-  final int? folderId;
+  final String? folderLocalId;
   final TodoList? existing;
 
   @override
@@ -36,7 +36,7 @@ class _ListEditorSheetState extends ConsumerState<ListEditorSheet> {
     final repo = ref.read(listRepositoryProvider);
     if (repo == null) return;
     if (widget.existing == null) {
-      await repo.create(name: text, folderId: widget.folderId);
+      await repo.create(name: text, folderLocalId: widget.folderLocalId);
     } else {
       await repo.rename(widget.existing!.id, text);
     }

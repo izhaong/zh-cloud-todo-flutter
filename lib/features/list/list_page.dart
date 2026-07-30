@@ -10,7 +10,7 @@ import '../tag/tag_page.dart';
 /// M11-B2 清单列表页。
 ///
 /// - 顶部固定 4 个智能清单：今日 / 全部 / 已完成 / 已过期
-/// - 下方按 folderId 分组显示普通清单
+/// - 下方按 folder 本地 UUID 分组显示普通清单
 /// - 长按弹编辑器（创建/重命名/删除 + 未完成任务拦截）
 /// - 拖拽排序：向上/向下按钮（避免引入第三方包）
 class ListPage extends ConsumerStatefulWidget {
@@ -21,11 +21,15 @@ class ListPage extends ConsumerStatefulWidget {
 }
 
 class _ListPageState extends ConsumerState<ListPage> {
-  Future<void> _openCreateSheet({int? folderId, TodoList? existing}) async {
+  Future<void> _openCreateSheet({
+    String? folderLocalId,
+    TodoList? existing,
+  }) async {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => ListEditorSheet(folderId: folderId, existing: existing),
+      builder: (_) =>
+          ListEditorSheet(folderLocalId: folderLocalId, existing: existing),
     );
   }
 
@@ -63,7 +67,9 @@ class _ListPageState extends ConsumerState<ListPage> {
     final repo = ref.read(listRepositoryProvider);
     if (repo == null) return;
     final lists = await repo.getAll();
-    final inFolder = lists.where((l) => l.folderId == list.folderId).toList();
+    final inFolder = lists
+        .where((l) => l.folderLocalId == list.folderLocalId)
+        .toList();
     inFolder.sort((a, b) {
       final c = a.sortOrder.compareTo(b.sortOrder);
       if (c != 0) return c;
@@ -127,8 +133,8 @@ class _ListPageState extends ConsumerState<ListPage> {
               ...folders.map(
                 (f) => _FolderGroup(
                   folder: f,
-                  lists: lists.where((l) => l.folderId == f.serverId).toList(),
-                  onCreate: () => _openCreateSheet(folderId: f.serverId),
+                  lists: lists.where((l) => l.folderLocalId == f.id).toList(),
+                  onCreate: () => _openCreateSheet(folderLocalId: f.id),
                   onTap: (l) => _openCreateSheet(existing: l),
                   onDelete: _deleteList,
                   onMove: _move,
@@ -137,7 +143,7 @@ class _ListPageState extends ConsumerState<ListPage> {
               const SizedBox(height: 8),
               _SectionTitle('未分组清单'),
               _UngroupedGroup(
-                lists: lists.where((l) => l.folderId == null).toList(),
+                lists: lists.where((l) => l.folderLocalId == null).toList(),
                 onTap: (l) => _openCreateSheet(existing: l),
                 onDelete: _deleteList,
                 onMove: _move,

@@ -71,12 +71,11 @@ void main() {
           dbB.todoLists,
         )..where((row) => row.serverId.equals(listId))).getSingleOrNull();
         expect(movedB?.folderId, folderId);
-        expect(
-          await (dbB.select(
-            dbB.todoFolders,
-          )..where((row) => row.serverId.equals(folderId))).getSingleOrNull(),
-          isNotNull,
-        );
+        final movedFolderB = await (dbB.select(
+          dbB.todoFolders,
+        )..where((row) => row.serverId.equals(folderId))).getSingleOrNull();
+        expect(movedFolderB, isNotNull);
+        expect(movedB?.folderLocalId, movedFolderB?.id);
 
         await lists.moveToFolder(list.id, null);
         await _coordinator(dbA, apiA, 'b3-move-a-$suffix').push();
@@ -86,6 +85,7 @@ void main() {
           dbB.todoLists,
         )..where((row) => row.serverId.equals(listId))).getSingleOrNull();
         expect(ungroupedB?.folderId, isNull);
+        expect(ungroupedB?.folderLocalId, isNull);
       } finally {
         await _deleteIfPresent(apiA, '/app-api/todo/list/delete', listServerId);
         await _deleteIfPresent(

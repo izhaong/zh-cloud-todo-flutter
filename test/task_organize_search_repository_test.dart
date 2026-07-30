@@ -38,6 +38,7 @@ void main() {
         TodoListsCompanion.insert(
           id: 'list-inbox',
           name: '收集箱',
+          folderLocalId: const Value('folder-work'),
           folderId: const Value(88),
           updatedAt: now,
           createdAt: now,
@@ -338,11 +339,8 @@ void main() {
   });
 
   test('新建子任务拒绝只读清单且不写任务或 outbox', () async {
-    await (db.update(
-      db.todoLists,
-    )..where((row) => row.id.equals('list-inbox'))).write(
-      const TodoListsCompanion(writable: Value(false)),
-    );
+    await (db.update(db.todoLists)..where((row) => row.id.equals('list-inbox')))
+        .write(const TodoListsCompanion(writable: Value(false)));
 
     await expectLater(
       taskRepository.create(

@@ -44,9 +44,24 @@ void main() {
                   data: {
                     'code': 0,
                     'data': {
-                      'changes': [],
+                      'changes': [
+                        {
+                          'changeId': 1,
+                          'entityType': 'list',
+                          'entityId': 101,
+                          'operation': 'upsert',
+                          'revision': 1,
+                          'tombstone': false,
+                          'payload': {
+                            'id': 101,
+                            'name': '子项目清单',
+                            'folderId': 72,
+                            'sortOrder': 0,
+                          },
+                        },
+                      ],
                       'tombstones': [],
-                      'nextCursor': 'todo-core:0',
+                      'nextCursor': 'todo-core:1',
                       'hasMore': false,
                     },
                   },
@@ -71,6 +86,9 @@ void main() {
       expect(parent.name, 'B3 恢复文件夹');
       expect(parent.sortOrder, 4);
       expect(child.parentId, parent.id);
+      final list = await db.listByServerId(101);
+      expect(list?.folderId, 72);
+      expect(list?.folderLocalId, child.id);
     },
   );
 
@@ -148,6 +166,7 @@ void main() {
               id: 'list-in-folder',
               serverId: const Value(101),
               name: '待办',
+              folderLocalId: const Value('folder-local'),
               folderId: const Value(88),
               updatedAt: now,
               createdAt: now,
@@ -207,6 +226,7 @@ void main() {
 
       final list = await db.listByServerId(101);
       expect(list?.folderId, isNull);
+      expect(list?.folderLocalId, isNull);
     },
   );
 }

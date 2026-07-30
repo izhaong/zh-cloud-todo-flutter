@@ -11,6 +11,7 @@ import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_coordinator.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/folder_repository.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/list_repository.dart';
 
 void main() {
   test('offline folder reparent coalesces before REST create', () async {
@@ -111,6 +112,51 @@ void main() {
         reopened.todoFolders,
       )..where((row) => row.id.equals(folder.id))).getSingleOrNull();
       expect(syncedFolder?.serverId, 71);
+    },
+  );
+
+  test(
+    'failed offline folder create defers its associated list sync',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      var syncRequests = 0;
+      final dio = Dio()
+        ..interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (options, handler) {
+              if (options.path.endsWith('/folder/create')) {
+                handler.reject(
+                  DioException(
+                    requestOptions: options,
+                    type: DioExceptionType.connectionError,
+                  ),
+                );
+                return;
+              }
+              syncRequests++;
+              handler.reject(DioException(requestOptions: options));
+            },
+          ),
+        );
+      final queue = SyncChangeQueue(db);
+      final folder = await FolderRepository(db, queue).create('离线失败文件夹');
+      await ListRepository(
+        db,
+        queue,
+      ).create(name: '依赖清单', folderLocalId: folder.id);
+
+      expect(await _coordinator(db, dio).push(), 0);
+      expect(syncRequests, 0);
+      final changes = await db.select(db.todoSyncChanges).get();
+      expect(
+        changes.singleWhere((change) => change.entity == 'folder').status,
+        'retryable',
+      );
+      expect(
+        changes.singleWhere((change) => change.entity == 'list').status,
+        'queued',
+      );
     },
   );
 }
