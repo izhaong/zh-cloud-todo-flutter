@@ -509,6 +509,85 @@ void main() {
     expect(requestedScale, TimelineScale.day);
   });
 
+  test('时间线窗口按日周月尺度前后移动并正确跨年', () {
+    expect(
+      shiftTimelineWindowAnchor(DateTime(2026, 7, 15), TimelineScale.day, 1),
+      DateTime(2026, 7, 16),
+    );
+    expect(
+      shiftTimelineWindowAnchor(DateTime(2026, 7, 15), TimelineScale.week, -1),
+      DateTime(2026, 7, 8),
+    );
+    expect(
+      shiftTimelineWindowAnchor(DateTime(2026, 12, 15), TimelineScale.month, 1),
+      DateTime(2027, 1),
+    );
+  });
+
+  testWidgets('时间线可浏览下一窗口并回到今天', (tester) async {
+    final tomorrowTask = _viewTask(
+      id: 'timeline-next-window',
+      title: '明天的时间线任务',
+      startAt: DateTime(2026, 7, 16, 9),
+      endAt: DateTime(2026, 7, 16, 10),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TimelineView(
+            tasks: [tomorrowTask],
+            now: DateTime(2026, 7, 15, 9),
+            scale: TimelineScale.day,
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const Key('timeline-continuous-bar-timeline-next-window')),
+      findsNothing,
+    );
+    await tester.tap(find.byTooltip('下一天'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('7月16日'), findsOneWidget);
+    expect(
+      find.byKey(const Key('timeline-continuous-bar-timeline-next-window')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byTooltip('回到今天'));
+    await tester.pumpAndSettle();
+    expect(find.text('7月15日'), findsOneWidget);
+    expect(
+      find.byKey(const Key('timeline-continuous-bar-timeline-next-window')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('时间线同一天父级重建不会重置浏览窗口', (tester) async {
+    Widget build(DateTime now) {
+      return MaterialApp(
+        home: Scaffold(
+          body: TimelineView(
+            tasks: const [],
+            now: now,
+            scale: TimelineScale.day,
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(build(DateTime(2026, 7, 15, 9)));
+    await tester.tap(find.byTooltip('下一天'));
+    await tester.pumpAndSettle();
+    expect(find.text('7月16日'), findsOneWidget);
+
+    await tester.pumpWidget(build(DateTime(2026, 7, 15, 18)));
+    await tester.pumpAndSettle();
+    expect(find.text('7月16日'), findsOneWidget);
+  });
+
   testWidgets('时间线日尺度拖动任务本体会按小时移动', (tester) async {
     final now = DateTime(2026, 7, 15, 9);
     final task = _viewTask(

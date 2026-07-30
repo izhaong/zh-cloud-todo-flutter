@@ -86,17 +86,13 @@ class TimelineView extends ConsumerWidget {
     final normalizedZoom = zoom.clamp(0.75, 1.5).toDouble();
     return Column(
       children: [
-        _TimelineZoomToolbar(
+        _TimelineWindow(
+          now: now,
+          tasks: tasks,
           zoom: normalizedZoom,
           scale: scale,
           onZoomChanged: onZoomChanged,
           onScaleChanged: onScaleChanged,
-        ),
-        _TimelineContinuousCanvas(
-          now: now,
-          scale: scale,
-          zoom: normalizedZoom,
-          tasks: tasks,
           onTaskTap: (task) => _openDetail(context, task),
           onTaskTimeChange: onTaskTimeChange,
           onSlotTap: onCreateTask == null
@@ -356,10 +352,141 @@ class TimelineView extends ConsumerWidget {
   }
 }
 
+DateTime shiftTimelineWindowAnchor(
+  DateTime anchor,
+  TimelineScale scale,
+  int direction,
+) {
+  switch (scale) {
+    case TimelineScale.day:
+      return DateTime(anchor.year, anchor.month, anchor.day + direction);
+    case TimelineScale.week:
+      return DateTime(anchor.year, anchor.month, anchor.day + direction * 7);
+    case TimelineScale.month:
+      return DateTime(anchor.year, anchor.month + direction);
+  }
+}
+
+String timelineWindowLabel(DateTime anchor, TimelineScale scale) {
+  final day = DateTime(anchor.year, anchor.month, anchor.day);
+  switch (scale) {
+    case TimelineScale.day:
+      return '${day.month}月${day.day}日';
+    case TimelineScale.week:
+      final start = day.subtract(Duration(days: day.weekday - 1));
+      final end = start.add(const Duration(days: 6));
+      return '${start.month}/${start.day}–${end.month}/${end.day}';
+    case TimelineScale.month:
+      return '${day.year}年${day.month}月';
+  }
+}
+
+class _TimelineWindow extends StatefulWidget {
+  const _TimelineWindow({
+    required this.now,
+    required this.tasks,
+    required this.zoom,
+    required this.scale,
+    required this.onTaskTap,
+    this.onZoomChanged,
+    this.onScaleChanged,
+    this.onSlotTap,
+    this.onTaskDropped,
+    this.onTaskTimeChange,
+  });
+
+  final DateTime now;
+  final List<TodoTask> tasks;
+  final double zoom;
+  final TimelineScale scale;
+  final ValueChanged<TodoTask> onTaskTap;
+  final Future<void> Function(double zoom)? onZoomChanged;
+  final Future<void> Function(TimelineScale scale)? onScaleChanged;
+  final ValueChanged<_TimelineSlot>? onSlotTap;
+  final void Function(TodoTask task, _TimelineSlot slot)? onTaskDropped;
+  final Future<void> Function(
+    TodoTask task, {
+    required DateTime startAt,
+    required DateTime endAt,
+    required DateTime dueAt,
+  })?
+  onTaskTimeChange;
+
+  @override
+  State<_TimelineWindow> createState() => _TimelineWindowState();
+}
+
+class _TimelineWindowState extends State<_TimelineWindow> {
+  late DateTime _anchor;
+
+  @override
+  void initState() {
+    super.initState();
+    _anchor = widget.now;
+  }
+
+  @override
+  void didUpdateWidget(covariant _TimelineWindow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_sameCalendarDay(oldWidget.now, widget.now)) {
+      _anchor = widget.now;
+    }
+  }
+
+  bool _sameCalendarDay(DateTime left, DateTime right) {
+    return left.year == right.year &&
+        left.month == right.month &&
+        left.day == right.day;
+  }
+
+  void _move(int direction) {
+    setState(() {
+      _anchor = shiftTimelineWindowAnchor(_anchor, widget.scale, direction);
+    });
+  }
+
+  void _returnToToday() {
+    setState(() => _anchor = widget.now);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _TimelineZoomToolbar(
+          zoom: widget.zoom,
+          scale: widget.scale,
+          anchor: _anchor,
+          onPrevious: () => _move(-1),
+          onNext: () => _move(1),
+          onToday: _returnToToday,
+          onZoomChanged: widget.onZoomChanged,
+          onScaleChanged: widget.onScaleChanged,
+        ),
+        _TimelineContinuousCanvas(
+          now: _anchor,
+          scale: widget.scale,
+          zoom: widget.zoom,
+          tasks: widget.tasks,
+          onTaskTap: widget.onTaskTap,
+          onTaskTimeChange: widget.onTaskTimeChange,
+          onSlotTap: widget.onSlotTap,
+          onTaskDropped: widget.onTaskDropped,
+        ),
+      ],
+    );
+  }
+}
+
 class _TimelineZoomToolbar extends StatelessWidget {
   const _TimelineZoomToolbar({
     required this.zoom,
     required this.scale,
+    required this.anchor,
+    required this.onPrevious,
+    required this.onNext,
+    required this.onToday,
     this.onZoomChanged,
     this.onScaleChanged,
   });
@@ -368,12 +495,26 @@ class _TimelineZoomToolbar extends StatelessWidget {
 
   final double zoom;
   final TimelineScale scale;
+  final DateTime anchor;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
+  final VoidCallback onToday;
   final Future<void> Function(double zoom)? onZoomChanged;
   final Future<void> Function(TimelineScale scale)? onScaleChanged;
 
   @override
   Widget build(BuildContext context) {
     final colors = brandColors(context);
+    final previousLabel = switch (scale) {
+      TimelineScale.day => '上一天',
+      TimelineScale.week => '上一周',
+      TimelineScale.month => '上个月',
+    };
+    final nextLabel = switch (scale) {
+      TimelineScale.day => '下一天',
+      TimelineScale.week => '下一周',
+      TimelineScale.month => '下个月',
+    };
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
       child: Wrap(
@@ -382,6 +523,62 @@ class _TimelineZoomToolbar extends StatelessWidget {
         spacing: 8,
         runSpacing: 8,
         children: [
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: colors.muted,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: previousLabel,
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 34,
+                    height: 36,
+                  ),
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(Icons.chevron_left, size: 20),
+                  onPressed: onPrevious,
+                ),
+                Semantics(
+                  liveRegion: true,
+                  label: '当前时间线窗口 ${timelineWindowLabel(anchor, scale)}',
+                  child: Text(
+                    timelineWindowLabel(anchor, scale),
+                    style: TextStyle(
+                      color: colors.foreground,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: nextLabel,
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 34,
+                    height: 36,
+                  ),
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(Icons.chevron_right, size: 20),
+                  onPressed: onNext,
+                ),
+                Tooltip(
+                  message: '回到今天',
+                  child: TextButton(
+                    onPressed: onToday,
+                    style: TextButton.styleFrom(
+                      minimumSize: const Size(44, 36),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text('今日'),
+                  ),
+                ),
+              ],
+            ),
+          ),
           SegmentedButton<TimelineScale>(
             key: const Key('timeline-scale-selector'),
             showSelectedIcon: false,
