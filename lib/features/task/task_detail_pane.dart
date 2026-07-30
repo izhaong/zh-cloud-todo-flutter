@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/db/app_database.dart';
 import '../../core/time/task_time_formatter.dart';
 import '../../core/theme/brand_colors.dart';
+import '../../core/theme/todo_layout_tokens.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../native/native_intents.dart';
 import '../../state/providers.dart';
@@ -20,6 +21,7 @@ import '../collaboration/task_comments_page.dart';
 import '../collaboration/task_assign_page.dart';
 import '../collaboration/list_member_page.dart';
 import '../note/note_page.dart';
+import 'task_view_mutation_feedback.dart';
 
 /// 收集箱的本地清单 id（synthetic inbox）：listId 为该值的任务视为"未归清单"。
 const String kInboxListId = 'inbox';
@@ -883,11 +885,12 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
   }
 
   Future<void> _addSubtask(TodoTask t) async {
+    final detailTaskId = widget.taskId;
     final repo = ref.read(taskRepositoryProvider);
     if (repo == null) return;
     final messenger = ScaffoldMessenger.of(context);
     final depth = await repo.depthOf(t.id);
-    if (!mounted || widget.taskId != t.id) return;
+    if (!mounted || widget.taskId != detailTaskId) return;
     // §2.2 子任务深度 ≤5 守卫：仅允许在深度 <5 的任务下继续添加子任务。
     if (depth >= 5) {
       messenger.showSnackBar(
@@ -2267,7 +2270,11 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
             ),
           ],
         ),
-        _SubtaskList(taskId: t.id, onAdd: () => _addSubtask(t)),
+        _SubtaskList(
+          taskId: t.id,
+          onAdd: () => _addSubtask(t),
+          onAddSubtask: _addSubtask,
+        ),
         const Divider(height: 32),
         sh('时间段（可选）'),
         const SizedBox(height: 8),
@@ -2666,10 +2673,19 @@ class _TaskListPicker extends ConsumerWidget {
 }
 
 class _SubtaskList extends ConsumerWidget {
-  const _SubtaskList({required this.taskId, required this.onAdd});
+  const _SubtaskList({
+    required this.taskId,
+    required this.onAdd,
+    required this.onAddSubtask,
+    this.depth = 0,
+    this.showEmptyAdd = true,
+  });
 
   final String taskId;
   final VoidCallback onAdd;
+  final ValueChanged<TodoTask> onAddSubtask;
+  final int depth;
+  final bool showEmptyAdd;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -2682,6 +2698,7 @@ class _SubtaskList extends ConsumerWidget {
       builder: (ctx, snap) {
         final items = snap.data ?? const <TodoTask>[];
         if (items.isEmpty) {
+          if (!showEmptyAdd) return const SizedBox.shrink();
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: OutlinedButton.icon(
@@ -2691,30 +2708,201 @@ class _SubtaskList extends ConsumerWidget {
             ),
           );
         }
-        return Column(
-          children: items
-              .map(
-                (st) => CheckboxListTile(
-                  value: st.completed,
-                  title: Text(
-                    st.title,
-                    style: TextStyle(
-                      decoration: st.completed
-                          ? TextDecoration.lineThrough
-                          : null,
-                    ),
+        return ReorderableListView.builder(
+          key: Key('subtask-list-$taskId'),
+          shrinkWrap: true,
+          primary: false,
+          physics: const NeverScrollableScrollPhysics(),
+          buildDefaultDragHandles: false,
+          itemCount: items.length,
+          onReorder: (oldIndex, newIndex) async {
+            final ids = items.map((task) => task.id).toList();
+            final moved = ids.removeAt(oldIndex);
+            if (newIndex > oldIndex) newIndex -= 1;
+            ids.insert(newIndex.clamp(0, ids.length), moved);
+            try {
+              await repo.reorderSiblings(
+                listId: items.first.listId,
+                parentTaskId: taskId,
+                orderedTaskIds: ids,
+              );
+            } catch (error) {
+              if (!ctx.mounted) return;
+              ScaffoldMessenger.of(ctx).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    taskViewMutationFailureMessage(error, '子任务排序保存失败，请重试'),
                   ),
-                  onChanged: (_) async {
-                    final repo = ref.read(taskRepositoryProvider);
-                    if (repo == null) return;
-                    await repo.toggleComplete(st.id);
-                  },
                 ),
-              )
-              .toList(),
+              );
+            }
+          },
+          itemBuilder: (context, index) {
+            final task = items[index];
+            return _SubtaskTreeItem(
+              key: ValueKey('subtask-tree-${task.id}'),
+              task: task,
+              previousSiblingId: index == 0 ? null : items[index - 1].id,
+              reorderIndex: index,
+              depth: depth,
+              onAddSubtask: onAddSubtask,
+            );
+          },
         );
       },
     );
+  }
+}
+
+enum _SubtaskHierarchyAction { indent, outdent, detach, addChild }
+
+class _SubtaskTreeItem extends ConsumerStatefulWidget {
+  const _SubtaskTreeItem({
+    super.key,
+    required this.task,
+    required this.previousSiblingId,
+    required this.reorderIndex,
+    required this.depth,
+    required this.onAddSubtask,
+  });
+
+  final TodoTask task;
+  final String? previousSiblingId;
+  final int reorderIndex;
+  final int depth;
+  final ValueChanged<TodoTask> onAddSubtask;
+
+  @override
+  ConsumerState<_SubtaskTreeItem> createState() => _SubtaskTreeItemState();
+}
+
+class _SubtaskTreeItemState extends ConsumerState<_SubtaskTreeItem> {
+  bool _hovered = false;
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final task = widget.task;
+    final showActions =
+        MediaQuery.sizeOf(context).width < TodoLayoutTokens.compactMinWidth ||
+        _hovered ||
+        _focused;
+    final actionWidgets = showActions
+        ? Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ReorderableDragStartListener(
+                key: Key('subtask-reorder-${task.id}'),
+                index: widget.reorderIndex,
+                child: const Tooltip(
+                  message: '拖动排序',
+                  child: Padding(
+                    padding: EdgeInsets.all(8),
+                    child: Icon(Icons.drag_indicator, size: 18),
+                  ),
+                ),
+              ),
+              PopupMenuButton<_SubtaskHierarchyAction>(
+                key: Key('subtask-more-${task.id}'),
+                tooltip: '子任务层级操作',
+                onSelected: _applyAction,
+                itemBuilder: (context) => [
+                  if (widget.previousSiblingId != null)
+                    PopupMenuItem(
+                      key: Key('subtask-indent-${task.id}'),
+                      value: _SubtaskHierarchyAction.indent,
+                      child: const Text('缩进为上一项子任务'),
+                    ),
+                  PopupMenuItem(
+                    key: Key('subtask-outdent-${task.id}'),
+                    value: _SubtaskHierarchyAction.outdent,
+                    child: const Text('反缩进一级'),
+                  ),
+                  PopupMenuItem(
+                    key: Key('subtask-detach-${task.id}'),
+                    value: _SubtaskHierarchyAction.detach,
+                    child: const Text('解除父任务'),
+                  ),
+                  PopupMenuItem(
+                    key: Key('subtask-add-child-${task.id}'),
+                    value: _SubtaskHierarchyAction.addChild,
+                    child: const Text('添加子任务'),
+                  ),
+                ],
+              ),
+            ],
+          )
+        : null;
+
+    return Focus(
+      onFocusChange: (focused) => setState(() => _focused = focused),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.only(left: widget.depth * 16.0),
+              child: CheckboxListTile(
+                key: Key('subtask-row-${task.id}'),
+                value: task.completed,
+                title: Text(
+                  task.title,
+                  style: TextStyle(
+                    decoration: task.completed
+                        ? TextDecoration.lineThrough
+                        : null,
+                  ),
+                ),
+                secondary: actionWidgets,
+                onChanged: (_) async {
+                  final repo = ref.read(taskRepositoryProvider);
+                  if (repo == null) return;
+                  await repo.toggleComplete(task.id);
+                },
+              ),
+            ),
+            if (widget.depth < 4)
+              _SubtaskList(
+                taskId: task.id,
+                onAdd: () => widget.onAddSubtask(task),
+                onAddSubtask: widget.onAddSubtask,
+                depth: widget.depth + 1,
+                showEmptyAdd: false,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _applyAction(_SubtaskHierarchyAction action) async {
+    final task = widget.task;
+    if (action == _SubtaskHierarchyAction.addChild) {
+      widget.onAddSubtask(task);
+      return;
+    }
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    try {
+      switch (action) {
+        case _SubtaskHierarchyAction.indent:
+          await repo.indent(task.id, widget.previousSiblingId!);
+        case _SubtaskHierarchyAction.outdent:
+          await repo.outdent(task.id);
+        case _SubtaskHierarchyAction.detach:
+          await repo.detach(task.id);
+        case _SubtaskHierarchyAction.addChild:
+          return;
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(taskViewMutationFailureMessage(error, '子任务层级调整失败，请重试')),
+        ),
+      );
+    }
   }
 }
 

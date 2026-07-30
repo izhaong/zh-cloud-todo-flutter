@@ -1,6 +1,7 @@
 import 'dart:async';
 
-import 'package:drift/drift.dart' show OrderingTerm;
+import 'package:drift/drift.dart' show OrderingTerm, Value;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -512,6 +513,242 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+    'detail subtask actions indent, outdent and detach through repository',
+    (tester) async {
+      final fixture = await _pumpDirectPane(
+        tester,
+        taskId: TodoVisualFixture.metadataTaskId,
+      );
+      const childId = 'visual-task-metadata-child-2';
+      const previousId = 'visual-task-metadata-child-1';
+
+      await _openSubtaskMenu(tester, childId);
+      await tester.tap(find.byKey(Key('subtask-indent-$childId')));
+      await tester.pumpAndSettle();
+      expect(
+        (await fixture.container.read(taskRepositoryProvider)!.getById(childId))
+            ?.parentTaskId,
+        previousId,
+      );
+
+      await _openSubtaskMenu(tester, childId);
+      await tester.tap(find.byKey(Key('subtask-outdent-$childId')));
+      await tester.pumpAndSettle();
+      expect(
+        (await fixture.container.read(taskRepositoryProvider)!.getById(childId))
+            ?.parentTaskId,
+        TodoVisualFixture.metadataTaskId,
+      );
+
+      await _openSubtaskMenu(tester, childId);
+      await tester.tap(find.byKey(Key('subtask-detach-$childId')));
+      await tester.pumpAndSettle();
+      expect(
+        (await fixture.container.read(taskRepositoryProvider)!.getById(childId))
+            ?.parentTaskId,
+        isNull,
+      );
+      final changes = await fixture.database
+          .select(fixture.database.todoSyncChanges)
+          .get();
+      expect(
+        changes.where((change) => change.entityLocalId == childId),
+        hasLength(3),
+      );
+    },
+  );
+
+  testWidgets('detail subtask drag persists sibling order and task outbox', (
+    tester,
+  ) async {
+    final fixture = await _pumpDirectPane(
+      tester,
+      taskId: TodoVisualFixture.metadataTaskId,
+    );
+    const firstId = 'visual-task-metadata-child-1';
+    const secondId = 'visual-task-metadata-child-2';
+    final secondRow = find.byKey(const Key('subtask-row-$secondId'));
+    await tester.scrollUntilVisible(
+      secondRow,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    final mouse = await _hover(tester, secondRow);
+    await tester.pumpAndSettle();
+    final handle = find.byKey(const Key('subtask-reorder-$secondId'));
+    final firstRow = find.byKey(const Key('subtask-row-$firstId'));
+    expect(handle, findsOneWidget);
+
+    await tester.drag(
+      handle,
+      Offset(0, tester.getCenter(firstRow).dy - tester.getCenter(handle).dy),
+    );
+    await mouse.removePointer();
+    await tester.pumpAndSettle();
+
+    final children = await fixture.database.childrenOf(
+      TodoVisualFixture.metadataTaskId,
+    );
+    expect(children.map((task) => task.id), [secondId, firstId]);
+    final changes = await fixture.database
+        .select(fixture.database.todoSyncChanges)
+        .get();
+    expect(changes.map((change) => change.entityLocalId), [secondId, firstId]);
+  });
+
+  testWidgets(
+    'fifth-level sibling drag stays within its parent and is replayable',
+    (tester) async {
+      final fixture = await _pumpDirectPane(
+        tester,
+        taskId: TodoVisualFixture.metadataTaskId,
+      );
+      final repository = fixture.container.read(taskRepositoryProvider)!;
+      var parentId = 'visual-task-metadata-child-1';
+      for (var depth = 2; depth <= 4; depth++) {
+        final task = await repository.create(
+          listId: TodoVisualFixture.inboxListId,
+          title: '第 $depth 层任务',
+          parentTaskId: parentId,
+        );
+        parentId = task.id;
+      }
+      final first = await repository.create(
+        listId: TodoVisualFixture.inboxListId,
+        title: '第五层任务 A',
+        parentTaskId: parentId,
+      );
+      final second = await repository.create(
+        listId: TodoVisualFixture.inboxListId,
+        title: '第五层任务 B',
+        parentTaskId: parentId,
+      );
+      await fixture.database.delete(fixture.database.todoSyncChanges).go();
+      await tester.pumpAndSettle();
+
+      final secondRow = find.byKey(Key('subtask-row-${second.id}'));
+      await tester.scrollUntilVisible(
+        secondRow,
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      final mouse = await _hover(tester, secondRow);
+      await tester.pumpAndSettle();
+      final handle = find.byKey(Key('subtask-reorder-${second.id}'));
+      final firstRow = find.byKey(Key('subtask-row-${first.id}'));
+      await tester.drag(
+        handle,
+        Offset(0, tester.getCenter(firstRow).dy - tester.getCenter(handle).dy),
+      );
+      await mouse.removePointer();
+      await tester.pumpAndSettle();
+
+      expect(await repository.depthOf(first.id), 5);
+      expect(await repository.depthOf(second.id), 5);
+      expect(
+        (await fixture.database.childrenOf(parentId)).map((task) => task.id),
+        [second.id, first.id],
+      );
+      final changes = await fixture.database
+          .select(fixture.database.todoSyncChanges)
+          .get();
+      expect(changes.map((change) => change.entityLocalId), [
+        second.id,
+        first.id,
+      ]);
+    },
+  );
+
+  testWidgets('nested subtask menu creates a child under the selected row', (
+    tester,
+  ) async {
+    final fixture = await _pumpDirectPane(
+      tester,
+      taskId: TodoVisualFixture.metadataTaskId,
+    );
+    const parentId = 'visual-task-metadata-child-1';
+
+    await _openSubtaskMenu(tester, parentId);
+    await tester.tap(find.byKey(const Key('subtask-add-child-$parentId')));
+    await tester.pumpAndSettle();
+    expect(find.text('新建子任务'), findsOneWidget);
+    final titleField = find.byWidgetPredicate(
+      (widget) => widget is TextField && widget.decoration?.labelText == '标题',
+    );
+    await tester.enterText(titleField.last, '嵌套新增任务');
+    await tester.tap(find.text('保存').last);
+    await tester.pumpAndSettle();
+
+    final created = await (fixture.database.select(
+      fixture.database.todoTasks,
+    )..where((row) => row.title.equals('嵌套新增任务'))).getSingle();
+    expect(created.parentTaskId, parentId);
+    final change = await (fixture.database.select(
+      fixture.database.todoSyncChanges,
+    )..where((row) => row.entityLocalId.equals(created.id))).getSingle();
+    expect(change.entity, 'task');
+  });
+
+  testWidgets('read-only subtask hierarchy failure is visible and rolls back', (
+    tester,
+  ) async {
+    final fixture = await _pumpDirectPane(
+      tester,
+      taskId: TodoVisualFixture.metadataTaskId,
+    );
+    final now = DateTime.utc(2026, 7, 30, 18);
+    await fixture.database
+        .into(fixture.database.todoLists)
+        .insert(
+          TodoListsCompanion.insert(
+            id: TodoVisualFixture.inboxListId,
+            name: '收集箱',
+            writable: const Value(false),
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    const childId = 'visual-task-metadata-child-2';
+
+    await _openSubtaskMenu(tester, childId);
+    await tester.tap(find.byKey(Key('subtask-indent-$childId')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('当前清单为只读，无法修改任务'), findsOneWidget);
+    expect(
+      (await fixture.container.read(taskRepositoryProvider)!.getById(childId))
+          ?.parentTaskId,
+      TodoVisualFixture.metadataTaskId,
+    );
+    expect(
+      await fixture.database.select(fixture.database.todoSyncChanges).get(),
+      isEmpty,
+    );
+  });
+}
+
+Future<void> _openSubtaskMenu(WidgetTester tester, String taskId) async {
+  final row = find.byKey(Key('subtask-row-$taskId'));
+  await tester.scrollUntilVisible(
+    row,
+    300,
+    scrollable: find.byType(Scrollable).first,
+  );
+  final mouse = await _hover(tester, row);
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(Key('subtask-more-$taskId')));
+  await tester.pumpAndSettle();
+  await mouse.removePointer();
+}
+
+Future<TestGesture> _hover(WidgetTester tester, Finder finder) async {
+  final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+  await mouse.addPointer(location: tester.getCenter(finder));
+  await mouse.moveTo(tester.getCenter(finder));
+  return mouse;
 }
 
 Finder get _detailRegion => find.byKey(const Key('todo-detail'));
