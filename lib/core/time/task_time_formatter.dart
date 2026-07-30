@@ -13,11 +13,13 @@ String formatTaskDateTime(
   required bool fixedTimezone,
   String? timeZone,
 }) {
-  final display = _displayTime(
-    instant,
-    fixedTimezone: fixedTimezone,
-    timeZone: timeZone,
-  );
+  final display = allDay
+      ? instant
+      : taskDisplayDateTime(
+          instant,
+          fixedTimezone: fixedTimezone,
+          timeZone: timeZone,
+        );
   final date =
       '${display.year.toString().padLeft(4, '0')}-'
       '${display.month.toString().padLeft(2, '0')}-'
@@ -28,27 +30,69 @@ String formatTaskDateTime(
       ' (${_timeZoneLabel(fixedTimezone, timeZone)})';
 }
 
-DateTime _displayTime(
+/// Converts a stored instant to the wall clock used by task presentation.
+DateTime taskDisplayDateTime(
   DateTime instant, {
   required bool fixedTimezone,
   required String? timeZone,
 }) {
+  final location = _fixedLocation(fixedTimezone, timeZone);
+  if (location == null) return instant.toLocal();
+  return timezone.TZDateTime.from(instant.toUtc(), location);
+}
+
+/// Moves an instant to [day] while preserving its presented wall-clock time.
+DateTime taskDateTimeForDisplayDay(
+  DateTime instant,
+  DateTime day, {
+  required bool fixedTimezone,
+  required String? timeZone,
+}) {
+  final display = taskDisplayDateTime(
+    instant,
+    fixedTimezone: fixedTimezone,
+    timeZone: timeZone,
+  );
+  final location = _fixedLocation(fixedTimezone, timeZone);
+  if (location != null) {
+    return timezone.TZDateTime(
+      location,
+      day.year,
+      day.month,
+      day.day,
+      display.hour,
+      display.minute,
+      display.second,
+      display.millisecond,
+      display.microsecond,
+    ).toUtc();
+  }
+  return DateTime(
+    day.year,
+    day.month,
+    day.day,
+    display.hour,
+    display.minute,
+    display.second,
+    display.millisecond,
+    display.microsecond,
+  );
+}
+
+timezone.Location? _fixedLocation(bool fixedTimezone, String? timeZone) {
   if (!fixedTimezone || timeZone == null || timeZone.trim().isEmpty) {
-    return instant.toLocal();
+    return null;
   }
   try {
     if (!_timeZonesInitialized) {
       timezone_data.initializeTimeZones();
       _timeZonesInitialized = true;
     }
-    return timezone.TZDateTime.from(
-      instant.toUtc(),
-      timezone.getLocation(timeZone),
-    );
+    return timezone.getLocation(timeZone.trim());
   } catch (_) {
     // Old locally cached data may contain an invalid zone. The server rejects
-    // new invalid IANA values, but this fallback keeps the detail readable.
-    return instant.toLocal();
+    // new invalid IANA values, but this fallback keeps the task usable.
+    return null;
   }
 }
 

@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/db/app_database.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/brand_colors.dart';
+import '../../../core/time/task_time_formatter.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../state/providers.dart';
 import '../task_detail_page.dart';
@@ -186,7 +187,14 @@ extension CalendarModeX on CalendarMode {
 DateTime? resolveTaskDate(TodoTask t) {
   final d = t.dueAt ?? t.endAt ?? t.startAt;
   if (d == null) return null;
-  return DateTime(d.year, d.month, d.day);
+  final display = t.allDay
+      ? d
+      : taskDisplayDateTime(
+          d,
+          fixedTimezone: t.fixedTimezone,
+          timeZone: t.timeZone,
+        );
+  return DateTime(display.year, display.month, display.day);
 }
 
 DateTime calendarDueAtForDay(TodoTask task, DateTime day) {
@@ -197,15 +205,11 @@ DateTime calendarDueAtForDay(TodoTask task, DateTime day) {
   if (source == null) {
     return DateTime(day.year, day.month, day.day);
   }
-  return DateTime(
-    day.year,
-    day.month,
-    day.day,
-    source.hour,
-    source.minute,
-    source.second,
-    source.millisecond,
-    source.microsecond,
+  return taskDateTimeForDisplayDay(
+    source,
+    day,
+    fixedTimezone: task.fixedTimezone,
+    timeZone: task.timeZone,
   );
 }
 
