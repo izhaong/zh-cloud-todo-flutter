@@ -28,6 +28,7 @@ class TaskViewActionRepository {
     : _uuid = uuid ?? const Uuid();
 
   static const _legacyTaskWorkspaceSourceKey = 'tasks_by_list';
+  static const _syntheticInboxListId = 'inbox';
 
   final AppDatabase _db;
   final SyncChangeQueue _queue;
@@ -380,6 +381,7 @@ class TaskViewActionRepository {
     final list = await (_db.select(
       _db.todoLists,
     )..where((row) => row.id.equals(listId))).getSingleOrNull();
+    if (list == null && listId == _syntheticInboxListId) return;
     if (list == null) {
       throw StateError('清单不存在');
     }
