@@ -9,6 +9,73 @@ import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 
 void main() {
   test(
+    'upgrades schema 20 by localizing persisted filter references',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'zh_cloud_todo_b3_schema20_',
+      );
+      final databaseFile = File('${directory.path}/todo.sqlite');
+      addTearDown(() async {
+        if (await directory.exists()) {
+          await directory.delete(recursive: true);
+        }
+      });
+
+      final beforeUpgrade = AppDatabase.forTesting(
+        NativeDatabase(databaseFile),
+      );
+      final now = DateTime.utc(2026, 7, 30, 13);
+      await beforeUpgrade.batch((batch) {
+        batch.insert(
+          beforeUpgrade.todoLists,
+          TodoListsCompanion.insert(
+            id: 'local-list',
+            serverId: const Value(101),
+            name: '项目',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+        batch.insert(
+          beforeUpgrade.todoTags,
+          TodoTagsCompanion.insert(
+            id: 'local-tag',
+            serverId: const Value(201),
+            name: '工作',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+        batch.insert(
+          beforeUpgrade.todoFilters,
+          TodoFiltersCompanion.insert(
+            id: 'local-filter',
+            name: '项目工作',
+            conditionJson: '{"listIds":[101],"tagIds":[201],"priorities":[3]}',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+      });
+      await beforeUpgrade.close();
+      _downgradeToSchema20(databaseFile);
+
+      final upgraded = AppDatabase.forTesting(NativeDatabase(databaseFile));
+      addTearDown(upgraded.close);
+      final version = await upgraded
+          .customSelect('PRAGMA user_version')
+          .getSingle();
+      final filter = await upgraded.select(upgraded.todoFilters).getSingle();
+
+      expect(version.data['user_version'], 21);
+      expect(filter.conditionJson, contains('"local-list"'));
+      expect(filter.conditionJson, contains('"local-tag"'));
+      expect(filter.conditionJson, isNot(contains('[101]')));
+      expect(filter.conditionJson, isNot(contains('[201]')));
+    },
+  );
+
+  test(
     'upgrades schema 19 with local folder UUIDs and backfills existing lists',
     () async {
       final directory = await Directory.systemTemp.createTemp(
@@ -57,7 +124,7 @@ void main() {
           .getSingle();
       final list = await upgraded.listByLocalId('list-before-local-reference');
 
-      expect(version.data['user_version'], 20);
+      expect(version.data['user_version'], 21);
       expect(list?.folderId, 88);
       expect(list?.folderLocalId, 'folder-before-local-reference');
     },
@@ -105,7 +172,7 @@ void main() {
           )
           .getSingle();
 
-      expect(version.data['user_version'], 20);
+      expect(version.data['user_version'], 21);
       expect(access.data['id'], 'list-before-access-role');
       expect(access.data['access_role'], 'owner');
       expect(access.data['writable'], 1);
@@ -148,7 +215,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 20);
+      expect(version.data['user_version'], 21);
       final task = await upgraded.select(upgraded.todoTasks).getSingle();
       expect(task.title, '迁移前任务');
       expect(task.assigneeUserId, isNull);
@@ -176,7 +243,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 20);
+      expect(version.data['user_version'], 21);
 
       final taskColumns = await upgraded
           .customSelect('PRAGMA table_info(todo_tasks)')
@@ -312,7 +379,7 @@ void main() {
           .getSingle();
       final rule = await upgraded.select(upgraded.todoRepeatRules).getSingle();
 
-      expect(version.data['user_version'], 20);
+      expect(version.data['user_version'], 21);
       expect(rule.id, 'repeat-rule-before-b2-b3-merge');
       expect(rule.byDay, '1,3,5');
       expect(rule.selectedDatesJson, isNull);
@@ -357,7 +424,7 @@ void main() {
         .getSingle();
     final rule = await upgraded.select(upgraded.todoRepeatRules).getSingle();
 
-    expect(version.data['user_version'], 20);
+    expect(version.data['user_version'], 21);
     expect(rule.freq, 'CUSTOM');
     expect(rule.byDay, '1,3,5');
     expect(rule.repeatMode, 'ON_DUE');
@@ -444,7 +511,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 20);
+      expect(version.data['user_version'], 21);
       await upgraded.close();
 
       final reopened = AppDatabase.forTesting(NativeDatabase(databaseFile));
@@ -536,7 +603,7 @@ void main() {
           )
           .getSingle();
 
-      expect(version.data['user_version'], 20);
+      expect(version.data['user_version'], 21);
       expect(task.title, '迁移前看板任务');
       expect(boardTable.data['name'], 'todo_board_preferences');
     },
@@ -601,7 +668,7 @@ void main() {
           )
           .getSingle();
 
-      expect(version.data['user_version'], 20);
+      expect(version.data['user_version'], 21);
       expect(task.title, '迁移前可靠性任务');
       expect(change.status, 'queued');
       expect(change.nextAttemptAt, isNull);
@@ -609,6 +676,15 @@ void main() {
       expect(recommendationTable.data['name'], 'todo_recommendations');
     },
   );
+}
+
+void _downgradeToSchema20(File databaseFile) {
+  final database = sqlite.sqlite3.open(databaseFile.path);
+  try {
+    database.execute('PRAGMA user_version = 20');
+  } finally {
+    database.dispose();
+  }
 }
 
 void _downgradeToSchema19WithoutFolderLocalId(File databaseFile) {

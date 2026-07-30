@@ -293,15 +293,29 @@ class SyncCoordinator {
     if (changes.isEmpty) return 0;
     _prepareTemporaryEntityIds(changes);
     final dtos = <SyncChangeDto>[];
+    final sentChanges = <TodoSyncChange>[];
     for (final change in changes) {
-      final dto = await _toChangeDto(change);
-      if (dto != null) dtos.add(dto);
+      try {
+        final dto = await _toChangeDto(change);
+        if (dto != null) {
+          dtos.add(dto);
+          sentChanges.add(change);
+        }
+      } on FormatException {
+        // 单条损坏的本地 payload 不能阻断同批其它有效 mutation，也不能按
+        // 网络故障无限重试。保留原文并给 UI 一个稳定、可解释的失败码。
+        await _markLocalPayloadInvalid(change);
+      } on TypeError {
+        await _markLocalPayloadInvalid(change);
+      } on _LocalPayloadInvalid {
+        await _markLocalPayloadInvalid(change);
+      }
     }
     if (dtos.isEmpty) return 0;
 
     try {
       final result = await api.push(
-        idempotencyKey: changes.first.clientMutationId,
+        idempotencyKey: sentChanges.first.clientMutationId,
         changes: dtos,
       );
       for (final accepted in result.accepted) {
@@ -320,7 +334,7 @@ class SyncCoordinator {
             conflict.clientMutationId!: conflict,
       };
       var count = 0;
-      for (final change in changes) {
+      for (final change in sentChanges) {
         if (acceptedIds.contains(change.clientMutationId)) {
           final conflict = conflictsByMutationId[change.clientMutationId];
           await (db.update(
@@ -336,7 +350,7 @@ class SyncCoordinator {
       }
       return count;
     } catch (_) {
-      for (final change in changes) {
+      for (final change in sentChanges) {
         await (db.update(
           db.todoSyncChanges,
         )..where((t) => t.id.equals(change.id))).write(
@@ -351,6 +365,19 @@ class SyncCoordinator {
       }
       return 0;
     }
+  }
+
+  Future<void> _markLocalPayloadInvalid(TodoSyncChange change) {
+    return (db.update(
+      db.todoSyncChanges,
+    )..where((row) => row.id.equals(change.id))).write(
+      TodoSyncChangesCompanion(
+        status: const Value('failed'),
+        attemptCount: Value(change.attemptCount + 1),
+        nextAttemptAt: const Value(null),
+        failureReason: const Value('LOCAL_PAYLOAD_INVALID'),
+      ),
+    );
   }
 
   /// `folder` 走普通 REST，不进入 `/sync` 协议。
@@ -757,8 +784,11 @@ class SyncCoordinator {
       final row = await (db.select(
         db.todoLists,
       )..where((list) => list.id.equals(localId.toString()))).getSingleOrNull();
-      if (row != null && row.serverId == null) return null;
-      resolved.add(row?.serverId ?? localId.toString());
+      if (row == null) {
+        throw const _LocalPayloadInvalid();
+      }
+      if (row.serverId == null) return null;
+      resolved.add(row.serverId!);
     }
     return resolved;
   }
@@ -773,8 +803,11 @@ class SyncCoordinator {
       final row = await (db.select(
         db.todoTags,
       )..where((tag) => tag.id.equals(localId.toString()))).getSingleOrNull();
-      if (row != null && row.serverId == null) return null;
-      resolved.add(row?.serverId ?? localId.toString());
+      if (row == null) {
+        throw const _LocalPayloadInvalid();
+      }
+      if (row.serverId == null) return null;
+      resolved.add(row.serverId!);
     }
     return resolved;
   }
@@ -1851,9 +1884,9 @@ class SyncCoordinator {
     final now = DateTime.now();
     final rawConditions =
         payload['conditionsJson'] ?? payload['conditions'] ?? payload;
-    final conditionJson = rawConditions is String
-        ? rawConditions
-        : jsonEncode(rawConditions);
+    final localizedConditions = await _localizeFilterConditions(rawConditions);
+    if (localizedConditions == null && existing == null) return;
+    final conditionJson = localizedConditions ?? existing!.conditionJson;
     final companion = TodoFiltersCompanion(
       id: Value(existing?.id ?? _uuid.v4()),
       serverId: Value(serverId),
@@ -1879,6 +1912,71 @@ class SyncCoordinator {
         db.todoFilters,
       )..where((t) => t.id.equals(existing.id))).write(companion);
     }
+  }
+
+  Future<String?> _localizeFilterConditions(Object? rawConditions) async {
+    final original = rawConditions is String
+        ? rawConditions
+        : jsonEncode(rawConditions);
+    Object? decoded;
+    try {
+      decoded = rawConditions is String
+          ? jsonDecode(rawConditions)
+          : rawConditions;
+    } on FormatException {
+      return original;
+    }
+    if (decoded is! Map) return original;
+    final conditions = Map<String, dynamic>.from(decoded);
+    if (conditions.containsKey('listIds')) {
+      final refs = conditions['listIds'];
+      if (refs is! List) return original;
+      final localIds = <String>[];
+      for (final ref in refs) {
+        final localId = await _localListIdForFilterRef(ref);
+        if (localId == null) return null;
+        localIds.add(localId);
+      }
+      conditions['listIds'] = localIds;
+    }
+    if (conditions.containsKey('tagIds')) {
+      final refs = conditions['tagIds'];
+      if (refs is! List) return original;
+      final localIds = <String>[];
+      for (final ref in refs) {
+        final localId = await _localTagIdForFilterRef(ref);
+        if (localId == null) return null;
+        localIds.add(localId);
+      }
+      conditions['tagIds'] = localIds;
+    }
+    return jsonEncode(conditions);
+  }
+
+  Future<String?> _localListIdForFilterRef(Object? ref) async {
+    if (ref is String) {
+      final local = await db.listByLocalId(ref);
+      if (local != null) return local.id;
+    }
+    final serverId = ref is num
+        ? ref.toInt()
+        : int.tryParse(ref?.toString() ?? '');
+    if (serverId == null) return null;
+    return (await db.listByServerId(serverId))?.id;
+  }
+
+  Future<String?> _localTagIdForFilterRef(Object? ref) async {
+    if (ref is String) {
+      final local = await (db.select(
+        db.todoTags,
+      )..where((row) => row.id.equals(ref))).getSingleOrNull();
+      if (local != null) return local.id;
+    }
+    final serverId = ref is num
+        ? ref.toInt()
+        : int.tryParse(ref?.toString() ?? '');
+    if (serverId == null) return null;
+    return (await db.tagByServerId(serverId))?.id;
   }
 
   Future<void> _upsertLocalTaskTag(
@@ -1969,6 +2067,10 @@ class SyncCoordinator {
     final normalized = dates.toList()..sort();
     return jsonEncode(normalized);
   }
+}
+
+class _LocalPayloadInvalid implements Exception {
+  const _LocalPayloadInvalid();
 }
 
 class SyncOutcome {
