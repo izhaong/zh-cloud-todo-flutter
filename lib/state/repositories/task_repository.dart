@@ -96,6 +96,7 @@ class TaskRepository {
     late TodoTask row;
     await _db.transaction(() async {
       await _ensureInboxList(listId, now);
+      await _requireWritableList(listId);
       await _assertParentChainDoesNotContain(null, listId, parentTaskId);
       await _db
           .into(_db.todoTasks)
