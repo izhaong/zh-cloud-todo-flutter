@@ -566,6 +566,71 @@ void main() {
 
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('时间线日尺度点击空白小时创建一小时时段任务', (tester) async {
+    TimelineTaskCreateRequest? request;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TimelineView(
+            tasks: const [],
+            now: DateTime(2026, 7, 15, 9),
+            scale: TimelineScale.day,
+            onCreateTask: (value) async => request = value,
+          ),
+        ),
+      ),
+    );
+
+    final daySlot = find.byKey(const Key('timeline-slot-day-10'));
+    await tester.ensureVisible(daySlot);
+    await tester.tap(daySlot);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('timeline-create-title')),
+      '点击创建的任务',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, '创建'));
+    await tester.pumpAndSettle();
+
+    expect(request?.title, '点击创建的任务');
+    expect(request?.startAt, DateTime(2026, 7, 15, 10));
+    expect(request?.endAt, DateTime(2026, 7, 15, 11));
+    expect(request?.dueAt, DateTime(2026, 7, 15, 11));
+    expect(request?.allDay, isFalse);
+  });
+
+  testWidgets('时间线月尺度点击空白日期创建全天时段任务', (tester) async {
+    TimelineTaskCreateRequest? request;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TimelineView(
+            tasks: const [],
+            now: DateTime(2026, 7, 15, 9),
+            scale: TimelineScale.month,
+            onCreateTask: (value) async => request = value,
+          ),
+        ),
+      ),
+    );
+
+    final monthSlot = find.byKey(const Key('timeline-slot-month-15'));
+    await tester.ensureVisible(monthSlot);
+    await tester.tap(monthSlot);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('timeline-create-title')),
+      '全天安排',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, '创建'));
+    await tester.pumpAndSettle();
+
+    expect(request?.startAt, DateTime(2026, 7, 15));
+    expect(request?.endAt, DateTime(2026, 7, 16));
+    expect(request?.dueAt, DateTime(2026, 7, 16));
+    expect(request?.allDay, isTrue);
+  });
 }
 
 TodoTask _viewTask({

@@ -11,6 +11,22 @@ import '../../../core/widgets/app_widgets.dart';
 import '../task_detail_page.dart';
 import '../task_view_mutation_feedback.dart';
 
+class TimelineTaskCreateRequest {
+  const TimelineTaskCreateRequest({
+    required this.title,
+    required this.startAt,
+    required this.endAt,
+    required this.dueAt,
+    required this.allDay,
+  });
+
+  final String title;
+  final DateTime startAt;
+  final DateTime endAt;
+  final DateTime dueAt;
+  final bool allDay;
+}
+
 /// M11-B3 时间线 (Timeline) 视图。
 ///
 /// 按 due_at 把任务分组（已过期 → 今天 → 明天 → 本周 → 下周 → 更早/无 due）。
@@ -23,6 +39,7 @@ class TimelineView extends ConsumerWidget {
     DateTime? now,
     this.onTaskSelected,
     this.onTaskTimeChange,
+    this.onCreateTask,
     this.zoom = 1,
     this.scale = TimelineScale.week,
     this.collapsedGroupIds = const {},
@@ -48,6 +65,7 @@ class TimelineView extends ConsumerWidget {
     required DateTime dueAt,
   })?
   onTaskTimeChange;
+  final Future<void> Function(TimelineTaskCreateRequest request)? onCreateTask;
 
   DateTime get _effectiveNow => _now ?? DateTime.now();
 
@@ -64,6 +82,14 @@ class TimelineView extends ConsumerWidget {
           scale: scale,
           onZoomChanged: onZoomChanged,
           onScaleChanged: onScaleChanged,
+        ),
+        _TimelineSlotStrip(
+          now: now,
+          scale: scale,
+          zoom: normalizedZoom,
+          onSlotTap: onCreateTask == null
+              ? null
+              : (slot) => _openCreateDialog(context, slot),
         ),
         Expanded(
           child: empty
@@ -101,6 +127,77 @@ class TimelineView extends ConsumerWidget {
       return;
     }
     showTaskDetailSheet(context, t.id);
+  }
+
+  Future<void> _openCreateDialog(
+    BuildContext context,
+    _TimelineSlot slot,
+  ) async {
+    var draftTitle = '';
+    final title = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('创建时间线任务'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(slot.description),
+            const SizedBox(height: 12),
+            TextField(
+              key: const Key('timeline-create-title'),
+              autofocus: true,
+              textInputAction: TextInputAction.done,
+              decoration: const InputDecoration(
+                labelText: '任务标题',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (value) => draftTitle = value,
+              onSubmitted: (value) {
+                final normalized = value.trim();
+                if (normalized.isNotEmpty) {
+                  Navigator.pop(dialogContext, normalized);
+                }
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final normalized = draftTitle.trim();
+              if (normalized.isNotEmpty) {
+                Navigator.pop(dialogContext, normalized);
+              }
+            },
+            child: const Text('创建'),
+          ),
+        ],
+      ),
+    );
+    if (title == null || !context.mounted) return;
+    try {
+      await onCreateTask!(
+        TimelineTaskCreateRequest(
+          title: title,
+          startAt: slot.startAt,
+          endAt: slot.endAt,
+          dueAt: slot.endAt,
+          allDay: slot.allDay,
+        ),
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(taskViewMutationFailureMessage(error, '创建任务失败，请重试')),
+        ),
+      );
+    }
   }
 
   /// 把任务分配到 6 个时间桶；返回按显示顺序排好的桶列表。
@@ -292,6 +389,154 @@ class _TimelineZoomToolbar extends StatelessWidget {
 enum TimelineScale { day, week, month }
 
 enum TimelineBucket { overdue, today, tomorrow, thisWeek, nextWeek, later }
+
+class _TimelineSlot {
+  const _TimelineSlot({
+    required this.keySuffix,
+    required this.label,
+    required this.description,
+    required this.startAt,
+    required this.endAt,
+    required this.allDay,
+  });
+
+  final String keySuffix;
+  final String label;
+  final String description;
+  final DateTime startAt;
+  final DateTime endAt;
+  final bool allDay;
+}
+
+class _TimelineSlotStrip extends StatelessWidget {
+  const _TimelineSlotStrip({
+    required this.now,
+    required this.scale,
+    required this.zoom,
+    this.onSlotTap,
+  });
+
+  final DateTime now;
+  final TimelineScale scale;
+  final double zoom;
+  final ValueChanged<_TimelineSlot>? onSlotTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = brandColors(context);
+    final slots = _slots();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      child: Row(
+        children: [
+          Text(
+            '时间轴',
+            style: TextStyle(
+              color: colors.mutedForeground,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final slot in slots)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: Tooltip(
+                        message: '${slot.description}，点击空白处创建任务',
+                        child: InkWell(
+                          key: Key(
+                            'timeline-slot-${scale.name}-${slot.keySuffix}',
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: onSlotTap == null
+                              ? null
+                              : () => onSlotTap!(slot),
+                          child: Container(
+                            constraints: BoxConstraints(
+                              minWidth:
+                                  (scale == TimelineScale.day ? 58 : 72) * zoom,
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 9,
+                            ),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: colors.border),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              slot.label,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: colors.foreground,
+                                fontSize: 12 * zoom,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<_TimelineSlot> _slots() {
+    final today = DateTime(now.year, now.month, now.day);
+    switch (scale) {
+      case TimelineScale.day:
+        return [
+          for (var hour = 0; hour < 24; hour++)
+            _TimelineSlot(
+              keySuffix: '$hour',
+              label: '${hour.toString().padLeft(2, '0')}:00',
+              description:
+                  '${today.month}月${today.day}日 ${hour.toString().padLeft(2, '0')}:00',
+              startAt: DateTime(today.year, today.month, today.day, hour),
+              endAt: DateTime(today.year, today.month, today.day, hour + 1),
+              allDay: false,
+            ),
+        ];
+      case TimelineScale.week:
+        final weekStart = today.subtract(Duration(days: today.weekday - 1));
+        return [
+          for (var offset = 0; offset < 7; offset++)
+            _allDaySlot(
+              weekStart.add(Duration(days: offset)),
+              keySuffix: '${offset + 1}',
+            ),
+        ];
+      case TimelineScale.month:
+        final days = DateTime(today.year, today.month + 1, 0).day;
+        return [
+          for (var day = 1; day <= days; day++)
+            _allDaySlot(
+              DateTime(today.year, today.month, day),
+              keySuffix: '$day',
+            ),
+        ];
+    }
+  }
+
+  _TimelineSlot _allDaySlot(DateTime day, {required String keySuffix}) {
+    return _TimelineSlot(
+      keySuffix: keySuffix,
+      label: '${day.month}/${day.day}',
+      description: '${day.month}月${day.day}日 全天',
+      startAt: day,
+      endAt: day.add(const Duration(days: 1)),
+      allDay: true,
+    );
+  }
+}
 
 DateTime? _timelineDueDisplay(TodoTask task) {
   final due = task.dueAt;
