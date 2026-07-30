@@ -60,6 +60,28 @@ void main() {
     expect(queued.single.entityLocalId, 'task-1');
   });
 
+  test('日历拖拽改期只更新截止时间并在同一事务入队', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    await _seedViewActionList(db);
+    final repository = TaskViewActionRepository(db, SyncChangeQueue(db));
+
+    await repository.moveCalendarTask(
+      'task-1',
+      dueAt: DateTime.utc(2026, 7, 20, 10),
+    );
+
+    final task = await _taskById(db, 'task-1');
+    final queued = await db.select(db.todoSyncChanges).get();
+    expect(task.startAt?.toUtc(), DateTime.utc(2026, 7, 16, 9));
+    expect(task.endAt?.toUtc(), DateTime.utc(2026, 7, 16, 10));
+    expect(task.dueAt?.toUtc(), DateTime.utc(2026, 7, 20, 10));
+    expect(queued, hasLength(1));
+    expect(queued.single.entity, SyncEntities.task);
+    expect(queued.single.op, SyncOps.upsert);
+    expect(queued.single.entityLocalId, 'task-1');
+  });
+
   test('看板跨列写入明确状态字段并入队', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
@@ -169,6 +191,31 @@ void main() {
 
     final task = await _taskById(db, 'task-1');
     expect(task.startAt?.toUtc(), DateTime.utc(2026, 7, 16, 9));
+    expect(await db.select(db.todoSyncChanges).get(), isEmpty);
+  });
+
+  test('只读清单拒绝日历拖拽改期且不修改任务或 outbox', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    await _seedViewActionList(db, writable: false);
+    final repository = TaskViewActionRepository(db, SyncChangeQueue(db));
+
+    await expectLater(
+      repository.moveCalendarTask(
+        'task-1',
+        dueAt: DateTime.utc(2026, 7, 20, 10),
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          '当前清单为只读，无法修改任务',
+        ),
+      ),
+    );
+
+    final task = await _taskById(db, 'task-1');
+    expect(task.dueAt?.toUtc(), DateTime.utc(2026, 7, 16, 10));
     expect(await db.select(db.todoSyncChanges).get(), isEmpty);
   });
 

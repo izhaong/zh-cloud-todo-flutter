@@ -90,6 +90,56 @@ void main() {
     });
   });
 
+  group('calendarDueAtForDay', () {
+    test('拖到目标日期时保留原截止时间的时分秒', () {
+      final now = DateTime(2026, 6, 15, 12);
+      final task = TodoTask(
+        id: 'move-time',
+        listId: '1',
+        title: '保留时间',
+        completed: false,
+        cancelled: false,
+        priority: 0,
+        isPinned: false,
+        sortOrder: 0,
+        dueAt: DateTime(2026, 6, 20, 18, 30, 15),
+        allDay: false,
+        fixedTimezone: false,
+        updatedAt: now,
+        createdAt: now,
+      );
+
+      expect(
+        calendarDueAtForDay(task, DateTime(2026, 6, 23)),
+        DateTime(2026, 6, 23, 18, 30, 15),
+      );
+    });
+
+    test('全天任务拖到目标日期后落在当天零点', () {
+      final now = DateTime(2026, 6, 15, 12);
+      final task = TodoTask(
+        id: 'move-all-day',
+        listId: '1',
+        title: '全天任务',
+        completed: false,
+        cancelled: false,
+        priority: 0,
+        isPinned: false,
+        sortOrder: 0,
+        dueAt: DateTime(2026, 6, 20),
+        allDay: true,
+        fixedTimezone: false,
+        updatedAt: now,
+        createdAt: now,
+      );
+
+      expect(
+        calendarDueAtForDay(task, DateTime(2026, 6, 23)),
+        DateTime(2026, 6, 23),
+      );
+    });
+  });
+
   testWidgets('CalendarView 月模式渲染工具栏 + 网格', (tester) async {
     final now = DateTime(2026, 6, 15, 12, 0, 0);
     final tasks = <TodoTask>[
@@ -165,6 +215,97 @@ void main() {
     expect(_selectedCalendarMode(tester), CalendarMode.agenda);
     expect(find.text('日程会议'), findsOneWidget);
     expect(find.text('09:00–10:00'), findsOneWidget);
+  });
+
+  testWidgets('月视图直接拖动任务卡到日期格会请求改期', (tester) async {
+    final now = DateTime(2026, 6, 15, 12);
+    final task = TodoTask(
+      id: 'drag-task',
+      listId: '1',
+      title: '拖拽改期',
+      completed: false,
+      cancelled: false,
+      priority: 2,
+      isPinned: false,
+      sortOrder: 0,
+      dueAt: DateTime(2026, 6, 20, 18, 30),
+      allDay: false,
+      fixedTimezone: false,
+      updatedAt: now,
+      createdAt: now,
+    );
+    (String, DateTime)? request;
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: CalendarView(
+              tasks: [task],
+              now: now,
+              onTaskDateChanged: (moved, dueAt) async {
+                request = (moved.id, dueAt);
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final source = find.byKey(const ValueKey('calendar-task-drag-drag-task'));
+    final target = find.byKey(const ValueKey('calendar-day-2026-6-23'));
+    await tester.drag(
+      source,
+      tester.getCenter(target) - tester.getCenter(source),
+    );
+    await tester.pumpAndSettle();
+
+    expect(request, ('drag-task', DateTime(2026, 6, 23, 18, 30)));
+  });
+
+  testWidgets('月视图拖拽改期失败时显示只读原因', (tester) async {
+    final now = DateTime(2026, 6, 15, 12);
+    final task = TodoTask(
+      id: 'readonly-task',
+      listId: 'readonly',
+      title: '只读任务',
+      completed: false,
+      cancelled: false,
+      priority: 0,
+      isPinned: false,
+      sortOrder: 0,
+      dueAt: DateTime(2026, 6, 20, 9),
+      allDay: false,
+      fixedTimezone: false,
+      updatedAt: now,
+      createdAt: now,
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: CalendarView(
+              tasks: [task],
+              now: now,
+              onTaskDateChanged: (_, _) async {
+                throw StateError('当前清单为只读，无法修改任务');
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final source = find.byKey(
+      const ValueKey('calendar-task-drag-readonly-task'),
+    );
+    final target = find.byKey(const ValueKey('calendar-day-2026-6-23'));
+    await tester.drag(
+      source,
+      tester.getCenter(target) - tester.getCenter(source),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('当前清单为只读，无法修改任务'), findsOneWidget);
   });
 
   testWidgets('CalendarView 列表模式按日期排序', (tester) async {
