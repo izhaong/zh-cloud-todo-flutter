@@ -19,9 +19,19 @@
 
 - [x] T010 在 `test/features/task/task_organize_search_test.dart` 写搜索定位、组合过滤、智能清单禁止结构拖拽、五级拖拽和批量结果反馈的 Widget 失败测试。
 - [x] T011 修改 `lib/features/task/tasks_by_list_page.dart`、`lib/features/filter/filter_bar.dart`、`lib/features/tag/tag_page.dart` 与 `lib/state/providers.dart` 接入 query/batch use-case，使 T010 通过且 Widget 不直接调用 API。
-- [ ] T012 运行 `plan.md` 的低资源命令，把实际命令、fixture 规模、性能测量、失败恢复与未运行的双端旅程写入 Docs #51；未验证条目保持 `partial`。
-- [ ] T013 与 Service #183 对齐请求/响应、分页、排序键、层级错误、批量逐项结果和 mutation 幂等键，并在 Docs #51 链接双方 PR。
+- [x] T012 运行 `plan.md` 的低资源命令，把实际命令、fixture 规模、性能测量、失败恢复与未运行的双端旅程写入 Docs #51；未验证条目保持 `partial`。
+- [x] T013 与 Service #183 对齐请求/响应、分页、排序键、层级错误、批量逐项结果和 mutation 幂等键，并在 Docs #51 链接双方 PR。
 - [x] T014 补齐总控 B3 的负责人过滤合同：Drift 保存 `assigneeUserId` 与可空展示名，sync pull 可回放，Repository 与高级筛选 UI 可按稳定用户 ID 过滤；Service #183 必须同步返回并校验同一字段后才能结项。
+
+## Flutter / Service 冻结契约
+
+| 能力 | Flutter 消费 | Service #183 / PR #184 |
+| --- | --- | --- |
+| 全局搜索 | `GET /task/global-search` 发送 `keyword/pageNo/pageSize`，读取 `{list,total}` 的 `task/list/tag` 结果。 | `PageResult<AppTodoGlobalSearchRespVO>`；任务优先，再按 `list/tag` 类型、标题和 ID 稳定排序分页。 |
+| 过滤与排序 | `/filter/apply` 发送 `id/pageNo/pageSize`；本地排序以置顶、用户字段、手工顺序和 UUID 稳定兜底。 | 允许 `priority/dueAt/createdAt/sortOrder/isPinned/title`（兼容 snake_case）与 `ASC/DESC`；服务端以置顶、用户字段、`sort_order`、ID 兜底，非法或重复键返回 `TODO_FILTER_INVALID_SORT`。 |
+| 层级与重排 | 本地 UUID 关系经 outbox 映射为 `parentTaskId/sortOrder`；REST 重排发送 `listId/items[{id,sortOrder}]`。 | 同清单、无循环约束分别使用 `TODO_TASK_PARENT_NOT_OWNED`、`TODO_TASK_PARENT_CYCLE`；服务端重排验证清单归属。Flutter 额外在本地冻结最多五级并在写入前拒绝。 |
+| 批量逐项结果 | `PUT /task/batch-update` 发送任务与修改字段；`deviceId/clientMutationId` 必须成对；读取 `taskId/status/errorCode`。 | 返回每项 `success/skipped/failed`，单项失败不回滚其它成功项；重复任务使用稳定跳过原因，权限或实体错误保留逐项错误码。 |
+| 同步幂等 | push 使用 `client_id/device_id/idempotency_key/changes`；同批重试保持幂等键和各 `clientMutationId` 不变，读取 `accepted/conflicts/nextCursor/serverTime`。 | 同时兼容 snake_case/camelCase；按设备、幂等键与请求摘要复用结果，内容不一致时拒绝，逐变更 `clientMutationId` 用于接受或冲突关联。 |
 
 ## 执行证据
 
@@ -55,3 +65,4 @@
 - 2026-07-30：T008/T009 的 filter/view preference 依赖与跨实体部分失败矩阵结项。实际发送批次只使用首个已发送 mutation 作为幂等键，网络失败只把已发送项标为 `retryable`，父实体未同步的 filter 继续排队；损坏 JSON 或缺失本地 list/tag 关联的 filter 仅自身以 `LOCAL_PAYLOAD_INVALID` 失败，不再阻断有效 view preference。filter pull 会把服务端 list/tag ID 还原为本地 UUID，schema 20→21 迁移同样转换既有过滤条件并保留无法完整解析的旧值。相关 27 项通过、1 项受保护 live 跳过；Flutter 全量 551 项通过、25 项受保护 live 跳过，`flutter analyze` 无错误。结合既有 folder/list/tag/task/task_tag/task/filter/view_preference 排序、依赖、离线重启与失败恢复证据，T008/T009 结项；真实 HTTP 合同、固定 GUI 和 Jenkins 仍归 T012/T013，不在此处宣称通过。
 - 2026-07-30：T005 的任务层级语义操作结项。`TaskRepository` 在既有同清单、只读、循环与五级子树校验上新增同层缩进、逐级反缩进、解除父关联和同父级完整手工排序；所有本地变更与 task outbox 保持同一 Drift transaction，排序拒绝重复、缺项或混入其它父节点的 UUID。直接子任务读取按 `sortOrder + UUID` 稳定返回，文件型数据库重启后仍保留父关系、顺序和 queued outbox。层级/组织/详情及看板回归 48 项通过；Flutter 全量 555 项通过、25 项受保护 live 跳过，`flutter analyze` 无错误。T005 结项；五级层级 Widget 入口与固定 GUI 仍归 T010/T011/T012，不在此处宣称完成。
 - 2026-07-30：T010/T011 的层级 Widget 最后一项结项。任务详情递归展示最多五级的本地 UUID 子任务树；同父级拖拽只调用 `TaskRepository.reorderSiblings`，hover 或移动端层级菜单的缩进、反缩进、解除关联和添加子任务也只经 Repository，不直接调用 API。红测先证明旧详情只有平铺勾选项且不存在层级入口；修复后两级操作、嵌套新增、只读失败 Snackbar 与真实第 5 层兄弟拖拽均通过，父节点不变、顺序写入 Drift 并形成逐项 task outbox。结合既有搜索定位、组合过滤、智能清单禁拖和批量逐项重试 Widget 证据，T010/T011 结项。详情/组织/Repository 定向 50 项通过；Flutter 全量 560 项通过、25 项受保护 live 跳过，既有 golden 一并通过且未更新基准，`flutter analyze` 无错误。真实固定 GUI、移动设备和外部 CI 仍归 T012。
+- 2026-07-30：T012/T013 收口。Dart MCP 以单并发执行 `task_organize_search_repository_test.dart`、`sync_coordinator_organize_search_test.dart` 与 `features/task/task_organize_search_test.dart`，57 项通过；同次文件型 SQLite 1,000 条 fixture 测得搜索首结果 `0ms`、过滤 `19ms`、三项批量反馈 `23ms`，均低于 `300ms` 本地预算；Dart MCP 全仓分析无错误，`git diff --check` 通过。JDK 25 `zh-cloud-service/develop` 执行批量、层级、重排、过滤、全局搜索与层级同步 6 个测试类，21 模块 reactor 成功、37 项通过。上表冻结了双方请求/响应、分页、排序键、层级错误、逐项结果和幂等键，证据同步至 Docs #51 并链接 Service PR #184 与本收口 PR。此前跨账户真实 HTTP 已通过且本地失败重试可见；本轮未重跑固定桌面 GUI、移动真机、移动端 1,000 条渲染/弱网 P95 和 Jenkins，因此这些外部门槛继续标记 `partial`，不作为 B3 全环境验收通过。
