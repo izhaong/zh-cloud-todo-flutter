@@ -547,6 +547,165 @@ void main() {
     ));
   });
 
+  test('时间线连续任务条按当前尺度计算位置、长度与可见区裁剪', () {
+    final dayTask = _viewTask(
+      id: 'timeline-day-span',
+      title: '日尺度跨度',
+      startAt: DateTime(2026, 7, 15, 9, 30),
+      endAt: DateTime(2026, 7, 15, 11),
+    );
+    final daySpan = calculateTimelineTaskSpan(
+      dayTask,
+      DateTime(2026, 7, 15, 9),
+      TimelineScale.day,
+    );
+
+    expect(daySpan?.startUnit, 9.5);
+    expect(daySpan?.unitCount, 1.5);
+
+    final clippedTask = TodoTask(
+      id: 'timeline-week-clipped',
+      listId: 'list-inbox',
+      title: '跨周裁剪',
+      completed: false,
+      cancelled: false,
+      allDay: true,
+      fixedTimezone: false,
+      priority: 0,
+      isPinned: false,
+      sortOrder: 0,
+      startAt: DateTime(2026, 7, 12),
+      endAt: DateTime(2026, 7, 14),
+      dueAt: DateTime(2026, 7, 14),
+      updatedAt: DateTime.utc(2026, 7, 15, 9),
+      createdAt: DateTime.utc(2026, 7, 15, 9),
+    );
+    final weekSpan = calculateTimelineTaskSpan(
+      clippedTask,
+      DateTime(2026, 7, 15, 9),
+      TimelineScale.week,
+    );
+
+    expect(weekSpan?.startUnit, 0);
+    expect(weekSpan?.unitCount, 1);
+    expect(
+      calculateTimelineTaskSpan(
+        _viewTask(
+          id: 'timeline-outside',
+          title: '不在当前范围',
+          startAt: DateTime(2026, 7, 16, 9),
+          endAt: DateTime(2026, 7, 16, 10),
+        ),
+        DateTime(2026, 7, 15, 9),
+        TimelineScale.day,
+      ),
+      isNull,
+    );
+  });
+
+  testWidgets('时间线按起止时间绘制连续任务条并支持按格拖动', (tester) async {
+    final task = _viewTask(
+      id: 'timeline-continuous',
+      title: '连续任务条',
+      startAt: DateTime(2026, 7, 15, 9),
+      endAt: DateTime(2026, 7, 15, 11),
+    );
+    (DateTime, DateTime, DateTime)? request;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TimelineView(
+            tasks: [task],
+            now: DateTime(2026, 7, 15, 9),
+            scale: TimelineScale.day,
+            onTaskTimeChange:
+                (_, {required startAt, required endAt, required dueAt}) async {
+                  request = (startAt, endAt, dueAt);
+                },
+          ),
+        ),
+      ),
+    );
+
+    final bar = find.byKey(
+      const Key('timeline-continuous-bar-timeline-continuous'),
+    );
+    expect(bar, findsOneWidget);
+    expect(tester.getSize(bar).width, closeTo(116, 0.01));
+
+    await tester.drag(bar, const Offset(58, 0));
+    await tester.pumpAndSettle();
+
+    expect(request, (
+      DateTime(2026, 7, 15, 10),
+      DateTime(2026, 7, 15, 12),
+      DateTime(2026, 7, 15, 12),
+    ));
+  });
+
+  testWidgets('时间线连续任务条右边缘调整时长且重叠任务分行展示', (tester) async {
+    final first = _viewTask(
+      id: 'timeline-overlap-first',
+      title: '重叠任务一',
+      startAt: DateTime(2026, 7, 15, 9),
+      endAt: DateTime(2026, 7, 15, 11),
+    );
+    final second = _viewTask(
+      id: 'timeline-overlap-second',
+      title: '重叠任务二',
+      startAt: DateTime(2026, 7, 15, 10),
+      endAt: DateTime(2026, 7, 15, 12),
+    );
+    (DateTime, DateTime, DateTime)? request;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TimelineView(
+            tasks: [first, second],
+            now: DateTime(2026, 7, 15, 9),
+            scale: TimelineScale.day,
+            onTaskTimeChange:
+                (
+                  task, {
+                  required startAt,
+                  required endAt,
+                  required dueAt,
+                }) async {
+                  if (task.id == first.id) {
+                    request = (startAt, endAt, dueAt);
+                  }
+                },
+          ),
+        ),
+      ),
+    );
+
+    final firstBar = find.byKey(
+      const Key('timeline-continuous-bar-timeline-overlap-first'),
+    );
+    final secondBar = find.byKey(
+      const Key('timeline-continuous-bar-timeline-overlap-second'),
+    );
+    expect(
+      tester.getTopLeft(firstBar).dy,
+      isNot(tester.getTopLeft(secondBar).dy),
+    );
+
+    await tester.drag(
+      find.byKey(
+        const Key('timeline-continuous-resize-timeline-overlap-first'),
+      ),
+      const Offset(58, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(request, (
+      DateTime(2026, 7, 15, 9),
+      DateTime(2026, 7, 15, 12),
+      DateTime(2026, 7, 15, 12),
+    ));
+  });
+
   testWidgets('时间线尺度与缩放工具栏在窄屏不会溢出', (tester) async {
     await tester.binding.setSurfaceSize(const Size(280, 500));
     addTearDown(() => tester.binding.setSurfaceSize(null));

@@ -36,6 +36,7 @@
 - **FR-007**: `PUT /task/reorder` 的直连契约仅用于 API 契约/真实 HTTP 对照，请求体固定为 `listId + items[{id, sortOrder}]`；Widget 的核心重排写路径仍必须经过共享 Repository/use-case 与 outbox。
 - **FR-008**: 时间线空白时段创建必须产出明确 `startAt/endAt/dueAt/allDay`：日尺度为一小时非全天任务，周/月尺度为一天的全天任务；创建必须复用 `TaskRepository` 的 Drift/outbox 原子写链路。
 - **FR-009**: 无开始、结束和截止日期的任务必须与远期任务分离到“安排任务（无日期）”；拖入时间格后通过共享 view-action Repository 原子写入完整时段、全天语义与 task outbox，只读拒绝不得产生部分写入。
+- **FR-010**: 有完整起止时间的任务必须在日/周/月时间轴上以连续任务条呈现；条的位置与长度分别由当前尺度下的开始时间和持续时间计算，跨出当前窗口的部分裁剪，重叠任务分行展示。拖动任务条及其右边缘仍只产生 B2 兼容的时间 mutation，不能把前端像素坐标持久化为业务真相。
 
 ## Success Criteria
 
