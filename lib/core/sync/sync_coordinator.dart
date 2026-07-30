@@ -73,9 +73,9 @@ class SyncCoordinator {
             .get();
     if (pending.isEmpty) return 0;
 
-    final folderChanges = pending
-        .where((c) => c.entity == SyncEntities.folder)
-        .toList();
+    final folderChanges = await _orderFolderChanges(
+      pending.where((c) => c.entity == SyncEntities.folder).toList(),
+    );
     final attachmentChanges = pending
         .where((c) => c.entity == SyncEntities.attachment)
         .toList();
@@ -428,6 +428,38 @@ class SyncCoordinator {
       }
     }
     return count;
+  }
+
+  Future<List<TodoSyncChange>> _orderFolderChanges(
+    List<TodoSyncChange> changes,
+  ) async {
+    final depthByChangeId = <int, int>{};
+    for (final change in changes) {
+      final localId = change.entityLocalId;
+      depthByChangeId[change.id] =
+          change.op == SyncOps.delete || localId == null
+          ? 0
+          : await _folderDepth(localId, <String>{});
+    }
+    return [...changes]..sort((left, right) {
+      final leftDelete = left.op == SyncOps.delete;
+      final rightDelete = right.op == SyncOps.delete;
+      if (leftDelete != rightDelete) return leftDelete ? 1 : -1;
+      final byDepth = (depthByChangeId[left.id] ?? 0).compareTo(
+        depthByChangeId[right.id] ?? 0,
+      );
+      return byDepth != 0 ? byDepth : left.id.compareTo(right.id);
+    });
+  }
+
+  Future<int> _folderDepth(String folderId, Set<String> visiting) async {
+    if (!visiting.add(folderId)) return 0;
+    final folder = await (db.select(
+      db.todoFolders,
+    )..where((row) => row.id.equals(folderId))).getSingleOrNull();
+    final parentId = folder?.parentId;
+    if (parentId == null) return 0;
+    return 1 + await _folderDepth(parentId, visiting);
   }
 
   Future<int?> _folderParentServerId(Map<String, dynamic> payload) async {
