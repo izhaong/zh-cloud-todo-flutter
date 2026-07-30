@@ -97,6 +97,7 @@ Setup → Foundational（阻塞） → US1（MVP） → US2 → US3 → US4 → 
 
 ## 执行证据
 
+- 2026-07-31：T031 更新 Flutter 自仓 `README.md` 与仓库级 `spec.md` 的当前事实：移除“仅脚手架”和明文偏好缓存等过期描述，明确 Drift + 原子 outbox、Android Keystore / Apple Keychain 会话、B0–B5 已实现范围与真实双设备/物理设备/iOS/完整 DoD 外部门禁，并补入 Android 17 模拟器已通过的小组件、URL Scheme 与系统分享边界。文档明确区分实现存在、本地测试通过和真实环境验收通过。T031 继续保持未勾选：`zh-cloud-docs/todo` 是独立仓库，当前父仓存在无关脏改动，本次未越界修改其对照矩阵。
 - 2026-07-30：T026 按 JDK 25 `zh-cloud-service/develop` 现行协作契约收口。旧 Flutter 使用数字 `userId` 邀请、`owner/member` 角色与 `PUT` 更新，无法匹配服务端 `userMobile + editor/viewer + PATCH`；现已按手机号邀请、显示角色和成员状态、限制 owner 管理入口，并区分接受邀请与主动退出。Dart MCP 定向 11 项与全量 585 项测试通过，25 项受保护真实环境测试按条件跳过，全量静态分析无错误；Service 以 Corretto 25.0.3 执行 `TodoListMemberServiceSyncTest`，4 项通过。真实双账号邀请/权限旅程与 Jenkins 未执行，不把它们记作通过。
 - 2026-07-30：继续收口 T026 的任务指派契约。旧 Flutter 错误解析/提交 `userId`，与服务端 `assigneeUserId/assigneeUserName/assigneeUserEmail` 不一致；现已显示真实执行人资料，从当前清单 active 成员中选择，并在客户端按 owner/active editor 与 viewer 权限禁用写入口。详情页先把本地 list UUID 解析为已同步的服务端 list ID，避免向成员接口传本地标识。Dart MCP 定向 37 项与全量 587 项测试通过，25 项受保护真实环境测试按条件跳过，全量静态分析无错误；真实双账号与 Jenkins 仍保持外部门槛，不把它们记作通过。
 - 2026-07-30：继续收口 T026 的评论与任务动态契约。评论列表改为解析服务端数组信封、`userName/userEmail/createTime/updateTime`，按 owner/editor/viewer 和评论作者限制新增、编辑、删除入口，并使用带任务归属校验的 DELETE 路由；任务动态补齐当前后端任务、时间、完成、执行人和评论动作标签，用户名缺失时回退邮箱。Dart MCP 定向 41 项与全量 590 项测试通过，25 项受保护真实环境测试按条件跳过，全量静态分析无错误；Service `develop` 以 Corretto 25.0.3 执行 `TodoSyncServiceActivityTest`，5 项通过。真实双账号评论权限旅程与 Jenkins 未执行，不把它们记作通过。

@@ -4,12 +4,13 @@ Todo 应用 **唯一 C 端客户端**（**Web / H5**、iOS、Android、macOS、W
 
 ## 状态
 
-| 项       | 说明                                                           |
-| -------- | -------------------------------------------------------------- |
-| 目录     | 已建立（monorepo 父目录 `zh-cloud/` 下）                       |
-| 脚手架   | Flutter 六端工程（含 `web/`）                                  |
-| Subagent | **`todo-flutter-dev`**（`.cursor/agents/todo-flutter-dev.md`） |
-| 已废弃   | `zh-cloud-client/apps/todo`（React）— 不再维护                 |
+| 项         | 说明                                                                 |
+| ---------- | -------------------------------------------------------------------- |
+| 产品实现   | Flutter 六端工程（含 Web/H5），核心功能、离线存储与同步合同已落地    |
+| 数据与会话 | Drift + 原子 outbox；会话使用 Android Keystore / Apple Keychain 加密 |
+| 验收状态   | 本地合同与自动回归已通过；真实双设备、物理设备、iOS 原生能力仍为外部门禁 |
+| Subagent   | **`todo-flutter-dev`**（`.cursor/agents/todo-flutter-dev.md`）       |
+| 已废弃     | `zh-cloud-client/apps/todo`（React）— 不再维护                       |
 
 ## 权威文档
 
@@ -17,6 +18,19 @@ Todo 应用 **唯一 C 端客户端**（**Web / H5**、iOS、Android、macOS、W
 - 系统架构 / DB / API：`zh-cloud-docs/todo/02_技术设计/`
 - 功能能力事实源：`specs/001-todo-dida-core-parity/{spec,plan,tasks}.md`
 - 视觉与响应式事实源：`specs/002-todo-visual-fidelity/{spec,plan,tasks}.md`
+
+## 能力与验收状态
+
+| 门槛 | 已有事实 | 仍未替代的外部证据 |
+| ---- | -------- | ------------------ |
+| B0 核心能力 | 任务、清单、组织、提醒、重复、协作、效率工具与账号安全均有实现和合同测试 | `zh-cloud-docs/todo` 对照矩阵独立仓同步 |
+| B1 离线同步 | Drift/outbox、幂等、重试、冲突、附件与受保护 live 旅程已实现 | 真实账号凭据下的完整 HTTP 与双设备执行 |
+| B2 时间提醒 | 固定时区时间、重复、提醒派发、持久调度与 Android 重启恢复合同已实现 | 物理设备到点通知、后台/重启和 iOS 旅程 |
+| B3 组织查询 | 文件夹、标签、筛选、搜索、批量、排序和权限隔离已实现 | 真实双账号、测试环境 A/B 固定旅程 |
+| B4 可工作视图 | 列表/看板/时间线真实拖拽、Repository/outbox 与 Service 合同已实现 | 显式测试账号下的真实 HTTP、第二设备和固定视觉旅程 |
+| B5 可靠性 | 推荐、恢复反馈、TalkBack 键盘、Android 小组件/URL Scheme/分享模拟器旅程已验证 | 物理设备、其它辅助技术、iOS handler、真实断网与完整 DoD |
+
+“实现存在”“本地测试通过”“真实设备/服务端验收通过”是三类独立结论；各规格未勾选项不得由构建成功替代。
 
 ## 视觉与响应式基线
 
@@ -46,7 +60,7 @@ Todo 工作区以 `1440×900` Web/PC 桌面视口为第一视觉母版，同时�
 - 注册：复用短信验证码登录，新手机号由 todo-member 后端按“短信登录即注册”创建账号
 - 忘记密码：`POST /app-api/todo-member/auth/send-sms-code`（当前后端 `MEMBER_RESET_PASSWORD` 为 `scene=4`）后调用 `PUT /app-api/todo-member/user/reset-password`
 
-登录成功后会持久化 todo-member `accessToken` / `refreshToken` 到本地偏好缓存，后续 `/app-api/todo/**` 请求应使用该 token 和 `tenant-id`。
+登录成功后会把 todo-member `accessToken` / `refreshToken` 与账号范围写入 `FlutterSecureStorage`（Android Keystore / Apple Keychain），后续 `/app-api/todo/**` 请求使用该 token 和 `tenant-id`；Drift 业务库按 tenant/user 隔离。
 
 ## 运行
 
