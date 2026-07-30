@@ -2,7 +2,7 @@
 
 **Feature Branch**: `feat/97-todo-workable-views`
 **Created**: 2026-07-15
-**Status**: 执行中；来源隔离与共享清单只读写链路已完成独立红绿闭环，B4 仍为 partial。
+**Status**: 执行中；来源隔离、共享清单只读写链路与任务重排 REST 契约已完成独立红绿闭环，B4 仍为 partial。
 **Input**: 父仓 B4、B0 能力矩阵、Flutter #97、Service #185、Docs #53。
 
 ## User Scenarios & Testing
@@ -33,6 +33,7 @@
 - **FR-004**: 看板跨列产生明确任务字段 mutation；时间线移动/缩放产生 B2 兼容的时间字段 mutation，不以仅前端坐标作为真相。
 - **FR-005**: 列表/看板/时间线对同一任务 UUID 保持选择和刷新规则；智能清单或筛选结果中的禁止结构操作有解释，不静默失败。
 - **FR-006**: 不重做 `specs/002-todo-visual-fidelity/` 的工作区结构或九张基准；视觉变化需明确批准。
+- **FR-007**: `PUT /task/reorder` 的直连契约仅用于 API 契约/真实 HTTP 对照，请求体固定为 `listId + items[{id, sortOrder}]`；Widget 的核心重排写路径仍必须经过共享 Repository/use-case 与 outbox。
 
 ## Success Criteria
 
