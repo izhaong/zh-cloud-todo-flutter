@@ -121,6 +121,7 @@ pubspec.yaml
 ## 6. 构建与发布
 
 - 常用命令：`flutter pub get`、`flutter analyze`、`flutter test`、`flutter run -d chrome|macos|windows|linux|<device>`；发布构建含 `flutter build web`（产物 `build/web/`）。
+- Gitea 共享 runner 的功能门禁执行 `flutter test --exclude-tags golden --exclude-tags performance`；golden 与文件型 SQLite 微基准在匹配的本地/专用环境单独执行，避免共享机器负载把绝对耗时阈值变成随机门禁。
 - 修改 Drift 表或生成模型后，运行 `dart run build_runner build --delete-conflicting-outputs` 并提交生成文件。
 - 分支：`develop` 集成、`main` 发布；合并只走 PR，禁止直推主干；commit 用中文 Conventional Commits。
 
