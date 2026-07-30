@@ -606,6 +606,171 @@ void main() {
   });
 
   test(
+    'stores all three repeat modes and rejects invalid rule fields',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final repeats = RepeatRuleRepository(db, SyncChangeQueue(db));
+      final startAt = DateTime(2026, 7, 13, 9);
+
+      await repeats.save(
+        taskId: 'task-due',
+        frequency: 'DAILY',
+        startAt: startAt,
+        repeatMode: 'ON_DUE',
+      );
+      await repeats.save(
+        taskId: 'task-complete',
+        frequency: 'DAILY',
+        startAt: startAt,
+        repeatMode: 'ON_COMPLETE',
+      );
+      await repeats.save(
+        taskId: 'task-selected',
+        frequency: 'CUSTOM',
+        startAt: startAt,
+        repeatMode: 'ON_SELECTED_DATES',
+        selectedDates: [DateTime(2026, 7, 15)],
+      );
+
+      expect(
+        (await db.select(db.todoRepeatRules).get())
+            .map((rule) => rule.repeatMode)
+            .toSet(),
+        {'ON_DUE', 'ON_COMPLETE', 'ON_SELECTED_DATES'},
+      );
+
+      final invalidSaves = <Future<TodoRepeatRule> Function()>[
+        () => repeats.save(
+          taskId: 'task-frequency',
+          frequency: 'HOURLY',
+          startAt: startAt,
+        ),
+        () => repeats.save(
+          taskId: 'task-mode',
+          frequency: 'DAILY',
+          startAt: startAt,
+          repeatMode: 'UNKNOWN',
+        ),
+        () => repeats.save(
+          taskId: 'task-interval',
+          frequency: 'DAILY',
+          intervalValue: 0,
+          startAt: startAt,
+        ),
+        () => repeats.save(
+          taskId: 'task-weekday',
+          frequency: 'CUSTOM',
+          weekdays: const [0, 8],
+          startAt: startAt,
+        ),
+        () => repeats.save(
+          taskId: 'task-month-day',
+          frequency: 'MONTHLY',
+          monthDay: 32,
+          startAt: startAt,
+        ),
+        () => repeats.save(
+          taskId: 'task-until',
+          frequency: 'DAILY',
+          startAt: startAt,
+          untilAt: startAt.subtract(const Duration(seconds: 1)),
+        ),
+        () => repeats.save(
+          taskId: 'task-count',
+          frequency: 'DAILY',
+          startAt: startAt,
+          countLimit: 0,
+        ),
+      ];
+
+      for (final save in invalidSaves) {
+        await expectLater(save(), throwsArgumentError);
+      }
+      expect(await db.select(db.todoRepeatRules).get(), hasLength(3));
+      expect(await db.select(db.todoSyncChanges).get(), hasLength(3));
+    },
+  );
+
+  test('rolls back a repeat rule when its outbox enqueue fails', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final repeats = RepeatRuleRepository(db, _FailingSyncChangeQueue(db));
+
+    await expectLater(
+      repeats.save(
+        taskId: 'task-1',
+        frequency: 'DAILY',
+        startAt: DateTime(2026, 7, 13, 9),
+      ),
+      throwsStateError,
+    );
+
+    expect(await db.select(db.todoRepeatRules).get(), isEmpty);
+    expect(await db.select(db.todoSyncChanges).get(), isEmpty);
+  });
+
+  test('rolls back a repeat skip when its outbox enqueue fails', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final working = RepeatRuleRepository(db, SyncChangeQueue(db));
+    final rule = await working.save(
+      taskId: 'task-1',
+      frequency: 'DAILY',
+      startAt: DateTime(2026, 7, 13, 9),
+    );
+    await db.delete(db.todoSyncChanges).go();
+    final repeats = RepeatRuleRepository(db, _FailingSyncChangeQueue(db));
+
+    await expectLater(
+      repeats.skip(
+        repeatRuleId: rule.id,
+        taskId: 'task-1',
+        occurrenceAt: DateTime(2026, 7, 14, 9),
+      ),
+      throwsStateError,
+    );
+
+    expect(await db.select(db.todoRepeatRules).get(), hasLength(1));
+    expect(await db.select(db.todoRepeatSkips).get(), isEmpty);
+    expect(await db.select(db.todoSyncChanges).get(), isEmpty);
+  });
+
+  test('rolls back repeat catchup when its outbox enqueue fails', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final occurrenceAt = DateTime(2026, 7, 14, 9);
+    final working = RepeatRuleRepository(db, SyncChangeQueue(db));
+    final rule = await working.save(
+      taskId: 'task-1',
+      frequency: 'DAILY',
+      startAt: DateTime(2026, 7, 13, 9),
+    );
+    final skip = await working.skip(
+      repeatRuleId: rule.id,
+      taskId: 'task-1',
+      occurrenceAt: occurrenceAt,
+    );
+    await (db.update(db.todoRepeatSkips)
+          ..where((row) => row.id.equals(skip.id)))
+        .write(const TodoRepeatSkipsCompanion(serverId: Value(702)));
+    await db.delete(db.todoSyncChanges).go();
+    final repeats = RepeatRuleRepository(db, _FailingSyncChangeQueue(db));
+
+    await expectLater(
+      repeats.catchup(
+        repeatRuleId: rule.id,
+        taskId: 'task-1',
+        occurrenceAt: occurrenceAt,
+      ),
+      throwsStateError,
+    );
+
+    expect(await db.select(db.todoRepeatSkips).get(), hasLength(1));
+    expect(await db.select(db.todoSyncChanges).get(), isEmpty);
+  });
+
+  test(
     'collapses an unsynced skip followed by catchup to no local action',
     () async {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
