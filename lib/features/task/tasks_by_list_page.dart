@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/app_database.dart';
@@ -13,12 +14,14 @@ import '../../state/repositories/task_batch_edit_repository.dart';
 import '../../state/repositories/task_query_repository.dart';
 import '../../state/repositories/task_repository.dart';
 import '../filter/filter_bar.dart';
+import '../shell/app_dialog.dart';
 import '../shell/quick_add_bar.dart';
 import 'view_mode.dart';
 import 'views/calendar_view.dart';
 import 'views/eisenhower_view.dart';
 import 'views/kanban_view.dart';
 import 'views/timeline_view.dart';
+import 'widgets/task_batch_action_bar.dart';
 import 'widgets/task_group_header.dart';
 import 'widgets/task_row_host.dart';
 import 'widgets/task_workspace_header.dart';
@@ -73,6 +76,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   String? _reportedInvalidSelectionId;
   bool _batchSelectionActive = false;
   bool _batchApplying = false;
+  String? _batchSelectionAnchorTaskId;
   final Set<String> _batchSelectedTaskIds = <String>{};
 
   @override
@@ -92,7 +96,12 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     super.didUpdateWidget(oldWidget);
     if (widget.lockedListId &&
         widget.initialListId != oldWidget.initialListId) {
-      setState(() => _selectedListId = widget.initialListId);
+      setState(() {
+        _selectedListId = widget.initialListId;
+        _batchSelectionActive = false;
+        _batchSelectionAnchorTaskId = null;
+        _batchSelectedTaskIds.clear();
+      });
       Future<void>.microtask(_restoreSortPreference);
     }
     if (widget.initialDueRange != oldWidget.initialDueRange ||
@@ -134,6 +143,8 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           _reportInvalidSelection(items);
         }
 
+        final showBatchActionBar =
+            _batchSelectionActive && _batchSelectedTaskIds.isNotEmpty;
         final modeBody = snapshot.connectionState == ConnectionState.waiting
             ? const Center(child: CircularProgressIndicator())
             : _buildModeBody(items, desktopMode: desktopMode, now: now);
@@ -150,45 +161,60 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 onSortChanged: _changeSort,
                 onFilterPressed: () => _openFilterPanel(raw),
                 batchSelectionActive: _batchSelectionActive,
-                batchSelectedCount: _batchSelectedTaskIds.length,
                 onBatchPressed: _toggleBatchSelection,
-                onBatchCompletePressed:
-                    _batchSelectionActive &&
-                        _batchSelectedTaskIds.isNotEmpty &&
-                        !_batchApplying
-                    ? _completeBatchSelection
-                    : null,
-                onBatchActionSelected:
-                    _batchSelectionActive &&
-                        _batchSelectedTaskIds.isNotEmpty &&
-                        !_batchApplying
-                    ? _applyBatchAction
-                    : null,
               ),
-            if (showQuickAdd)
+            if (showQuickAdd && !_batchSelectionActive)
               QuickAddBar(onSubmit: _submitQuickAdd, tagOptions: tagOptions),
             Expanded(
-              child: mobileMode
-                  ? Padding(
-                      padding: const EdgeInsets.only(bottom: 72),
-                      child: modeBody,
-                    )
-                  : modeBody,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  bottom: showBatchActionBar
+                      ? 88
+                      : mobileMode
+                      ? 72
+                      : 0,
+                ),
+                child: modeBody,
+              ),
             ),
           ],
         );
-        if (!mobileMode) return workspace;
         return Stack(
           children: [
             workspace,
-            Positioned(
-              right: 16,
-              bottom: 16,
-              child: MobileQuickAddButton(
-                onSubmit: _submitQuickAdd,
-                tagOptions: tagOptions,
+            if (showBatchActionBar)
+              Positioned(
+                left: mobileMode ? 12 : 24,
+                right: mobileMode ? 12 : 24,
+                bottom: mobileMode ? 12 : 18,
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 760),
+                    child: AnimatedSwitcher(
+                      duration: TodoLayoutTokens.stateTransitionDurationFor(
+                        context,
+                      ),
+                      child: TaskBatchActionBar(
+                        selectedCount: _batchSelectedTaskIds.length,
+                        applying: _batchApplying,
+                        onExit: _toggleBatchSelection,
+                        onComplete: _completeBatchSelection,
+                        onActionSelected: _applyBatchAction,
+                        onDelete: _confirmBatchDelete,
+                      ),
+                    ),
+                  ),
+                ),
               ),
-            ),
+            if (mobileMode && !_batchSelectionActive)
+              Positioned(
+                right: 16,
+                bottom: 16,
+                child: MobileQuickAddButton(
+                  onSubmit: _submitQuickAdd,
+                  tagOptions: tagOptions,
+                ),
+              ),
           ],
         );
       },
@@ -225,6 +251,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           batchSelectionActive: _batchSelectionActive,
           batchSelectedTaskIds: _batchSelectedTaskIds,
           onBatchSelectionChanged: _updateBatchSelection,
+          onBatchSelectionRequested: _handleBatchSelectionRequest,
         );
       case TaskViewMode.kanban:
         final listId = _selectedListId;
@@ -328,6 +355,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     setState(() {
       _mode = mode;
       _batchSelectionActive = false;
+      _batchSelectionAnchorTaskId = null;
       _batchSelectedTaskIds.clear();
     });
     final repository = ref.read(taskViewActionRepositoryProvider);
@@ -343,18 +371,60 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   }
 
   void _toggleBatchSelection() {
+    if (!_batchSelectionActive) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    }
     setState(() {
       _mode = TaskViewMode.list;
       _batchSelectionActive = !_batchSelectionActive;
+      _batchSelectionAnchorTaskId = null;
       _batchSelectedTaskIds.clear();
     });
   }
 
   void _updateBatchSelection(String taskId, bool selected) {
     setState(() {
+      _batchSelectionAnchorTaskId = taskId;
       if (selected) {
         _batchSelectedTaskIds.add(taskId);
       } else {
+        _batchSelectedTaskIds.remove(taskId);
+      }
+    });
+  }
+
+  void _handleBatchSelectionRequest(
+    String taskId,
+    List<String> visibleTaskIds,
+    _TaskSelectionIntent intent,
+  ) {
+    if (!_batchSelectionActive) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    }
+    setState(() {
+      _mode = TaskViewMode.list;
+      _batchSelectionActive = true;
+      if (intent == _TaskSelectionIntent.range) {
+        final anchorIndex = visibleTaskIds.indexOf(
+          _batchSelectionAnchorTaskId ?? '',
+        );
+        final taskIndex = visibleTaskIds.indexOf(taskId);
+        if (anchorIndex >= 0 && taskIndex >= 0) {
+          final start = anchorIndex < taskIndex ? anchorIndex : taskIndex;
+          final end = anchorIndex < taskIndex ? taskIndex : anchorIndex;
+          _batchSelectedTaskIds
+            ..clear()
+            ..addAll(visibleTaskIds.sublist(start, end + 1));
+        } else {
+          _batchSelectedTaskIds
+            ..clear()
+            ..add(taskId);
+          _batchSelectionAnchorTaskId = taskId;
+        }
+        return;
+      }
+      _batchSelectionAnchorTaskId = taskId;
+      if (!_batchSelectedTaskIds.add(taskId)) {
         _batchSelectedTaskIds.remove(taskId);
       }
     });
@@ -368,6 +438,10 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   }
 
   Future<void> _applyBatchAction(TaskBatchAction action) async {
+    if (action == TaskBatchAction.complete) {
+      await _completeBatchSelection();
+      return;
+    }
     if (action == TaskBatchAction.moveToList) {
       final listId = await _selectBatchDestinationList();
       if (listId == null || !mounted) return;
@@ -435,8 +509,106 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         taskIds: [],
         tagIds: [],
       ),
+      TaskBatchAction.complete => throw StateError('完成动作已提前处理'),
     };
     await _applyBatchEdit(command, successVerb: '已更新');
+  }
+
+  Future<void> _confirmBatchDelete() async {
+    final selectedIds = _batchSelectedTaskIds.toList(growable: false);
+    if (selectedIds.isEmpty || _batchApplying) return;
+    final confirmed = await AppDialog.confirm(
+      context,
+      title: '删除所选任务？',
+      content:
+          '将删除 ${selectedIds.length} 项任务，子任务也会被一并删除。'
+          '此操作会同步到其他设备。',
+      confirmLabel: '删除',
+      danger: true,
+    );
+    if (!confirmed || !mounted) return;
+    await _runBatchDelete(selectedIds);
+  }
+
+  Future<void> _runBatchDelete(List<String> taskIds) async {
+    final repository = ref.read(taskRepositoryProvider);
+    if (repository == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('任务暂不可用，请稍后重试')));
+      return;
+    }
+    setState(() => _batchApplying = true);
+    final failedTaskIds = <String>[];
+    final failedReasons = <String>{};
+    var succeeded = 0;
+    try {
+      final deleteGroups = await _groupSelectedDeleteRoots(repository, taskIds);
+      for (final group in deleteGroups) {
+        try {
+          await repository.delete(group.rootTaskId);
+          succeeded += group.selectedTaskIds.length;
+        } catch (_) {
+          failedTaskIds.addAll(group.selectedTaskIds);
+          failedReasons.add('本地删除失败');
+        }
+      }
+    } catch (_) {
+      failedTaskIds.addAll(taskIds);
+      failedReasons.add('本地任务读取失败');
+    }
+    if (!mounted) return;
+    setState(() {
+      _batchApplying = false;
+      _batchSelectionActive = failedTaskIds.isNotEmpty;
+      _batchSelectionAnchorTaskId = failedTaskIds.isEmpty
+          ? null
+          : failedTaskIds.first;
+      _batchSelectedTaskIds
+        ..clear()
+        ..addAll(failedTaskIds);
+    });
+    final failed = failedTaskIds.length;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '已删除 $succeeded 项；失败 $failed 项'
+          '${failedReasons.isEmpty ? '' : '：${failedReasons.join('、')}'}',
+        ),
+        action: failedTaskIds.isEmpty
+            ? null
+            : SnackBarAction(
+                label: '重试失败项',
+                onPressed: () => _runBatchDelete(failedTaskIds),
+              ),
+      ),
+    );
+  }
+
+  Future<List<_BatchDeleteGroup>> _groupSelectedDeleteRoots(
+    TaskRepository repository,
+    List<String> selectedIds,
+  ) async {
+    final selected = selectedIds.toSet();
+    final selectedIdsByRoot = <String, List<String>>{};
+    for (final taskId in selectedIds) {
+      var task = await repository.getById(taskId);
+      var parentId = task?.parentTaskId;
+      var rootTaskId = taskId;
+      final visitedIds = <String>{taskId};
+      while (parentId != null && visitedIds.add(parentId)) {
+        if (selected.contains(parentId)) {
+          rootTaskId = parentId;
+        }
+        task = await repository.getById(parentId);
+        parentId = task?.parentTaskId;
+      }
+      selectedIdsByRoot.putIfAbsent(rootTaskId, () => []).add(taskId);
+    }
+    return [
+      for (final entry in selectedIdsByRoot.entries)
+        _BatchDeleteGroup(rootTaskId: entry.key, selectedTaskIds: entry.value),
+    ];
   }
 
   Future<String?> _selectBatchDestinationList() async {
@@ -629,6 +801,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     setState(() {
       _batchApplying = false;
       _batchSelectionActive = false;
+      _batchSelectionAnchorTaskId = null;
       _batchSelectedTaskIds.clear();
     });
     ScaffoldMessenger.of(context).showSnackBar(
@@ -828,6 +1001,7 @@ class _ListBody extends StatefulWidget {
     required this.batchSelectionActive,
     required this.batchSelectedTaskIds,
     required this.onBatchSelectionChanged,
+    required this.onBatchSelectionRequested,
   });
 
   final List<TodoTask> items;
@@ -840,6 +1014,12 @@ class _ListBody extends StatefulWidget {
   final bool batchSelectionActive;
   final Set<String> batchSelectedTaskIds;
   final void Function(String taskId, bool selected) onBatchSelectionChanged;
+  final void Function(
+    String taskId,
+    List<String> visibleTaskIds,
+    _TaskSelectionIntent intent,
+  )
+  onBatchSelectionRequested;
 
   @override
   State<_ListBody> createState() => _ListBodyState();
@@ -890,6 +1070,10 @@ class _ListBodyState extends State<_ListBody> {
     final entries = <Object>[
       for (final group in groups) ...[group, ...group.tasks],
     ];
+    final visibleTaskIds = entries
+        .whereType<TodoTask>()
+        .map((task) => task.id)
+        .toList(growable: false);
 
     if (widget.desktopMode) {
       return ReorderableListView.builder(
@@ -903,6 +1087,7 @@ class _ListBodyState extends State<_ListBody> {
         // forward; the adjustment below preserves its pre-3.44 index contract.
         // ignore: deprecated_member_use
         onReorder: (oldIndex, newIndex) async {
+          if (widget.batchSelectionActive) return;
           final entry = entries[oldIndex];
           if (entry is! TodoTask) return;
           final visibleTaskIds = entries
@@ -957,9 +1142,9 @@ class _ListBodyState extends State<_ListBody> {
               task: task,
               desktopMode: true,
               enableSwipeGestures: false,
-              reorderIndex: index,
+              reorderIndex: widget.batchSelectionActive ? null : index,
               selected: widget.selectedTaskId == task.id,
-              onTap: widget.onTaskSelected,
+              onTap: (taskId) => _handleTaskActivation(taskId, visibleTaskIds),
               batchSelectionActive: widget.batchSelectionActive,
               batchSelected: widget.batchSelectedTaskIds.contains(task.id),
               onBatchSelectionChanged: (selected) =>
@@ -987,8 +1172,9 @@ class _ListBodyState extends State<_ListBody> {
         final task = entry as TodoTask;
         return TaskRowHost(
           task: task,
+          enableSwipeGestures: !widget.batchSelectionActive,
           selected: widget.selectedTaskId == task.id,
-          onTap: widget.onTaskSelected,
+          onTap: (taskId) => _handleTaskActivation(taskId, visibleTaskIds),
           batchSelectionActive: widget.batchSelectionActive,
           batchSelected: widget.batchSelectedTaskIds.contains(task.id),
           onBatchSelectionChanged: (selected) =>
@@ -1003,6 +1189,41 @@ class _ListBodyState extends State<_ListBody> {
     sorted.sort((a, b) => compareTodoTasks(a, b, widget.sort));
     return sorted;
   }
+
+  void _handleTaskActivation(String taskId, List<String> visibleTaskIds) {
+    final keyboard = HardwareKeyboard.instance;
+    if (keyboard.isShiftPressed) {
+      widget.onBatchSelectionRequested(
+        taskId,
+        visibleTaskIds,
+        _TaskSelectionIntent.range,
+      );
+      return;
+    }
+    if (keyboard.isControlPressed ||
+        keyboard.isMetaPressed ||
+        widget.batchSelectionActive) {
+      widget.onBatchSelectionRequested(
+        taskId,
+        visibleTaskIds,
+        _TaskSelectionIntent.toggle,
+      );
+      return;
+    }
+    widget.onTaskSelected?.call(taskId);
+  }
+}
+
+enum _TaskSelectionIntent { toggle, range }
+
+class _BatchDeleteGroup {
+  const _BatchDeleteGroup({
+    required this.rootTaskId,
+    required this.selectedTaskIds,
+  });
+
+  final String rootTaskId;
+  final List<String> selectedTaskIds;
 }
 
 class _TaskGroup {
