@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -106,16 +104,9 @@ class NativeTaskProjection {
 /// 原生增强入口页。页面只消费当前账号的 Drift 任务投影；平台通道仅接收
 /// 已同步的服务端任务 ID，不会为离线任务伪造 ID。
 class NativeEntryPage extends ConsumerStatefulWidget {
-  const NativeEntryPage({
-    super.key,
-    this.taskStream,
-    this.incomingUriStream,
-    this.initialUriLoader,
-  });
+  const NativeEntryPage({super.key, this.taskStream});
 
   final Stream<List<TodoTask>>? taskStream;
-  final Stream<Uri>? incomingUriStream;
-  final Future<Uri?> Function()? initialUriLoader;
 
   @override
   ConsumerState<NativeEntryPage> createState() => _NativeEntryPageState();
@@ -123,43 +114,11 @@ class NativeEntryPage extends ConsumerStatefulWidget {
 
 class _NativeEntryPageState extends ConsumerState<NativeEntryPage> {
   final TextEditingController _noteCtl = TextEditingController();
-  StreamSubscription<Uri>? _incomingUriSubscription;
-  int _warmUriVersion = 0;
-  String _lastResult = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _incomingUriSubscription =
-        (widget.incomingUriStream ?? NativeIntents.incomingUris()).listen(
-          _recordWarmUri,
-          onError: (Object _) {},
-        );
-    _bootstrapUri();
-  }
 
   @override
   void dispose() {
-    unawaited(_incomingUriSubscription?.cancel());
     _noteCtl.dispose();
     super.dispose();
-  }
-
-  Future<void> _bootstrapUri() async {
-    final warmUriVersion = _warmUriVersion;
-    final uri =
-        await (widget.initialUriLoader ?? NativeIntents.handleIncomingUri)();
-    if (uri != null && warmUriVersion == _warmUriVersion) _recordUri(uri);
-  }
-
-  void _recordWarmUri(Uri uri) {
-    _warmUriVersion++;
-    _recordUri(uri);
-  }
-
-  void _recordUri(Uri uri) {
-    if (!mounted) return;
-    setState(() => _lastResult = 'URI 入参: $uri');
   }
 
   @override
@@ -183,15 +142,6 @@ class _NativeEntryPageState extends ConsumerState<NativeEntryPage> {
           body: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              if (_lastResult.isNotEmpty)
-                Card(
-                  color: Theme.of(context).colorScheme.secondaryContainer,
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Text(_lastResult),
-                  ),
-                ),
-              const SizedBox(height: 16),
               _SectionTitle('桌面便签'),
               TextField(
                 controller: _noteCtl,

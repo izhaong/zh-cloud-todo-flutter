@@ -10,6 +10,7 @@ import '../../core/sync/connectivity_recovery_trigger.dart';
 import '../../core/sync/sync_entities.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_widgets.dart';
+import '../../native/native_intents.dart';
 import '../../state/nlp_date.dart';
 import '../../state/providers.dart';
 import '../../state/repositories/task_query_repository.dart';
@@ -33,7 +34,10 @@ import 'todo_workspace.dart';
 
 /// Todo 主壳：只负责状态与内容分发，布局交给 [TodoWorkspace]。
 class HomeShell extends ConsumerStatefulWidget {
-  const HomeShell({super.key});
+  const HomeShell({super.key, this.incomingUriStream, this.initialUriLoader});
+
+  final Stream<Uri>? incomingUriStream;
+  final Future<Uri?> Function()? initialUriLoader;
 
   @override
   ConsumerState<HomeShell> createState() => _HomeShellState();
@@ -53,6 +57,8 @@ class _HomeShellState extends ConsumerState<HomeShell>
   bool _preserveSelectionWhenMobileRouteCloses = false;
   StreamSubscription<ReminderNotificationSelection>?
   _reminderSelectionSubscription;
+  StreamSubscription<Uri>? _incomingUriSubscription;
+  Future<void> _nativeTaskAddQueue = Future.value();
 
   bool _syncing = false;
   String _syncStatus = '同步尚未执行';
@@ -67,6 +73,12 @@ class _HomeShellState extends ConsumerState<HomeShell>
     _reminderSelectionSubscription = notifications.reminderSelections.listen(
       (selection) => unawaited(_handleReminderSelection(selection)),
     );
+    _incomingUriSubscription =
+        (widget.incomingUriStream ?? NativeIntents.incomingUris()).listen(
+          _enqueueNativeTaskAdd,
+          onError: (Object _) {},
+        );
+    unawaited(_loadInitialNativeTaskAdd());
     _initNotifications(notifications);
     if (!const bool.fromEnvironment('FLUTTER_TEST')) {
       _triggerSync();
@@ -87,6 +99,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
   void dispose() {
     _periodicSync?.cancel();
     unawaited(_reminderSelectionSubscription?.cancel());
+    unawaited(_incomingUriSubscription?.cancel());
     unawaited(_connectivityRecoveryTrigger?.dispose() ?? Future.value());
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -139,6 +152,68 @@ class _HomeShellState extends ConsumerState<HomeShell>
     });
     if (hadTaskSelection) _dismissDetailPresentation();
     _selectTask(task.id);
+  }
+
+  Future<void> _loadInitialNativeTaskAdd() async {
+    final uri =
+        await (widget.initialUriLoader ?? NativeIntents.handleIncomingUri)();
+    if (uri != null) _enqueueNativeTaskAdd(uri);
+  }
+
+  void _enqueueNativeTaskAdd(Uri uri) {
+    _nativeTaskAddQueue = _nativeTaskAddQueue.then(
+      (_) => _createTaskFromNativeLink(uri),
+    );
+  }
+
+  Future<void> _createTaskFromNativeLink(Uri uri) async {
+    final request = NativeTaskAddRequest.tryParse(uri);
+    if (request == null) {
+      _showNativeTaskAddMessage('快捷指令参数无效');
+      return;
+    }
+    final repository = ref.read(taskRepositoryProvider);
+    if (repository == null) {
+      _showNativeTaskAddMessage('请先登录后重试');
+      return;
+    }
+    try {
+      final defaults = await ref
+          .read(taskCaptureDefaultsRepositoryProvider)
+          ?.get();
+      final created = await repository.create(
+        listId: defaults?.defaultListId ?? 'inbox',
+        title: request.title,
+        priority: defaults?.defaultPriority ?? 0,
+        dueAt: request.dueAt,
+        allDay: request.allDay,
+      );
+      if (!mounted) return;
+      final hadTaskSelection = _selectedTaskId != null;
+      setState(() {
+        _section = Section.tasks;
+        if (created.listId == 'inbox') {
+          _smart = SmartList.inbox;
+          _listId = null;
+        } else {
+          _smart = SmartList.all;
+          _listId = created.listId;
+        }
+        _selectedTaskId = null;
+      });
+      if (hadTaskSelection) _dismissDetailPresentation();
+      _selectTask(created.id);
+      _showNativeTaskAddMessage('已通过快捷指令创建任务');
+    } catch (_) {
+      _showNativeTaskAddMessage('快捷指令创建失败');
+    }
+  }
+
+  void _showNativeTaskAddMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _pollUpcomingReminders() async {

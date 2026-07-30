@@ -6,6 +6,56 @@ library;
 
 import 'package:flutter/services.dart';
 
+class NativeTaskAddRequest {
+  const NativeTaskAddRequest({
+    required this.title,
+    required this.dueAt,
+    required this.allDay,
+  });
+
+  final String title;
+  final DateTime? dueAt;
+  final bool allDay;
+
+  static NativeTaskAddRequest? tryParse(Uri uri) {
+    if (uri.scheme.toLowerCase() != NativeIntents.urlScheme ||
+        uri.host.toLowerCase() != 'task' ||
+        uri.path != '/add' ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasPort ||
+        uri.fragment.isNotEmpty) {
+      return null;
+    }
+    final titleValues = uri.queryParametersAll['title'];
+    if (titleValues == null || titleValues.length != 1) return null;
+    final title = titleValues.single.trim();
+    if (title.isEmpty) return null;
+
+    final dueValues = uri.queryParametersAll['due'];
+    if (dueValues != null && dueValues.length != 1) return null;
+    final dueAt = dueValues == null ? null : _parseDate(dueValues.single);
+    if (dueValues != null && dueAt == null) return null;
+    return NativeTaskAddRequest(
+      title: title,
+      dueAt: dueAt,
+      allDay: dueAt != null,
+    );
+  }
+
+  static DateTime? _parseDate(String value) {
+    final match = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(value);
+    if (match == null) return null;
+    final year = int.parse(match.group(1)!);
+    final month = int.parse(match.group(2)!);
+    final day = int.parse(match.group(3)!);
+    final parsed = DateTime(year, month, day);
+    if (parsed.year != year || parsed.month != month || parsed.day != day) {
+      return null;
+    }
+    return parsed;
+  }
+}
+
 class NativeIntents {
   NativeIntents._();
 
