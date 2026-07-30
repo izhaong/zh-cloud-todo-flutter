@@ -568,18 +568,35 @@ class TagApi {
   final ApiClient _client;
 
   /// `POST /tag/task-bind`
-  Future<void> taskBind({required String taskId, required int tagServerId}) =>
-      _client.post(
-        '/tag/task-bind',
-        data: {'taskId': taskId, 'tagId': tagServerId},
-      );
+  Future<int> taskBind({
+    required int taskId,
+    required List<int> tagServerIds,
+  }) async {
+    if (tagServerIds.isEmpty) {
+      throw ArgumentError.value(tagServerIds, 'tagServerIds', '标签不能为空');
+    }
+    final response = await _client.post<Map<String, dynamic>>(
+      '/tag/task-bind',
+      data: {'taskId': taskId, 'tagIds': tagServerIds},
+    );
+    _ensureSuccess(response.data);
+    final dynamic data = response.data?.containsKey('code') == true
+        ? response.data!['data']
+        : response.data;
+    return data is num ? data.toInt() : int.tryParse('$data') ?? 0;
+  }
 
   /// `DELETE /tag/task-unbind`
-  Future<void> taskUnbind({required String taskId, required int tagServerId}) =>
-      _client.delete(
-        '/tag/task-unbind',
-        data: {'taskId': taskId, 'tagId': tagServerId},
-      );
+  Future<void> taskUnbind({
+    required int taskId,
+    required int tagServerId,
+  }) async {
+    final response = await _client.delete<Map<String, dynamic>>(
+      '/tag/task-unbind',
+      data: {'taskId': taskId, 'tagId': tagServerId},
+    );
+    _ensureSuccess(response.data);
+  }
 }
 
 class TaskActivityRecord {

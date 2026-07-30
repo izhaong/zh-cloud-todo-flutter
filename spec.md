@@ -113,7 +113,7 @@ pubspec.yaml
 ## 5. 对外契约
 
 - 登录：`/app-api/todo-member/auth/{login,sms-login,send-sms-code,logout}`、`/app-api/todo-member/user/reset-password`；已启用双重验证的登录请求携带可选 `twoFactorCode`。
-- 业务：`/app-api/todo/**`；任务重排 `PUT /task/reorder` 使用 `listId + items[{id, sortOrder}]`，仅作为 API 契约/真实 HTTP 对照，Widget 核心写路径仍走 Repository/outbox；检查事项直连助手使用 `/task-hierarchy/checklist` 及其 `create/update/delete` 子路由，请求字段对齐后端 `taskId/name/assigneeUserId/sortOrder` 与 `id/name/done`，删除通过 `DELETE` 查询参数提交；效率域成就墙使用 `/achievement/wall`；双重验证使用 `/security/2fa/{status,setup,confirm,disable}`，setup 返回 Base32 密钥与标准 `otpauth` URI；数据导出使用 `/security/export`、`/security/export/list`、`/security/export/{id}/download`，下载请求复用会话鉴权；任务导入使用 `/import-health/tasks`、`/import-health/task-batches` 与 `/import-health/rollback`。
+- 业务：`/app-api/todo/**`；任务重排 `PUT /task/reorder` 使用 `listId + items[{id, sortOrder}]`，仅作为 API 契约/真实 HTTP 对照，Widget 核心写路径仍走 Repository/outbox；检查事项直连助手使用 `/task-hierarchy/checklist` 及其 `create/update/delete` 子路由，请求字段对齐后端 `taskId/name/assigneeUserId/sortOrder` 与 `id/name/done`，删除通过 `DELETE` 查询参数提交；标签直连助手使用 `POST /tag/task-bind` 批量提交数值 `taskId + tagIds[]`，解绑使用 `DELETE /tag/task-unbind` 提交数值 `taskId + tagId`；效率域成就墙使用 `/achievement/wall`；双重验证使用 `/security/2fa/{status,setup,confirm,disable}`，setup 返回 Base32 密钥与标准 `otpauth` URI；数据导出使用 `/security/export`、`/security/export/list`、`/security/export/{id}/download`，下载请求复用会话鉴权；任务导入使用 `/import-health/tasks`、`/import-health/task-batches` 与 `/import-health/rollback`。
 - 同步：`/app-api/todo/sync/{pull,push}`。
 - 默认 API `http://127.0.0.1:48080`、租户 `1`，可用 `--dart-define=TODO_API_BASE_URL`、`--dart-define=TODO_TENANT_ID` 覆盖。
 - 后端契约变更须在 `zh-cloud-service`（`service-dev`）配套 PR 并互链。
@@ -121,6 +121,7 @@ pubspec.yaml
 ## 6. 构建与发布
 
 - 常用命令：`flutter pub get`、`flutter analyze`、`flutter test`、`flutter run -d chrome|macos|windows|linux|<device>`；发布构建含 `flutter build web`（产物 `build/web/`）。
+- Gitea 共享 runner 的功能门禁执行 `flutter test --exclude-tags 'golden || performance'`；golden 与文件型 SQLite 微基准在匹配的本地/专用环境单独执行，避免共享机器负载把绝对耗时阈值变成随机门禁。
 - 修改 Drift 表或生成模型后，运行 `dart run build_runner build --delete-conflicting-outputs` 并提交生成文件。
 - 分支：`develop` 集成、`main` 发布；合并只走 PR，禁止直推主干；commit 用中文 Conventional Commits。
 

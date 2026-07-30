@@ -209,7 +209,7 @@ void main() {
     expect(searchWatch.elapsedMilliseconds, lessThan(300));
     expect(filterWatch.elapsedMilliseconds, lessThan(300));
     expect(batchWatch.elapsedMilliseconds, lessThan(300));
-    // 保留本机实际测量，供 Docs 验收记录而非将固定时间写死在断言中。
+    // 保留本机实际测量，供 Docs 验收记录；共享 runner 不作为专用性能环境。
     // ignore: avoid_print
     print(
       'B3_PERF file-sqlite-1000 '
@@ -217,7 +217,7 @@ void main() {
       'filter=${filterWatch.elapsedMilliseconds}ms '
       'batch3=${batchWatch.elapsedMilliseconds}ms',
     );
-  });
+  }, tags: 'performance');
 
   test('重设父任务拒绝自引用', () async {
     await expectLater(
