@@ -33,6 +33,7 @@ class KanbanView extends ConsumerWidget {
     this.collapsedColumnIds = const {},
     this.onColumnOrderChanged,
     this.onColumnCollapsedChanged,
+    this.onColumnTasksReordered,
   });
 
   /// 渲染用的任务列表（已应用 list/filter 的客户端过滤结果）。
@@ -49,6 +50,7 @@ class KanbanView extends ConsumerWidget {
   onColumnOrderChanged;
   final Future<void> Function(String columnId, bool collapsed)?
   onColumnCollapsedChanged;
+  final Future<void> Function(List<String> taskIds)? onColumnTasksReordered;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -144,6 +146,9 @@ class KanbanView extends ConsumerWidget {
                               priority: ordered[index].priority,
                               completed: ordered[index].completed,
                             ),
+                      onTasksReordered: onColumnTasksReordered == null
+                          ? null
+                          : (taskIds) => _reorderTasks(context, taskIds),
                       onAdd:
                           ordered[index].key == const ValueKey('col-todo') &&
                               listId != null
@@ -221,6 +226,19 @@ class KanbanView extends ConsumerWidget {
     }
   }
 
+  Future<void> _reorderTasks(BuildContext context, List<String> taskIds) async {
+    try {
+      await onColumnTasksReordered!(taskIds);
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(taskViewMutationFailureMessage(error, '看板排序失败，请重试')),
+        ),
+      );
+    }
+  }
+
   static Future<void> _quickAdd(
     BuildContext context,
     WidgetRef ref,
@@ -261,6 +279,7 @@ class _KanbanColumn extends StatelessWidget {
     this.onCollapsedChanged,
     this.onMoveLeft,
     this.onMoveRight,
+    this.onTasksReordered,
     this.onCardMove,
     this.onAdd,
   });
@@ -271,6 +290,7 @@ class _KanbanColumn extends StatelessWidget {
   final Future<void> Function(bool collapsed)? onCollapsedChanged;
   final Future<void> Function()? onMoveLeft;
   final Future<void> Function()? onMoveRight;
+  final Future<void> Function(List<String> taskIds)? onTasksReordered;
   final Future<void> Function(TodoTask task)? onCardMove;
   final VoidCallback? onAdd;
 
@@ -278,6 +298,7 @@ class _KanbanColumn extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = brandColors(context);
     return SizedBox(
+      key: data.key,
       width: collapsed ? 72 : 260,
       child: AppCard(
         margin: EdgeInsets.zero,
@@ -384,14 +405,27 @@ class _KanbanColumn extends StatelessWidget {
                       style: TextStyle(color: Theme.of(context).disabledColor),
                     ),
                   )
-                : ListView.separated(
+                : ReorderableListView.builder(
                     padding: const EdgeInsets.all(8),
                     itemCount: data.tasks.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (_, i) => _KanbanCard(
-                      task: data.tasks[i],
-                      accent: data.color,
-                      onTap: () => onCardTap(data.tasks[i]),
+                    onReorder: onTasksReordered == null
+                        ? (_, _) {}
+                        : (oldIndex, newIndex) {
+                            final ids = data.tasks
+                                .map((task) => task.id)
+                                .toList(growable: false);
+                            onTasksReordered!(
+                              reorderKanbanTaskIds(ids, oldIndex, newIndex),
+                            );
+                          },
+                    itemBuilder: (_, i) => Padding(
+                      key: ValueKey('kanban-task-${data.tasks[i].id}'),
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _KanbanCard(
+                        task: data.tasks[i],
+                        accent: data.color,
+                        onTap: () => onCardTap(data.tasks[i]),
+                      ),
                     ),
                   ),
           ),
@@ -399,6 +433,19 @@ class _KanbanColumn extends StatelessWidget {
       ],
     );
   }
+}
+
+List<String> reorderKanbanTaskIds(
+  List<String> ids,
+  int oldIndex,
+  int newIndex,
+) {
+  final reordered = List<String>.from(ids);
+  var targetIndex = newIndex;
+  if (targetIndex > oldIndex) targetIndex--;
+  final moved = reordered.removeAt(oldIndex);
+  reordered.insert(targetIndex, moved);
+  return reordered;
 }
 
 class _ColumnCount extends StatelessWidget {

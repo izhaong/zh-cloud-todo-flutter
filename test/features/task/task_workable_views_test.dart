@@ -6,6 +6,11 @@ import 'package:zh_cloud_todo_flutter/features/task/views/kanban_view.dart';
 import 'package:zh_cloud_todo_flutter/features/task/views/timeline_view.dart';
 
 void main() {
+  test('看板同列重排遵循 Reorderable 索引语义', () {
+    expect(reorderKanbanTaskIds(['a', 'b', 'c'], 0, 2), ['b', 'a', 'c']);
+    expect(reorderKanbanTaskIds(['a', 'b', 'c'], 2, 0), ['c', 'a', 'b']);
+  });
+
   testWidgets('看板拖到进行中列会请求共享任务写操作', (tester) async {
     final now = DateTime.utc(2026, 7, 15, 9);
     final task = TodoTask(
