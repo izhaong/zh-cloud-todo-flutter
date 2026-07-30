@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:drift/native.dart';
 
 import 'package:zh_cloud_todo_flutter/core/api/efficiency_api.dart';
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
@@ -9,6 +10,7 @@ import 'package:zh_cloud_todo_flutter/features/task/view_mode.dart';
 import 'package:zh_cloud_todo_flutter/features/task/views/eisenhower_view.dart';
 import 'package:zh_cloud_todo_flutter/features/task/views/task_view_mode_tabs.dart';
 import 'package:zh_cloud_todo_flutter/state/efficiency_providers.dart';
+import 'package:zh_cloud_todo_flutter/state/providers.dart';
 import 'package:zh_cloud_todo_flutter/state/session_state.dart';
 
 /// M11-B3 c3 测试：四象限 Eisenhower 分类纯函数 + 视图 tab 渲染。
@@ -108,6 +110,31 @@ void main() {
     await tester.tap(find.text('四象限'));
     await tester.pumpAndSettle();
     expect(changed, TaskViewMode.eisenhower);
+  });
+
+  testWidgets('TaskViewModeTabs 只回调父组件且不直接写同步队列', (tester) async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    TaskViewMode? changed;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        child: MaterialApp(
+          home: Scaffold(
+            body: TaskViewModeTabs(
+              mode: TaskViewMode.list,
+              onChanged: (mode) => changed = mode,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('看板'));
+    await tester.pumpAndSettle();
+
+    expect(changed, TaskViewMode.kanban);
+    expect(await db.select(db.todoSyncChanges).get(), isEmpty);
   });
 
   testWidgets('EisenhowerView 4 象限渲染', (tester) async {

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -148,21 +150,97 @@ void main() {
     addTearDown(db.close);
     final repository = TaskViewActionRepository(db, SyncChangeQueue(db));
 
-    expect(await repository.getTaskWorkspaceViewMode(), equals(null));
+    expect(
+      await repository.getTaskWorkspaceViewMode(sourceKey: 'list:inbox'),
+      equals(null),
+    );
+    expect(
+      await repository.getTaskWorkspaceViewMode(sourceKey: 'list:work'),
+      equals(null),
+    );
     expect(await repository.getCalendarViewMode(), equals(null));
 
-    await repository.saveTaskWorkspaceViewMode('kanban');
+    await repository.saveTaskWorkspaceViewMode(
+      sourceKey: 'list:inbox',
+      viewType: 'kanban',
+    );
+    await repository.saveTaskWorkspaceViewMode(
+      sourceKey: 'list:work',
+      viewType: 'timeline',
+    );
     await repository.saveCalendarViewMode('agenda');
 
-    expect(await repository.getTaskWorkspaceViewMode(), 'kanban');
+    expect(
+      await repository.getTaskWorkspaceViewMode(sourceKey: 'list:inbox'),
+      'kanban',
+    );
+    expect(
+      await repository.getTaskWorkspaceViewMode(sourceKey: 'list:work'),
+      'timeline',
+    );
     expect(await repository.getCalendarViewMode(), 'agenda');
     final preferences = await db.select(db.todoViewPreferences).get();
     final queued = await db.select(db.todoSyncChanges).get();
-    expect(preferences, hasLength(2));
-    expect(queued, hasLength(2));
+    expect(preferences, hasLength(3));
+    expect(queued, hasLength(3));
     expect(preferences.map((row) => row.sourceType).toSet(), {
       'task_view',
       'calendar_view',
     });
+    final payloads = queued
+        .map(
+          (change) => jsonDecode(change.payloadJson) as Map<String, dynamic>,
+        )
+        .toList(growable: false);
+    expect(
+      payloads
+          .where((payload) => payload['sourceType'] == 'task_view')
+          .map((payload) => payload['sourceKey'])
+          .toSet(),
+      {'list:inbox', 'list:work'},
+    );
+  });
+
+  test('旧任务视图偏好只回退收集箱且读取不产生写操作', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final now = DateTime.utc(2026, 7, 30, 9);
+    await db
+        .into(db.todoViewPreferences)
+        .insert(
+          TodoViewPreferencesCompanion.insert(
+            id: 'legacy-view',
+            sourceType: 'task_view',
+            sourceKey: 'tasks_by_list',
+            valueJson: '{"viewType":"kanban"}',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    final repository = TaskViewActionRepository(db, SyncChangeQueue(db));
+
+    expect(
+      await repository.getTaskWorkspaceViewMode(sourceKey: 'list:inbox'),
+      'kanban',
+    );
+    expect(
+      await repository.getTaskWorkspaceViewMode(sourceKey: 'list:work'),
+      equals(null),
+    );
+    expect(
+      await repository.getTaskWorkspaceViewMode(sourceKey: 'smart:all'),
+      equals(null),
+    );
+    expect(await db.select(db.todoViewPreferences).get(), hasLength(1));
+    expect(await db.select(db.todoSyncChanges).get(), isEmpty);
+
+    await repository.saveTaskWorkspaceViewMode(
+      sourceKey: 'list:inbox',
+      viewType: 'timeline',
+    );
+    expect(
+      await repository.getTaskWorkspaceViewMode(sourceKey: 'list:inbox'),
+      'timeline',
+    );
   });
 }

@@ -92,6 +92,141 @@ void main() {
     expect(change['payload']?['status'], 'DONE');
   });
 
+  test('任务视图偏好出站把本地清单 UUID 映射为稳定服务端键', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final now = DateTime.utc(2026, 7, 30, 9);
+    await db
+        .into(db.todoLists)
+        .insert(
+          TodoListsCompanion.insert(
+            id: 'list-local-a',
+            serverId: const Value(101),
+            name: '项目',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    await TaskViewActionRepository(
+      db,
+      SyncChangeQueue(db),
+    ).saveTaskWorkspaceViewMode(
+      sourceKey: 'list:list-local-a',
+      viewType: 'timeline',
+    );
+
+    Map<String, dynamic>? sentChange;
+    final dio = Dio()
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            sentChange =
+                ((((options.data as Map)['changes'] as List).single) as Map)
+                    .cast<String, dynamic>();
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                data: {
+                  'code': 0,
+                  'data': {
+                    'ok': true,
+                    'accepted': [
+                      {
+                        'entityType': sentChange!['entityType'],
+                        'entityId': 401,
+                        'operation': sentChange!['operation'],
+                        'clientMutationId': sentChange!['clientMutationId'],
+                      },
+                    ],
+                    'conflicts': const [],
+                  },
+                },
+              ),
+            );
+          },
+        ),
+      );
+    final client = ApiClient(dio: dio);
+    final coordinator = SyncCoordinator(
+      db: db,
+      api: SyncApi(client, clientId: 'test', deviceId: 'device-a'),
+      todoApi: client,
+    );
+
+    expect(await coordinator.push(), 1);
+    expect(sentChange!['entityType'], 'view_preference');
+    expect(sentChange!['payload']?['sourceType'], 'task_view');
+    expect(sentChange!['payload']?['sourceKey'], 'list-server:101');
+    final localPreference = await db.select(db.todoViewPreferences).getSingle();
+    expect(localPreference.sourceKey, 'list:list-local-a');
+    expect(localPreference.serverId, 401);
+  });
+
+  test('任务视图偏好入站把稳定服务端键映射为本地清单 UUID', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final dio = Dio()
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                data: {
+                  'code': 0,
+                  'data': {
+                    'changes': [
+                      {
+                        'entityType': 'list',
+                        'entityId': 101,
+                        'operation': 'upsert',
+                        'revision': 1,
+                        'payload': {'name': '项目', 'sortOrder': 0},
+                      },
+                      {
+                        'entityType': 'view_preference',
+                        'entityId': 401,
+                        'operation': 'upsert',
+                        'revision': 2,
+                        'payload': {
+                          'sourceType': 'task_view',
+                          'sourceKey': 'list-server:101',
+                          'viewType': 'timeline',
+                        },
+                      },
+                    ],
+                    'tombstones': const [],
+                    'nextCursor': '2',
+                    'hasMore': false,
+                  },
+                },
+              ),
+            );
+          },
+        ),
+      );
+    final client = ApiClient(dio: dio);
+    final coordinator = SyncCoordinator(
+      db: db,
+      api: SyncApi(client, clientId: 'test', deviceId: 'device-b'),
+      todoApi: client,
+    );
+
+    expect(await coordinator.pull(), 2);
+    final list = await db.listByServerId(101);
+    expect(list, isNotNull);
+    expect(
+      await TaskViewActionRepository(
+        db,
+        SyncChangeQueue(db),
+      ).getTaskWorkspaceViewMode(sourceKey: 'list:${list!.id}'),
+      'timeline',
+    );
+    final preference = await db.select(db.todoViewPreferences).getSingle();
+    expect(preference.sourceKey, 'list:${list.id}');
+    expect(preference.valueJson, contains('"sourceKey":"list:${list.id}"'));
+  });
+
   test('拉取看板偏好会映射服务端清单并落入本地表', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
