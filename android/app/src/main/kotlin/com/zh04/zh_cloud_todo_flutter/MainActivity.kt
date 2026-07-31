@@ -72,7 +72,14 @@ class MainActivity : FlutterActivity() {
                             .map { mapOf("title" to it.title) },
                     )
 
-                "pushLockScreenTasks" -> result.notImplemented()
+                "pushLockScreenTasks" -> {
+                    val tasks = NativeIntentContract.lockScreenTasks(call.arguments)
+                    if (tasks == null) {
+                        result.error("invalid_arguments", "锁屏任务快照无效", null)
+                    } else {
+                        result.success(LockScreenTasksRenderer.update(this, tasks))
+                    }
+                }
 
                 else -> result.notImplemented()
             }

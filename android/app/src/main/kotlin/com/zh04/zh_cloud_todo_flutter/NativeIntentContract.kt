@@ -12,6 +12,11 @@ data class TodayWidgetTask(
     val title: String,
 )
 
+data class NativeLockScreenTask(
+    val serverId: Int,
+    val title: String,
+)
+
 object NativeIntentContract {
     const val SYSTEM_NOTE_ACTION = "android.intent.action.CREATE_NOTE"
 
@@ -21,6 +26,8 @@ object NativeIntentContract {
     private const val SYSTEM_NOTE_MIN_API = 34
     private const val TODAY_WIDGET_MAX_TASKS = 5
     private const val TODAY_WIDGET_MAX_TITLE_LENGTH = 80
+    private const val LOCK_SCREEN_MAX_TASKS = 5
+    private const val LOCK_SCREEN_MAX_TITLE_LENGTH = 80
 
     fun acceptedIncomingLink(rawLink: String?): String? {
         val uri =
@@ -64,7 +71,40 @@ object NativeIntentContract {
         return tasks
     }
 
+    fun lockScreenTasks(arguments: Any?): List<NativeLockScreenTask>? {
+        val map = arguments as? Map<*, *> ?: return null
+        val values = map["tasks"] as? List<*> ?: return null
+        val tasks = mutableListOf<NativeLockScreenTask>()
+        for (value in values.take(LOCK_SCREEN_MAX_TASKS)) {
+            val task = value as? Map<*, *> ?: return null
+            val rawId = task["id"] as? Number ?: return null
+            val serverId = rawId.toLong()
+            if (serverId !in 1L..Int.MAX_VALUE.toLong() ||
+                rawId.toDouble() != serverId.toDouble()
+            ) {
+                return null
+            }
+            val title =
+                (task["title"] as? String)
+                    ?.trim()
+                    ?.takeIf(String::isNotEmpty)
+                    ?: return null
+            tasks +=
+                NativeLockScreenTask(
+                    serverId = serverId.toInt(),
+                    title = title.takeCodePoints(LOCK_SCREEN_MAX_TITLE_LENGTH),
+                )
+        }
+        return tasks
+    }
+
     fun supportsSystemNote(apiLevel: Int): Boolean = apiLevel >= SYSTEM_NOTE_MIN_API
+
+    private fun String.takeCodePoints(maxCodePoints: Int): String {
+        val count = codePointCount(0, length)
+        if (count <= maxCodePoints) return this
+        return substring(0, offsetByCodePoints(0, maxCodePoints))
+    }
 }
 
 class NativeLinkEvents {

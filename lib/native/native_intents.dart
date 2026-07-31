@@ -1,10 +1,30 @@
 /// 原生增强的 Dart 侧 platform channel 契约与安全降级入口。
 ///
-/// Android 已实现冷/热启动 URL Scheme、系统分享与可用时创建系统便签；
-/// iOS、锁屏任务和真实桌面小组件等尚未接入的能力仍返回“不支持”或空结果。
+/// Android 已实现冷/热启动 URL Scheme、系统分享、可用时创建系统便签、
+/// 锁屏重要任务通知与今日任务桌面小组件；iOS 尚未接入的能力仍返回
+/// “不支持”或空结果。
 library;
 
 import 'package:flutter/services.dart';
+
+class NativeLockScreenTask {
+  const NativeLockScreenTask({required this.serverId, required this.title});
+
+  final int serverId;
+  final String title;
+
+  Map<String, Object> toJson() => {'id': serverId, 'title': title};
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NativeLockScreenTask &&
+          serverId == other.serverId &&
+          title == other.title;
+
+  @override
+  int get hashCode => Object.hash(serverId, title);
+}
 
 class NativeTaskAddRequest {
   const NativeTaskAddRequest({
@@ -116,11 +136,31 @@ class NativeIntents {
     }
   }
 
-  /// 锁屏重要任务：把任务 id 列表推送给系统（Android: KeyguardManager；iOS: Lock Screen widget）。
-  static Future<bool> pushLockScreenTasks(List<int> taskIds) async {
+  /// 锁屏重要任务：Android 以 ongoing 通知展示最多五项已同步任务；
+  /// 空快照会清除通知。iOS 未实现时安全返回 false。
+  static Future<bool> pushLockScreenTasks(
+    Iterable<NativeLockScreenTask> tasks,
+  ) async {
+    final candidates = tasks.take(5).toList(growable: false);
+    if (candidates.any(
+      (task) => task.serverId <= 0 || task.title.trim().isEmpty,
+    )) {
+      return false;
+    }
+    final snapshot = candidates
+        .map(
+          (task) => NativeLockScreenTask(
+            serverId: task.serverId,
+            title: task.title.trim(),
+          ).toJson(),
+        )
+        .toList(growable: false);
     try {
-      await _channel.invokeMethod('pushLockScreenTasks', {'ids': taskIds});
-      return true;
+      final rendered = await _channel.invokeMethod<bool>(
+        'pushLockScreenTasks',
+        {'tasks': snapshot},
+      );
+      return rendered == true;
     } on PlatformException {
       return false;
     } on MissingPluginException {
