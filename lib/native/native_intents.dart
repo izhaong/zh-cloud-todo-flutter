@@ -1,8 +1,8 @@
 /// 原生增强的 Dart 侧 platform channel 契约与安全降级入口。
 ///
 /// Android 已实现冷/热启动 URL Scheme、系统分享、可用时创建系统便签、
-/// 锁屏重要任务通知与今日任务桌面小组件；iOS 尚未接入的能力仍返回
-/// “不支持”或空结果。
+/// 锁屏重要任务通知与今日任务桌面小组件；iOS 已实现冷/热启动 URL Scheme
+/// 与系统分享，其余尚未接入的能力仍返回“不支持”或空结果。
 library;
 
 import 'package:flutter/services.dart';

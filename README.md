@@ -8,7 +8,7 @@ Todo 应用 **唯一 C 端客户端**（**Web / H5**、iOS、Android、macOS、W
 | ---------- | -------------------------------------------------------------------- |
 | 产品实现   | Flutter 六端工程（含 Web/H5），核心功能、离线存储与同步合同已落地    |
 | 数据与会话 | Drift + 原子 outbox；会话使用 Android Keystore / Apple Keychain 加密 |
-| 验收状态   | 本地合同与自动回归已通过；真实双设备、物理设备、iOS 原生能力仍为外部门禁 |
+| 验收状态   | 本地合同与自动回归已通过；真实双设备、物理设备与 iOS 原生设备旅程仍为外部门禁 |
 | Subagent   | **`todo-flutter-dev`**（`.cursor/agents/todo-flutter-dev.md`）       |
 | 已废弃     | `zh-cloud-client/apps/todo`（React）— 不再维护                       |
 
@@ -28,7 +28,7 @@ Todo 应用 **唯一 C 端客户端**（**Web / H5**、iOS、Android、macOS、W
 | B2 时间提醒 | 固定时区时间、重复、提醒派发、持久调度与 Android 重启恢复合同已实现 | 物理设备到点通知、后台/重启和 iOS 旅程 |
 | B3 组织查询 | 文件夹、标签、筛选、搜索、批量、排序和权限隔离已实现 | 真实双账号、测试环境 A/B 固定旅程 |
 | B4 可工作视图 | 列表/看板/时间线真实拖拽、Repository/outbox 与 Service 合同已实现 | 显式测试账号下的真实 HTTP、第二设备和固定视觉旅程 |
-| B5 可靠性 | 推荐、恢复反馈、TalkBack 键盘、Android 小组件/URL Scheme/分享/锁屏任务模拟器旅程已验证 | 物理设备、其它辅助技术、iOS handler/锁屏组件、真实断网与完整 DoD |
+| B5 可靠性 | 推荐、恢复反馈、TalkBack 键盘、Android 小组件/URL Scheme/分享/锁屏模拟器旅程，以及 iOS URL Scheme/分享编译合同已验证 | 物理设备、其它辅助技术、iOS 设备旅程/锁屏组件、真实断网与完整 DoD |
 
 “实现存在”“本地测试通过”“真实设备/服务端验收通过”是三类独立结论；各规格未勾选项不得由构建成功替代。
 
