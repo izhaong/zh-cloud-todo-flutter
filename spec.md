@@ -6,7 +6,7 @@
 
 ## 1. 定位
 
-zh-cloud 平台 Todo 产品的 **唯一 C 端客户端**（**Web / H5**、iOS、Android、macOS、Windows、Linux，均为 Flutter 构建）。通过 `/app-api/todo-member` 完成会员登录，通过 `/app-api/todo` 与 `/app-api/todo/sync` 与后端 `zh-cloud-service` 联调。`zh-cloud-client/apps/todo`（React）**已废弃、不再维护**。核心功能、离线数据链路与本地合同已实现；真实双设备、物理设备、iOS 原生 handler 和完整视觉/无障碍 DoD 仍按各规格未勾选项独立验收，不以构建或模拟器单点成功替代。
+zh-cloud 平台 Todo 产品的 **唯一 C 端客户端**（**Web / H5**、iOS、Android、macOS、Windows、Linux，均为 Flutter 构建）。通过 `/app-api/todo-member` 完成会员登录，通过 `/app-api/todo` 与 `/app-api/todo/sync` 与后端 `zh-cloud-service` 联调。`zh-cloud-client/apps/todo`（React）**已废弃、不再维护**。核心功能、离线数据链路与本地合同已实现；真实双设备、物理设备、iOS 原生设备旅程和完整视觉/无障碍 DoD 仍按各规格未勾选项独立验收，不以构建或模拟器单点成功替代。
 
 ### 1.1 规格事实源
 
@@ -103,7 +103,7 @@ pubspec.yaml
 
 - 设置页的“原生增强”入口只消费当前账号 Drift 中的真实任务：今日任务用于应用内小组件预览、系统分享和桌面便签草稿，已完成或已取消任务不参与投影。
 - 锁屏投影包含优先级不低于 2 或已置顶的活动任务；只向平台通道传递最多五项已同步任务的真实服务端 ID 与标题最小快照，离线任务显示未同步数量且不伪造 ID。显式空快照用于清除，非法 ID 或空白标题必须拒绝且不得误清除现有投影。
-- 未注册 `zh_cloud_todo/native` 平台通道时，URL Scheme、系统分享、桌面便签、锁屏任务和小组件接口必须安全返回“不支持”或空结果。Android 关闭 Flutter 默认 deep-link 接管，由自定义通道单独消费且只接受 `zhcloudtodo://task/add`：冷启动链接通过 MethodChannel 消费一次，热启动链接通过 EventChannel 回传；事件监听尚未建立时只保留最新合法链接，避免无界缓冲。应用主壳是唯一 URI 消费者，严格要求唯一非空 `title`，可选 `due` 仅接受有效 `YYYY-MM-DD`；合法请求使用当前快速收集默认清单/优先级并经 `TaskRepository` 的 Drift + outbox 原子写链路创建任务，连续请求串行执行，非法参数和创建失败必须给出可见反馈。Android 支持系统分享，并在 API 34+ 且系统存在便签处理器时创建便签；今日任务桌面小组件使用 `AppWidgetProvider + RemoteViews` 渲染 Flutter 当前账号显式更新的最多五项真实任务快照，快照持久化供 Flutter 未运行时读取，登出、无有效会话或切换账号时必须清空，点击小组件回到应用。Android 锁屏重要任务使用固定 ID 的 ongoing 通知，私密版本显示标题，系统隐藏敏感通知时切换到只显示数量的公开版本；Android 13+ 未授权通知时明确失败，空快照、登出、无有效会话和切换账号时清除。错误 Scheme/路径和缺失系统能力不得崩溃或伪造成功。Android 17 模拟器已经完成小组件添加/更新/进程回收冷启动、URL Scheme 冷热启动、系统分享、无便签 Provider 安全降级，以及锁屏私密/公开可见性、无通知权限和清除旅程；这不替代 Android 24–25、物理设备、跨账号、真实便签目标或 iOS 验收。iOS handler 与锁屏组件仍未实现，不计作完整多端原生能力完成。
+- 未注册 `zh_cloud_todo/native` 平台通道时，URL Scheme、系统分享、桌面便签、锁屏任务和小组件接口必须安全返回“不支持”或空结果。Android 与 iOS 均关闭 Flutter 默认 deep-link 接管，由自定义通道单独消费且只接受 `zhcloudtodo://task/add`：冷启动链接通过 MethodChannel 消费一次，热启动链接通过 EventChannel 回传；事件监听尚未建立时只保留最新合法链接，避免无界缓冲。应用主壳是唯一 URI 消费者，严格要求唯一非空 `title`，可选 `due` 仅接受有效 `YYYY-MM-DD`；合法请求使用当前快速收集默认清单/优先级并经 `TaskRepository` 的 Drift + outbox 原子写链路创建任务，连续请求串行执行，非法参数和创建失败必须给出可见反馈。Android 与 iOS 均支持拒绝空文本的系统分享；Android 还在 API 34+ 且系统存在便签处理器时创建便签，今日任务桌面小组件使用 `AppWidgetProvider + RemoteViews` 渲染 Flutter 当前账号显式更新的最多五项真实任务快照，快照持久化供 Flutter 未运行时读取，登出、无有效会话或切换账号时必须清空，点击小组件回到应用。Android 锁屏重要任务使用固定 ID 的 ongoing 通知，私密版本显示标题，系统隐藏敏感通知时切换到只显示数量的公开版本；Android 13+ 未授权通知时明确失败，空快照、登出、无有效会话和切换账号时清除。错误 Scheme/路径和缺失系统能力不得崩溃或伪造成功。Android 17 模拟器已经完成小组件添加/更新/进程回收冷启动、URL Scheme 冷热启动、系统分享、无便签 Provider 安全降级，以及锁屏私密/公开可见性、无通知权限和清除旅程。iOS 的 URL Scheme 冷热入口、事件缓冲和 `UIActivityViewController` 分享已通过 iPhoneOS SDK 编译器类型检查；由于本机缺少可用 iOS Platform Support / Simulator runtime，尚未完成 Runner 链接与设备旅程，Today/WidgetKit、便签和锁屏能力继续显式 `notImplemented`。上述证据不替代 Android 24–25、物理设备、跨账号、真实便签目标、iOS 设备或完整多端验收。
 
 ### 4.5 清单协作
 
