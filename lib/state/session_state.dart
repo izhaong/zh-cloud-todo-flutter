@@ -57,7 +57,7 @@ class SessionController extends Notifier<TodoAuthSession?> {
     try {
       final session = await store.readSession();
       if (session == null) {
-        _clearNativeWidgetSnapshot();
+        _clearNativeTaskProjections();
         ref.read(sessionBootstrappedProvider.notifier).state = true;
         return;
       }
@@ -78,11 +78,11 @@ class SessionController extends Notifier<TodoAuthSession?> {
         state = session;
       } else {
         await store.clearSession();
-        _clearNativeWidgetSnapshot();
+        _clearNativeTaskProjections();
       }
     } catch (_) {
       await store.clearSession();
-      _clearNativeWidgetSnapshot();
+      _clearNativeTaskProjections();
     } finally {
       ref.read(sessionBootstrappedProvider.notifier).state = true;
     }
@@ -93,7 +93,7 @@ class SessionController extends Notifier<TodoAuthSession?> {
     if (current != null &&
         (current.userId != session.userId ||
             current.tenantId != session.tenantId)) {
-      _clearNativeWidgetSnapshot();
+      _clearNativeTaskProjections();
     }
     state = session;
     final store = ref.read(sessionStoreProvider);
@@ -106,7 +106,7 @@ class SessionController extends Notifier<TodoAuthSession?> {
     state = null;
     final store = ref.read(sessionStoreProvider);
     await store.clearSession();
-    _clearNativeWidgetSnapshot();
+    _clearNativeTaskProjections();
     try {
       await ref.read(authGatewayProvider).logout(current.accessToken);
     } catch (_) {
@@ -114,7 +114,8 @@ class SessionController extends Notifier<TodoAuthSession?> {
     }
   }
 
-  void _clearNativeWidgetSnapshot() {
+  void _clearNativeTaskProjections() {
     unawaited(NativeIntents.updateTodayWidgetSnapshot(const []));
+    unawaited(NativeIntents.pushLockScreenTasks(const []));
   }
 }

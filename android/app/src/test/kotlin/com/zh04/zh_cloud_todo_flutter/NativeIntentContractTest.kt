@@ -114,4 +114,82 @@ class NativeIntentContractTest {
         )
         assertNull(NativeIntentContract.todayWidgetTasks(null))
     }
+
+    @Test
+    fun `lock screen snapshot requires real positive ids and bounded non blank titles`() {
+        assertEquals(
+            listOf(
+                NativeLockScreenTask(serverId = 101, title = "第一项"),
+                NativeLockScreenTask(serverId = 102, title = "第二项"),
+                NativeLockScreenTask(serverId = 103, title = "第三项"),
+                NativeLockScreenTask(serverId = 104, title = "第四项"),
+                NativeLockScreenTask(serverId = 105, title = "第五项"),
+            ),
+            NativeIntentContract.lockScreenTasks(
+                mapOf(
+                    "tasks" to
+                        listOf(
+                            mapOf("id" to 101, "title" to " 第一项 "),
+                            mapOf("id" to 102L, "title" to "第二项"),
+                            mapOf("id" to 103, "title" to "第三项"),
+                            mapOf("id" to 104, "title" to "第四项"),
+                            mapOf("id" to 105, "title" to "第五项"),
+                            mapOf("id" to 106, "title" to "第六项"),
+                        ),
+                ),
+            ),
+        )
+        assertEquals(
+            NativeLockScreenTask(serverId = 201, title = "长".repeat(80)),
+            NativeIntentContract
+                .lockScreenTasks(
+                    mapOf(
+                        "tasks" to
+                            listOf(
+                                mapOf("id" to 201, "title" to "长".repeat(81)),
+                            ),
+                    ),
+                )!!
+                .single(),
+        )
+        assertEquals(
+            NativeLockScreenTask(
+                serverId = 202,
+                title = "${"长".repeat(79)}😀",
+            ),
+            NativeIntentContract
+                .lockScreenTasks(
+                    mapOf(
+                        "tasks" to
+                            listOf(
+                                mapOf(
+                                    "id" to 202,
+                                    "title" to "${"长".repeat(79)}😀额外",
+                                ),
+                            ),
+                    ),
+                )!!
+                .single(),
+        )
+        assertEquals(
+            emptyList(),
+            NativeIntentContract.lockScreenTasks(mapOf("tasks" to emptyList<Any>())),
+        )
+        assertNull(
+            NativeIntentContract.lockScreenTasks(
+                mapOf("tasks" to listOf(mapOf("id" to 0, "title" to "无效 ID"))),
+            ),
+        )
+        assertNull(
+            NativeIntentContract.lockScreenTasks(
+                mapOf("tasks" to listOf(mapOf("id" to 1.5, "title" to "非整数 ID"))),
+            ),
+        )
+        assertNull(
+            NativeIntentContract.lockScreenTasks(
+                mapOf("tasks" to listOf(mapOf("id" to 202, "title" to "  "))),
+            ),
+        )
+        assertNull(NativeIntentContract.lockScreenTasks(null))
+    }
 }

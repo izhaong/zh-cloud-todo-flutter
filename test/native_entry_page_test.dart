@@ -53,7 +53,10 @@ void main() {
       'tomorrow-high',
       'today-pinned-local',
     ]);
-    expect(projection.lockScreenServerIds, [101, 102]);
+    expect(projection.lockScreenTasks, const [
+      NativeLockScreenTask(serverId: 101, title: '提交工作报告'),
+      NativeLockScreenTask(serverId: 102, title: '明天的重要任务'),
+    ]);
     expect(projection.unsyncedImportantCount, 1);
     expect(projection.shareText, contains('提交工作报告'));
     expect(projection.shareText, isNot(contains('明天的重要任务')));
@@ -64,9 +67,39 @@ void main() {
     expect(await NativeIntents.handleIncomingUri(), isNull);
     expect(await NativeIntents.shareText('今日任务'), isFalse);
     expect(await NativeIntents.setStickyNote('今日重点'), isFalse);
-    expect(await NativeIntents.pushLockScreenTasks([101]), isFalse);
+    expect(
+      await NativeIntents.pushLockScreenTasks(const [
+        NativeLockScreenTask(serverId: 101, title: '今日重点'),
+      ]),
+      isFalse,
+    );
     expect(await NativeIntents.widgetTodaySnapshot(), isEmpty);
     expect(await NativeIntents.updateTodayWidgetSnapshot(['今日任务']), isFalse);
+  });
+
+  test('锁屏快照只把显式空列表用于清除且拒绝无效任务', () async {
+    const channel = MethodChannel('zh_cloud_todo/native');
+    final received = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          received.add(call);
+          return true;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+
+    expect(await NativeIntents.pushLockScreenTasks(const []), isTrue);
+    expect(received.single.arguments, {'tasks': <Object>[]});
+
+    expect(
+      await NativeIntents.pushLockScreenTasks(const [
+        NativeLockScreenTask(serverId: 0, title: '无效任务'),
+      ]),
+      isFalse,
+    );
+    expect(received, hasLength(1));
   });
 
   test('今日投影按任务固定时区的墙上日期归组', () {
@@ -83,7 +116,7 @@ void main() {
     expect(projection.todayTasks.single.id, 'los-angeles-evening');
   });
 
-  testWidgets('原生增强页把真实服务端任务 ID 推送到平台通道', (tester) async {
+  testWidgets('原生增强页把真实服务端任务快照推送到平台通道', (tester) async {
     const channel = MethodChannel('zh_cloud_todo/native');
     MethodCall? received;
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
@@ -131,7 +164,9 @@ void main() {
 
     expect(received?.method, 'pushLockScreenTasks');
     expect(received?.arguments, {
-      'ids': [201],
+      'tasks': [
+        {'id': 201, 'title': '真实锁屏任务'},
+      ],
     });
   });
 

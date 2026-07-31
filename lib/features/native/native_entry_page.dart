@@ -11,7 +11,7 @@ class NativeTaskProjection {
   const NativeTaskProjection({
     required this.todayTasks,
     required this.importantTasks,
-    required this.lockScreenServerIds,
+    required this.lockScreenTasks,
     required this.unsyncedImportantCount,
     required this.shareText,
     required this.stickyNoteText,
@@ -19,7 +19,7 @@ class NativeTaskProjection {
 
   final List<TodoTask> todayTasks;
   final List<TodoTask> importantTasks;
-  final List<int> lockScreenServerIds;
+  final List<NativeLockScreenTask> lockScreenTasks;
   final int unsyncedImportantCount;
   final String shareText;
   final String stickyNoteText;
@@ -46,9 +46,15 @@ class NativeTaskProjection {
             if (priority != 0) return priority;
             return _compareBySchedule(left, right);
           });
-    final lockScreenServerIds = importantTasks
-        .map((task) => task.serverId)
-        .whereType<int>()
+    final lockScreenTasks = importantTasks
+        .where((task) => task.serverId != null && task.title.trim().isNotEmpty)
+        .take(5)
+        .map(
+          (task) => NativeLockScreenTask(
+            serverId: task.serverId!,
+            title: task.title.trim(),
+          ),
+        )
         .toList(growable: false);
     final unsyncedImportantCount = importantTasks
         .where((task) => task.serverId == null)
@@ -70,7 +76,7 @@ class NativeTaskProjection {
     return NativeTaskProjection(
       todayTasks: List.unmodifiable(todayTasks),
       importantTasks: List.unmodifiable(importantTasks),
-      lockScreenServerIds: List.unmodifiable(lockScreenServerIds),
+      lockScreenTasks: List.unmodifiable(lockScreenTasks),
       unsyncedImportantCount: unsyncedImportantCount,
       shareText: shareText,
       stickyNoteText: stickyNoteText,
@@ -101,8 +107,8 @@ class NativeTaskProjection {
   }
 }
 
-/// 原生增强入口页。页面只消费当前账号的 Drift 任务投影；平台通道仅接收
-/// 已同步的服务端任务 ID，不会为离线任务伪造 ID。
+/// 原生增强入口页。页面只消费当前账号的 Drift 任务投影；锁屏平台通道仅接收
+/// 已同步任务的服务端 ID 与标题最小快照，不会为离线任务伪造 ID。
 class NativeEntryPage extends ConsumerStatefulWidget {
   const NativeEntryPage({super.key, this.taskStream});
 
@@ -218,16 +224,22 @@ class _NativeEntryPageState extends ConsumerState<NativeEntryPage> {
               FilledButton.icon(
                 icon: const Icon(Icons.lock_outline),
                 label: Text(
-                  '推送 ${projection.lockScreenServerIds.length} 项重要任务',
+                  projection.lockScreenTasks.isEmpty
+                      ? '清除锁屏任务'
+                      : '推送 ${projection.lockScreenTasks.length} 项重要任务',
                 ),
-                onPressed: projection.lockScreenServerIds.isEmpty
-                    ? null
-                    : () async {
-                        final ok = await NativeIntents.pushLockScreenTasks(
-                          projection.lockScreenServerIds,
-                        );
-                        _toast(ok ? '已推送' : '不支持当前平台');
-                      },
+                onPressed: () async {
+                  final ok = await NativeIntents.pushLockScreenTasks(
+                    projection.lockScreenTasks,
+                  );
+                  _toast(
+                    ok
+                        ? projection.lockScreenTasks.isEmpty
+                              ? '已清除锁屏任务'
+                              : '已推送'
+                        : '不支持当前平台或通知权限未开启',
+                  );
+                },
               ),
               const SizedBox(height: 24),
               _SectionTitle('桌面小组件数据预览'),

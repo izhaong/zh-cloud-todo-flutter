@@ -106,13 +106,13 @@ void main() {
     expect(container.read(sessionBootstrappedProvider), isTrue);
   });
 
-  test('sign out clears the persisted native widget snapshot', () async {
+  test('sign out clears persisted native widget and lock screen snapshots', () async {
     const channel = MethodChannel('zh_cloud_todo/native');
-    MethodCall? received;
+    final received = <MethodCall>[];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
-          received = call;
-          return null;
+          received.add(call);
+          return call.method == 'pushLockScreenTasks' ? true : null;
         });
     addTearDown(
       () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -129,8 +129,22 @@ void main() {
     await container.read(sessionProvider.notifier).setSession(persistedSession);
     await container.read(sessionProvider.notifier).signOut();
 
-    expect(received?.method, 'updateTodayWidgetSnapshot');
-    expect(received?.arguments, {'tasks': <Object>[]});
+    expect(
+      received.map((call) => call.method),
+      containsAll(['updateTodayWidgetSnapshot', 'pushLockScreenTasks']),
+    );
+    expect(
+      received
+          .singleWhere((call) => call.method == 'updateTodayWidgetSnapshot')
+          .arguments,
+      {'tasks': <Object>[]},
+    );
+    expect(
+      received
+          .singleWhere((call) => call.method == 'pushLockScreenTasks')
+          .arguments,
+      {'tasks': <Object>[]},
+    );
   });
 }
 
