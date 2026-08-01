@@ -560,15 +560,27 @@ class RecommendationTask {
 
 /// 推荐任务只读接口；不参与任务写入的 outbox 协议。
 class RecommendationApi {
-  RecommendationApi(this._client);
+  RecommendationApi(this._client, {DateTime Function()? now})
+    : _now = now ?? DateTime.now;
 
   final ApiClient _client;
+  final DateTime Function() _now;
 
   /// `GET /help/recommend-tasks?limit=10`。
   Future<List<RecommendationTask>> list({int limit = 10}) async {
+    final current = _now();
+    final today = DateTime(current.year, current.month, current.day);
+    final tomorrow = DateTime(current.year, current.month, current.day + 1);
+    final upcomingEnd = DateTime(current.year, current.month, current.day + 3);
     final response = await _client.get<dynamic>(
       '/help/recommend-tasks',
-      query: {'limit': limit.clamp(1, 50)},
+      query: {
+        'limit': limit.clamp(1, 50),
+        'today': _formatLocalDate(today),
+        'todayStartEpochMillis': today.millisecondsSinceEpoch,
+        'tomorrowStartEpochMillis': tomorrow.millisecondsSinceEpoch,
+        'upcomingEndEpochMillis': upcomingEnd.millisecondsSinceEpoch,
+      },
     );
     final body = response.data;
     final data = body is Map<String, dynamic> && body.containsKey('code')
@@ -583,6 +595,11 @@ class RecommendationApi {
         .where((item) => item.taskServerId > 0 && item.reasonCode.isNotEmpty)
         .toList(growable: false);
   }
+
+  String _formatLocalDate(DateTime value) =>
+      '${value.year.toString().padLeft(4, '0')}-'
+      '${value.month.toString().padLeft(2, '0')}-'
+      '${value.day.toString().padLeft(2, '0')}';
 }
 
 /// 标签 - 任务绑定（直接 REST；本地同步写仍由 TagRepository 负责 offline 安全）。

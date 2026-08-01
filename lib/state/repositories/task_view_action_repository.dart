@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../../core/db/app_database.dart';
 import '../../core/sync/sync_change_queue.dart';
 import '../../core/sync/sync_entities.dart';
+import '../../core/time/task_time_formatter.dart';
 
 class TaskWorkspacePreference {
   const TaskWorkspacePreference({
@@ -363,6 +364,61 @@ class TaskViewActionRepository {
         localId: task.id,
         serverId: task.serverId,
         payload: task.toJson(),
+      );
+    });
+  }
+
+  /// 将推荐任务安排到客户端本地“今天”。
+  ///
+  /// 已有截止时间保留其展示墙钟时刻；无日期任务使用纯日期全天语义。
+  /// 已经属于今天时不重复写入，也不产生第二条 outbox mutation。
+  Future<void> addToToday(String taskId, {DateTime? today}) async {
+    final target = today ?? DateTime.now();
+    final targetDay = DateTime(target.year, target.month, target.day);
+    await _db.transaction(() async {
+      final task = await _requireWritableTask(taskId);
+      final currentDisplay = task.dueAt == null
+          ? null
+          : taskWallClockDateTime(
+              task.dueAt!,
+              allDay: task.allDay,
+              fixedTimezone: task.fixedTimezone,
+              timeZone: task.timeZone,
+            );
+      if (currentDisplay != null &&
+          currentDisplay.year == targetDay.year &&
+          currentDisplay.month == targetDay.month &&
+          currentDisplay.day == targetDay.day) {
+        return;
+      }
+      final dueAt = task.dueAt == null
+          ? targetDay
+          : task.allDay
+          ? targetDay
+          : taskDateTimeForDisplayDay(
+              task.dueAt!,
+              targetDay,
+              fixedTimezone: task.fixedTimezone,
+              timeZone: task.timeZone,
+            );
+      await (_db.update(
+        _db.todoTasks,
+      )..where((row) => row.id.equals(taskId))).write(
+        TodoTasksCompanion(
+          dueAt: Value(dueAt),
+          allDay: Value(task.dueAt == null ? true : task.allDay),
+          updatedAt: Value(DateTime.now()),
+        ),
+      );
+      final updated = await (_db.select(
+        _db.todoTasks,
+      )..where((row) => row.id.equals(taskId))).getSingle();
+      await _queue.enqueue(
+        entity: SyncEntities.task,
+        op: SyncOps.upsert,
+        localId: updated.id,
+        serverId: updated.serverId,
+        payload: updated.toJson(),
       );
     });
   }

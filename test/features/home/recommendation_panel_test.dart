@@ -34,6 +34,7 @@ void main() {
       _OfflineRecommendationApi(),
     );
     int? selected;
+    int? addedToToday;
 
     await tester.pumpWidget(
       ProviderScope(
@@ -44,6 +45,7 @@ void main() {
           home: Scaffold(
             body: RecommendationPanel(
               onTaskSelected: (taskId) => selected = taskId,
+              onAddToToday: (taskId) async => addedToToday = taskId,
             ),
           ),
         ),
@@ -57,9 +59,10 @@ void main() {
     );
     expect(panelSemanticsFinder, findsOneWidget);
     expect(find.byTooltip('刷新推荐任务'), findsOneWidget);
+    expect(find.byTooltip('添加到今天'), findsOneWidget);
     expect(find.bySemanticsLabel(RegExp('即将到期的任务')), findsOneWidget);
     final panelNode = tester.getSemantics(panelSemanticsFinder);
-    final refreshNode = tester.getSemantics(find.byType(IconButton));
+    final refreshNode = tester.getSemantics(find.byTooltip('刷新推荐任务'));
     final taskNode = tester.getSemantics(find.text('即将到期的任务'));
     expect(refreshNode.id, isNot(panelNode.id));
     expect(taskNode.id, isNot(panelNode.id));
@@ -67,6 +70,11 @@ void main() {
     expect(find.text('即将到期的任务'), findsOneWidget);
     expect(find.text('即将到期'), findsOneWidget);
     await tester.tap(find.text('即将到期的任务'));
+    expect(selected, 7);
+    expect(addedToToday, isNull);
+    await tester.tap(find.byTooltip('添加到今天'));
+    await tester.pumpAndSettle();
+    expect(addedToToday, 7);
     expect(selected, 7);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
@@ -100,7 +108,12 @@ void main() {
           recommendationRepositoryProvider.overrideWithValue(repository),
         ],
         child: MaterialApp(
-          home: Scaffold(body: RecommendationPanel(onTaskSelected: (_) {})),
+          home: Scaffold(
+            body: RecommendationPanel(
+              onTaskSelected: (_) {},
+              onAddToToday: (_) async {},
+            ),
+          ),
         ),
       ),
     );
@@ -143,7 +156,12 @@ void main() {
           recommendationRepositoryProvider.overrideWithValue(repository),
         ],
         child: MaterialApp(
-          home: Scaffold(body: RecommendationPanel(onTaskSelected: (_) {})),
+          home: Scaffold(
+            body: RecommendationPanel(
+              onTaskSelected: (_) {},
+              onAddToToday: (_) async {},
+            ),
+          ),
         ),
       ),
     );
@@ -184,7 +202,12 @@ void main() {
             recommendationRepositoryProvider.overrideWithValue(repository),
           ],
           child: MaterialApp(
-            home: Scaffold(body: RecommendationPanel(onTaskSelected: (_) {})),
+            home: Scaffold(
+              body: RecommendationPanel(
+                onTaskSelected: (_) {},
+                onAddToToday: (_) async {},
+              ),
+            ),
           ),
         ),
       );
@@ -206,6 +229,120 @@ void main() {
       await tester.pumpAndSettle();
     } finally {
       api.completeAll(_recommendations);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    }
+  });
+
+  testWidgets('添加到今天失败时保留推荐并发布可恢复的 live region', (tester) async {
+    final semantics = tester.ensureSemantics();
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    await db
+        .into(db.todoRecommendations)
+        .insert(
+          TodoRecommendationsCompanion.insert(
+            taskServerId: const Value(7),
+            title: '待安排任务',
+            reasonCode: 'LONG_UNFINISHED',
+            reason: '长期未完成',
+            score: 800,
+            refreshedAt: DateTime.utc(2026, 8, 2),
+          ),
+        );
+    final repository = RecommendationRepository(
+      db,
+      _OfflineRecommendationApi(),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          recommendationRepositoryProvider.overrideWithValue(repository),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: RecommendationPanel(
+              onTaskSelected: (_) {},
+              onAddToToday: (_) =>
+                  Future<void>.error(StateError('write failed')),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('添加到今天'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('待安排任务'), findsOneWidget);
+    expect(find.text('添加到今天失败，请重试'), findsOneWidget);
+    expect(
+      tester.getSemantics(find.text('添加到今天失败，请重试')),
+      matchesSemantics(label: '添加到今天失败，请重试', isLiveRegion: true),
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+    semantics.dispose();
+  });
+
+  testWidgets('添加到今天进行中禁用按钮并忽略重复点击', (tester) async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    await db
+        .into(db.todoRecommendations)
+        .insert(
+          TodoRecommendationsCompanion.insert(
+            taskServerId: const Value(7),
+            title: '待安排任务',
+            reasonCode: 'LONG_UNFINISHED',
+            reason: '长期未完成',
+            score: 800,
+            refreshedAt: DateTime.utc(2026, 8, 2),
+          ),
+        );
+    final repository = RecommendationRepository(
+      db,
+      _OfflineRecommendationApi(),
+    );
+    final completion = Completer<void>();
+    var calls = 0;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          recommendationRepositoryProvider.overrideWithValue(repository),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: RecommendationPanel(
+              onTaskSelected: (_) {},
+              onAddToToday: (_) {
+                calls++;
+                return completion.future;
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final addButton = find.byWidgetPredicate(
+      (widget) => widget is IconButton && widget.tooltip == '添加到今天',
+    );
+    try {
+      await tester.tap(addButton);
+      await tester.pump();
+      expect(calls, 1);
+      expect(tester.widget<IconButton>(addButton).onPressed, isNull);
+      await tester.tap(addButton);
+      await tester.pump();
+      expect(calls, 1);
+    } finally {
+      if (!completion.isCompleted) completion.complete();
+      await tester.pumpAndSettle();
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump(const Duration(milliseconds: 1));
     }

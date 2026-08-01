@@ -11,9 +11,14 @@ import '../../state/providers.dart';
 ///
 /// 没有成功缓存时不占用工作区布局，因此不会改变既有固定视觉旅程。
 class RecommendationPanel extends ConsumerStatefulWidget {
-  const RecommendationPanel({super.key, required this.onTaskSelected});
+  const RecommendationPanel({
+    super.key,
+    required this.onTaskSelected,
+    required this.onAddToToday,
+  });
 
   final ValueChanged<int> onTaskSelected;
+  final Future<void> Function(int) onAddToToday;
 
   @override
   ConsumerState<RecommendationPanel> createState() =>
@@ -22,12 +27,29 @@ class RecommendationPanel extends ConsumerStatefulWidget {
 
 class _RecommendationPanelState extends ConsumerState<RecommendationPanel> {
   var _refreshFailed = false;
+  var _addToTodayFailed = false;
   Future<void>? _refreshInFlight;
+  final _addingTaskIds = <int>{};
 
   @override
   void initState() {
     super.initState();
     unawaited(_refresh());
+  }
+
+  Future<void> _addToToday(int taskServerId) async {
+    if (_addingTaskIds.contains(taskServerId)) return;
+    setState(() {
+      _addingTaskIds.add(taskServerId);
+      _addToTodayFailed = false;
+    });
+    try {
+      await widget.onAddToToday(taskServerId);
+    } catch (_) {
+      if (mounted) setState(() => _addToTodayFailed = true);
+    } finally {
+      if (mounted) setState(() => _addingTaskIds.remove(taskServerId));
+    }
   }
 
   Future<void> _refresh() {
@@ -122,6 +144,22 @@ class _RecommendationPanelState extends ConsumerState<RecommendationPanel> {
                         ),
                       ),
                     ),
+                  if (_addToTodayFailed)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+                      child: Semantics(
+                        label: '添加到今天失败，请重试',
+                        liveRegion: true,
+                        excludeSemantics: true,
+                        child: Text(
+                          '添加到今天失败，请重试',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
                   for (final item in recommendations.take(3))
                     Material(
                       type: MaterialType.transparency,
@@ -137,7 +175,29 @@ class _RecommendationPanelState extends ConsumerState<RecommendationPanel> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        trailing: const Icon(Icons.chevron_right),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: '添加到今天',
+                              onPressed:
+                                  _addingTaskIds.contains(item.taskServerId)
+                                  ? null
+                                  : () => unawaited(
+                                      _addToToday(item.taskServerId),
+                                    ),
+                              icon: _addingTaskIds.contains(item.taskServerId)
+                                  ? const SizedBox.square(
+                                      dimension: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.add, size: 20),
+                            ),
+                            const Icon(Icons.chevron_right),
+                          ],
+                        ),
                         onTap: () => widget.onTaskSelected(item.taskServerId),
                       ),
                     ),

@@ -112,6 +112,40 @@ void main() {
 
     expect(await repository.watchAll().first, isEmpty);
   });
+
+  test('添加到今天成功后只移除对应推荐缓存', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final repository = RecommendationRepository(
+      db,
+      _FakeRecommendationApi(const []),
+    );
+    await db.batch((batch) {
+      batch.insertAll(db.todoRecommendations, [
+        TodoRecommendationsCompanion.insert(
+          taskServerId: const Value(7),
+          title: '已安排任务',
+          reasonCode: 'DUE_SOON',
+          reason: '即将到期',
+          score: 900,
+          refreshedAt: DateTime.utc(2026, 8, 2),
+        ),
+        TodoRecommendationsCompanion.insert(
+          taskServerId: const Value(8),
+          title: '保留任务',
+          reasonCode: 'LONG_UNFINISHED',
+          reason: '长期未完成',
+          score: 800,
+          refreshedAt: DateTime.utc(2026, 8, 2),
+        ),
+      ]);
+    });
+
+    await repository.removeTask(7);
+
+    final cached = await repository.watchAll().first;
+    expect(cached.map((item) => item.taskServerId), [8]);
+  });
 }
 
 class _FakeRecommendationApi extends RecommendationApi {
