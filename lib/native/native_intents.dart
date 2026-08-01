@@ -101,9 +101,20 @@ class NativeIntents {
     }
   }
 
-  /// 监听应用已运行时收到的 URL Scheme。平台未注册事件通道时会向订阅者
-  /// 报错，调用方应安全忽略并继续使用应用内功能。
+  /// 监听应用已运行时收到的 URL Scheme。先通过 MethodChannel 确认平台
+  /// 已注册事件 handler；不支持时返回空流，避免 EventChannel 把激活失败
+  /// 直接上报为未处理的 FlutterError。
   static Stream<Uri> incomingUris() async* {
+    try {
+      final supported = await _channel.invokeMethod<bool>(
+        'supportsLinkEvents',
+      );
+      if (supported != true) return;
+    } on PlatformException {
+      return;
+    } on MissingPluginException {
+      return;
+    }
     await for (final event in _linkEvents.receiveBroadcastStream()) {
       if (event is! String) continue;
       final uri = Uri.tryParse(event);

@@ -199,10 +199,13 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 onFilterPressed: () => _openFilterPanel(raw),
                 batchSelectionActive: _batchSelectionActive,
                 onBatchPressed: _toggleBatchSelection,
+                onCreateSection: _mode == TaskViewMode.list && listId != null
+                    ? _createTaskSection
+                    : null,
               ),
             if (showQuickAdd && !_batchSelectionActive)
               QuickAddBar(onSubmit: _submitQuickAdd, tagOptions: tagOptions),
-            if (_mode == TaskViewMode.list && listId != null)
+            if (_mode == TaskViewMode.list && taskSections.isNotEmpty)
               _TaskSectionManagerBar(
                 sections: taskSections,
                 onCreate: _createTaskSection,
@@ -272,7 +275,19 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     }
     return Scaffold(
       backgroundColor: colors.surface,
-      appBar: AppBar(title: Text(widget.title), centerTitle: false),
+      appBar: AppBar(
+        title: Text(widget.title),
+        centerTitle: false,
+        actions: [
+          if (_mode == TaskViewMode.list && _selectedListId != null)
+            IconButton(
+              key: const Key('todo-section-create-appbar'),
+              tooltip: '新建分组',
+              onPressed: _createTaskSection,
+              icon: const Icon(Icons.playlist_add),
+            ),
+        ],
+      ),
       body: body,
     );
   }
