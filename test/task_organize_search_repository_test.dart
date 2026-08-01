@@ -699,6 +699,62 @@ void main() {
     });
   });
 
+  test('批量关联主任务逐项保留成功、重复、循环和不存在结果', () async {
+    final batchRepository = TaskBatchEditRepository(db, SyncChangeQueue(db));
+    await taskRepository.reparent('task-2', 'task-1');
+    await db.delete(db.todoSyncChanges).go();
+
+    final results = await batchRepository.linkToParent(
+      taskIds: const ['task-3', 'task-1', 'task-3', 'task-missing'],
+      parentTaskId: 'task-2',
+    );
+
+    expect(results.map((result) => result.status), [
+      TaskBatchEditStatus.success,
+      TaskBatchEditStatus.failed,
+      TaskBatchEditStatus.skipped,
+      TaskBatchEditStatus.failed,
+    ]);
+    expect(results[1].reason, '任务父子关系形成循环');
+    expect(results[2].reason, '重复任务');
+    expect(results[3].reason, '任务不存在');
+
+    final linked = await (db.select(
+      db.todoTasks,
+    )..where((row) => row.id.equals('task-3'))).getSingle();
+    final rejected = await (db.select(
+      db.todoTasks,
+    )..where((row) => row.id.equals('task-1'))).getSingle();
+    expect(linked.parentTaskId, 'task-2');
+    expect(rejected.parentTaskId, isNull);
+
+    final queued = await db.select(db.todoSyncChanges).get();
+    expect(queued, hasLength(1));
+    expect(queued.single.entity, SyncEntities.task);
+    expect(queued.single.entityLocalId, 'task-3');
+  });
+
+  test('批量关联主任务拒绝第六级并保留准确失败原因', () async {
+    final batchRepository = TaskBatchEditRepository(db, SyncChangeQueue(db));
+    for (var index = 2; index <= 6; index++) {
+      await taskRepository.reparent('task-$index', 'task-${index - 1}');
+    }
+    await db.delete(db.todoSyncChanges).go();
+
+    final results = await batchRepository.linkToParent(
+      taskIds: const ['task-7'],
+      parentTaskId: 'task-6',
+    );
+
+    expect(results.single.status, TaskBatchEditStatus.failed);
+    expect(results.single.reason, '任务层级不能超过五级');
+    final rejected = await (db.select(
+      db.todoTasks,
+    )..where((row) => row.id.equals('task-7'))).getSingle();
+    expect(rejected.parentTaskId, isNull);
+    expect(await db.select(db.todoSyncChanges).get(), isEmpty);
+  });
+
   test('批量编辑在本地移动清单并更新截止时间后逐项入队', () async {
     final batchRepository = TaskBatchEditRepository(db, SyncChangeQueue(db));
     final dueAt = DateTime.utc(2026, 7, 20, 18);

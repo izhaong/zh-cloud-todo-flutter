@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import '../../core/db/app_database.dart';
 import '../../core/sync/sync_change_queue.dart';
 import '../../core/sync/sync_entities.dart';
+import 'task_repository.dart';
 
 /// B3 任务批量编辑的逐项结果。
 ///
@@ -55,10 +56,72 @@ class TaskBatchEditCommand {
 }
 
 class TaskBatchEditRepository {
-  TaskBatchEditRepository(this._db, this._queue);
+  TaskBatchEditRepository(AppDatabase db, SyncChangeQueue queue)
+    : _db = db,
+      _queue = queue,
+      _tasks = TaskRepository(db, queue);
 
   final AppDatabase _db;
   final SyncChangeQueue _queue;
+  final TaskRepository _tasks;
+
+  /// 将每个任务关联到同一个主任务，并逐项保留成功、跳过与失败结果。
+  ///
+  /// 层级、循环、同清单与只读规则由 [TaskRepository.reparent] 统一维护；
+  /// 每个任务使用独立 transaction，避免一个失败项回滚其它成功项。
+  Future<List<TaskBatchEditResult>> linkToParent({
+    required List<String> taskIds,
+    required String parentTaskId,
+  }) async {
+    final seenIds = <String>{};
+    final results = <TaskBatchEditResult>[];
+    for (final taskId in taskIds) {
+      if (!seenIds.add(taskId)) {
+        results.add(
+          TaskBatchEditResult(
+            taskId: taskId,
+            status: TaskBatchEditStatus.skipped,
+            reason: '重复任务',
+          ),
+        );
+        continue;
+      }
+      try {
+        await _tasks.reparent(taskId, parentTaskId);
+        results.add(
+          TaskBatchEditResult(
+            taskId: taskId,
+            status: TaskBatchEditStatus.success,
+          ),
+        );
+      } on ArgumentError catch (error) {
+        results.add(
+          TaskBatchEditResult(
+            taskId: taskId,
+            status: TaskBatchEditStatus.failed,
+            reason: error.message?.toString() ?? '关联主任务失败',
+          ),
+        );
+      } on StateError catch (error) {
+        results.add(
+          TaskBatchEditResult(
+            taskId: taskId,
+            status: TaskBatchEditStatus.failed,
+            reason: error.message,
+          ),
+        );
+      } catch (_) {
+        results.add(
+          TaskBatchEditResult(
+            taskId: taskId,
+            status: TaskBatchEditStatus.failed,
+            reason: '关联主任务失败',
+          ),
+        );
+      }
+    }
+    return results;
+  }
 
   Future<List<TaskBatchEditResult>> apply(TaskBatchEditCommand command) async {
     if (!command.hasChanges) {
