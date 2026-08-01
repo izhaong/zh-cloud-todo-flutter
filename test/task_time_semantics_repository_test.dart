@@ -716,6 +716,13 @@ void main() {
           startAt: startAt,
           countLimit: 0,
         ),
+        () => repeats.save(
+          taskId: 'task-end-condition',
+          frequency: 'DAILY',
+          startAt: startAt,
+          untilAt: DateTime(2026, 7, 31, 23, 59, 59),
+          countLimit: 3,
+        ),
       ];
 
       for (final save in invalidSaves) {
