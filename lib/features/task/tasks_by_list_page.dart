@@ -709,6 +709,12 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       );
       return;
     }
+    if (action == TaskBatchAction.linkToParent) {
+      final parentTaskId = await _selectBatchParentTask();
+      if (parentTaskId == null || !mounted) return;
+      await _applyBatchParentLink(parentTaskId: parentTaskId);
+      return;
+    }
     if (action == TaskBatchAction.setTags) {
       final tagIds = await _selectBatchTagIds();
       if (tagIds == null || !mounted) return;
@@ -757,6 +763,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         listId: kInboxListId,
       ),
       TaskBatchAction.moveToList => throw StateError('指定清单需要先选择目标'),
+      TaskBatchAction.linkToParent => throw StateError('主任务需要先选择目标'),
       TaskBatchAction.setTags => throw StateError('标签需要先选择目标'),
       TaskBatchAction.setDueAt => throw StateError('截止日期需要先选择目标'),
       TaskBatchAction.clearDueAt => const TaskBatchEditCommand(
@@ -911,6 +918,76 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     );
   }
 
+  Future<String?> _selectBatchParentTask() async {
+    final taskRepository = ref.read(taskRepositoryProvider);
+    final queryRepository = ref.read(taskQueryRepositoryProvider);
+    if (taskRepository == null || queryRepository == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('任务暂不可用，请稍后重试')));
+      return null;
+    }
+    final selectedIds = _batchSelectedTaskIds.toSet();
+    if (selectedIds.isEmpty) return null;
+    final selectedTasks = await Future.wait(
+      selectedIds.map(taskRepository.getById),
+    );
+    final firstSelected = selectedTasks.whereType<TodoTask>().firstOrNull;
+    if (!mounted) return null;
+    if (firstSelected == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('所选任务已不存在')));
+      return null;
+    }
+    final candidates = (await queryRepository.filter(
+      TaskQueryFilter(listId: firstSelected.listId),
+    )).where((task) => !selectedIds.contains(task.id)).toList(growable: false);
+    if (!mounted) return null;
+    if (candidates.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('暂无可关联的主任务')));
+      return null;
+    }
+    return showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.sizeOf(sheetContext).height * 0.6,
+          child: Column(
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '关联主任务',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: ListView(
+                  children: [
+                    for (final task in candidates)
+                      ListTile(
+                        key: Key('todo-batch-parent-${task.id}'),
+                        leading: const Icon(Icons.account_tree_outlined),
+                        title: Text(task.title),
+                        onTap: () => Navigator.of(sheetContext).pop(task.id),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<DateTime?> _selectBatchDueAt() {
     final now = ref.read(currentDateTimeProvider)();
     return showDatePicker(
@@ -1031,6 +1108,59 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       ),
     );
     if (!mounted) return;
+    _finishBatchOperation(
+      results: results,
+      successVerb: successVerb,
+      onRetry: (failedTaskIds) => _applyBatchEdit(
+        TaskBatchEditCommand(
+          taskIds: failedTaskIds,
+          listId: baseCommand.listId,
+          dueAt: baseCommand.dueAt,
+          clearDueAt: baseCommand.clearDueAt,
+          tagIds: baseCommand.tagIds,
+          priority: baseCommand.priority,
+          completed: baseCommand.completed,
+          isPinned: baseCommand.isPinned,
+        ),
+        successVerb: '已重试',
+      ),
+    );
+  }
+
+  Future<void> _applyBatchParentLink({
+    required String parentTaskId,
+    List<String>? taskIds,
+  }) async {
+    final repository = ref.read(taskBatchEditRepositoryProvider);
+    if (repository == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('批量编辑暂不可用，请稍后重试')));
+      return;
+    }
+    final selectedIds =
+        taskIds ?? _batchSelectedTaskIds.toList(growable: false);
+    setState(() => _batchApplying = true);
+    final results = await repository.linkToParent(
+      taskIds: selectedIds,
+      parentTaskId: parentTaskId,
+    );
+    if (!mounted) return;
+    _finishBatchOperation(
+      results: results,
+      successVerb: '已关联',
+      onRetry: (failedTaskIds) => _applyBatchParentLink(
+        parentTaskId: parentTaskId,
+        taskIds: failedTaskIds,
+      ),
+    );
+  }
+
+  void _finishBatchOperation({
+    required List<TaskBatchEditResult> results,
+    required String successVerb,
+    required Future<void> Function(List<String> failedTaskIds) onRetry,
+  }) {
     final succeeded = results
         .where((result) => result.status == TaskBatchEditStatus.success)
         .length;
@@ -1076,19 +1206,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 label: '重试失败项',
                 onPressed: () {
                   if (!mounted) return;
-                  _applyBatchEdit(
-                    TaskBatchEditCommand(
-                      taskIds: failedTaskIds,
-                      listId: baseCommand.listId,
-                      dueAt: baseCommand.dueAt,
-                      clearDueAt: baseCommand.clearDueAt,
-                      tagIds: baseCommand.tagIds,
-                      priority: baseCommand.priority,
-                      completed: baseCommand.completed,
-                      isPinned: baseCommand.isPinned,
-                    ),
-                    successVerb: '已重试',
-                  );
+                  onRetry(failedTaskIds);
                 },
               ),
       ),

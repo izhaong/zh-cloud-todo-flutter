@@ -11,6 +11,7 @@ enum TaskBatchAction {
   moveToInbox,
   setDueAt,
   moveToList,
+  linkToParent,
   setTags,
   clearDueAt,
   clearTags,
@@ -27,6 +28,7 @@ extension TaskBatchActionX on TaskBatchAction {
     TaskBatchAction.complete => '完成所选',
     TaskBatchAction.moveToInbox => '移至收集箱',
     TaskBatchAction.moveToList => '移至清单…',
+    TaskBatchAction.linkToParent => '关联主任务…',
     TaskBatchAction.setTags => '设置标签…',
     TaskBatchAction.setDueAt => '设置截止日期…',
     TaskBatchAction.clearDueAt => '清空截止日期',
@@ -191,6 +193,7 @@ class TaskBatchActionBar extends StatelessWidget {
                         for (final action in [
                           if (ultraCompact) TaskBatchAction.complete,
                           TaskBatchAction.moveToInbox,
+                          TaskBatchAction.linkToParent,
                           TaskBatchAction.setTags,
                           TaskBatchAction.clearDueAt,
                           TaskBatchAction.clearTags,

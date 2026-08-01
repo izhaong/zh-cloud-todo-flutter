@@ -391,6 +391,71 @@ void main() {
         find.byKey(const Key('todo-batch-action-complete')),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const Key('todo-batch-action-linkToParent')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'batch edit links selected tasks to a chosen parent with feedback',
+    (tester) async {
+      final fixture = await pumpTodoVisualScenario(
+        tester,
+        viewport: TodoVisualViewports.wide,
+        fixtureSet: TodoVisualFixtureSet.populated,
+        child: const Scaffold(body: TasksByListPage(hideAppBar: true)),
+      );
+
+      await enterBatchEdit(tester);
+      await tester.tap(
+        find.byKey(
+          Key('task-batch-select-${TodoVisualFixture.secondaryTodayTaskId}'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('todo-batch-more')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('todo-batch-action-linkToParent')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('关联主任务'), findsOneWidget);
+      expect(
+        find.byKey(Key('todo-batch-parent-${TodoVisualFixture.pinnedTaskId}')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          Key('todo-batch-parent-${TodoVisualFixture.secondaryTodayTaskId}'),
+        ),
+        findsNothing,
+      );
+
+      await tester.tap(
+        find.byKey(Key('todo-batch-parent-${TodoVisualFixture.pinnedTaskId}')),
+      );
+      await tester.pumpAndSettle();
+
+      final linked =
+          await (fixture.database.select(fixture.database.todoTasks)..where(
+                (row) => row.id.equals(TodoVisualFixture.secondaryTodayTaskId),
+              ))
+              .getSingle();
+      expect(linked.parentTaskId, TodoVisualFixture.pinnedTaskId);
+      final queued = await fixture.database
+          .select(fixture.database.todoSyncChanges)
+          .get();
+      expect(
+        queued.where(
+          (change) =>
+              change.entity == 'task' &&
+              change.entityLocalId == TodoVisualFixture.secondaryTodayTaskId &&
+              change.op == 'upsert',
+        ),
+        hasLength(1),
+      );
+      expect(find.text('已关联 1 项；失败 0 项'), findsOneWidget);
     },
   );
 
