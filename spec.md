@@ -16,6 +16,7 @@ zh-cloud 平台 Todo 产品的 **唯一 C 端客户端**（**Web / H5**、iOS、
 - `specs/008-todo-task-actionable-views/{spec,plan,tasks}.md`：列表、看板、时间线与共享视图写链路的当前契约，定义来源隔离偏好、任务 mutation 和失败反馈。
 - `specs/010-todo-portable-task-import/{spec,plan,tasks}.md`：便携 JSON 任务导入、稳定请求 ID、批次历史与按批回滚的当前实现契约。
 - `specs/011-todo-persistent-reminder-scheduling/{spec,plan,tasks}.md`：系统级持久提醒调度、改期撤销与 Android 重启恢复契约。
+- `specs/012-todo-task-multi-select-actionbar/{spec,plan,tasks}.md`：桌面连续/离散多选、响应式选择坞、安全批量写操作与纯读批量系统分享契约。
 - `specs/013-todo-sidebar-navigation/{spec,plan,tasks}.md`：智能清单、文件夹/标签树与效率底栏的当前实现契约。
 - `specs/014-todo-list-sections/{spec,plan,tasks}.md`：清单内 Section、任务归组、离线同步、删除回未分组与工作区管理入口的当前实现契约。
 - 两套规格按职责互补；视觉规格不得改写账号、数据、同步、接口或权限语义，功能规格不得复制视觉契约正文。
@@ -92,6 +93,7 @@ pubspec.yaml
 - 看板整卡长按用于跨列移动，独立“拖动排序”手柄用于列内顺序；两个命中区域不得互相竞争，列内结果仍通过共享 Repository 写入 Drift 与 outbox。
 - 时间线提供按来源隔离并跨端同步的日/周/月尺度，可按当前尺度浏览前后窗口并随时回到今天；有完整起止时间的任务按当前尺度绘制为横向连续任务条，任务条位置代表开始时间、长度代表持续时间，跨越当前可见日/周/月的部分按边界裁剪，重叠任务分行展示。无开始、结束和截止日期的任务独立显示在“安排任务（无日期）”，可拖入当前尺度的小时或日期格。日尺度空白小时可创建一小时非全天任务，周/月尺度空白日期可创建一天的全天任务，创建通过 `TaskRepository` 原子写入 Drift 与 task outbox。安排、移动和时长调整统一通过 `TaskViewActionRepository` 写入 Drift 与 outbox：日尺度下非全天任务本体按小时横向移动，周/月尺度按天移动，全天任务始终按天移动；右边缘对非全天任务按小时、全天任务按天调整。按钮入口继续作为键盘与无障碍替代操作。
 - 任务详情的检查事项使用独立拖拽手柄；完整 UUID 顺序由 `TaskRepository` 原子写入 Drift 并逐项进入 task outbox，只读拒绝保持原顺序并显示服务端权限原因。
+- 任务列表批量分享按当前实际可见顺序汇总所选任务，每项包含标题、可选正文和截止时间，并调用 Android/iOS 系统分享；该操作只读取当前 Drift 投影，不修改任务、不写 outbox，平台不支持时保留选择并明确反馈。
 
 ### 4.3 效率工具
 

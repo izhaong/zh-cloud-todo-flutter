@@ -395,6 +395,7 @@ void main() {
         find.byKey(const Key('todo-batch-action-linkToParent')),
         findsOneWidget,
       );
+      expect(find.byKey(const Key('todo-batch-action-share')), findsOneWidget);
     },
   );
 
@@ -991,5 +992,127 @@ void main() {
               ..where((row) => row.id.equals(TodoVisualFixture.todayTaskId)))
             .getSingle();
     expect(task.dueAt, DateTime(2026, 7, 20));
+  });
+
+  testWidgets(
+    'batch share preserves visible order and never writes tasks or outbox',
+    (tester) async {
+      const channel = MethodChannel('zh_cloud_todo/native');
+      MethodCall? received;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+        call,
+      ) async {
+        received = call;
+        return null;
+      });
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          channel,
+          null,
+        ),
+      );
+      final fixture = await TodoVisualFixture.create();
+      addTearDown(fixture.dispose);
+      final tasksBefore = await fixture.database
+          .select(fixture.database.todoTasks)
+          .get();
+      final outboxBefore = await fixture.database
+          .select(fixture.database.todoSyncChanges)
+          .get();
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: fixture.container,
+          child: MaterialApp(
+            theme: ThemeData.light().copyWith(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            home: const Scaffold(body: TasksByListPage(hideAppBar: true)),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await enterBatchEdit(tester);
+      await tester.tap(
+        find.byKey(
+          Key('task-batch-select-${TodoVisualFixture.secondaryTodayTaskId}'),
+        ),
+      );
+      await tester.tap(
+        find.byKey(Key('task-batch-select-${TodoVisualFixture.pinnedTaskId}')),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('todo-batch-more')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('todo-batch-action-share')));
+      await tester.pumpAndSettle();
+
+      expect(received?.method, 'share');
+      expect(received?.arguments, {
+        'text':
+            '已选择 2 项 Todo 任务\n\n'
+            '1. 确定今天最重要的三件事\n'
+            '先完成视觉母版，再处理交互细节。\n'
+            '截止：2026-07-11 09:30 (本地时区)\n\n'
+            '2. 回复设计反馈并确认下一步\n'
+            '截止：2026-07-11 14:30 (本地时区)',
+        'subject': '2 项 Todo 任务',
+      });
+      expect(find.text('已打开系统分享'), findsOneWidget);
+      expect(
+        await fixture.database.select(fixture.database.todoTasks).get(),
+        tasksBefore,
+      );
+      expect(
+        await fixture.database.select(fixture.database.todoSyncChanges).get(),
+        outboxBefore,
+      );
+    },
+  );
+
+  testWidgets('batch share reports unsupported platform and keeps selection', (
+    tester,
+  ) async {
+    const channel = MethodChannel('zh_cloud_todo/native');
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+      call,
+    ) async {
+      throw PlatformException(code: 'unsupported');
+    });
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        null,
+      ),
+    );
+    final fixture = await TodoVisualFixture.create();
+    addTearDown(fixture.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: fixture.container,
+        child: MaterialApp(
+          theme: ThemeData.light().copyWith(
+            extensions: const [AppThemeExtension(AppColors.light)],
+          ),
+          home: const Scaffold(body: TasksByListPage(hideAppBar: true)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await enterBatchEdit(tester);
+    await tester.tap(
+      find.byKey(Key('task-batch-select-${TodoVisualFixture.pinnedTaskId}')),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('todo-batch-more')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('todo-batch-action-share')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('当前设备不支持系统分享'), findsOneWidget);
+    expect(find.text('1 已选'), findsOneWidget);
   });
 }
