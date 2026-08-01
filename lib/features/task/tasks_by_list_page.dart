@@ -9,6 +9,7 @@ import '../../core/theme/brand_colors.dart';
 import '../../core/theme/todo_layout_tokens.dart';
 import '../../core/time/task_time_formatter.dart';
 import '../../core/widgets/app_widgets.dart';
+import '../../native/native_intents.dart';
 import '../../state/nlp_date.dart';
 import '../../state/providers.dart';
 import '../../state/repositories/board_preference_repository.dart';
@@ -164,6 +165,12 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       builder: (context, snapshot) {
         final raw = snapshot.data ?? const <TodoTask>[];
         final items = applyTaskFilter(raw, _filter, _selectedListId, now);
+        final listOrderedItems = _visibleTasksInListOrder(
+          items,
+          sections: taskSections,
+          sort: _sort,
+          now: now,
+        );
         if (snapshot.hasData) {
           _reportInvalidSelection(items);
         }
@@ -237,7 +244,10 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                         applying: _batchApplying,
                         onExit: _toggleBatchSelection,
                         onComplete: _completeBatchSelection,
-                        onActionSelected: _applyBatchAction,
+                        onActionSelected: (action) => _applyBatchAction(
+                          action,
+                          visibleTasks: listOrderedItems,
+                        ),
                         onDelete: _confirmBatchDelete,
                       ),
                     ),
@@ -695,7 +705,10 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     );
   }
 
-  Future<void> _applyBatchAction(TaskBatchAction action) async {
+  Future<void> _applyBatchAction(
+    TaskBatchAction action, {
+    required List<TodoTask> visibleTasks,
+  }) async {
     if (action == TaskBatchAction.complete) {
       await _completeBatchSelection();
       return;
@@ -713,6 +726,10 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       final parentTaskId = await _selectBatchParentTask();
       if (parentTaskId == null || !mounted) return;
       await _applyBatchParentLink(parentTaskId: parentTaskId);
+      return;
+    }
+    if (action == TaskBatchAction.share) {
+      await _shareBatchSelection(visibleTasks);
       return;
     }
     if (action == TaskBatchAction.setTags) {
@@ -764,6 +781,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       ),
       TaskBatchAction.moveToList => throw StateError('指定清单需要先选择目标'),
       TaskBatchAction.linkToParent => throw StateError('主任务需要先选择目标'),
+      TaskBatchAction.share => throw StateError('分享动作已提前处理'),
       TaskBatchAction.setTags => throw StateError('标签需要先选择目标'),
       TaskBatchAction.setDueAt => throw StateError('截止日期需要先选择目标'),
       TaskBatchAction.clearDueAt => const TaskBatchEditCommand(
@@ -777,6 +795,40 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       TaskBatchAction.complete => throw StateError('完成动作已提前处理'),
     };
     await _applyBatchEdit(command, successVerb: '已更新');
+  }
+
+  Future<void> _shareBatchSelection(List<TodoTask> visibleTasks) async {
+    if (_batchApplying) return;
+    final selectedTasks = visibleTasks
+        .where((task) => _batchSelectedTaskIds.contains(task.id))
+        .toList(growable: false);
+    if (selectedTasks.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('所选任务已不存在')));
+      return;
+    }
+    final body = [
+      '已选择 ${selectedTasks.length} 项 Todo 任务',
+      for (var index = 0; index < selectedTasks.length; index++)
+        [
+          '${index + 1}. ${selectedTasks[index].title}',
+          if ((selectedTasks[index].description ?? '').trim().isNotEmpty)
+            selectedTasks[index].description!.trim(),
+          if (selectedTasks[index].dueAt != null)
+            '截止：${formatTaskDateTime(selectedTasks[index].dueAt!, allDay: selectedTasks[index].allDay, fixedTimezone: selectedTasks[index].fixedTimezone, timeZone: selectedTasks[index].timeZone)}',
+        ].join('\n'),
+    ].join('\n\n');
+    setState(() => _batchApplying = true);
+    final shared = await NativeIntents.shareText(
+      body,
+      subject: '${selectedTasks.length} 项 Todo 任务',
+    );
+    if (!mounted) return;
+    setState(() => _batchApplying = false);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(shared ? '已打开系统分享' : '当前设备不支持系统分享')));
   }
 
   Future<void> _confirmBatchDelete() async {
@@ -1921,6 +1973,19 @@ List<_TaskGroup> _groupTasksBySection(
     );
   }
   return groups;
+}
+
+List<TodoTask> _visibleTasksInListOrder(
+  List<TodoTask> tasks, {
+  required List<TodoTaskSection> sections,
+  required TaskSort sort,
+  required DateTime now,
+}) {
+  final sorted = [...tasks]..sort((a, b) => compareTodoTasks(a, b, sort));
+  final groups = sections.isEmpty
+      ? _groupTasks(sorted, now)
+      : _groupTasksBySection(sorted, sections);
+  return [for (final group in groups) ...group.tasks];
 }
 
 List<TodoTask> applyTaskFilter(
