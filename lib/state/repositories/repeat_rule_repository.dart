@@ -256,6 +256,13 @@ class RepeatRuleRepository {
     if (countLimit != null && countLimit < 1) {
       throw ArgumentError.value(countLimit, 'countLimit', '次数上限必须为正整数');
     }
+    if (untilAt != null && countLimit != null) {
+      throw ArgumentError.value(
+        countLimit,
+        'countLimit',
+        '重复结束日期和次数上限只能选择一种',
+      );
+    }
     const selectedDatesMode = 'ON_SELECTED_DATES';
     if (repeatMode != 'ON_DUE' &&
         repeatMode != 'ON_COMPLETE' &&

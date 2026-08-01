@@ -297,9 +297,6 @@ void main() {
                                           'intervalValue': 2,
                                           'weekdays': '1,3',
                                           'startAt': now.toIso8601String(),
-                                          'untilAt': now
-                                              .add(const Duration(days: 30))
-                                              .toIso8601String(),
                                           'countLimit': 4,
                                           'enabled': true,
                                           'repeatMode': 'ON_DUE',
@@ -337,6 +334,7 @@ void main() {
       expect(restoredRepeat.freq, 'WEEKLY');
       expect(restoredRepeat.interval, 2);
       expect(restoredRepeat.byDay, '1,3');
+      expect(restoredRepeat.until, isNull);
       expect(restoredRepeat.countLimit, 4);
       expect(await db.readRevision('reminder', 301), 8);
       expect(await db.readRevision('repeat_rule', 401), 12);
@@ -363,7 +361,6 @@ void main() {
         intervalValue: 2,
         weekdays: const [1, 3],
         startAt: now,
-        untilAt: now.add(const Duration(days: 30)),
         countLimit: 3,
         timeZone: 'Asia/Shanghai',
       );
