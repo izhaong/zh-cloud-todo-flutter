@@ -29,24 +29,30 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
   Timer? _syncTicker;
   PomodoroSessionDto? _session;
   List<PomodoroPresetDto> _presets = const [];
+  List<PomodoroSessionDto> _records = const [];
   String? _mode;
   int? _selectedTaskId;
   int _secondsLeft = 0;
   int _syncRequest = 0;
+  int _recordsRequest = 0;
   bool _paused = false;
   bool _loadingPresets = true;
   bool _actionPending = false;
   bool _syncInFlight = false;
+  bool _loadingRecords = true;
+  bool _recordActionPending = false;
   String? _presetError;
   String? _actionError;
   String? _syncError;
+  String? _recordsError;
+  String? _recordActionError;
 
   @override
   void initState() {
     super.initState();
     _selectedTaskId = widget.taskId;
     Future<void>.microtask(() async {
-      await Future.wait([_loadPresets(), _syncActiveSession()]);
+      await Future.wait([_loadPresets(), _syncActiveSession(), _loadRecords()]);
       if (!mounted) return;
       _syncTicker = Timer.periodic(_syncInterval, (_) => _syncActiveSession());
     });
@@ -55,6 +61,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
   @override
   void dispose() {
     _syncRequest++;
+    _recordsRequest++;
     _ticker?.cancel();
     _syncTicker?.cancel();
     _minutesController.dispose();
@@ -143,7 +150,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
   }
 
   Future<void> _syncActiveSession() async {
-    if (_syncInFlight) return;
+    if (_syncInFlight || _actionPending) return;
     _syncInFlight = true;
     final request = ++_syncRequest;
     try {
@@ -161,6 +168,35 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
     } finally {
       _syncInFlight = false;
     }
+  }
+
+  Future<void> _loadRecords() async {
+    final request = ++_recordsRequest;
+    if (mounted) {
+      setState(() {
+        _loadingRecords = true;
+        _recordsError = null;
+      });
+    }
+    try {
+      final records = await ref.read(pomodoroApiProvider).page(pageSize: 20);
+      if (!mounted || request != _recordsRequest) return;
+      setState(() {
+        _records = records;
+        _loadingRecords = false;
+      });
+    } catch (error) {
+      if (!mounted || request != _recordsRequest) return;
+      setState(() {
+        _loadingRecords = false;
+        _recordsError = '记录加载失败：$error';
+      });
+    }
+  }
+
+  Future<void> _refreshRecordsAndStats() async {
+    ref.invalidate(pomodoroStatsProvider);
+    await _loadRecords();
   }
 
   int _remainingSeconds(PomodoroSessionDto session) {
@@ -207,6 +243,34 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
       _paused = false;
       if (clearRemark) _remarkController.clear();
     });
+  }
+
+  Future<void> _adjustDuration(int deltaMinutes) async {
+    final session = _session;
+    if (session == null || _actionPending) return;
+    final previousPlanned = session.plannedMinutes ?? 25;
+    setState(() {
+      _actionPending = true;
+      _actionError = null;
+    });
+    try {
+      _syncRequest++;
+      final adjusted = await ref
+          .read(pomodoroApiProvider)
+          .adjust(session.id, deltaMinutes: deltaMinutes);
+      if (!mounted) return;
+      final remaining = _secondsLeft + (adjusted - previousPlanned) * 60;
+      setState(() {
+        _session = session.copyWith(plannedMinutes: adjusted);
+        _secondsLeft = remaining.clamp(0, adjusted * 60);
+      });
+      await _refreshRecordsAndStats();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _actionError = '调整失败：$error');
+    } finally {
+      if (mounted) setState(() => _actionPending = false);
+    }
   }
 
   Future<void> _pause() async {
@@ -274,13 +338,113 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
         await api.cancel(session.id);
       }
       if (!mounted) return;
-      ref.invalidate(pomodoroStatsProvider);
+      await _refreshRecordsAndStats();
+      if (!mounted) return;
       _clearSession(clearRemark: true);
     } catch (error) {
       if (!mounted) return;
       setState(() => _actionError = complete ? '完成失败：$error' : '取消失败：$error');
     } finally {
       if (mounted) setState(() => _actionPending = false);
+    }
+  }
+
+  Future<void> _showBackfillDialog(List<TodoTask> tasks) async {
+    final created = await showDialog<bool>(
+      context: context,
+      builder: (context) => _BackfillDialog(
+        tasks: tasks,
+        presets: _presets,
+        onSubmit:
+            ({
+              int? taskId,
+              required String mode,
+              required int actualMinutes,
+              required DateTime startedAt,
+              required DateTime endedAt,
+              String? remark,
+            }) {
+              return ref
+                  .read(pomodoroApiProvider)
+                  .backfill(
+                    taskId: taskId,
+                    mode: mode,
+                    actualMinutes: actualMinutes,
+                    startedAt: startedAt,
+                    endedAt: endedAt,
+                    remark: remark,
+                  );
+            },
+      ),
+    );
+    if (created == true && mounted) await _refreshRecordsAndStats();
+  }
+
+  Future<void> _editDuration(PomodoroSessionDto record) async {
+    final actualMinutes = await showDialog<int>(
+      context: context,
+      builder: (context) =>
+          _DurationDialog(initialMinutes: record.actualMinutes ?? 0),
+    );
+    if (actualMinutes == null || !mounted) return;
+    await _updateDuration(record, actualMinutes);
+  }
+
+  Future<void> _updateDuration(
+    PomodoroSessionDto record,
+    int actualMinutes,
+  ) async {
+    if (_recordActionPending) return;
+    setState(() {
+      _recordActionPending = true;
+      _recordActionError = null;
+    });
+    try {
+      await ref
+          .read(pomodoroApiProvider)
+          .updateDuration(record.id, actualMinutes: actualMinutes);
+      if (!mounted) return;
+      await _refreshRecordsAndStats();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _recordActionError = '更新失败：$error');
+    } finally {
+      if (mounted) setState(() => _recordActionPending = false);
+    }
+  }
+
+  Future<void> _deleteRecord(PomodoroSessionDto record) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除专注记录？'),
+        content: const Text('删除后无法恢复。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('确认删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted || _recordActionPending) return;
+    setState(() {
+      _recordActionPending = true;
+      _recordActionError = null;
+    });
+    try {
+      await ref.read(pomodoroApiProvider).deleteRecord(record.id);
+      if (!mounted) return;
+      await _refreshRecordsAndStats();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _recordActionError = '删除失败：$error');
+    } finally {
+      if (mounted) setState(() => _recordActionPending = false);
     }
   }
 
@@ -307,6 +471,9 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
           orElse: () => const <TodoTask>[],
         );
     final taskIds = tasks.map((task) => task.serverId!).toSet();
+    final taskTitles = <int, String>{
+      for (final task in tasks) task.serverId!: task.title,
+    };
     final selectedTaskId = _selectedTaskId;
     final selectedTaskMissing =
         selectedTaskId != null && !taskIds.contains(selectedTaskId);
@@ -406,9 +573,71 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
                 style: Theme.of(context).textTheme.displayLarge,
               ),
             ),
+            if (running) ...[
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton.outlined(
+                    key: const Key('pomodoro-adjust-minus'),
+                    tooltip: '减少 5 分钟',
+                    onPressed: _actionPending
+                        ? null
+                        : () => _adjustDuration(-5),
+                    icon: const Icon(Icons.remove),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    child: Text('调整专注时间'),
+                  ),
+                  IconButton.outlined(
+                    key: const Key('pomodoro-adjust-plus'),
+                    tooltip: '增加 5 分钟',
+                    onPressed: _actionPending ? null : () => _adjustDuration(5),
+                    icon: const Icon(Icons.add),
+                  ),
+                ],
+              ),
+            ],
             if (_paused) ...[
               const SizedBox(height: 8),
               const Center(child: Text('已暂停')),
+            ],
+            if (running) ...[
+              const SizedBox(height: 16),
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  if (_paused)
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.play_arrow),
+                      label: const Text('恢复'),
+                      onPressed: _actionPending ? null : _resume,
+                    )
+                  else
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.pause),
+                      label: const Text('暂停'),
+                      onPressed: _actionPending ? null : _pause,
+                    ),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.check),
+                    label: const Text('完成'),
+                    onPressed: _actionPending
+                        ? null
+                        : () => _finish(complete: true),
+                  ),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.close),
+                    label: const Text('取消'),
+                    onPressed: _actionPending
+                        ? null
+                        : () => _finish(complete: false),
+                  ),
+                ],
+              ),
             ],
             if (_syncError != null) ...[
               const SizedBox(height: 12),
@@ -447,42 +676,76 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
                 icon: const Icon(Icons.play_arrow),
                 label: const Text('开始专注'),
                 onPressed: _canStart ? _start : null,
-              )
-            else
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  if (_paused)
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.play_arrow),
-                      label: const Text('恢复'),
-                      onPressed: _actionPending ? null : _resume,
-                    )
-                  else
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.pause),
-                      label: const Text('暂停'),
-                      onPressed: _actionPending ? null : _pause,
-                    ),
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.check),
-                    label: const Text('完成'),
-                    onPressed: _actionPending
-                        ? null
-                        : () => _finish(complete: true),
-                  ),
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.close),
-                    label: const Text('取消'),
-                    onPressed: _actionPending
-                        ? null
-                        : () => _finish(complete: false),
-                  ),
-                ],
               ),
             const SizedBox(height: 48),
+            const Divider(),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '专注记录',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: _recordActionPending
+                      ? null
+                      : () => _showBackfillDialog(tasks),
+                  icon: const Icon(Icons.add),
+                  label: const Text('新增记录'),
+                ),
+              ],
+            ),
+            if (_recordActionError != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _recordActionError!,
+                key: const Key('pomodoro-record-action-error'),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+            if (_recordsError != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _recordsError!,
+                key: const Key('pomodoro-records-error'),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton(
+                  onPressed: _loadingRecords ? null : _loadRecords,
+                  child: const Text('重试加载记录'),
+                ),
+              ),
+            ],
+            if (_loadingRecords && _records.isEmpty) ...[
+              const SizedBox(height: 16),
+              const Center(child: CircularProgressIndicator()),
+            ] else if (_records.isEmpty) ...[
+              const SizedBox(height: 16),
+              const Text('暂无专注记录'),
+            ] else ...[
+              const SizedBox(height: 8),
+              for (final record in _records)
+                _PomodoroRecordCard(
+                  record: record,
+                  taskTitle: taskTitles[record.taskId],
+                  enabled: !_recordActionPending,
+                  onEdit: () => _editDuration(record),
+                  onAddFive: () {
+                    final current = record.actualMinutes ?? 0;
+                    if (current + 5 > 1440) {
+                      setState(() => _recordActionError = '专注时长不能超过 1440 分钟');
+                      return;
+                    }
+                    _updateDuration(record, current + 5);
+                  },
+                  onDelete: () => _deleteRecord(record),
+                ),
+            ],
+            const SizedBox(height: 24),
             const Divider(),
             const SizedBox(height: 16),
             Text('最近 7 天统计', style: Theme.of(context).textTheme.titleMedium),
@@ -537,6 +800,408 @@ class _ModeSelector extends StatelessWidget {
             selected: preset.mode == mode,
             onSelected: enabled ? (_) => onChanged(preset.mode) : null,
           ),
+      ],
+    );
+  }
+}
+
+class _PomodoroRecordCard extends StatelessWidget {
+  const _PomodoroRecordCard({
+    required this.record,
+    required this.taskTitle,
+    required this.enabled,
+    required this.onEdit,
+    required this.onAddFive,
+    required this.onDelete,
+  });
+
+  final PomodoroSessionDto record;
+  final String? taskTitle;
+  final bool enabled;
+  final VoidCallback onEdit;
+  final VoidCallback onAddFive;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final isCompleted = record.status == 'COMPLETED';
+    final timeRange = _timeRange(record.startedAt, record.endedAt);
+    final detail = <String>[
+      _modeLabel(record.mode),
+      '${record.actualMinutes ?? 0} 分钟',
+      ?timeRange,
+    ].join(' · ');
+    return Card(
+      key: ValueKey('pomodoro-record-${record.id}'),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(detail, style: Theme.of(context).textTheme.titleSmall),
+            if (taskTitle != null || record.taskId != null) ...[
+              const SizedBox(height: 4),
+              Text('关联任务：${taskTitle ?? '#${record.taskId}'}'),
+            ],
+            if (record.remark?.isNotEmpty == true) ...[
+              const SizedBox(height: 4),
+              Text(record.remark!),
+            ],
+            if (isCompleted) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 4,
+                runSpacing: 4,
+                children: [
+                  TextButton.icon(
+                    key: Key('pomodoro-record-edit-${record.id}'),
+                    onPressed: enabled ? onEdit : null,
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('编辑时长'),
+                  ),
+                  TextButton.icon(
+                    key: Key('pomodoro-record-add-${record.id}'),
+                    onPressed: enabled ? onAddFive : null,
+                    icon: const Icon(Icons.add),
+                    label: const Text('追加 5 分钟'),
+                  ),
+                  TextButton.icon(
+                    key: Key('pomodoro-record-delete-${record.id}'),
+                    onPressed: enabled ? onDelete : null,
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('删除'),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _modeLabel(String mode) => switch (mode) {
+    'MODE_25_5' => '经典 25/5',
+    'MODE_50_10' => '长专注 50/10',
+    'FREE' => '自由专注',
+    'CUSTOM' => '自定义专注',
+    _ => mode,
+  };
+
+  static String _formatDateTime(DateTime value) {
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${value.month}月${value.day}日 '
+        '${two(value.hour)}:${two(value.minute)}';
+  }
+
+  static String? _timeRange(DateTime? startedAt, DateTime? endedAt) {
+    if (startedAt == null) return null;
+    final start = _formatDateTime(startedAt);
+    if (endedAt == null) return start;
+    final end = _formatDateTime(endedAt);
+    return '$start – $end';
+  }
+}
+
+typedef _BackfillSubmit =
+    Future<int> Function({
+      int? taskId,
+      required String mode,
+      required int actualMinutes,
+      required DateTime startedAt,
+      required DateTime endedAt,
+      String? remark,
+    });
+
+class _BackfillDialog extends StatefulWidget {
+  const _BackfillDialog({
+    required this.tasks,
+    required this.presets,
+    required this.onSubmit,
+  });
+
+  final List<TodoTask> tasks;
+  final List<PomodoroPresetDto> presets;
+  final _BackfillSubmit onSubmit;
+
+  @override
+  State<_BackfillDialog> createState() => _BackfillDialogState();
+}
+
+class _BackfillDialogState extends State<_BackfillDialog> {
+  final _minutesController = TextEditingController(text: '25');
+  final _remarkController = TextEditingController();
+  late DateTime _startedAt;
+  late DateTime _endedAt;
+  late String _mode;
+  int? _taskId;
+  bool _submitting = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _endedAt = DateTime.now();
+    _startedAt = _endedAt.subtract(const Duration(minutes: 25));
+    _mode = widget.presets.isEmpty ? 'CUSTOM' : widget.presets.first.mode;
+  }
+
+  @override
+  void dispose() {
+    _minutesController.dispose();
+    _remarkController.dispose();
+    super.dispose();
+  }
+
+  int? get _actualMinutes {
+    final value = int.tryParse(_minutesController.text.trim());
+    if (value == null || value < 0 || value > 1440) return null;
+    return value;
+  }
+
+  Future<void> _pickDateTime({required bool started}) async {
+    final current = started ? _startedAt : _endedAt;
+    final date = await showDatePicker(
+      context: context,
+      initialDate: current,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (!mounted || date == null) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(current),
+    );
+    if (!mounted || time == null) return;
+    final selected = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
+    setState(() {
+      if (started) {
+        _startedAt = selected;
+      } else {
+        _endedAt = selected;
+      }
+      _error = null;
+    });
+  }
+
+  Future<void> _submit() async {
+    final actualMinutes = _actualMinutes;
+    final remark = _remarkController.text.trim();
+    if (actualMinutes == null) {
+      setState(() => _error = '分钟数必须在 0–1440 之间');
+      return;
+    }
+    if (_endedAt.isBefore(_startedAt)) {
+      setState(() => _error = '结束时间不能早于开始时间');
+      return;
+    }
+    if (remark.length > 512) {
+      setState(() => _error = '备注不能超过 512 个字符');
+      return;
+    }
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+    try {
+      await widget.onSubmit(
+        taskId: _taskId,
+        mode: _mode,
+        actualMinutes: actualMinutes,
+        startedAt: _startedAt,
+        endedAt: _endedAt,
+        remark: remark,
+      );
+      if (mounted) Navigator.pop(context, true);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = '保存失败：$error');
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('新增专注记录'),
+      content: SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: _mode,
+                decoration: const InputDecoration(labelText: '专注模式'),
+                items: [
+                  if (widget.presets.isEmpty)
+                    const DropdownMenuItem(value: 'CUSTOM', child: Text('自定义'))
+                  else
+                    for (final preset in widget.presets)
+                      DropdownMenuItem(
+                        value: preset.mode,
+                        child: Text(preset.label),
+                      ),
+                ],
+                onChanged: _submitting
+                    ? null
+                    : (value) => setState(() => _mode = value ?? _mode),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                key: const Key('pomodoro-backfill-minutes'),
+                controller: _minutesController,
+                enabled: !_submitting,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(
+                  labelText: '实际分钟',
+                  helperText: '0–1440',
+                ),
+                onChanged: (_) => setState(() => _error = null),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<int?>(
+                initialValue: _taskId,
+                decoration: const InputDecoration(labelText: '关联任务（可选）'),
+                items: [
+                  const DropdownMenuItem<int?>(
+                    value: null,
+                    child: Text('不关联任务'),
+                  ),
+                  for (final task in widget.tasks)
+                    DropdownMenuItem<int?>(
+                      value: task.serverId,
+                      child: Text(task.title, overflow: TextOverflow.ellipsis),
+                    ),
+                ],
+                onChanged: _submitting
+                    ? null
+                    : (value) => setState(() => _taskId = value),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                key: const Key('pomodoro-backfill-started-at'),
+                onPressed: _submitting
+                    ? null
+                    : () => _pickDateTime(started: true),
+                icon: const Icon(Icons.schedule),
+                label: Text('开始：${_formatDateTime(_startedAt)}'),
+              ),
+              OutlinedButton.icon(
+                key: const Key('pomodoro-backfill-ended-at'),
+                onPressed: _submitting
+                    ? null
+                    : () => _pickDateTime(started: false),
+                icon: const Icon(Icons.schedule),
+                label: Text('结束：${_formatDateTime(_endedAt)}'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                key: const Key('pomodoro-backfill-remark'),
+                controller: _remarkController,
+                enabled: !_submitting,
+                minLines: 2,
+                maxLines: 4,
+                maxLength: 512,
+                decoration: const InputDecoration(labelText: '备注（可选）'),
+                onChanged: (_) => setState(() => _error = null),
+              ),
+              if (_error != null)
+                Text(
+                  _error!,
+                  key: const Key('pomodoro-backfill-error'),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _submitting ? null : () => Navigator.pop(context, false),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: _submitting ? null : _submit,
+          child: const Text('保存记录'),
+        ),
+      ],
+    );
+  }
+
+  static String _formatDateTime(DateTime value) {
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${value.year}-${two(value.month)}-${two(value.day)} '
+        '${two(value.hour)}:${two(value.minute)}';
+  }
+}
+
+class _DurationDialog extends StatefulWidget {
+  const _DurationDialog({required this.initialMinutes});
+
+  final int initialMinutes;
+
+  @override
+  State<_DurationDialog> createState() => _DurationDialogState();
+}
+
+class _DurationDialogState extends State<_DurationDialog> {
+  late final TextEditingController _controller;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: '${widget.initialMinutes}');
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final value = int.tryParse(_controller.text.trim());
+    if (value == null || value < 0 || value > 1440) {
+      setState(() => _error = '分钟数必须在 0–1440 之间');
+      return;
+    }
+    Navigator.pop(context, value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('编辑实际时长'),
+      content: TextField(
+        key: const Key('pomodoro-record-duration'),
+        controller: _controller,
+        autofocus: true,
+        keyboardType: TextInputType.number,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        decoration: InputDecoration(
+          labelText: '实际分钟',
+          helperText: '0–1440',
+          errorText: _error,
+        ),
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('保存')),
       ],
     );
   }

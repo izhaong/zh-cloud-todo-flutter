@@ -273,6 +273,106 @@ void main() {
       );
     },
   );
+
+  test('pomodoro record management follows service contracts', () async {
+    final requests = <RequestOptions>[];
+    final dio = Dio()
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            requests.add(options);
+            if (options.path.endsWith('/pomodoro/41/adjust')) {
+              return handler.resolve(_response(options, 30));
+            }
+            if (options.path.endsWith('/pomodoro/backfill')) {
+              return handler.resolve(_response(options, 43));
+            }
+            if (options.path.endsWith('/pomodoro/page')) {
+              return handler.resolve(
+                _response(options, {
+                  'list': [
+                    {
+                      'id': 43,
+                      'taskId': 81,
+                      'mode': 'CUSTOM',
+                      'plannedMinutes': 40,
+                      'actualMinutes': 40,
+                      'status': 'COMPLETED',
+                      'startedAt': '2026-08-02T09:00:00',
+                      'endedAt': '2026-08-02T09:40:00',
+                      'remark': '完成评审',
+                    },
+                  ],
+                  'total': 1,
+                }),
+              );
+            }
+            return handler.resolve(_response(options, true));
+          },
+        ),
+      );
+    final api = PomodoroApi(dio);
+    final startedAt = DateTime(2026, 8, 2, 9);
+    final endedAt = DateTime(2026, 8, 2, 9, 40);
+
+    final adjusted = await api.adjust(41, deltaMinutes: 5);
+    final backfilled = await api.backfill(
+      taskId: 81,
+      mode: 'CUSTOM',
+      actualMinutes: 40,
+      startedAt: startedAt,
+      endedAt: endedAt,
+      remark: '  完成评审  ',
+    );
+    final records = await api.page(
+      status: 'COMPLETED',
+      pageNo: 1,
+      pageSize: 20,
+    );
+    await api.updateDuration(43, actualMinutes: 45);
+    await api.deleteRecord(43);
+
+    expect(adjusted, 30);
+    expect(backfilled, 43);
+    expect(records.single.id, 43);
+    expect(records.single.remark, '完成评审');
+    expect(
+      requests
+          .singleWhere((request) => request.path.endsWith('/41/adjust'))
+          .data,
+      {'deltaMinutes': 5},
+    );
+    expect(
+      requests
+          .singleWhere((request) => request.path.endsWith('/backfill'))
+          .data,
+      {
+        'taskId': 81,
+        'mode': 'CUSTOM',
+        'actualMinutes': 40,
+        'startedAt': '2026-08-02T09:00:00.000',
+        'endedAt': '2026-08-02T09:40:00.000',
+        'remark': '完成评审',
+      },
+    );
+    expect(
+      requests
+          .singleWhere((request) => request.path.endsWith('/pomodoro/page'))
+          .queryParameters,
+      {'status': 'COMPLETED', 'pageNo': 1, 'pageSize': 20},
+    );
+    final update = requests.singleWhere(
+      (request) => request.path.endsWith('/43/duration'),
+    );
+    expect(update.method, 'PUT');
+    expect(update.data, {'actualMinutes': 45});
+    expect(
+      requests
+          .singleWhere((request) => request.path.endsWith('/pomodoro/43'))
+          .method,
+      'DELETE',
+    );
+  });
 }
 
 Response<Map<String, dynamic>> _response(RequestOptions options, Object? data) {
