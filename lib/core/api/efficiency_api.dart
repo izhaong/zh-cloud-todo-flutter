@@ -25,6 +25,7 @@ class PomodoroSessionDto {
   final int? actualMinutes;
   final String status;
   final DateTime? startedAt;
+  final DateTime? pausedAt;
   final DateTime? endedAt;
   final int pausedSeconds;
 
@@ -36,6 +37,7 @@ class PomodoroSessionDto {
     this.actualMinutes,
     required this.status,
     this.startedAt,
+    this.pausedAt,
     this.endedAt,
     this.pausedSeconds = 0,
   });
@@ -49,8 +51,32 @@ class PomodoroSessionDto {
       actualMinutes: (j['actualMinutes'] as num?)?.toInt(),
       status: j['status']?.toString() ?? 'RUNNING',
       startedAt: _parseDate(j['startedAt']),
+      pausedAt: _parseDate(j['pausedAt']),
       endedAt: _parseDate(j['endedAt']),
       pausedSeconds: (j['pausedSeconds'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+class PomodoroPresetDto {
+  const PomodoroPresetDto({
+    required this.mode,
+    required this.label,
+    this.focusMinutes,
+    this.breakMinutes,
+  });
+
+  final String mode;
+  final String label;
+  final int? focusMinutes;
+  final int? breakMinutes;
+
+  factory PomodoroPresetDto.fromJson(Map<String, dynamic> json) {
+    return PomodoroPresetDto(
+      mode: json['mode']?.toString() ?? '',
+      label: json['label']?.toString() ?? '',
+      focusMinutes: (json['focusMinutes'] as num?)?.toInt(),
+      breakMinutes: (json['breakMinutes'] as num?)?.toInt(),
     );
   }
 }
@@ -402,9 +428,33 @@ class PomodoroApi {
 
   Future<void> pause(int id) => _action('/pomodoro/$id/pause');
   Future<void> resume(int id) => _action('/pomodoro/$id/resume');
-  Future<void> complete(int id, {String? remark}) =>
-      _action('/pomodoro/$id/complete', data: {'remark': remark});
+  Future<void> complete(int id, {String? remark, DateTime? clientEndAt}) {
+    final normalizedRemark = remark?.trim();
+    return _action(
+      '/pomodoro/$id/complete',
+      data: <String, dynamic>{
+        if (normalizedRemark != null && normalizedRemark.isNotEmpty)
+          'remark': normalizedRemark,
+        if (clientEndAt != null) 'clientEndAt': clientEndAt.toIso8601String(),
+      },
+    );
+  }
+
   Future<void> cancel(int id) => _action('/pomodoro/$id/cancel');
+
+  Future<List<PomodoroPresetDto>> presets() async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '${ApiConfig.todoPrefix}/pomodoro/presets',
+    );
+    final data = _unwrapData(response.data);
+    if (data is! List) return const [];
+    return data
+        .whereType<Map>()
+        .map(
+          (item) => PomodoroPresetDto.fromJson(Map<String, dynamic>.from(item)),
+        )
+        .toList(growable: false);
+  }
 
   Future<void> _action(String path, {Object? data}) async {
     final response = await _dio.post<Map<String, dynamic>>(

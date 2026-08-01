@@ -29,6 +29,24 @@ void main() {
             onRequest: (options, handler) {
               requests.add(options);
               final path = options.path;
+              if (path.endsWith('/pomodoro/presets')) {
+                return handler.resolve(
+                  _response(options, [
+                    {
+                      'mode': 'MODE_25_5',
+                      'focusMinutes': 25,
+                      'breakMinutes': 5,
+                      'label': '经典 25/5',
+                    },
+                    {
+                      'mode': 'FREE',
+                      'focusMinutes': null,
+                      'breakMinutes': null,
+                      'label': '正计时',
+                    },
+                  ]),
+                );
+              }
               if (path.endsWith('/pomodoro/start')) {
                 return handler.resolve(_response(options, 41));
               }
@@ -51,8 +69,9 @@ void main() {
                         'id': 42,
                         'mode': 'MODE_50_10',
                         'plannedMinutes': 50,
-                        'status': 'RUNNING',
+                        'status': 'PAUSED',
                         'startedAt': '2026-07-30T09:00:00',
+                        'pausedAt': '2026-07-30T09:20:00',
                         'pausedSeconds': 60,
                       },
                     ],
@@ -149,6 +168,9 @@ void main() {
         mode: 'MODE_25_5',
         plannedMinutes: 25,
       );
+      final presets = await pomodoro.presets();
+      final clientEndAt = DateTime(2026, 7, 30, 9, 25);
+      await pomodoro.complete(41, remark: '  完成初稿  ', clientEndAt: clientEndAt);
       final pomodoroStats = await pomodoro.stats(period: 'week');
       final activePomodoro = await pomodoro.active();
 
@@ -171,9 +193,23 @@ void main() {
       final achievement = await AchievementApi(dio).wall();
 
       expect(started.id, 41);
+      expect(presets.first.mode, 'MODE_25_5');
+      expect(presets.first.focusMinutes, 25);
+      expect(presets.first.breakMinutes, 5);
+      expect(presets.first.label, '经典 25/5');
+      expect(presets.last.focusMinutes, isNull);
+      expect(
+        requests
+            .firstWhere(
+              (request) => request.path.endsWith('/pomodoro/41/complete'),
+            )
+            .data,
+        {'remark': '完成初稿', 'clientEndAt': '2026-07-30T09:25:00.000'},
+      );
       expect(pomodoroStats['totalMinutes'], 75);
       expect(activePomodoro?.id, 42);
       expect(activePomodoro?.pausedSeconds, 60);
+      expect(activePomodoro?.pausedAt, DateTime(2026, 7, 30, 9, 20));
       expect(
         requests
             .firstWhere((request) => request.path.endsWith('/pomodoro/stats'))
