@@ -46,4 +46,10 @@ class RecommendationRepository {
       });
     });
   }
+
+  Future<void> removeTask(int taskServerId) async {
+    await (_db.delete(
+      _db.todoRecommendations,
+    )..where((row) => row.taskServerId.equals(taskServerId))).go();
+  }
 }

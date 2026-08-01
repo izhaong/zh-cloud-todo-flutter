@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:drift/drift.dart';
+import 'package:drift/drift.dart' hide isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -132,6 +132,88 @@ void main() {
     expect(queued.single.entity, SyncEntities.task);
     expect(queued.single.op, SyncOps.upsert);
     expect(queued.single.entityLocalId, 'task-1');
+  });
+
+  test('推荐任务添加到今天保留固定时区墙钟时刻并原子入队', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    await _seedViewActionList(db);
+    await (db.update(
+      db.todoTasks,
+    )..where((row) => row.id.equals('task-1'))).write(
+      TodoTasksCompanion(
+        dueAt: Value(DateTime.utc(2026, 3, 7, 17, 30)),
+        startAt: const Value.absent(),
+        endAt: const Value.absent(),
+        allDay: const Value(false),
+        fixedTimezone: const Value(true),
+        timeZone: const Value('America/Los_Angeles'),
+      ),
+    );
+    final repository = TaskViewActionRepository(db, SyncChangeQueue(db));
+
+    await repository.addToToday('task-1', today: DateTime(2026, 3, 8));
+
+    final task = await _taskById(db, 'task-1');
+    final queued = await db.select(db.todoSyncChanges).get();
+    expect(task.dueAt?.toUtc(), DateTime.utc(2026, 3, 8, 16, 30));
+    expect(task.allDay, isFalse);
+    expect(task.fixedTimezone, isTrue);
+    expect(task.timeZone, 'America/Los_Angeles');
+    expect(queued, hasLength(1));
+    expect(queued.single.entity, SyncEntities.task);
+  });
+
+  test('无日期推荐任务添加到今天设为全天且重复调用不重复入队', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    await _seedViewActionList(db);
+    await (db.update(
+      db.todoTasks,
+    )..where((row) => row.id.equals('task-1'))).write(
+      const TodoTasksCompanion(
+        dueAt: Value(null),
+        startAt: Value(null),
+        endAt: Value(null),
+        allDay: Value(false),
+      ),
+    );
+    final repository = TaskViewActionRepository(db, SyncChangeQueue(db));
+    final today = DateTime(2026, 8, 2);
+
+    await repository.addToToday('task-1', today: today);
+    await repository.addToToday('task-1', today: today);
+
+    final task = await _taskById(db, 'task-1');
+    final queued = await db.select(db.todoSyncChanges).get();
+    expect(task.dueAt, today);
+    expect(task.allDay, isTrue);
+    expect(task.startAt, isNull);
+    expect(task.endAt, isNull);
+    expect(queued, hasLength(1));
+  });
+
+  test('只读清单拒绝添加到今天且不修改任务或 outbox', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    await _seedViewActionList(db, writable: false);
+    final repository = TaskViewActionRepository(db, SyncChangeQueue(db));
+    final before = await _taskById(db, 'task-1');
+
+    await expectLater(
+      repository.addToToday('task-1', today: DateTime(2026, 8, 2)),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          '当前清单为只读，无法修改任务',
+        ),
+      ),
+    );
+
+    final after = await _taskById(db, 'task-1');
+    expect(after.dueAt, before.dueAt);
+    expect(await db.select(db.todoSyncChanges).get(), isEmpty);
   });
 
   test('看板跨列写入明确状态字段并入队', () async {

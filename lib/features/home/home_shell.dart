@@ -661,7 +661,10 @@ class _HomeShellState extends ConsumerState<HomeShell>
     }
     return Column(
       children: [
-        RecommendationPanel(onTaskSelected: _selectRecommendedTask),
+        RecommendationPanel(
+          onTaskSelected: _selectRecommendedTask,
+          onAddToToday: _addRecommendedTaskToToday,
+        ),
         Expanded(
           child: TasksByListPage(
             title: _taskPaneTitle,
@@ -684,6 +687,18 @@ class _HomeShellState extends ConsumerState<HomeShell>
     final db = ref.read(appDatabaseProvider);
     final task = await db?.taskByServerId(serverTaskId);
     if (task != null && mounted) _selectTask(task.id);
+  }
+
+  Future<void> _addRecommendedTaskToToday(int serverTaskId) async {
+    final db = ref.read(appDatabaseProvider);
+    final repository = ref.read(taskViewActionRepositoryProvider);
+    final task = await db?.taskByServerId(serverTaskId);
+    if (task == null || repository == null) {
+      throw StateError('推荐任务尚未同步到本地');
+    }
+    await repository.addToToday(task.id);
+    await ref.read(recommendationRepositoryProvider)?.removeTask(serverTaskId);
+    unawaited(_triggerSync());
   }
 
   String get _taskPaneTitle {
