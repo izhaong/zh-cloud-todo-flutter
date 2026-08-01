@@ -1,24 +1,9 @@
-// Web/H5 构建与部署见 GitHub Actions（.github/workflows/web.yml）。
-// 本 Jenkinsfile 保留作 Gitea webhook 备用；推荐 develop/v* 推送到 GitHub 触发 Actions 更新。
-// Script Path: Jenkinsfile
-// GWT token: zh-cloud-todo-flutter
-// Jenkins test: https://jenkins.zh04.com/view/test/job/zh-cloud-test/job/zh-cloud-todo-flutter/
-// Jenkins prod: https://jenkins.zh04.com/view/prod/job/zh-cloud-prod/job/zh-cloud-todo-flutter/
+// zh-cloud-todo-flutter — 单个根级 Gitea Multibranch Job。
+// develop/main/SemVer tag 由 BRANCH_NAME/TAG_NAME 路由，触发由 Jenkins Gitea SCM Source 维护。
+// Script Path: Jenkinsfile；本仓只维护 Todo Flutter Web 构建与部署。
 // 文档: docs/engineering/01-ci-jenkins.md
 
-import groovy.json.JsonOutput
-
 // ---- 通用工具 -----------------------------------------------------------
-
-// 返回 GWT ref 过滤正则：test 仅 develop / release/*；prod 仅 vX.Y.Z tag。
-// 之前版本将 refs/heads/main 也允许为 prod 触发，会误把发版 tag 之外的 hotfix 直推 prod，已收紧。
-String giteaWebhookRefFilter() {
-  String jobName = (env.JOB_NAME ?: '').toLowerCase()
-  boolean prodJob = jobName.contains('/zh-cloud-prod/') || jobName.endsWith('-prod')
-  return prodJob
-    ? '^refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+(-.+)?$'
-    : '^refs/heads/(develop|release/.+)$'
-}
 
 // 飞书 webhook 通知。配置 FEISHU_WEBHOOK_URL 后生效；失败仅 echo 不抛错。
 void feishuBuildNotify(String statusEmoji, String title) {
@@ -27,7 +12,7 @@ void feishuBuildNotify(String statusEmoji, String title) {
     echo '⚠️ 未配置 FEISHU_WEBHOOK_URL，跳过飞书通知'
     return
   }
-  String lineRef = (env.GIT_TAG ?: env.GIT_BRANCH ?: env.gitea_ref ?: '').toString().trim()
+  String lineRef = (env.GIT_TAG ?: env.GIT_BRANCH ?: env.BRANCH_NAME ?: '').toString().trim()
   String commit = (env.GIT_COMMIT ?: '').trim()
   String buildUrl = (env.BUILD_URL ?: '').trim()
   List<String> lines = [
@@ -50,9 +35,18 @@ void feishuBuildNotify(String statusEmoji, String title) {
 // 进入 Flutter 镜像执行闭包；统一 user 映射避免 root 写出 _netrc / .pub-cache 之类。
 void flutterInside(String flutterImg, Closure body) {
   def img = docker.image(flutterImg)
-  retry(3) {
-    img.pull()
+  boolean cachedImage = sh(
+    script: "docker image inspect '${flutterImg}' >/dev/null 2>&1",
+    returnStatus: true
+  ) == 0
+  if (!cachedImage) {
+    retry(3) {
+      img.pull()
+    }
+  } else {
+    echo "[ci] 复用本地 Flutter 构建镜像：${flutterImg}"
   }
+  sh "docker image inspect '${flutterImg}' >/dev/null"
   String dockerUser = sh(script: 'echo "$(id -u):$(id -g)"', returnStdout: true).trim()
   img.inside("-u ${dockerUser}", body)
 }
@@ -71,38 +65,19 @@ String sq(String v) {
 }
 
 pipeline {
-  agent any
-
-  triggers {
-    GenericTrigger(
-      genericVariables: [
-        [key: 'gitea_ref', value: '$.ref'],
-        [key: 'commit_after', value: '$.after'],
-      ],
-      token: 'zh-cloud-todo-flutter',
-      regexpFilterText: '$gitea_ref',
-      regexpFilterExpression: giteaWebhookRefFilter(),
-      printContributedVariables: true,
-      printPostContent: false,
-      silentResponse: false,
-      allowSeveralTriggersPerBuild: false,
-      causeString: 'GWT: $gitea_ref',
-    )
-  }
+  agent { label 'built-in' }
 
   options {
-    withFolderProperties()
     timestamps()
-    disableConcurrentBuilds(abortPrevious: true)
-    quietPeriod(20)
-    buildDiscarder(logRotator(numToKeepStr: '3', artifactNumToKeepStr: '3'))
-    timeout(time: 1, unit: 'HOURS')
-    // 与 zh-cloud-service 一致：显式 checkout，避免 Declarative 默认检出与 GWT 竞态
+    disableConcurrentBuilds()
+    buildDiscarder(logRotator(numToKeepStr: '10', artifactNumToKeepStr: '10'))
+    timeout(time: 10, unit: 'MINUTES')
+    // 显式 checkout，避免 Declarative 默认检出与 Multibranch 上下文解析竞态。
     skipDefaultCheckout(true)
   }
 
   parameters {
-    string(name: 'TAG_NAME', defaultValue: '', trim: true, description: 'prod 手工构建时填 vX.Y.Z；test 一般留空')
+    string(name: 'TAG_NAME', defaultValue: '', trim: true, description: 'Multibranch tag 兼容字段；正常由 TAG_NAME/BRANCH_NAME 自动解析')
     booleanParam(name: 'SKIP_TESTS', defaultValue: false, description: '为 true 时跳过 flutter test')
     booleanParam(name: 'SKIP_ANALYZE', defaultValue: false, description: '为 true 时跳过 flutter analyze')
     booleanParam(
@@ -125,9 +100,9 @@ pipeline {
     string(name: 'TODO_TENANT_ID', defaultValue: '1', trim: true, description: '构建时注入 TODO_TENANT_ID')
     string(
       name: 'DEPLOY_SSH_CONFIG',
-      defaultValue: '',
+      defaultValue: '192.168.3.94',
       trim: true,
-      description: 'Publish Over SSH 里 SSH Server 的 Name（必填，prod 不允许 host.docker.internal）'
+      description: 'Publish Over SSH 里 test 部署 Server 的已登记 Name'
     )
     string(
       name: 'DEPLOY_STAGING_DIR',
@@ -135,6 +110,8 @@ pipeline {
       trim: true,
       description: '远端压缩包临时目录，必须是绝对路径'
     )
+    string(name: 'DEPLOY_TARGET_DIR_TEST', defaultValue: '/izhaong/zh-cloud-test', trim: true, description: 'test 宿主机部署根目录')
+    string(name: 'DEPLOY_TARGET_DIR_PROD', defaultValue: '/izhaong/zh-cloud-prod', trim: true, description: 'prod 宿主机部署根目录；promotion 接通前不使用')
     string(
       name: 'COMPOSE_DEPLOY_SUBPATH',
       defaultValue: 'todo-flutter',
@@ -158,12 +135,6 @@ pipeline {
       defaultValue: true,
       description: '部署后是否 docker compose up -d todo-flutter'
     )
-    string(
-      name: 'APPROVED_DEPLOY_USERS',
-      defaultValue: 'izhaong',
-      trim: true,
-      description: 'prod approve 阶段可点确认的 Jenkins 用户名列表（逗号分隔）'
-    )
   }
 
   stages {
@@ -178,72 +149,41 @@ pipeline {
     stage('解析触发上下文') {
       steps {
         script {
-          String zeroSha = '0000000000000000000000000000000000000000'
-          String after = (env.commit_after ?: '').trim()
-          if (after == zeroSha) {
-            error('Gitea 分支删除事件（commit_after 全 0），跳过构建')
-          }
-
-          String fromFolder = (env.DEPLOY_ENV ?: '').toString().trim()
-          String dep = fromFolder
-          if (!dep) {
-            String jn = (env.JOB_NAME ?: '').toLowerCase()
-            dep = (jn.contains('prod') || jn.contains('zh-cloud-prod')) ? 'prod' : 'test'
-          }
-          dep = dep.toLowerCase()
-          if (dep != 'test' && dep != 'prod') {
-            error("DEPLOY_ENV 仅支持 test 或 prod，当前: ${dep}")
-          }
-          env.RESOLVED_ENV = dep
-          boolean isProd = (dep == 'prod')
-
-          String refFromGwt = (env.gitea_ref ?: '').toString()
-          String ref = (env.GIT_BRANCH ?: env.BRANCH_NAME ?: refFromGwt).toString()
-
-          if (isProd) {
-            if (refFromGwt && !(refFromGwt ==~ /^refs\/tags\/v[0-9]+\.[0-9]+\.[0-9]+(-.+)?$/)) {
-              error("prod 仅允许 vX.Y.Z tag 触发，当前 ref=${refFromGwt}")
-            }
-            String tag = (env.TAG_NAME ?: params.TAG_NAME ?: '').trim()
-            if (!tag && ref.startsWith('refs/tags/')) {
-              tag = ref.replace('refs/tags/', '').trim()
-            }
-            env.TRIGGER_TAG = tag
-            if (!env.TRIGGER_TAG) {
-              error('prod 未解析到 tag；需由 v* tag 触发，或手工构建在 TAG_NAME 填 vX.Y.Z')
-            }
-          } else {
-            if (refFromGwt && !(refFromGwt ==~ /^refs\/heads\/(develop|release\/.+)$/)) {
-              error("test 仅允许 develop / release/* push 触发，当前 ref=${refFromGwt}")
-            }
+          String branchName = (env.BRANCH_NAME ?: '').trim()
+          String tagName = (env.TAG_NAME ?: params.TAG_NAME ?: '').trim()
+          String candidateTag = tagName ?: branchName
+          if (branchName == 'develop') {
+            env.DELIVERY_MODE = 'test'
+            env.RESOLVED_ENV = 'test'
             env.TRIGGER_TAG = ''
+          } else if (branchName == 'main') {
+            env.DELIVERY_MODE = 'candidate'
+            env.RESOLVED_ENV = 'prod'
+            env.TRIGGER_TAG = ''
+          } else if (candidateTag ==~ /^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/) {
+            env.DELIVERY_MODE = 'production'
+            env.RESOLVED_ENV = 'prod'
+            env.TRIGGER_TAG = candidateTag
+          } else {
+            error("不受信任的 Multibranch ref: BRANCH_NAME=${branchName}, TAG_NAME=${tagName}")
           }
-          echo "[ci] RESOLVED_ENV=${env.RESOLVED_ENV} ref=${refFromGwt} TRIGGER_TAG=${env.TRIGGER_TAG ?: '—'}"
+          echo "[ci] DELIVERY_MODE=${env.DELIVERY_MODE} RESOLVED_ENV=${env.RESOLVED_ENV} BRANCH_NAME=${branchName} TRIGGER_TAG=${env.TRIGGER_TAG ?: '—'}"
         }
+      }
+    }
+
+    stage('生产提升保护') {
+      when { expression { return env.DELIVERY_MODE == 'production' } }
+      steps {
+        error('production 必须读取 main 的 release-ready manifest 并提升同一 digest；当前仓库尚未完成 promotion 实现')
       }
     }
 
     stage('环境检查') {
       steps {
         sh 'docker --version'
-        script {
-          // 密钥类变量走 mask，避免日志全量打印。
-          def maskValue = { key, value ->
-            String text = value == null ? '' : value.toString()
-            return (key ==~ /(?i).*(TOKEN|PASSWORD|PASS|SECRET|COOKIE|CREDENTIAL|ACCESS_KEY|SECRET_KEY|WEBHOOK|PRIVATE_KEY).*/) ? '****' : text
-          }
-          Map envMap = [:]
-          String rawEnv = sh(script: 'printenv | sort', returnStdout: true).trim()
-          rawEnv.split('\n').findAll { it && it.contains('=') }.each { line ->
-            int idx = line.indexOf('=')
-            String key = line.substring(0, idx)
-            envMap[key] = maskValue(key, line.substring(idx + 1))
-          }
-          Map paramsMap = [:]
-          params.each { key, value -> paramsMap[key.toString()] = maskValue(key.toString(), value) }
-          echo "ENV_JSON=${JsonOutput.toJson(envMap)}"
-          echo "PARAMS_JSON=${JsonOutput.toJson(paramsMap)}"
-        }
+        sh 'tool/test_jenkinsfile_runtime_contract.sh'
+        echo "[ci] ref=${env.BRANCH_NAME ?: '—'} mode=${env.DELIVERY_MODE ?: '—'} env=${env.RESOLVED_ENV ?: '—'}"
       }
     }
 
@@ -253,7 +193,7 @@ pipeline {
           String flutterImg = 'ghcr.io/cirruslabs/flutter:3.44.0'
           String apiBase = resolveApiBase(params, env.RESOLVED_ENV ?: 'test')
           if (!apiBase) {
-            error('TODO_API_BASE_URL 未解析到，请检查 DEPLOY_ENV 或显式设置 TODO_API_BASE_URL')
+            error('TODO_API_BASE_URL 未解析到，请检查 Multibranch ref 路由或显式设置 TODO_API_BASE_URL')
           }
           String tenantId = (env.TODO_TENANT_ID ?: params.TODO_TENANT_ID ?: '1').trim()
           env.BUILD_API_BASE_URL = apiBase
@@ -298,58 +238,39 @@ test -s .jenkins-dist/todo-flutter-web.tar.gz
       }
     }
 
-    stage('确认部署生产') {
-      when {
-        allOf {
-          expression { return params.DEPLOY_TO_HOST == null || params.DEPLOY_TO_HOST }
-          expression { return env.RESOLVED_ENV == 'prod' }
-          not { changeRequest() }
-        }
-      }
-      options {
-        // 收紧到 2 小时；与 pipeline 顶层 1h timeout 矛盾修复见 issue:
-        // 生产发版前人在岗可以马上放行，卡 24h 无意义。
-        timeout(time: 2, unit: 'HOURS')
-      }
+    stage('归档 Web 制品') {
       steps {
-        input message: '确认将 todo-flutter Web 部署到生产宿主机？',
-              ok: '确认部署',
-              submitter: (params.APPROVED_DEPLOY_USERS ?: 'izhaong').split(',').collect { it.trim() }.join(',')
+        archiveArtifacts artifacts: '.jenkins-dist/*.tar.gz', fingerprint: true, onlyIfSuccessful: true
       }
     }
 
-    stage('部署到宿主机（SSH Publisher）') {
+    stage('部署测试环境') {
       when {
         allOf {
-          expression { return params.DEPLOY_TO_HOST == null || params.DEPLOY_TO_HOST }
+          expression { return env.DELIVERY_MODE == 'test' && params.DEPLOY_TO_HOST }
           not { changeRequest() }
-          expression { return env.RESOLVED_ENV != 'test' }
         }
       }
       steps {
         script {
           String sshCfg = (params.DEPLOY_SSH_CONFIG ?: '').trim()
           String staging = (params.DEPLOY_STAGING_DIR ?: '').trim()
-          String deployRoot = (env.DEPLOY_TARGET_DIR ?: '').trim()
+          String deployRoot = (params.DEPLOY_TARGET_DIR_TEST ?: '').trim()
           String composeSub = (params.COMPOSE_DEPLOY_SUBPATH ?: 'todo-flutter').trim()
           String composeFile = (params.REMOTE_COMPOSE_FILE ?: 'docker-compose.yml').trim()
           String projectOverride = (params.REMOTE_COMPOSE_PROJECT ?: '').trim()
           boolean restart = (params.RESTART_COMPOSE == null) || params.RESTART_COMPOSE
-          boolean isTest = (env.RESOLVED_ENV == 'test')
+          boolean isTest = true
 
           if (!sshCfg) error('DEPLOY_SSH_CONFIG 不能为空')
-          if (!deployRoot) error('DEPLOY_TARGET_DIR 不能为空；请通过 Folder 环境变量传入，例如 /izhaong/zh-cloud-test')
+          if (!deployRoot) error('DEPLOY_TARGET_DIR_TEST 不能为空')
           if (!staging || !composeSub || !composeFile) {
             error('DEPLOY_SSH_CONFIG / DEPLOY_STAGING_DIR / COMPOSE_DEPLOY_SUBPATH / REMOTE_COMPOSE_FILE 不能为空')
           }
           if (!deployRoot.startsWith('/') || !staging.startsWith('/')) {
             error('DEPLOY_TARGET_DIR 与 DEPLOY_STAGING_DIR 必须使用绝对路径')
           }
-          if (!isTest && sshCfg == 'host.docker.internal') {
-            error('prod 部署禁止使用 DEPLOY_SSH_CONFIG=host.docker.internal，避免误将生产部署到本机')
-          }
-
-          echo "[deploy] ssh=${sshCfg} DEPLOY_TARGET_DIR=${deployRoot} subpath=${composeSub}"
+          echo "[deploy] ssh=${sshCfg} DEPLOY_TARGET_DIR_TEST=${deployRoot} subpath=${composeSub}"
           String deployExec = """
 set -e
 STAGING_DIR=${sq(staging)}
