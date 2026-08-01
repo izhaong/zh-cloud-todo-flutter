@@ -90,4 +90,74 @@ void main() {
     await tester.pump(Duration.zero);
     await db.close();
   });
+
+  testWidgets('空 Section 不占用列表高度且可从既有菜单创建首个分组', (tester) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    final now = DateTime(2026, 7, 30);
+    await db
+        .into(db.todoLists)
+        .insert(
+          TodoListsCompanion.insert(
+            id: 'list-empty-sections',
+            name: '工作',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    final queue = SyncChangeQueue(db);
+    final container = ProviderContainer(
+      overrides: [
+        taskRepositoryProvider.overrideWithValue(TaskRepository(db, queue)),
+        taskSectionRepositoryProvider.overrideWithValue(
+          TaskSectionRepository(db, queue),
+        ),
+        currentDateTimeProvider.overrideWithValue(() => now),
+      ],
+    );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: ThemeData(
+            extensions: const [AppThemeExtension(AppColors.light)],
+          ),
+          home: const Scaffold(
+            body: TasksByListPage(
+              initialListId: 'list-empty-sections',
+              lockedListId: true,
+              hideAppBar: true,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.byKey(const Key('todo-section-manager')), findsNothing);
+    await tester.tap(find.byKey(const Key('todo-sort-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('todo-section-create-menu')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('todo-section-name-field')),
+      '下周',
+    );
+    await tester.tap(find.byKey(const Key('todo-section-name-confirm')));
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.byKey(const Key('todo-section-manager')), findsOneWidget);
+    expect(find.text('下周'), findsNWidgets(2));
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    container.dispose();
+    await tester.pump(Duration.zero);
+    await db.close();
+  });
 }

@@ -169,6 +169,8 @@ private final class IOSNativeShareItem: NSObject, UIActivityItemSource {
     result: @escaping FlutterResult
   ) {
     switch call.method {
+    case "supportsLinkEvents":
+      result(true)
     case "getInitialLink":
       result(IOSNativeLinkBridge.shared.takeInitialLink())
     case "share":

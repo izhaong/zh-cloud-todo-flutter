@@ -17,6 +17,8 @@ void main() {
     expect(appDelegate, contains('"zh_cloud_todo/native"'));
     expect(appDelegate, contains('"zh_cloud_todo/native_links"'));
     expect(appDelegate, contains('"getInitialLink"'));
+    expect(appDelegate, contains('case "supportsLinkEvents":'));
+    expect(appDelegate, contains('result(true)'));
     expect(appDelegate, contains('"share"'));
     expect(appDelegate, contains('UIActivityViewController'));
     expect(appDelegate, contains('FlutterMethodNotImplemented'));

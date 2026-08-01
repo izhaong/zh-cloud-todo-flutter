@@ -47,6 +47,10 @@ void main() {
     );
   });
 
+  test('平台未注册热启动事件通道时主壳安全降级', () async {
+    expect(await NativeIntents.incomingUris().toList(), isEmpty);
+  });
+
   testWidgets('冷启动 task add 链接通过 Repository 和 outbox 创建任务', (tester) async {
     final fixture = await pumpTodoVisualScenario(
       tester,

@@ -31,6 +31,8 @@ class MainActivity : FlutterActivity() {
             NATIVE_CHANNEL,
         ).setMethodCallHandler { call, result ->
             when (call.method) {
+                "supportsLinkEvents" -> result.success(true)
+
                 "getInitialLink" -> {
                     result.success(pendingInitialLink)
                     pendingInitialLink = null

@@ -14,6 +14,7 @@ enum _TaskWorkspaceHeaderCommand {
   title,
   createdAt,
   batchEdit,
+  createSection,
 }
 
 extension on _TaskWorkspaceHeaderCommand {
@@ -24,6 +25,7 @@ extension on _TaskWorkspaceHeaderCommand {
     _TaskWorkspaceHeaderCommand.title => TaskSort.title,
     _TaskWorkspaceHeaderCommand.createdAt => TaskSort.createdAt,
     _TaskWorkspaceHeaderCommand.batchEdit => null,
+    _TaskWorkspaceHeaderCommand.createSection => null,
   };
 }
 
@@ -51,6 +53,7 @@ class TaskWorkspaceHeader extends StatelessWidget {
     required this.onFilterPressed,
     this.batchSelectionActive = false,
     this.onBatchPressed,
+    this.onCreateSection,
   });
 
   final String title;
@@ -63,6 +66,7 @@ class TaskWorkspaceHeader extends StatelessWidget {
   final VoidCallback onFilterPressed;
   final bool batchSelectionActive;
   final VoidCallback? onBatchPressed;
+  final VoidCallback? onCreateSection;
 
   @override
   Widget build(BuildContext context) {
@@ -130,8 +134,19 @@ class TaskWorkspaceHeader extends StatelessWidget {
                   final nextSort = command.sort;
                   if (nextSort != null) {
                     onSortChanged(nextSort);
-                  } else {
-                    onBatchPressed?.call();
+                    return;
+                  }
+                  switch (command) {
+                    case _TaskWorkspaceHeaderCommand.batchEdit:
+                      onBatchPressed?.call();
+                    case _TaskWorkspaceHeaderCommand.createSection:
+                      onCreateSection?.call();
+                    case _TaskWorkspaceHeaderCommand.smart:
+                    case _TaskWorkspaceHeaderCommand.priorityDesc:
+                    case _TaskWorkspaceHeaderCommand.dueDate:
+                    case _TaskWorkspaceHeaderCommand.title:
+                    case _TaskWorkspaceHeaderCommand.createdAt:
+                      break;
                   }
                 },
                 itemBuilder: (context) => [
@@ -148,6 +163,13 @@ class TaskWorkspaceHeader extends StatelessWidget {
                       key: const Key('todo-batch-edit'),
                       value: _TaskWorkspaceHeaderCommand.batchEdit,
                       child: Text(batchSelectionActive ? '退出批量编辑' : '批量编辑'),
+                    ),
+                  if (onCreateSection != null) const PopupMenuDivider(),
+                  if (onCreateSection != null)
+                    const PopupMenuItem(
+                      key: Key('todo-section-create-menu'),
+                      value: _TaskWorkspaceHeaderCommand.createSection,
+                      child: Text('新建分组'),
                     ),
                 ],
               ),

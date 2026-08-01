@@ -7,6 +7,9 @@ void main() {
     final manifest = File(
       'android/app/src/main/AndroidManifest.xml',
     ).readAsStringSync();
+    final activity = File(
+      'android/app/src/main/kotlin/com/zh04/zh_cloud_todo_flutter/MainActivity.kt',
+    ).readAsStringSync();
 
     expect(
       manifest,
@@ -17,5 +20,9 @@ void main() {
     );
     expect(manifest, contains('android:path="/add"'));
     expect(manifest, isNot(contains('android:pathPrefix="/add"')));
+    expect(
+      activity,
+      contains('"supportsLinkEvents" -> result.success(true)'),
+    );
   });
 }
