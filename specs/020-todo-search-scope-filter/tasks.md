@@ -4,7 +4,7 @@
 - [x] T002 实现全部/任务/清单/标签范围以及任务筛选选择器。
 - [x] T003 实现加载更多、过期响应隔离、失败保留与 320px 读屏行为。
 - [ ] T004 通过格式、静态分析、全量测试、Web 与 Claude CLI 门禁。
-- [ ] T005 创建并合入 Gitea PR，补 develop 构建和测试环境证据。
+- [x] T005 创建并合入 Gitea PR，补 develop 构建和测试环境证据。
 
 ## 执行证据
 
@@ -18,3 +18,5 @@
 ## 当前阻塞
 
 - 2026-08-02：Claude CLI 2.1.216 以只读 `plan` 模式审查本切片，在约 2 分 30 秒内没有输出任何审查结论，已中断以避免无界等待；工作区无额外写入。该交叉验证未通过也未失败，T004 保持未完成，待 CLI 能返回带 `VERDICT` 的只读结果后补证据；本地格式、分析、测试和 Web 构建不受影响。
+- 2026-08-02：实现经 PR [#243](https://gitea.zh04.com/izhaong/zh-cloud-todo-flutter/pulls/243) 合入 `develop`，合并提交为 `70bcf13733d423adf03d5c517e45e7408ca71816`。合并前 API 显示 PR 可合并且 head 为 `90f2a77de94bb13a41fbc7f779665b112f61ad0c`。
+- 2026-08-02：该 PR 的 Gitea Actions `CI / Analyze & Test (pull_request)` run `4579` 在业务检出和任何测试之前失败；runner 拉取固定镜像 `docker-mirror.zh04.com/gitea/runner-images@sha256:cd3105…` 时，其 manifest HEAD 请求返回 `502 Bad Gateway`。这是外部镜像可用性阻塞，不是本次 Flutter 代码失败，未做无效重跑。本切片已以本地全量测试和 Web release 为构建证据；当前 Codex 会话未暴露 Jenkins MCP，故不能把 Jenkins 页面或历史状态冒充为本次 Jenkins 验证。
