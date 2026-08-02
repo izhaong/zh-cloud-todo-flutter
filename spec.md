@@ -19,6 +19,7 @@ zh-cloud 平台 Todo 产品的 **唯一 C 端客户端**（**Web / H5**、iOS、
 - `specs/012-todo-task-multi-select-actionbar/{spec,plan,tasks}.md`：桌面连续/离散多选、响应式选择坞、安全批量写操作与纯读批量系统分享契约。
 - `specs/013-todo-sidebar-navigation/{spec,plan,tasks}.md`：智能清单、文件夹/标签树与效率底栏的当前实现契约。
 - `specs/014-todo-list-sections/{spec,plan,tasks}.md`：清单内 Section、任务归组、离线同步、删除回未分组与工作区管理入口的当前实现契约。
+- `specs/021-todo-task-focus-entry/{spec,plan,tasks}.md`：从已同步有效任务的列表、详情进入现有番茄专注页的当前入口契约。
 - 两套规格按职责互补；视觉规格不得改写账号、数据、同步、接口或权限语义，功能规格不得复制视觉契约正文。
 
 ### 1.2 桌面母版与响应式档位
@@ -100,6 +101,7 @@ pubspec.yaml
 
 - 推荐任务请求携带客户端本地日期和精确 UTC 日界线，只展示无重复、非今天、未完成任务；“即将到来”限定为明天与后天。刷新失败时保留上一次成功的 Drift 缓存，并以独立 live region 明确说明恢复状态；重试成功后清除失败反馈。同一面板同一时刻只执行一个刷新请求，请求结束后才允许下一次刷新，避免初始化与用户操作的乱序响应覆盖缓存。推荐面板、刷新按钮、任务正文与“添加到今天”按钮保持独立语义节点；添加操作经 `TaskViewActionRepository` 原子更新 Drift 与 task outbox，成功后移出缓存，失败时保留推荐并给出可恢复反馈。
 - 番茄专注模式与时长以服务端 presets 为事实源，支持 CUSTOM/FREE 的 1–1440 分钟输入、已同步未完成任务关联及最多 512 字符专注笔记；完成请求附带裁剪备注和客户端结束时刻，失败保留会话与文字。页面每 15 秒单飞读取活跃会话，并以服务端 `pausedAt` 收敛其它设备的暂停、恢复与结束状态；规格与验证边界见 [`specs/015-todo-focus-session-parity/`](specs/015-todo-focus-session-parity/)。
+- 已同步、未完成且未放弃的任务可从任务列表的更多/桌面右键菜单以及任务详情的更多菜单进入 `PomodoroPage`；入口只传递后端整数 `serverId`，不以本地 UUID 伪造专注关联。规格与验证边界见 [`specs/021-todo-task-focus-entry/`](specs/021-todo-task-focus-entry/)。
 - 活动专注支持服务端确认后的 ±5 分钟调整；专注记录读取服务端分页事实源，支持补录、编辑/追加实际分钟与二次确认删除，失败保留倒计时、表单或旧列表并可重试；规格与验证边界见 [`specs/016-todo-focus-record-management/`](specs/016-todo-focus-record-management/)。
 - 专注统计支持今天、最近 7 天与最近 30 天切换，展示服务端真实累计、日均、最佳小时、连续分钟趋势与专注日历；旧请求不会覆盖新周期，失败保留上次成功结果并可重试；规格与验证边界见 [`specs/017-todo-focus-statistics/`](specs/017-todo-focus-statistics/)。
 - 专注分析扩展到最近 12 个月的月趋势、按任务分钟/会话分布与可选日期的每日完成时间轴；统计和时间轴分别隔离旧响应，失败时保留并标明上次成功来源，分析请求不会阻塞每 15 秒活跃会话同步；规格与验证边界见 [`specs/018-todo-focus-analytics/`](specs/018-todo-focus-analytics/)。
