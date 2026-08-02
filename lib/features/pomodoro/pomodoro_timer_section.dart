@@ -12,6 +12,10 @@ class PomodoroTimerSection extends StatelessWidget {
     required this.habitTitles,
     required this.onRetry,
     required this.onStart,
+    required this.onEdit,
+    required this.onArchiveChanged,
+    required this.onDelete,
+    this.archivedView = false,
     this.error,
     this.actionPendingId,
     this.onCreate,
@@ -27,6 +31,10 @@ class PomodoroTimerSection extends StatelessWidget {
   final int? actionPendingId;
   final VoidCallback onRetry;
   final ValueChanged<PomodoroTimerDto> onStart;
+  final ValueChanged<PomodoroTimerDto> onEdit;
+  final ValueChanged<PomodoroTimerDto> onArchiveChanged;
+  final ValueChanged<PomodoroTimerDto> onDelete;
+  final bool archivedView;
   final VoidCallback? onCreate;
   final VoidCallback? onShowArchived;
 
@@ -39,7 +47,7 @@ class PomodoroTimerSection extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                '常用专注',
+                archivedView ? '已归档计时器' : '常用专注',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
             ),
@@ -80,6 +88,10 @@ class PomodoroTimerSection extends StatelessWidget {
                 canStart: canStart && actionPendingId == null,
                 pending: actionPendingId == timer.id,
                 onStart: () => onStart(timer),
+                archivedView: archivedView,
+                onEdit: () => onEdit(timer),
+                onArchiveChanged: () => onArchiveChanged(timer),
+                onDelete: () => onDelete(timer),
               ),
             ),
         ],
@@ -105,6 +117,10 @@ class _PomodoroTimerCard extends StatelessWidget {
     required this.canStart,
     required this.pending,
     required this.onStart,
+    required this.archivedView,
+    required this.onEdit,
+    required this.onArchiveChanged,
+    required this.onDelete,
     this.taskTitle,
     this.habitTitle,
   });
@@ -113,6 +129,10 @@ class _PomodoroTimerCard extends StatelessWidget {
   final bool canStart;
   final bool pending;
   final VoidCallback onStart;
+  final bool archivedView;
+  final VoidCallback onEdit;
+  final VoidCallback onArchiveChanged;
+  final VoidCallback onDelete;
   final String? taskTitle;
   final String? habitTitle;
 
@@ -155,7 +175,7 @@ class _PomodoroTimerCard extends StatelessWidget {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
               )
-            else
+            else if (!archivedView)
               Semantics(
                 container: true,
                 excludeSemantics: true,
@@ -166,6 +186,32 @@ class _PomodoroTimerCard extends StatelessWidget {
                   icon: const Icon(Icons.play_arrow),
                 ),
               ),
+            PopupMenuButton<String>(
+              key: Key('pomodoro-timer-menu-${timer.id}'),
+              tooltip: '管理${timer.name}',
+              onSelected: (value) {
+                switch (value) {
+                  case 'edit':
+                    onEdit();
+                    break;
+                  case 'archive':
+                    onArchiveChanged();
+                    break;
+                  case 'delete':
+                    onDelete();
+                    break;
+                }
+              },
+              itemBuilder: (context) => [
+                if (!archivedView)
+                  const PopupMenuItem(value: 'edit', child: Text('编辑')),
+                PopupMenuItem(
+                  value: 'archive',
+                  child: Text(archivedView ? '恢复' : '归档'),
+                ),
+                const PopupMenuItem(value: 'delete', child: Text('删除')),
+              ],
+            ),
           ],
         ),
       ),

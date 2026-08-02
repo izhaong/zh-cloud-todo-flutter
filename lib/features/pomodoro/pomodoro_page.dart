@@ -8,6 +8,7 @@ import '../../core/api/efficiency_api.dart';
 import '../../core/db/app_database.dart';
 import '../../state/efficiency_providers.dart';
 import '../../state/providers.dart';
+import 'pomodoro_timer_editor.dart';
 import 'pomodoro_timer_section.dart';
 
 /// 番茄专注页：服务端预设、任务关联、专注笔记与跨设备会话收敛。
@@ -55,6 +56,8 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
   bool _loadingTimeline = true;
   bool _recordActionPending = false;
   bool _loadingTimers = true;
+  bool _showingArchivedTimers = false;
+  bool _timersDataArchived = false;
   String? _presetError;
   String? _actionError;
   String? _syncError;
@@ -148,7 +151,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
     }
   }
 
-  Future<void> _loadTimers() async {
+  Future<void> _loadTimers({bool archived = false}) async {
     final request = ++_timersRequest;
     if (mounted) {
       setState(() {
@@ -157,10 +160,13 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
       });
     }
     try {
-      final timers = await ref.read(pomodoroApiProvider).timers();
+      final timers = await ref
+          .read(pomodoroApiProvider)
+          .timers(archived: archived);
       if (!mounted || request != _timersRequest) return;
       setState(() {
         _timers = timers;
+        _timersDataArchived = archived;
         _loadingTimers = false;
       });
     } catch (error) {
@@ -186,6 +192,187 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
     } catch (error) {
       if (!mounted) return;
       setState(() => _timerError = '计时器启动失败：$error');
+    } finally {
+      if (mounted) setState(() => _timerActionPendingId = null);
+    }
+  }
+
+  Future<void> _selectTimerArchiveView(bool archived) async {
+    if (_showingArchivedTimers == archived && _timersDataArchived == archived) {
+      return;
+    }
+    setState(() => _showingArchivedTimers = archived);
+    await _loadTimers(archived: archived);
+  }
+
+  Future<void> _showTimerEditor({
+    required Map<int, String> taskTitles,
+    PomodoroTimerDto? initial,
+  }) async {
+    if (_timerActionPendingId != null) return;
+    Map<int, String> habitTitles = const {};
+    try {
+      final habits = await ref.read(myHabitsProvider.future);
+      habitTitles = {
+        for (final habit in habits)
+          if (!habit.archived) habit.id: habit.name,
+      };
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _timerError = '习惯加载失败：$error');
+      return;
+    }
+    if (!mounted) return;
+    final draft = await showPomodoroTimerEditor(
+      context: context,
+      initial: initial,
+      taskTitles: taskTitles,
+      habitTitles: habitTitles,
+    );
+    if (!mounted || draft == null) return;
+    await _saveTimerDraft(initial: initial, draft: draft);
+  }
+
+  Future<void> _saveTimerDraft({
+    required PomodoroTimerDto? initial,
+    required PomodoroTimerDraft draft,
+  }) async {
+    setState(() {
+      _timerActionPendingId = initial?.id ?? -1;
+      _timerError = null;
+    });
+    try {
+      final api = ref.read(pomodoroApiProvider);
+      late PomodoroTimerDto confirmed;
+      if (initial == null) {
+        final id = await api.createTimer(
+          name: draft.name,
+          mode: draft.mode,
+          focusMinutes: draft.focusMinutes,
+          taskId: draft.taskId,
+          habitId: draft.habitId,
+          sortOrder: draft.sortOrder,
+        );
+        confirmed = PomodoroTimerDto(
+          id: id,
+          name: draft.name,
+          mode: draft.mode,
+          focusMinutes: draft.focusMinutes,
+          taskId: draft.taskId,
+          habitId: draft.habitId,
+          sortOrder: draft.sortOrder,
+        );
+      } else {
+        await api.updateTimer(
+          initial.id,
+          name: draft.name,
+          mode: draft.mode,
+          focusMinutes: draft.focusMinutes,
+          taskId: draft.taskId,
+          habitId: draft.habitId,
+          sortOrder: draft.sortOrder,
+        );
+        confirmed = PomodoroTimerDto(
+          id: initial.id,
+          name: draft.name,
+          mode: draft.mode,
+          focusMinutes: draft.focusMinutes,
+          taskId: draft.taskId,
+          habitId: draft.habitId,
+          sortOrder: draft.sortOrder,
+          archived: initial.archived,
+        );
+      }
+      if (!mounted) return;
+      setState(() {
+        _showingArchivedTimers = false;
+        _timersDataArchived = false;
+        _timers = [
+          for (final timer in _timers)
+            if (timer.id != confirmed.id) timer,
+          confirmed,
+        ]..sort(_compareTimers);
+      });
+      unawaited(_loadTimers());
+    } catch (error) {
+      if (!mounted) return;
+      setState(
+        () =>
+            _timerError = initial == null ? '计时器新增失败：$error' : '计时器编辑失败：$error',
+      );
+    } finally {
+      if (mounted) setState(() => _timerActionPendingId = null);
+    }
+  }
+
+  int _compareTimers(PomodoroTimerDto left, PomodoroTimerDto right) {
+    final bySort = left.sortOrder.compareTo(right.sortOrder);
+    return bySort != 0 ? bySort : left.id.compareTo(right.id);
+  }
+
+  Future<bool> _confirmTimerAction(
+    PomodoroTimerDto timer, {
+    required String action,
+  }) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('$action“${timer.name}”？'),
+            content: Text('仅$action这个常用计时器，历史专注记录会保留。'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: Text('确认$action'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  Future<void> _changeTimerArchive(PomodoroTimerDto timer) async {
+    final archived = !timer.archived;
+    final action = archived ? '归档' : '恢复';
+    if (!await _confirmTimerAction(timer, action: action) || !mounted) return;
+    setState(() {
+      _timerActionPendingId = timer.id;
+      _timerError = null;
+    });
+    try {
+      await ref.read(pomodoroApiProvider).setTimerArchived(timer.id, archived);
+      if (!mounted) return;
+      setState(() {
+        _timers = _timers.where((value) => value.id != timer.id).toList();
+      });
+      unawaited(_loadTimers(archived: _showingArchivedTimers));
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _timerError = '计时器$action失败：$error');
+    } finally {
+      if (mounted) setState(() => _timerActionPendingId = null);
+    }
+  }
+
+  Future<void> _deleteTimer(PomodoroTimerDto timer) async {
+    if (!await _confirmTimerAction(timer, action: '删除') || !mounted) return;
+    setState(() {
+      _timerActionPendingId = timer.id;
+      _timerError = null;
+    });
+    try {
+      await ref.read(pomodoroApiProvider).deleteTimer(timer.id);
+      if (!mounted) return;
+      setState(() {
+        _timers = _timers.where((value) => value.id != timer.id).toList();
+      });
+      unawaited(_loadTimers(archived: _showingArchivedTimers));
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _timerError = '计时器删除失败：$error');
     } finally {
       if (mounted) setState(() => _timerActionPendingId = null);
     }
@@ -625,7 +812,13 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
     final taskTitles = <int, String>{
       for (final task in tasks) task.serverId!: task.title,
     };
-    final needsHabitTitles = _timers.any((timer) => timer.habitId != null);
+    final timerDataMatches = _timersDataArchived == _showingArchivedTimers;
+    final displayedTimers = timerDataMatches
+        ? _timers
+        : const <PomodoroTimerDto>[];
+    final needsHabitTitles = displayedTimers.any(
+      (timer) => timer.habitId != null,
+    );
     final habits = needsHabitTitles
         ? ref.watch(myHabitsProvider).valueOrNull ?? const []
         : const [];
@@ -639,24 +832,48 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
     final durationRequired = _selectedPreset?.focusMinutes == null;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('番茄专注')),
+      appBar: AppBar(
+        title: const Text('番茄专注'),
+        actions: [
+          IconButton(
+            tooltip: _showingArchivedTimers ? '查看使用中的计时器' : '查看已归档计时器',
+            onPressed: () => _selectTimerArchiveView(!_showingArchivedTimers),
+            icon: Icon(
+              _showingArchivedTimers
+                  ? Icons.timer_outlined
+                  : Icons.archive_outlined,
+            ),
+          ),
+          IconButton(
+            tooltip: '新增常用专注计时器',
+            onPressed: () => _showTimerEditor(taskTitles: taskTitles),
+            icon: const Icon(Icons.add_alarm),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
             if (_loadingTimers ||
                 _timerError != null ||
-                _timers.isNotEmpty) ...[
+                displayedTimers.isNotEmpty ||
+                _showingArchivedTimers) ...[
               PomodoroTimerSection(
-                timers: _timers,
+                timers: displayedTimers,
                 loading: _loadingTimers,
                 error: _timerError,
                 actionPendingId: _timerActionPendingId,
                 canStart: !running && !_actionPending,
                 taskTitles: taskTitles,
                 habitTitles: habitTitles,
-                onRetry: _loadTimers,
+                archivedView: _showingArchivedTimers,
+                onRetry: () => _loadTimers(archived: _showingArchivedTimers),
                 onStart: _startTimer,
+                onEdit: (timer) =>
+                    _showTimerEditor(taskTitles: taskTitles, initial: timer),
+                onArchiveChanged: _changeTimerArchive,
+                onDelete: _deleteTimer,
               ),
               const SizedBox(height: 24),
               const Divider(),

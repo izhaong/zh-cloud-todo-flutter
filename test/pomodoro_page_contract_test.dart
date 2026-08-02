@@ -276,6 +276,171 @@ void main() {
     expect(find.textContaining('计时器启动失败'), findsOneWidget);
   });
 
+  testWidgets(
+    'timer editor validates modes associations and lifecycle actions',
+    (tester) async {
+      final api = _FakePomodoroApi();
+      await _pumpPage(
+        tester,
+        api: api,
+        habits: [HabitDto(id: 20, name: '阅读')],
+      );
+
+      await tester.tap(find.byTooltip('新增常用专注计时器'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('保存计时器'));
+      await tester.pump();
+      expect(find.text('名称需为 1–64 个字符'), findsOneWidget);
+
+      await tester.enterText(
+        find.byKey(const Key('pomodoro-timer-name')),
+        List.filled(65, '字').join(),
+      );
+      await tester.tap(find.text('保存计时器'));
+      await tester.pump();
+      expect(find.text('名称需为 1–64 个字符'), findsOneWidget);
+
+      await tester.enterText(
+        find.byKey(const Key('pomodoro-timer-name')),
+        '  最小番茄  ',
+      );
+      await tester.tap(find.byKey(const Key('pomodoro-timer-mode')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('自定义番茄').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('pomodoro-timer-minutes')),
+        '0',
+      );
+      await tester.tap(find.text('保存计时器'));
+      await tester.pump();
+      expect(find.text('分钟数必须在 1–1440 之间'), findsOneWidget);
+
+      await tester.enterText(
+        find.byKey(const Key('pomodoro-timer-minutes')),
+        '1',
+      );
+      await tester.tap(find.byKey(const Key('pomodoro-timer-association')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('习惯：阅读').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('保存计时器'));
+      await tester.pumpAndSettle();
+
+      expect(api.lastCreatedTimerName, '最小番茄');
+      expect(api.lastCreatedTimerMode, 'CUSTOM');
+      expect(api.lastCreatedTimerMinutes, 1);
+      expect(api.lastCreatedTimerHabitId, 20);
+      expect(api.lastCreatedTimerTaskId, isNull);
+      expect(find.text('最小番茄'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('新增常用专注计时器'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('pomodoro-timer-name')),
+        '最大番茄',
+      );
+      await tester.tap(find.byKey(const Key('pomodoro-timer-mode')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('自定义番茄').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('pomodoro-timer-minutes')),
+        '1441',
+      );
+      await tester.tap(find.text('保存计时器'));
+      await tester.pump();
+      expect(find.text('分钟数必须在 1–1440 之间'), findsOneWidget);
+      await tester.enterText(
+        find.byKey(const Key('pomodoro-timer-minutes')),
+        '1440',
+      );
+      await tester.tap(find.text('保存计时器'));
+      await tester.pumpAndSettle();
+      expect(api.lastCreatedTimerMinutes, 1440);
+
+      await tester.tap(find.byTooltip('新增常用专注计时器'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('pomodoro-timer-name')),
+        '自由写作',
+      );
+      await tester.tap(find.byKey(const Key('pomodoro-timer-mode')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('正计时').last);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('pomodoro-timer-minutes')), findsNothing);
+      await tester.tap(find.text('保存计时器'));
+      await tester.pumpAndSettle();
+      expect(api.lastCreatedTimerMode, 'FREE');
+      expect(api.lastCreatedTimerMinutes, isNull);
+    },
+  );
+
+  testWidgets(
+    'timer edit archive restore and delete preserve confirmed state',
+    (tester) async {
+      final api = _FakePomodoroApi()
+        ..timerValues = const [
+          PomodoroTimerDto(
+            id: 10,
+            name: '深度工作',
+            mode: 'CUSTOM',
+            focusMinutes: 45,
+          ),
+        ];
+      await _pumpPage(tester, api: api);
+
+      await tester.tap(find.byKey(const Key('pomodoro-timer-menu-10')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('编辑'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('pomodoro-timer-name')),
+        '深度写作',
+      );
+      await tester.tap(find.text('保存计时器'));
+      await tester.pumpAndSettle();
+      expect(api.lastUpdatedTimerName, '深度写作');
+      expect(find.text('深度写作'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('pomodoro-timer-menu-10')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('归档'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('历史专注记录会保留'), findsOneWidget);
+      await tester.tap(find.text('确认归档'));
+      await tester.pumpAndSettle();
+      expect(api.archivedTimerActions, [(10, true)]);
+      expect(find.text('深度写作'), findsNothing);
+
+      await tester.tap(find.byTooltip('查看已归档计时器'));
+      await tester.pumpAndSettle();
+      expect(find.text('深度写作'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('pomodoro-timer-menu-10')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('恢复'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('历史专注记录会保留'), findsOneWidget);
+      await tester.tap(find.text('确认恢复'));
+      await tester.pumpAndSettle();
+      expect(api.archivedTimerActions.last, (10, false));
+
+      await tester.tap(find.byTooltip('查看使用中的计时器'));
+      await tester.pumpAndSettle();
+      api.timerDeleteError = StateError('offline');
+      await tester.tap(find.byKey(const Key('pomodoro-timer-menu-10')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('删除'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('历史专注记录会保留'), findsOneWidget);
+      await tester.tap(find.text('确认删除'));
+      await tester.pumpAndSettle();
+      expect(find.text('深度写作'), findsOneWidget);
+      expect(find.textContaining('计时器删除失败'), findsOneWidget);
+    },
+  );
+
   testWidgets('preset failure is visible and retryable', (tester) async {
     final api = _FakePomodoroApi()..presetsError = StateError('offline');
     await _pumpPage(tester, api: api);
@@ -1032,7 +1197,15 @@ class _FakePomodoroApi extends PomodoroApi {
   List<PomodoroTimerDto> timerValues = const [];
   Future<List<PomodoroTimerDto>> Function(bool archived)? timersHandler;
   Object? timerStartError;
+  Object? timerDeleteError;
   final List<int> startedTimerIds = [];
+  final List<(int, bool)> archivedTimerActions = [];
+  String? lastCreatedTimerName;
+  String? lastCreatedTimerMode;
+  int? lastCreatedTimerMinutes;
+  int? lastCreatedTimerTaskId;
+  int? lastCreatedTimerHabitId;
+  String? lastUpdatedTimerName;
 
   @override
   Future<List<PomodoroTimerDto>> timers({bool archived = false}) async {
@@ -1056,6 +1229,95 @@ class _FakePomodoroApi extends PomodoroApi {
       status: 'RUNNING',
       startedAt: DateTime.now(),
     );
+  }
+
+  @override
+  Future<int> createTimer({
+    required String name,
+    required String mode,
+    int? focusMinutes,
+    int? taskId,
+    int? habitId,
+    int sortOrder = 0,
+  }) async {
+    lastCreatedTimerName = name;
+    lastCreatedTimerMode = mode;
+    lastCreatedTimerMinutes = focusMinutes;
+    lastCreatedTimerTaskId = taskId;
+    lastCreatedTimerHabitId = habitId;
+    final id = timerValues.isEmpty
+        ? 10
+        : timerValues.map((timer) => timer.id).reduce((a, b) => a > b ? a : b) +
+              1;
+    timerValues = [
+      ...timerValues,
+      PomodoroTimerDto(
+        id: id,
+        name: name,
+        mode: mode,
+        focusMinutes: focusMinutes,
+        taskId: taskId,
+        habitId: habitId,
+        sortOrder: sortOrder,
+      ),
+    ];
+    return id;
+  }
+
+  @override
+  Future<void> updateTimer(
+    int id, {
+    required String name,
+    required String mode,
+    int? focusMinutes,
+    int? taskId,
+    int? habitId,
+    int sortOrder = 0,
+  }) async {
+    lastUpdatedTimerName = name;
+    timerValues = timerValues
+        .map(
+          (timer) => timer.id == id
+              ? PomodoroTimerDto(
+                  id: id,
+                  name: name,
+                  mode: mode,
+                  focusMinutes: focusMinutes,
+                  taskId: taskId,
+                  habitId: habitId,
+                  sortOrder: sortOrder,
+                  archived: timer.archived,
+                )
+              : timer,
+        )
+        .toList();
+  }
+
+  @override
+  Future<void> setTimerArchived(int id, bool archived) async {
+    archivedTimerActions.add((id, archived));
+    timerValues = timerValues
+        .map(
+          (timer) => timer.id == id
+              ? PomodoroTimerDto(
+                  id: timer.id,
+                  name: timer.name,
+                  mode: timer.mode,
+                  focusMinutes: timer.focusMinutes,
+                  taskId: timer.taskId,
+                  habitId: timer.habitId,
+                  sortOrder: timer.sortOrder,
+                  archived: archived,
+                )
+              : timer,
+        )
+        .toList();
+  }
+
+  @override
+  Future<void> deleteTimer(int id) async {
+    if (timerDeleteError != null) throw timerDeleteError!;
+    timerValues = timerValues.where((timer) => timer.id != id).toList();
   }
 
   @override
