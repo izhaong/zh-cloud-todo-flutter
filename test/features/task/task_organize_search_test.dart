@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +11,7 @@ import 'package:zh_cloud_todo_flutter/core/theme/app_theme.dart';
 import 'package:zh_cloud_todo_flutter/features/home/home_shell.dart';
 import 'package:zh_cloud_todo_flutter/features/task/tasks_by_list_page.dart';
 import 'package:zh_cloud_todo_flutter/features/task/task_search_page.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/task_query_repository.dart';
 
 import '../../support/todo_visual_fixture.dart';
 import '../../support/todo_visual_test_harness.dart';
@@ -63,6 +66,228 @@ void main() {
       expect(find.text('标签 · 专注'), findsOneWidget);
     },
   );
+
+  testWidgets('search scopes task results and applies local combined filters', (
+    tester,
+  ) async {
+    final fixture = await TodoVisualFixture.create();
+    addTearDown(fixture.dispose);
+    final now = fixture.fixedNow;
+    await fixture.database.batch((batch) {
+      batch.insert(
+        fixture.database.todoLists,
+        TodoListsCompanion.insert(
+          id: 'search-filter-list',
+          name: '筛选搜索清单',
+          updatedAt: now,
+          createdAt: now,
+        ),
+      );
+      batch.insert(
+        fixture.database.todoTags,
+        TodoTagsCompanion.insert(
+          id: 'search-filter-tag',
+          name: '筛选搜索标签',
+          updatedAt: now,
+          createdAt: now,
+        ),
+      );
+      batch.insertAll(fixture.database.todoTasks, [
+        TodoTasksCompanion.insert(
+          id: 'search-filter-match',
+          listId: 'search-filter-list',
+          title: '筛选搜索目标',
+          priority: const Value(3),
+          dueAt: Value(DateTime(2026, 7, 11, 10)),
+          updatedAt: now,
+          createdAt: now,
+        ),
+        TodoTasksCompanion.insert(
+          id: 'search-filter-other',
+          listId: 'search-filter-list',
+          title: '筛选搜索其他任务',
+          priority: const Value(1),
+          updatedAt: now,
+          createdAt: now,
+        ),
+      ]);
+      batch.insertAll(fixture.database.todoTaskTags, [
+        TodoTaskTagsCompanion.insert(
+          taskId: 'search-filter-match',
+          tagId: 'search-filter-tag',
+        ),
+        TodoTaskTagsCompanion.insert(
+          taskId: 'search-filter-match',
+          tagId: TodoVisualFixture.focusTagId,
+        ),
+        TodoTaskTagsCompanion.insert(
+          taskId: 'search-filter-other',
+          tagId: 'search-filter-tag',
+        ),
+      ]);
+    });
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: fixture.container,
+        child: MaterialApp(
+          theme: ThemeData.light().copyWith(
+            extensions: const [AppThemeExtension(AppColors.light)],
+          ),
+          home: const TaskSearchPage(),
+        ),
+      ),
+    );
+    await tester.enterText(find.byKey(const Key('global-task-search')), '筛选搜索');
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('task-search-scope-all')), findsOneWidget);
+    expect(find.byKey(const Key('task-search-scope-task')), findsOneWidget);
+    expect(find.byKey(const Key('task-search-scope-list')), findsOneWidget);
+    expect(find.byKey(const Key('task-search-scope-tag')), findsOneWidget);
+    expect(find.text('任务 · 筛选搜索目标'), findsOneWidget);
+    expect(find.text('清单 · 筛选搜索清单'), findsOneWidget);
+    expect(find.text('标签 · 筛选搜索标签'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('task-search-scope-task')));
+    await tester.pumpAndSettle();
+    expect(find.text('任务 · 筛选搜索目标'), findsOneWidget);
+    expect(find.text('清单 · 筛选搜索清单'), findsNothing);
+    expect(find.text('标签 · 筛选搜索标签'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('task-search-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('task-search-filter-list')));
+    await tester.pumpAndSettle();
+    expect(find.text('收集箱'), findsOneWidget);
+    await tester.tap(find.text('筛选搜索清单').last);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('task-search-filter-tag-search-filter-tag')),
+    );
+    await tester.tap(
+      find.byKey(
+        const Key('task-search-filter-tag-${TodoVisualFixture.focusTagId}'),
+      ),
+    );
+    await tester.tap(find.byKey(const Key('task-search-filter-priority-3')));
+    await tester.tap(find.byKey(const Key('task-search-filter-apply')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('任务 · 筛选搜索目标'), findsOneWidget);
+    expect(find.text('任务 · 筛选搜索其他任务'), findsNothing);
+    expect(find.byKey(const Key('task-search-filter-clear')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('task-search-filter-clear')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('task-search-scope-task')), findsOneWidget);
+    expect(find.text('任务 · 筛选搜索目标'), findsOneWidget);
+    expect(find.text('任务 · 筛选搜索其他任务'), findsOneWidget);
+  });
+
+  testWidgets('search appends stable pages and isolates stale requests', (
+    tester,
+  ) async {
+    final fixture = await TodoVisualFixture.create();
+    addTearDown(fixture.dispose);
+    final originalSize = tester.view.physicalSize;
+    final originalDpr = tester.view.devicePixelRatio;
+    tester.view.physicalSize = const Size(320, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.physicalSize = originalSize;
+      tester.view.devicePixelRatio = originalDpr;
+    });
+    final oldRequest = Completer<TaskSearchPageResult>();
+    final requests = <TaskSearchPageRequest>[];
+    Future<TaskSearchPageResult> search(TaskSearchPageRequest request) {
+      requests.add(request);
+      if (request.keyword == '旧关键词') return oldRequest.future;
+      if (request.keyword == '新关键词') {
+        return Future.value(
+          const TaskSearchPageResult(
+            total: 1,
+            results: [
+              TaskSearchResult(
+                type: TaskSearchResultType.task,
+                id: 'new-result',
+                title: '新查询结果',
+              ),
+            ],
+          ),
+        );
+      }
+      final start = request.offset;
+      final end = start + 50 > 51 ? 51 : start + 50;
+      return Future.value(
+        TaskSearchPageResult(
+          total: 51,
+          results: [
+            for (var index = start; index < end; index++)
+              TaskSearchResult(
+                type: TaskSearchResultType.task,
+                id: 'page-$index',
+                title: '分页任务 ${index.toString().padLeft(2, '0')}',
+              ),
+          ],
+        ),
+      );
+    }
+
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: fixture.container,
+        child: MaterialApp(
+          theme: ThemeData.light().copyWith(
+            extensions: const [AppThemeExtension(AppColors.light)],
+          ),
+          home: TaskSearchPage(searchPage: search),
+        ),
+      ),
+    );
+    await tester.enterText(
+      find.byKey(const Key('global-task-search')),
+      '分页关键词',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('任务 · 分页任务 00'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('task-search-load-more')),
+      400,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.bySemanticsLabel('加载更多 1 条搜索结果'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('task-search-load-more')));
+    await tester.pumpAndSettle();
+    expect(find.text('任务 · 分页任务 50'), findsOneWidget);
+    expect(requests.map((request) => request.offset), [0, 50]);
+    expect(tester.takeException(), isNull);
+
+    await tester.enterText(find.byKey(const Key('global-task-search')), '旧关键词');
+    await tester.pump();
+    await tester.enterText(find.byKey(const Key('global-task-search')), '新关键词');
+    await tester.pumpAndSettle();
+    expect(find.text('任务 · 新查询结果'), findsOneWidget);
+
+    oldRequest.complete(
+      const TaskSearchPageResult(
+        total: 1,
+        results: [
+          TaskSearchResult(
+            type: TaskSearchResultType.task,
+            id: 'old-result',
+            title: '旧查询结果',
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('任务 · 新查询结果'), findsOneWidget);
+    expect(find.text('任务 · 旧查询结果'), findsNothing);
+    semantics.dispose();
+  });
 
   testWidgets('searching a list opens that local list in the workspace', (
     tester,

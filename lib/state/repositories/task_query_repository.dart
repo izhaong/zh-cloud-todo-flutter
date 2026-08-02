@@ -43,6 +43,11 @@ int compareTodoTasks(TodoTask left, TodoTask right, TaskSort sort) {
 
 enum TaskSearchResultType { task, list, tag }
 
+/// 搜索页当前展示的实体范围。
+///
+/// `all` 保留既有“任务优先、清单、标签”的稳定顺序；其余范围只保留对应实体。
+enum TaskSearchScope { all, task, list, tag }
+
 class TaskSearchResult {
   const TaskSearchResult({
     required this.type,
@@ -55,6 +60,34 @@ class TaskSearchResult {
   final String title;
 
   String get identity => '${type.name}:$id';
+}
+
+/// 离线搜索的可复现分页请求。
+///
+/// 任务筛选只适用于 [TaskSearchScope.task]，由调用方在选择其它范围时保留但不应用，
+/// 从而在切回任务范围后仍能恢复用户当前筛选。
+class TaskSearchPageRequest {
+  const TaskSearchPageRequest({
+    required this.keyword,
+    this.scope = TaskSearchScope.all,
+    this.filter = const TaskQueryFilter(),
+    this.offset = 0,
+    this.limit = 50,
+  });
+
+  final String keyword;
+  final TaskSearchScope scope;
+  final TaskQueryFilter filter;
+  final int offset;
+  final int limit;
+}
+
+/// 一页本地搜索结果；[total] 是应用范围和任务筛选后的总数。
+class TaskSearchPageResult {
+  const TaskSearchPageResult({required this.results, required this.total});
+
+  final List<TaskSearchResult> results;
+  final int total;
 }
 
 class TaskQueryFilter {
@@ -101,6 +134,49 @@ class TaskQueryRepository {
             title: entry.title,
           ),
         )
+        .toList(growable: false);
+  }
+
+  /// 在本地 FTS 结果上应用实体范围和任务组合筛选后，返回稳定分页。
+  ///
+  /// FTS 已按任务、清单、标签、标题和实体 ID 排序；任务范围额外只保留既有
+  /// [filter] 结果中的本地 UUID。先完成交集再切页，避免筛选后的第二页出现空洞。
+  Future<TaskSearchPageResult> searchPage(TaskSearchPageRequest request) async {
+    if (request.offset < 0) {
+      throw ArgumentError.value(request.offset, 'offset', '搜索偏移量不能小于零');
+    }
+    if (request.limit < 1 || request.limit > 50) {
+      throw ArgumentError.value(request.limit, 'limit', '搜索页长必须在 1 到 50 之间');
+    }
+
+    final allEntries = await search(request.keyword);
+    final scopedEntries = allEntries.where(
+      (entry) => switch (request.scope) {
+        TaskSearchScope.all => true,
+        TaskSearchScope.task => entry.type == TaskSearchResultType.task,
+        TaskSearchScope.list => entry.type == TaskSearchResultType.list,
+        TaskSearchScope.tag => entry.type == TaskSearchResultType.tag,
+      },
+    );
+    final filteredEntries = request.scope == TaskSearchScope.task
+        ? await _filterTaskSearchEntries(scopedEntries, request.filter)
+        : scopedEntries.toList(growable: false);
+    final total = filteredEntries.length;
+    final pageStart = request.offset.clamp(0, total);
+    final pageEnd = (pageStart + request.limit).clamp(pageStart, total);
+    return TaskSearchPageResult(
+      results: filteredEntries.sublist(pageStart, pageEnd),
+      total: total,
+    );
+  }
+
+  Future<List<TaskSearchResult>> _filterTaskSearchEntries(
+    Iterable<TaskSearchResult> entries,
+    TaskQueryFilter filter,
+  ) async {
+    final taskIds = (await this.filter(filter)).map((task) => task.id).toSet();
+    return entries
+        .where((entry) => taskIds.contains(entry.id))
         .toList(growable: false);
   }
 
