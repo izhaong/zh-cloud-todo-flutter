@@ -1,6 +1,6 @@
 # Todo 常用专注计时器任务
 
-- [ ] T001 增加 Timer DTO、CRUD、归档与一键启动 API 红绿合同。
+- [x] T001 增加 Timer DTO、CRUD、归档与一键启动 API 红绿合同。
 - [ ] T002 实现请求隔离的 Timer 列表、空态和一键启动。
 - [ ] T003 实现新增/编辑、任务/习惯关联、归档/恢复与删除。
 - [ ] T004 实现真正 Stopwatch 的恢复、递增和暂停语义。
@@ -11,3 +11,4 @@
 
 - 2026-08-02：滴答官方 Timer/How to Start Focus 对照确认当前缺少用户级 Timer、任务/习惯关联、一键启动、编辑/归档/删除和真正 Stopwatch；当前只完成规格与实施计划。
 - 2026-08-02：跨设备 Service 实体方案已确定；Flutter-only 与 JSON/presets 方案因偏离跨设备事实源和实体约束而否决。
+- 2026-08-02：API 红测在编译阶段准确缺少 `PomodoroTimerDto` 与 timers/create/update/archive/delete/start 方法；实现强类型 Timer DTO、FREE 空时长省略、完整 CRUD 路由、归档 query 参数、会话 `timerId/habitId` 解析及 Timer start 完整会话校验后，`efficiency_api_contract_test.dart` 7/7 通过。标量 Timer start 响应会抛出契约错误，不伪造活动会话。

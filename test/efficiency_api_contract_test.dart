@@ -399,6 +399,148 @@ void main() {
     },
   );
 
+  test('pomodoro timer CRUD and start follow service contracts', () async {
+    final requests = <RequestOptions>[];
+    final dio = Dio()
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            requests.add(options);
+            final path = options.path;
+            if (path.endsWith('/pomodoro/timers') && options.method == 'GET') {
+              return handler.resolve(
+                _response(options, [
+                  {
+                    'id': 10,
+                    'name': '晨间阅读',
+                    'mode': 'FREE',
+                    'focusMinutes': null,
+                    'taskId': null,
+                    'habitId': 20,
+                    'sortOrder': 3,
+                    'archived': false,
+                  },
+                ]),
+              );
+            }
+            if (path.endsWith('/pomodoro/timers') && options.method == 'POST') {
+              return handler.resolve(_response(options, 11));
+            }
+            if (path.endsWith('/pomodoro/timers/10/start')) {
+              return handler.resolve(
+                _response(options, {
+                  'id': 41,
+                  'timerId': 10,
+                  'taskId': null,
+                  'habitId': 20,
+                  'mode': 'FREE',
+                  'plannedMinutes': null,
+                  'status': 'RUNNING',
+                  'startedAt': '2026-08-02T09:00:00',
+                  'pausedSeconds': 0,
+                }),
+              );
+            }
+            return handler.resolve(_response(options, true));
+          },
+        ),
+      );
+    final api = PomodoroApi(dio);
+
+    final timers = await api.timers(archived: false);
+    final created = await api.createTimer(
+      name: '晨间阅读',
+      mode: 'FREE',
+      habitId: 20,
+      sortOrder: 3,
+    );
+    await api.updateTimer(
+      10,
+      name: '深度工作',
+      mode: 'CUSTOM',
+      focusMinutes: 45,
+      taskId: 30,
+      sortOrder: 4,
+    );
+    await api.setTimerArchived(10, true);
+    await api.deleteTimer(10);
+    final session = await api.startTimer(10);
+
+    expect(timers.single.id, 10);
+    expect(timers.single.name, '晨间阅读');
+    expect(timers.single.mode, 'FREE');
+    expect(timers.single.focusMinutes, isNull);
+    expect(timers.single.habitId, 20);
+    expect(timers.single.archived, isFalse);
+    expect(created, 11);
+    expect(session.id, 41);
+    expect(session.timerId, 10);
+    expect(session.habitId, 20);
+    expect(session.plannedMinutes, isNull);
+    expect(session.startedAt, DateTime(2026, 8, 2, 9));
+
+    final listRequest = requests.singleWhere(
+      (request) =>
+          request.path.endsWith('/pomodoro/timers') && request.method == 'GET',
+    );
+    expect(listRequest.queryParameters, {'archived': false});
+    final createRequest = requests.singleWhere(
+      (request) =>
+          request.path.endsWith('/pomodoro/timers') && request.method == 'POST',
+    );
+    expect(createRequest.data, {
+      'name': '晨间阅读',
+      'mode': 'FREE',
+      'habitId': 20,
+      'sortOrder': 3,
+    });
+    final updateRequest = requests.singleWhere(
+      (request) =>
+          request.path.endsWith('/pomodoro/timers/10') &&
+          request.method == 'PUT',
+    );
+    expect(updateRequest.data, {
+      'name': '深度工作',
+      'mode': 'CUSTOM',
+      'focusMinutes': 45,
+      'taskId': 30,
+      'sortOrder': 4,
+    });
+    final archiveRequest = requests.singleWhere(
+      (request) => request.path.endsWith('/pomodoro/timers/10/archived'),
+    );
+    expect(archiveRequest.method, 'PUT');
+    expect(archiveRequest.queryParameters, {'value': true});
+    expect(
+      requests.singleWhere(
+        (request) =>
+            request.path.endsWith('/pomodoro/timers/10') &&
+            request.method == 'DELETE',
+      ),
+      isNotNull,
+    );
+    expect(
+      requests
+          .singleWhere(
+            (request) => request.path.endsWith('/pomodoro/timers/10/start'),
+          )
+          .method,
+      'POST',
+    );
+  });
+
+  test('pomodoro timer start rejects incomplete session contracts', () async {
+    final dio = Dio()
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) =>
+              handler.resolve(_response(options, 41)),
+        ),
+      );
+
+    expect(() => PomodoroApi(dio).startTimer(10), throwsA(isA<StateError>()));
+  });
+
   test('pomodoro record management follows service contracts', () async {
     final requests = <RequestOptions>[];
     final dio = Dio()

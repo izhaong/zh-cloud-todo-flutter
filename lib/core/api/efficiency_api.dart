@@ -19,7 +19,9 @@ dynamic _unwrapData(Map<String, dynamic>? body) {
 
 class PomodoroSessionDto {
   final int id;
+  final int? timerId;
   final int? taskId;
+  final int? habitId;
   final String mode;
   final int? plannedMinutes;
   final int? actualMinutes;
@@ -32,7 +34,9 @@ class PomodoroSessionDto {
 
   PomodoroSessionDto({
     required this.id,
+    this.timerId,
     this.taskId,
+    this.habitId,
     required this.mode,
     this.plannedMinutes,
     this.actualMinutes,
@@ -47,7 +51,9 @@ class PomodoroSessionDto {
   factory PomodoroSessionDto.fromJson(Map<String, dynamic> j) {
     return PomodoroSessionDto(
       id: (j['id'] as num?)?.toInt() ?? 0,
+      timerId: (j['timerId'] as num?)?.toInt(),
       taskId: (j['taskId'] as num?)?.toInt(),
+      habitId: (j['habitId'] as num?)?.toInt(),
       mode: j['mode']?.toString() ?? 'MODE_25_5',
       plannedMinutes: (j['plannedMinutes'] as num?)?.toInt(),
       actualMinutes: (j['actualMinutes'] as num?)?.toInt(),
@@ -63,7 +69,9 @@ class PomodoroSessionDto {
   PomodoroSessionDto copyWith({int? plannedMinutes, int? actualMinutes}) {
     return PomodoroSessionDto(
       id: id,
+      timerId: timerId,
       taskId: taskId,
+      habitId: habitId,
       mode: mode,
       plannedMinutes: plannedMinutes ?? this.plannedMinutes,
       actualMinutes: actualMinutes ?? this.actualMinutes,
@@ -73,6 +81,41 @@ class PomodoroSessionDto {
       endedAt: endedAt,
       pausedSeconds: pausedSeconds,
       remark: remark,
+    );
+  }
+}
+
+class PomodoroTimerDto {
+  const PomodoroTimerDto({
+    required this.id,
+    required this.name,
+    required this.mode,
+    this.focusMinutes,
+    this.taskId,
+    this.habitId,
+    this.sortOrder = 0,
+    this.archived = false,
+  });
+
+  final int id;
+  final String name;
+  final String mode;
+  final int? focusMinutes;
+  final int? taskId;
+  final int? habitId;
+  final int sortOrder;
+  final bool archived;
+
+  factory PomodoroTimerDto.fromJson(Map<String, dynamic> json) {
+    return PomodoroTimerDto(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      name: json['name']?.toString() ?? '',
+      mode: json['mode']?.toString() ?? '',
+      focusMinutes: (json['focusMinutes'] as num?)?.toInt(),
+      taskId: (json['taskId'] as num?)?.toInt(),
+      habitId: (json['habitId'] as num?)?.toInt(),
+      sortOrder: (json['sortOrder'] as num?)?.toInt() ?? 0,
+      archived: json['archived'] == true,
     );
   }
 }
@@ -581,6 +624,121 @@ class PomodoroApi {
       status: 'RUNNING',
       startedAt: DateTime.now(),
     );
+  }
+
+  Future<List<PomodoroTimerDto>> timers({bool archived = false}) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '${ApiConfig.todoPrefix}/pomodoro/timers',
+      queryParameters: {'archived': archived},
+    );
+    final data = _unwrapData(response.data);
+    if (data is! List) return const [];
+    return data
+        .whereType<Map>()
+        .map(
+          (item) => PomodoroTimerDto.fromJson(Map<String, dynamic>.from(item)),
+        )
+        .toList(growable: false);
+  }
+
+  Future<int> createTimer({
+    required String name,
+    required String mode,
+    int? focusMinutes,
+    int? taskId,
+    int? habitId,
+    int sortOrder = 0,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '${ApiConfig.todoPrefix}/pomodoro/timers',
+      data: _timerPayload(
+        name: name,
+        mode: mode,
+        focusMinutes: focusMinutes,
+        taskId: taskId,
+        habitId: habitId,
+        sortOrder: sortOrder,
+      ),
+    );
+    final data = _unwrapData(response.data);
+    return data is num ? data.toInt() : int.parse('$data');
+  }
+
+  Future<void> updateTimer(
+    int id, {
+    required String name,
+    required String mode,
+    int? focusMinutes,
+    int? taskId,
+    int? habitId,
+    int sortOrder = 0,
+  }) async {
+    final response = await _dio.put<Map<String, dynamic>>(
+      '${ApiConfig.todoPrefix}/pomodoro/timers/$id',
+      data: _timerPayload(
+        name: name,
+        mode: mode,
+        focusMinutes: focusMinutes,
+        taskId: taskId,
+        habitId: habitId,
+        sortOrder: sortOrder,
+      ),
+    );
+    _unwrapData(response.data);
+  }
+
+  Future<void> setTimerArchived(int id, bool archived) async {
+    final response = await _dio.put<Map<String, dynamic>>(
+      '${ApiConfig.todoPrefix}/pomodoro/timers/$id/archived',
+      queryParameters: {'value': archived},
+    );
+    _unwrapData(response.data);
+  }
+
+  Future<void> deleteTimer(int id) async {
+    final response = await _dio.delete<Map<String, dynamic>>(
+      '${ApiConfig.todoPrefix}/pomodoro/timers/$id',
+    );
+    _unwrapData(response.data);
+  }
+
+  Future<PomodoroSessionDto> startTimer(int id) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '${ApiConfig.todoPrefix}/pomodoro/timers/$id/start',
+    );
+    final data = _unwrapData(response.data);
+    if (data is! Map) {
+      throw StateError('Timer 启动响应缺少完整会话');
+    }
+    final json = Map<String, dynamic>.from(data);
+    if (json['id'] is! num ||
+        (json['id'] as num).toInt() <= 0 ||
+        json['mode'] is! String ||
+        (json['mode'] as String).isEmpty ||
+        json['status'] is! String ||
+        (json['status'] as String).isEmpty ||
+        _parseDate(json['startedAt']) == null) {
+      throw StateError('Timer 启动响应缺少完整会话');
+    }
+    return PomodoroSessionDto.fromJson(json);
+  }
+
+  static Map<String, dynamic> _timerPayload({
+    required String name,
+    required String mode,
+    required int? focusMinutes,
+    required int? taskId,
+    required int? habitId,
+    required int sortOrder,
+  }) {
+    return <String, dynamic>{
+      'name': name,
+      'mode': mode,
+      'focusMinutes': ?focusMinutes,
+      'taskId': ?taskId,
+      'habitId': ?habitId,
+      'sortOrder': sortOrder,
+    };
   }
 
   Future<void> pause(int id) => _action('/pomodoro/$id/pause');
