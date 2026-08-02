@@ -336,6 +336,93 @@ void main() {
     await tester.pump();
   });
 
+  testWidgets('older active timer response cannot replace archived view', (
+    tester,
+  ) async {
+    final activeResponse = Completer<List<PomodoroTimerDto>>();
+    final archivedResponse = Completer<List<PomodoroTimerDto>>();
+    final api = _FakePomodoroApi()
+      ..timersHandler = (archived) =>
+          archived ? archivedResponse.future : activeResponse.future;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [pomodoroApiProvider.overrideWithValue(api)],
+        child: const MaterialApp(home: PomodoroPage()),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('查看已归档计时器'));
+    await tester.pump();
+    archivedResponse.complete(const [
+      PomodoroTimerDto(id: 12, name: '已归档阅读', mode: 'FREE', archived: true),
+    ]);
+    await tester.pump();
+    expect(find.text('已归档阅读'), findsOneWidget);
+
+    activeResponse.complete(const [
+      PomodoroTimerDto(
+        id: 11,
+        name: '迟到的活动列表',
+        mode: 'CUSTOM',
+        focusMinutes: 45,
+      ),
+    ]);
+    await tester.pump();
+    expect(find.text('已归档阅读'), findsOneWidget);
+    expect(find.text('迟到的活动列表'), findsNothing);
+    expect(find.text('已归档计时器'), findsOneWidget);
+  });
+
+  testWidgets('timer cards expose exact semantics without 320px overflow', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final now = DateTime(2026, 8, 2);
+    final api = _FakePomodoroApi()
+      ..timerValues = const [
+        PomodoroTimerDto(
+          id: 10,
+          name: '深度写作',
+          mode: 'CUSTOM',
+          focusMinutes: 45,
+          taskId: 81,
+        ),
+        PomodoroTimerDto(
+          id: 12,
+          name: '旧阅读',
+          mode: 'FREE',
+          habitId: 20,
+          archived: true,
+        ),
+      ];
+    await _pumpPage(
+      tester,
+      api: api,
+      tasks: [_task(id: 'synced', serverId: 81, title: '报告', now: now)],
+      habits: [HabitDto(id: 20, name: '阅读')],
+    );
+
+    expect(find.bySemanticsLabel('深度写作'), findsOneWidget);
+    expect(find.bySemanticsLabel('45 分钟'), findsOneWidget);
+    expect(find.bySemanticsLabel('关联任务：报告'), findsOneWidget);
+    expect(find.bySemanticsLabel('开始深度写作，45 分钟'), findsOneWidget);
+    expect(find.byTooltip('管理深度写作'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byTooltip('查看已归档计时器'));
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('旧阅读'), findsOneWidget);
+    expect(find.bySemanticsLabel('正计时'), findsOneWidget);
+    expect(find.bySemanticsLabel('关联习惯：阅读'), findsOneWidget);
+    expect(find.byTooltip('管理旧阅读'), findsOneWidget);
+    expect(find.bySemanticsLabel('开始旧阅读，正计时'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('failed timer start keeps the last successful timer list', (
     tester,
   ) async {

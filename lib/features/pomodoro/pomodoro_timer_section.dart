@@ -156,13 +156,31 @@ class _PomodoroTimerCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    timer.name,
-                    style: Theme.of(context).textTheme.titleMedium,
+                  Semantics(
+                    container: true,
+                    label: timer.name,
+                    excludeSemantics: true,
+                    child: Text(
+                      timer.name,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                   ),
                   const SizedBox(height: 4),
-                  Text(durationLabel),
-                  Text(associationLabel, overflow: TextOverflow.ellipsis),
+                  Semantics(
+                    container: true,
+                    label: durationLabel,
+                    excludeSemantics: true,
+                    child: Text(durationLabel),
+                  ),
+                  Semantics(
+                    container: true,
+                    label: associationLabel,
+                    excludeSemantics: true,
+                    child: Text(
+                      associationLabel,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ],
               ),
             ),
