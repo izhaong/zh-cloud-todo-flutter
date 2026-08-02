@@ -22,12 +22,14 @@ import '../collaboration/task_comments_page.dart';
 import '../collaboration/task_assign_page.dart';
 import '../collaboration/list_member_page.dart';
 import '../note/note_page.dart';
+import '../pomodoro/pomodoro_page.dart';
 import 'task_view_mutation_feedback.dart';
 
 /// 收集箱的本地清单 id（synthetic inbox）：listId 为该值的任务视为"未归清单"。
 const String kInboxListId = 'inbox';
 
 enum _TaskDetailAction {
+  startPomodoro,
   previewMarkdown,
   togglePin,
   moveToInbox,
@@ -796,6 +798,45 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
 
   bool _isCurrentTask(String taskId) {
     return mounted && widget.taskId == taskId;
+  }
+
+  bool _canStartPomodoro(TodoTask task) {
+    return task.serverId != null && !task.completed && !task.cancelled;
+  }
+
+  void _startPomodoro(TodoTask task) {
+    final serverId = task.serverId;
+    if (!_canStartPomodoro(task) || serverId == null) return;
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => PomodoroPage(taskId: serverId)));
+  }
+
+  List<PopupMenuEntry<_TaskDetailAction>> _compactMoreActions(TodoTask task) {
+    return [
+      if (_canStartPomodoro(task))
+        const PopupMenuItem(
+          value: _TaskDetailAction.startPomodoro,
+          child: Text('开始专注'),
+        ),
+      const PopupMenuItem(
+        value: _TaskDetailAction.convertToNote,
+        child: Text('转为笔记'),
+      ),
+    ];
+  }
+
+  void _onCompactMoreAction(TodoTask task, _TaskDetailAction action) {
+    switch (action) {
+      case _TaskDetailAction.startPomodoro:
+        _startPomodoro(task);
+        return;
+      case _TaskDetailAction.convertToNote:
+        unawaited(_convertToNote(task));
+        return;
+      default:
+        return;
+    }
   }
 
   @override
@@ -2435,10 +2476,10 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                 onPressed: () => _openCollaborationHub(t),
                 icon: const Icon(Icons.people_outline),
               ),
-              IconButton(
-                tooltip: '转为笔记',
-                onPressed: () => _convertToNote(t),
-                icon: const Icon(Icons.note_add_outlined),
+              PopupMenuButton<_TaskDetailAction>(
+                tooltip: '更多任务操作',
+                onSelected: (action) => _onCompactMoreAction(t, action),
+                itemBuilder: (context) => _compactMoreActions(t),
               ),
               IconButton(
                 tooltip: '删除',
@@ -2476,6 +2517,9 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                   tooltip: '更多任务操作',
                   onSelected: (action) {
                     switch (action) {
+                      case _TaskDetailAction.startPomodoro:
+                        _startPomodoro(t);
+                        return;
                       case _TaskDetailAction.previewMarkdown:
                         unawaited(_previewMarkdown(t));
                         return;
@@ -2506,6 +2550,11 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                     }
                   },
                   itemBuilder: (context) => [
+                    if (_canStartPomodoro(t))
+                      const PopupMenuItem(
+                        value: _TaskDetailAction.startPomodoro,
+                        child: Text('开始专注'),
+                      ),
                     if ((t.description ?? '').trim().isNotEmpty)
                       const PopupMenuItem(
                         value: _TaskDetailAction.previewMarkdown,
@@ -2578,10 +2627,10 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                   onPressed: () => _share(t),
                   icon: const Icon(Icons.share_outlined),
                 ),
-                IconButton(
-                  tooltip: '转为笔记',
-                  onPressed: () => _convertToNote(t),
-                  icon: const Icon(Icons.note_add_outlined),
+                PopupMenuButton<_TaskDetailAction>(
+                  tooltip: '更多任务操作',
+                  onSelected: (action) => _onCompactMoreAction(t, action),
+                  itemBuilder: (context) => _compactMoreActions(t),
                 ),
                 IconButton(
                   tooltip: '放弃任务',

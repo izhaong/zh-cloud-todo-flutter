@@ -5,7 +5,10 @@ import '../../../core/db/app_database.dart';
 import '../../../core/theme/brand_colors.dart';
 import '../../../core/time/task_time_formatter.dart';
 import '../../../state/providers.dart';
+import '../../pomodoro/pomodoro_page.dart';
 import 'task_row.dart';
+
+enum _TaskRowContextAction { startPomodoro, more }
 
 /// Provider-aware adapter that assembles row data and reports task actions.
 class TaskRowHost extends ConsumerStatefulWidget {
@@ -149,34 +152,44 @@ class _TaskRowHostState extends ConsumerState<TaskRowHost> {
                   onTap: () => widget.onTap?.call(widget.task.id),
                 );
 
-                if (!widget.enableSwipeGestures) return row;
-                return Dismissible(
-                  key: ValueKey('task-${widget.task.id}'),
-                  direction: DismissDirection.horizontal,
-                  background: _SwipeBackground(
-                    alignment: Alignment.centerLeft,
-                    icon: widget.task.completed
-                        ? Icons.undo
-                        : Icons.check_circle,
-                    label: widget.task.completed ? '取消完成' : '完成',
-                    color: colors.success,
-                  ),
-                  secondaryBackground: _SwipeBackground(
-                    alignment: Alignment.centerRight,
-                    icon: Icons.more_horiz,
-                    label: '更多',
-                    color: colors.accent,
-                  ),
-                  confirmDismiss: (direction) async {
-                    if (taskRepo == null) return false;
-                    if (direction == DismissDirection.startToEnd) {
-                      await taskRepo.toggleComplete(widget.task.id);
+                Widget taskRow = row;
+                if (widget.enableSwipeGestures) {
+                  taskRow = Dismissible(
+                    key: ValueKey('task-${widget.task.id}'),
+                    direction: DismissDirection.horizontal,
+                    background: _SwipeBackground(
+                      alignment: Alignment.centerLeft,
+                      icon: widget.task.completed
+                          ? Icons.undo
+                          : Icons.check_circle,
+                      label: widget.task.completed ? '取消完成' : '完成',
+                      color: colors.success,
+                    ),
+                    secondaryBackground: _SwipeBackground(
+                      alignment: Alignment.centerRight,
+                      icon: Icons.more_horiz,
+                      label: '更多',
+                      color: colors.accent,
+                    ),
+                    confirmDismiss: (direction) async {
+                      if (direction == DismissDirection.startToEnd) {
+                        if (taskRepo == null) return false;
+                        await taskRepo.toggleComplete(widget.task.id);
+                        return false;
+                      }
+                      await _showMoreMenu(context);
                       return false;
-                    }
-                    await _showMoreMenu(context);
-                    return false;
+                    },
+                    child: row,
+                  );
+                }
+                if (!widget.desktopMode) return taskRow;
+                return GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onSecondaryTapDown: (details) {
+                    _showDesktopContextMenu(context, details.globalPosition);
                   },
-                  child: row,
+                  child: taskRow,
                 );
               },
             );
@@ -194,6 +207,16 @@ class _TaskRowHostState extends ConsumerState<TaskRowHost> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (_canStartPomodoro)
+              ListTile(
+                key: Key('todo-task-start-focus-${widget.task.id}'),
+                leading: Icon(Icons.timer_outlined, color: colors.accent),
+                title: const Text('开始专注'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _startPomodoro(context);
+                },
+              ),
             ListTile(
               leading: Icon(Icons.delete_outline, color: colors.destructive),
               title: const Text('删除'),
@@ -231,6 +254,53 @@ class _TaskRowHostState extends ConsumerState<TaskRowHost> {
         ),
       ),
     );
+  }
+
+  bool get _canStartPomodoro {
+    final task = widget.task;
+    return task.serverId != null && !task.completed && !task.cancelled;
+  }
+
+  void _startPomodoro(BuildContext context) {
+    final serverId = widget.task.serverId;
+    if (!_canStartPomodoro || serverId == null) return;
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => PomodoroPage(taskId: serverId)));
+  }
+
+  Future<void> _showDesktopContextMenu(
+    BuildContext context,
+    Offset globalPosition,
+  ) async {
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final action = await showMenu<_TaskRowContextAction>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(globalPosition.dx, globalPosition.dy, 0, 0),
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        if (_canStartPomodoro)
+          const PopupMenuItem(
+            value: _TaskRowContextAction.startPomodoro,
+            child: Text('开始专注'),
+          ),
+        const PopupMenuItem(
+          value: _TaskRowContextAction.more,
+          child: Text('更多操作'),
+        ),
+      ],
+    );
+    if (!context.mounted || action == null) return;
+    switch (action) {
+      case _TaskRowContextAction.startPomodoro:
+        _startPomodoro(context);
+        return;
+      case _TaskRowContextAction.more:
+        await _showMoreMenu(context);
+        return;
+    }
   }
 
   Future<void> _showSectionMenu() async {
