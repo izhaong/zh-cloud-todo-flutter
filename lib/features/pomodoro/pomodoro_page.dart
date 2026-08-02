@@ -8,6 +8,7 @@ import '../../core/api/efficiency_api.dart';
 import '../../core/db/app_database.dart';
 import '../../state/efficiency_providers.dart';
 import '../../state/providers.dart';
+import 'pomodoro_timer_section.dart';
 
 /// 番茄专注页：服务端预设、任务关联、专注笔记与跨设备会话收敛。
 class PomodoroPage extends ConsumerStatefulWidget {
@@ -31,6 +32,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
   PomodoroStatsDto? _stats;
   List<PomodoroTimelineDto>? _timeline;
   List<PomodoroPresetDto> _presets = const [];
+  List<PomodoroTimerDto> _timers = const [];
   List<PomodoroSessionDto> _records = const [];
   String? _mode;
   String _statsPeriod = 'week';
@@ -43,6 +45,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
   int _recordsRequest = 0;
   int _statsRequest = 0;
   int _timelineRequest = 0;
+  int _timersRequest = 0;
   bool _paused = false;
   bool _loadingPresets = true;
   bool _actionPending = false;
@@ -51,6 +54,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
   bool _loadingStats = true;
   bool _loadingTimeline = true;
   bool _recordActionPending = false;
+  bool _loadingTimers = true;
   String? _presetError;
   String? _actionError;
   String? _syncError;
@@ -58,6 +62,8 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
   String? _statsError;
   String? _timelineError;
   String? _recordActionError;
+  String? _timerError;
+  int? _timerActionPendingId;
 
   @override
   void initState() {
@@ -70,6 +76,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
       unawaited(_loadRecords());
       unawaited(_loadStats());
       unawaited(_loadTimeline());
+      unawaited(_loadTimers());
       if (!mounted) return;
       _syncTicker = Timer.periodic(_syncInterval, (_) => _syncActiveSession());
     });
@@ -81,6 +88,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
     _recordsRequest++;
     _statsRequest++;
     _timelineRequest++;
+    _timersRequest++;
     _ticker?.cancel();
     _syncTicker?.cancel();
     _minutesController.dispose();
@@ -137,6 +145,49 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
         _loadingPresets = false;
         _presetError = '专注模式加载失败：$error';
       });
+    }
+  }
+
+  Future<void> _loadTimers() async {
+    final request = ++_timersRequest;
+    if (mounted) {
+      setState(() {
+        _loadingTimers = true;
+        _timerError = null;
+      });
+    }
+    try {
+      final timers = await ref.read(pomodoroApiProvider).timers();
+      if (!mounted || request != _timersRequest) return;
+      setState(() {
+        _timers = timers;
+        _loadingTimers = false;
+      });
+    } catch (error) {
+      if (!mounted || request != _timersRequest) return;
+      setState(() {
+        _loadingTimers = false;
+        _timerError = '计时器加载失败：$error';
+      });
+    }
+  }
+
+  Future<void> _startTimer(PomodoroTimerDto timer) async {
+    if (_session != null || _timerActionPendingId != null) return;
+    setState(() {
+      _timerActionPendingId = timer.id;
+      _timerError = null;
+    });
+    try {
+      _syncRequest++;
+      final session = await ref.read(pomodoroApiProvider).startTimer(timer.id);
+      if (!mounted) return;
+      _activateSession(session, secondsLeft: _remainingSeconds(session));
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _timerError = '计时器启动失败：$error');
+    } finally {
+      if (mounted) setState(() => _timerActionPendingId = null);
     }
   }
 
@@ -574,6 +625,14 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
     final taskTitles = <int, String>{
       for (final task in tasks) task.serverId!: task.title,
     };
+    final needsHabitTitles = _timers.any((timer) => timer.habitId != null);
+    final habits = needsHabitTitles
+        ? ref.watch(myHabitsProvider).valueOrNull ?? const []
+        : const [];
+    final habitTitles = <int, String>{
+      for (final habit in habits)
+        if (!habit.archived) habit.id: habit.name,
+    };
     final selectedTaskId = _selectedTaskId;
     final selectedTaskMissing =
         selectedTaskId != null && !taskIds.contains(selectedTaskId);
@@ -585,6 +644,24 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
+            if (_loadingTimers ||
+                _timerError != null ||
+                _timers.isNotEmpty) ...[
+              PomodoroTimerSection(
+                timers: _timers,
+                loading: _loadingTimers,
+                error: _timerError,
+                actionPendingId: _timerActionPendingId,
+                canStart: !running && !_actionPending,
+                taskTitles: taskTitles,
+                habitTitles: habitTitles,
+                onRetry: _loadTimers,
+                onStart: _startTimer,
+              ),
+              const SizedBox(height: 24),
+              const Divider(),
+              const SizedBox(height: 24),
+            ],
             if (_loadingPresets)
               const Center(child: CircularProgressIndicator())
             else if (_presetError != null) ...[

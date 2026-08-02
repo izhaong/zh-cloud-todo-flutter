@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zh_cloud_todo_flutter/core/api/efficiency_api.dart';
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
+import 'package:zh_cloud_todo_flutter/features/habit/habit_repository.dart';
 import 'package:zh_cloud_todo_flutter/features/pomodoro/pomodoro_page.dart';
 import 'package:zh_cloud_todo_flutter/state/efficiency_providers.dart';
 import 'package:zh_cloud_todo_flutter/state/providers.dart';
@@ -200,6 +201,79 @@ void main() {
     expect(api.activeCalls, 2);
     timelineResponse.complete(const []);
     await tester.pump();
+  });
+
+  testWidgets(
+    'timer cards start a server timer without blocking session sync',
+    (tester) async {
+      final api = _FakePomodoroApi()
+        ..timerValues = const [
+          PomodoroTimerDto(id: 10, name: '晨间阅读', mode: 'FREE', habitId: 20),
+        ];
+      await _pumpPage(
+        tester,
+        api: api,
+        habits: [HabitDto(id: 20, name: '阅读')],
+      );
+
+      expect(find.text('常用专注'), findsOneWidget);
+      expect(find.text('晨间阅读'), findsOneWidget);
+      expect(find.text('关联习惯：阅读'), findsOneWidget);
+      await tester.tap(find.bySemanticsLabel('开始晨间阅读，正计时'));
+      await tester.pump();
+
+      expect(api.startedTimerIds, [10]);
+      await tester.scrollUntilVisible(
+        find.text('暂停'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('暂停'), findsOneWidget);
+    },
+  );
+
+  testWidgets('pending timer list does not block periodic active sync', (
+    tester,
+  ) async {
+    final timerResponse = Completer<List<PomodoroTimerDto>>();
+    final api = _FakePomodoroApi()..timersHandler = (_) => timerResponse.future;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [pomodoroApiProvider.overrideWithValue(api)],
+        child: const MaterialApp(home: PomodoroPage()),
+      ),
+    );
+    await tester.pump();
+
+    expect(api.activeCalls, 1);
+    await tester.pump(const Duration(seconds: 15));
+    await tester.pump();
+
+    expect(api.activeCalls, 2);
+    timerResponse.complete(const []);
+    await tester.pump();
+  });
+
+  testWidgets('failed timer start keeps the last successful timer list', (
+    tester,
+  ) async {
+    final api = _FakePomodoroApi()
+      ..timerValues = const [
+        PomodoroTimerDto(
+          id: 10,
+          name: '深度工作',
+          mode: 'CUSTOM',
+          focusMinutes: 45,
+        ),
+      ]
+      ..timerStartError = StateError('offline');
+    await _pumpPage(tester, api: api);
+
+    await tester.tap(find.bySemanticsLabel('开始深度工作，45 分钟'));
+    await tester.pump();
+
+    expect(find.text('深度工作'), findsOneWidget);
+    expect(find.textContaining('计时器启动失败'), findsOneWidget);
   });
 
   testWidgets('preset failure is visible and retryable', (tester) async {
@@ -883,12 +957,14 @@ Future<void> _pumpPage(
   WidgetTester tester, {
   required _FakePomodoroApi api,
   List<TodoTask> tasks = const [],
+  List<HabitDto> habits = const [],
 }) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         pomodoroApiProvider.overrideWithValue(api),
         allTasksStreamProvider.overrideWith((ref) => Stream.value(tasks)),
+        myHabitsProvider.overrideWith((ref) async => habits),
       ],
       child: const MaterialApp(home: PomodoroPage()),
     ),
@@ -953,6 +1029,34 @@ class _FakePomodoroApi extends PomodoroApi {
   List<(int, int)> updatedDurations = [];
   List<PomodoroSessionDto> records = [];
   final List<PomodoroSessionDto?> activeResponses = [];
+  List<PomodoroTimerDto> timerValues = const [];
+  Future<List<PomodoroTimerDto>> Function(bool archived)? timersHandler;
+  Object? timerStartError;
+  final List<int> startedTimerIds = [];
+
+  @override
+  Future<List<PomodoroTimerDto>> timers({bool archived = false}) async {
+    final handler = timersHandler;
+    if (handler != null) return handler(archived);
+    return timerValues.where((timer) => timer.archived == archived).toList();
+  }
+
+  @override
+  Future<PomodoroSessionDto> startTimer(int id) async {
+    if (timerStartError != null) throw timerStartError!;
+    startedTimerIds.add(id);
+    final timer = timerValues.singleWhere((value) => value.id == id);
+    return PomodoroSessionDto(
+      id: 41,
+      timerId: id,
+      taskId: timer.taskId,
+      habitId: timer.habitId,
+      mode: timer.mode,
+      plannedMinutes: timer.focusMinutes,
+      status: 'RUNNING',
+      startedAt: DateTime.now(),
+    );
+  }
 
   @override
   Future<List<PomodoroPresetDto>> presets() async {
