@@ -2,7 +2,7 @@
 
 - [x] T001 建立任务列表的专注入口红绿合同。
 - [x] T002 建立任务详情的专注入口红绿合同。
-- [ ] T003 通过格式、静态分析、全量测试、Web 与 Claude CLI 门禁。
+- [x] T003 通过格式、静态分析、全量测试、Web 与 Claude CLI 门禁。
 - [x] T004 创建并合入 Gitea PR，并保留 CI/Jenkins 的真实证据。
 
 ## 执行证据
@@ -12,6 +12,6 @@
 - 2026-08-02：`dart format --output=none --set-exit-if-changed`、`flutter analyze`、受影响的 40 项回归、`flutter test --concurrency=1`（689 通过，26 个显式环境跳过）和测试配置的 Web release build 均成功。两张 selected workspace Golden 基准经人工核验，仅因“转为笔记”动作收纳至统一“更多任务操作”图标而更新；更新后全量 Golden 回归通过。
 - 2026-08-02：PR [#248](https://gitea.zh04.com/izhaong/zh-cloud-todo-flutter/pulls/248) 已从 `codex/247-todo-task-focus-entry` 合并至 `develop`（merge commit `9f23cc7`），远端特性分支已删除。Gitea Actions 对该分支返回 0 个 run；Jenkins MCP 显示控制器可构建、队列为空，但按本仓 SCM URL 和该分支搜索无匹配 Job。因此没有可等待或可判定的远程构建，不能把“无 Job”误记为构建成功。
 
-## 当前阻塞
+## Claude CLI 交叉验证
 
-- Claude CLI 只读审查未给出可验证的输出或 `VERDICT`：两次启动 Claude Code 2.1.216 Sonnet 高强度、仅授予 Read/Glob/Grep 后，均在 90 秒观察期内无 stdout；第二次已显式终止，避免留下无界后台进程。它既不是代码否决也不是审查通过，因此 T003 保持未完成；本地验证结果不受影响。
+- 初始两次 Claude Code 2.1.216 Sonnet 工具/plan 只读审查在 90 秒观察期内无 stdout；随后改用无工具模式，并通过标准输入按列表入口、详情入口和 Widget 测试三段提供实际已合入代码。三次均返回 `VERDICT: PASS`，分别确认状态/serverId 门禁、窄屏/宽屏详情路由和桌面/移动端/负向测试覆盖；因此 T003 已完成。长输入评审不稳定仍记录为 CLI 使用约束，但不再阻塞本规格。

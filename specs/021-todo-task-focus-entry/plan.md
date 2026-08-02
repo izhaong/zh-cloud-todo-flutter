@@ -85,6 +85,6 @@ Run: `flutter test --concurrency=1`
 
 Run: `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1`
 
-- [ ] **Step 3: Run Claude CLI read-only review**
+- [x] **Step 3: Run Claude CLI read-only review**
 
 Review this spec, `task_row_host.dart`, `task_detail_pane.dart`, `task_focus_entry_test.dart`, and `spec.md`. Record a literal pass verdict or the exact external blocker; do not treat a timeout as approval.
