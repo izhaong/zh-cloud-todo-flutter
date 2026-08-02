@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/api/efficiency_api.dart';
 import '../features/habit/habit_repository.dart';
+import '../features/pomodoro/focus_immersion_settings.dart';
 import 'providers.dart';
 
 final pomodoroApiProvider = Provider<PomodoroApi>((ref) {
@@ -42,6 +43,13 @@ final habitRepositoryProvider = Provider<HabitRepository>((ref) {
 
 /// 当前活跃番茄会话 id（null 表示未在专注）。
 final activePomodoroIdProvider = StateProvider<int?>((ref) => null);
+
+final focusImmersionSettingsStoreProvider =
+    Provider<FocusImmersionSettingsStore>((ref) {
+      return FocusImmersionSettingsStore(
+        storage: SharedPreferencesFocusImmersionSettingsStorage(),
+      );
+    });
 
 /// 倒数日列表。
 final countdownsProvider = FutureProvider.autoDispose<List<CountdownDto>>((
