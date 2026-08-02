@@ -8,8 +8,12 @@ import '../../core/api/efficiency_api.dart';
 import '../../core/db/app_database.dart';
 import '../../state/efficiency_providers.dart';
 import '../../state/providers.dart';
+import 'focus_immersion_settings.dart';
+import 'focus_immersive_pane.dart';
 import 'pomodoro_timer_editor.dart';
 import 'pomodoro_timer_section.dart';
+
+enum _FocusMenuAction { enterImmersion, toggleAutoEnter, digital, flip, pixel }
 
 /// 番茄专注页：服务端预设、任务关联、专注笔记与跨设备会话收敛。
 class PomodoroPage extends ConsumerStatefulWidget {
@@ -67,6 +71,12 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
   String? _recordActionError;
   String? _timerError;
   int? _timerActionPendingId;
+  FocusImmersionSettings _immersionSettings = const FocusImmersionSettings();
+  bool _immersionSettingsLoaded = false;
+  bool _immersive = false;
+  bool _immersiveControlsVisible = false;
+  int? _autoEnteredSessionId;
+  int? _immersiveDismissedSessionId;
 
   @override
   void initState() {
@@ -74,6 +84,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
     _timelineDate = DateUtils.dateOnly(DateTime.now());
     _selectedTaskId = widget.taskId;
     Future<void>.microtask(() {
+      unawaited(_loadImmersionSettings());
       unawaited(_loadPresets());
       unawaited(_syncActiveSession());
       unawaited(_loadRecords());
@@ -557,6 +568,97 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
     return (plannedSeconds - elapsed).clamp(0, plannedSeconds);
   }
 
+  Future<void> _loadImmersionSettings() async {
+    final settings = await ref.read(focusImmersionSettingsStoreProvider).read();
+    if (!mounted) return;
+    setState(() {
+      _immersionSettings = settings;
+      _immersionSettingsLoaded = true;
+    });
+    _tryAutoEnterImmersion();
+  }
+
+  Future<void> _updateImmersionSettings(FocusImmersionSettings value) async {
+    if (!mounted) return;
+    setState(() => _immersionSettings = value);
+    await ref.read(focusImmersionSettingsStoreProvider).write(value);
+    if (!mounted) return;
+    _tryAutoEnterImmersion();
+  }
+
+  void _enterImmersion() {
+    if (!mounted || _session == null) return;
+    setState(() {
+      _immersive = true;
+      _immersiveControlsVisible = false;
+    });
+  }
+
+  void _tryAutoEnterImmersion() {
+    final session = _session;
+    if (!mounted ||
+        !_immersionSettingsLoaded ||
+        !_immersionSettings.autoEnter ||
+        session == null ||
+        _immersive ||
+        _autoEnteredSessionId == session.id ||
+        _immersiveDismissedSessionId == session.id) {
+      return;
+    }
+    setState(() {
+      _immersive = true;
+      _immersiveControlsVisible = false;
+      _autoEnteredSessionId = session.id;
+    });
+  }
+
+  void _exitImmersion() {
+    final session = _session;
+    if (!mounted || session == null) return;
+    setState(() {
+      _immersive = false;
+      _immersiveControlsVisible = false;
+      _immersiveDismissedSessionId = session.id;
+    });
+  }
+
+  void _toggleImmersiveControls() {
+    if (!mounted) return;
+    setState(() => _immersiveControlsVisible = !_immersiveControlsVisible);
+  }
+
+  Future<void> _onFocusMenuSelected(_FocusMenuAction action) async {
+    switch (action) {
+      case _FocusMenuAction.enterImmersion:
+        _enterImmersion();
+        return;
+      case _FocusMenuAction.toggleAutoEnter:
+        await _updateImmersionSettings(
+          FocusImmersionSettings(
+            autoEnter: !_immersionSettings.autoEnter,
+            style: _immersionSettings.style,
+          ),
+        );
+        return;
+      case _FocusMenuAction.digital:
+      case _FocusMenuAction.flip:
+      case _FocusMenuAction.pixel:
+        final style = switch (action) {
+          _FocusMenuAction.digital => FocusTimerStyle.digital,
+          _FocusMenuAction.flip => FocusTimerStyle.flip,
+          _FocusMenuAction.pixel => FocusTimerStyle.pixel,
+          _ => _immersionSettings.style,
+        };
+        await _updateImmersionSettings(
+          FocusImmersionSettings(
+            autoEnter: _immersionSettings.autoEnter,
+            style: style,
+          ),
+        );
+        return;
+    }
+  }
+
   void _activateSession(
     PomodoroSessionDto session, {
     required int secondsLeft,
@@ -581,6 +683,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
         }
       });
     });
+    _tryAutoEnterImmersion();
   }
 
   void _clearSession({required bool clearRemark}) {
@@ -591,6 +694,10 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
       _session = null;
       _secondsLeft = _mode == 'FREE' ? 0 : (_plannedMinutes ?? 0) * 60;
       _paused = false;
+      _immersive = false;
+      _immersiveControlsVisible = false;
+      _autoEnteredSessionId = null;
+      _immersiveDismissedSessionId = null;
       if (clearRemark) _remarkController.clear();
     });
   }
@@ -809,6 +916,27 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
   @override
   Widget build(BuildContext context) {
     final running = _session != null;
+    if (_immersive && _session != null) {
+      return Scaffold(
+        body: FocusImmersivePane(
+          style: _immersionSettings.style,
+          seconds: _secondsLeft,
+          paused: _paused,
+          controlsVisible: _immersiveControlsVisible,
+          onToggleControls: _toggleImmersiveControls,
+          onPauseOrResume: () {
+            if (_paused) {
+              unawaited(_resume());
+            } else {
+              unawaited(_pause());
+            }
+          },
+          onComplete: () => unawaited(_finish(complete: true)),
+          onCancel: () => unawaited(_finish(complete: false)),
+          onExit: _exitImmersion,
+        ),
+      );
+    }
     final tasks = ref
         .watch(allTasksStreamProvider)
         .maybeWhen(
@@ -861,6 +989,45 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
             tooltip: '新增常用专注计时器',
             onPressed: () => _showTimerEditor(taskTitles: taskTitles),
             icon: const Icon(Icons.add_alarm),
+          ),
+          PopupMenuButton<_FocusMenuAction>(
+            tooltip: '更多专注操作',
+            position: PopupMenuPosition.under,
+            onSelected: (action) => unawaited(_onFocusMenuSelected(action)),
+            itemBuilder: (context) => [
+              if (running)
+                const PopupMenuItem(
+                  key: Key('pomodoro-focus-enter'),
+                  value: _FocusMenuAction.enterImmersion,
+                  child: Text('进入沉浸模式'),
+                ),
+              CheckedPopupMenuItem(
+                key: const Key('pomodoro-focus-auto-enter'),
+                value: _FocusMenuAction.toggleAutoEnter,
+                checked: _immersionSettings.autoEnter,
+                child: const Text('自动进入沉浸模式'),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(enabled: false, child: Text('计时样式')),
+              CheckedPopupMenuItem(
+                key: const Key('pomodoro-focus-style-digital'),
+                value: _FocusMenuAction.digital,
+                checked: _immersionSettings.style == FocusTimerStyle.digital,
+                child: const Text('简约数字'),
+              ),
+              CheckedPopupMenuItem(
+                key: const Key('pomodoro-focus-style-flip'),
+                value: _FocusMenuAction.flip,
+                checked: _immersionSettings.style == FocusTimerStyle.flip,
+                child: const Text('翻页钟'),
+              ),
+              CheckedPopupMenuItem(
+                key: const Key('pomodoro-focus-style-pixel'),
+                value: _FocusMenuAction.pixel,
+                checked: _immersionSettings.style == FocusTimerStyle.pixel,
+                child: const Text('像素时钟'),
+              ),
+            ],
           ),
         ],
       ),

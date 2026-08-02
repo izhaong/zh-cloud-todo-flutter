@@ -103,7 +103,7 @@ Expected: PASS.
 - Adds page-local `_immersive`, `_immersiveControlsVisible`, `_autoEnteredSessionId`, and loaded `FocusImmersionSettings` state.
 - Reuses existing `_pause`, `_resume`, `_finish`, `_clearSession`, `_activateSession`, `_secondsLeft` and `_session`; no new API method is introduced.
 
-- [ ] **Step 1: Write failing integration tests**
+- [x] **Step 1: Write failing integration tests**
 
 ```dart
 await tester.tap(find.byTooltip('更多专注操作'));
@@ -116,17 +116,17 @@ expect(api.completeCalls, isEmpty);
 
 Add cases for auto-enter after local start and remote active-session restore, manual exit followed by a 15-second sync does not re-enter, remote session disappearance exits immersion, style selection persists, and pause/finish actions call the existing fake API exactly once.
 
-- [ ] **Step 2: Run the red page tests**
+- [x] **Step 2: Run the red page tests**
 
 Run: `flutter test test/pomodoro_page_contract_test.dart --plain-name 'immersive'`
 
 Expected: FAIL because there is no page menu, preference load, immersive state or pane.
 
-- [ ] **Step 3: Implement minimal integration**
+- [x] **Step 3: Implement minimal integration**
 
 Load settings in `initState` without blocking presets/session sync. Show a `PopupMenuButton` with stable tooltip `更多专注操作`; expose manual entry only while `_session != null`, and expose a checkable auto-enter setting plus a style picker. In `_activateSession`, after updating existing state, call a guarded helper that enters once only when the loaded preference is enabled, the session has not been manually dismissed and its id differs from `_autoEnteredSessionId`. In `_clearSession`, reset immersive local state before returning to normal page.
 
-- [ ] **Step 4: Run focused page tests**
+- [x] **Step 4: Run focused page tests**
 
 Run: `flutter test test/pomodoro_page_contract_test.dart --plain-name 'immersive'`
 

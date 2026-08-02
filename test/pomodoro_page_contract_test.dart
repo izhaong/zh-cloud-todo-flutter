@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zh_cloud_todo_flutter/core/api/efficiency_api.dart';
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/features/habit/habit_repository.dart';
+import 'package:zh_cloud_todo_flutter/features/pomodoro/focus_immersion_settings.dart';
 import 'package:zh_cloud_todo_flutter/features/pomodoro/pomodoro_page.dart';
 import 'package:zh_cloud_todo_flutter/state/efficiency_providers.dart';
 import 'package:zh_cloud_todo_flutter/state/providers.dart';
@@ -42,6 +43,173 @@ void main() {
     expect(find.text('完成'), findsOneWidget);
     expect(find.text('取消'), findsOneWidget);
     expect(find.text('开始专注'), findsNothing);
+  });
+
+  testWidgets('immersive manual exit preserves the active session', (
+    tester,
+  ) async {
+    final api = _FakePomodoroApi();
+    await _pumpPage(tester, api: api);
+    await tester.tap(find.text('开始专注'));
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('更多专注操作'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('pomodoro-focus-enter')));
+    await tester.pump();
+    expect(find.byKey(const Key('focus-immersive-pane')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('focus-immersive-timer')));
+    await tester.pump();
+    await tester.tap(find.text('退出沉浸'));
+    await tester.pump();
+
+    expect(find.byKey(const Key('focus-immersive-pane')), findsNothing);
+    expect(find.text('暂停'), findsOneWidget);
+    expect(api.pauseCalls, isEmpty);
+    expect(api.completeCalls, isEmpty);
+    expect(api.cancelCalls, isEmpty);
+  });
+
+  testWidgets('immersive controls keep using the existing session actions', (
+    tester,
+  ) async {
+    final api = _FakePomodoroApi();
+    await _pumpPage(tester, api: api);
+    await tester.tap(find.text('开始专注'));
+    await tester.pump();
+    await tester.tap(find.byTooltip('更多专注操作'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('pomodoro-focus-enter')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('focus-immersive-timer')));
+    await tester.pump();
+
+    await tester.tap(find.text('暂停'));
+    await tester.pump();
+    await tester.tap(find.text('恢复'));
+    await tester.pump();
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+
+    expect(api.pauseCalls, [41]);
+    expect(api.resumeCalls, [41]);
+    expect(api.cancelCalls, [41]);
+    expect(find.byKey(const Key('focus-immersive-pane')), findsNothing);
+    expect(find.text('开始专注'), findsOneWidget);
+  });
+
+  testWidgets('immersive auto entry does not reenter after manual exit', (
+    tester,
+  ) async {
+    final storage = _FocusImmersionMemoryStorage();
+    final store = FocusImmersionSettingsStore(storage: storage);
+    await store.write(
+      const FocusImmersionSettings(
+        autoEnter: true,
+        style: FocusTimerStyle.flip,
+      ),
+    );
+    final now = DateTime.now();
+    final active = PomodoroSessionDto(
+      id: 71,
+      mode: 'MODE_25_5',
+      plannedMinutes: 25,
+      status: 'RUNNING',
+      startedAt: now.subtract(const Duration(minutes: 3)),
+    );
+    final api = _FakePomodoroApi()..activeResponses.addAll([active, active]);
+    await _pumpPage(tester, api: api, focusImmersionSettingsStore: store);
+
+    expect(find.byKey(const Key('focus-immersive-pane')), findsOneWidget);
+    expect(find.byKey(const Key('focus-immersive-style-flip')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('focus-immersive-timer')));
+    await tester.pump();
+    await tester.tap(find.text('退出沉浸'));
+    await tester.pump();
+
+    await tester.pump(const Duration(seconds: 15));
+    await tester.pump();
+    expect(find.byKey(const Key('focus-immersive-pane')), findsNothing);
+  });
+
+  testWidgets('immersive auto entry starts after a local session starts', (
+    tester,
+  ) async {
+    final storage = _FocusImmersionMemoryStorage();
+    final store = FocusImmersionSettingsStore(storage: storage);
+    await store.write(
+      const FocusImmersionSettings(
+        autoEnter: true,
+        style: FocusTimerStyle.pixel,
+      ),
+    );
+    final api = _FakePomodoroApi();
+    await _pumpPage(tester, api: api, focusImmersionSettingsStore: store);
+
+    await tester.tap(find.text('开始专注'));
+    await tester.pump();
+    expect(find.byKey(const Key('focus-immersive-pane')), findsOneWidget);
+    expect(
+      find.byKey(const Key('focus-immersive-style-pixel')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('remote session disappearance exits immersive mode', (
+    tester,
+  ) async {
+    final storage = _FocusImmersionMemoryStorage();
+    final store = FocusImmersionSettingsStore(storage: storage);
+    await store.write(const FocusImmersionSettings(autoEnter: true));
+    final api = _FakePomodoroApi()
+      ..activeResponses.addAll([
+        PomodoroSessionDto(
+          id: 72,
+          mode: 'MODE_25_5',
+          plannedMinutes: 25,
+          status: 'RUNNING',
+          startedAt: DateTime.now().subtract(const Duration(minutes: 3)),
+        ),
+        null,
+      ]);
+    await _pumpPage(tester, api: api, focusImmersionSettingsStore: store);
+
+    expect(find.byKey(const Key('focus-immersive-pane')), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 15));
+    await tester.pump();
+    expect(find.byKey(const Key('focus-immersive-pane')), findsNothing);
+    expect(find.text('开始专注'), findsOneWidget);
+  });
+
+  testWidgets('immersive style choice persists before manual entry', (
+    tester,
+  ) async {
+    final storage = _FocusImmersionMemoryStorage();
+    final store = FocusImmersionSettingsStore(storage: storage);
+    final api = _FakePomodoroApi();
+    await _pumpPage(tester, api: api, focusImmersionSettingsStore: store);
+
+    await tester.tap(find.byTooltip('更多专注操作'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('pomodoro-focus-style-pixel')));
+    await tester.pump();
+    expect(
+      await store.read(),
+      const FocusImmersionSettings(style: FocusTimerStyle.pixel),
+    );
+
+    await tester.tap(find.text('开始专注'));
+    await tester.pump();
+    await tester.tap(find.byTooltip('更多专注操作'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('pomodoro-focus-enter')));
+    await tester.pump();
+    expect(
+      find.byKey(const Key('focus-immersive-style-pixel')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('stopwatch restores and counts elapsed focus time', (
@@ -1292,11 +1460,16 @@ Future<void> _pumpPage(
   required _FakePomodoroApi api,
   List<TodoTask> tasks = const [],
   List<HabitDto> habits = const [],
+  FocusImmersionSettingsStore? focusImmersionSettingsStore,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         pomodoroApiProvider.overrideWithValue(api),
+        if (focusImmersionSettingsStore != null)
+          focusImmersionSettingsStoreProvider.overrideWithValue(
+            focusImmersionSettingsStore,
+          ),
         allTasksStreamProvider.overrideWith((ref) => Stream.value(tasks)),
         myHabitsProvider.overrideWith((ref) async => habits),
       ],
@@ -1304,6 +1477,19 @@ Future<void> _pumpPage(
     ),
   );
   await tester.pumpAndSettle();
+}
+
+class _FocusImmersionMemoryStorage implements FocusImmersionSettingsStorage {
+  final Map<String, String> values = <String, String>{};
+
+  @override
+  Future<String?> readString(String key) async => values[key];
+
+  @override
+  Future<bool> writeString(String key, String value) async {
+    values[key] = value;
+    return true;
+  }
 }
 
 TodoTask _task({
@@ -1358,6 +1544,10 @@ class _FakePomodoroApi extends PomodoroApi {
   DateTime? completedAt;
   int activeCalls = 0;
   int pageCalls = 0;
+  final List<int> pauseCalls = [];
+  final List<int> resumeCalls = [];
+  final List<int> completeCalls = [];
+  final List<int> cancelCalls = [];
   List<int> adjustDeltas = [];
   List<int> backfillMinutes = [];
   List<(int, int)> updatedDurations = [];
@@ -1559,18 +1749,25 @@ class _FakePomodoroApi extends PomodoroApi {
   @override
   Future<void> complete(int id, {String? remark, DateTime? clientEndAt}) async {
     if (completeError != null) throw completeError!;
+    completeCalls.add(id);
     completedRemark = remark;
     completedAt = clientEndAt;
   }
 
   @override
-  Future<void> pause(int id) async {}
+  Future<void> pause(int id) async {
+    pauseCalls.add(id);
+  }
 
   @override
-  Future<void> resume(int id) async {}
+  Future<void> resume(int id) async {
+    resumeCalls.add(id);
+  }
 
   @override
-  Future<void> cancel(int id) async {}
+  Future<void> cancel(int id) async {
+    cancelCalls.add(id);
+  }
 
   @override
   Future<int> adjust(int id, {required int deltaMinutes}) async {
