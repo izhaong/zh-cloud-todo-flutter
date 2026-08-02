@@ -65,7 +65,7 @@ Expected: PASS.
 - Consumes `FocusTimerStyle`, `seconds`, `paused`, `onToggleControls`, `onPauseOrResume`, `onComplete`, `onCancel`, `onExit`, and `controlsVisible`.
 - Produces `FocusImmersivePane`, which contains no `Timer`, `Ref`, REST client or storage access.
 
-- [ ] **Step 1: Write failing visual and semantic tests**
+- [x] **Step 1: Write failing visual and semantic tests**
 
 ```dart
 expect(find.byKey(const Key('focus-immersive-pane')), findsOneWidget);
@@ -76,17 +76,17 @@ expect(find.text('退出沉浸'), findsOneWidget);
 
 Cover all three styles, hidden/revealed controls, PAUSED wording, every action callback, 320px and 1.3 text scale with no `RenderFlex overflowed` exception.
 
-- [ ] **Step 2: Run the red pane test**
+- [x] **Step 2: Run the red pane test**
 
 Run: `flutter test test/features/pomodoro/focus_immersive_pane_test.dart`
 
 Expected: FAIL because `FocusImmersivePane` does not exist.
 
-- [ ] **Step 3: Implement the pure presentation component**
+- [x] **Step 3: Implement the pure presentation component**
 
 Render `digital` with the normal display typography, `flip` as grouped digit cards and `pixel` with a fixed-width visual treatment. Keep the same `mm:ss` data in every style. Wrap the timer in a labelled button that toggles the control layer; controls use text-plus-icon buttons and stay inside a scrolling/`Wrap` action region at narrow widths.
 
-- [ ] **Step 4: Run the pane test**
+- [x] **Step 4: Run the pane test**
 
 Run: `flutter test test/features/pomodoro/focus_immersive_pane_test.dart`
 
