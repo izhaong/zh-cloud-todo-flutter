@@ -124,6 +124,112 @@ void main() {
     expect(entries.map((entry) => entry.title).toList(), ['收集周报', '收集箱', '收集']);
   });
 
+  test(
+    'search page scopes and combines task filters before pagination',
+    () async {
+      final now = DateTime.utc(2026, 8, 2, 9);
+      await db.batch((batch) {
+        batch.insert(
+          db.todoTags,
+          TodoTagsCompanion.insert(
+            id: 'tag-search-extra',
+            name: '专题标签',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+        for (var index = 0; index < 55; index++) {
+          final padded = index.toString().padLeft(2, '0');
+          batch.insert(
+            db.todoTasks,
+            TodoTasksCompanion.insert(
+              id: 'task-search-$padded',
+              listId: 'list-target',
+              title: '专题检索 $padded',
+              priority: Value(index == 17 ? 3 : 1),
+              dueAt: Value(index == 17 ? DateTime.utc(2026, 8, 10) : null),
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+        }
+        batch.insert(
+          db.todoTaskTags,
+          TodoTaskTagsCompanion.insert(
+            taskId: 'task-search-17',
+            tagId: 'tag-target',
+          ),
+        );
+        batch.insert(
+          db.todoTaskTags,
+          TodoTaskTagsCompanion.insert(
+            taskId: 'task-search-17',
+            tagId: 'tag-search-extra',
+          ),
+        );
+      });
+
+      final firstPage = await repository.searchPage(
+        const TaskSearchPageRequest(
+          keyword: '专题检索',
+          scope: TaskSearchScope.task,
+        ),
+      );
+      final samePage = await repository.searchPage(
+        const TaskSearchPageRequest(
+          keyword: '专题检索',
+          scope: TaskSearchScope.task,
+        ),
+      );
+      final secondPage = await repository.searchPage(
+        const TaskSearchPageRequest(
+          keyword: '专题检索',
+          scope: TaskSearchScope.task,
+          offset: 50,
+        ),
+      );
+
+      expect(firstPage.total, 55);
+      expect(firstPage.results.map((result) => result.identity), [
+        for (var index = 0; index < 50; index++)
+          'task:task-search-${index.toString().padLeft(2, '0')}',
+      ]);
+      expect(
+        samePage.results.map((result) => result.identity),
+        firstPage.results.map((result) => result.identity),
+      );
+      expect(secondPage.total, 55);
+      expect(secondPage.results.map((result) => result.identity), [
+        for (var index = 50; index < 55; index++)
+          'task:task-search-${index.toString().padLeft(2, '0')}',
+      ]);
+
+      final combined = await repository.searchPage(
+        TaskSearchPageRequest(
+          keyword: '专题检索',
+          scope: TaskSearchScope.task,
+          filter: TaskQueryFilter(
+            listId: 'list-target',
+            tagIds: const ['tag-target', 'tag-search-extra'],
+            priority: 3,
+            dueAtFrom: DateTime.utc(2026, 8, 10),
+            dueAtTo: DateTime.utc(2026, 8, 10),
+          ),
+        ),
+      );
+      expect(combined.results.map((result) => result.identity), [
+        'task:task-search-17',
+      ]);
+
+      final listScope = await repository.searchPage(
+        const TaskSearchPageRequest(keyword: '本周', scope: TaskSearchScope.list),
+      );
+      expect(listScope.results.map((result) => result.identity), [
+        'list:list-target',
+      ]);
+    },
+  );
+
   test('文件型 SQLite 的千条任务首个搜索过滤和批量反馈均在 300ms 内', () async {
     final databasePath =
         '${Directory.systemTemp.path}/todo-b3-performance-${DateTime.now().microsecondsSinceEpoch}.sqlite';
