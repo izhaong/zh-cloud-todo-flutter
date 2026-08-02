@@ -164,6 +164,8 @@ Pass the storage/state excerpt, the immersive pane excerpt and the relevant test
 
 > Execution constraint (2026-08-02): the storage excerpt returned `VERDICT: PASS`. The no-tool Sonnet probe also returned immediately, but the pane source excerpt produced no output in three bounded requests (240, 118 and 30 lines; the first exceeded 90 seconds). This is recorded as a Claude CLI content-response constraint, not an approval. Local static analysis, targeted tests, full serial suite and Web build remain required and passed; retry the missing independent source review when the CLI response path recovers.
 
-- [ ] **Step 3: Create and merge the Gitea PR**
+- [x] **Step 3: Create and merge the Gitea PR**
 
 Create a PR linked to `Fixes #253`; its task-scoped commits use Chinese Conventional Commits. Preserve actual Actions/Jenkins evidence and merge only through the repository PR flow.
+
+> Completed (2026-08-02): [PR #254](https://gitea.zh04.com/izhaong/zh-cloud-todo-flutter/pulls/254) merged into `develop` as `ed762f9`. Jenkins was healthy with an empty queue, but `findJobsWithScmUrl` found no job for this repository URL and branch; Gitea Actions reported zero runs. These are absent remote gates, not remote test passes.
