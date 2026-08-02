@@ -43,14 +43,6 @@ final habitRepositoryProvider = Provider<HabitRepository>((ref) {
 /// 当前活跃番茄会话 id（null 表示未在专注）。
 final activePomodoroIdProvider = StateProvider<int?>((ref) => null);
 
-/// 番茄会话历史（最近 7 天）。
-final pomodoroStatsProvider = FutureProvider.autoDispose<Map<String, dynamic>>((
-  ref,
-) async {
-  final api = ref.watch(pomodoroApiProvider);
-  return api.stats(period: 'week');
-});
-
 /// 倒数日列表。
 final countdownsProvider = FutureProvider.autoDispose<List<CountdownDto>>((
   ref,

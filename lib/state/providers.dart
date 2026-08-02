@@ -337,6 +337,13 @@ final tasksByListProvider = StreamProvider.family<List<TodoTask>, String>((
   return repo.watchTopLevelByList(listId);
 });
 
+/// 全部顶层任务流。专注关联等跨清单选择器只读使用，不直接修改 outbox。
+final allTasksStreamProvider = StreamProvider<List<TodoTask>>((ref) {
+  final repo = ref.watch(taskRepositoryProvider);
+  if (repo == null) return const Stream<List<TodoTask>>.empty();
+  return repo.watchAll();
+});
+
 final taskSectionsByListProvider =
     StreamProvider.family<List<TodoTaskSection>, String>((ref, listId) {
       final repo = ref.watch(taskSectionRepositoryProvider);

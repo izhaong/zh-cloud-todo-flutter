@@ -5,6 +5,119 @@ import 'package:zh_cloud_todo_flutter/core/api/efficiency_api.dart';
 import 'package:zh_cloud_todo_flutter/features/habit/habit_repository.dart';
 
 void main() {
+  test('pomodoro stats accept empty trends and null best hour', () {
+    final stats = PomodoroStatsDto.fromJson({
+      'totalSessions': 0,
+      'totalMinutes': 0,
+      'bestHour': null,
+      'trend': [],
+      'minutesTrend': [],
+    });
+
+    expect(stats.totalSessions, 0);
+    expect(stats.totalMinutes, 0);
+    expect(stats.bestHour, isNull);
+    expect(stats.sessionTrend, isEmpty);
+    expect(stats.minutesTrend, isEmpty);
+    expect(stats.averageMinutesPerDay, 0);
+  });
+
+  test(
+    'pomodoro analytics parse year distribution and timeline contracts',
+    () async {
+      final requests = <RequestOptions>[];
+      final dio = Dio()
+        ..interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (options, handler) {
+              requests.add(options);
+              if (options.path.endsWith('/pomodoro/stats')) {
+                return handler.resolve(
+                  _response(options, {
+                    'totalSessions': 3,
+                    'totalMinutes': 90,
+                    'bestHour': '09:00',
+                    'trend': [
+                      {'date': '2025-09', 'count': 1},
+                      {'date': '2026-08', 'count': 2},
+                    ],
+                    'minutesTrend': [
+                      {'date': '2025-09', 'count': 30},
+                      {'date': '2026-08', 'count': 60},
+                    ],
+                    'taskDistribution': [
+                      {
+                        'taskId': 101,
+                        'taskTitle': '工作报告',
+                        'minutes': 60,
+                        'sessions': 2,
+                      },
+                      {
+                        'taskId': null,
+                        'taskTitle': '未分类',
+                        'minutes': 30,
+                        'sessions': 1,
+                      },
+                    ],
+                  }),
+                );
+              }
+              if (options.path.endsWith('/pomodoro/timeline')) {
+                return handler.resolve(
+                  _response(options, [
+                    {
+                      'id': 71,
+                      'taskId': 101,
+                      'taskTitle': '工作报告',
+                      'mode': 'MODE_25_5',
+                      'startedAt': '2026-08-02T09:00:00',
+                      'endedAt': '2026-08-02T09:25:00',
+                      'actualMinutes': 25,
+                      'remark': '完成初稿',
+                    },
+                  ]),
+                );
+              }
+              return handler.resolve(_response(options, true));
+            },
+          ),
+        );
+      final api = PomodoroApi(dio);
+
+      final stats = await api.stats(period: 'year');
+      final timeline = await api.timeline(date: DateTime(2026, 8, 2));
+
+      expect(stats.minutesTrend.first.date, '2025-09');
+      expect(stats.taskDistribution, hasLength(2));
+      expect(stats.taskDistribution.first.taskId, 101);
+      expect(stats.taskDistribution.first.taskTitle, '工作报告');
+      expect(stats.taskDistribution.first.minutes, 60);
+      expect(stats.taskDistribution.first.sessions, 2);
+      expect(stats.taskDistribution.last.taskId, isNull);
+      expect(timeline.single.id, 71);
+      expect(timeline.single.taskTitle, '工作报告');
+      expect(timeline.single.mode, 'MODE_25_5');
+      expect(timeline.single.startedAt, DateTime(2026, 8, 2, 9));
+      expect(timeline.single.endedAt, DateTime(2026, 8, 2, 9, 25));
+      expect(timeline.single.actualMinutes, 25);
+      expect(timeline.single.remark, '完成初稿');
+      expect(
+        requests
+            .firstWhere((request) => request.path.endsWith('/pomodoro/stats'))
+            .queryParameters,
+        {'period': 'year'},
+      );
+      expect(
+        requests
+            .firstWhere(
+              (request) => request.path.endsWith('/pomodoro/timeline'),
+            )
+            .queryParameters,
+        {'date': '2026-08-02'},
+      );
+    },
+  );
+
   test('最高等级成就进度保持为 100% 且不显示负数差额', () {
     const wall = AchievementWallDto(
       totalScore: 15000,
@@ -29,6 +142,24 @@ void main() {
             onRequest: (options, handler) {
               requests.add(options);
               final path = options.path;
+              if (path.endsWith('/pomodoro/presets')) {
+                return handler.resolve(
+                  _response(options, [
+                    {
+                      'mode': 'MODE_25_5',
+                      'focusMinutes': 25,
+                      'breakMinutes': 5,
+                      'label': '经典 25/5',
+                    },
+                    {
+                      'mode': 'FREE',
+                      'focusMinutes': null,
+                      'breakMinutes': null,
+                      'label': '正计时',
+                    },
+                  ]),
+                );
+              }
               if (path.endsWith('/pomodoro/start')) {
                 return handler.resolve(_response(options, 41));
               }
@@ -38,8 +169,14 @@ void main() {
                     'totalSessions': 3,
                     'totalMinutes': 75,
                     'bestHour': '09:00',
-                    'trend': [],
-                    'minutesTrend': [],
+                    'trend': [
+                      {'date': '2026-07-29', 'count': 1},
+                      {'date': '2026-07-30', 'count': 2},
+                    ],
+                    'minutesTrend': [
+                      {'date': '2026-07-29', 'count': 25},
+                      {'date': '2026-07-30', 'count': 50},
+                    ],
                   }),
                 );
               }
@@ -51,8 +188,9 @@ void main() {
                         'id': 42,
                         'mode': 'MODE_50_10',
                         'plannedMinutes': 50,
-                        'status': 'RUNNING',
+                        'status': 'PAUSED',
                         'startedAt': '2026-07-30T09:00:00',
+                        'pausedAt': '2026-07-30T09:20:00',
                         'pausedSeconds': 60,
                       },
                     ],
@@ -149,6 +287,9 @@ void main() {
         mode: 'MODE_25_5',
         plannedMinutes: 25,
       );
+      final presets = await pomodoro.presets();
+      final clientEndAt = DateTime(2026, 7, 30, 9, 25);
+      await pomodoro.complete(41, remark: '  完成初稿  ', clientEndAt: clientEndAt);
       final pomodoroStats = await pomodoro.stats(period: 'week');
       final activePomodoro = await pomodoro.active();
 
@@ -171,9 +312,29 @@ void main() {
       final achievement = await AchievementApi(dio).wall();
 
       expect(started.id, 41);
-      expect(pomodoroStats['totalMinutes'], 75);
+      expect(presets.first.mode, 'MODE_25_5');
+      expect(presets.first.focusMinutes, 25);
+      expect(presets.first.breakMinutes, 5);
+      expect(presets.first.label, '经典 25/5');
+      expect(presets.last.focusMinutes, isNull);
+      expect(
+        requests
+            .firstWhere(
+              (request) => request.path.endsWith('/pomodoro/41/complete'),
+            )
+            .data,
+        {'remark': '完成初稿', 'clientEndAt': '2026-07-30T09:25:00.000'},
+      );
+      expect(pomodoroStats.totalSessions, 3);
+      expect(pomodoroStats.totalMinutes, 75);
+      expect(pomodoroStats.bestHour, '09:00');
+      expect(pomodoroStats.sessionTrend.first.date, '2026-07-29');
+      expect(pomodoroStats.sessionTrend.last.count, 2);
+      expect(pomodoroStats.minutesTrend.last.count, 50);
+      expect(pomodoroStats.averageMinutesPerDay, 37.5);
       expect(activePomodoro?.id, 42);
       expect(activePomodoro?.pausedSeconds, 60);
+      expect(activePomodoro?.pausedAt, DateTime(2026, 7, 30, 9, 20));
       expect(
         requests
             .firstWhere((request) => request.path.endsWith('/pomodoro/stats'))
@@ -237,6 +398,248 @@ void main() {
       );
     },
   );
+
+  test('pomodoro timer CRUD and start follow service contracts', () async {
+    final requests = <RequestOptions>[];
+    final dio = Dio()
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            requests.add(options);
+            final path = options.path;
+            if (path.endsWith('/pomodoro/timers') && options.method == 'GET') {
+              return handler.resolve(
+                _response(options, [
+                  {
+                    'id': 10,
+                    'name': '晨间阅读',
+                    'mode': 'FREE',
+                    'focusMinutes': null,
+                    'taskId': null,
+                    'habitId': 20,
+                    'sortOrder': 3,
+                    'archived': false,
+                  },
+                ]),
+              );
+            }
+            if (path.endsWith('/pomodoro/timers') && options.method == 'POST') {
+              return handler.resolve(_response(options, 11));
+            }
+            if (path.endsWith('/pomodoro/timers/10/start')) {
+              return handler.resolve(
+                _response(options, {
+                  'id': 41,
+                  'timerId': 10,
+                  'taskId': null,
+                  'habitId': 20,
+                  'mode': 'FREE',
+                  'plannedMinutes': null,
+                  'status': 'RUNNING',
+                  'startedAt': '2026-08-02T09:00:00',
+                  'pausedSeconds': 0,
+                }),
+              );
+            }
+            return handler.resolve(_response(options, true));
+          },
+        ),
+      );
+    final api = PomodoroApi(dio);
+
+    final timers = await api.timers(archived: false);
+    final created = await api.createTimer(
+      name: '晨间阅读',
+      mode: 'FREE',
+      habitId: 20,
+      sortOrder: 3,
+    );
+    await api.updateTimer(
+      10,
+      name: '深度工作',
+      mode: 'CUSTOM',
+      focusMinutes: 45,
+      taskId: 30,
+      sortOrder: 4,
+    );
+    await api.setTimerArchived(10, true);
+    await api.deleteTimer(10);
+    final session = await api.startTimer(10);
+
+    expect(timers.single.id, 10);
+    expect(timers.single.name, '晨间阅读');
+    expect(timers.single.mode, 'FREE');
+    expect(timers.single.focusMinutes, isNull);
+    expect(timers.single.habitId, 20);
+    expect(timers.single.archived, isFalse);
+    expect(created, 11);
+    expect(session.id, 41);
+    expect(session.timerId, 10);
+    expect(session.habitId, 20);
+    expect(session.plannedMinutes, isNull);
+    expect(session.startedAt, DateTime(2026, 8, 2, 9));
+
+    final listRequest = requests.singleWhere(
+      (request) =>
+          request.path.endsWith('/pomodoro/timers') && request.method == 'GET',
+    );
+    expect(listRequest.queryParameters, {'archived': false});
+    final createRequest = requests.singleWhere(
+      (request) =>
+          request.path.endsWith('/pomodoro/timers') && request.method == 'POST',
+    );
+    expect(createRequest.data, {
+      'name': '晨间阅读',
+      'mode': 'FREE',
+      'habitId': 20,
+      'sortOrder': 3,
+    });
+    final updateRequest = requests.singleWhere(
+      (request) =>
+          request.path.endsWith('/pomodoro/timers/10') &&
+          request.method == 'PUT',
+    );
+    expect(updateRequest.data, {
+      'name': '深度工作',
+      'mode': 'CUSTOM',
+      'focusMinutes': 45,
+      'taskId': 30,
+      'sortOrder': 4,
+    });
+    final archiveRequest = requests.singleWhere(
+      (request) => request.path.endsWith('/pomodoro/timers/10/archived'),
+    );
+    expect(archiveRequest.method, 'PUT');
+    expect(archiveRequest.queryParameters, {'value': true});
+    expect(
+      requests.singleWhere(
+        (request) =>
+            request.path.endsWith('/pomodoro/timers/10') &&
+            request.method == 'DELETE',
+      ),
+      isNotNull,
+    );
+    expect(
+      requests
+          .singleWhere(
+            (request) => request.path.endsWith('/pomodoro/timers/10/start'),
+          )
+          .method,
+      'POST',
+    );
+  });
+
+  test('pomodoro timer start rejects incomplete session contracts', () async {
+    final dio = Dio()
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) =>
+              handler.resolve(_response(options, 41)),
+        ),
+      );
+
+    expect(() => PomodoroApi(dio).startTimer(10), throwsA(isA<StateError>()));
+  });
+
+  test('pomodoro record management follows service contracts', () async {
+    final requests = <RequestOptions>[];
+    final dio = Dio()
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            requests.add(options);
+            if (options.path.endsWith('/pomodoro/41/adjust')) {
+              return handler.resolve(_response(options, 30));
+            }
+            if (options.path.endsWith('/pomodoro/backfill')) {
+              return handler.resolve(_response(options, 43));
+            }
+            if (options.path.endsWith('/pomodoro/page')) {
+              return handler.resolve(
+                _response(options, {
+                  'list': [
+                    {
+                      'id': 43,
+                      'taskId': 81,
+                      'mode': 'CUSTOM',
+                      'plannedMinutes': 40,
+                      'actualMinutes': 40,
+                      'status': 'COMPLETED',
+                      'startedAt': '2026-08-02T09:00:00',
+                      'endedAt': '2026-08-02T09:40:00',
+                      'remark': '完成评审',
+                    },
+                  ],
+                  'total': 1,
+                }),
+              );
+            }
+            return handler.resolve(_response(options, true));
+          },
+        ),
+      );
+    final api = PomodoroApi(dio);
+    final startedAt = DateTime(2026, 8, 2, 9);
+    final endedAt = DateTime(2026, 8, 2, 9, 40);
+
+    final adjusted = await api.adjust(41, deltaMinutes: 5);
+    final backfilled = await api.backfill(
+      taskId: 81,
+      mode: 'CUSTOM',
+      actualMinutes: 40,
+      startedAt: startedAt,
+      endedAt: endedAt,
+      remark: '  完成评审  ',
+    );
+    final records = await api.page(
+      status: 'COMPLETED',
+      pageNo: 1,
+      pageSize: 20,
+    );
+    await api.updateDuration(43, actualMinutes: 45);
+    await api.deleteRecord(43);
+
+    expect(adjusted, 30);
+    expect(backfilled, 43);
+    expect(records.single.id, 43);
+    expect(records.single.remark, '完成评审');
+    expect(
+      requests
+          .singleWhere((request) => request.path.endsWith('/41/adjust'))
+          .data,
+      {'deltaMinutes': 5},
+    );
+    expect(
+      requests
+          .singleWhere((request) => request.path.endsWith('/backfill'))
+          .data,
+      {
+        'taskId': 81,
+        'mode': 'CUSTOM',
+        'actualMinutes': 40,
+        'startedAt': '2026-08-02T09:00:00.000',
+        'endedAt': '2026-08-02T09:40:00.000',
+        'remark': '完成评审',
+      },
+    );
+    expect(
+      requests
+          .singleWhere((request) => request.path.endsWith('/pomodoro/page'))
+          .queryParameters,
+      {'status': 'COMPLETED', 'pageNo': 1, 'pageSize': 20},
+    );
+    final update = requests.singleWhere(
+      (request) => request.path.endsWith('/43/duration'),
+    );
+    expect(update.method, 'PUT');
+    expect(update.data, {'actualMinutes': 45});
+    expect(
+      requests
+          .singleWhere((request) => request.path.endsWith('/pomodoro/43'))
+          .method,
+      'DELETE',
+    );
+  });
 }
 
 Response<Map<String, dynamic>> _response(RequestOptions options, Object? data) {
