@@ -1,6 +1,6 @@
 # Todo 从任务入口开始番茄专注
 
-**状态**：设计完成
+**状态**：已合并，验证完成
 **创建日期**：2026-08-02
 **关联 Issue**：[#247](https://gitea.zh04.com/izhaong/zh-cloud-todo-flutter/issues/247)
 **上游规格**：`specs/015-todo-focus-session-parity/`
