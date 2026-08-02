@@ -30,4 +30,3 @@
 - Widget 测试覆盖活动调整成功/失败、新增失败保留、编辑/追加、删除确认失败保留、列表重试和 320px。
 - `flutter analyze`、全量测试、test 配置 Web release 与 Claude CLI 通过。
 - Gitea/Jenkins 恢复后补真实 PR、develop 构建和 test 环境证据。
-

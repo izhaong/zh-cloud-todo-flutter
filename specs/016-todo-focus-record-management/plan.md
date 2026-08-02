@@ -19,4 +19,3 @@
 ## Task 4: 全量验证
 
 运行 format、定向测试、`flutter analyze`、`flutter test --concurrency=1`、test Web release 和 Claude CLI；更新规格证据并提交。
-
