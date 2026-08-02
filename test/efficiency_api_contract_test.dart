@@ -22,6 +22,102 @@ void main() {
     expect(stats.averageMinutesPerDay, 0);
   });
 
+  test(
+    'pomodoro analytics parse year distribution and timeline contracts',
+    () async {
+      final requests = <RequestOptions>[];
+      final dio = Dio()
+        ..interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (options, handler) {
+              requests.add(options);
+              if (options.path.endsWith('/pomodoro/stats')) {
+                return handler.resolve(
+                  _response(options, {
+                    'totalSessions': 3,
+                    'totalMinutes': 90,
+                    'bestHour': '09:00',
+                    'trend': [
+                      {'date': '2025-09', 'count': 1},
+                      {'date': '2026-08', 'count': 2},
+                    ],
+                    'minutesTrend': [
+                      {'date': '2025-09', 'count': 30},
+                      {'date': '2026-08', 'count': 60},
+                    ],
+                    'taskDistribution': [
+                      {
+                        'taskId': 101,
+                        'taskTitle': '工作报告',
+                        'minutes': 60,
+                        'sessions': 2,
+                      },
+                      {
+                        'taskId': null,
+                        'taskTitle': '未分类',
+                        'minutes': 30,
+                        'sessions': 1,
+                      },
+                    ],
+                  }),
+                );
+              }
+              if (options.path.endsWith('/pomodoro/timeline')) {
+                return handler.resolve(
+                  _response(options, [
+                    {
+                      'id': 71,
+                      'taskId': 101,
+                      'taskTitle': '工作报告',
+                      'mode': 'MODE_25_5',
+                      'startedAt': '2026-08-02T09:00:00',
+                      'endedAt': '2026-08-02T09:25:00',
+                      'actualMinutes': 25,
+                      'remark': '完成初稿',
+                    },
+                  ]),
+                );
+              }
+              return handler.resolve(_response(options, true));
+            },
+          ),
+        );
+      final api = PomodoroApi(dio);
+
+      final stats = await api.stats(period: 'year');
+      final timeline = await api.timeline(date: DateTime(2026, 8, 2));
+
+      expect(stats.minutesTrend.first.date, '2025-09');
+      expect(stats.taskDistribution, hasLength(2));
+      expect(stats.taskDistribution.first.taskId, 101);
+      expect(stats.taskDistribution.first.taskTitle, '工作报告');
+      expect(stats.taskDistribution.first.minutes, 60);
+      expect(stats.taskDistribution.first.sessions, 2);
+      expect(stats.taskDistribution.last.taskId, isNull);
+      expect(timeline.single.id, 71);
+      expect(timeline.single.taskTitle, '工作报告');
+      expect(timeline.single.mode, 'MODE_25_5');
+      expect(timeline.single.startedAt, DateTime(2026, 8, 2, 9));
+      expect(timeline.single.endedAt, DateTime(2026, 8, 2, 9, 25));
+      expect(timeline.single.actualMinutes, 25);
+      expect(timeline.single.remark, '完成初稿');
+      expect(
+        requests
+            .firstWhere((request) => request.path.endsWith('/pomodoro/stats'))
+            .queryParameters,
+        {'period': 'year'},
+      );
+      expect(
+        requests
+            .firstWhere(
+              (request) => request.path.endsWith('/pomodoro/timeline'),
+            )
+            .queryParameters,
+        {'date': '2026-08-02'},
+      );
+    },
+  );
+
   test('最高等级成就进度保持为 100% 且不显示负数差额', () {
     const wall = AchievementWallDto(
       totalScore: 15000,

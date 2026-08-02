@@ -116,6 +116,7 @@ void main() {
     (tester) async {
       final api = _FakePomodoroApi();
       await _pumpPage(tester, api: api);
+      final initialTimelineRequests = api.timelineDates.length;
       await tester.tap(find.text('开始专注'));
       await tester.pump();
       await tester.enterText(
@@ -128,6 +129,7 @@ void main() {
 
       expect(api.completedRemark, '完成初稿');
       expect(api.completedAt, isNotNull);
+      expect(api.timelineDates.length, greaterThan(initialTimelineRequests));
       expect(find.text('开始专注'), findsOneWidget);
       expect(find.text('取消'), findsNothing);
       expect(find.byKey(const Key('pomodoro-remark')), findsNothing);
@@ -175,6 +177,29 @@ void main() {
     expect(find.text('开始专注'), findsOneWidget);
     expect(find.text('取消'), findsNothing);
     expect(api.activeCalls, 3);
+  });
+
+  testWidgets('pending timeline does not block periodic active sync', (
+    tester,
+  ) async {
+    final timelineResponse = Completer<List<PomodoroTimelineDto>>();
+    final api = _FakePomodoroApi()
+      ..timelineHandler = (_) => timelineResponse.future;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [pomodoroApiProvider.overrideWithValue(api)],
+        child: const MaterialApp(home: PomodoroPage()),
+      ),
+    );
+    await tester.pump();
+
+    expect(api.activeCalls, 1);
+    await tester.pump(const Duration(seconds: 15));
+    await tester.pump();
+
+    expect(api.activeCalls, 2);
+    timelineResponse.complete(const []);
+    await tester.pump();
   });
 
   testWidgets('preset failure is visible and retryable', (tester) async {
@@ -615,6 +640,171 @@ void main() {
     expect(find.bySemanticsLabel('2026-08-02 专注日历 45 分钟'), findsOneWidget);
   });
 
+  testWidgets(
+    'year statistics use month labels and task distribution semantics',
+    (tester) async {
+      final api = _FakePomodoroApi()
+        ..statsByPeriod['year'] = const PomodoroStatsDto(
+          totalSessions: 3,
+          totalMinutes: 90,
+          bestHour: '09:00',
+          sessionTrend: [
+            PomodoroDailyStatsDto(date: '2025-09', count: 1),
+            PomodoroDailyStatsDto(date: '2026-08', count: 2),
+          ],
+          minutesTrend: [
+            PomodoroDailyStatsDto(date: '2025-09', count: 30),
+            PomodoroDailyStatsDto(date: '2026-08', count: 60),
+          ],
+          taskDistribution: [
+            PomodoroTaskDistributionDto(
+              taskId: 101,
+              taskTitle: '工作报告',
+              minutes: 60,
+              sessions: 2,
+            ),
+            PomodoroTaskDistributionDto(
+              taskTitle: '未分类',
+              minutes: 30,
+              sessions: 1,
+            ),
+          ],
+        );
+      await _pumpPage(tester, api: api);
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('pomodoro-stats-section')),
+        240,
+        scrollable: find.byType(Scrollable).first,
+      );
+
+      await tester.tap(find.text('12 个月'));
+      await tester.pump();
+
+      expect(api.statsPeriods.last, 'year');
+      expect(find.text('25/09'), findsOneWidget);
+      expect(find.text('26/08'), findsOneWidget);
+      expect(find.text('月均专注'), findsOneWidget);
+      expect(find.text('专注日历'), findsNothing);
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('pomodoro-task-distribution-semantics-101')),
+        240,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump();
+      expect(find.bySemanticsLabel('工作报告，专注 60 分钟，2 次会话'), findsOneWidget);
+      expect(find.bySemanticsLabel('未分类，专注 30 分钟，1 次会话'), findsOneWidget);
+    },
+  );
+
+  testWidgets('older timeline response cannot replace selected date', (
+    tester,
+  ) async {
+    final today = DateUtils.dateOnly(DateTime.now());
+    final previous = today.subtract(const Duration(days: 1));
+    final todayResponse = Completer<List<PomodoroTimelineDto>>();
+    final previousResponse = Completer<List<PomodoroTimelineDto>>();
+    final api = _FakePomodoroApi()
+      ..timelineHandler = (date) => DateUtils.isSameDay(date, previous)
+          ? previousResponse.future
+          : todayResponse.future;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [pomodoroApiProvider.overrideWithValue(api)],
+        child: const MaterialApp(home: PomodoroPage()),
+      ),
+    );
+    await tester.pump();
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('pomodoro-timeline-section')),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    await tester.tap(find.byKey(const Key('pomodoro-timeline-previous')));
+    await tester.pump();
+    previousResponse.complete([
+      _timeline(id: 72, date: previous, title: '昨日专注'),
+    ]);
+    await tester.pump();
+    todayResponse.complete([_timeline(id: 71, date: today, title: '今日旧响应')]);
+    await tester.pump();
+
+    expect(find.text('昨日专注'), findsOneWidget);
+    expect(find.text('今日旧响应'), findsNothing);
+  });
+
+  testWidgets('timeline failure keeps last success and retries selected date', (
+    tester,
+  ) async {
+    final today = DateUtils.dateOnly(DateTime.now());
+    final previous = today.subtract(const Duration(days: 1));
+    final api = _FakePomodoroApi()
+      ..timelineByDate[_dateKey(today)] = [
+        _timeline(id: 71, date: today, title: '今日专注'),
+      ];
+    await _pumpPage(tester, api: api);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('pomodoro-timeline-section')),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    api.timelineError = StateError('offline');
+
+    await tester.tap(find.byKey(const Key('pomodoro-timeline-previous')));
+    await tester.pump();
+
+    expect(find.textContaining('时间轴加载失败'), findsOneWidget);
+    expect(find.text('今日专注'), findsOneWidget);
+    expect(
+      find.byKey(const Key('pomodoro-timeline-data-date-note')),
+      findsOneWidget,
+    );
+
+    api.timelineError = null;
+    api.timelineByDate[_dateKey(previous)] = [
+      _timeline(id: 72, date: previous, title: '昨日重试成功'),
+    ];
+    await tester.scrollUntilVisible(
+      find.text('重试加载时间轴'),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.drag(find.byType(ListView), const Offset(0, -120));
+    await tester.pump();
+    await tester.tap(find.text('重试加载时间轴'));
+    await tester.pump();
+
+    expect(api.timelineDates.last, previous);
+    expect(find.text('昨日重试成功'), findsOneWidget);
+    expect(find.textContaining('时间轴加载失败'), findsNothing);
+    expect(
+      find.byKey(const Key('pomodoro-timeline-data-date-note')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('timeline items expose time task minutes and mode semantics', (
+    tester,
+  ) async {
+    final today = DateUtils.dateOnly(DateTime.now());
+    final api = _FakePomodoroApi()
+      ..timelineByDate[_dateKey(today)] = [
+        _timeline(id: 73, date: today, title: '工作报告'),
+      ];
+    await _pumpPage(tester, api: api);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('pomodoro-timeline-73')),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+
+    expect(
+      find.bySemanticsLabel('09:00–09:25，工作报告，专注 25 分钟，经典 25/5'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('narrow layout does not overflow at 320 logical pixels', (
     tester,
   ) async {
@@ -667,6 +857,26 @@ PomodoroStatsDto _stats({required int totalMinutes, required int days}) {
       ),
     ),
   );
+}
+
+PomodoroTimelineDto _timeline({
+  required int id,
+  required DateTime date,
+  required String title,
+}) {
+  return PomodoroTimelineDto(
+    id: id,
+    taskTitle: title,
+    mode: 'MODE_25_5',
+    startedAt: DateTime(date.year, date.month, date.day, 9),
+    endedAt: DateTime(date.year, date.month, date.day, 9, 25),
+    actualMinutes: 25,
+  );
+}
+
+String _dateKey(DateTime date) {
+  String two(int value) => value.toString().padLeft(2, '0');
+  return '${date.year}-${two(date.month)}-${two(date.day)}';
 }
 
 Future<void> _pumpPage(
@@ -726,10 +936,14 @@ class _FakePomodoroApi extends PomodoroApi {
   Object? deleteError;
   Object? pageError;
   Object? statsError;
+  Object? timelineError;
   Future<PomodoroStatsDto> Function(String period)? statsHandler;
+  Future<List<PomodoroTimelineDto>> Function(DateTime date)? timelineHandler;
   PomodoroStatsDto statsValue = const PomodoroStatsDto.empty();
   final Map<String, PomodoroStatsDto> statsByPeriod = {};
   final List<String> statsPeriods = [];
+  final List<DateTime> timelineDates = [];
+  final Map<String, List<PomodoroTimelineDto>> timelineByDate = {};
   String? completedRemark;
   DateTime? completedAt;
   int activeCalls = 0;
@@ -788,6 +1002,16 @@ class _FakePomodoroApi extends PomodoroApi {
     final handler = statsHandler;
     if (handler != null) return handler(period);
     return statsByPeriod[period] ?? statsValue;
+  }
+
+  @override
+  Future<List<PomodoroTimelineDto>> timeline({required DateTime date}) async {
+    final normalized = DateUtils.dateOnly(date);
+    timelineDates.add(normalized);
+    if (timelineError != null) throw timelineError!;
+    final handler = timelineHandler;
+    if (handler != null) return handler(normalized);
+    return timelineByDate[_dateKey(normalized)] ?? const [];
   }
 
   @override

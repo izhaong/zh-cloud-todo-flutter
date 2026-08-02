@@ -114,6 +114,67 @@ class PomodoroDailyStatsDto {
   }
 }
 
+class PomodoroTaskDistributionDto {
+  const PomodoroTaskDistributionDto({
+    this.taskId,
+    required this.taskTitle,
+    required this.minutes,
+    required this.sessions,
+  });
+
+  final int? taskId;
+  final String taskTitle;
+  final int minutes;
+  final int sessions;
+
+  factory PomodoroTaskDistributionDto.fromJson(Map<String, dynamic> json) {
+    final minutes = (json['minutes'] as num?)?.toInt() ?? 0;
+    final sessions = (json['sessions'] as num?)?.toInt() ?? 0;
+    return PomodoroTaskDistributionDto(
+      taskId: (json['taskId'] as num?)?.toInt(),
+      taskTitle: json['taskTitle']?.toString() ?? '未分类',
+      minutes: minutes < 0 ? 0 : minutes,
+      sessions: sessions < 0 ? 0 : sessions,
+    );
+  }
+}
+
+class PomodoroTimelineDto {
+  const PomodoroTimelineDto({
+    required this.id,
+    this.taskId,
+    required this.taskTitle,
+    required this.mode,
+    this.startedAt,
+    this.endedAt,
+    required this.actualMinutes,
+    this.remark,
+  });
+
+  final int id;
+  final int? taskId;
+  final String taskTitle;
+  final String mode;
+  final DateTime? startedAt;
+  final DateTime? endedAt;
+  final int actualMinutes;
+  final String? remark;
+
+  factory PomodoroTimelineDto.fromJson(Map<String, dynamic> json) {
+    final actualMinutes = (json['actualMinutes'] as num?)?.toInt() ?? 0;
+    return PomodoroTimelineDto(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      taskId: (json['taskId'] as num?)?.toInt(),
+      taskTitle: json['taskTitle']?.toString() ?? '未分类',
+      mode: json['mode']?.toString() ?? '',
+      startedAt: _parseDate(json['startedAt']),
+      endedAt: _parseDate(json['endedAt']),
+      actualMinutes: actualMinutes < 0 ? 0 : actualMinutes,
+      remark: json['remark']?.toString(),
+    );
+  }
+}
+
 class PomodoroStatsDto {
   const PomodoroStatsDto({
     required this.totalSessions,
@@ -121,6 +182,7 @@ class PomodoroStatsDto {
     required this.sessionTrend,
     required this.minutesTrend,
     this.bestHour,
+    this.taskDistribution = const [],
   });
 
   const PomodoroStatsDto.empty()
@@ -128,13 +190,15 @@ class PomodoroStatsDto {
       totalMinutes = 0,
       bestHour = null,
       sessionTrend = const [],
-      minutesTrend = const [];
+      minutesTrend = const [],
+      taskDistribution = const [];
 
   final int totalSessions;
   final int totalMinutes;
   final String? bestHour;
   final List<PomodoroDailyStatsDto> sessionTrend;
   final List<PomodoroDailyStatsDto> minutesTrend;
+  final List<PomodoroTaskDistributionDto> taskDistribution;
 
   double get averageMinutesPerDay =>
       minutesTrend.isEmpty ? 0 : totalMinutes / minutesTrend.length;
@@ -151,12 +215,25 @@ class PomodoroStatsDto {
           .toList(growable: false);
     }
 
+    List<PomodoroTaskDistributionDto> parseDistribution(Object? value) {
+      if (value is! List) return const [];
+      return value
+          .whereType<Map>()
+          .map(
+            (item) => PomodoroTaskDistributionDto.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .toList(growable: false);
+    }
+
     return PomodoroStatsDto(
       totalSessions: (json['totalSessions'] as num?)?.toInt() ?? 0,
       totalMinutes: (json['totalMinutes'] as num?)?.toInt() ?? 0,
       bestHour: json['bestHour']?.toString(),
       sessionTrend: parseTrend(json['trend']),
       minutesTrend: parseTrend(json['minutesTrend']),
+      taskDistribution: parseDistribution(json['taskDistribution']),
     );
   }
 }
@@ -643,6 +720,22 @@ class PomodoroApi {
     final data = _unwrapData(r.data);
     if (data is! Map) return const PomodoroStatsDto.empty();
     return PomodoroStatsDto.fromJson(Map<String, dynamic>.from(data));
+  }
+
+  Future<List<PomodoroTimelineDto>> timeline({required DateTime date}) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '${ApiConfig.todoPrefix}/pomodoro/timeline',
+      queryParameters: {'date': _dateOnly(date)},
+    );
+    final data = _unwrapData(response.data);
+    if (data is! List) return const [];
+    return data
+        .whereType<Map>()
+        .map(
+          (item) =>
+              PomodoroTimelineDto.fromJson(Map<String, dynamic>.from(item)),
+        )
+        .toList(growable: false);
   }
 }
 
