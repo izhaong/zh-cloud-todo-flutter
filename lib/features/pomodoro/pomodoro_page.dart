@@ -107,6 +107,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
   }
 
   int? get _plannedMinutes {
+    if (_mode == 'FREE') return null;
     final fixed = _selectedPreset?.focusMinutes;
     if (fixed != null) return fixed;
     final parsed = int.tryParse(_minutesController.text.trim());
@@ -118,7 +119,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
       !_loadingPresets &&
       _presetError == null &&
       _selectedPreset != null &&
-      _plannedMinutes != null &&
+      (_mode == 'FREE' || _plannedMinutes != null) &&
       !_actionPending;
 
   Future<void> _loadPresets() async {
@@ -188,7 +189,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
       _syncRequest++;
       final session = await ref.read(pomodoroApiProvider).startTimer(timer.id);
       if (!mounted) return;
-      _activateSession(session, secondsLeft: _remainingSeconds(session));
+      _activateSession(session, secondsLeft: _sessionDisplaySeconds(session));
     } catch (error) {
       if (!mounted) return;
       setState(() => _timerError = '计时器启动失败：$error');
@@ -381,7 +382,11 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
   Future<void> _start() async {
     final mode = _mode;
     final plannedMinutes = _plannedMinutes;
-    if (mode == null || plannedMinutes == null || _actionPending) return;
+    if (mode == null ||
+        (mode != 'FREE' && plannedMinutes == null) ||
+        _actionPending) {
+      return;
+    }
     setState(() {
       _actionPending = true;
       _actionError = null;
@@ -396,7 +401,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
             plannedMinutes: plannedMinutes,
           );
       if (!mounted) return;
-      _activateSession(session, secondsLeft: plannedMinutes * 60);
+      _activateSession(session, secondsLeft: _sessionDisplaySeconds(session));
     } catch (error) {
       if (!mounted) return;
       setState(() => _actionError = '开始失败：$error');
@@ -415,7 +420,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
       if (session == null) {
         _clearSession(clearRemark: true);
       } else {
-        _activateSession(session, secondsLeft: _remainingSeconds(session));
+        _activateSession(session, secondsLeft: _sessionDisplaySeconds(session));
       }
       setState(() => _syncError = null);
     } catch (error) {
@@ -537,15 +542,18 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
     _selectTimelineDate(selected);
   }
 
-  int _remainingSeconds(PomodoroSessionDto session) {
-    final plannedSeconds = (session.plannedMinutes ?? 25) * 60;
+  int _sessionDisplaySeconds(PomodoroSessionDto session) {
     final startedAt = session.startedAt;
-    if (startedAt == null) return plannedSeconds;
+    final plannedSeconds = (session.plannedMinutes ?? 25) * 60;
+    if (startedAt == null) {
+      return session.mode == 'FREE' ? 0 : plannedSeconds;
+    }
     final effectiveEnd = session.status == 'PAUSED' && session.pausedAt != null
         ? session.pausedAt!
         : DateTime.now();
     final elapsed =
         effectiveEnd.difference(startedAt).inSeconds - session.pausedSeconds;
+    if (session.mode == 'FREE') return elapsed < 0 ? 0 : elapsed;
     return (plannedSeconds - elapsed).clamp(0, plannedSeconds);
   }
 
@@ -566,7 +574,11 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted || _paused) return;
       setState(() {
-        if (_secondsLeft > 0) _secondsLeft--;
+        if (_session?.mode == 'FREE') {
+          _secondsLeft++;
+        } else if (_secondsLeft > 0) {
+          _secondsLeft--;
+        }
       });
     });
   }
@@ -577,7 +589,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
     if (!mounted) return;
     setState(() {
       _session = null;
-      _secondsLeft = (_plannedMinutes ?? 0) * 60;
+      _secondsLeft = _mode == 'FREE' ? 0 : (_plannedMinutes ?? 0) * 60;
       _paused = false;
       if (clearRemark) _remarkController.clear();
     });
@@ -585,7 +597,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
 
   Future<void> _adjustDuration(int deltaMinutes) async {
     final session = _session;
-    if (session == null || _actionPending) return;
+    if (session == null || session.mode == 'FREE' || _actionPending) return;
     final previousPlanned = session.plannedMinutes ?? 25;
     setState(() {
       _actionPending = true;
@@ -790,7 +802,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
     setState(() {
       _mode = mode;
       _actionError = null;
-      _secondsLeft = (_plannedMinutes ?? 0) * 60;
+      _secondsLeft = mode == 'FREE' ? 0 : (_plannedMinutes ?? 0) * 60;
     });
   }
 
@@ -829,7 +841,8 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
     final selectedTaskId = _selectedTaskId;
     final selectedTaskMissing =
         selectedTaskId != null && !taskIds.contains(selectedTaskId);
-    final durationRequired = _selectedPreset?.focusMinutes == null;
+    final durationRequired =
+        _mode != 'FREE' && _selectedPreset?.focusMinutes == null;
 
     return Scaffold(
       appBar: AppBar(
@@ -904,7 +917,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 decoration: InputDecoration(
-                  labelText: _mode == 'FREE' ? '正计时目标分钟数' : '专注分钟数',
+                  labelText: '专注分钟数',
                   helperText: '请输入 1–1440 的整数',
                   errorText:
                       _minutesController.text.isNotEmpty &&
@@ -967,7 +980,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
                 style: Theme.of(context).textTheme.displayLarge,
               ),
             ),
-            if (running) ...[
+            if (running && _session?.mode != 'FREE') ...[
               const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,

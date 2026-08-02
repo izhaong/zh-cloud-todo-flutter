@@ -27,15 +27,97 @@ void main() {
 
     await tester.tap(find.text('自由'));
     await tester.pump();
+    expect(find.byKey(const Key('pomodoro-custom-minutes')), findsNothing);
     await tester.tap(find.text('开始专注'));
     await tester.pump();
 
     expect(api.started, isTrue);
     expect(api.startedMode, 'FREE');
+    expect(api.startedMinutes, isNull);
+    expect(find.text('00:00'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('00:01'), findsOneWidget);
+    expect(find.text('调整专注时间'), findsNothing);
     expect(find.text('暂停'), findsOneWidget);
     expect(find.text('完成'), findsOneWidget);
     expect(find.text('取消'), findsOneWidget);
     expect(find.text('开始专注'), findsNothing);
+  });
+
+  testWidgets('stopwatch restores and counts elapsed focus time', (
+    tester,
+  ) async {
+    final now = DateTime.now();
+    final api = _FakePomodoroApi()
+      ..activeResponses.addAll([
+        PomodoroSessionDto(
+          id: 71,
+          mode: 'FREE',
+          status: 'RUNNING',
+          startedAt: now.subtract(const Duration(minutes: 3)),
+        ),
+        PomodoroSessionDto(
+          id: 71,
+          mode: 'FREE',
+          status: 'PAUSED',
+          startedAt: now.subtract(const Duration(minutes: 10)),
+          pausedAt: now.subtract(const Duration(minutes: 5)),
+          pausedSeconds: 120,
+        ),
+      ]);
+    await _pumpPage(tester, api: api);
+
+    expect(find.text('03:00'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('03:01'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 14));
+    await tester.pump();
+    expect(find.text('03:00'), findsOneWidget);
+    expect(find.text('已暂停'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('03:00'), findsOneWidget);
+  });
+
+  testWidgets('pomodoro restoration continues to count down', (tester) async {
+    final api = _FakePomodoroApi()
+      ..activeResponses.add(
+        PomodoroSessionDto(
+          id: 72,
+          mode: 'MODE_25_5',
+          plannedMinutes: 25,
+          status: 'RUNNING',
+          startedAt: DateTime.now().subtract(const Duration(minutes: 3)),
+        ),
+      );
+    await _pumpPage(tester, api: api);
+
+    expect(find.text('22:00'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('21:59'), findsOneWidget);
+  });
+
+  testWidgets('stopwatch pause freezes and resume continues counting', (
+    tester,
+  ) async {
+    final api = _FakePomodoroApi();
+    await _pumpPage(tester, api: api);
+    await tester.tap(find.text('自由'));
+    await tester.pump();
+    await tester.tap(find.text('开始专注'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('00:01'), findsOneWidget);
+
+    await tester.tap(find.text('暂停'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text('00:01'), findsOneWidget);
+
+    await tester.tap(find.text('恢复'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('00:02'), findsOneWidget);
   });
 
   testWidgets('uses service presets and submits custom minutes', (
@@ -1357,7 +1439,7 @@ class _FakePomodoroApi extends PomodoroApi {
       mode: mode,
       plannedMinutes: plannedMinutes,
       status: 'RUNNING',
-      startedAt: DateTime(2026, 7, 30, 9),
+      startedAt: DateTime.now(),
     );
   }
 
