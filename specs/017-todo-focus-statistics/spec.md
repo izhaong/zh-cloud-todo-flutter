@@ -1,6 +1,6 @@
 # Todo 专注统计深化
 
-**状态**：设计完成
+**状态**：本地实现与验证完成，外部门禁待恢复
 **创建日期**：2026-08-02
 **后端依赖**：`zh-cloud-service/specs/012-todo-focus-statistics/spec.md`
 
@@ -29,4 +29,3 @@
 - Widget 测试覆盖周期切换、旧响应隔离、失败保留/重试、趋势语义与 320px。
 - `flutter analyze`、全量测试、test 配置 Web release 与 Claude CLI 通过。
 - Gitea/Jenkins 恢复后补真实 PR、develop 构建和 test 环境证据。
-

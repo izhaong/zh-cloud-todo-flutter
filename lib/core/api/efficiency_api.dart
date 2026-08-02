@@ -100,6 +100,67 @@ class PomodoroPresetDto {
   }
 }
 
+class PomodoroDailyStatsDto {
+  const PomodoroDailyStatsDto({required this.date, required this.count});
+
+  final String date;
+  final int count;
+
+  factory PomodoroDailyStatsDto.fromJson(Map<String, dynamic> json) {
+    return PomodoroDailyStatsDto(
+      date: json['date']?.toString() ?? '',
+      count: (json['count'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+class PomodoroStatsDto {
+  const PomodoroStatsDto({
+    required this.totalSessions,
+    required this.totalMinutes,
+    required this.sessionTrend,
+    required this.minutesTrend,
+    this.bestHour,
+  });
+
+  const PomodoroStatsDto.empty()
+    : totalSessions = 0,
+      totalMinutes = 0,
+      bestHour = null,
+      sessionTrend = const [],
+      minutesTrend = const [];
+
+  final int totalSessions;
+  final int totalMinutes;
+  final String? bestHour;
+  final List<PomodoroDailyStatsDto> sessionTrend;
+  final List<PomodoroDailyStatsDto> minutesTrend;
+
+  double get averageMinutesPerDay =>
+      minutesTrend.isEmpty ? 0 : totalMinutes / minutesTrend.length;
+
+  factory PomodoroStatsDto.fromJson(Map<String, dynamic> json) {
+    List<PomodoroDailyStatsDto> parseTrend(Object? value) {
+      if (value is! List) return const [];
+      return value
+          .whereType<Map>()
+          .map(
+            (item) =>
+                PomodoroDailyStatsDto.fromJson(Map<String, dynamic>.from(item)),
+          )
+          .toList(growable: false);
+    }
+
+    return PomodoroStatsDto(
+      totalSessions: (json['totalSessions'] as num?)?.toInt() ?? 0,
+      totalMinutes: (json['totalMinutes'] as num?)?.toInt() ?? 0,
+      bestHour: json['bestHour']?.toString(),
+      sessionTrend: parseTrend(json['trend']),
+      minutesTrend: parseTrend(json['minutesTrend']),
+    );
+  }
+}
+
 class CountdownDto {
   final int id;
   final String title;
@@ -574,12 +635,14 @@ class PomodoroApi {
     return null;
   }
 
-  Future<Map<String, dynamic>> stats({String period = 'week'}) async {
+  Future<PomodoroStatsDto> stats({String period = 'week'}) async {
     final r = await _dio.get<Map<String, dynamic>>(
       '${ApiConfig.todoPrefix}/pomodoro/stats',
       queryParameters: {'period': period},
     );
-    return Map<String, dynamic>.from(_unwrapData(r.data) as Map? ?? {});
+    final data = _unwrapData(r.data);
+    if (data is! Map) return const PomodoroStatsDto.empty();
+    return PomodoroStatsDto.fromJson(Map<String, dynamic>.from(data));
   }
 }
 

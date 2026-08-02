@@ -64,7 +64,6 @@ void main() {
       ProviderScope(
         overrides: [
           pomodoroApiProvider.overrideWithValue(_FakePomodoroApi()),
-          pomodoroStatsProvider.overrideWith((ref) async => const {}),
           myHabitsProvider.overrideWith((ref) async => const []),
           habitStatsProvider.overrideWith((ref) async => const {}),
           countdownsProvider.overrideWith((ref) async => const []),

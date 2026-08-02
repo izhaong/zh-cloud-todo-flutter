@@ -13,7 +13,6 @@ import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/features/pomodoro/pomodoro_page.dart';
 import 'package:zh_cloud_todo_flutter/features/reminder/reminder_inbox_page.dart'
     show ReminderInboxPage, groupByTask, InboxEntry;
-import 'package:zh_cloud_todo_flutter/state/efficiency_providers.dart';
 import 'package:zh_cloud_todo_flutter/state/providers.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/reminder_inbox_repository.dart';
 
@@ -434,7 +433,6 @@ void main() {
             ),
           ]),
         ),
-        pomodoroStatsProvider.overrideWith((ref) async => <String, dynamic>{}),
       ],
     );
     addTearDown(container.dispose);

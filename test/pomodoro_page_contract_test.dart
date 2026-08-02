@@ -299,7 +299,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('pomodoro-record-add-61')));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(api.updatedDurations, [(61, 45)]);
     expect(api.pageCalls, greaterThanOrEqualTo(2));
@@ -409,7 +409,7 @@ void main() {
     await tester.tap(find.byKey(const Key('pomodoro-record-delete-62')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('确认删除'));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.textContaining('删除失败'), findsOneWidget);
     expect(find.text('不能丢失'), findsOneWidget);
@@ -436,6 +436,185 @@ void main() {
     expect(find.text('重试成功'), findsOneWidget);
   });
 
+  testWidgets('switches among day week and month statistics', (tester) async {
+    final api = _FakePomodoroApi()
+      ..statsByPeriod['week'] = _stats(totalMinutes: 70, days: 7)
+      ..statsByPeriod['month'] = _stats(totalMinutes: 300, days: 30);
+    await _pumpPage(tester, api: api);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('pomodoro-stats-section')),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    expect(api.statsPeriods, ['week']);
+    await tester.tap(find.text('30 天'));
+    await tester.pump();
+
+    expect(api.statsPeriods.last, 'month');
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('pomodoro-stats-total-minutes')),
+        matching: find.text('300'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('older statistics response cannot replace selected period', (
+    tester,
+  ) async {
+    final week = Completer<PomodoroStatsDto>();
+    final month = Completer<PomodoroStatsDto>();
+    final api = _FakePomodoroApi()
+      ..statsHandler = (period) =>
+          period == 'month' ? month.future : week.future;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [pomodoroApiProvider.overrideWithValue(api)],
+        child: const MaterialApp(home: PomodoroPage()),
+      ),
+    );
+    await tester.pump();
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('pomodoro-stats-section')),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('30 天'));
+    await tester.pump();
+
+    month.complete(_stats(totalMinutes: 300, days: 30));
+    await tester.pump();
+    week.complete(_stats(totalMinutes: 70, days: 7));
+    await tester.pump();
+
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('pomodoro-stats-total-minutes')),
+        matching: find.text('300'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('70'), findsNothing);
+  });
+
+  testWidgets('slow period switch labels retained statistics source', (
+    tester,
+  ) async {
+    final month = Completer<PomodoroStatsDto>();
+    final api = _FakePomodoroApi()
+      ..statsByPeriod['week'] = _stats(totalMinutes: 70, days: 7);
+    await _pumpPage(tester, api: api);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('pomodoro-stats-section')),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    api.statsHandler = (_) => month.future;
+
+    await tester.tap(find.text('30 天'));
+    await tester.pump();
+
+    expect(find.text('正在加载 30 天，暂显示 7 天结果'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('pomodoro-stats-total-minutes')),
+        matching: find.text('70'),
+      ),
+      findsOneWidget,
+    );
+
+    month.complete(_stats(totalMinutes: 300, days: 30));
+    await tester.pump();
+    expect(
+      find.byKey(const Key('pomodoro-stats-data-period-note')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('statistics failure keeps last success and retries', (
+    tester,
+  ) async {
+    final api = _FakePomodoroApi()
+      ..statsByPeriod['week'] = _stats(totalMinutes: 70, days: 7);
+    await _pumpPage(tester, api: api);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('pomodoro-stats-section')),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    api.statsError = StateError('offline');
+
+    await tester.tap(find.text('今天'));
+    await tester.pump();
+
+    expect(find.textContaining('统计加载失败'), findsOneWidget);
+    expect(find.text('暂未更新到今天，暂显示 7 天结果'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('pomodoro-stats-total-minutes')),
+        matching: find.text('70'),
+      ),
+      findsOneWidget,
+    );
+
+    api.statsError = null;
+    api.statsByPeriod['day'] = _stats(totalMinutes: 25, days: 1);
+    await tester.tap(find.text('重试加载统计'));
+    await tester.pump();
+
+    expect(api.statsPeriods.last, 'day');
+    expect(find.textContaining('统计加载失败'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('pomodoro-stats-total-minutes')),
+        matching: find.text('25'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('first statistics failure does not invent zero metrics', (
+    tester,
+  ) async {
+    final api = _FakePomodoroApi()..statsError = StateError('offline');
+    await _pumpPage(tester, api: api);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('pomodoro-stats-section')),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    expect(find.textContaining('统计加载失败'), findsOneWidget);
+    expect(
+      find.byKey(const Key('pomodoro-stats-total-sessions')),
+      findsNothing,
+    );
+    expect(find.byKey(const Key('pomodoro-stats-total-minutes')), findsNothing);
+    expect(find.text('重试加载统计'), findsOneWidget);
+  });
+
+  testWidgets('trend bars expose date and minute semantics', (tester) async {
+    final api = _FakePomodoroApi()
+      ..statsByPeriod['week'] = const PomodoroStatsDto(
+        totalSessions: 1,
+        totalMinutes: 45,
+        bestHour: '09:00',
+        sessionTrend: [PomodoroDailyStatsDto(date: '2026-08-02', count: 1)],
+        minutesTrend: [PomodoroDailyStatsDto(date: '2026-08-02', count: 45)],
+      );
+    await _pumpPage(tester, api: api);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('pomodoro-stats-section')),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    expect(find.bySemanticsLabel('2026-08-02 专注 45 分钟'), findsOneWidget);
+    expect(find.bySemanticsLabel('2026-08-02 专注日历 45 分钟'), findsOneWidget);
+  });
+
   testWidgets('narrow layout does not overflow at 320 logical pixels', (
     tester,
   ) async {
@@ -457,7 +636,37 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('新增专注记录'), findsOneWidget);
     expect(tester.takeException(), isNull);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('pomodoro-stats-section')),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(tester.takeException(), isNull);
   });
+}
+
+PomodoroStatsDto _stats({required int totalMinutes, required int days}) {
+  return PomodoroStatsDto(
+    totalSessions: days,
+    totalMinutes: totalMinutes,
+    bestHour: '09:00',
+    sessionTrend: List.generate(
+      days,
+      (index) => PomodoroDailyStatsDto(
+        date: '2026-08-${(index + 1).toString().padLeft(2, '0')}',
+        count: 1,
+      ),
+    ),
+    minutesTrend: List.generate(
+      days,
+      (index) => PomodoroDailyStatsDto(
+        date: '2026-08-${(index + 1).toString().padLeft(2, '0')}',
+        count: totalMinutes ~/ days,
+      ),
+    ),
+  );
 }
 
 Future<void> _pumpPage(
@@ -516,6 +725,11 @@ class _FakePomodoroApi extends PomodoroApi {
   Object? updateDurationError;
   Object? deleteError;
   Object? pageError;
+  Object? statsError;
+  Future<PomodoroStatsDto> Function(String period)? statsHandler;
+  PomodoroStatsDto statsValue = const PomodoroStatsDto.empty();
+  final Map<String, PomodoroStatsDto> statsByPeriod = {};
+  final List<String> statsPeriods = [];
   String? completedRemark;
   DateTime? completedAt;
   int activeCalls = 0;
@@ -568,8 +782,12 @@ class _FakePomodoroApi extends PomodoroApi {
   }
 
   @override
-  Future<Map<String, dynamic>> stats({String period = 'week'}) async {
-    return const {'totalSessions': 0, 'totalMinutes': 0};
+  Future<PomodoroStatsDto> stats({String period = 'week'}) async {
+    statsPeriods.add(period);
+    if (statsError != null) throw statsError!;
+    final handler = statsHandler;
+    if (handler != null) return handler(period);
+    return statsByPeriod[period] ?? statsValue;
   }
 
   @override

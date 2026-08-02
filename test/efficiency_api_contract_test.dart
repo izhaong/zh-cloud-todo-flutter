@@ -5,6 +5,23 @@ import 'package:zh_cloud_todo_flutter/core/api/efficiency_api.dart';
 import 'package:zh_cloud_todo_flutter/features/habit/habit_repository.dart';
 
 void main() {
+  test('pomodoro stats accept empty trends and null best hour', () {
+    final stats = PomodoroStatsDto.fromJson({
+      'totalSessions': 0,
+      'totalMinutes': 0,
+      'bestHour': null,
+      'trend': [],
+      'minutesTrend': [],
+    });
+
+    expect(stats.totalSessions, 0);
+    expect(stats.totalMinutes, 0);
+    expect(stats.bestHour, isNull);
+    expect(stats.sessionTrend, isEmpty);
+    expect(stats.minutesTrend, isEmpty);
+    expect(stats.averageMinutesPerDay, 0);
+  });
+
   test('最高等级成就进度保持为 100% 且不显示负数差额', () {
     const wall = AchievementWallDto(
       totalScore: 15000,
@@ -56,8 +73,14 @@ void main() {
                     'totalSessions': 3,
                     'totalMinutes': 75,
                     'bestHour': '09:00',
-                    'trend': [],
-                    'minutesTrend': [],
+                    'trend': [
+                      {'date': '2026-07-29', 'count': 1},
+                      {'date': '2026-07-30', 'count': 2},
+                    ],
+                    'minutesTrend': [
+                      {'date': '2026-07-29', 'count': 25},
+                      {'date': '2026-07-30', 'count': 50},
+                    ],
                   }),
                 );
               }
@@ -206,7 +229,13 @@ void main() {
             .data,
         {'remark': '完成初稿', 'clientEndAt': '2026-07-30T09:25:00.000'},
       );
-      expect(pomodoroStats['totalMinutes'], 75);
+      expect(pomodoroStats.totalSessions, 3);
+      expect(pomodoroStats.totalMinutes, 75);
+      expect(pomodoroStats.bestHour, '09:00');
+      expect(pomodoroStats.sessionTrend.first.date, '2026-07-29');
+      expect(pomodoroStats.sessionTrend.last.count, 2);
+      expect(pomodoroStats.minutesTrend.last.count, 50);
+      expect(pomodoroStats.averageMinutesPerDay, 37.5);
       expect(activePomodoro?.id, 42);
       expect(activePomodoro?.pausedSeconds, 60);
       expect(activePomodoro?.pausedAt, DateTime(2026, 7, 30, 9, 20));

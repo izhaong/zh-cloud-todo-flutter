@@ -28,23 +28,29 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
   Timer? _ticker;
   Timer? _syncTicker;
   PomodoroSessionDto? _session;
+  PomodoroStatsDto? _stats;
   List<PomodoroPresetDto> _presets = const [];
   List<PomodoroSessionDto> _records = const [];
   String? _mode;
+  String _statsPeriod = 'week';
+  String? _statsDataPeriod;
   int? _selectedTaskId;
   int _secondsLeft = 0;
   int _syncRequest = 0;
   int _recordsRequest = 0;
+  int _statsRequest = 0;
   bool _paused = false;
   bool _loadingPresets = true;
   bool _actionPending = false;
   bool _syncInFlight = false;
   bool _loadingRecords = true;
+  bool _loadingStats = true;
   bool _recordActionPending = false;
   String? _presetError;
   String? _actionError;
   String? _syncError;
   String? _recordsError;
+  String? _statsError;
   String? _recordActionError;
 
   @override
@@ -52,7 +58,12 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
     super.initState();
     _selectedTaskId = widget.taskId;
     Future<void>.microtask(() async {
-      await Future.wait([_loadPresets(), _syncActiveSession(), _loadRecords()]);
+      await Future.wait([
+        _loadPresets(),
+        _syncActiveSession(),
+        _loadRecords(),
+        _loadStats(),
+      ]);
       if (!mounted) return;
       _syncTicker = Timer.periodic(_syncInterval, (_) => _syncActiveSession());
     });
@@ -62,6 +73,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
   void dispose() {
     _syncRequest++;
     _recordsRequest++;
+    _statsRequest++;
     _ticker?.cancel();
     _syncTicker?.cancel();
     _minutesController.dispose();
@@ -139,7 +151,6 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
             plannedMinutes: plannedMinutes,
           );
       if (!mounted) return;
-      ref.invalidate(pomodoroStatsProvider);
       _activateSession(session, secondsLeft: plannedMinutes * 60);
     } catch (error) {
       if (!mounted) return;
@@ -195,8 +206,41 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
   }
 
   Future<void> _refreshRecordsAndStats() async {
-    ref.invalidate(pomodoroStatsProvider);
+    unawaited(_loadStats());
     await _loadRecords();
+  }
+
+  Future<void> _loadStats() async {
+    final request = ++_statsRequest;
+    final period = _statsPeriod;
+    if (mounted) {
+      setState(() {
+        _loadingStats = true;
+        _statsError = null;
+      });
+    }
+    try {
+      final stats = await ref.read(pomodoroApiProvider).stats(period: period);
+      if (!mounted || request != _statsRequest) return;
+      setState(() {
+        _stats = stats;
+        _statsDataPeriod = period;
+        _loadingStats = false;
+      });
+    } catch (_) {
+      if (!mounted || request != _statsRequest) return;
+      setState(() {
+        _loadingStats = false;
+        _statsError = '统计加载失败，请检查网络后重试';
+      });
+    }
+  }
+
+  void _selectStatsPeriod(Set<String> selection) {
+    final period = selection.firstOrNull;
+    if (period == null || period == _statsPeriod) return;
+    setState(() => _statsPeriod = period);
+    _loadStats();
   }
 
   int _remainingSeconds(PomodoroSessionDto session) {
@@ -697,6 +741,31 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
                 ),
               ],
             ),
+            if (_loadingRecords && _records.isEmpty) ...[
+              const SizedBox(height: 16),
+              const Center(child: CircularProgressIndicator()),
+            ] else if (_records.isEmpty && _recordsError == null) ...[
+              const SizedBox(height: 16),
+              const Text('暂无专注记录'),
+            ] else ...[
+              const SizedBox(height: 8),
+              for (final record in _records)
+                _PomodoroRecordCard(
+                  record: record,
+                  taskTitle: taskTitles[record.taskId],
+                  enabled: !_recordActionPending,
+                  onEdit: () => _editDuration(record),
+                  onAddFive: () {
+                    final current = record.actualMinutes ?? 0;
+                    if (current + 5 > 1440) {
+                      setState(() => _recordActionError = '专注时长不能超过 1440 分钟');
+                      return;
+                    }
+                    _updateDuration(record, current + 5);
+                  },
+                  onDelete: () => _deleteRecord(record),
+                ),
+            ],
             if (_recordActionError != null) ...[
               const SizedBox(height: 8),
               Text(
@@ -720,47 +789,19 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
                 ),
               ),
             ],
-            if (_loadingRecords && _records.isEmpty) ...[
-              const SizedBox(height: 16),
-              const Center(child: CircularProgressIndicator()),
-            ] else if (_records.isEmpty) ...[
-              const SizedBox(height: 16),
-              const Text('暂无专注记录'),
-            ] else ...[
-              const SizedBox(height: 8),
-              for (final record in _records)
-                _PomodoroRecordCard(
-                  record: record,
-                  taskTitle: taskTitles[record.taskId],
-                  enabled: !_recordActionPending,
-                  onEdit: () => _editDuration(record),
-                  onAddFive: () {
-                    final current = record.actualMinutes ?? 0;
-                    if (current + 5 > 1440) {
-                      setState(() => _recordActionError = '专注时长不能超过 1440 分钟');
-                      return;
-                    }
-                    _updateDuration(record, current + 5);
-                  },
-                  onDelete: () => _deleteRecord(record),
-                ),
-            ],
             const SizedBox(height: 24),
             const Divider(),
             const SizedBox(height: 16),
-            Text('最近 7 天统计', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            ref
-                .watch(pomodoroStatsProvider)
-                .when(
-                  loading: () =>
-                      const Center(child: CircularProgressIndicator()),
-                  error: (error, _) => Text('加载失败: $error'),
-                  data: (stats) => Text(
-                    '总会话: ${stats['totalSessions'] ?? 0} · '
-                    '总分钟: ${stats['totalMinutes'] ?? 0}',
-                  ),
-                ),
+            _PomodoroStatsSection(
+              key: const Key('pomodoro-stats-section'),
+              period: _statsPeriod,
+              dataPeriod: _statsDataPeriod,
+              stats: _stats,
+              loading: _loadingStats,
+              error: _statsError,
+              onPeriodChanged: _selectStatsPeriod,
+              onRetry: _loadStats,
+            ),
           ],
         ),
       ),
@@ -771,6 +812,345 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
     final minutes = (seconds ~/ 60).toString().padLeft(2, '0');
     final remainder = (seconds % 60).toString().padLeft(2, '0');
     return '$minutes:$remainder';
+  }
+}
+
+class _PomodoroStatsSection extends StatelessWidget {
+  const _PomodoroStatsSection({
+    super.key,
+    required this.period,
+    required this.dataPeriod,
+    required this.stats,
+    required this.loading,
+    required this.error,
+    required this.onPeriodChanged,
+    required this.onRetry,
+  });
+
+  final String period;
+  final String? dataPeriod;
+  final PomodoroStatsDto? stats;
+  final bool loading;
+  final String? error;
+  final ValueChanged<Set<String>> onPeriodChanged;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final data = stats;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                '专注统计',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            if (loading && data != null)
+              const SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: SegmentedButton<String>(
+            key: const Key('pomodoro-stats-period'),
+            segments: const [
+              ButtonSegment(value: 'day', label: Text('今天')),
+              ButtonSegment(value: 'week', label: Text('7 天')),
+              ButtonSegment(value: 'month', label: Text('30 天')),
+            ],
+            selected: {period},
+            showSelectedIcon: false,
+            onSelectionChanged: onPeriodChanged,
+          ),
+        ),
+        if (data != null && dataPeriod != null && dataPeriod != period) ...[
+          const SizedBox(height: 8),
+          Text(
+            loading
+                ? '正在加载 ${_periodLabel(period)}，暂显示 ${_periodLabel(dataPeriod!)}结果'
+                : '暂未更新到${_periodLabel(period)}，暂显示 ${_periodLabel(dataPeriod!)}结果',
+            key: const Key('pomodoro-stats-data-period-note'),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+        if (error != null) ...[
+          const SizedBox(height: 12),
+          Text(
+            error!,
+            key: const Key('pomodoro-stats-error'),
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+          const SizedBox(height: 4),
+          OutlinedButton.icon(
+            onPressed: loading ? null : onRetry,
+            icon: const Icon(Icons.refresh),
+            label: const Text('重试加载统计'),
+          ),
+        ],
+        if (data == null) ...[
+          const SizedBox(height: 24),
+          if (loading)
+            const Center(child: CircularProgressIndicator())
+          else if (error == null)
+            const Text('当前周期暂无统计数据'),
+        ] else ...[
+          const SizedBox(height: 16),
+          _StatsMetrics(stats: data),
+          const SizedBox(height: 24),
+          Text('专注节奏', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Text('按天查看实际专注分钟', style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 12),
+          _FocusTrendChart(items: data.minutesTrend),
+          const SizedBox(height: 24),
+          Text('专注日历', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Text('颜色越深，专注时间越长', style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 12),
+          _FocusCalendar(items: data.minutesTrend),
+        ],
+      ],
+    );
+  }
+
+  static String _periodLabel(String period) {
+    return switch (period) {
+      'day' => '今天',
+      'month' => '30 天',
+      _ => '7 天',
+    };
+  }
+}
+
+class _StatsMetrics extends StatelessWidget {
+  const _StatsMetrics({required this.stats});
+
+  final PomodoroStatsDto stats;
+
+  @override
+  Widget build(BuildContext context) {
+    final average = stats.averageMinutesPerDay;
+    final averageLabel = average == average.roundToDouble()
+        ? average.toStringAsFixed(0)
+        : average.toStringAsFixed(1);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = (constraints.maxWidth - 8) / 2;
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            SizedBox(
+              width: width,
+              child: _StatsMetric(
+                key: const Key('pomodoro-stats-total-sessions'),
+                label: '完成会话',
+                value: '${stats.totalSessions}',
+                unit: '次',
+              ),
+            ),
+            SizedBox(
+              width: width,
+              child: _StatsMetric(
+                key: const Key('pomodoro-stats-total-minutes'),
+                label: '专注分钟',
+                value: '${stats.totalMinutes}',
+                unit: '分钟',
+              ),
+            ),
+            SizedBox(
+              width: width,
+              child: _StatsMetric(
+                key: const Key('pomodoro-stats-average-minutes'),
+                label: '日均专注',
+                value: averageLabel,
+                unit: '分钟',
+              ),
+            ),
+            SizedBox(
+              width: width,
+              child: _StatsMetric(
+                key: const Key('pomodoro-stats-best-hour'),
+                label: '高效时段',
+                value: stats.bestHour ?? '暂无',
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _StatsMetric extends StatelessWidget {
+  const _StatsMetric({
+    super.key,
+    required this.label,
+    required this.value,
+    this.unit,
+  });
+
+  final String label;
+  final String value;
+  final String? unit;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: Theme.of(context).textTheme.labelMedium),
+            const SizedBox(height: 4),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Flexible(
+                  child: Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                ),
+                if (unit != null) ...[
+                  const SizedBox(width: 4),
+                  Text(unit!, style: Theme.of(context).textTheme.labelSmall),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FocusTrendChart extends StatelessWidget {
+  const _FocusTrendChart({required this.items});
+
+  final List<PomodoroDailyStatsDto> items;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) return const Text('当前周期暂无专注趋势');
+    final maxMinutes = items.fold<int>(
+      0,
+      (max, item) => item.count > max ? item.count : max,
+    );
+    final colors = Theme.of(context).colorScheme;
+    return SizedBox(
+      height: 160,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            for (final item in items)
+              Semantics(
+                label: '${item.date} 专注 ${item.count} 分钟',
+                child: ExcludeSemantics(
+                  child: SizedBox(
+                    width: 34,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Text(
+                          '${item.count}',
+                          style: Theme.of(context).textTheme.labelSmall,
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          width: 18,
+                          height: maxMinutes == 0
+                              ? 4
+                              : 8 + 66 * item.count / maxMinutes,
+                          decoration: BoxDecoration(
+                            color: item.count == 0
+                                ? colors.surfaceContainerHighest
+                                : colors.primary,
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(6),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          item.date.length >= 5
+                              ? item.date.substring(item.date.length - 5)
+                              : item.date,
+                          style: Theme.of(context).textTheme.labelSmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FocusCalendar extends StatelessWidget {
+  const _FocusCalendar({required this.items});
+
+  final List<PomodoroDailyStatsDto> items;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) return const Text('当前周期暂无专注日历');
+    final maxMinutes = items.fold<int>(
+      0,
+      (max, item) => item.count > max ? item.count : max,
+    );
+    final colors = Theme.of(context).colorScheme;
+    return GridView.count(
+      crossAxisCount: 7,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 6,
+      crossAxisSpacing: 6,
+      children: [
+        for (final item in items)
+          Semantics(
+            label: '${item.date} 专注日历 ${item.count} 分钟',
+            child: ExcludeSemantics(
+              child: Tooltip(
+                message: '${item.date} · ${item.count} 分钟',
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Color.lerp(
+                      colors.surfaceContainerHighest,
+                      colors.primary,
+                      maxMinutes == 0 ? 0 : item.count / maxMinutes,
+                    ),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 }
 
