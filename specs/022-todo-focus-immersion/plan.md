@@ -138,7 +138,7 @@ Expected: PASS.
 - Modify: `spec.md`
 - Modify: `specs/022-todo-focus-immersion/tasks.md`
 
-- [ ] **Step 1: Run local quality gates**
+- [x] **Step 1: Run local quality gates**
 
 Run:
 
@@ -162,6 +162,8 @@ Expected: every command exits 0; any Web Wasm dry-run warning from existing `flu
 
 Pass the storage/state excerpt, the immersive pane excerpt and the relevant tests separately through stdin to `claude -p --model sonnet --no-session-persistence`. Require each response to begin with literal `VERDICT: PASS` or `VERDICT: FAIL`; a nonresponding request is recorded as an execution constraint, never approval.
 
+> Execution constraint (2026-08-02): the storage excerpt returned `VERDICT: PASS`. The no-tool Sonnet probe also returned immediately, but the pane source excerpt produced no output in three bounded requests (240, 118 and 30 lines; the first exceeded 90 seconds). This is recorded as a Claude CLI content-response constraint, not an approval. Local static analysis, targeted tests, full serial suite and Web build remain required and passed; retry the missing independent source review when the CLI response path recovers.
+
 - [ ] **Step 3: Create and merge the Gitea PR**
 
-Create one conventional commit `feat(todo): 增加番茄沉浸模式` linked to `Fixes #253`; preserve actual Actions/Jenkins evidence and merge only through the repository PR flow.
+Create a PR linked to `Fixes #253`; its task-scoped commits use Chinese Conventional Commits. Preserve actual Actions/Jenkins evidence and merge only through the repository PR flow.

@@ -3,30 +3,36 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zh_cloud_todo_flutter/features/pomodoro/focus_immersion_settings.dart';
 
 void main() {
-  test('immersion settings default safely when storage is empty or malformed', () async {
-    final storage = _MemoryStorage();
-    final store = FocusImmersionSettingsStore(storage: storage);
+  test(
+    'immersion settings default safely when storage is empty or malformed',
+    () async {
+      final storage = _MemoryStorage();
+      final store = FocusImmersionSettingsStore(storage: storage);
 
-    expect(await store.read(), const FocusImmersionSettings());
+      expect(await store.read(), const FocusImmersionSettings());
 
-    storage.values[FocusImmersionSettingsStore.storageKey] = 'not-json';
-    expect(await store.read(), const FocusImmersionSettings());
+      storage.values[FocusImmersionSettingsStore.storageKey] = 'not-json';
+      expect(await store.read(), const FocusImmersionSettings());
 
-    storage.values[FocusImmersionSettingsStore.storageKey] =
-        '{"autoEnter":true,"style":"unknown"}';
-    expect(await store.read(), const FocusImmersionSettings());
-  });
+      storage.values[FocusImmersionSettingsStore.storageKey] =
+          '{"autoEnter":true,"style":"unknown"}';
+      expect(await store.read(), const FocusImmersionSettings());
+    },
+  );
 
-  test('immersion settings round-trip auto entry and each supported style', () async {
-    final storage = _MemoryStorage();
-    final store = FocusImmersionSettingsStore(storage: storage);
+  test(
+    'immersion settings round-trip auto entry and each supported style',
+    () async {
+      final storage = _MemoryStorage();
+      final store = FocusImmersionSettingsStore(storage: storage);
 
-    for (final style in FocusTimerStyle.values) {
-      final value = FocusImmersionSettings(autoEnter: true, style: style);
-      expect(await store.write(value), isTrue);
-      expect(await store.read(), value);
-    }
-  });
+      for (final style in FocusTimerStyle.values) {
+        final value = FocusImmersionSettings(autoEnter: true, style: style);
+        expect(await store.write(value), isTrue);
+        expect(await store.read(), value);
+      }
+    },
+  );
 
   test('immersion settings report write failure without throwing', () async {
     final storage = _MemoryStorage()..writeSucceeds = false;

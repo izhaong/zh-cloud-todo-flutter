@@ -12,6 +12,8 @@
 - 2026-08-02：偏好存储先以缺少文件、类型和接口的编译错误完成红测；实现默认值、`digital/flip/pixel`、损坏数据回退和写失败降级后，`focus_immersion_settings_test.dart` 3/3 通过。
 - 2026-08-02：沉浸展示层先以缺少文件的编译错误完成红测；实现纯展示组件后，`focus_immersive_pane_test.dart` 3/3 通过，覆盖三种样式、计时器语义、可展开动作、暂停措辞，以及 320px/1.3 倍字体无溢出。
 - 2026-08-02：页面接线先以缺少菜单、状态和展示层的断言失败完成红测；实现菜单、会话内自动进入和本地展示偏好后，`pomodoro_page_contract_test.dart --plain-name immersive` 6/6 通过，覆盖手动进出、暂停/恢复/取消、会话启动/远端恢复的自动进入、手动退出不重入、远端清除退出与样式持久化。
+- 2026-08-02：格式检查、`flutter analyze`、沉浸相关 50 项测试、全仓串行 `flutter test --concurrency=1`（701 通过、26 项环境开关跳过）以及带 test API/tenant 参数的 Web release 均通过。Web 只出现既有 `flutter_secure_storage_web` Wasm dry-run 兼容警告，`build/web` 已成功产出。
+- 2026-08-02：Claude CLI 存储合同审查返回 `VERDICT: PASS`；Sonnet 探针可立即响应，但展示源码的三次无工具 stdin 审查（240、118、30 行）均静默/超时，首次超过 90 秒后终止。该独立复核缺口已记录，不能解释为 Claude 批准；待 CLI 恢复后重试展示与页面源码分段审查。
 
 ## 当前边界
 
