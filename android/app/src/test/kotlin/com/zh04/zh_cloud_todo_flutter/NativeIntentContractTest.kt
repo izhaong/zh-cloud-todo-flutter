@@ -47,6 +47,24 @@ class NativeIntentContractTest {
     }
 
     @Test
+    fun `keep screen awake accepts only a boolean enabled map`() {
+        assertEquals(
+            true,
+            NativeIntentContract.keepScreenAwakeEnabled(mapOf("enabled" to true)),
+        )
+        assertEquals(
+            false,
+            NativeIntentContract.keepScreenAwakeEnabled(mapOf("enabled" to false)),
+        )
+        assertNull(NativeIntentContract.keepScreenAwakeEnabled(emptyMap<String, Any?>()))
+        assertNull(NativeIntentContract.keepScreenAwakeEnabled(null))
+        assertNull(NativeIntentContract.keepScreenAwakeEnabled("true"))
+        assertNull(
+            NativeIntentContract.keepScreenAwakeEnabled(mapOf("enabled" to "true")),
+        )
+    }
+
+    @Test
     fun `system note is only offered on Android 14 or newer`() {
         assertEquals(false, NativeIntentContract.supportsSystemNote(apiLevel = 33))
         assertEquals(true, NativeIntentContract.supportsSystemNote(apiLevel = 34))

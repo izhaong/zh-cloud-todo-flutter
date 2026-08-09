@@ -47,6 +47,17 @@ enum IOSNativeIntentContract {
       subject: subject?.isEmpty == false ? subject : nil
     )
   }
+
+  static func keepScreenAwakeEnabled(_ arguments: Any?) -> Bool? {
+    guard
+      let values = arguments as? [String: Any],
+      let enabled = values["enabled"] as? NSNumber,
+      CFGetTypeID(enabled) == CFBooleanGetTypeID()
+    else {
+      return nil
+    }
+    return enabled.boolValue
+  }
 }
 
 final class IOSNativeLinkBridge: NSObject, FlutterStreamHandler {
@@ -173,6 +184,19 @@ private final class IOSNativeShareItem: NSObject, UIActivityItemSource {
       result(true)
     case "getInitialLink":
       result(IOSNativeLinkBridge.shared.takeInitialLink())
+    case "setKeepScreenAwake":
+      guard let enabled = IOSNativeIntentContract.keepScreenAwakeEnabled(call.arguments) else {
+        result(
+          FlutterError(
+            code: "invalid_arguments",
+            message: "屏幕常亮参数无效",
+            details: nil
+          )
+        )
+        return
+      }
+      UIApplication.shared.isIdleTimerDisabled = enabled
+      result(true)
     case "share":
       guard let request = IOSNativeIntentContract.shareRequest(call.arguments) else {
         result(

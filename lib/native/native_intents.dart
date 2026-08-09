@@ -106,9 +106,7 @@ class NativeIntents {
   /// 直接上报为未处理的 FlutterError。
   static Stream<Uri> incomingUris() async* {
     try {
-      final supported = await _channel.invokeMethod<bool>(
-        'supportsLinkEvents',
-      );
+      final supported = await _channel.invokeMethod<bool>('supportsLinkEvents');
       if (supported != true) return;
     } on PlatformException {
       return;
@@ -140,6 +138,21 @@ class NativeIntents {
     try {
       await _channel.invokeMethod('setStickyNote', {'content': content});
       return true;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
+  /// 控制前台专注会话期间是否保持屏幕常亮；不支持时安全返回 false。
+  static Future<bool> setKeepScreenAwake(bool enabled) async {
+    try {
+      final updated = await _channel.invokeMethod<Object?>(
+        'setKeepScreenAwake',
+        {'enabled': enabled},
+      );
+      return updated == true;
     } on PlatformException {
       return false;
     } on MissingPluginException {
