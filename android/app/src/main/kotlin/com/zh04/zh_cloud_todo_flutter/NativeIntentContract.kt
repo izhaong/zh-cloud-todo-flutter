@@ -55,6 +55,11 @@ object NativeIntentContract {
         return (map["content"] as? String)?.trim()?.takeIf(String::isNotEmpty)
     }
 
+    fun keepScreenAwakeEnabled(arguments: Any?): Boolean? {
+        val map = arguments as? Map<*, *> ?: return null
+        return map["enabled"] as? Boolean
+    }
+
     fun todayWidgetTasks(arguments: Any?): List<TodayWidgetTask>? {
         val map = arguments as? Map<*, *> ?: return null
         val values = map["tasks"] as? List<*> ?: return null
