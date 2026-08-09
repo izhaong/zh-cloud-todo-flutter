@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zh_cloud_todo_flutter/features/pomodoro/focus_immersion_settings.dart';
@@ -31,6 +33,57 @@ void main() {
         expect(await store.write(value), isTrue);
         expect(await store.read(), value);
       }
+    },
+  );
+
+  test(
+    'immersion settings read legacy JSON with screen awake disabled',
+    () async {
+      final storage = _MemoryStorage()
+        ..values[FocusImmersionSettingsStore.storageKey] =
+            '{"autoEnter":true,"style":"flip"}';
+      final store = FocusImmersionSettingsStore(storage: storage);
+
+      final settings = await store.read();
+
+      expect(settings.autoEnter, isTrue);
+      expect(settings.style, FocusTimerStyle.flip);
+      expect(settings.keepScreenAwake, isFalse);
+    },
+  );
+
+  test('immersion settings round-trip screen awake preference', () async {
+    final storage = _MemoryStorage();
+    final store = FocusImmersionSettingsStore(storage: storage);
+    const value = FocusImmersionSettings(
+      autoEnter: true,
+      style: FocusTimerStyle.pixel,
+      keepScreenAwake: true,
+    );
+
+    expect(await store.write(value), isTrue);
+    expect(await store.read(), value);
+    expect(
+      jsonDecode(storage.values[FocusImmersionSettingsStore.storageKey]!)
+          as Map<String, dynamic>,
+      containsPair('keepScreenAwake', isTrue),
+    );
+  });
+
+  test(
+    'immersion settings default invalid screen awake fields safely',
+    () async {
+      final storage = _MemoryStorage();
+      final store = FocusImmersionSettingsStore(storage: storage);
+
+      storage.values[FocusImmersionSettingsStore.storageKey] =
+          '{"autoEnter":true,"style":"digital","keepScreenAwake":"true"}';
+
+      final settings = await store.read();
+
+      expect(settings.autoEnter, isTrue);
+      expect(settings.style, FocusTimerStyle.digital);
+      expect(settings.keepScreenAwake, isFalse);
     },
   );
 

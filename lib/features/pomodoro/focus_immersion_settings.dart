@@ -8,20 +8,23 @@ class FocusImmersionSettings {
   const FocusImmersionSettings({
     this.autoEnter = false,
     this.style = FocusTimerStyle.digital,
+    this.keepScreenAwake = false,
   });
 
   final bool autoEnter;
   final FocusTimerStyle style;
+  final bool keepScreenAwake;
 
   @override
   bool operator ==(Object other) {
     return other is FocusImmersionSettings &&
         other.autoEnter == autoEnter &&
-        other.style == style;
+        other.style == style &&
+        other.keepScreenAwake == keepScreenAwake;
   }
 
   @override
-  int get hashCode => Object.hash(autoEnter, style);
+  int get hashCode => Object.hash(autoEnter, style, keepScreenAwake);
 }
 
 abstract interface class FocusImmersionSettingsStorage {
@@ -68,7 +71,12 @@ class FocusImmersionSettingsStore {
         (value) => value.name == styleName,
       );
       if (style.isEmpty) return const FocusImmersionSettings();
-      return FocusImmersionSettings(autoEnter: autoEnter, style: style.first);
+      final keepScreenAwake = decoded['keepScreenAwake'];
+      return FocusImmersionSettings(
+        autoEnter: autoEnter,
+        style: style.first,
+        keepScreenAwake: keepScreenAwake is bool ? keepScreenAwake : false,
+      );
     } catch (_) {
       return const FocusImmersionSettings();
     }
@@ -78,7 +86,11 @@ class FocusImmersionSettingsStore {
     try {
       return await _storage.writeString(
         storageKey,
-        jsonEncode({'autoEnter': value.autoEnter, 'style': value.style.name}),
+        jsonEncode({
+          'autoEnter': value.autoEnter,
+          'style': value.style.name,
+          'keepScreenAwake': value.keepScreenAwake,
+        }),
       );
     } catch (_) {
       return false;
