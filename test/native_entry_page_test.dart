@@ -67,6 +67,7 @@ void main() {
     expect(await NativeIntents.handleIncomingUri(), isNull);
     expect(await NativeIntents.shareText('今日任务'), isFalse);
     expect(await NativeIntents.setStickyNote('今日重点'), isFalse);
+    expect(await NativeIntents.setKeepScreenAwake(true), isFalse);
     expect(
       await NativeIntents.pushLockScreenTasks(const [
         NativeLockScreenTask(serverId: 101, title: '今日重点'),
@@ -75,6 +76,57 @@ void main() {
     );
     expect(await NativeIntents.widgetTodaySnapshot(), isEmpty);
     expect(await NativeIntents.updateTodayWidgetSnapshot(['今日任务']), isFalse);
+  });
+
+  test('常亮请求使用原生通道的精确方法和布尔参数', () async {
+    const channel = MethodChannel('zh_cloud_todo/native');
+    final received = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          received.add(call);
+          return true;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+
+    expect(await NativeIntents.setKeepScreenAwake(true), isTrue);
+    expect(await NativeIntents.setKeepScreenAwake(false), isTrue);
+    expect(received, [
+      isA<MethodCall>()
+          .having((call) => call.method, 'method', 'setKeepScreenAwake')
+          .having((call) => call.arguments, 'arguments', {'enabled': true}),
+      isA<MethodCall>()
+          .having((call) => call.method, 'method', 'setKeepScreenAwake')
+          .having((call) => call.arguments, 'arguments', {'enabled': false}),
+    ]);
+  });
+
+  test('常亮请求对平台异常和非 true 返回值安全降级', () async {
+    const channel = MethodChannel('zh_cloud_todo/native');
+    final responses = <Object?>[
+      false,
+      null,
+      'unexpected',
+      PlatformException(code: 'unsupported'),
+    ].iterator;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          responses.moveNext();
+          final response = responses.current;
+          if (response is PlatformException) throw response;
+          return response;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+
+    expect(await NativeIntents.setKeepScreenAwake(true), isFalse);
+    expect(await NativeIntents.setKeepScreenAwake(true), isFalse);
+    expect(await NativeIntents.setKeepScreenAwake(true), isFalse);
+    expect(await NativeIntents.setKeepScreenAwake(true), isFalse);
   });
 
   test('锁屏快照只把显式空列表用于清除且拒绝无效任务', () async {

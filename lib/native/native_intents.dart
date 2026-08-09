@@ -147,6 +147,21 @@ class NativeIntents {
     }
   }
 
+  /// 控制前台专注会话期间是否保持屏幕常亮；不支持时安全返回 false。
+  static Future<bool> setKeepScreenAwake(bool enabled) async {
+    try {
+      final updated = await _channel.invokeMethod<Object?>(
+        'setKeepScreenAwake',
+        {'enabled': enabled},
+      );
+      return updated == true;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
   /// 锁屏重要任务：Android 以 ongoing 通知展示最多五项已同步任务；
   /// 空快照会清除通知。iOS 未实现时安全返回 false。
   static Future<bool> pushLockScreenTasks(
