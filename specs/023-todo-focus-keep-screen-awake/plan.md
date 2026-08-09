@@ -1,6 +1,6 @@
 # Todo 专注屏幕常亮实施计划
 
-**Issue:** #256  
+**Issue:** #256
 **分支：** `codex/256-todo-focus-keep-screen-awake`
 
 ## 不变条件

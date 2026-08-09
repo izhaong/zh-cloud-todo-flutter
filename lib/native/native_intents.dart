@@ -106,9 +106,7 @@ class NativeIntents {
   /// 直接上报为未处理的 FlutterError。
   static Stream<Uri> incomingUris() async* {
     try {
-      final supported = await _channel.invokeMethod<bool>(
-        'supportsLinkEvents',
-      );
+      final supported = await _channel.invokeMethod<bool>('supportsLinkEvents');
       if (supported != true) return;
     } on PlatformException {
       return;
