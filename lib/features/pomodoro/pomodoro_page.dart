@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/efficiency_api.dart';
 import '../../core/db/app_database.dart';
+import '../../native/native_intents.dart';
 import '../../state/efficiency_providers.dart';
 import '../../state/providers.dart';
 import 'focus_immersion_settings.dart';
@@ -13,7 +14,14 @@ import 'focus_immersive_pane.dart';
 import 'pomodoro_timer_editor.dart';
 import 'pomodoro_timer_section.dart';
 
-enum _FocusMenuAction { enterImmersion, toggleAutoEnter, digital, flip, pixel }
+enum _FocusMenuAction {
+  enterImmersion,
+  toggleAutoEnter,
+  toggleKeepScreenAwake,
+  digital,
+  flip,
+  pixel,
+}
 
 /// 番茄专注页：服务端预设、任务关联、专注笔记与跨设备会话收敛。
 class PomodoroPage extends ConsumerStatefulWidget {
@@ -26,7 +34,8 @@ class PomodoroPage extends ConsumerStatefulWidget {
   ConsumerState<PomodoroPage> createState() => _PomodoroPageState();
 }
 
-class _PomodoroPageState extends ConsumerState<PomodoroPage> {
+class _PomodoroPageState extends ConsumerState<PomodoroPage>
+    with WidgetsBindingObserver {
   static const _syncInterval = Duration(seconds: 15);
 
   final _minutesController = TextEditingController(text: '25');
@@ -73,14 +82,24 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
   int? _timerActionPendingId;
   FocusImmersionSettings _immersionSettings = const FocusImmersionSettings();
   bool _immersionSettingsLoaded = false;
+  bool _immersionSettingsReadResolved = false;
+  bool _autoEnterChangedBeforeSettingsRead = false;
+  bool _styleChangedBeforeSettingsRead = false;
+  bool _keepScreenAwakeChangedBeforeSettingsRead = false;
+  Future<void> _immersionSettingsWriteTail = Future<void>.value();
   bool _immersive = false;
   bool _immersiveControlsVisible = false;
   int? _autoEnteredSessionId;
   int? _immersiveDismissedSessionId;
+  bool _appInForeground = false;
+  bool? _lastKeepScreenAwakeDesired;
 
   @override
   void initState() {
     super.initState();
+    final lifecycleState = WidgetsBinding.instance.lifecycleState;
+    _appInForeground = lifecycleState == AppLifecycleState.resumed;
+    WidgetsBinding.instance.addObserver(this);
     _timelineDate = DateUtils.dateOnly(DateTime.now());
     _selectedTaskId = widget.taskId;
     Future<void>.microtask(() {
@@ -98,6 +117,8 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
 
   @override
   void dispose() {
+    _appInForeground = false;
+    _syncKeepScreenAwake();
     _syncRequest++;
     _recordsRequest++;
     _statsRequest++;
@@ -107,7 +128,14 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
     _syncTicker?.cancel();
     _minutesController.dispose();
     _remarkController.dispose();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appInForeground = state == AppLifecycleState.resumed;
+    _syncKeepScreenAwake();
   }
 
   PomodoroPresetDto? get _selectedPreset {
@@ -569,21 +597,82 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
   }
 
   Future<void> _loadImmersionSettings() async {
-    final settings = await ref.read(focusImmersionSettingsStoreProvider).read();
-    if (!mounted) return;
+    final store = ref.read(focusImmersionSettingsStoreProvider);
+    final settings = await store.read();
+    final settingsChangedBeforeRead =
+        _autoEnterChangedBeforeSettingsRead ||
+        _styleChangedBeforeSettingsRead ||
+        _keepScreenAwakeChangedBeforeSettingsRead;
+    final resolvedSettings = FocusImmersionSettings(
+      autoEnter: _autoEnterChangedBeforeSettingsRead
+          ? _immersionSettings.autoEnter
+          : settings.autoEnter,
+      style: _styleChangedBeforeSettingsRead
+          ? _immersionSettings.style
+          : settings.style,
+      keepScreenAwake: _keepScreenAwakeChangedBeforeSettingsRead
+          ? _immersionSettings.keepScreenAwake
+          : settings.keepScreenAwake,
+    );
+    if (!mounted) {
+      if (settingsChangedBeforeRead) {
+        unawaited(_persistImmersionSettings(store, resolvedSettings));
+      }
+      return;
+    }
+    _immersionSettingsReadResolved = true;
+    _autoEnterChangedBeforeSettingsRead = false;
+    _styleChangedBeforeSettingsRead = false;
+    _keepScreenAwakeChangedBeforeSettingsRead = false;
     setState(() {
-      _immersionSettings = settings;
+      _immersionSettings = resolvedSettings;
       _immersionSettingsLoaded = true;
     });
     _tryAutoEnterImmersion();
+    _syncKeepScreenAwake();
+    if (settingsChangedBeforeRead) {
+      unawaited(_persistImmersionSettings(store, resolvedSettings));
+    }
   }
 
-  Future<void> _updateImmersionSettings(FocusImmersionSettings value) async {
+  Future<void> _updateImmersionSettings(
+    FocusImmersionSettings value, {
+    bool autoEnterChanged = false,
+    bool styleChanged = false,
+    bool keepScreenAwakeChanged = false,
+  }) async {
     if (!mounted) return;
-    setState(() => _immersionSettings = value);
-    await ref.read(focusImmersionSettingsStoreProvider).write(value);
+    final changedBeforeSettingsRead = !_immersionSettingsReadResolved;
+    if (changedBeforeSettingsRead) {
+      _autoEnterChangedBeforeSettingsRead |= autoEnterChanged;
+      _styleChangedBeforeSettingsRead |= styleChanged;
+      _keepScreenAwakeChangedBeforeSettingsRead |= keepScreenAwakeChanged;
+    }
+    setState(() {
+      _immersionSettings = value;
+      if (changedBeforeSettingsRead) _immersionSettingsLoaded = true;
+    });
+    _syncKeepScreenAwake();
+    if (changedBeforeSettingsRead) {
+      _tryAutoEnterImmersion();
+      return;
+    }
+    await _persistImmersionSettings(
+      ref.read(focusImmersionSettingsStoreProvider),
+      value,
+    );
     if (!mounted) return;
     _tryAutoEnterImmersion();
+  }
+
+  Future<void> _persistImmersionSettings(
+    FocusImmersionSettingsStore store,
+    FocusImmersionSettings value,
+  ) {
+    _immersionSettingsWriteTail = _immersionSettingsWriteTail.then((_) async {
+      await store.write(value);
+    });
+    return _immersionSettingsWriteTail;
   }
 
   void _enterImmersion() {
@@ -637,7 +726,19 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
           FocusImmersionSettings(
             autoEnter: !_immersionSettings.autoEnter,
             style: _immersionSettings.style,
+            keepScreenAwake: _immersionSettings.keepScreenAwake,
           ),
+          autoEnterChanged: true,
+        );
+        return;
+      case _FocusMenuAction.toggleKeepScreenAwake:
+        await _updateImmersionSettings(
+          FocusImmersionSettings(
+            autoEnter: _immersionSettings.autoEnter,
+            style: _immersionSettings.style,
+            keepScreenAwake: !_immersionSettings.keepScreenAwake,
+          ),
+          keepScreenAwakeChanged: true,
         );
         return;
       case _FocusMenuAction.digital:
@@ -653,7 +754,9 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
           FocusImmersionSettings(
             autoEnter: _immersionSettings.autoEnter,
             style: style,
+            keepScreenAwake: _immersionSettings.keepScreenAwake,
           ),
+          styleChanged: true,
         );
         return;
     }
@@ -672,6 +775,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
       _paused = session.status == 'PAUSED';
       _secondsLeft = secondsLeft;
     });
+    _syncKeepScreenAwake();
     _ticker?.cancel();
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted || _paused) return;
@@ -700,6 +804,44 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
       _immersiveDismissedSessionId = null;
       if (clearRemark) _remarkController.clear();
     });
+    _syncKeepScreenAwake();
+  }
+
+  void _syncKeepScreenAwake() {
+    final session = _session;
+    final desired =
+        _immersionSettingsLoaded &&
+        _immersionSettings.keepScreenAwake &&
+        session?.status == 'RUNNING' &&
+        !_paused &&
+        _appInForeground;
+    if (_lastKeepScreenAwakeDesired == desired ||
+        (!desired && _lastKeepScreenAwakeDesired == null)) {
+      return;
+    }
+    _lastKeepScreenAwakeDesired = desired;
+    unawaited(NativeIntents.setKeepScreenAwake(desired));
+  }
+
+  PomodoroSessionDto _copySessionWithStatus(
+    PomodoroSessionDto session,
+    String status,
+  ) {
+    return PomodoroSessionDto(
+      id: session.id,
+      timerId: session.timerId,
+      taskId: session.taskId,
+      habitId: session.habitId,
+      mode: session.mode,
+      plannedMinutes: session.plannedMinutes,
+      actualMinutes: session.actualMinutes,
+      status: status,
+      startedAt: session.startedAt,
+      pausedAt: session.pausedAt,
+      endedAt: session.endedAt,
+      pausedSeconds: session.pausedSeconds,
+      remark: session.remark,
+    );
   }
 
   Future<void> _adjustDuration(int deltaMinutes) async {
@@ -741,7 +883,11 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
       _syncRequest++;
       await ref.read(pomodoroApiProvider).pause(session.id);
       if (!mounted) return;
-      setState(() => _paused = true);
+      setState(() {
+        _session = _copySessionWithStatus(session, 'PAUSED');
+        _paused = true;
+      });
+      _syncKeepScreenAwake();
     } catch (error) {
       if (!mounted) return;
       setState(() => _actionError = '暂停失败：$error');
@@ -761,7 +907,11 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
       _syncRequest++;
       await ref.read(pomodoroApiProvider).resume(session.id);
       if (!mounted) return;
-      setState(() => _paused = false);
+      setState(() {
+        _session = _copySessionWithStatus(session, 'RUNNING');
+        _paused = false;
+      });
+      _syncKeepScreenAwake();
     } catch (error) {
       if (!mounted) return;
       setState(() => _actionError = '恢复失败：$error');
@@ -795,9 +945,8 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
         await api.cancel(session.id);
       }
       if (!mounted) return;
-      await _refreshRecordsAndStats();
-      if (!mounted) return;
       _clearSession(clearRemark: true);
+      await _refreshRecordsAndStats();
     } catch (error) {
       if (!mounted) return;
       setState(() => _actionError = complete ? '完成失败：$error' : '取消失败：$error');
@@ -1006,6 +1155,12 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage> {
                 value: _FocusMenuAction.toggleAutoEnter,
                 checked: _immersionSettings.autoEnter,
                 child: const Text('自动进入沉浸模式'),
+              ),
+              CheckedPopupMenuItem(
+                key: const Key('pomodoro-focus-keep-screen-awake'),
+                value: _FocusMenuAction.toggleKeepScreenAwake,
+                checked: _immersionSettings.keepScreenAwake,
+                child: const Text('专注时保持屏幕常亮（仅 Android/iOS）'),
               ),
               const PopupMenuDivider(),
               const PopupMenuItem(enabled: false, child: Text('计时样式')),

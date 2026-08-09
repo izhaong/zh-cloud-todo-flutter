@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -211,6 +212,405 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+    'foreground running session requests keep-screen-awake only once across periodic sync',
+    (tester) async {
+      final calls = _mockKeepScreenAwake(tester, result: false);
+      final storage = _FocusImmersionMemoryStorage();
+      final store = FocusImmersionSettingsStore(storage: storage);
+      await store.write(const FocusImmersionSettings(keepScreenAwake: true));
+      final active = PomodoroSessionDto(
+        id: 73,
+        mode: 'MODE_25_5',
+        plannedMinutes: 25,
+        status: 'RUNNING',
+        startedAt: DateTime.now().subtract(const Duration(minutes: 3)),
+      );
+      final api = _FakePomodoroApi()..activeResponses.addAll([active, active]);
+
+      await _pumpPage(tester, api: api, focusImmersionSettingsStore: store);
+      expect(_keepScreenAwakeValues(calls), [true]);
+
+      await tester.pump(const Duration(seconds: 15));
+      await tester.pump();
+      expect(_keepScreenAwakeValues(calls), [true]);
+    },
+  );
+
+  testWidgets(
+    'pending settings read preserves an enabled keep-screen-awake choice',
+    (tester) async {
+      final calls = _mockKeepScreenAwake(tester);
+      final storage = _DelayedFocusImmersionStorage();
+      final store = FocusImmersionSettingsStore(storage: storage);
+      await store.write(
+        const FocusImmersionSettings(
+          autoEnter: true,
+          style: FocusTimerStyle.flip,
+        ),
+      );
+      final api = _FakePomodoroApi()
+        ..activeResponses.add(
+          PomodoroSessionDto(
+            id: 731,
+            mode: 'MODE_25_5',
+            plannedMinutes: 25,
+            status: 'RUNNING',
+            startedAt: DateTime.now().subtract(const Duration(minutes: 3)),
+          ),
+        );
+
+      await _pumpPage(tester, api: api, focusImmersionSettingsStore: store);
+      await tester.tap(find.byTooltip('更多专注操作'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('pomodoro-focus-keep-screen-awake')),
+      );
+      await tester.pump();
+      expect(_keepScreenAwakeValues(calls), [true]);
+
+      storage.completeRead();
+      await tester.pumpAndSettle();
+      expect(_keepScreenAwakeValues(calls), [true]);
+      expect(
+        await store.read(),
+        const FocusImmersionSettings(
+          autoEnter: true,
+          style: FocusTimerStyle.flip,
+          keepScreenAwake: true,
+        ),
+      );
+    },
+  );
+
+  testWidgets(
+    'disposing during a pending settings read still persists keep-screen-awake',
+    (tester) async {
+      final calls = _mockKeepScreenAwake(tester);
+      final storage = _DelayedFocusImmersionStorage();
+      final store = FocusImmersionSettingsStore(storage: storage);
+      await store.write(
+        const FocusImmersionSettings(
+          autoEnter: true,
+          style: FocusTimerStyle.flip,
+        ),
+      );
+      final api = _FakePomodoroApi()
+        ..activeResponses.add(
+          PomodoroSessionDto(
+            id: 7311,
+            mode: 'MODE_25_5',
+            plannedMinutes: 25,
+            status: 'RUNNING',
+            startedAt: DateTime.now().subtract(const Duration(minutes: 3)),
+          ),
+        );
+
+      await _pumpPage(tester, api: api, focusImmersionSettingsStore: store);
+      await tester.tap(find.byTooltip('更多专注操作'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('pomodoro-focus-keep-screen-awake')),
+      );
+      await tester.pump();
+      expect(_keepScreenAwakeValues(calls), [true]);
+
+      await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+      await tester.pump();
+      storage.completeRead();
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        await store.read(),
+        const FocusImmersionSettings(
+          autoEnter: true,
+          style: FocusTimerStyle.flip,
+          keepScreenAwake: true,
+        ),
+      );
+    },
+  );
+
+  testWidgets(
+    'null lifecycle waits for an explicit resume before enabling keep-screen-awake',
+    (tester) async {
+      tester.binding.resetInternalState();
+      tester.binding.platformDispatcher.resetInitialLifecycleState();
+      expect(tester.binding.lifecycleState, isNull);
+
+      final calls = _mockKeepScreenAwake(tester);
+      final storage = _FocusImmersionMemoryStorage();
+      final store = FocusImmersionSettingsStore(storage: storage);
+      await store.write(const FocusImmersionSettings(keepScreenAwake: true));
+      final api = _FakePomodoroApi()
+        ..activeResponses.add(
+          PomodoroSessionDto(
+            id: 732,
+            mode: 'MODE_25_5',
+            plannedMinutes: 25,
+            status: 'RUNNING',
+            startedAt: DateTime.now().subtract(const Duration(minutes: 3)),
+          ),
+        );
+
+      await _pumpPage(
+        tester,
+        api: api,
+        focusImmersionSettingsStore: store,
+        foreground: false,
+      );
+      expect(tester.binding.lifecycleState, isNull);
+      expect(_keepScreenAwakeValues(calls), isEmpty);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(_keepScreenAwakeValues(calls), [true]);
+    },
+  );
+
+  testWidgets(
+    'pausing and resuming an enabled session toggles keep-screen-awake',
+    (tester) async {
+      final calls = _mockKeepScreenAwake(tester);
+      final storage = _FocusImmersionMemoryStorage();
+      final store = FocusImmersionSettingsStore(storage: storage);
+      await store.write(const FocusImmersionSettings(keepScreenAwake: true));
+      final api = _FakePomodoroApi()
+        ..activeResponses.add(
+          PomodoroSessionDto(
+            id: 74,
+            mode: 'MODE_25_5',
+            plannedMinutes: 25,
+            status: 'RUNNING',
+            startedAt: DateTime.now().subtract(const Duration(minutes: 3)),
+          ),
+        );
+
+      await _pumpPage(tester, api: api, focusImmersionSettingsStore: store);
+      expect(_keepScreenAwakeValues(calls), [true]);
+
+      await tester.tap(find.text('暂停'));
+      await tester.pump();
+      expect(_keepScreenAwakeValues(calls), [true, false]);
+
+      await tester.tap(find.text('恢复'));
+      await tester.pump();
+      expect(_keepScreenAwakeValues(calls), [true, false, true]);
+    },
+  );
+
+  testWidgets('clearing an enabled session disables keep-screen-awake', (
+    tester,
+  ) async {
+    final calls = _mockKeepScreenAwake(tester);
+    final storage = _FocusImmersionMemoryStorage();
+    final store = FocusImmersionSettingsStore(storage: storage);
+    await store.write(const FocusImmersionSettings(keepScreenAwake: true));
+    final api = _FakePomodoroApi()
+      ..activeResponses.addAll([
+        PomodoroSessionDto(
+          id: 75,
+          mode: 'MODE_25_5',
+          plannedMinutes: 25,
+          status: 'RUNNING',
+          startedAt: DateTime.now().subtract(const Duration(minutes: 3)),
+        ),
+        null,
+      ]);
+
+    await _pumpPage(tester, api: api, focusImmersionSettingsStore: store);
+    expect(_keepScreenAwakeValues(calls), [true]);
+
+    await tester.pump(const Duration(seconds: 15));
+    await tester.pump();
+    expect(_keepScreenAwakeValues(calls), [true, false]);
+  });
+
+  testWidgets(
+    'enabled session only requests keep-screen-awake when its status is running',
+    (tester) async {
+      final calls = _mockKeepScreenAwake(tester);
+      final storage = _FocusImmersionMemoryStorage();
+      final store = FocusImmersionSettingsStore(storage: storage);
+      await store.write(const FocusImmersionSettings(keepScreenAwake: true));
+      final api = _FakePomodoroApi()
+        ..activeResponses.add(
+          PomodoroSessionDto(
+            id: 751,
+            mode: 'MODE_25_5',
+            plannedMinutes: 25,
+            status: 'COMPLETED',
+            startedAt: DateTime.now().subtract(const Duration(minutes: 3)),
+          ),
+        );
+
+      await _pumpPage(tester, api: api, focusImmersionSettingsStore: store);
+      expect(_keepScreenAwakeValues(calls), isEmpty);
+    },
+  );
+
+  testWidgets(
+    'page created while backgrounded does not request keep-screen-awake',
+    (tester) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      try {
+        final calls = _mockKeepScreenAwake(tester);
+        final storage = _DelayedFocusImmersionStorage();
+        final store = FocusImmersionSettingsStore(storage: storage);
+        await store.write(const FocusImmersionSettings(keepScreenAwake: true));
+        final api = _FakePomodoroApi()
+          ..activeResponses.add(
+            PomodoroSessionDto(
+              id: 752,
+              mode: 'MODE_25_5',
+              plannedMinutes: 25,
+              status: 'RUNNING',
+              startedAt: DateTime.now().subtract(const Duration(minutes: 3)),
+            ),
+          );
+
+        await _pumpPage(
+          tester,
+          api: api,
+          focusImmersionSettingsStore: store,
+          foreground: false,
+        );
+        storage.completeRead();
+        await tester.pump();
+        expect(_keepScreenAwakeValues(calls), isEmpty);
+      } finally {
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pump();
+      }
+    },
+  );
+
+  testWidgets(
+    'completing an enabled session disables keep-screen-awake before records refresh',
+    (tester) => _expectFinishToDisableKeepScreenAwake(tester, complete: true),
+  );
+
+  testWidgets(
+    'cancelling an enabled session disables keep-screen-awake before records refresh',
+    (tester) => _expectFinishToDisableKeepScreenAwake(tester, complete: false),
+  );
+
+  testWidgets(
+    'backgrounding and foregrounding an enabled running session toggles keep-screen-awake',
+    (tester) async {
+      final calls = _mockKeepScreenAwake(tester);
+      final storage = _FocusImmersionMemoryStorage();
+      final store = FocusImmersionSettingsStore(storage: storage);
+      await store.write(const FocusImmersionSettings(keepScreenAwake: true));
+      final api = _FakePomodoroApi()
+        ..activeResponses.add(
+          PomodoroSessionDto(
+            id: 76,
+            mode: 'MODE_25_5',
+            plannedMinutes: 25,
+            status: 'RUNNING',
+            startedAt: DateTime.now().subtract(const Duration(minutes: 3)),
+          ),
+        );
+
+      await _pumpPage(tester, api: api, focusImmersionSettingsStore: store);
+      expect(_keepScreenAwakeValues(calls), [true]);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      expect(_keepScreenAwakeValues(calls), [true, false]);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(_keepScreenAwakeValues(calls), [true, false, true]);
+    },
+  );
+
+  testWidgets(
+    'disposing an enabled running session disables keep-screen-awake',
+    (tester) async {
+      final calls = _mockKeepScreenAwake(tester);
+      final storage = _FocusImmersionMemoryStorage();
+      final store = FocusImmersionSettingsStore(storage: storage);
+      await store.write(const FocusImmersionSettings(keepScreenAwake: true));
+      final api = _FakePomodoroApi()
+        ..activeResponses.add(
+          PomodoroSessionDto(
+            id: 77,
+            mode: 'MODE_25_5',
+            plannedMinutes: 25,
+            status: 'RUNNING',
+            startedAt: DateTime.now().subtract(const Duration(minutes: 3)),
+          ),
+        );
+
+      await _pumpPage(tester, api: api, focusImmersionSettingsStore: store);
+      expect(_keepScreenAwakeValues(calls), [true]);
+
+      await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+      await tester.pump();
+      expect(_keepScreenAwakeValues(calls), [true, false]);
+    },
+  );
+
+  testWidgets(
+    'keep-screen-awake menu persists its toggle and mobile boundary',
+    (tester) async {
+      final storage = _FocusImmersionMemoryStorage();
+      final store = FocusImmersionSettingsStore(storage: storage);
+      await _pumpPage(
+        tester,
+        api: _FakePomodoroApi(),
+        focusImmersionSettingsStore: store,
+      );
+
+      await tester.tap(find.byTooltip('更多专注操作'));
+      await tester.pumpAndSettle();
+      expect(find.text('专注时保持屏幕常亮（仅 Android/iOS）'), findsOneWidget);
+      expect(
+        tester
+            .widget<CheckedPopupMenuItem<dynamic>>(
+              find.byKey(const Key('pomodoro-focus-keep-screen-awake')),
+            )
+            .checked,
+        isFalse,
+      );
+
+      await tester.tap(
+        find.byKey(const Key('pomodoro-focus-keep-screen-awake')),
+      );
+      await tester.pump();
+      expect(
+        await store.read(),
+        const FocusImmersionSettings(keepScreenAwake: true),
+      );
+
+      await tester.tap(find.byTooltip('更多专注操作'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<CheckedPopupMenuItem<dynamic>>(
+              find.byKey(const Key('pomodoro-focus-keep-screen-awake')),
+            )
+            .checked,
+        isTrue,
+      );
+    },
+  );
 
   testWidgets('stopwatch restores and counts elapsed focus time', (
     tester,
@@ -1461,7 +1861,9 @@ Future<void> _pumpPage(
   List<TodoTask> tasks = const [],
   List<HabitDto> habits = const [],
   FocusImmersionSettingsStore? focusImmersionSettingsStore,
+  bool foreground = true,
 }) async {
+  if (foreground) _enterTestForeground(tester);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -1479,6 +1881,79 @@ Future<void> _pumpPage(
   await tester.pumpAndSettle();
 }
 
+void _enterTestForeground(WidgetTester tester) {
+  final state = tester.binding.lifecycleState;
+  if (state == AppLifecycleState.resumed) return;
+  if (state == AppLifecycleState.paused) {
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+  }
+  if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+  }
+  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+}
+
+Future<void> _expectFinishToDisableKeepScreenAwake(
+  WidgetTester tester, {
+  required bool complete,
+}) async {
+  final calls = _mockKeepScreenAwake(tester);
+  final storage = _FocusImmersionMemoryStorage();
+  final store = FocusImmersionSettingsStore(storage: storage);
+  await store.write(const FocusImmersionSettings(keepScreenAwake: true));
+  final api = _FakePomodoroApi()
+    ..activeResponses.add(
+      PomodoroSessionDto(
+        id: complete ? 753 : 754,
+        mode: 'MODE_25_5',
+        plannedMinutes: 25,
+        status: 'RUNNING',
+        startedAt: DateTime.now().subtract(const Duration(minutes: 3)),
+      ),
+    );
+  await _pumpPage(tester, api: api, focusImmersionSettingsStore: store);
+  expect(_keepScreenAwakeValues(calls), [true]);
+
+  final records = Completer<List<PomodoroSessionDto>>();
+  api.pageHandler = () => records.future;
+  try {
+    await tester.tap(find.text(complete ? '完成' : '取消'));
+    await tester.pump();
+    expect(_keepScreenAwakeValues(calls), [true, false]);
+  } finally {
+    if (!records.isCompleted) records.complete(const []);
+    await tester.pumpAndSettle();
+  }
+}
+
+List<MethodCall> _mockKeepScreenAwake(
+  WidgetTester tester, {
+  Object? result = true,
+}) {
+  const channel = MethodChannel('zh_cloud_todo/native');
+  final calls = <MethodCall>[];
+  tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+    call,
+  ) async {
+    if (call.method == 'setKeepScreenAwake') calls.add(call);
+    return result;
+  });
+  addTearDown(
+    () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      null,
+    ),
+  );
+  return calls;
+}
+
+List<bool> _keepScreenAwakeValues(List<MethodCall> calls) {
+  return calls
+      .map((call) => (call.arguments as Map<Object?, Object?>)['enabled'])
+      .whereType<bool>()
+      .toList(growable: false);
+}
+
 class _FocusImmersionMemoryStorage implements FocusImmersionSettingsStorage {
   final Map<String, String> values = <String, String>{};
 
@@ -1490,6 +1965,31 @@ class _FocusImmersionMemoryStorage implements FocusImmersionSettingsStorage {
     values[key] = value;
     return true;
   }
+}
+
+class _DelayedFocusImmersionStorage implements FocusImmersionSettingsStorage {
+  final Map<String, String> values = <String, String>{};
+  final _read = Completer<String?>();
+  String? _pendingReadValue;
+  bool _readStarted = false;
+
+  @override
+  Future<String?> readString(String key) {
+    if (!_readStarted) {
+      _readStarted = true;
+      _pendingReadValue = values[key];
+    }
+    if (_read.isCompleted) return Future<String?>.value(values[key]);
+    return _read.future;
+  }
+
+  @override
+  Future<bool> writeString(String key, String value) async {
+    values[key] = value;
+    return true;
+  }
+
+  void completeRead() => _read.complete(_pendingReadValue);
 }
 
 TodoTask _task({
@@ -1533,6 +2033,7 @@ class _FakePomodoroApi extends PomodoroApi {
   Object? pageError;
   Object? statsError;
   Object? timelineError;
+  Future<List<PomodoroSessionDto>> Function()? pageHandler;
   Future<PomodoroStatsDto> Function(String period)? statsHandler;
   Future<List<PomodoroTimelineDto>> Function(DateTime date)? timelineHandler;
   PomodoroStatsDto statsValue = const PomodoroStatsDto.empty();
@@ -1802,6 +2303,8 @@ class _FakePomodoroApi extends PomodoroApi {
   }) async {
     pageCalls++;
     if (pageError != null) throw pageError!;
+    final handler = pageHandler;
+    if (handler != null) return handler();
     return records;
   }
 
