@@ -1,7 +1,7 @@
 # Todo 专注屏幕常亮规格
 
 **Issue:** #256
-**状态：** 设计完成，待实现
+**状态：** 实现完成；iOS Runner、Claude CLI 和 Android/iOS 真机自动锁屏效果仍是独立验收门槛。
 
 ## 目标
 
