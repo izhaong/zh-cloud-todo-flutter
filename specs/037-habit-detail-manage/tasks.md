@@ -14,7 +14,7 @@
 - [x] T-008 时间字段按 epoch 毫秒上送（FR-6；探针 PJ 让 `checkedAt` 退回 ISO → 红）
 - [x] T-009 四件套：320px + 1.3 档位在**四个**新表面（详情页 / 编辑弹层 / 「...」菜单路由 / 删除确认框）各用自己的 context 复检；「...」与色块有独立读屏语义；校验错误落在字段上（探针 PM 摘掉 `errorText: _nameError` → 红）
 - [ ] T-010 六项门禁日志齐全（见下）
-- [ ] T-011 矩阵 #43/#44 补 `文件:行号` 证据；PR 未合并前不翻「有」（在 `zh-cloud-docs` 侧回写，落点 `todo/01_需求阶段/对照矩阵/dida-parity-matrix.md` 第 95-96 行）
+- [x] T-011 矩阵 #43–46 补 `文件:行号` 证据；PR 未合并前不翻「有」（`zh-cloud-docs!72`，落点 `todo/01_需求阶段/对照矩阵/dida-parity-matrix.md` 第 95-98 行，基准 SHA 见文末对账）
 - [x] T-012 契约缺口按规则 5 另开 Service 单：`zh-cloud-service#277`
 
 ## 反向探针的两个「绿」，以及它们真正说明什么
@@ -112,3 +112,22 @@ Compiling lib/main.dart for the Web...    19.8s
 分支 726 = 709 + 本文件 17 条新用例，**逐条对上，没有凭空消失的用例**。
 ⇒ 目标里记的「基线 713 passed / 26 skipped」**多算了 4 条**，后续轮次按 709 起算（日志 `/tmp/r21-baseline-develop.log`）。
 
+
+## T-011 矩阵回写对账（`zh-cloud-docs!72`，基准 SHA 已逐个 `sed -n 'Np'` 打印核对）
+
+| 矩阵行 | 已合并证据（`develop@a1d7733`） | 待合并（`feat/290@a815c9a` = 本 PR !291） |
+| ------ | ------------------------------ | ---------------------------------------- |
+| #43    | `habit_page.dart:199` 行内打卡、`habit_repository.dart:44` 列表 / `:72` check-in | — |
+| #44    | `habit_page.dart:88,103`、`habit_repository.dart:59`（仅「填名称即建」） | `habit_editor.dart`、`habit_detail_page.dart:48,49`、`habit_repository.dart:120` update / `:148` delete |
+| #45    | —（维持「无」） | 提示只有单时点 `habit_editor.dart:263-271` |
+| #46    | `habit_repository.dart:84` stats / `:95` overviewStats、`habit_page.dart:29,39,49` | 复核 B-2 已摘聚合统计卡 ⇒ `habit_detail_page.dart` 无统计卡 |
+
+四行「状态」列一个字未改（`origin/develop` 仍在 `a1d7733` ⇒ !291 未合并）。#43 落点端 `BE(admin)/WEB` → `BE(admin)/FL` 是**证据口径替换**而非能力升级：图例里 `WEB=apps/todo` 已废弃，行内写明「撤回」二字留痕。
+`!291` 合并后回来做第二遍：把「已实现待合并」换成已合并 SHA，并复评 #43/#44 的状态列。
+
+## 下一轮入口（本轮不接，避免顺手扩面）
+
+1. **habit 归档 / 恢复接线**：端点在 `zh-cloud-service!276`（未合并）。合并后在详情页菜单加第 3 项，反向断言 `find.text('归档')` findsNothing 要同步改成正向断言。
+2. **#45 打卡提示的多时点**：契约侧 `reminderAt` 是单个 `LocalDateTime`（绝对时点），嘀嗒是「每天 9:00/12:00/18:00/21:00」重复 ⇒ 需先在 Service 定义重复语义或改字段（spec 边界①-b），客户端不改。
+3. **Service #277**：删除习惯不级联清打卡记录（`deleteHabit` 只 `deleteById`，`TodoHabitCheckInMapper` 无按 habitId 删除）⇒ 矩阵文案与嘀嗒口径差异取决于这张单的结论。
+4. **同族时间字段**：全仓仍有 21 处 `toIso8601String`，未逐处判定是否同样与 `TimestampLocalDateTimeSerializer` 冲突（FR-6 已留痕）。
