@@ -174,6 +174,24 @@ void main() {
       );
     });
 
+    testWidgets('主任务改名后主任务行跟着变，不是首屏一次性快照', (tester) async {
+      final fixture = await pumpPane(tester, taskId: _childTaskId);
+      final repo = fixture.container.read(taskRepositoryProvider);
+      expect(repo, isNotNull);
+
+      await repo!.update(_metadataTaskId, title: '$_metadataTitle（改名）');
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('主任务：$_metadataTitle（改名）'),
+        findsOneWidget,
+        reason:
+            '主任务行不得停在首屏快照（探针：把流换成每次 build 重取一次也能过，'
+            '所以这条只钉「行为不陈旧」，不钉 watchById 机制本身）',
+      );
+      expect(find.text('主任务：$_metadataTitle'), findsNothing);
+    });
+
     testWidgets('只读清单里关联失败：给提示、原数据保持、面板还在', (tester) async {
       final fixture = await pumpPane(tester, taskId: _childTaskId);
       final stamp = DateTime(2026, 7, 30, 18);
