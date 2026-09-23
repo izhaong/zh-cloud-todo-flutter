@@ -152,6 +152,7 @@ NIT（逐条采纳/拒绝，拒的要留理由）：
 - **存量同源缺陷（本切片没顺手改，另开治理 Issue）**：`_save()` 的两条反馈（未登录之外的 `StateError` 原因、
   「保存任务失败，请稍后重试」，`task_quick_add_sheet.dart:67-74`）仍走根 `ScaffoldMessenger` ⇒ 与复核 B4 同因，
   在生产里同样被这层 modal 路由盖住。本切片只把自己引入的三条消息搬进弹窗内，不扩大改动面。
+  **已开治理 Issue：izhaong/zh-cloud-todo-flutter#289**。
 - **模板行那对状态措辞无人钉**：`已同步` / `等待同步` 在 `test/` 里钉的是**别的整串**——
   `test/features/task/task_workable_views_test.dart:176`「已恢复上次看板设置，等待同步」、`test/reminder_inbox_test.dart:282,393`「操作等待同步」，
   `git grep -c 已同步 HEAD -- test` = **0 个文件** ⇒ 弹层与详情页共用的那对模板状态文案（`task_detail_pane.dart:3640`、
