@@ -30,7 +30,18 @@
   反向探针 PD（`header: true` 改 false）与该用例红；PJ（去掉「添加到今天」label）亦红。
   **本轮踩到并修掉的真缺陷**：组标题原本写 `Semantics(header: true, excludeSemantics: true)` 却没给 label
   ⇒ 文本节点被排除、节点自身又无名字，读屏什么都不念（用例先红，随后去掉 `excludeSemantics` 修复）。
-- [ ] T008 六项门禁 —— 见下条填写（跑在 /tmp/gate-033.log）。
+- [x] T008 六项门禁在最终状态一次跑完，日志 `/tmp/gate-033-final.log`（2026-09-23 20:05）：
+  `git diff --check` exit=0；`dart format --output=none --set-exit-if-changed` 三个显式文件 **exit=0**
+  （`Formatted 3 files (0 changed)`；本轮两个生产文件与测试文件都是新增/已格式化，不像 032 那样蹭到存量欠债）；
+  `flutter analyze` ⇒ No issues found!；`flutter test --tags golden` ⇒ `00:03 +9: All tests passed!`（**未重录基线**）；
+  `flutter test --exclude-tags 'golden || performance' --concurrency=1` ⇒ `01:55 +719 ~26: All tests passed!`；
+  `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1`
+  ⇒ `✓ Built build/web`。
+  新页用例文件单跑：`00:00 +10: All tests passed!`；与面板同跑（含回归）：`00:00 +16: All tests passed!`。
+  对照口径：goal 记的基线 713/26 与本分支实测 719/26 不可直接相减 —— specs/024–032 的用例都在各自未合并分支上，
+  本分支基线 `develop@a1d7733`，未做同基线复算，故只报实测值、不宣称「与基线一致」。
+  中途还有两版红过的日志留着：`/tmp/gate-033.log`（analyze 报 `deprecated_member_use` ⇒ 第 3 项红）、
+  以及更早在 `matchesSemantics` 上把整文件跑挂的那轮（`/tmp/sem.log`）。
 - [x] T009 「+」在飞的重复点击只靠禁用态挡：早退守卫是死代码，已删。
   证据：先加的 `if (_addingTaskIds.contains(...)) return;` 摘掉后用例**仍然绿**（探针 PE 第一次跑），
   说明它咬不住任何行为 ⇒ 删除并把探针结论写进代码注释与 plan.md；改用 `onPressed == null` 这条可咬住的断言。
