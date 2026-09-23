@@ -205,12 +205,15 @@ class _RecommendationPageState extends ConsumerState<RecommendationPage> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 6, 20, 2),
-              child: Text(
-                entry.key.label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+              child: Semantics(
+                header: true,
+                child: Text(
+                  entry.key.label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             ),

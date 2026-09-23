@@ -454,9 +454,12 @@ void main() {
         (
           id: 71,
           title: '一条非常长足以在窄屏挤爆标题栏的推荐任务名称',
-          code: 'REPEATEDLY_RESCHEDULED',
-          reason: '已多次改期，建议重新安排',
-          dueAt: null,
+          // 必须走 `DUE_SOON` + 明天：第 11 轮此前种的是 `REPEATEDLY_RESCHEDULED`/`dueAt: null`，
+          // 数据根本不经过子档那个 `Column`（复核员在 /tmp 副本上往该 Column 注入溢出，
+          // 原用用例照样绿 ⇒ 覆盖缺口）。
+          code: 'DUE_SOON',
+          reason: '即将到期',
+          dueAt: DateTime(2026, 9, 24, 9),
           score: 1099,
         ),
       ]);
@@ -471,6 +474,11 @@ void main() {
         ).scale(10),
         closeTo(13, 0.001),
         reason: '档位没传进页面就等于整条用例在 1.0 上排版',
+      );
+      expect(
+        find.byKey(const ValueKey('recommendation-bucket-tomorrow')),
+        findsOneWidget,
+        reason: '数据得真的经过子档容器，否则"这条用例覆盖了新布局"就是假的',
       );
       expect(tester.takeException(), isNull);
       await settleDown(tester);
@@ -522,6 +530,41 @@ void main() {
               '外层 `Semantics(container+label)` + 内层 `ExcludeSemantics` 必须只留一个节点，'
               '多一个（例如 tooltip 自己成节点）就说明这层包装是重复暴露',
         );
+        await settleDown(tester);
+      } finally {
+        semantics.dispose();
+      }
+    });
+
+    testWidgets('子档标题「明天」也是 header 节点，读屏不会只念组标题', (tester) async {
+      final semantics = tester.ensureSemantics();
+      try {
+        final db = await seedDb(tester, [
+          (
+            id: 82,
+            title: '明天的评审',
+            code: 'DUE_SOON',
+            reason: '即将到期',
+            dueAt: DateTime(2026, 9, 24, 9),
+            score: 900,
+          ),
+        ]);
+        await pumpPage(tester, db: db);
+
+        final bucketFinder = find.ancestor(
+          of: find.text('明天'),
+          matching: find.byType(Semantics),
+        );
+        expect(
+          tester
+              .widgetList<Semantics>(bucketFinder)
+              .any((widget) => widget.properties.header == true),
+          isTrue,
+          reason:
+              '第 11 轮此前只 seed 了 RECENTLY_ADDED 一组 ⇒ 子档标题是裸 Text，'
+              '读屏念得出"即将到来"却念不出"明天"这一档的层级',
+        );
+        expect(find.bySemanticsLabel(RegExp('^明天')), findsOneWidget);
         await settleDown(tester);
       } finally {
         semantics.dispose();
