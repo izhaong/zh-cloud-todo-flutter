@@ -13,6 +13,7 @@ enum _TaskWorkspaceHeaderCommand {
   dueDate,
   title,
   createdAt,
+  updatedAt,
   batchEdit,
   createSection,
 }
@@ -24,6 +25,7 @@ extension on _TaskWorkspaceHeaderCommand {
     _TaskWorkspaceHeaderCommand.dueDate => TaskSort.dueDate,
     _TaskWorkspaceHeaderCommand.title => TaskSort.title,
     _TaskWorkspaceHeaderCommand.createdAt => TaskSort.createdAt,
+    _TaskWorkspaceHeaderCommand.updatedAt => TaskSort.updatedAt,
     _TaskWorkspaceHeaderCommand.batchEdit => null,
     _TaskWorkspaceHeaderCommand.createSection => null,
   };
@@ -36,6 +38,7 @@ extension TaskSortX on TaskSort {
     TaskSort.dueDate => '截止日期',
     TaskSort.title => '标题',
     TaskSort.createdAt => '创建时间',
+    TaskSort.updatedAt => '修改时间',
   };
 }
 
@@ -146,6 +149,7 @@ class TaskWorkspaceHeader extends StatelessWidget {
                     case _TaskWorkspaceHeaderCommand.dueDate:
                     case _TaskWorkspaceHeaderCommand.title:
                     case _TaskWorkspaceHeaderCommand.createdAt:
+                    case _TaskWorkspaceHeaderCommand.updatedAt:
                       break;
                   }
                 },

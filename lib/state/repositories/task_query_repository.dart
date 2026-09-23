@@ -19,7 +19,7 @@ DateTime _dateOnly(DateTime value) =>
 ///
 /// 所有排序仍固定以置顶、手工顺序与任务 UUID 作为额外键，确保
 /// Drift 查询与 Widget 渲染在同值场景也拥有相同的确定性顺序。
-enum TaskSort { smart, priorityDesc, dueDate, title, createdAt }
+enum TaskSort { smart, priorityDesc, dueDate, title, createdAt, updatedAt }
 
 int compareTodoTasks(TodoTask left, TodoTask right, TaskSort sort) {
   if (left.isPinned != right.isPinned) return left.isPinned ? -1 : 1;
@@ -34,6 +34,7 @@ int compareTodoTasks(TodoTask left, TodoTask right, TaskSort sort) {
       right.title.toLowerCase(),
     ),
     TaskSort.createdAt => right.createdAt.compareTo(left.createdAt),
+    TaskSort.updatedAt => right.updatedAt.compareTo(left.updatedAt),
   };
   if (bySelectedField != 0) return bySelectedField;
 
