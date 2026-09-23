@@ -11,9 +11,13 @@
   `BackButton` 返回后断 `find.byType(EisenhowerView)` `findsOneWidget`。
   反向探针 PB（点击不导航）⇒ 该用例红。
 - [x] T003 失败要说出来，不伪装成空态（四件套之「失败保留已加载数据」在本页的可执行形式）。
-  证据：夹具 apiClient 是 `_NoNetworkApiClient`（`test/support/todo_visual_fixture.dart:76` 固定 override）
-  ⇒ 走到真实数据通道必然失败；用例 2 断「规则加载失败」+「重试」在，且「还没有四象限规则」
-  （空态文案 `quadrant_rules_page.dart:370`）不在 ⇒ 报错没被当成「一条规则都没有」。
+  证据：用例 2 断「规则加载失败」+「重试」在，且「还没有四象限规则」
+  （空态文案 `quadrant_rules_page.dart:371`）不在 ⇒ 报错没被当成「一条规则都没有」。
+  **归因经复核更正**：取数必然失败**不是**夹具的 `_NoNetworkApiClient` 拦的 —— 它覆写的是 `ApiClient.get/post`
+  （`test/support/todo_visual_fixture.dart:462`），而 `QuadrantApi` 拿的是 `apiClient.raw` 那个 Dio
+  直连（`state/efficiency_providers.dart:21`、`core/api/efficiency_api.dart:496-502`）⇒ 绕过覆写，
+  被 flutter_test 默认掐断真实 socket 才失败。这条更正很重要：
+  以后有人「用 provider override 造一个成功态」并不会让这条用例变绿，机制得说对才不误导。
 - [x] T004 320px + 1.3 倍字体不溢出，且档位**在 push 出来的路由自己的 context 上**自检（四件套）。
   证据：用例 3 以 `Size(320, 720)` 泵壳、切四象限、点开菜单项，然后
   `MediaQuery.textScalerOf(tester.element(find.text('四象限规则'))).scale(10) ≈ 13` + `takeException()` 为 null。
@@ -59,4 +63,37 @@
 ## 复核手段与结论
 
 `claude` CLI 本机不可用（`unrecognized_model`），按目标约定改用本会话**只读子代理**审 FR-1..FR-5 与测试假阳性，
-结论以 `VERDICT:` 行为准；结果与本文件处置记在下（第几轮、BLOCKER、是否采纳）——复核回来前不宣称通过。
+结论以 `VERDICT:` 行为准；复核回来前不宣称通过。
+
+### 第一轮复核（`VERDICT: FAIL`，三条 BLOCKER）逐条处置
+
+- **B1「`pubspec.lock` 被本机镜像重写，必须从提交中剔除」——不采纳，属事实错误。**
+  复核员看到的是工作区的脏文件。实测：`git log --oneline origin/develop..HEAD -- pubspec.lock` 输出 **0 行**、
+  `git diff --stat origin/develop..HEAD -- pubspec.lock` 空，PR !284 的文件清单里也没有它
+  （`git diff --name-only origin/develop...HEAD` 只有 4 个代码/测试文件 + 3 个 specs 文件）。
+  它从头到尾只是本机新 SDK 重解析的工作区噪音，按既定口径不入库。
+- **B2「FR-3/FR-4 把没证的子句写成判据」——采纳。** FR-3 原先只在列表视图做负向断言，
+  现改为遍历 看板/时间线/日历/列表 四种视图逐个负向，并在每个视图里先断「批量编辑」在（正对照，
+  证明菜单确实展开、`findsNothing` 不是空转）；FR-4 的「同一入口连点只叠一层」**从判据里撤掉**，
+  理由是 `PopupMenuMenuItem` 选中即关菜单 ⇒ 不存在可叠的第二次导航，留着就是一条永远绿的假判据。
+  复核员同时独立确认负向断言机制咬得住（`WidgetController.hitTestWarningShouldBeFatal` 默认 true ⇒
+  tap 落不到 `todo-sort-menu` 会直接抛，不会静默空转）。
+- **B3「失败态归因错」——采纳，已按上面 T003 更正。**
+
+### 复核带出的真缺陷（本轮修掉）
+
+- [x] T012 规则页在 320px + 1.3 倍字体下**打开编辑器弹窗会溢出**（`A RenderFlex overflowed by 36 pixels on the right`）。
+  这条以前照不到：`QuadrantRulesPage` 没有任何 in-app 入口，手机上根本走不到弹窗；
+  入口一通，它就是本切片的义务。新增用例 5 直接泵页 + override provider 造「有数据」态
+  （走真实入口只能拿到失败态），断列表不溢出 + 点开「新建规则」后弹窗不溢出。
+  成因经探针定位：`DropdownButtonFormField` 未设 `isExpanded` ⇒ 选中项按内容撑宽。
+  **反证过程记着有价值**：我先怀疑的是弹窗里硬编码的 `width: 480`，夹成 `min(480, 屏宽-80)` 后溢出**没消失**，
+  说明紧约束早被父级夹住、那个改动是 no-op ⇒ 已回退，不把无用代码留在仓里；
+  真正生效的是一行 `isExpanded: true`（`quadrant_rules_page.dart:306`），
+  反向探针 PD（摘掉 `isExpanded`）⇒ 该用例红，恢复后 `cmp -s` 逐字节一致。
+  另一条自我更正：我先写的 `AlertDialog` 宽度 `< 320` 断言是错判据（实测盒子就是 320.0，铺满屏是设计行为），
+  已删除，溢出才是判据。
+
+### 最终门禁
+
+第 13 轮修订后的最终状态跑在 `/tmp/gate-034b.log`（T006 记的是修订前那一版，日志留着不覆盖）。

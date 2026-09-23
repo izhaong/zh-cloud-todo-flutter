@@ -4,7 +4,7 @@
 
 - `QuadrantRulesPage`（`lib/features/quadrant/quadrant_rules_page.dart:10`）在 develop 上已实现完整 CRUD：
   读 `quadrantRulesProvider`（`:15`）、失败态 `_LoadError`（`:29`，文案 `规则加载失败：$error` + 「重试」`:393`）、
-  空态（`:370` 「还没有四象限规则」）、规则行 `ListTile` + `编辑/删除` 菜单（`:53-68`）。
+  空态（`:371` 「还没有四象限规则」）、规则行 `ListTile` + `编辑/删除` 菜单（`:53-68`）。
 - 可达性复验：`Grep "QuadrantRulesPage|四象限" lib/ test/` ⇒ 生产侧只有该文件自身；
   `test/quadrant_rules_page_test.dart:25,45` 是直接 `MaterialApp(home: QuadrantRulesPage())` 泵出来的，
   **没有任何 in-app 导航指向它** ⇒ 矩阵 #36 判「实现齐但走不到」成立。
