@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart' show SemanticsFlag;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zh_cloud_todo_flutter/core/api/api_client.dart';
@@ -414,11 +413,17 @@ void main() {
         ]);
         await pumpPage(tester, db: db);
 
-        final groupNode = tester.getSemantics(
-          find.bySemanticsLabel(RegExp('^最近添加')),
-        );
+        // 不用 matchesSemantics：节点 textDirection 为 null 时它的 describeMismatch
+        // 自己会抛 `Null is not a subtype of String`，把真实差异盖掉。
         expect(
-          groupNode.hasFlag(SemanticsFlag.isHeader),
+          tester
+              .widgetList<Semantics>(
+                find.ancestor(
+                  of: find.textContaining('最近添加'),
+                  matching: find.byType(Semantics),
+                ),
+              )
+              .any((widget) => widget.properties.header == true),
           isTrue,
           reason: '组标题要标成 header，读屏才知道它是标题而不是正文',
         );
