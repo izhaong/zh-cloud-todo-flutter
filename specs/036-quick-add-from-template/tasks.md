@@ -35,7 +35,75 @@
       不是存量欠债。只 format 这一个文件（未整仓原地格式化），复跑 8 例仍绿，并在新字节上重跑全部探针。
       注：这次红只存在于终端输出，**没有单独落日志文件**（最终态绿的那次才在 `/tmp/gate-036.log`）。
 - [x] **T006 六项门禁跑在最终字节**：见下表，日志 `/tmp/gate-036.log`。
-- [ ] **T007 只读复核拿到 VERDICT 并逐条处置**：复核在跑（手段见「限制」），结果与处置回填本节。
+- [x] **T007 只读复核拿到 VERDICT 并逐条处置**：第 1 轮 `VERDICT: FAIL`，7 条 blocker 全部复验为真、全部照改；
+      NIT 8 条采纳 5 条、写明理由拒/部分拒 3 条（见下节）。修复后六项门禁在最终字节上重跑，见「第 2 次门禁」表。
+      第 2 轮复核**待派**（两轮封顶：PASS 就记结论，FAIL 只照它改一次、不再派第 3 轮）。
+
+## 第 1 轮复核处置（`VERDICT: FAIL`，7 BLOCKERS / 8 NITS）
+
+复核手段：本会话只读子代理（`claude` CLI 不可用，理由见「限制」）。它在 `sha256` 与本轮字节一致的副本
+`/tmp/g036-probe` 上跑实验，仓内文件未被写入。**7 条 blocker 我逐条回原码复验，没有一条是误报**，故全部照改。
+
+| # | 复核结论 | 我本地复验到的事实 | 处置 |
+| - | -------- | ------------------ | ---- |
+| B1 | `spec.md:54-55` 的「全仓 `test/` 内 `TaskQuickAddSheet` 零命中」是假 | `git grep -c TaskQuickAddSheet HEAD -- test` ⇒ `task_quick_add_sheet_test.dart:2` 与本轮新文件各 2 处 | **照改**：零命中范围收窄到 `test/visual/`，并承认既有用例已覆盖「保存」那条失败路径（用例 6 是「模板」入口，弹层是否打开不同，两条都留） |
+| B2 | `taskSeed` 在 `try` 外、守卫不在 `finally` ⇒ 一条坏模板永久锁死入口且零反馈 | 直读 `:100-122`：`try` 从 `:104` 起，复位在 `:122` 裸写；`taskSeed` 是 `jsonDecode(...) as Map<String,dynamic>`（`template_repository.dart:105`），`contentJson` 由 pull 原样落库 | **照改**：`taskSeed` 挪进 `try`、复位进 `finally`；补用例 9 + 探针 PC（红测原文 `type 'Null' is not a subtype of type 'Map<String, dynamic>' in type cast`） |
+| B3 | `sheetContext.mounted` 挡不住误关宿主弹窗 | `:123` 就是 `if (sheetContext.mounted) Navigator.of(sheetContext).pop()`；反向动画期间元素仍 mounted，pop 打到下一层路由 | **照改**：`ModalRoute.of(sheetContext)` 捕获 + `isCurrent` 才 pop；补用例 10（挂起假 `TaskRepository` 把窗口钉死）+ 探针 PD |
+| B4 | 三条提示在生产里看不见（SnackBar 被本弹窗这层路由盖住） | 两个宿主（`task_detail_pane.dart:946`、`kanban_view.dart:251`）都是 `showModalBottomSheet` + `isScrollControlled`，弹窗自身无 `Scaffold` ⇒ messenger 解析到根 | **照改**：`_toast` 换成 `_report`（`setState` 一行 `Text`，key `todo-quick-add-feedback`），断言改为「必须落在弹窗子树内」；探针 PE 把 `_report` 换回 SnackBar ⇒ 4 条齐红。**存量同源缺陷 `_save()` 里那两条 SnackBar 不在本切片改**，另开治理 Issue |
+| B5 | 「...」按钮语义节点空标签，套件从不检查 | `:195` 是 `child: const Icon(...)`；复核员 dump 到 `label:""`。**但它建议的修法（改用 `icon:`）实测不成立**：本会话 `child:` 与 `icon:` 两种写法在 `ensureSemantics()` 后都拿不到 `'更多'` | **照改，修法不同**：显式 `Semantics(label:'更多', button:true, container:true)` 包裹；用例补 `bySemanticsLabel('更多')`，且 `ensureSemantics()` 之后必须再 `pump()` 一帧（否则恒 0 命中＝空转）；探针 PF 把 label 换成同义词 ⇒ 用例 1 红 |
+| B6 | 目标清单这一维从未被验（把 `listId` 写成字面量 `'inbox'` 全绿） | 8 例都 pump `inboxListId`，模板来源任务也在收集箱 | **照改**：补用例 11（弹窗开在 `workListId`）；探针 PG 硬编码 `'inbox'` ⇒ 用例 11 红 |
+| B7 | 守卫「复位」无覆盖（删掉 `_applyingTemplate = false` 全绿） | 原用例 7 只测「挡住第二次」 | **照改**：补用例 12（同弹窗连挑两次 ⇒ 两条）；探针 PB 删复位 ⇒ 用例 12 红 |
+
+NIT（逐条采纳/拒绝，拒的要留理由）：
+
+- ✅ **死分支**：`taskRepositoryProvider` 与 `templateRepositoryProvider` 的 null 条件完全相同（`providers.dart:151-156` / `:297-302`）⇒ `templates != null` 时 `repo` 必不为 null。已删该分支。
+- ✅ **「不再实现第二份列表逻辑」措辞不实**：弹层确实又写了一份渲染。已在 `plan.md` 落点表里更正为「数据链路与措辞同源、渲染是第二份」，并把 `已同步/等待同步` 在 `test/` 内 0 命中记进「仍缺」。
+- ✅ **用例 5 的 outbox 断言近乎恒真**：已在 reason 里降级为「只能挡未来往这条路径加写库」，并补「弹层未被打开」的断言。
+- ✅ **模板路径忽略 `taskCaptureDefaultsRepositoryProvider.defaultPriority`**：不采纳为「本切片修」——模板的语义就是「按当时存下的那套值建任务」，覆盖用户的新任务默认值是嘀「从模板添加」的应有行为；已在「仍缺」留一条待人工在嘀嗒上核。
+- ✅ **「选择后即建 vs 预填」不是已证实的 parity**：`02-任务详情.md:346` 只说「即可从模板添加任务」，没说弹窗是否留手输内容。已在「仍缺」保留为待人工核验项。
+- ❌ **动作词「添加」与详情页「应用」不一致要统一**：**暂不采纳**。嘀嗒原文用的是「从模板添加任务」⇒ 「添加」更贴源；已在 `plan.md` 写明理由与推翻条件。
+- ❌ **`tooltip: '更多'` 不是嘀嗒措辞**：**保留**并标注为本端措辞（嘀嗒那页 `:372` 的另一处「...」菜单也这么写），不是抄来的词。
+- ❌ **用例 8 的两条 `textScalerOf(...).scale(10)` 只是在量 harness**：**部分采纳**——`takeException` 才是实体断言这一点写进 `plan.md`；但档位自检保留，且已改成「反馈行出现之后」再量，避免只测初始态。
+
+**本轮自己引入又被门禁抓到的两处**（不是复核员提的，记下来防重犯）：`use_build_context_synchronously`
+（`Navigator.of(sheetContext)` 只留了 `isCurrent` 判定，丢了 mounted 判定）与 `use_super_parameters`
+（测试里的假仓储该用 `super.` 形参）。⇒ 门禁 3 首轮 `2 issues found`，改完重跑。
+
+## 反向探针（第 2 次，最终字节，脚本 `/tmp/r20_probes.py`）
+
+| 代号 | 摘掉什么 | 结果 |
+| ---- | -------- | ---- |
+| PA | `if (_applyingTemplate) return;` | `+11 -1`，红在「连点两次「添加」只建一条任务」 |
+| PB | `finally` 里的 `_applyingTemplate = false;` | `+10 -2`，红含「同一个弹窗里连挑两次模板」 |
+| PC | 把 `taskSeed` 挪回 `try` 外 | `+11 -1`，红在「模板内容坏了…」，异常原文 `type 'Null' is not a subtype of type 'Map<String, dynamic>' in type cast` |
+| PD | `isCurrent` 判定换回 `sheetContext.mounted` | `+11 -1`，红在「用户先把模板弹层滑掉…」 |
+| PE | `_report` 换回根 SnackBar | `+7 -5`，四条提示用例齐红 |
+| PF | `Semantics` 的 label 换同义词 | `+11 -1`，红在「弹窗下方有「...」…」 |
+| PG | `listId: widget.listId` → 字面量 `'inbox'` | `+11 -1`，红在「弹窗开在别的清单时…」 |
+| PH | 菜单项「模板」→「从模板添加」 | `+0 -12`（全文件都靠 `find.text('模板')` 开弹层，措辞一改全体红） |
+| PI | 删掉空态 `Text('暂无本地模板')` | `+11 -1`，红在「一个模板都没有时…」 |
+
+9 条探针逐条红、`cmp -s` 证明摘完还原后与基准**逐字节一致**（输出 `IDENTICAL`）。
+第 1 轮那 6 条（PA–PF 旧编号）未重跑：本轮把 `_addFromTemplate` 整段改写了，旧探针的锚文本已不存在，
+故上表是**在最终字节上重新推导的等价集**（覆盖守卫挡住/复位、try 边界、pop 判据、反馈可见性、两处措辞、空态）。
+
+## 第 2 次门禁（复核修复后的最终字节，日志 `/tmp/gate-036-r2.log`）
+
+| 门禁 | 结果原文 |
+| ---- | -------- |
+| 1 `git diff --check` | `rc=0` |
+| 2 `dart format --output=none --set-exit-if-changed` 两个显式文件 | `Formatted 2 files (0 changed) in 0.03 seconds.` / `rc=0` |
+| 3 `flutter analyze` | `No issues found! (ran in 1.4s)` / `rc=0`。**首轮这里是 `rc=1`：`2 issues found`** —— `use_build_context_synchronously`（`Navigator.of(sheetContext)` 只留了 `isCurrent`）与 `use_super_parameters`（测试里的假仓储），两处都是本轮改出来的，已真修（不是跳过） |
+| 4 `flutter test --tags golden` | `00:03 +9: All tests passed!` / `rc=0` |
+| 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `01:54 +721 ~26: All tests passed!` / `rc=0`（= 基线 709 + 本切片 12 例） |
+| 6 `flutter build web --release …` | `✓ Built build/web` / `rc=0` |
+| 7 `test/goldens` 改动数 | `0`（`git status --porcelain test/goldens \| wc -l`） |
+| 8 sha256 前 16 位 | `4f082f98f16242b4` `task_quick_add_sheet.dart` / `33be868e647aa9fa` `quick_add_from_template_test.dart` |
+| 9 工作区脏文件 | ` M pubspec.lock`（本机 SDK 重解析，不入库）+ lib/test 两件 + specs/036 三件套 |
+
+⚠️ 第一次跑门禁时后台脚本没 `source ~/development/env-flutter.sh` ⇒ gate2–6 全 `rc=127`（命令根本不存在）。
+那一份日志**不算任何门槛通过**，本表是重跑后的；记下来防「拿 127 当红、或当绿」。
+
 - [x] **T008 回写矩阵行**：`zh-cloud-docs@36a48db`（分支 `docs/dida-parity-matrix-round0`，PR !69）
       #7 行的「仍缺」原本写 `—`（等于宣称已齐），实际嘀嗒《添加任务》`:54` 的下拉里有三样 ⇒
       补回「优先级（有）/ 添加附件（快速添加弹窗内没有）/ 从模板添加（!288 待合并）」，
@@ -81,6 +149,18 @@
 - 模板弹层只提供「添加」，没有嘀嗒模板管理面（列表页改名/删除/模板库）⇒ 属矩阵 #89 的另一格缺口。
 - 已选模板后无法二次确认或撤销（即刻建任务），与详情页「应用」一致；若人工在嘀嗒上核到「选择后是预填」，本行结论要改。
 - 矩阵行状态翻转要等合并；未合并前只写「已实现待合并」。
+- **存量同源缺陷（本切片没顺手改，另开治理 Issue）**：`_save()` 的两条反馈（未登录之外的 `StateError` 原因、
+  「保存任务失败，请稍后重试」，`task_quick_add_sheet.dart:67-74`）仍走根 `ScaffoldMessenger` ⇒ 与复核 B4 同因，
+  在生产里同样被这层 modal 路由盖住。本切片只把自己引入的三条消息搬进弹窗内，不扩大改动面。
+- **模板行那对状态措辞无人钉**：`已同步` / `等待同步` 在 `test/` 里钉的是**别的整串**——
+  `test/features/task/task_workable_views_test.dart:176`「已恢复上次看板设置，等待同步」、`test/reminder_inbox_test.dart:282,393`「操作等待同步」，
+  `git grep -c 已同步 HEAD -- test` = **0 个文件** ⇒ 弹层与详情页共用的那对模板状态文案（`task_detail_pane.dart:3640`、
+  `task_quick_add_sheet.dart:286`）没有任何用例守着，「与详情页同源措辞」目前只是叙述。要补得连详情页一起补，属另一切片。
+- 模板路径不吃 `taskCaptureDefaultsRepositoryProvider.defaultPriority`（`_save()` 在 `:61` 吃）⇒
+  模板存的是优先级 0 时会覆盖用户「新任务默认值」。**待人工在嘀嗒上核**：嘀嗒究竟是「模板值优先」还是「用户默认值优先」，
+  在此之前不改（改了就是自创规则）。
+- 反馈是一行文本、不是 toast：新消息覆盖旧消息、不自动消失（关掉弹窗即消失）。没做消息队列与超时——
+  本弹窗只有这一行反馈，加队列属没被要求的可配置性。
 
 ## 下轮入口
 

@@ -51,5 +51,11 @@
 - **不动快速添加栏（`quick_add_bar.dart`）**：嘀嗒说的是「任务输入弹窗」，对应本端 `TaskQuickAddSheet`；
   桌面常驻栏那一条是另一个表面，改它会碰 44px 布局常量（`TodoLayoutTokens.quickAddHeight`，
   被 `test/core/theme/todo_layout_tokens_test.dart:14` 钉住）与黄金覆盖面。
-- **不重录 9 张黄金图**：黄金只在 `test/visual/todo_workspace_golden_test.dart`，全仓 `test/` 内
-  `TaskQuickAddSheet` 零命中 ⇒ 本弹窗不在基线画面上；门禁仍跑 `--tags golden` 证明没顺手改动别处。
+- **不重录 9 张黄金图**：黄金只在 `test/visual/todo_workspace_golden_test.dart`，该文件内
+  `TaskQuickAddSheet` **零命中**（它只命中 `QuickAddBar`/`MobileQuickAddButton`，且弹层的两个真实调用点是
+  `task_detail_pane.dart:946` 与 `kanban_view.dart:251`，都不在基线画面上）⇒ 本弹窗不在基线覆盖面里；
+  门禁仍跑 `--tags golden` 证明没顺手改动别处。
+  **第 2 轮复核改判**：上一版这里写的是「全仓 `test/` 内 `TaskQuickAddSheet` 零命中」——**假**。
+  `test/features/task/task_quick_add_sheet_test.dart` 就有 2 处命中并 pump 本弹窗，其中
+  「父任务跨清单被拒 ⇒ 弹窗保留 + 提示原因」这一条与本切片用例 6 走同一失败路径（用例 6 是**模板**入口，
+  那条是**保存**入口，弹层是否打开这一点不同，故保留两条）。零命中范围只能收窄到 `test/visual/`。
