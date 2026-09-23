@@ -442,7 +442,7 @@ void main() {
   });
 
   testWidgets('弹窗开在别的清单时，模板建出的任务落进那个清单', (tester) async {
-    // 复核探针 PJ：生产里把 listId 换成字面量 'inbox' 时原 8 例全绿 ——
+    // 复核探针 PG（见 tasks.md「反向探针（第 2 次）」表）：生产里把 listId 换成字面量 'inbox' 时原 8 例全绿 ——
     // 因为每条用例都 pump 收集箱，而模板来源任务本身也在收集箱，等于没测这一维。
     final fixture = await pumpSheet(
       tester,
@@ -471,7 +471,7 @@ void main() {
   });
 
   testWidgets('同一个弹窗里连挑两次模板，两条都建得出来', (tester) async {
-    // 复核探针 PI：删掉守卫复位那一行，原 8 例全绿 —— 早退守卫只测了「挡住第二次」，
+    // 复核探针 PB：删掉守卫复位那一行，原 8 例全绿 —— 早退守卫只测了「挡住第二次」，
     // 没测「成功之后要把门打开」。FR-2 要的正是「点某一条即建一条」。
     final fixture = await pumpSheet(tester);
     final source =

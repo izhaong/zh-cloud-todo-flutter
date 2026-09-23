@@ -37,6 +37,7 @@
 - [x] **T006 六项门禁跑在最终字节**：见下表，日志 `/tmp/gate-036.log`。
 - [x] **T007 只读复核拿到 VERDICT 并逐条处置**：第 1 轮 `VERDICT: FAIL`，7 条 blocker 全部复验为真、全部照改；
       NIT 8 条采纳 5 条、写明理由拒/部分拒 3 条（见下节）。修复后六项门禁在最终字节上重跑，见「第 2 次门禁」表。
+      第 2 轮 `VERDICT: PASS`（0 blocker / 9 NIT，见「第 2 轮复核处置」节）⇒ 两轮封顶用尽，不再要第 3 轮。
       第 2 轮复核**待派**（两轮封顶：PASS 就记结论，FAIL 只照它改一次、不再派第 3 轮）。
 
 ## 第 1 轮复核处置（`VERDICT: FAIL`，7 BLOCKERS / 8 NITS）
@@ -150,18 +151,58 @@ NIT（逐条采纳/拒绝，拒的要留理由）：
 - 已选模板后无法二次确认或撤销（即刻建任务），与详情页「应用」一致；若人工在嘀嗒上核到「选择后是预填」，本行结论要改。
 - 矩阵行状态翻转要等合并；未合并前只写「已实现待合并」。
 - **存量同源缺陷（本切片没顺手改，另开治理 Issue）**：`_save()` 的两条反馈（未登录之外的 `StateError` 原因、
-  「保存任务失败，请稍后重试」，`task_quick_add_sheet.dart:67-74`）仍走根 `ScaffoldMessenger` ⇒ 与复核 B4 同因，
+  「保存任务失败，请稍后重试」，`task_quick_add_sheet.dart:66-76`（两处 `ScaffoldMessenger.of` 在 `:68` 与 `:73`））仍走根 `ScaffoldMessenger` ⇒ 与复核 B4 同因，
   在生产里同样被这层 modal 路由盖住。本切片只把自己引入的三条消息搬进弹窗内，不扩大改动面。
   **已开治理 Issue：izhaong/zh-cloud-todo-flutter#289**。
 - **模板行那对状态措辞无人钉**：`已同步` / `等待同步` 在 `test/` 里钉的是**别的整串**——
   `test/features/task/task_workable_views_test.dart:176`「已恢复上次看板设置，等待同步」、`test/reminder_inbox_test.dart:282,393`「操作等待同步」，
   `git grep -c 已同步 HEAD -- test` = **0 个文件** ⇒ 弹层与详情页共用的那对模板状态文案（`task_detail_pane.dart:3640`、
-  `task_quick_add_sheet.dart:286`）没有任何用例守着，「与详情页同源措辞」目前只是叙述。要补得连详情页一起补，属另一切片。
+  `task_quick_add_sheet.dart:309-310`，`task_detail_pane.dart:3640`）没有任何用例守着，「与详情页同源措辞」目前只是叙述。要补得连详情页一起补，属另一切片。
 - 模板路径不吃 `taskCaptureDefaultsRepositoryProvider.defaultPriority`（`_save()` 在 `:61` 吃）⇒
   模板存的是优先级 0 时会覆盖用户「新任务默认值」。**待人工在嘀嗒上核**：嘀嗒究竟是「模板值优先」还是「用户默认值优先」，
   在此之前不改（改了就是自创规则）。
 - 反馈是一行文本、不是 toast：新消息覆盖旧消息、不自动消失（关掉弹窗即消失）。没做消息队列与超时——
   本弹窗只有这一行反馈，加队列属没被要求的可配置性。
+
+## 第 2 轮复核处置（`VERDICT: PASS`，0 BLOCKERS / 9 NITS）
+
+复核手段同第 1 轮（本机 `claude` CLI 不可用 ⇒ 会话内只读子代理，必须出 `VERDICT`）。
+复核员在 `/tmp/g036-r2-probe` 的 rsync 副本上跑了 15 条反向探针，仓库字节未被写；
+sha256 与本地两份文件一致（`4f082f98f16…` / `33be868e647…`），并独立量测了 B4 的生产前提
+（390×844 下 `SnackBar` 矩形完全落在 modal 路由矩形内且位于更底层 ⇒ 不可见）。
+
+采纳并已在本轮改掉（文档类，见 commit）：
+
+| NIT | 内容 | 处置 |
+| --- | ---- | ---- |
+| 3 | `Key('todo-quick-add-feedback')` 没有任何用例引用，而 `plan.md` 把它当契约点名 | 待办：要么让某条断言直接按 key 找，要么把 plan.md 的措辞改成「按弹窗子树断言」。**本 commit 未动**，留给下一轮与 #289 一起收（同一片代码，避免拆两次）。 |
+| 4 | 探针编号三套含义漂移（plan.md 第 1 轮表 / tasks.md 第 2 轮表 / 测试注释） | 已修：plan.md 表标明「第 1 轮」并加指向；测试注释的 `PJ`/`PI` 改为与 tasks.md 第 2 次表一致的 `PG`/`PB`。 |
+| 5 | tasks.md 两处行号随修复失效（`:67-74`、`:286`） | 已修：`:66-76`（两处 `ScaffoldMessenger.of` 在 `:68`/`:73`）、`:309-310`。 |
+
+不采纳 / 记为仍缺（都带理由）：
+
+1. **NIT1 `button: true` / `container: true` 没被钉**（删掉两者只留 label 仍全绿）。
+   不为此加断言：语义标志位的组合是 Material 层行为，用 `getSemantics(...).flags` 钉它等于把框架实现写进我们的用例；
+   有牙的是 label 那条（改措辞必红）。
+2. **NIT2 「...」节点上 label 与 action 落在两个语义节点**（复核员实测 `label="更多" tap=false` + 子节点 `tap=true`）。
+   承认是可读屏体验缺陷，但**修它需要换控件形态**（`Semantics(mergesDescendantsState: true)` 或自建按钮），
+   属于 #289 那一片（同源的还有 `_save()` 的两条 SnackBar），且必须真机 VoiceOver 复验 ——
+   本机无第二台设备，widget 测试证明不了读屏顺序，不在此自证通过。
+3. **NIT6 没有一条用例把宿主弹窗经 `showModalBottomSheet` 泵进树**（12 条都泵 `Scaffold.body`），
+   所以 B4 的几何只是结构性约束。复核员自己另写了一次生产形态量测并给出 `feedbackInsideSheet=true`；
+   把那段临时量测转成常驻用例要引入新的 golden/尺寸断言面，留待 #289 一并处理。
+4. **NIT7 菜单项用 `findsWidgets` 而非 `findsOneWidget`**（弹层标题也叫「模板」，理论上失 label 仍绿）。
+   同条用例里 `bySemanticsLabel('更多')` 已是 `findsOneWidget`，且改菜单文案必红（PH 实测 `+0 -12`）⇒ 收益低于改动风险，不动。
+5. **NIT8 `if (_applyingTemplate) return;` 静默**：复核员自己判定「无可达的静默无反馈路径」，同意；
+   加一条 `_report` 会给一个够不着的分支编文案。
+6. **NIT9 反馈行 +34 px、320×568 + 假键盘下溢出 14 px**：复核员做了同脚本 A/B，
+   基线 `a1d7733` **同样溢出** ⇒ 属存量非滚动布局，归 #289，不在本切片顺手改。
+
+**改后门禁（最终字节一次跑完，日志 `/tmp/gate036r3.log`）**：
+`git diff --check` rc=0 · `dart format` `Formatted 1 file (0 changed)` rc=0 · `flutter analyze` `No issues found!` · `flutter test --tags golden` `00:03 +9: All tests passed!` · `flutter test --exclude-tags 'golden || performance' --concurrency=1` `01:51 +721 ~26: All tests passed!` · `flutter build web --release` `✓ Built build/web`。
+
+**结论**：本切片代码侧收口（两轮复核用尽，第 2 轮 PASS 且 0 blocker）。
+剩余全部是文档契约措辞（NIT3）、#289 存量族与需要真机/人工核对的行为项。
 
 ## 下轮入口
 
@@ -181,6 +222,10 @@ NIT（逐条采纳/拒绝，拒的要留理由）：
      按规则 5，这一项要先在 `zh-cloud-service` 加契约，客户端不得自己造（例如借用 `sortOrder` 或本地标记硬编）。
    - 快速添加弹窗补「添加附件」（队列 1 的真缺口，复用 `task_detail_pane.dart` 的 `_AttachmentSection` 链路）。
 3. **要先动契约、别从客户端下手**：倒数纪念日的 类型 / 提醒 / 重复 / 图标 / 农历 / 计时方式 / 分组 / 置顶
+   —— 归档这一项已按规则 5 先动契约：`zh-cloud-service` Issue #274 → PR !276
+   （`PUT /app-api/todo/{habit,countdown}/{id}/archived?value=` + 读侧 `/list` 与两个分页的
+   `archived` 默认只看未归档；零增量 SQL）。**合并前客户端不要接**（矩阵行不翻转），
+   合并后再做习惯接线里的「归档 / 已归档 / 恢复」。
    （`TodoCountdownDO` 只有 name/targetDate/style/showAge/backgroundImage/sortOrder/archived，
    `AppTodoCountdownPageReqVO.java:13,15` 只有 name 与 archived）⇒ 在 `zh-cloud-service` 先开 Issue + 增量 SQL，再回客户端。
    归档字段的修法仓内已有先例，不必自创形状：`AppTodoPomodoroTimerController.java:65`（`@PutMapping("/{id}/archived")`
