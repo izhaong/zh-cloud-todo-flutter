@@ -136,7 +136,11 @@ UI 不复制仓储规则、无真机声称。
   `lib/core/sync/sync_coordinator.dart:37` 实例化并在 outbox 上传路径消费（不是死代码），
   且任务详情早已有「附件」小节 `_AttachmentSection`（`task_detail_pane.dart:2324` 附近）。
   所以 #89 的「附件挂载入口」这一半**不需要新轮次**，下一轮只查笔记侧是否真的缺入口。
-- 建议门槛：#11 推荐任务独立页（规则式：临近到期 / 长期未动的有界候选，帮助中心
-  `01-任务/05-推荐任务.md`），入口优先放进已有聚合页，不改侧栏与 dock ⇒ 不重录黄金基线。
+- 建议门槛：#11 推荐任务独立页（帮助中心 `01-任务/05-推荐任务.md`）。本轮已取证：嘀嗒四组的分组维度**契约里已有**
+  （`TodoHelpCenterService.java:173,176,179,183` = `REPEATEDLY_RESCHEDULED`/`DUE_SOON`/`LONG_UNFINISHED`/`RECENTLY_ADDED`），
+  做独立页不需要新端点；但每组的**子档**要 `createdAt`/`rescheduleCount`/`unfinishedDays` 三个字段，
+  `AppTodoRecommendTaskRespVO.java:10-31` 现在没有 ⇒ 已开 izhaong/zh-cloud-service#271（先改契约）。
+  客户端可先落四组 + 「即将到来 明天/后天」（能从 `dueAt` 算），子档在 `spec.md` 里写成仍缺项，不算完成。
+  入口优先放进现有 `RecommendationPanel` 的标题行（面板只在有缓存时渲染、push 路由拍不到黄金图）⇒ 不重录黄金基线。
 - 需要授权才动的：#23 缺项 ①「清单页渲染子任务树」（改可见列表布局 ⇒ 先申请重录 9 张黄金图）。
 
