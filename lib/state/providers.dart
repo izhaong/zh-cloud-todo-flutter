@@ -12,6 +12,7 @@ import '../core/sync/sync_coordinator.dart';
 import '../core/time/task_time_formatter.dart';
 import '../state/session_state.dart';
 import 'repositories/board_preference_repository.dart';
+import 'repositories/filter_repository.dart';
 import 'repositories/folder_repository.dart';
 import 'repositories/activity_repository.dart';
 import 'repositories/list_repository.dart';
@@ -146,6 +147,20 @@ final tagRepositoryProvider = Provider<TagRepository?>((ref) {
   final queue = ref.watch(syncChangeQueueProvider);
   if (db == null || queue == null) return null;
   return TagRepository(db, queue);
+});
+
+final filterRepositoryProvider = Provider<FilterRepository?>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  final queue = ref.watch(syncChangeQueueProvider);
+  if (db == null || queue == null) return null;
+  return FilterRepository(db, queue);
+});
+
+/// 已保存过滤器（本地 Drift 事实源，含服务端 pull 落库的）。
+final savedFiltersStreamProvider = StreamProvider<List<TodoFilter>>((ref) {
+  final repo = ref.watch(filterRepositoryProvider);
+  if (repo == null) return Stream<List<TodoFilter>>.value(const []);
+  return repo.watchAll();
 });
 
 final taskRepositoryProvider = Provider<TaskRepository?>((ref) {
