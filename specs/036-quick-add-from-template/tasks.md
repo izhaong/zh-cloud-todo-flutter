@@ -150,10 +150,10 @@ NIT（逐条采纳/拒绝，拒的要留理由）：
 - 模板弹层只提供「添加」，没有嘀嗒模板管理面（列表页改名/删除/模板库）⇒ 属矩阵 #89 的另一格缺口。
 - 已选模板后无法二次确认或撤销（即刻建任务），与详情页「应用」一致；若人工在嘀嗒上核到「选择后是预填」，本行结论要改。
 - 矩阵行状态翻转要等合并；未合并前只写「已实现待合并」。
-- **存量同源缺陷（本切片没顺手改，另开治理 Issue）**：`_save()` 的两条反馈（未登录之外的 `StateError` 原因、
-  「保存任务失败，请稍后重试」，`task_quick_add_sheet.dart:66-76`（两处 `ScaffoldMessenger.of` 在 `:68` 与 `:73`））仍走根 `ScaffoldMessenger` ⇒ 与复核 B4 同因，
-  在生产里同样被这层 modal 路由盖住。本切片只把自己引入的三条消息搬进弹窗内，不扩大改动面。
-  **已开治理 Issue：izhaong/zh-cloud-todo-flutter#289**。
+- **存量同源缺陷 → 已在第 3 轮由 #289 收掉**：`_save()` 的两条失败反馈原先走根 `ScaffoldMessenger`（HEAD 版的 `:68`、`:73`），
+  现改为 `_report()`（现 `:66-69`），并把弹窗内容改为 `SingleChildScrollView(reverse: true)`（`:138-142`）——
+  因为量到 `320×568 + 键盘 260px + 1.3 倍字体`下这张非滚动 Column 会裁掉底部 `8.2px`，而底部正是反馈行。
+  Refs izhaong/zh-cloud-todo-flutter#289。
 - **模板行那对状态措辞无人钉**：`已同步` / `等待同步` 在 `test/` 里钉的是**别的整串**——
   `test/features/task/task_workable_views_test.dart:176`「已恢复上次看板设置，等待同步」、`test/reminder_inbox_test.dart:282,393`「操作等待同步」，
   `git grep -c 已同步 HEAD -- test` = **0 个文件** ⇒ 弹层与详情页共用的那对模板状态文案（`task_detail_pane.dart:3640`、
@@ -175,7 +175,7 @@ sha256 与本地两份文件一致（`4f082f98f16…` / `33be868e647…`），�
 
 | NIT | 内容 | 处置 |
 | --- | ---- | ---- |
-| 3 | `Key('todo-quick-add-feedback')` 没有任何用例引用，而 `plan.md` 把它当契约点名 | 待办：要么让某条断言直接按 key 找，要么把 plan.md 的措辞改成「按弹窗子树断言」。**本 commit 未动**，留给下一轮与 #289 一起收（同一片代码，避免拆两次）。 |
+| 3 | `Key('todo-quick-add-feedback')` 没有任何用例引用，而 `plan.md` 把它当契约点名 | **第 3 轮已收**：新增的「生产形态」用例直接 `find.byKey(Key('todo-quick-add-feedback'))`（`task_quick_add_sheet_test.dart:137`），另两条仍按弹窗子树断言（`sheetMessage`）。 |
 | 4 | 探针编号三套含义漂移（plan.md 第 1 轮表 / tasks.md 第 2 轮表 / 测试注释） | 已修：plan.md 表标明「第 1 轮」并加指向；测试注释的 `PJ`/`PI` 改为与 tasks.md 第 2 次表一致的 `PG`/`PB`。 |
 | 5 | tasks.md 两处行号随修复失效（`:67-74`、`:286`） | 已修：`:66-76`（两处 `ScaffoldMessenger.of` 在 `:68`/`:73`）、`:309-310`。 |
 
@@ -188,15 +188,19 @@ sha256 与本地两份文件一致（`4f082f98f16…` / `33be868e647…`），�
    承认是可读屏体验缺陷，但**修它需要换控件形态**（`Semantics(mergesDescendantsState: true)` 或自建按钮），
    属于 #289 那一片（同源的还有 `_save()` 的两条 SnackBar），且必须真机 VoiceOver 复验 ——
    本机无第二台设备，widget 测试证明不了读屏顺序，不在此自证通过。
-3. **NIT6 没有一条用例把宿主弹窗经 `showModalBottomSheet` 泵进树**（12 条都泵 `Scaffold.body`），
-   所以 B4 的几何只是结构性约束。复核员自己另写了一次生产形态量测并给出 `feedbackInsideSheet=true`；
-   把那段临时量测转成常驻用例要引入新的 golden/尺寸断言面，留待 #289 一并处理。
+3. ~~NIT6 没有一条用例把宿主弹窗经 `showModalBottomSheet` 泵进树~~ **第 3 轮已补**：
+   `task_quick_add_sheet_test.dart:137` 那条走的就是生产拓扑（`showModalBottomSheet` + `FakeViewPadding(bottom: 260)` + 320×568 + 1.3 倍字体），
+   并断言反馈行 `rect.bottom ≤ 308`。没有新增 golden，也未重录 9 张基线。
+   这一条不是摆设：它当场量出 `A RenderFlex overflowed by 8.2 pixels on the bottom`，即第 2 轮那句 `feedbackInsideSheet=true` 只证明了「在子树里」，没证明「在可见区里」。
 4. **NIT7 菜单项用 `findsWidgets` 而非 `findsOneWidget`**（弹层标题也叫「模板」，理论上失 label 仍绿）。
    同条用例里 `bySemanticsLabel('更多')` 已是 `findsOneWidget`，且改菜单文案必红（PH 实测 `+0 -12`）⇒ 收益低于改动风险，不动。
 5. **NIT8 `if (_applyingTemplate) return;` 静默**：复核员自己判定「无可达的静默无反馈路径」，同意；
    加一条 `_report` 会给一个够不着的分支编文案。
-6. **NIT9 反馈行 +34 px、320×568 + 假键盘下溢出 14 px**：复核员做了同脚本 A/B，
-   基线 `a1d7733` **同样溢出** ⇒ 属存量非滚动布局，归 #289，不在本切片顺手改。
+6. **NIT9 反馈行 +34 px、320×568 + 假键盘下溢出** → **第 3 轮已修**（非滚动 Column 换成 `SingleChildScrollView(reverse: true)`）。
+   本轮自己量到的溢出是 `8.2px`，量的是「表单 + 反馈行、不含 NLP 行」（1.3 倍字体 + 键盘 260px），与复核员那个 14px 不是同一份内容，两个数字都成立。
+   **未测的**：补上 NLP 行之后的非滚动布局会溢出多少（改布局之后才加的那行断言）⇒ 常驻用例只覆盖「修好之后 + 最坏内容」这一格。
+   探针：`reverse: true` 改 `false` ⇒ 该行落在视口外**根本没被构建**（`Found 0 widgets with key <'todo-quick-add-feedback'>`），
+   改回后 `cmp -s` 证明逐字节一致。取舍：底部对齐换来「保存」与反馈必定可见，代价是极端高度下标题「新建任务」滚出视口——嘀嗒该弹窗同样是自下向上、标题非操作对象，判定可接受。
 
 **改后门禁（最终字节一次跑完，日志 `/tmp/gate036r3.log`）**：
 `git diff --check` rc=0 · `dart format` `Formatted 1 file (0 changed)` rc=0 · `flutter analyze` `No issues found!` · `flutter test --tags golden` `00:03 +9: All tests passed!` · `flutter test --exclude-tags 'golden || performance' --concurrency=1` `01:51 +721 ~26: All tests passed!` · `flutter build web --release` `✓ Built build/web`。
@@ -239,3 +243,44 @@ sha256 与本地两份文件一致（`4f082f98f16…` / `33be868e647…`），�
 6. **剩余工时粗估**（不含等人给条件的项）：习惯接线族 ≈ 1.5 轮；快速添加附件 ≈ 1 轮；
    倒数纪念日契约 ≈ 1 轮（service）+ 1 轮（客户端）；清单页子任务树 / 文件夹入口 / 左滑 ≈ 各 1 轮且**都要先批准重录黄金图**；
    纯客户端可推进的窗口大约还能撑 6–8 轮，之后就要靠合并与 test 环境才能再进。
+
+## 第 3 轮（#289：`_save()` 的两条失败反馈搬进弹窗，并修掉承载它的布局）
+
+- 红测先行且失败信息精确指向缺失项（日志 `/tmp/r22-red-full.log`，exit=1）：
+  `Found 0 widgets with text containing 父任务必须属于同一清单 descending from widgets with key [<'todo-quick-add-sheet'>]`、
+  `… 保存任务失败，请稍后重试 …`，各命中 1 次 ⇒ 两条 catch 分支各有用例钉住，摘回 SnackBar 必红。
+- 新增第 3 条用例走生产形态（`showModalBottomSheet` + `FakeViewPadding(bottom: 260)` + 320×568 + 1.3 倍字体 + NLP 行），
+  当场量到 `A RenderFlex overflowed by 8.2 pixels on the bottom` ⇒ 「搬进子树」不等于「搬进可见区」，遂加 `SingleChildScrollView(reverse: true)`。
+- 反向探针两条：① `_report` 换回根 SnackBar ⇒ 前两条用例红（改前/改后同一判据）；② `reverse: true` 换 `false` ⇒ 第三条红且
+  `Found 0 widgets with key <'todo-quick-add-feedback'>`（滚出视口的行根本没被构建）。两次都 `cp` 回写并 `cmp -s` 证明逐字节一致。
+- 六项门禁（最终态一次跑完，`/tmp/r22-gates-v2.log`）：
+
+```
+$ git diff --check                                   exit=0
+$ dart format --output=none --set-exit-if-changed <2 files>
+  Formatted 2 files (0 changed)                      exit=0   # 先红过一次：HEAD 版 0 changed ⇒ 红是我引入的，只格式化自己那个文件
+$ flutter analyze                                    No issues found!
+$ flutter test --tags golden                         00:03 +9: All tests passed!
+$ flutter test --exclude-tags 'golden || performance' --concurrency=1
+                                                     01:51 +723 ~26: All tests passed!
+$ flutter build web --release --dart-define=…        ✓ Built build/web
+```
+
+- 计数对账（不靠推测）：develop@`a1d7733` 实测 709 ⇒ 709 + 本分支 specs/036 新增文件 12 条 + 本轮 2 条（通用失败分支、生产形态）= **723**，逐条对上；
+  9 张黄金图未变、未重录。
+- 复核：`claude` CLI 本机不可用（`unrecognized_model`）⇒ 沿用本会话只读子代理。第 1 轮 **`VERDICT: FAIL`**，
+  3 条 BLOCKER：B-1 `pubspec.lock` 混进 diff、B-2 specs/036 三处措辞随修复失效、B-3 #289 自己认领的 NIT3/NIT6/NIT9 三条验证债未收。
+  - **B-1 不采纳（附证据）**：`pubspec.lock` 全程未 staged（`git status --short` 只有 ` M pubspec.lock`，提交只 `git add` 那两个文件），
+    且它是本机新 SDK 重解析的既有现象，不是本轮引入的改动；复核员把「工作区 diff」当成了「将提交的 diff」。
+  - B-2、B-3 全采纳：本节的三处回写 + 新增生产形态用例 + `reverse` 修布局，就是按结论改的。
+  - 5 条 NIT 的处置见下。
+
+第 1 轮复核 NIT：采纳 2 条、不采纳 3 条（都带理由）。
+
+- **采纳 N-3**：用例里「否则失败提示是空转出来的」那句注释高估了那条断言（抛点在 `create` 之前，它恒真）⇒ 注释已按实际作用改写。
+- **采纳 N-5（转成待办）**：`_save()` 的 `repo == null`（未登录点保存＝零反馈）比 SnackBar 被盖更糟，本轮不动，另开 Issue 跟。
+- **不采纳 N-1（`matchRoot: true` 是空操作）**：`sheetMessage()` 与同仓已验收的 `quick_add_from_template_test.dart:102-108` 逐字同一份实现；
+  在这里单点删参数会让两个文件各持一个「差一个 flag」的同名 helper，属制造漂移。
+- **不采纳 N-2（两处 helper 重复，提到 `test/support/`）**：目前正好 2 处、且都在同一功能目录，抽公共 helper 是未被要求的抽象；
+  第三处出现时再提。
+- **不采纳 N-4（`_feedback` 不随重试清空）**：`_report` 覆盖旧值是 #288 已验收行为，本轮只换了调用方，改它会顺带改掉「已应用模板」那条的语义。
