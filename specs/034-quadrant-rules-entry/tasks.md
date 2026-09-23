@@ -38,9 +38,11 @@
   ⇒ `✓ Built build/web`。
   最终字节 sha256 前 8：`155bc7ba` tasks_by_list_page.dart、`885f1447` task_workspace_header.dart、
   `13f1c927` quadrant_rules_entry_test.dart。
-  对照口径：目标记的基线 713/26 与本分支实测 713/26 **数字相同但未做同基线复算**，
-  复算正在独立 worktree 跑（`/tmp/base-034.log`，基线点 `develop@a1d7733`）；
-  出数前不写「与基线一致」，只报实测值 —— 本分支含本轮新增 4 例，纯减法对不上是已知事实。
+  对照口径：同一条全量命令在**独立 worktree 的基线点 `develop@a1d7733`** 上实测
+  `02:17 +709 ~26: All tests passed!`（`/tmp/base-034.log`，跑完已 `git worktree remove`），
+  本分支 `+713 ~26` ⇒ **709 + 本轮新增 4 例 = 713，逐一对上、无回归**。
+  目标里记的「基线 713/26」与本分支数字相同纯属巧合 —— 那是在别的分支状态上数的，
+  本规格的对照以 `709 → 713` 这组同口径复算为准。
 
 ## 未做 / 仍缺
 
