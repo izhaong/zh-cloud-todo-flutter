@@ -15,6 +15,14 @@
   外加 `item-11.top < item-12.top` 钉 明天→后天，`item-13` 不丢。
   反向探针 **PK**（把 `_dueSoonBucketLabel` 的两个返回值互换）⇒ 该用例红；
   **PL**（把 `_dueSoonBucketOrder` 两条倒过来）⇒ 同一条用例红。日志 `/tmp/probe-033-r2.log`、`/tmp/probe-033-po.log`。
+  **第 12 轮补的洞（第二轮复核 BLOCKER）**：以上都只是**页面层**的证据 —— 页面用例直接往 Drift 塞 `DateTime`，
+  绕过了「服务端响应 → `RecommendationTask.fromJson` → 仓储写库」这条真实通道。
+  而线上 `dueAt` 是 epoch 毫秒数字，`todo_api.dart` 原实现只认 `String` ⇒ 真实数据下 `dueAt` 恒 null ⇒
+  明天/后天两档**在真机上永远不渲染**。现已补：
+  先写喂毫秒的用例（红：`Expected: DateTime:<2026-08-03 09:30:00.000> Actual: <null>`）→
+  `todo_api.dart` 认 `num`（按毫秒，与同文件 `:1113`、`:1495`、`:1598` 的既有口径一致）→ 绿；
+  ISO 字符串通道也补了一条不断言的对照用例，避免后端加 `@JsonFormat` 时反向踩空。
+  教训：**"页面能渲染"不等于"数据能到达"** —— 分组/时间档这类功能的证据必须有一条从响应线格式起的用例。
   记一笔第一轮的假阳性：那时只断「两个档键 + 三行都在树里」，是**对称断言**，
   明天↔后天 互换时键都还在、文案都还找得到 ⇒ 全绿。探针 PK 当时绿，就是这条不覆盖该机制。
 - [x] T003 点行进任务详情、行内「+」添加到今天；重复点击两层屏障（FR-4、FR-5）。
@@ -83,6 +91,10 @@
 - [ ] T012 远端 CI 未跑（runner `cgroup is not mounted`、Jenkins Job 不可达）；本地门禁不替代远端证据。
 - [ ] T013 页面只在 `initState` 取一次仓储并订一次流：provider 若在页面存活期间被换成另一个仓储实例，
   页面仍看旧仓储的流。未做 `didUpdateWidget`/`ref.listen` 重订。
+  **第 12 轮改掉原来的记账理由**（原写「`recommendationRepositoryProvider` 与登录态同生命周期，存活期被换不是可达状态」）：
+  这句站不住 —— `state/providers.dart:94-109` 每次 `sessionProvider` 变更就新建 `AppDatabase` 并 `ref.onDispose(db.close)`，
+  而 `_refresh` 走 `ref.read`（写新库）、页面读旧流 ⇒ 症状是「刷新后列表不动」。
+  至于登出时这条 push 路由是否还活着**未验证**（要真机/手手感），所以本条仍是未做而非"不可达"。
   本轮把**后果**改小了：旧写法下这条流的错误会被当成「没有数据」，念成「暂无推荐任务」（假空态）；
   现在（T015）会念「读取推荐任务失败」⇒ 用户至少看得见出问题，但**订阅关系仍不重连**。
 - [ ] T014 「过期响应不覆盖新响应」只做到本页面内：`_requestRefresh` 共用同一次请求，
@@ -120,6 +132,25 @@
   让第二档真正被断；limit 不一致并入 T014/spec.md，不新增可配置项。
 - 复核员的一处判断经复验不成立：称 `findsWidgets` 光靠 tooltip 即可满足 —— 实测 PJ（摘 label）用例红、
   收紧成 `findsOneWidget` 全绿。按 goal 的「子代理否定结论要复验」处理，未照其措辞放宽断言。
+
+### 第二轮复核（第 12 轮做）：`VERDICT: FAIL`
+
+手段同上（本会话只读子代理，`claude` CLI 不可用）。1 blocker + 3 minor + 2 nit，逐条处置：
+
+- BLOCKER：`dueAt` 线格式是 epoch 毫秒，客户端只认字符串 ⇒ 两个子档真实数据下永不渲染；且全仓**没有任何用例经过
+  `RecommendationTask.fromJson`**（契约用例假响应是 `'data': []`），所以六项门禁结构上抓不到 ⇒ **采纳**，
+  按 T002 的补法修（先红后绿）。这条同时说明「反向探针全红」不等于「数据通道通」：探针只能证**已写用例**的覆盖，
+  证不了"该覆盖的通道一条用例都没有"。
+- M2（320px 用例种的是 `REPEATEDLY_RESCHEDULED`/`dueAt: null`，不经过新的子档 `Column`）⇒ **采纳**：数据改走
+  `DUE_SOON` + 明天，并加一条"必须出现 `recommendation-bucket-tomorrow`"的自检；探针 **PR2**（判据恒 null）⇒ 该用例红。
+- M3（子档标题裸 `Text`，无 header 语义）⇒ **采纳**：包 `Semantics(header: true)` + 新用例；探针 **PQ2**（`header: false`）⇒ 红。
+- M4（T013 的记账理由错）⇒ **采纳**，改写见上。
+- N5（面板头部三个动作没有 320px 用例）⇒ **采纳**：补一条 320px+1.3 的面板用例；探针 **PS2**（摘入口）⇒ 红。
+- N6（文档里的正则与代码不符）⇒ **采纳**（见 T007）。
+- 复核员自我更正一处，我复验后保留其结论：其第一次注入零高度 `SizedBox` 时报「`takeException()` 像死断言」，
+  换带高度的盒子后为 RED ⇒ 320px 用例的两条断言都是活的（`flex.dart` 在 `size.isEmpty` 处提前 return 解释了第一次假绿）。
+- 运维事实如实记下：本轮第 12 次复核期间（21:02）工作树被我自己的 `git checkout feat/todo-quadrant-rules-entry` 切走，
+  复核员是在 `/tmp` 副本上审 `8912d62` 的字节（`cmp` 一致），未做 checkout。以后派发复核期间不再切分支。
 
 **本轮（第 11 轮 = 033 复核修复轮）结束状态**：BLOCKER + M2/M4/M5(前半)/M6/M7 + N9 全部落地，
 每项都有反向探针（PK/PL/PM/PN/PO/PP 六条，各自红、恢复后 `cmp -s` 逐字节一致）；
