@@ -44,9 +44,14 @@
       只对这一个文件跑 `dart format`（未整仓原地格式化），复跑 4 例仍 `All tests passed!`，
       并在新字节上重跑全部四个探针（`/tmp/r15-probes3.log` 仍四红）。
 - [ ] **T007 只读复核拿 VERDICT**：见下面「复核轮次」。**未完成**。
-- [ ] **T008 回写矩阵行**：#20 由「仍缺」改「已实现待合并 <PR>」。**未完成（等 PR 号）**。
-- [ ] **T009 另开 Issue 记 Service 债（FR-5）**：`TodoFilterServiceImpl.java` 的 `resolveSortColumn`
-      白名单缺 `update_time`，按规则 5 要先改契约再改客户端。**未完成**。
+- [x] **T008 回写矩阵行**：`zh-cloud-docs` 提交 `9409531`（分支 `docs/dida-parity-matrix-round0`，即 PR !69）
+      把 #20 的 ② 由「没有」改记为「已实现待合并 izhaong/zh-cloud-todo-flutter!286」，
+      并顺手更正第 14 轮留下的假锚点：`updatedAt` 非空列在 `app_database.dart:98` 的 `TodoTasks`（原写 `:43` 属 `TodoLists`）。
+      改后该行未转义/转义 `|` 总数仍为 13（改前后各数一遍，防整行替换吃掉末列）。
+- [x] **T009 另开 Issue 记 Service 债（FR-5）**：izhaong/zh-cloud-service#273
+      「已保存过滤器的排序白名单缺『修改时间』列」，正文含 `TodoFilterServiceImpl.java:487-500` 实测白名单六项与
+      `default -> null`（即客户端硬发未支持字段会被静默忽略，不是报错），并按规则 5 写明「先改契约再改客户端」。
+      本仓 Issue #285 / PR !286 与它互链。
 - [x] **T010 六项门禁跑在最终字节**：见下表。
 
 ## 门禁（最终字节，日志 `/tmp/gate-035b.log`）
