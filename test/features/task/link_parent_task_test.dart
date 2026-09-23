@@ -415,6 +415,35 @@ void main() {
         _metadataTaskId,
       );
     });
+
+    testWidgets('候选还在加载时再点一次入口：不得叠两层弹层', (tester) async {
+      _SlowLinkPreparationRepository? slow;
+      await pumpPane(
+        tester,
+        taskId: TodoVisualFixture.pinnedTaskId,
+        repoBuilder: (db, queue) =>
+            slow = _SlowLinkPreparationRepository(db, queue),
+      );
+
+      await tester.tap(find.byTooltip('更多任务操作'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('关联主任务'));
+      await tester.pump();
+      expect(slow!.preparing, isTrue, reason: '先把候选加载悬住，模拟慢查询');
+
+      await tester.tap(find.byTooltip('更多任务操作'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('关联主任务'));
+      await tester.pump();
+      slow!.release();
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('task-parent-sheet')),
+        findsOneWidget,
+        reason: '叠两层时「取消关联」只退一层，用户会以为按钮失灵',
+      );
+    });
   });
 }
 
@@ -445,5 +474,22 @@ class _SlowReparentRepository extends TaskRepository {
   Future<void> reparent(String taskId, String? newParentId) async {
     await _gate.future;
     await super.reparent(taskId, newParentId);
+  }
+}
+
+/// 把「关联主任务」的候选加载悬在第一个 await 上，用来验加载期间重复点入口的表现。
+class _SlowLinkPreparationRepository extends TaskRepository {
+  _SlowLinkPreparationRepository(super.db, super.queue);
+
+  final Completer<void> _gate = Completer<void>();
+
+  bool get preparing => !_gate.isCompleted;
+
+  void release() => _gate.complete();
+
+  @override
+  Future<Set<String>> descendantIds(String taskId) async {
+    await _gate.future;
+    return super.descendantIds(taskId);
   }
 }

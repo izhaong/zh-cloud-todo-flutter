@@ -597,6 +597,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
   DateTime? _startAt;
   DateTime? _endAt;
   bool _loading = true;
+  var _linkParentOpen = false;
   bool _clearStartAt = false;
   bool _clearEndAt = false;
   DateTime? _dueAt;
@@ -853,6 +854,18 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
   /// 已关联时显示当前主任务并可取消关联。成环、五级上限与只读清单由
   /// [TaskRepository.reparent] 兜底，这里只负责把失败说清楚。
   Future<void> _linkParentTask(TodoTask task) async {
+    if (_linkParentOpen) return;
+    _linkParentOpen = true;
+    try {
+      await _prepareAndShowParentSheet(task);
+    } finally {
+      _linkParentOpen = false;
+    }
+  }
+
+  /// 候选要先等三次 await，加载期间再点一次「...」→「关联主任务」会叠两层弹层：
+  /// 「取消关联」只退一层，看起来像按钮失灵。一次打开只允许一个在飞的加载。
+  Future<void> _prepareAndShowParentSheet(TodoTask task) async {
     final taskRepository = ref.read(taskRepositoryProvider);
     final queryRepository = ref.read(taskQueryRepositoryProvider);
     if (taskRepository == null || queryRepository == null) {
@@ -917,7 +930,10 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
   /// 不能对用户说「请重试」，直接把它的原因转成提示。
   String _reparentFailureMessage(Object error) {
     if (error is StateError) return error.message;
-    if (error is ArgumentError) return '${error.message}';
+    // `ArgumentError.message` 是 `Object?`，`'${...}'` 会渲染出字面量 "null"。
+    if (error is ArgumentError) {
+      return error.message?.toString() ?? '关联主任务失败，请重试';
+    }
     return taskViewMutationFailureMessage(error, '关联主任务失败，请重试');
   }
 
