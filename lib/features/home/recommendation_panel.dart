@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/db/app_database.dart';
 import '../../core/theme/app_theme.dart';
 import '../../state/providers.dart';
+import 'recommendation_page.dart';
 
 /// 仅消费 Repository 的推荐读取模型；不在 Widget 中直连后端。
 ///
@@ -119,6 +120,20 @@ class _RecommendationPanelState extends ConsumerState<RecommendationPanel> {
                             '推荐任务',
                             style: TextStyle(fontWeight: FontWeight.w700),
                           ),
+                        ),
+                        IconButton(
+                          tooltip: '查看推荐任务',
+                          onPressed: () => unawaited(
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => RecommendationPage(
+                                  onTaskSelected: widget.onTaskSelected,
+                                  onAddToToday: widget.onAddToToday,
+                                ),
+                              ),
+                            ),
+                          ),
+                          icon: const Icon(Icons.open_in_full, size: 18),
                         ),
                         IconButton(
                           tooltip: '刷新推荐任务',
