@@ -871,17 +871,27 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       _showTaskDetailFeedback('暂无可关联的主任务');
       return;
     }
+    // 弹层离场动画期间 sheetContext 仍然 mounted，连点两个候选会把下层路由一起弹掉，
+    // 所以一次打开只允许提交一次。
+    var handled = false;
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (sheetContext) => _ParentTaskSheet(
-        currentParentTitle: currentParent?.title,
-        candidates: candidates,
-        onSelect: (parentTaskId) =>
-            _applyReparent(task.id, parentTaskId, sheetContext),
-        onUnlink: () => _applyReparent(task.id, null, sheetContext),
-      ),
+      builder: (sheetContext) {
+        Future<void> apply(String? parentTaskId) async {
+          if (handled) return;
+          handled = true;
+          await _applyReparent(task.id, parentTaskId, sheetContext);
+        }
+
+        return _ParentTaskSheet(
+          currentParentTitle: currentParent?.title,
+          candidates: candidates,
+          onSelect: (parentTaskId) => unawaited(apply(parentTaskId)),
+          onUnlink: () => unawaited(apply(null)),
+        );
+      },
     );
   }
 
@@ -897,12 +907,18 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     } catch (error) {
       if (sheetContext.mounted) Navigator.of(sheetContext).pop();
       if (!mounted) return;
-      _showTaskDetailFeedback(
-        taskViewMutationFailureMessage(error, '关联主任务失败，请重试'),
-      );
+      _showTaskDetailFeedback(_reparentFailureMessage(error));
       return;
     }
     if (sheetContext.mounted) Navigator.of(sheetContext).pop();
+  }
+
+  /// 仓储的规则裁决（只读清单、五级上限、成环）都是确定性失败，
+  /// 不能对用户说「请重试」，直接把它的原因转成提示。
+  String _reparentFailureMessage(Object error) {
+    if (error is StateError) return error.message;
+    if (error is ArgumentError) return '${error.message}';
+    return taskViewMutationFailureMessage(error, '关联主任务失败，请重试');
   }
 
   void _showTaskDetailFeedback(String message) {
@@ -923,7 +939,6 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
         final parent = snapshot.data;
         if (parent == null) return const SizedBox.shrink();
         final colors = brandColors(context);
-        final label = '主任务：${parent.title}';
         return InkWell(
           key: const Key('task-detail-parent-row'),
           borderRadius: BorderRadius.circular(6),
@@ -931,7 +946,8 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
           child: Semantics(
             container: true,
             button: true,
-            label: label,
+            // 嘀嗒可见文案就是裸的主任务标题；「主任务：」只给读屏，避免读出来不知道是什么。
+            label: '主任务：${parent.title}',
             onTap: () => unawaited(showTaskDetailSheet(context, parent.id)),
             child: ExcludeSemantics(
               child: Padding(
@@ -946,7 +962,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        label,
+                        parent.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -2832,7 +2848,6 @@ class _ParentTaskSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = brandColors(context);
     final currentParent = currentParentTitle;
     return SafeArea(
       key: const ValueKey('task-parent-sheet'),
@@ -2882,25 +2897,20 @@ class _ParentTaskSheet extends StatelessWidget {
                   ],
                 ),
               ),
+            // 无候选又无当前主任务时调用侧已早退（「暂无可关联的主任务」），
+            // 有主任务则主任务本身必在候选内，故这里不再摆空态分支。
             Expanded(
-              child: candidates.isEmpty
-                  ? Center(
-                      child: Text(
-                        '暂无可关联的主任务',
-                        style: TextStyle(color: colors.mutedForeground),
-                      ),
-                    )
-                  : ListView(
-                      children: [
-                        for (final task in candidates)
-                          ListTile(
-                            key: ValueKey('task-parent-candidate-${task.id}'),
-                            leading: const Icon(Icons.account_tree_outlined),
-                            title: Text(task.title),
-                            onTap: () => onSelect(task.id),
-                          ),
-                      ],
+              child: ListView(
+                children: [
+                  for (final task in candidates)
+                    ListTile(
+                      key: ValueKey('task-parent-candidate-${task.id}'),
+                      leading: const Icon(Icons.account_tree_outlined),
+                      title: Text(task.title),
+                      onTap: () => onSelect(task.id),
                     ),
+                ],
+              ),
             ),
           ],
         ),

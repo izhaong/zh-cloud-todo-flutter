@@ -25,6 +25,7 @@ void main() {
     WidgetTester tester, {
     required String taskId,
     Size size = const Size(760, 900),
+    bool embedded = true,
     TaskRepository Function(AppDatabase db, SyncChangeQueue queue)? repoBuilder,
   }) async {
     final fixture = await TodoVisualFixture.create();
@@ -34,7 +35,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    Widget pane = TaskDetailPane(taskId: taskId, embedded: true);
+    Widget pane = TaskDetailPane(taskId: taskId, embedded: embedded);
     if (repoBuilder != null) {
       final repository = repoBuilder(
         fixture.database,
@@ -183,13 +184,13 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.text('主任务：$_metadataTitle（改名）'),
+        find.text('$_metadataTitle（改名）'),
         findsOneWidget,
         reason:
-            '主任务行不得停在首屏快照（探针：把流换成每次 build 重取一次也能过，'
-            '所以这条只钉「行为不陈旧」，不钉 watchById 机制本身）',
+            '主任务行的可见文案就是裸的主任务标题（嘀嗒如此），改名要跟上。'
+            '探针边界：换成「每次 build 重取一次」也能过 ⇒ 这条只钉行为不陈旧，不钉 watchById 机制。',
       );
-      expect(find.text('主任务：$_metadataTitle'), findsNothing);
+      expect(find.text(_metadataTitle), findsNothing);
     });
 
     testWidgets('只读清单里关联失败：给提示、原数据保持、面板还在', (tester) async {
@@ -258,11 +259,7 @@ void main() {
     });
 
     testWidgets('320px + 1.3 倍字体：弹层自己继承档位且不溢出', (tester) async {
-      await pumpPane(
-        tester,
-        taskId: TodoVisualFixture.pinnedTaskId,
-        size: const Size(320, 620),
-      );
+      await pumpPane(tester, taskId: _childTaskId, size: const Size(320, 620));
       tester.platformDispatcher.textScaleFactorTestValue = 1.3;
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       await tester.pumpAndSettle();
@@ -270,11 +267,16 @@ void main() {
       // 存量欠债（本轮不动、另开 Issue）：嵌入态详情操作头 `_buildEmbedded` 的
       // Row 在 320px + 1.3 倍下已溢出 36px。先吃掉这条既有异常，
       // 才能把「弹层自身零溢出」与它分开证明。
+      // takeException 的字符串只带消息，不带出处；这里用「像素数 + 弹层尚未打开」
+      // 两个条件把它钉成 Issue #279 记录的那一条（FlutterError.onError 里
+      // 的调用栈是 Row ← Padding ← Column-<'todo-task-detail-pane'>）。
+      final preExisting = '${tester.takeException()}';
       expect(
-        '${tester.takeException()}',
-        contains('RenderFlex overflowed'),
+        preExisting,
+        contains('RenderFlex overflowed by 36 pixels'),
         reason: '既有溢出要留在账上，不能被本轮当成自己的通过',
       );
+      expect(find.byKey(const Key('todo-task-detail-pane')), findsOneWidget);
 
       await openParentSheet(tester);
       final sheetContext = tester.element(
@@ -289,6 +291,11 @@ void main() {
         tester.takeException(),
         isNull,
         reason: '「关联主任务」弹层在 320px + 1.3 倍下不得再有新溢出',
+      );
+      expect(
+        tester.getSize(find.byKey(const ValueKey('task-parent-sheet'))).height,
+        moreOrLessEquals(620 * 0.6, epsilon: 1),
+        reason: '钉住 isScrollControlled：弹层要按 60% 屏高展开，否则这条参数没人验证',
       );
     });
 
@@ -315,7 +322,113 @@ void main() {
         handle.dispose();
       }
     });
+
+    testWidgets('窄屏全屏页的「...」里也有关联主任务（独立码路，不复用嵌头）', (tester) async {
+      await pumpPane(
+        tester,
+        taskId: TodoVisualFixture.pinnedTaskId,
+        embedded: false,
+        size: const Size(390, 844),
+      );
+
+      await openParentSheet(tester);
+
+      expect(
+        find.byKey(const ValueKey('task-parent-sheet')),
+        findsOneWidget,
+        reason: '窄屏页内联的菜单项与回调是另一段代码，不测就等于没接',
+      );
+      expect(
+        find.byKey(const ValueKey('task-parent-candidate-$_metadataTaskId')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('同清单没有别的任务：提示「暂无可关联的主任务」，不弹层', (tester) async {
+      await pumpPane(tester, taskId: 'visual-task-reading-list');
+
+      await openParentSheet(tester);
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.text('暂无可关联的主任务'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('task-parent-sheet')),
+        findsNothing,
+        reason: '没候选还弹一个空弹层，是凭空多一步操作',
+      );
+    });
+
+    testWidgets('五级上限的确定性失败：说清原因，不是「请重试」', (tester) async {
+      final fixture = await pumpPane(tester, taskId: _metadataTaskId);
+      final repo = fixture.container.read(taskRepositoryProvider);
+      expect(repo, isNotNull);
+      var parentId = TodoVisualFixture.pinnedTaskId;
+      for (var level = 1; level <= 5; level++) {
+        parentId = (await repo!.create(
+          listId: TodoVisualFixture.inboxListId,
+          title: '第 $level 层',
+          parentTaskId: parentId,
+        )).id;
+      }
+      await tester.pumpAndSettle();
+
+      await openParentSheet(tester);
+      await tester.tap(find.byKey(ValueKey('task-parent-candidate-$parentId')));
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.textContaining('五级'), findsOneWidget);
+      expect(
+        (await taskOf(fixture.database, _metadataTaskId)).parentTaskId,
+        isNull,
+        reason: '超限不能留下半截层级',
+      );
+    });
+
+    testWidgets('连点两个候选只提交一次（弹层离场动画期间不得二次 pop）', (tester) async {
+      _CountingReparentRepository? counter;
+      final fixture = await pumpPane(
+        tester,
+        taskId: TodoVisualFixture.pinnedTaskId,
+        repoBuilder: (db, queue) =>
+            counter = _CountingReparentRepository(db, queue),
+      );
+
+      await openParentSheet(tester);
+      await tester.tap(
+        find.byKey(const ValueKey('task-parent-candidate-$_metadataTaskId')),
+      );
+      await tester.tap(
+        find.byKey(
+          const ValueKey(
+            'task-parent-candidate-${TodoVisualFixture.todayTaskId}',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(counter!.reparentCalls, 1, reason: '第二次点击必须被吞掉');
+      expect(
+        (await taskOf(
+          fixture.database,
+          TodoVisualFixture.pinnedTaskId,
+        )).parentTaskId,
+        _metadataTaskId,
+      );
+    });
   });
+}
+
+/// 数 `reparent` 被调用几次，用来钉住「一次打开只提交一次」。
+class _CountingReparentRepository extends TaskRepository {
+  _CountingReparentRepository(super.db, super.queue);
+
+  int reparentCalls = 0;
+
+  @override
+  Future<void> reparent(String taskId, String? newParentId) {
+    reparentCalls += 1;
+    return super.reparent(taskId, newParentId);
+  }
 }
 
 /// 把 reparent 卡在 awaited 状态，用来验「回包晚于面板卸载」不砸已销毁的 State。
