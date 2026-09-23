@@ -167,15 +167,25 @@ NIT（逐条采纳/拒绝，拒的要留理由）：
 
 1. 本切片只剩第 2 轮复核结论待回填（两轮封顶）；矩阵 #7 / #89 行停在「已实现待合并」，合并（人的动作）后才翻 SHA。
 2. **零基线影响的下一刀候选（本轮取证时新排出来的，按性价比排序）**：
-   - **习惯接线的纯客户端那一半**（矩阵 #44/#45/#46 本轮实测）：`TodoHabitDO` 已有 `icon`/`color`/`period`/
-     `targetCount`/`reminderAt`/`sortOrder`/`archived`，`AppTodoHabitController` 七个端点齐全，而
+   - **习惯接线的纯客户端那一半**（矩阵 #44/#45/#46 本轮实测）：`AppTodoHabitController` 端点齐全
+     （`page`/`create`/`update`/`delete`/`get`/`check-in`/`stats`），而
      `features/habit/habit_repository.dart` 只调了 `page`/`create`/`check-in`/`stats` 四个、新建表单只有名字一个字段
-     ⇒ 补「编辑 / 归档 / 删除 / 频率 / 目标」不需要动契约。`grep -c 习惯 test/visual/todo_workspace_golden_test.dart` = **0**
+     ⇒ 补「编辑 / 删除 / 频率 / 目标 / 图标 / 颜色 / 提醒时间 / 打卡备注」不需要动契约
+     （`AppTodoHabitBaseVO` 已有 name/icon/color/period/targetCount/reminderAt/sortOrder，
+     `AppTodoHabitCheckInReqVO` 已有可选 `note`）。`grep -c 习惯 test/visual/todo_workspace_golden_test.dart` = **0**
      ⇒ 大概率零基线，但 `home_shell.dart:649` 直接内嵌 `HabitPage`，动手前先在 320px/默认档各拍一次确认 9 张不变。
+   - **自我更正（本条上一版写错了）**：上面这块**不包括「归档」**。原文写的是「编辑 / 归档 / 删除…不需要动契约」，
+     错在只看了 DO 层——`TodoHabitDO:50` 确实有 `archived`，但 `AppTodoHabitBaseVO`（create+update 的入参）**没有**
+     `archived`，可读的只有 `AppTodoHabitRespVO:21` 与 `AppTodoHabitPageReqVO:17`（筛选），
+     可写的 `archived` 只在**管理端** VO（`HabitUpdateReqVO:22`）⇒ app-api 今天既归档不了也取消归档不了。
+     按规则 5，这一项要先在 `zh-cloud-service` 加契约，客户端不得自己造（例如借用 `sortOrder` 或本地标记硬编）。
    - 快速添加弹窗补「添加附件」（队列 1 的真缺口，复用 `task_detail_pane.dart` 的 `_AttachmentSection` 链路）。
 3. **要先动契约、别从客户端下手**：倒数纪念日的 类型 / 提醒 / 重复 / 图标 / 农历 / 计时方式 / 分组 / 置顶
    （`TodoCountdownDO` 只有 name/targetDate/style/showAge/backgroundImage/sortOrder/archived，
    `AppTodoCountdownPageReqVO.java:13,15` 只有 name 与 archived）⇒ 在 `zh-cloud-service` 先开 Issue + 增量 SQL，再回客户端。
+   归档字段的修法仓内已有先例，不必自创形状：`AppTodoPomodoroTimerController.java:65`（`@PutMapping("/{id}/archived")`
+   → `timerService.setArchived(id, archived)`）与 `AppTodoNoteController.java:45`（`@PutMapping("/archive")`）——
+   habit 与 countdown 各照此加一个 app-api 端点即可。
 4. **轨道 A 到此收口**：A/B/C 三段都已清算（A 段最后一批 6 行落在 `zh-cloud-docs@09c7e8b`，PR !69）。
    轨道 A 只剩「矩阵之外的两处人工判定」：B33/C9 早已判完，剩 `specs/001-todo-dida-core-parity/spec.md:66`
    与成就入口路线的措辞冲突（队列 5 里那条），以及 #52 的共享三种方式要先在 Service 加端点。
