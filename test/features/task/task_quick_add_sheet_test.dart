@@ -206,4 +206,137 @@ void main() {
       reason: '反馈必须落在键盘上方的可见区，被键盘或屏幕底边盖住等于没有反馈',
     );
   });
+
+  testWidgets('未登录点保存要说「请先登录」，不能静默吞掉这一次点击', (tester) async {
+    final fixture = await TodoVisualFixture.create(
+      overridesBuilder: (database) => [
+        taskRepositoryProvider.overrideWithValue(null),
+      ],
+    );
+    addTearDown(fixture.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: fixture.container,
+        child: const MaterialApp(
+          home: Scaffold(
+            body: TaskQuickAddSheet(listId: TodoVisualFixture.inboxListId),
+          ),
+        ),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField), '未登录时敲的标题');
+    await tester.pump();
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    expect(
+      sheetMessage('请先登录'),
+      findsOneWidget,
+      reason:
+          '措辞与同文件 _addFromTemplate 的 :84 同源；摘掉这句 _report 这条用例必须红（Issue #292）',
+    );
+    expect(
+      find.byType(TaskQuickAddSheet),
+      findsOneWidget,
+      reason: '没保存成功不能关弹窗，否则用户敲的标题直接蒸发',
+    );
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller?.text,
+      '未登录时敲的标题',
+    );
+    expect(
+      await (fixture.database.select(
+        fixture.database.todoTasks,
+      )..where((row) => row.title.equals('未登录时敲的标题'))).get(),
+      isEmpty,
+      reason: 'populated 夹具本来就有任务，只能按这一条标题查有没有多出空写',
+    );
+  });
+
+  testWidgets('空标题点保存：提示落在标题框自己下面，且不发任何写请求', (tester) async {
+    // 生产拓扑 + 1.3 倍字体：errorText 会给标题框再加一行，必须量它是否被键盘/底边裁掉。
+    tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    tester.view.viewInsets = const FakeViewPadding(bottom: 260);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetViewInsets);
+
+    final fixture = await TodoVisualFixture.create();
+    addTearDown(fixture.dispose);
+    final changesBeforeAttempt = await fixture.database
+        .select(fixture.database.todoSyncChanges)
+        .get();
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: fixture.container,
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (ctx) => TextButton(
+                onPressed: () => showModalBottomSheet<void>(
+                  context: ctx,
+                  isScrollControlled: true,
+                  builder: (_) => const TaskQuickAddSheet(
+                    listId: TodoVisualFixture.inboxListId,
+                  ),
+                ),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).decoration?.errorText,
+      '请填写任务标题',
+      reason: '嘀嗒是「空标题不可提交」而不是「点了没反应」；提示归表单自己，不占反馈行',
+    );
+    // `sheetMessage` 只证「在弹窗这棵子树里」，而 errorText 也在那棵树里 ⇒ 按文本判不出它落在哪一行。
+    // 所以这里改成按 key 判「反馈行根本没出现」。
+    expect(
+      find.byKey(const Key('todo-quick-add-feedback')),
+      findsNothing,
+      reason: '反馈行留给「保存失败/请先登录」这类结果提示，校验态不往那里挤',
+    );
+    expect(find.byType(TaskQuickAddSheet), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    final error = find.text('请填写任务标题');
+    expect(
+      tester.getRect(error).bottom,
+      lessThanOrEqualTo(568 - 260 + 0.5),
+      reason: '多出来的这行要看得见，被键盘盖住等于没提示',
+    );
+    // 夹具是 populated（本来就有任务和 outbox 行）⇒ 只能查「这次有没有多出空标题行 / 多出一条变更」，
+    // 不能整表 isEmpty，否则永远红。
+    final emptyTitles = await (fixture.database.select(
+      fixture.database.todoTasks,
+    )..where((row) => row.title.equals(''))).get();
+    expect(emptyTitles, isEmpty, reason: '空标题不能落一条空任务');
+    expect(
+      await fixture.database.select(fixture.database.todoSyncChanges).get(),
+      orderedEquals(changesBeforeAttempt),
+      reason: '被早退守卫挡住的那次点击不能登记任何 outbox 变更',
+    );
+
+    await tester.enterText(find.byType(TextField), '补上标题');
+    await tester.pump();
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).decoration?.errorText,
+      isNull,
+      reason: '校验态要在下一次输入时清掉，否则会一直挂着',
+    );
+  });
 }

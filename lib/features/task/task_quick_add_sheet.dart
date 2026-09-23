@@ -24,6 +24,7 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
   DateTime? _nlpResolvedDueAt;
   bool _applyingTemplate = false;
   String? _feedback;
+  String? _titleError;
 
   @override
   void initState() {
@@ -40,6 +41,9 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
   }
 
   void _maybeResolveDate() {
+    if (_titleError != null && _titleCtrl.text.trim().isNotEmpty) {
+      setState(() => _titleError = null);
+    }
     final resolved = NlpDateParser().parse(_titleCtrl.text);
     if (resolved?.date != _nlpResolvedDueAt) {
       setState(() => _nlpResolvedDueAt = resolved?.date);
@@ -48,9 +52,16 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
 
   Future<void> _save() async {
     final text = _titleCtrl.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty) {
+      setState(() => _titleError = '请填写任务标题');
+      return;
+    }
     final repo = ref.read(taskRepositoryProvider);
-    if (repo == null) return;
+    if (repo == null) {
+      // 与 _addFromTemplate 同一措辞：未登录点「保存」不能静默吞掉这一次点击。
+      _report('请先登录');
+      return;
+    }
     try {
       final defaults = await ref
           .read(taskCaptureDefaultsRepositoryProvider)
@@ -153,9 +164,10 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
             TextField(
               controller: _titleCtrl,
               autofocus: true,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: '标题',
-                border: OutlineInputBorder(),
+                errorText: _titleError,
+                border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 12),
