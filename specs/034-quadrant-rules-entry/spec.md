@@ -11,7 +11,8 @@
 ## 现有落点（本规格的地基）
 
 - 视图：`features/task/views/eisenhower_view.dart:26` `EisenhowerView`，由
-  `features/task/tasks_by_list_page.dart:448` 在 `TaskViewMode.eisenhower` 分支渲染；
+  `features/task/tasks_by_list_page.dart:448`（基准 `origin/develop`；本分支 HEAD 上是 `:452`）
+  在 `TaskViewMode.eisenhower` 分支渲染；
   枚举与标签 `features/task/view_mode.dart:5,16,31`。⇒ 四象限视图本身**可达**（矩阵 #34/#35 有依据）。
 - 规则页：`features/quadrant/quadrant_rules_page.dart:10` `QuadrantRulesPage` 已实现完整的
   读/新建/编辑/删除（`:105` `quadrantApiProvider`、`:111/:120` create/update、`:167` 删除确认、
@@ -33,7 +34,10 @@
   规则读取失败要明说且不伪装成空态。
   **撤掉的子句**：「同一入口连点只叠一层页面」不可证 —— `PopupMenuMenuItem` 选中即关菜单，
   不重开菜单点不到第二次，也就没有可叠的第二次导航；留着它等于写一条永远绿的判据。
-  **另记未做**：「过期响应不覆盖新响应」属规则页数据层竞态，本轮无法经入口注入 provider（harness 不透传 overrides，见 tasks.md T007）。
+  **另记未做**：「过期响应不覆盖新响应」属规则页数据层竞态。原因**不是**脚手架缺能力 ——
+  `TodoVisualFixture.create` 在 develop 上就有 `overridesBuilder`（`test/support/todo_visual_fixture.dart:60`、`:90`），
+  只是本仓包装 `pumpTodoVisualScenario` 没往下透传（`test/support/todo_visual_test_harness.dart:35`）；
+  细节与两条可选做法见 tasks.md T007。
 - FR-5 不改动服务端契约：`/app-api/todo/quadrant/**` 已被规则页消费完，本轮无后端缺口。
 
 ## 取舍与被否方案
@@ -41,8 +45,10 @@
 - **入口放四象限视图头部，不放设置页聚合入口**：嘀嗒那里就是视图内的动作；
   被否：照 #76–78 成就入口那样塞进 `settings_route.dart` —— 那会把「规则」从它作用的视图里搬走，
   用户要先离开四象限才能改规则，属自创交互。
-- **不改 9 张黄金基线**：`git grep -i "eisenhower|四象限|viewMode" origin/develop -- test/visual test/support`
-  ⇒ **0 命中**，黄金用例从不切到四象限模式，往该视图头部加一行不可能改变基线；
+- **不改 9 张黄金基线**：`git grep -iE "eisenhower|四象限|viewMode" origin/develop -- test/visual test/support`
+  ⇒ **0 命中**（命令原先漏写 `-E`，`|` 被当字面量 —— 复核员指出后按 `-E` 复跑仍 0 命中，结论不变；
+  同时反向自检 `-iE` 跑在 `lib` 上得 63 命中，证明是这三张目录里真没有，不是正则写坏了）；
+  黄金用例从不切到四象限模式，往该视图头部加一行不可能改变基线；
   被否：为"更保险"去申请重录基线。
 - **加在既有「...」菜单里、按视图条件出现，不新造头部行**：`TaskWorkspaceHeader` 的 `todo-sort-menu`
   已经承载两个按视图条件出现的动作（批量编辑、仅列表视图的「新建分组」`tasks_by_list_page.dart:202`）

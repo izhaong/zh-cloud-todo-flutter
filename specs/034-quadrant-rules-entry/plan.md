@@ -3,7 +3,8 @@
 ## 现状与缺口（开工前复验，不抄上一轮结论）
 
 - `QuadrantRulesPage`（`lib/features/quadrant/quadrant_rules_page.dart:10`）在 develop 上已实现完整 CRUD：
-  读 `quadrantRulesProvider`（`:15`）、失败态 `_LoadError`（`:29`，文案 `规则加载失败：$error` + 「重试」`:393`）、
+  读 `quadrantRulesProvider`（`:15`）、失败态 `_LoadError`（`:29`，文案 `规则加载失败：$error` + 「重试」`:393`，
+  该 `:393` 是 `origin/develop` 基准，本分支 HEAD 上是 `:394`）、
   空态（`:371` 「还没有四象限规则」）、规则行 `ListTile` + `编辑/删除` 菜单（`:53-68`）。
 - 可达性复验：`Grep "QuadrantRulesPage|四象限" lib/ test/` ⇒ 生产侧只有该文件自身；
   `test/quadrant_rules_page_test.dart:25,45` 是直接 `MaterialApp(home: QuadrantRulesPage())` 泵出来的，
@@ -23,11 +24,13 @@
 
 ## 步骤 → 验证
 
-1. 红测（`test/features/task/quadrant_rules_entry_test.dart` 4 例）⇒ 逐条失败信息必须指向缺失项，
+1. 红测（`test/features/task/quadrant_rules_entry_test.dart`，**最终 5 例**：初版 4 例，
+   第 1 轮复核补第 5 例覆盖编辑器弹窗）⇒ 逐条失败信息必须指向缺失项，
    不能是「切不到四象限视图」这类前置失败。
 2. 最小实现：`TaskWorkspaceHeader` 加可选 `onEditQuadrantRules` + 菜单项；`tasks_by_list_page` 按视图传值并 `Navigator.push`。
-3. 反向探针 PA/PB/PC（见 tasks.md），恢复后 `cmp -s` 逐字节一致。
-4. 六项门禁 → `/tmp/gate-034.log`；只读子代理复核 FR-1..FR-4 拿 `VERDICT`。
+3. 反向探针 PA/PB/PC/PD（见 tasks.md；PD 又拆成 PD/PD2 两种字体配置），恢复后 `cmp -s` 逐字节一致。
+4. 六项门禁 → 最终版 `/tmp/gate-034d.log`（修订前的两版留在 `/tmp/gate-034.log`、`/tmp/gate-034c.log`）；
+   只读子代理复核 FR-1..FR-5 拿 `VERDICT`（两轮各一次）。
 5. 回写 `tasks.md` 与矩阵 #36 行（未合并前只写「已实现待合并」）。
 
 ## 明确不做

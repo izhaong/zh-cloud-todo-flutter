@@ -92,9 +92,12 @@ void main() {
     );
   });
 
-  testWidgets('规则页的数据态与新建弹窗在 320px + 1.3 倍字体下排版不溢出', (tester) async {
-    // 入口把这条路打开给手机之前，规则页只有桌面直链能到；现在弹窗排版归本切片负责。
-    // 数据态只能在这里造：夹具走的是真实取数（必然失败态），故直接泵页 + override provider。
+  testWidgets('规则页的数据态列表与编辑器弹窗在 320px + 1.3 倍字体下排版不溢出', (tester) async {
+    // 入口把这条路打开给手机之前，规则页只有桌面直链能到；现在它的排版归本切片负责。
+    // 「有数据」态只能在这里造：夹具的 `overridesBuilder` 在 develop 上就有
+    // （`test/support/todo_visual_fixture.dart:60`、`:90` 展开进 container），
+    // 但 `pumpTodoVisualScenario` 没把它透传出来（`test/support/todo_visual_test_harness.dart:35`
+    // 只传 `set:`）⇒ 走真实入口拿不到数据态。弹窗那半边不需要数据，由下一条用例在真实入口上验。
     tester.platformDispatcher.textScaleFactorTestValue = 1.3;
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     tester.view.physicalSize = const Size(320, 720);
@@ -122,8 +125,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('按优先级分四象限'), findsOneWidget);
+    expect(
+      MediaQuery.textScalerOf(tester.element(find.text('四象限规则'))).scale(10),
+      closeTo(13, 0.001),
+      reason: '这条用例自己泵页，档位没生效就等于整条在 1.0 上排版',
+    );
     expect(tester.takeException(), isNull, reason: '窄屏 + 大字体下规则列表溢出');
 
+    // 这条是 isExpanded 的**唯一可观测判据**（见探针 PD/PD2）：默认 `MaterialApp` 用的是测试字体
+    // （Ahem，每个字符占满字号宽），摘掉 `isExpanded` 时这里溢出；下一条用例走生产主题 +
+    // `TodoGoldenSans`，同样摘掉却不溢出 ⇒ 溢出量与字体度量绑定，不能报成生产口径的像素数。
     await tester.tap(find.byTooltip('新建规则'));
     await tester.pumpAndSettle();
     expect(find.text('新建四象限规则'), findsOneWidget);
@@ -160,6 +171,18 @@ void main() {
       reason: '档位没传进 push 出来的路由就等于整条用例在 1.0 上排版',
     );
     expect(tester.takeException(), isNull);
+
+    // 弹窗不需要数据：`quadrant_rules_page.dart:20-24` 的 AppBar 动作无条件渲染，失败态下也在
+    // ⇒ 这条证明**真实入口 + 生产主题**下打开编辑器弹窗不溢出（用的是 TodoGoldenSans 度量）。
+    // 注意：它抓不到 `isExpanded`（探针 PD2 摘掉该行后这条仍绿），isExpanded 的判据在上一条用例里。
+    await tester.tap(find.byTooltip('新建规则'));
+    await tester.pumpAndSettle();
+    expect(find.text('新建四象限规则'), findsOneWidget);
+    expect(
+      tester.takeException(),
+      isNull,
+      reason: '生产主题 + 真实入口下 320px/1.3 打开编辑器弹窗溢出',
+    );
   });
 
   testWidgets('入口与规则页标题各是独立可读屏节点', (tester) async {
