@@ -8,7 +8,7 @@
 
 - 档位枚举 `lib/state/repositories/task_query_repository.dart:22` 是
   `enum TaskSort { smart, priorityDesc, dueDate, title, createdAt }` ⇒ **没有「修改时间」这一档**；
-- 数据不缺：`updatedAt` 早在表里（`lib/core/db/app_database.dart:43`），Drift 行对象上就有该列，
+- 数据不缺：`updatedAt` 早在表里（`lib/core/db/app_database.dart:98`，`TodoTasks` 的非空列；`:43` 是 `TodoLists` 的同名列，别混），Drift 行对象上就有该列，
   测试夹具也在喂它（`test/support/todo_visual_fixture.dart:128/139/146/153/411`）；
 - 菜单是**由枚举自动生成的**：`lib/features/task/widgets/task_workspace_header.dart:154-159`
   用 `for (final candidate in TaskSort.values)` 产 `PopupMenuItem`，
