@@ -105,9 +105,10 @@ Compiling lib/main.dart for the Web...    19.8s
 `exit=1`。为排除"存量欠债"，把 HEAD 版单独抽出来量同一判据：`/tmp/hp_head.dart`、`/tmp/hr_head.dart` 都 `0 changed / exit=0`
 ⇒ 这 4 处红是我本轮引入的，就地只格式化这 4 个文件（不整仓原地格式化），红日志留存。
 
-测试计数对账（**别抄基线数字**）：记在目标里的基线是 `713 passed / 26 skipped`，
-但本轮分支 = develop + 本文件 17 条用例，实跑 726 ⇒ 反推 develop 实际是 **709**，与记的 713 差 4 条。
-差值用一次干净 develop 的 worktree 实跑来定死，不靠推测：见下条。
+- [x] T-010 六项门禁日志齐全（见上）
 
-- [ ] T-013 develop 基线复测（`/tmp/zh-tf-develop` worktree），把 713 这个数改对或说明差在哪
+测试计数对账（已定死，不靠推测）：在干净 worktree `/tmp/zh-tf-develop`（HEAD = `a1d7733`）实跑同一判据 ⇒
+`flutter test --exclude-tags 'golden || performance' --concurrency=1` → **`+709 ~26: All tests passed!`**
+分支 726 = 709 + 本文件 17 条新用例，**逐条对上，没有凭空消失的用例**。
+⇒ 目标里记的「基线 713 passed / 26 skipped」**多算了 4 条**，后续轮次按 709 起算（日志 `/tmp/r21-baseline-develop.log`）。
 
