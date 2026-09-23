@@ -64,15 +64,9 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
       );
       if (mounted) Navigator.pop(context);
     } on StateError catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.message.toString())));
+      _report(error.message.toString());
     } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('保存任务失败，请稍后重试')));
+      _report('保存任务失败，请稍后重试');
     }
   }
 
@@ -141,7 +135,11 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      child: Padding(
+      child: SingleChildScrollView(
+        // reverse：键盘弹起时内容底部对齐，保证「保存」与最后一行反馈可见，
+        // 标题那种上方内容滚出去（非滚动布局在 320×568 + 1.3 倍字体下会裁掉底部 8.2px，
+        // 而底部正好是反馈行）。
+        reverse: true,
         padding: const EdgeInsets.all(16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
