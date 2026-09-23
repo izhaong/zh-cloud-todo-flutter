@@ -165,6 +165,22 @@ NIT（逐条采纳/拒绝，拒的要留理由）：
 
 ## 下轮入口
 
-1. 等只读复核 `VERDICT`（两轮封顶）；`FAIL` 就照结论改，不采纳的在本文件写理由。
-2. 回写矩阵 #7 / #89 两行（划掉「快速添加无模板入口」，补 `文件:行号` 与本切片计数），并在 `zh-cloud-docs` 上提交。
-3. 合并是人的动作：!286（specs/035）与本 PR 待合并；合并后再 bump 父仓 submodule 指针。
+1. 本切片只剩第 2 轮复核结论待回填（两轮封顶）；矩阵 #7 / #89 行停在「已实现待合并」，合并（人的动作）后才翻 SHA。
+2. **零基线影响的下一刀候选（本轮取证时新排出来的，按性价比排序）**：
+   - **习惯接线的纯客户端那一半**（矩阵 #44/#45/#46 本轮实测）：`TodoHabitDO` 已有 `icon`/`color`/`period`/
+     `targetCount`/`reminderAt`/`sortOrder`/`archived`，`AppTodoHabitController` 七个端点齐全，而
+     `features/habit/habit_repository.dart` 只调了 `page`/`create`/`check-in`/`stats` 四个、新建表单只有名字一个字段
+     ⇒ 补「编辑 / 归档 / 删除 / 频率 / 目标」不需要动契约。`grep -c 习惯 test/visual/todo_workspace_golden_test.dart` = **0**
+     ⇒ 大概率零基线，但 `home_shell.dart:649` 直接内嵌 `HabitPage`，动手前先在 320px/默认档各拍一次确认 9 张不变。
+   - 快速添加弹窗补「添加附件」（队列 1 的真缺口，复用 `task_detail_pane.dart` 的 `_AttachmentSection` 链路）。
+3. **要先动契约、别从客户端下手**：倒数纪念日的 类型 / 提醒 / 重复 / 图标 / 农历 / 计时方式 / 分组 / 置顶
+   （`TodoCountdownDO` 只有 name/targetDate/style/showAge/backgroundImage/sortOrder/archived，
+   `AppTodoCountdownPageReqVO.java:13,15` 只有 name 与 archived）⇒ 在 `zh-cloud-service` 先开 Issue + 增量 SQL，再回客户端。
+4. **轨道 A 到此收口**：A/B/C 三段都已清算（A 段最后一批 6 行落在 `zh-cloud-docs@09c7e8b`，PR !69）。
+   轨道 A 只剩「矩阵之外的两处人工判定」：B33/C9 早已判完，剩 `specs/001-todo-dida-core-parity/spec.md:66`
+   与成就入口路线的措辞冲突（队列 5 里那条），以及 #52 的共享三种方式要先在 Service 加端点。
+5. 待合并积压（合并是人的动作）：todo-flutter !259/!261/!263/!267/!268/!269/!271/!273/!275/!277/!280/!282/!284/!286/!288
+   + docs !69/!70 + service !272 + 父仓 !93/!74。合并后需 bump 父仓 submodule 指针（另开 Issue + PR）。
+6. **剩余工时粗估**（不含等人给条件的项）：习惯接线族 ≈ 1.5 轮；快速添加附件 ≈ 1 轮；
+   倒数纪念日契约 ≈ 1 轮（service）+ 1 轮（客户端）；清单页子任务树 / 文件夹入口 / 左滑 ≈ 各 1 轮且**都要先批准重录黄金图**；
+   纯客户端可推进的窗口大约还能撑 6–8 轮，之后就要靠合并与 test 环境才能再进。
