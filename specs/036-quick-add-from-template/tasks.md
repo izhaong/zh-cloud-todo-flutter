@@ -246,34 +246,66 @@ sha256 与本地两份文件一致（`4f082f98f16…` / `33be868e647…`），�
 
 ## 第 3 轮（#289：`_save()` 的两条失败反馈搬进弹窗，并修掉承载它的布局）
 
-- 红测先行且失败信息精确指向缺失项（日志 `/tmp/r22-red-full.log`，exit=1）：
-  `Found 0 widgets with text containing 父任务必须属于同一清单 descending from widgets with key [<'todo-quick-add-sheet'>]`、
-  `… 保存任务失败，请稍后重试 …`，各命中 1 次 ⇒ 两条 catch 分支各有用例钉住，摘回 SnackBar 必红。
-- 新增第 3 条用例走生产形态（`showModalBottomSheet` + `FakeViewPadding(bottom: 260)` + 320×568 + 1.3 倍字体 + NLP 行），
-  当场量到 `A RenderFlex overflowed by 8.2 pixels on the bottom` ⇒ 「搬进子树」不等于「搬进可见区」，遂加 `SingleChildScrollView(reverse: true)`。
-- 反向探针两条：① `_report` 换回根 SnackBar ⇒ 前两条用例红（改前/改后同一判据）；② `reverse: true` 换 `false` ⇒ 第三条红且
-  `Found 0 widgets with key <'todo-quick-add-feedback'>`（滚出视口的行根本没被构建）。两次都 `cp` 回写并 `cmp -s` 证明逐字节一致。
-- 六项门禁（最终态一次跑完，`/tmp/r22-gates-v2.log`）：
+### 先说被自己测错的两处（第 2 轮复核抓到，本轮重测改口）
+
+1. **`8.2px` 归因错了。** 用「同一处代码 × 两种内容」重测非滚动布局（`/tmp/r22-probe-N-nlp.log`、`/tmp/r22-probe-N-nonlp.log`）：
+   - 含 NLP 识别行 + 反馈行 ⇒ `RenderFlex overflowed by 45 pixels on the bottom`，且该轮失败信息是
+     `Found 0 widgets with key [<'todo-quick-add-feedback'>]` —— 反馈行被裁到查不到；
+   - 不含 NLP 行 ⇒ 溢出 `8.2px`，此时 `todo-quick-add-feedback` **仍然找得到**（红的是我那条「最坏内容必须在树里」的自检）。
+   ⇒ 先前把 8.2px 说成「正好裁掉反馈行」没有证据，真实临界是 45px 那一档；两个数都留在日志里，正文按 45px 写。
+2. **「滚出视口的行根本没被构建」这句机制描述是错的。** `SliverToBoxAdapter` 会完整构建子树，
+   红的原因是 `Finder.skipOffstage` 默认 true 把视口外节点过滤掉了。措辞改成「被视口裁剪，默认不计入查找」。
+
+### 三条生产形态探针（每条都有日志，且恢复后 `git diff --quiet HEAD` 返回 0）
+
+| 探针 | 改动 | 结果 | 日志 |
+| ---- | ---- | ---- | ---- |
+| P-1 | 两条 catch 摘回根 `SnackBar`（其余不动，跑全文件 3 条） | `+0 -3` **三条全红**，3 次 `Found 0 widgets` | `/tmp/r22-probe-snackbar.log` |
+| P-2 | `reverse: true` → `false` | `+0 -1`，只有「生产形态」红，`Found 0 widgets with key` | `/tmp/r22-probe-reverse.log` |
+| P-3 | 非滚动 + 最终布局，内容含 NLP 行 | 非滚动 `-1`/溢出 45px；最终布局 **绿** | 两份 `/tmp/r22-probe-N-nlp.log`、`/tmp/r22-probe-FINAL-nlp.log` |
+
+⇒ P-1 补上了第 1 轮记录里「第 3 条用例对 SnackBar 回退的检出属推断」那一格；P-2 说明 `rect.bottom ≤ 308.5` 与
+`skipOffstage` 一起才咬得住底部对齐，三条判据互补不冗余。
+
+### 六项门禁（最终态跑完，日志 `/tmp/r22-gates-v4.log`）
 
 ```
 $ git diff --check                                   exit=0
-$ dart format --output=none --set-exit-if-changed <2 files>
-  Formatted 2 files (0 changed)                      exit=0   # 先红过一次：HEAD 版 0 changed ⇒ 红是我引入的，只格式化自己那个文件
+$ dart format --output=none --set-exit-if-changed <本轮 2 个显式文件>
+  Formatted 2 files (0 changed)                      exit=0     # 先红过一次；HEAD 版同判据 0 changed ⇒ 红是我引入的
 $ flutter analyze                                    No issues found!
-$ flutter test --tags golden                         00:03 +9: All tests passed!
+$ flutter test --tags golden                         00:03 +9: All tests passed!   # 9 张基线未变、未重录
 $ flutter test --exclude-tags 'golden || performance' --concurrency=1
                                                      01:51 +723 ~26: All tests passed!
 $ flutter build web --release --dart-define=…        ✓ Built build/web
 ```
 
-- 计数对账（不靠推测）：develop@`a1d7733` 实测 709 ⇒ 709 + 本分支 specs/036 新增文件 12 条 + 本轮 2 条（通用失败分支、生产形态）= **723**，逐条对上；
-  9 张黄金图未变、未重录。
-- 复核：`claude` CLI 本机不可用（`unrecognized_model`）⇒ 沿用本会话只读子代理。第 1 轮 **`VERDICT: FAIL`**，
-  3 条 BLOCKER：B-1 `pubspec.lock` 混进 diff、B-2 specs/036 三处措辞随修复失效、B-3 #289 自己认领的 NIT3/NIT6/NIT9 三条验证债未收。
-  - **B-1 不采纳（附证据）**：`pubspec.lock` 全程未 staged（`git status --short` 只有 ` M pubspec.lock`，提交只 `git add` 那两个文件），
-    且它是本机新 SDK 重解析的既有现象，不是本轮引入的改动；复核员把「工作区 diff」当成了「将提交的 diff」。
-  - B-2、B-3 全采纳：本节的三处回写 + 新增生产形态用例 + `reverse` 修布局，就是按结论改的。
-  - 5 条 NIT 的处置见下。
+计数对账：develop@`a1d7733` 实测 **709** + specs/036 的 `quick_add_from_template_test.dart` **12** 条
++ 本轮 `task_quick_add_sheet_test.dart` 1→**3** 条（+2）= **723**，与门禁原文一致，无用例凭空消失。
+
+### 复核（`claude` CLI 本机不可用 `unrecognized_model` ⇒ 本会话只读子代理替代）
+
+- **第 1 轮 `VERDICT: FAIL`**，3 BLOCKER：B-1 `pubspec.lock` 混进 diff、B-2 specs/036 三处措辞随修复失效、B-3 #289 认领的 NIT3/NIT6/NIT9 未收。
+  - **B-2/B-3 采纳**：本节 + 生产形态用例 + `reverse` 布局就是按结论改的。
+  - **B-1 不采纳（复核员第 2 轮独立核实「说法成立」）**：`git diff 8ac35c4..5418d10 --stat` 只有 4 个文件、不含 `pubspec.lock`；
+    它全程只是工作区 ` M`。补充事实（第 2 轮量出）：该文件非 URL 行有 147 条真实版本跃迁，所以**禁止 `git add -A`** 这条纪律要留着。
+- **第 2 轮 `VERDICT: PASS`**（并独立跑过 `task_quick_add_sheet_test.dart` 3/3 绿、analyze、format、diff --check）。
+  5 条 NIT（记作 **R2-N1…R2-N5**）：**全部采纳**，就是上面「先说被自己测错的两处」+ 探针表 + 行号/容差（`:138` 用例、`:194` 按 key 断言、
+  `308.5` 带 `+0.5` 容差）+ 日志改引 `v3` 的来由。本轮不再重跑复核（无新结论可拿）。
+
+### 仍缺（不写成已完成）
+
+- 「生产形态」用例只覆盖 320×568 + 键盘 260 + 1.3 倍字体这一格；键盘高度分布、真机 VoiceOver 朗读顺序未测（本机无第二台设备）。
+- `_save()` 的 `:51`（空标题）与 `:53`（未登录）两个静默出口仍**未修**，拆给 `izhaong/zh-cloud-todo-flutter#292`。
+- 矩阵 #7 行状态翻转要等 !288 合并；未合并前只写「已实现待合并」。
+
+### 下一轮入口
+
+1. **#292**：给 `_save()` 两个静默出口补反馈（未登录 `_report('请先登录')` 与既有措辞同源；空标题走 `TextField.decoration.errorText`），各配反向探针。
+2. !288 合并后回写矩阵 #7：把「已实现待合并」换成已合并 SHA，并复评该行状态列。
+3. 嘀嗒《02-更好地完成习惯》的 #45 剩余面（打卡方式三档、多时间点提示、月度打卡表与补记）——需先在 Service 定 `reminderAt` 的重复语义。
+
+### 第 1 轮复核的 NIT 处置（编号与第 2 轮的 R2-N 分开看）
 
 第 1 轮复核 NIT：采纳 2 条、不采纳 3 条（都带理由）。
 
