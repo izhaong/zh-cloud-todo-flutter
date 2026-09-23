@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -30,6 +32,13 @@ void main() {
       sortByName('updatedAt').label,
       '修改时间',
       reason: '措辞要贴嘀嗒，不写「更新时间」「最近修改」',
+    );
+    // 菜单项由 `TaskSort.values` 生成（`task_workspace_header.dart` 的 itemBuilder 遍历 values），
+    // 所以「紧跟创建时间 + 不重排既有档位」这条 FR-1 判据落在声明顺序上才是可证的。
+    expect(
+      TaskSort.values.map((sort) => sort.name).toList(),
+      ['smart', 'priorityDesc', 'dueDate', 'title', 'createdAt', 'updatedAt'],
+      reason: '「修改时间」必须在「创建时间」之后，且既有五档顺序不动（重排会让已存偏好的语义位移）',
     );
   });
 
@@ -98,6 +107,44 @@ void main() {
     );
   });
 
+  test('sync pull 的嵌套包装能读出修改时间档；未知档位名退回智能排序', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final repository = TaskSortPreferenceRepository(db, SyncChangeQueue(db));
+    final now = DateTime.utc(2026, 9, 23);
+
+    // 第二设备不是走 save()，而是服务端实体落库：排序在**字符串化的 valueJson 里**
+    // （`task_sort_preference_repository.dart` 的嵌套分支）。只认本地扁平形状会静默退回智能排序。
+    Future<void> seed(String sourceKey, Object valueJson) => db
+        .into(db.todoViewPreferences)
+        .insert(
+          TodoViewPreferencesCompanion(
+            id: Value('sort-$sourceKey'),
+            sourceType: const Value('TASK_SORT'),
+            sourceKey: Value(sourceKey),
+            valueJson: Value(jsonEncode(valueJson)),
+            updatedAt: Value(now),
+            createdAt: Value(now),
+          ),
+        );
+
+    await seed('from-sync', {
+      'valueJson': jsonEncode({'sort': 'updatedAt'}),
+    });
+    expect(
+      await repository.get('from-sync'),
+      sortByName('updatedAt'),
+      reason: 'sync pull 的包装形状读不出 updatedAt，就等于跨端不生效',
+    );
+
+    await seed('other-list', {'sort': 'updatedAtDesc'});
+    expect(
+      await repository.get('other-list'),
+      TaskSort.smart,
+      reason: '未知档位名必须退回 smart（本仓既有断言只覆盖「无行」那一支，未覆盖这一支）',
+    );
+  });
+
   testWidgets('排序菜单里的「修改时间」在 320px + 1.3 倍字体下可见可选且不溢出', (tester) async {
     tester.platformDispatcher.textScaleFactorTestValue = 1.3;
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
@@ -121,6 +168,10 @@ void main() {
                 onModeChanged: (_) {},
                 onSortChanged: (sort) => changed = sort,
                 onFilterPressed: () {},
+                // 生产里 onBatchPressed 常驻、onCreateSection 条件出现（`tasks_by_list_page.dart:191-204`）
+                // ⇒ 两个都传，溢出判据才落在「6 档 + 2 分隔线 + 2 命令项」的最长菜单上。
+                onBatchPressed: () {},
+                onCreateSection: () {},
               ),
             ],
           ),
