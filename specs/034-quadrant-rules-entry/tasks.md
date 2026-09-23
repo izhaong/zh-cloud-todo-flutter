@@ -96,4 +96,29 @@
 
 ### 最终门禁
 
-第 13 轮修订后的最终状态跑在 `/tmp/gate-034b.log`（T006 记的是修订前那一版，日志留着不覆盖）。
+第 13 轮修订后的最终状态跑在 `/tmp/gate-034c.log`（T006 记的是修订前那一版，`gate-034.log` /
+`gate-034b.log` 留着不覆盖）。原文抄录，供 PR 评论对照：
+
+| 门禁 | 结果原文 |
+| ---- | -------- |
+| 1 `git diff --check` | `exit=0` |
+| 2 `dart format --output=none --set-exit-if-changed` 四个显式文件 | `Changed lib/features/task/tasks_by_list_page.dart` / `Formatted 4 files (1 changed)` / `exit=1` |
+| 2b 同检查跑在 `git show HEAD:` 版（存量证明） | `Changed /tmp/head_p1_034b.dart` / `exit=1` ⇒ 红的是 HEAD 已有的排版欠债，不是本轮引入 |
+| 3 `flutter analyze` | `No issues found! (ran in 1.6s)` |
+| 4 `flutter test --tags golden` | `00:04 +9: All tests passed!` |
+| 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:13 +714 ~26: All tests passed!` |
+| 6 `flutter build web --release …` | `✓ Built build/web` |
+| 7 `test/goldens` 改动数 | `0` |
+| 8 本轮文件 sha256 | `155bc7ba` `tasks_by_list_page.dart` / `885f1447` `task_workspace_header.dart` / `4395abc0` `quadrant_rules_page.dart` / `bb07dde7` `quadrant_rules_entry_test.dart` |
+| 9 工作区脏文件 | 仅 ` M pubspec.lock`（未 staged，按口径不入库） |
+
+5 条用例同基线复算：`develop@a1d7733` 基线 `+709 ~26`（`/tmp/base-034.log`）⇒ 本轮 `+714 ~26`，
+多出的正好是本切片新增的 5 例，没有别的路数被顺手改动。
+
+### 复核轮次（记录到本文件提交为止的真实状态）
+
+- 复核手段：`claude` CLI 本机不可用（`unrecognized_model`），按口径替换为本会话只读子代理审本轮 FR。
+- 第 1 轮 `VERDICT: FAIL`（B1/B2/B3），逐条处置见上面两节。
+- 第 2 轮针对修订后的最终字节（sha256 见上表第 8 行）已派出，**本次提交时结论未回**，
+  因此本切片在「拿到 VERDICT」这一条上**尚未闭环**。
+- 「两轮无新结论就停下请示」⇒ 不再派第 3 轮；第 2 轮结论回来后要么据此改，要么在 PR 里说明不改的理由。
