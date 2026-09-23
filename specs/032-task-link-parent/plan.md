@@ -29,5 +29,5 @@
 
 ## Task 4：验证与交付
 
-13 条用例（`test/features/task/link_parent_task_test.dart`）+ 十组反向探针（其中 P5 未能区分机制，边界已记进 tasks.md）+ 六项门禁
+14 条用例（`test/features/task/link_parent_task_test.dart`）+ 十一组反向探针（其中 P5 未能区分机制，边界已记进 tasks.md）+ 六项门禁
 + 只读子代理复核（`claude` CLI 本机不可用，见 `tasks.md` 说明）+ 矩阵回写 + PR。

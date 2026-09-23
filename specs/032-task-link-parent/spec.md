@@ -38,7 +38,7 @@
 
 ## 验证边界
 
-- 证据只来自 `flutter test` 的 13 条用例（`test/features/task/link_parent_task_test.dart`）与十组反向探针
+- 证据只来自 `flutter test` 的 14 条用例（`test/features/task/link_parent_task_test.dart`）与十一组反向探针
   （摘菜单项 / 摘主任务行 / 摘后代排除 / 摘弹层存活判断，逐个必须红，恢复后 `cmp -s` 逐字节一致）。
 - 桌面/手机/网页三端同一套 Flutter 代码，但**真机点击与读屏软件实测未做**：本机无第二台可登录 test 的设备。
 - 清单页「展开/收起子任务」不属于本规格（它改可见列表布局 ⇒ 需先申请重录 9 张黄金基线）。
