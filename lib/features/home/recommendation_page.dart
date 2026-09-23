@@ -16,6 +16,13 @@ const _recommendationGroups = <({String code, String title})>[
 
 const _dueSoonCode = 'DUE_SOON';
 
+/// 「即将到来」下唯一能由 `dueAt` 算出的两档，顺序写死：
+/// 跟着候选数据（仓储按 `score` 降序）走的话，分数高的「后天」会排到「明天」前面。
+const _dueSoonBucketOrder = <({String label, String keyName})>[
+  (label: '明天', keyName: 'tomorrow'),
+  (label: '后天', keyName: 'day-after'),
+];
+
 /// 嘀嗒《推荐任务》独立页：把工作区面板里只有前几条的推荐摊开成四类分组。
 ///
 /// 分组依据是服务端给的 `reasonCode`，客户端不重新发明判据；
@@ -60,18 +67,17 @@ class _RecommendationPageState extends ConsumerState<RecommendationPage> {
   }
 
   Future<void> _addToToday(int taskServerId) async {
-    // 重复点击由下面 `onPressed: adding ? null : …` 的禁用态挡住；
-    // 这里再写一道早退守卫是死代码（反向探针摘掉它，用例仍然绿）。
-    setState(() {
-      _addingTaskIds.add(taskServerId);
-      _addToTodayFailed = false;
-    });
+    // 禁用态只在**下一次 build 之后**生效；同一帧内连点两次，两次都命中
+    // 上一次 build 里 onPressed 非 null 的按钮，所以要这道守卫兜住同帧。
+    if (!_addingTaskIds.add(taskServerId)) return;
+    setState(() => _addToTodayFailed = false);
     try {
       await widget.onAddToToday(taskServerId);
     } catch (_) {
       if (mounted) setState(() => _addToTodayFailed = true);
     } finally {
-      if (mounted) setState(() => _addingTaskIds.remove(taskServerId));
+      _addingTaskIds.remove(taskServerId);
+      if (mounted) setState(() {});
     }
   }
 
@@ -126,6 +132,13 @@ class _RecommendationPageState extends ConsumerState<RecommendationPage> {
           : StreamBuilder<List<TodoRecommendation>>(
               stream: _stream,
               builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  // 快照报错时 `data` 是 null；不分支出去就会把失败念成「暂无推荐任务」。
+                  return const _RecommendationFeedback(
+                    message: '读取推荐任务失败',
+                    subtitle: '可点右上角刷新重试。',
+                  );
+                }
                 final all = snapshot.data ?? const <TodoRecommendation>[];
                 return ListView(
                   padding: const EdgeInsets.fromLTRB(0, 4, 0, 24),
@@ -141,10 +154,7 @@ class _RecommendationPageState extends ConsumerState<RecommendationPage> {
                         color: Theme.of(context).colorScheme.error,
                       ),
                     if (all.isEmpty)
-                      const _RecommendationFeedback(
-                        message: '暂无推荐任务',
-                        subtitle: '没有待安排的提醒类任务时这里会空着。',
-                      ),
+                      const _RecommendationFeedback(message: '暂无推荐任务'),
                     for (final group in _recommendationGroups)
                       ..._buildGroup(group, all),
                   ],
@@ -172,38 +182,42 @@ class _RecommendationPageState extends ConsumerState<RecommendationPage> {
         for (final item in members) _buildRow(item),
       ];
     }
-    final buckets = <String, List<TodoRecommendation>>{};
-    final rest = <TodoRecommendation>[];
-    for (final item in members) {
-      final label = _dueSoonBucketLabel(item.dueAt);
-      if (label == null) {
-        rest.add(item);
-      } else {
-        buckets.putIfAbsent(label, () => <TodoRecommendation>[]).add(item);
-      }
+    final sections =
+        <({String label, String keyName}), List<TodoRecommendation>>{};
+    for (final bucket in _dueSoonBucketOrder) {
+      final items = members
+          .where((item) => _dueSoonBucketLabel(item.dueAt) == bucket.label)
+          .toList(growable: false);
+      if (items.isNotEmpty) sections[bucket] = items;
     }
-    final bucketKeyFor = {'明天': 'tomorrow', '后天': 'day-after'};
+    final unbucketed = members
+        .where((item) => _dueSoonBucketLabel(item.dueAt) == null)
+        .toList(growable: false);
     return [
       _GroupHeader(
         key: ValueKey('recommendation-group-${group.code}'),
         label: header,
       ),
-      for (final entry in buckets.entries) ...[
-        Padding(
-          key: ValueKey('recommendation-bucket-${bucketKeyFor[entry.key]}'),
-          padding: const EdgeInsets.fromLTRB(20, 6, 20, 2),
-          child: Text(
-            entry.key,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+      for (final entry in sections.entries)
+        Column(
+          key: ValueKey('recommendation-bucket-${entry.key.keyName}'),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 6, 20, 2),
+              child: Text(
+                entry.key.label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
             ),
-          ),
+            for (final item in entry.value) _buildRow(item),
+          ],
         ),
-        for (final item in entry.value) _buildRow(item),
-      ],
-      for (final item in rest) _buildRow(item),
+      for (final item in unbucketed) _buildRow(item),
     ];
   }
 

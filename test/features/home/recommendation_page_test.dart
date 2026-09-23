@@ -55,6 +55,7 @@ void main() {
     WidgetTester tester, {
     required AppDatabase db,
     RecommendationApi? api,
+    RecommendationRepository? repository,
     Size size = const Size(760, 900),
     void Function(int)? onTaskSelected,
     Future<void> Function(int)? onAddToToday,
@@ -63,14 +64,15 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final repository = RecommendationRepository(
-      db,
-      api ?? _OfflineRecommendationApi(),
-    );
+    final resolvedRepository =
+        repository ??
+        RecommendationRepository(db, api ?? _OfflineRecommendationApi());
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          recommendationRepositoryProvider.overrideWithValue(repository),
+          recommendationRepositoryProvider.overrideWithValue(
+            resolvedRepository,
+          ),
         ],
         child: MaterialApp(
           home: RecommendationPage(
@@ -82,7 +84,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    return repository;
+    return resolvedRepository;
   }
 
   /// Drift 在 StreamBuilder 退订时会排一个 zero-delay 的关闭定时器，
@@ -93,16 +95,8 @@ void main() {
   }
 
   group('推荐任务独立页', () {
-    testWidgets('四类成组且顺序照嘀嗒，空组不占位', (tester) async {
+    testWidgets('四类成组且顺序照嘀嗒，中间空组不占位', (tester) async {
       final db = await seedDb(tester, [
-        (
-          id: 3,
-          title: '搁置很久的重构',
-          code: 'LONG_UNFINISHED',
-          reason: '已超过 14 天未完成',
-          dueAt: null,
-          score: 800,
-        ),
         (
           id: 1,
           title: '刚加的调研',
@@ -110,6 +104,14 @@ void main() {
           reason: '刚刚添加，建议安排下一步',
           dueAt: null,
           score: 700,
+        ),
+        (
+          id: 2,
+          title: '改了三次期的申报',
+          code: 'REPEATEDLY_RESCHEDULED',
+          reason: '已多次改期，建议重新安排',
+          dueAt: null,
+          score: 1003,
         ),
         (
           id: 4,
@@ -125,23 +127,27 @@ void main() {
 
       expect(find.byKey(const ValueKey('recommendation-page')), findsOneWidget);
       expect(find.textContaining('最近添加'), findsOneWidget);
-      expect(find.textContaining('长时间未完成'), findsOneWidget);
+      expect(find.textContaining('多次修改时间'), findsOneWidget);
       expect(find.textContaining('即将到来'), findsOneWidget);
       expect(
-        find.textContaining('多次修改时间'),
+        find.textContaining('长时间未完成'),
         findsNothing,
-        reason: '嘀嗒没有这一类的候选时不摆空组',
+        reason: '嘀嗒没有这一类的候选时不摆空组（本例故意抽掉中间那一组）',
       );
 
       final order = tester
-          .widgetList<Text>(find.textContaining(RegExp('最近添加|长时间未完成|即将到来')))
+          .widgetList<Text>(
+            find.textContaining(RegExp('最近添加|多次修改时间|长时间未完成|即将到来')),
+          )
           .map((text) => text.data!.split('（').first)
           .toList();
-      expect(order, [
-        '最近添加',
-        '长时间未完成',
-        '即将到来',
-      ], reason: '分组顺序是嘀嗒的信息架构，不是本地按分数排');
+      expect(
+        order,
+        ['最近添加', '多次修改时间', '即将到来'],
+        reason:
+            '分组顺序是嘀嗒的信息架构：「多次修改时间」固定占第二档，'
+            '不是本地按分数排（本例它的 score 最高，若按分数排就会跳到第一位）',
+      );
       await settleDown(tester);
     });
 
@@ -160,8 +166,10 @@ void main() {
           title: '后天交付',
           code: 'DUE_SOON',
           reason: '即将到期',
+          // 故意比「明天」高：仓储按 score desc 返回，「后天」会先回来。
+          // 若子档顺序跟着数据走，后面两条顺序断言就会红。
           dueAt: DateTime(2026, 9, 25, 9),
-          score: 900,
+          score: 910,
         ),
         (
           id: 13,
@@ -175,24 +183,48 @@ void main() {
 
       await pumpPage(tester, db: db);
 
-      expect(
-        find.byKey(const ValueKey('recommendation-bucket-tomorrow')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('recommendation-bucket-day-after')),
-        findsOneWidget,
-      );
+      const tomorrow = ValueKey('recommendation-bucket-tomorrow');
+      const dayAfter = ValueKey('recommendation-bucket-day-after');
+      expect(find.byKey(tomorrow), findsOneWidget);
+      expect(find.byKey(dayAfter), findsOneWidget);
       expect(find.text('明天'), findsOneWidget);
       expect(find.text('后天'), findsOneWidget);
+      // 断「这一行属于这一档」，不是断「两档和两行都在树里」：
+      // 后者在 明天↔后天 互换时仍然全绿（键都还在、文案都还找得到）。
       expect(
-        find.byKey(const ValueKey('recommendation-item-11')),
+        find.descendant(
+          of: find.byKey(tomorrow),
+          matching: find.byKey(const ValueKey('recommendation-item-11')),
+        ),
         findsOneWidget,
-        reason: '明天到期要落进「明天」子档',
+        reason: '9/24 到期必须落在「明天」这一档内部，而不是只落在同一个组里',
       );
       expect(
-        find.byKey(const ValueKey('recommendation-item-12')),
+        find.descendant(
+          of: find.byKey(dayAfter),
+          matching: find.byKey(const ValueKey('recommendation-item-12')),
+        ),
         findsOneWidget,
+        reason: '9/25 到期必须落在「后天」这一档内部',
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(tomorrow),
+          matching: find.byKey(const ValueKey('recommendation-item-12')),
+        ),
+        findsNothing,
+        reason: '两档互换时上面的正向断言会同时骗人，这条把互换钉死',
+      );
+      expect(
+        tester
+            .getRect(find.byKey(const ValueKey('recommendation-item-11')))
+            .top,
+        lessThan(
+          tester
+              .getRect(find.byKey(const ValueKey('recommendation-item-12')))
+              .top,
+        ),
+        reason: '嘀嗒是 明天 → 后天；「后天」分数更高也不能排到前面',
       );
       expect(
         find.byKey(const ValueKey('recommendation-item-13')),
@@ -256,7 +288,7 @@ void main() {
       expect(
         tester.widget<IconButton>(addButton).onPressed,
         isNull,
-        reason: '「+」在飞必须变禁用态：这是重复点击的唯一屏障（早退守卫是死代码，摘了探针仍绿）',
+        reason: '「+」在飞要变禁用态：这是**跨帧**重复点击的屏障（同帧靠 _addToToday 的早退守卫）',
       );
       await tester.tap(addButton);
       await tester.pump();
@@ -271,6 +303,41 @@ void main() {
         findsNothing,
         reason: '服务端返回后该行不再是候选，不能再被添加',
       );
+      await settleDown(tester);
+    });
+
+    testWidgets('同一帧内连点两次「+」：早退守卫要挡住第二次', (tester) async {
+      final db = await seedDb(tester, [
+        (
+          id: 32,
+          title: '双击就重复安排的任务',
+          code: 'RECENTLY_ADDED',
+          reason: '刚刚添加，建议安排下一步',
+          dueAt: null,
+          score: 700,
+        ),
+      ]);
+      final completion = Completer<void>();
+      var calls = 0;
+      await pumpPage(
+        tester,
+        db: db,
+        onAddToToday: (_) {
+          calls++;
+          return completion.future;
+        },
+      );
+
+      final addButton = find.byKey(const ValueKey('recommendation-add-32'));
+      // 两次 tap 之间不 pump ⇒ 不重排版，第二次的命中目标仍是**上一次 build 里
+      // onPressed 非 null** 的那个按钮：禁用态这时救不了，只有早退守卫能。
+      await tester.tap(addButton);
+      await tester.tap(addButton);
+      await tester.pump();
+
+      expect(calls, 1, reason: '同一帧两次点击各跑一遍 handler，会把同一任务安排两次');
+      if (!completion.isCompleted) completion.complete();
+      await tester.pumpAndSettle();
       await settleDown(tester);
     });
 
@@ -339,6 +406,8 @@ void main() {
         db,
         _OfflineRecommendationApi(),
       );
+      int? selected;
+      int? addedToToday;
       tester.view.physicalSize = const Size(760, 900);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
@@ -351,8 +420,8 @@ void main() {
           child: MaterialApp(
             home: Scaffold(
               body: RecommendationPanel(
-                onTaskSelected: (_) {},
-                onAddToToday: (_) async {},
+                onTaskSelected: (id) => selected = id,
+                onAddToToday: (id) async => addedToToday = id,
               ),
             ),
           ),
@@ -368,6 +437,15 @@ void main() {
         findsOneWidget,
         reason: '面板只摊前几条，嘀嗒的完整四类要在独立页里看',
       );
+      // 独立页必须把面板自己的两个回调传下去（首页那套打开详情/添加到今天的动作
+      // 是 home_shell 给的）：只断「页面出现了」的话，把回调换成空函数照样绿。
+      await tester.tap(find.byKey(const ValueKey('recommendation-item-61')));
+      await tester.pumpAndSettle();
+      expect(selected, 61, reason: '点独立页的行程要落到面板同一个任务详情回调');
+
+      await tester.tap(find.byKey(const ValueKey('recommendation-add-61')));
+      await tester.pumpAndSettle();
+      expect(addedToToday, 61, reason: '「+」也要转发到面板回调：否则会绕过首页成功后的移除逻辑');
       await settleDown(tester);
     });
 
@@ -438,8 +516,11 @@ void main() {
         expect(taskNode.label, contains('读屏可见的推荐'));
         expect(
           find.bySemanticsLabel(RegExp('^添加到今天')),
-          findsWidgets,
-          reason: '「+」是动作，不能只是个没有名字的图标',
+          findsOneWidget,
+          reason:
+              '「+」是动作，不能只是个没有名字的图标；'
+              '外层 `Semantics(container+label)` + 内层 `ExcludeSemantics` 必须只留一个节点，'
+              '多一个（例如 tooltip 自己成节点）就说明这层包装是重复暴露',
         );
         await settleDown(tester);
       } finally {
@@ -459,6 +540,27 @@ void main() {
       );
       await settleDown(tester);
     });
+
+    testWidgets('缓存流自己报错：说「读取失败」而不是伪装成没有推荐', (tester) async {
+      final db = await seedDb(tester, const []);
+      await pumpPage(
+        tester,
+        db: db,
+        repository: _FailingStreamRecommendationRepository(db),
+      );
+
+      expect(
+        find.textContaining('读取推荐任务失败'),
+        findsOneWidget,
+        reason: '快照有错误时 data 为 null，与「真的没有推荐」在界面上必须可分辨',
+      );
+      expect(
+        find.textContaining('暂无'),
+        findsNothing,
+        reason: '把失败念成「暂无推荐任务」会让用户以为真的没有任务',
+      );
+      await settleDown(tester);
+    });
   });
 }
 
@@ -468,4 +570,15 @@ class _OfflineRecommendationApi extends RecommendationApi {
   @override
   Future<List<RecommendationTask>> list({int limit = 10}) =>
       Future<List<RecommendationTask>>.error(StateError('offline'));
+}
+
+/// 真实场景是「provider 被换成绑定已关闭 DB 的仓储」，Drift 关库后抛什么类型不该由用例赌；
+/// 这里钉住的是**同一条通道**：`watchAll()` 返回的流抛错。
+class _FailingStreamRecommendationRepository extends RecommendationRepository {
+  _FailingStreamRecommendationRepository(AppDatabase db)
+    : super(db, _OfflineRecommendationApi());
+
+  @override
+  Stream<List<TodoRecommendation>> watchAll() =>
+      Stream<List<TodoRecommendation>>.error(StateError('database closed'));
 }
