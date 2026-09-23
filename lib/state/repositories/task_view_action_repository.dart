@@ -14,12 +14,14 @@ class TaskWorkspacePreference {
     this.timelineZoom = 1,
     this.timelineScale = 'week',
     this.collapsedTimelineGroupIds = const {},
+    this.showCompletedTasks,
   });
 
   final String? viewType;
   final double timelineZoom;
   final String timelineScale;
   final Set<String> collapsedTimelineGroupIds;
+  final bool? showCompletedTasks;
 }
 
 /// B4 任务视图共享写操作。
@@ -116,18 +118,25 @@ class TaskViewActionRepository {
     );
   }
 
-  Future<void> saveCalendarViewMode(String viewType) async {
-    return _saveViewPreference(
+  /// 日历显示设置（视图模式 + 是否显示已完成）整组读取。
+  Future<TaskWorkspacePreference> getCalendarDisplay() {
+    return _getTaskWorkspacePreference(
       sourceType: 'calendar_view',
       sourceKey: 'task_calendar',
-      viewType: viewType,
     );
   }
 
-  Future<String?> getCalendarViewMode() {
-    return _getViewPreference(
+  /// 模式与开关必须一起写：`_saveViewPreference` 在 `viewType` 缺失时会把
+  /// `viewType` 兜底成 `list`，只写开关会静默把用户的视图模式改掉。
+  Future<void> saveCalendarDisplay({
+    required String viewMode,
+    required bool showCompletedTasks,
+  }) {
+    return _saveViewPreference(
       sourceType: 'calendar_view',
       sourceKey: 'task_calendar',
+      viewType: viewMode,
+      preferencePatch: {'showCompletedTasks': showCompletedTasks},
     );
   }
 
@@ -230,17 +239,10 @@ class TaskViewActionRepository {
       timelineZoom: zoom >= 0.75 && zoom <= 1.5 ? zoom : 1,
       timelineScale: scale,
       collapsedTimelineGroupIds: collapsed,
+      showCompletedTasks: value['showCompletedTasks'] is bool
+          ? value['showCompletedTasks'] as bool
+          : null,
     );
-  }
-
-  Future<String?> _getViewPreference({
-    required String sourceType,
-    required String sourceKey,
-  }) async {
-    return (await _getTaskWorkspacePreference(
-      sourceType: sourceType,
-      sourceKey: sourceKey,
-    )).viewType;
   }
 
   Map<String, dynamic> _decodePreferenceValue(String? rawValue) {

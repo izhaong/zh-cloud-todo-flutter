@@ -519,7 +519,7 @@ void main() {
       await repository.getTaskWorkspaceViewMode(sourceKey: 'list:work'),
       equals(null),
     );
-    expect(await repository.getCalendarViewMode(), equals(null));
+    expect((await repository.getCalendarDisplay()).showCompletedTasks, isNull);
 
     await repository.saveTaskWorkspaceViewMode(
       sourceKey: 'list:inbox',
@@ -529,7 +529,10 @@ void main() {
       sourceKey: 'list:work',
       viewType: 'timeline',
     );
-    await repository.saveCalendarViewMode('agenda');
+    await repository.saveCalendarDisplay(
+      viewMode: 'agenda',
+      showCompletedTasks: true,
+    );
 
     expect(
       await repository.getTaskWorkspaceViewMode(sourceKey: 'list:inbox'),
@@ -539,7 +542,9 @@ void main() {
       await repository.getTaskWorkspaceViewMode(sourceKey: 'list:work'),
       'timeline',
     );
-    expect(await repository.getCalendarViewMode(), 'agenda');
+    final display = await repository.getCalendarDisplay();
+    expect(display.viewType, 'agenda');
+    expect(display.showCompletedTasks, isTrue);
     final preferences = await db.select(db.todoViewPreferences).get();
     final queued = await db.select(db.todoSyncChanges).get();
     expect(preferences, hasLength(3));
