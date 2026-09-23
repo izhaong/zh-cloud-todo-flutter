@@ -23,6 +23,7 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
   int? _priorityOverride;
   DateTime? _nlpResolvedDueAt;
   bool _applyingTemplate = false;
+  String? _feedback;
 
   @override
   void initState() {
@@ -75,18 +76,18 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
     }
   }
 
-  void _toast(String message) {
+  /// 结果只写在弹窗自己的一行里，不走 SnackBar：生产里本弹窗是 `showModalBottomSheet`
+  /// 的一层路由，根 ScaffoldMessenger 的 SnackBar 画在弹窗底下，手机上等于没有反馈。
+  void _report(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    setState(() => _feedback = message);
   }
 
   /// 嘀嗒《如何使用任务模板？》移动端：「点击任务输入弹窗下方的「...」按钮，选择「模板」」。
   Future<void> _addFromTemplate() async {
     final templates = ref.read(templateRepositoryProvider);
     if (templates == null) {
-      _toast('请先登录');
+      _report('请先登录');
       return;
     }
     await showModalBottomSheet<void>(
@@ -98,30 +99,35 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
         onPick: (template) async {
           if (_applyingTemplate) return;
           _applyingTemplate = true;
-          final repo = ref.read(taskRepositoryProvider);
-          final seed = templates.taskSeed(template);
+          // 请求在飞时用户可以先滑掉弹层：那时元素还没 dispose，只有路由已不是当前路由。
+          final pickerRoute = ModalRoute.of(sheetContext);
           String message;
           try {
-            if (repo == null) {
-              message = '请先登录';
-            } else {
-              await repo.create(
-                listId: widget.listId,
-                parentTaskId: widget.parentTaskId,
-                title: seed.title,
-                description: seed.description,
-                priority: seed.priority,
-              );
-              message = '已应用模板“${template.name}”';
-            }
+            final seed = templates.taskSeed(template);
+            final repo = ref.read(taskRepositoryProvider)!;
+            await repo.create(
+              listId: widget.listId,
+              parentTaskId: widget.parentTaskId,
+              title: seed.title,
+              description: seed.description,
+              priority: seed.priority,
+            );
+            message = '已应用模板“${template.name}”';
           } on StateError catch (error) {
             message = error.message.toString();
           } catch (_) {
             message = '保存任务失败，请稍后重试';
+          } finally {
+            _applyingTemplate = false;
           }
-          _applyingTemplate = false;
-          if (sheetContext.mounted) Navigator.of(sheetContext).pop();
-          _toast(message);
+          // 两道判定各管一件事：mounted 保证 `Navigator.of` 不越界，
+          // isCurrent 保证不把下一层路由（宿主的快速添加弹窗）一起关掉。
+          if (sheetContext.mounted &&
+              pickerRoute != null &&
+              pickerRoute.isCurrent) {
+            Navigator.of(sheetContext).pop();
+          }
+          _report(message);
         },
       ),
     );
@@ -183,16 +189,24 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
               ),
             Row(
               children: [
-                PopupMenuButton<String>(
-                  key: const Key('todo-quick-add-more'),
-                  tooltip: '更多',
-                  onSelected: (value) {
-                    if (value == 'template') _addFromTemplate();
-                  },
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(value: 'template', child: Text('模板')),
-                  ],
-                  child: const Icon(Icons.more_horiz),
+                // tooltip 进不了读屏标签（`child:` 与 `icon:` 两种写法实测都拿不到，
+                // 后者在本仓的 PopupMenuButton + ensureSemantics 组合下仍为 0 命中），
+                // 所以显式补一个语义节点，措辞与 tooltip 同源。
+                Semantics(
+                  label: '更多',
+                  button: true,
+                  container: true,
+                  child: PopupMenuButton<String>(
+                    key: const Key('todo-quick-add-more'),
+                    tooltip: '更多',
+                    onSelected: (value) {
+                      if (value == 'template') _addFromTemplate();
+                    },
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(value: 'template', child: Text('模板')),
+                    ],
+                    icon: const Icon(Icons.more_horiz),
+                  ),
                 ),
                 const Spacer(),
                 TextButton(
@@ -202,6 +216,15 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
                 FilledButton(onPressed: _save, child: const Text('保存')),
               ],
             ),
+            if (_feedback != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  key: const Key('todo-quick-add-feedback'),
+                  _feedback!,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ),
           ],
         ),
       ),
