@@ -25,7 +25,7 @@
 第 5 处是同一文件里 `onSelected` 的穷尽 `switch (command)`：`updatedAt` 与其余排序档一样归到
 `break` 分组（排序由上面的 `command.sort != null` 分支提前处理），这条不是新功能，是 Dart 穷尽性要求的。
 
-## 测试设计（`test/task_sort_updated_at_test.dart`，4 例）
+## 测试设计（`test/task_sort_updated_at_test.dart`，5 例）
 
 1. **档位存在 + 措辞 + 顺序**：`TaskSort.values.map(.name)` 含 `updatedAt`，`label == '修改时间'`，并整表比对 `['smart','priorityDesc','dueDate','title','createdAt','updatedAt']` —— 菜单由 `TaskSort.values` 生成，所以「紧跟创建时间、不重排既有档位」这条 FR-1 判据只有钉在声明顺序上才可证（第 1 轮复核的 NIT2：原先没有任何用例钉顺序）。
    用 `sortByName(...)`（`firstWhere(name == …)`）而不是编译期常量引用新档 ——
