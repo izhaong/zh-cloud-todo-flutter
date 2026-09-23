@@ -35,24 +35,14 @@
   最后用「基线文件 + 只重放 5 个本意 hunk」重建，`git diff` 从 8 个 hunk 降到 5 个）；
   ③ 文档不再声称「每处都做了反向对照」——`preset` 命名与错误态当时确实没测，现已各自补上用例；
   ④ `dueRangeChipLabel` 补齐 `tomorrow/last7days/next7days`，否则点名文案会露出兜底的「Due」。
-- 2026-09-23：六项门禁（`/tmp/gate-029.log` 为改前一遍、`/tmp/gate-029-final.log` 为最终状态）：
+- 2026-09-23：六项门禁在最终状态跑，日志 `/tmp/gate-029-develop.log`（分支已重做到 develop `a1d7733` 之上，
+  单提交 `dfba98b`；中途两次测量分别是 `/tmp/gate-029.log` 与 `/tmp/gate-029-final.log`，
+  它们跑在「本分支叠着 028」的临时状态上，计数 721 / 724 与最终态不同，留着但不当最终证据）：
   `git diff --check` exit=0；`dart format --output=none --set-exit-if-changed` 对 9 个显式文件
-  `Formatted 9 files (0 changed)`；`flutter analyze` `No issues found!`；
-  `flutter test --tags golden` `00:04 +9: All tests passed!`（9 张基线未变，`git status test/goldens` 空）；
-  全量 `+721 ~26: All tests passed!`；`flutter build web --release` `✓ Built build/web`。
-
-## 未勾项与下一步
-
-- T006 未勾：#22 状态要等本 PR 合并后引**已合并** SHA 才翻；本轮只在矩阵里把「无本地入口」改成
-  「入口已实现待合并」，并写清剩余缺口。
-- **契约缺口，需先在 `zh-cloud-service` 动再回客户端**（不得由 Flutter 硬编码绕过）：
-  `conditions` 现在只有 `listIds/tagIds/dateRange{preset,from,to}/priorities/statuses/keyword`，
-  装不下 ①「已过期 / 将来」这类 preset（无对应字段）②文件夹维度 ③「且 / 或」布尔分组。
-  ⇒ 这三类条件本轮**明确拒绝保存**并在对话框点名，不是静默丢；要支持得扩 `conditions` 与
-  本地 `TodoFilterConditions` + 新迁移。
-- 未覆盖：`home_shell._openFilters()` 那 5 行接线没被 pump `HomeShell` 直接验（两端各自有用例：
-  页面 pop 忠实 `TaskFilter`、面板吃 `initialFilter` 真的筛）；跨端「保存→push→另一台 pull→套用结果一致」
-  需 test 环境与第二台设备。
-- 未做（本轮非目标）：过滤器重命名/改条件、「且/或」高级筛选、任务面板的标签维度筛选（`applyTaskFilter` 缺分支，
-  这条同时是上一项 bug 的根因，应单开切片补齐）。
-- `efficiency_hub_page.dart` 与「智能清单」旧链路仍在仓内无调用点，本切片只登记不删。
+  `Formatted 9 files (0 changed)` exit=0；`flutter analyze` `No issues found!`；
+  `flutter test --tags golden` `00:03 +9: All tests passed!`（9 张基线未变，`git status --short test/goldens` 为空）；
+  全量 `02:11 +720 ~26: All tests passed!`（= develop 基线 709 + 本切片 11，数目自洽）；
+  `flutter build web --release --dart-define=TODO_API_BASE_URL=… --dart-define=TODO_TENANT_ID=1` `✓ Built build/web`。
+- 2026-09-23：一次自我纠偏（写在案子上，免得只留好结果）。本分支最初是从 `feat/todo-achievement-entry`
+  拉出的（忘了先回 develop），会把 028 的提交一起带进本 PR 的 diff；改成「基线 + cherry-pick」重做后
+  `git log` 只剩 `a1d7733 → dfba98b`，全量计数也从 724 回到自洽的 720。
