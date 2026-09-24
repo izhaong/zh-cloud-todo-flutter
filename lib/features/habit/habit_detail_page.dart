@@ -6,6 +6,7 @@ import '../../core/widgets/app_widgets.dart';
 import '../../state/efficiency_providers.dart';
 import '../shell/app_dialog.dart';
 import 'habit_editor.dart';
+import 'habit_month_grid.dart';
 import 'habit_repository.dart';
 
 /// 嘀嗒《01-开始坚持一个习惯》:58「点击习惯进入详情页，点击右上角「...」，
@@ -42,10 +43,12 @@ class HabitDetailPage extends ConsumerWidget {
               onSelected: (action) => switch (action) {
                 'edit' => _edit(context, ref, habit),
                 'delete' => _confirmDelete(context, ref, habit),
+                'month' => showHabitMonthSheet(context, habit),
                 _ => null,
               },
               itemBuilder: (_) => const [
                 PopupMenuItem(value: 'edit', child: Text('编辑')),
+                PopupMenuItem(value: 'month', child: Text('月度打卡表')),
                 PopupMenuItem(value: 'delete', child: Text('删除')),
               ],
             ),

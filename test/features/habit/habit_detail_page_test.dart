@@ -243,11 +243,35 @@ void main() {
     // 菜单项只在弹开时存在于树上，所以「找到了」本身就是「展开后确实有这一项」。
     expect(find.text('编辑'), findsOneWidget);
     expect(find.text('删除'), findsOneWidget);
+    expect(find.text('月度打卡表'), findsOneWidget);
     expect(
       find.text('归档'),
       findsNothing,
       reason:
           'PUT /habit/{id}/archived 只在未合并的 zh-cloud-service!276 里，提前接就是线上 404',
+    );
+  });
+
+  testWidgets('详情页「...」→「月度打卡表」开的是当月表（嘀嗒《02-更好地完成习惯》:77/:84）', (tester) async {
+    await pumpHabits(tester);
+    await tester.tap(find.text('喝水'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('habit-detail-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('月度打卡表'));
+    await tester.pumpAndSettle();
+
+    // 按弹层自己的 key 定位，别用裸文案：详情页宿主上也可能出现同样的字。
+    expect(
+      find.byKey(const ValueKey('todo-habit-month-title')),
+      findsOneWidget,
+      reason: '入口没接到 showHabitMonthSheet 时，这里找不到月度表的标题',
+    );
+    expect(
+      find.byKey(const ValueKey('todo-habit-month-grid')),
+      findsOneWidget,
+      reason: '标题在而表不在 ⇒ 只弹了壳，没渲染当月格',
     );
   });
 
