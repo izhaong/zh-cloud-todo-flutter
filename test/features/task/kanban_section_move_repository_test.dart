@@ -130,6 +130,22 @@ void main() {
     expect(await db.select(db.todoSyncChanges).get(), isEmpty);
   });
 
+  test('已完成任务拖进分组列后 completed 仍为 true（分组模式不改完成状态）', () async {
+    final db = await seeded();
+    final repository = TaskViewActionRepository(db, SyncChangeQueue(db));
+    await (db.update(db.todoTasks)..where((row) => row.id.equals('task-1')))
+        .write(const TodoTasksCompanion(completed: Value(true)));
+
+    await repository.moveKanbanTaskToSection('task-1', sectionId: 'sec-en');
+
+    final task = await (db.select(
+      db.todoTasks,
+    )..where((row) => row.id.equals('task-1'))).getSingle();
+    expect(task.completed, isTrue);
+    expect(task.priority, 2);
+    expect(task.sectionId, 'sec-en');
+  });
+
   test('分组不存在时拒绝写入', () async {
     final db = await seeded();
     final repository = TaskViewActionRepository(db, SyncChangeQueue(db));

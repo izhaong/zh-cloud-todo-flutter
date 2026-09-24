@@ -30,9 +30,11 @@ import '../task_view_mutation_feedback.dart';
 ///   - 看板列头没有「重命名 / 新建 / 删除」分组入口：同页 `:108`「点击「分组」右上角的「···」」、
 ///     `:115`「点击右上角「...」-「管理分组」」。清单侧那套 CRUD 已经能用
 ///     （`tasks_by_list_page.dart` 里 `todo-section-create` 那一组 Key），只是没挂到看板列头。
-///   - 分组模式下列不可折叠：`BoardViewPreference` 的列 id 词汇被
-///     `board_preference_repository.dart` 用 `defaultColumnIds.contains` 锁在固定四列，
-///     分组列的折叠状态存不进去 ⇒ 与其给一个「点了当下生效、重进就丢」的开关，这里直接不给。
+///   - 分组模式没有「归档」列，也不提供列折叠：折叠状态存不进偏好
+///     （`board_preference_repository.dart` 用 `defaultColumnIds.contains` 把列 id 词汇锁在固定四列）
+///     ⇒ 这一模式不给 `onColumnCollapsedChanged`，菜单里的「折叠<列名>」与 develop 一样灰显。
+///     代价是**已完成任务不再被聚合**，而是留在自己的分组列里；
+///     "拖进/拖出归档来改完成状态"只属于 priority 那四列，分组模式的拖拽只写 `sectionId`。
 class KanbanView extends ConsumerWidget {
   const KanbanView({
     super.key,
@@ -517,13 +519,11 @@ class _KanbanColumn extends StatelessWidget {
                     enabled: onMoveRight != null,
                     child: Text('右移${data.title}'),
                   ),
-                  // 分组模式下列折叠存不进偏好（见 KanbanView 类注释），
-                  // 所以不给这一项，而不是给一个点了会丢的开关。
-                  if (onCollapsedChanged != null)
-                    PopupMenuItem(
-                      value: 'collapse',
-                      child: Text('折叠${data.title}'),
-                    ),
+                  PopupMenuItem(
+                    value: 'collapse',
+                    enabled: onCollapsedChanged != null,
+                    child: Text('折叠${data.title}'),
+                  ),
                 ],
                 onSelected: (value) {
                   if (value == 'left') onMoveLeft?.call();

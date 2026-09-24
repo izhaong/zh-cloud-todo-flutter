@@ -341,4 +341,97 @@ void main() {
 
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('长分组名的列标题用省略号而不是撑破列头', (tester) async {
+    await pump(
+      tester,
+      tasks: [task('a', sectionId: 'sec-en')],
+      sections: [section('sec-en', '全年英语语法与词汇复习计划', 0)],
+    );
+
+    final title = tester.widget<Text>(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('col-sec-en')),
+            matching: find.text('全年英语语法与词汇复习计划'),
+          )
+          .first,
+    );
+    expect(title.overflow, TextOverflow.ellipsis);
+    expect(title.maxLines, 1);
+  });
+
+  testWidgets('分组模式已完成任务留在自己的分组列，不聚合成归档列', (tester) async {
+    await pump(
+      tester,
+      tasks: [task('a', sectionId: 'sec-en', completed: true)],
+      sections: sections,
+    );
+
+    expect(find.text('归档'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('col-sec-en')),
+        matching: find.text('任务-a'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('分组模式忽略折叠：偏好里塞分组 id 也不会收起该列', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: KanbanView(
+            tasks: [task('a', sectionId: 'sec-en')],
+            listId: 'list-inbox',
+            sections: sections,
+            collapsedColumnIds: const {'sec-en'},
+            onTaskSectionMove: (_, _) async {},
+            onColumnCollapsedChanged: (_, _) async {},
+          ),
+        ),
+      ),
+    );
+
+    expect(tester.getSize(find.byKey(const ValueKey('col-sec-en'))).width, 260);
+    expect(find.text('展开英语'), findsNothing);
+  });
+
+  testWidgets('分组模式的列头菜单仍列出「折叠」项但不可用（与固定四列一致）', (tester) async {
+    await pump(
+      tester,
+      tasks: [task('a', sectionId: 'sec-en')],
+      sections: sections,
+      onSectionMove: (_, _) async {},
+      onSectionOrderChanged: (_) {},
+    );
+
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('col-sec-en')),
+        matching: find.byType(PopupMenuButton<String>),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    PopupMenuItem<String> item(String label) =>
+        tester.widget<PopupMenuItem<String>>(
+          find.ancestor(
+            of: find.text(label),
+            matching: find.byType(PopupMenuItem<String>),
+          ),
+        );
+    // 三项都渲染（与 develop 的固定四列一致），折叠在分组模式是「灰显」而不是消失。
+    expect(item('折叠英语').enabled, isFalse);
+    expect(item('左移英语').enabled, isFalse);
+    expect(item('右移英语').enabled, isTrue);
+  });
+
+  testWidgets('固定四列的「+」tooltip 也带上列名（本轮确实改了这一处）', (tester) async {
+    await pump(tester, tasks: [task('a')]);
+
+    expect(find.byTooltip('在未开始新建任务'), findsOneWidget);
+    expect(find.byTooltip('新建任务'), findsNothing);
+  });
 }
