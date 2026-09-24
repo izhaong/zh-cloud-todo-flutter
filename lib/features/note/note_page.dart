@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/todo_api.dart';
 import '../../state/providers.dart';
 import 'task_summary_sheet.dart';
+import 'note_template_sheet.dart';
 
 class NotePage extends ConsumerStatefulWidget {
   const NotePage({super.key});
@@ -266,6 +267,19 @@ class _NoteEditorDialogState extends State<_NoteEditorDialog> {
   Future<void> _insertSummary() async {
     final summary = await showNoteTaskSummarySheet(context);
     if (summary == null || !mounted) return;
+    _insertBlock(summary);
+  }
+
+  /// 嘀嗒《用模板高效记笔记》：「进入笔记详情页，点击『使用模板』…选中任意一个
+  /// 即可自动添加到笔记中」。插入语义与摘要同一条路径，不另写一套光标算术。
+  Future<void> _insertTemplate() async {
+    final content = await showNoteTemplateSheet(context);
+    if (content == null || !mounted) return;
+    _insertBlock(content);
+  }
+
+  /// 整块插入：块前后补换行（Markdown 块不能贴着上一行的字），光标停在块尾。
+  void _insertBlock(String block) {
     final value = _content.value;
     final caret = value.selection.isValid
         ? value.selection.start.clamp(0, value.text.length)
@@ -274,7 +288,7 @@ class _NoteEditorDialogState extends State<_NoteEditorDialog> {
     final after = value.text.substring(caret);
     final joined =
         '${before.isEmpty || before.endsWith('\n') ? before : '$before\n'}'
-        '$summary'
+        '$block'
         '${after.isEmpty || after.startsWith('\n') ? after : '\n$after'}';
     _content.value = TextEditingValue(
       text: joined,
@@ -309,6 +323,15 @@ class _NoteEditorDialogState extends State<_NoteEditorDialog> {
                   onPressed: _insertSummary,
                   icon: const Icon(Icons.article_outlined, size: 18),
                   label: const Text('插入摘要'),
+                ),
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: const Key('todo-note-insert-template'),
+                  onPressed: _insertTemplate,
+                  icon: const Icon(Icons.dashboard_outlined, size: 18),
+                  label: const Text('使用模板'),
                 ),
               ),
               TextField(
