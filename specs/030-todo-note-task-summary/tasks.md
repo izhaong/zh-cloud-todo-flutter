@@ -67,6 +67,52 @@
   约定是**不随功能 PR 提交**——这是目标里给 human 的约定，不是本仓文档条文。本轮未 stage 该文件。
 - 「plan.md 的 Consumer 转换」：复核判「改文档」，已按此改 `plan.md`（对话框不读 provider，无需 Consumer）。
 
+## 追加切片（第 28 轮）：笔记「使用模板」
+
+基线同上（`feat/todo-note-summary-insert`，栈在本 PR 的摘要切片之上）。
+
+- [x] T9 `TemplateApi`（`core/api/todo_api.dart`）：`listMy()` / `listPublic()` 打既有
+      `/app-api/todo/template/list-my`、`/template/list-public`，`NoteTemplateDto.fromJson` 按 wire 形状解包，
+      `code != 0` 抛出并带服务端文案。挂到 `TodoApi.templates`。
+- [x] T10 `note_template_sheet.dart`：并列取两组、按「我的模板 / 预设模板」分组（空组不渲染标题）、
+      `_requestId` 丢过期响应、失败保留已加载列表并给出原因。
+- [x] T11 笔记编辑器 `使用模板` 入口与 `插入摘要` 共用 `_insertBlock`（同一套光标/换行拼接逻辑）。
+- [x] T12 四件套：320px + 1.3 倍不溢出、入口/分组名/模板名独立读屏语义、失败保留、过期不覆盖。
+- [ ] T13 回写矩阵 #89（属 `zh-cloud-docs`，见 docs !83；摘要与模板都写「已实现待合并 !275」）。
+
+### 验证记录（2026-09-24，日志 /tmp/r28_gates_a.log 与 /tmp/r28_gates_b.log）
+
+- `git diff --check` → `gate1 exit=0`
+- `dart format --output=none --set-exit-if-changed <4 个显式文件>` → `Formatted 4 files (0 changed)`，`gate2 exit=0`
+- `flutter analyze` → `No issues found! (ran in 3.4s)`
+- `flutter test --tags golden` → `00:03 +9: All tests passed!`（基线未变，未申请重录）
+- `flutter test --exclude-tags 'golden || performance' --concurrency=1` → `02:06 +739 ~26: All tests passed!`
+  本分支上一条记录是 `+731 ~26`，本轮新增用例全在**新文件** `test/features/note/note_template_insert_test.dart` 里
+  （8 条）⇒ 731 + 8 = 739 对得上。
+- `flutter build web --release --dart-define=TODO_API_BASE_URL=... --dart-define=TODO_TENANT_ID=1` → `✓ Built build/web`
+- 单文件 `flutter test test/features/note/note_template_insert_test.dart` → `00:01 +8: All tests passed!`
+
+红测起点：新符号只能红在编译层 ——
+`Error when reading 'lib/features/note/note_template_sheet.dart': No such file or directory`。
+
+反向探针（摘掉生产代码必须红，恢复后 `cmp -s` 逐字节一致）：
+
+| 摘掉的代码 | 结果 |
+| --- | --- |
+| `note_template_sheet.dart` 两处 `requestId != _requestId` 守卫 | 「后到的旧响应不得覆盖新结果」红：`Found 2 widgets with text "过期模板"` |
+
+（本切片只做了一次探针，其余三条断言——入口存在、分组与光标插入、320px 不溢出——
+在实现前就是红的，属新文件整体红，不是切片级判据。）
+
+测试脚手架自身的两处假阴性（都记下来，别再犯）：
+
+1. 「后到的旧响应」用例第一次红在 `Offset(288.0, 756.0) is outside the bounds of the render tree`：
+   弹层入场动画没走完就 `tap` 重新加载按钮 ⇒ 点到屏幕外。`pumpAndSettle` 又永远不返回
+   （第一轮挂起、`CircularProgressIndicator` 是无限动画）⇒ 换成 `pump()` + `pump(400ms)`。
+2. 修完动画问题后变成 `Found 2 widgets with text "最新模板"`：假 `_FakeApiClient` 对
+   `list-my` 与 `list-public` 返回了同一份数据，于是一个模板在两个分组里各渲染一次。
+   生产代码没问题 ⇒ 按路径分别返回。
+
 ## 下一轮入口
 
 - #89 剩余：标签/指派人/优先级筛选（嘀嗒「显示内容」）、专注数据入摘要（需本地专注记录表）、
