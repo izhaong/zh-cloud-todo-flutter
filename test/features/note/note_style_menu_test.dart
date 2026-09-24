@@ -158,8 +158,10 @@ Future<void> _openEditor(
 }
 
 class _FakeNoteRepository implements NoteRepository {
+  /// 本用例只关心编辑弹窗，列表恒空即可；其余成员（create/update/delete/archive/
+  /// convertFromTask）走 `noSuchMethod` 抛错，避免误以为它们被覆盖测到了。
   @override
-  Future<List<TodoNoteItem>> notes({bool includeArchived = false}) async => [];
+  Future<List<TodoNoteItem>> list() async => const [];
 
   @override
   dynamic noSuchMethod(Invocation invocation) =>
