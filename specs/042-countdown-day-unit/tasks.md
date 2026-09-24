@@ -13,15 +13,18 @@
 - [x] 复核手段替换：`claude` CLI 本机不可用（`unrecognized_model`），改由本会话**只读子代理**审 FR-001..FR-006，
       要求逐条给 VERIFIED / FALSIFIED / UNPROVEN 并给命令与决定性输出行，末尾必须落 `VERDICT`
 
-## 门禁（最终状态一次跑完，日志 `/tmp/r41_gates2.log`）
+## 门禁（最终状态 `9d1de85` 一次跑完，日志 `/tmp/r41_gates3.log`）
 | 门禁 | 结果 |
 | --- | --- |
 | 1 `git diff --check` | `gate1 rc=0`（区间 `origin/develop...HEAD`） |
 | 2 `dart format --output=none --set-exit-if-changed`（仅本轮 2 个显式文件） | `Formatted 2 files (0 changed)`、`gate2 rc=0` |
-| 3 `flutter analyze` | `No issues found! (ran in 1.8s)`、`gate3 rc=0`。**run #1 曾红**：`1 issue found` + `gate3 rc=1` —— 我在测试里写了 `node.hasFlag(SemanticsFlag.isButton)`，本机 SDK 已废弃该 API（`deprecated_member_use`），改成 `node.flagsCollection.isButton` 并去掉随之无用的 `import 'package:flutter/semantics.dart'` 后才归零 |
-| 4 `flutter test --tags golden` | `00:04 +9: All tests passed!`、`gate4 rc=0`（基线 9 张，**未重录**） |
-| 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:13 +714 ~26: All tests passed!`、`gate5 rc=0`。计数可核对：develop 基线 709 + 本轮 5 例 = 714（objective 里那句「713 passed」是 2026-09-23 当时的数） |
-| 6 `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web`、`gate6 rc=0` |
+| 3 `flutter analyze` | run #3 `No issues found! (ran in 2.0s)`、`gate3 rc=0`。**run #1 曾红**：`1 issue found` + `gate3 rc=1` —— 我在测试里写了 `node.hasFlag(SemanticsFlag.isButton)`，本机 SDK 已废弃该 API（`deprecated_member_use`），改成 `node.flagsCollection.isButton` 并去掉随之无用的 `import 'package:flutter/semantics.dart'` 后才归零 |
+| 4 `flutter test --tags golden` | run #3 `00:03 +9: All tests passed!`、`gate4 rc=0`（基线 9 张，**未重录**） |
+| 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | run #3（最终状态）`02:12 +714 ~26: All tests passed!`、`gate5 rc=0`；run #2 为 `02:13 +714 ~26`。计数可核对：develop 基线 709 + 本轮 5 例 = 714（objective 里那句「713 passed」是 2026-09-23 当时的数） |
+| 6 `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | run #3 `✓ Built build/web`、`gate6 rc=0`。同一次输出里另有一句 wasm  advis​ory（`Consider addressing these issues to enable wasm builds`）—— 那是**未开 wasm 的提示**，不是失败：本次构建产物已建成 |
+
+
+run #1 日志 `/tmp/r41_gates.log`（`gate3 rc=1` 那遍）、run #2 `/tmp/r41_gates2.log`、**run #3 `/tmp/r41_gates3.log` 才是最终状态 `9d1de85` 的六项一次性记录**。
 
 ## 复核（第 1 轮：VERDICT: FAIL → 逐条复验后修复）
 只读子代理审 FR-001..FR-006，结论 **FAIL**。5 条发现逐条对照源码复验：
