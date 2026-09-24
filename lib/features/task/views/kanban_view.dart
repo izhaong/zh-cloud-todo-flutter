@@ -7,6 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/brand_colors.dart';
 import '../../../core/time/task_time_formatter.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../task_assign_action.dart';
 import '../task_detail_page.dart';
 import '../task_quick_add_sheet.dart';
 import '../task_view_mutation_feedback.dart';
@@ -17,7 +18,7 @@ import '../task_view_mutation_feedback.dart';
 ///   0 = 未开始 / 1 = 进行中 / 2 = 紧急 / 3 = 归档（priority=3 + completed）
 ///
 /// 卡片：title + due 摘要 + priority 标签 + 子任务进度
-/// 点击进 TaskDetailPage。
+/// 点击进 TaskDetailPage；右键走「分配给」（同页 `:175`，动作见 `task_assign_action.dart`）。
 ///
 /// 跨列拖拽**已实现**（`LongPressDraggable` + `DragTarget`，写操作走 `onTaskMove`，
 /// 由 `tasks_by_list_page.dart:380` 落到共享任务 mutation），
@@ -170,6 +171,8 @@ class KanbanView extends ConsumerWidget {
                               listId != null
                           ? () => _quickAdd(context, ref, listId!)
                           : null,
+                      onAssignCard: (task) =>
+                          openTaskAssignAction(context, ref, task),
                     ),
                   ),
               ],
@@ -298,6 +301,7 @@ class _KanbanColumn extends StatelessWidget {
     this.onTasksReordered,
     this.onCardMove,
     this.onAdd,
+    this.onAssignCard,
   });
 
   final _KanbanColumnData data;
@@ -309,6 +313,37 @@ class _KanbanColumn extends StatelessWidget {
   final Future<void> Function(List<String> taskIds)? onTasksReordered;
   final Future<void> Function(TodoTask task)? onCardMove;
   final VoidCallback? onAdd;
+
+  /// 嘀嗒《02-看板视图：分类管理任务》`:175`「在看板视图右键任务，选择「分配给」即可。」
+  final ValueChanged<TodoTask>? onAssignCard;
+
+  /// 卡片右键菜单：项目只有「分配给」一项 —— 帮助页 `:175` 只写了这一条，
+  /// 不自创没在原文里出现的菜单项。
+  Future<void> _showCardContextMenu(
+    BuildContext context,
+    Offset globalPosition,
+    TodoTask task,
+  ) async {
+    final callback = onAssignCard;
+    if (callback == null) return;
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final action = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(globalPosition.dx, globalPosition.dy, 0, 0),
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        PopupMenuItem<String>(
+          key: Key('kanban-card-assign-${task.id}'),
+          value: 'assign',
+          child: const Text('分配给'),
+        ),
+      ],
+    );
+    if (!context.mounted || action != 'assign') return;
+    callback(task);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -437,14 +472,26 @@ class _KanbanColumn extends StatelessWidget {
                               reorderKanbanTaskIds(ids, oldIndex, newIndex),
                             );
                           },
-                    itemBuilder: (_, i) => Padding(
+                    itemBuilder: (_, i) => GestureDetector(
+                      // ReorderableListView 要求**条目根 widget** 带 key，
+                      // 所以 key 留在这一层，Padding 只是它的孩子。
                       key: ValueKey('kanban-task-${data.tasks[i].id}'),
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: _KanbanCard(
-                        task: data.tasks[i],
-                        accent: data.color,
-                        reorderIndex: onTasksReordered == null ? null : i,
-                        onTap: () => onCardTap(data.tasks[i]),
+                      behavior: HitTestBehavior.translucent,
+                      onSecondaryTapDown: onAssignCard == null
+                          ? null
+                          : (details) => _showCardContextMenu(
+                              context,
+                              details.globalPosition,
+                              data.tasks[i],
+                            ),
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _KanbanCard(
+                          task: data.tasks[i],
+                          accent: data.color,
+                          reorderIndex: onTasksReordered == null ? null : i,
+                          onTap: () => onCardTap(data.tasks[i]),
+                        ),
                       ),
                     ),
                   ),
