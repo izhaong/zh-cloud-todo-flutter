@@ -72,6 +72,21 @@
       （要复现得把修复改回去），所以本轮补的是形态断言而不是数字：
       `长分组名的列标题用省略号而不是撑破列头` 断言 `overflow == TextOverflow.ellipsis` 且 `maxLines == 1`。
 
+## #315 第 1 轮只读复核（`VERDICT: FAIL`，2 BLOCKING + 4 NIT，全部成立、无驳回）
+| # | 级别 | 复核员说的 | 我复验到的 | 处置 |
+| --- | --- | --- | --- | --- |
+| 1 | BLOCKING | 台账说日志有 `head=5fa649f` 那行，实际 `/tmp/g54/gates.log` 只有 8 行、缺 gate1-3 | `wc -l`=8、`grep -rl "5fa649f" /tmp` 无命中。成因：`... \| tee /tmp/g54/gates.log 2>/dev/null \|\| mkdir -p /tmp/g54` —— tee 在目录存在前就跑了，前半段只进了 stdout | 重跑一份完整日志（`gates-final.log`，`>` 一次写完 + 头尾溯源行），台账改引它并把成因写下来 |
+| 2 | BLOCKING | spec 说 `新建分组` 抄自那枚 chip 的 tooltip | `sed -n '1884,1888p'` ⇒ `ActionChip(key: todo-section-create, label: Text('分组'))` **没有 tooltip**；真来源是 `tasks_by_list_page.dart:298` 的 IconButton tooltip 与 `task_workspace_header.dart:182` 的 `Text('新建分组')` | 改述来源（结论"照抄清单侧用词"不变） |
+| 3 | NIT | 三条点击全在第一列，闭包抓错 index 不会红 | 成立 | 加 `改的是被点的那一列，不是第一列`（在 `col-sec-pol` 上点，断言 `id == 'sec-pol'`）；另加页面级 `kanban_section_menu_page_test.dart`：改名框 `initialValue == 'B组'`、确认框 `删除“B组”？` 且 `删除“A组”？` findsNothing ⇒ 两个回调用反必红 |
+| 4 | NIT | 读屏用例 `.first` + `findsOneWidget` 退化成 ≥1 | 成立 | 去掉 `.first`，断言唯一 |
+| 5 | NIT | 哨兵列 tooltip `管理分组 未分组` 会误导（它不是分组、6 项里 4 项恒灰） | 成立 | 只有 `data.sectionId != null` 的列才叫 `管理分组 <名称>`，「未分组」仍叫 `调整未分组列`，用例双向断言 |
+| 6 | NIT | 页面接线零覆盖 + `onSectionCreate: listId == null ? null : …` 是死分支 | 前半成立（`task_section_workspace_test.dart` 无 kanban 关键字）；后半成立（`tasks_by_list_page.dart:162` 保证 listId 为 null 时 sections 必空） | 死分支去掉；页面覆盖按 #3 补 |
+
+**顺带撞出来的一个既有缺陷**：写"确认删除后列真的消失"这条端到端用例时它是红的 —— 回源是
+`providers.dart` 的 `taskSectionRepositoryProvider` 在 db/queue 未就绪时返回 null，而三处分组写操作都写 `?.` ⇒
+**静默 no-op 且不进 catch**。清单侧一直如此，本 PR 只是多暴露一个入口 ⇒ 立 todo-flutter **#316**，本轮不顺手改；
+那条端到端用例撤掉（撤的不是"覆盖"，是"在缺陷未修前把它写成绿的"）。
+
 ## Issue #315 那一格（列头「···」→ 重命名/新建分组/删除）已证实
 - [x] 三项挂在**列头已有的那枚「···」**上，不新增按钮：分组模式下 `KanbanView.onSectionRename` /
       `onSectionCreate` / `onSectionDelete` 只交出「这一列对应的 `TodoTaskSection`」，
@@ -89,17 +104,21 @@
       ⇒ 本轮 5 条用例同时 `[E]` 红（就地三项 / 未分组列 / tooltip / 320px 菜单 / 不自己改列），
       `cp` 还原后 `cmp -s` 判 IDENTICAL；正向对照 `没有分组时列头菜单不含分组管理三项` 在探针下仍绿，
       说明它咬的是"不该出现"而不是恒真。
-- [x] 六项门禁跑在**已提交终态** `5fa649f`，日志 `/tmp/g54/gates.log`：
-      溯源头 `### head=5fa649f  status_before_gates=[]  time=2026-09-24T19:39:00Z` +
-      尾行 `### status_after_gates=[]` 与 `### pr_files=…`（8 个文件，无 `pubspec.lock`）。
+- [x] 六项门禁跑在**已提交终态** `e3d58a9`，日志 `/tmp/g54/gates-final.log`（一条 `>` 重定向写完，
+      不再有"tee 早于 mkdir 把上半段丢掉"的事）：
+      头 `### head=e3d58a9  status_before_gates=[]  time=2026-09-24T19:56:14Z`、
+      尾 `### status_after_gates=[]` 与 `### pr_files=…`（9 个文件，无 `pubspec.lock`）。
       | 门禁 | 结果 |
       | --- | --- |
       | 1 `git diff --check` / `git diff --check origin/develop...HEAD` | `rc=0` / `rc=0` |
-      | 2 `dart format --output=none --set-exit-if-changed <6 个显式文件>` | `Formatted 6 files (0 changed)`、`rc=0`（N=6 == 本轮文件数，见第 53 轮的假绿教训） |
-      | 3 `flutter analyze` | `No issues found! (ran in 1.8s)`、`rc=0` |
+      | 2 `dart format --output=none --set-exit-if-changed <7 个显式文件>` | `Formatted 7 files (0 changed)`、`rc=0`（N=7 == 本轮文件数） |
+      | 3 `flutter analyze` | `No issues found! (ran in 1.3s)`、`rc=0` |
       | 4 `flutter test --tags golden` | `00:04 +9: All tests passed!`、`rc=0`（9 张基线未重录） |
-      | 5 全量非 golden | `02:25 +926 ~26: All tests passed!`、`rc=0`（本轮 +6：23 widget + 5 仓储） |
+      | 5 全量非 golden | `02:29 +929 ~26: All tests passed!`、`rc=0` |
       | 6 `flutter build web --release --dart-define=…` | `✓ Built build/web`、`rc=0` |
+      ⚠️ 这一栏第一次写的是 `5fa649f` + `/tmp/g54/gates.log`（8 行、缺 head 与 gate1-3）—— 被复核当场抓到"留证不实"。
+      数字本身没造假（那一轮确实跑过），但**引用的文件里根本没有那些行**，等价于拿不存在的东西当物证。
+      规矩补一条：写"完整日志"之前先 `wc -l` + `head -1` 该日志，把这两个读数一起抄进台账。
 
 ## 矩阵 #15 现在到底差什么（别急着重言）
 #313 + #315 把「分组开列 / 跨列拖动 / 拖动分组排序 / 分组内新建 / 列头管理分组」五格都补完了，
