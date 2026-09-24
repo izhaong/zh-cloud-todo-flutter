@@ -63,7 +63,17 @@ void main() {
   Future<void> openMonthSheet(WidgetTester tester) async {
     await tester.tap(find.text('喝水'));
     await tester.pumpAndSettle();
-    expect(find.text('月度打卡表'), findsOneWidget);
+    // 嘀嗒《02-更好地完成习惯》:77 是「点击习惯进入打卡页面」，月度表挂在详情页「...」里，
+    // 不再是点列表行直接弹表 ⇒ 本文件的入口全部走详情页。
+    await tester.tap(find.byKey(const Key('habit-detail-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('月度打卡表'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('todo-habit-month-title')),
+      findsOneWidget,
+      reason: '没真正弹开表的话，下面所有断言会在空树上假绿',
+    );
   }
 
   Finder monthCells() => find.byWidgetPredicate(
@@ -81,7 +91,7 @@ void main() {
     );
   });
 
-  testWidgets('点习惯行出现「月度打卡表」，标题点明是哪个月', (tester) async {
+  testWidgets('详情页「...」→「月度打卡表」出表，标题点明是哪个月', (tester) async {
     await pumpHabit(tester);
     expect(find.text('月度打卡表'), findsNothing);
 
