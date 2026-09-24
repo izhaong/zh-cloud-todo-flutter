@@ -37,6 +37,10 @@
 + 本文件 **8** 条（第 1 轮复核时是 7 条，补了 `:198` 已同步那一支）⇒ 898 + 8 = 906，没有用例被顺带删掉或跳过。
 （注：门禁日志是 21:10 那次跑的，`pr_files` 已含 `tasks.md`；上一版 `05d62fe` 的门禁读数在 `/tmp/g58/gates.log`，当时 PR 是 5 个文件。）
 
+**第 2 轮复核后的增量提交 `282ffa8`**：只改这两份 markdown（`git diff --name-only 6f4efd8 HEAD` 实得
+`specs/045-kanban-card-assign/{spec.md,tasks.md}`），Dart 与用例字节一丁点没动 ⇒ 上表 2-6 号的读数对最终字节仍然成立，
+不为 markdown 重跑 30 分钟的门禁；门禁 1 换新范围重跑：`git diff --check origin/develop HEAD` **rc=0**（复核 R2-7 指出上一版只扫了 `HEAD~1 HEAD`）。
+
 ## 反向探针（每条断言都要能红，红不了就不算证据）
 
 | # | 改法 | 期望 | 实际读数（日志） |
