@@ -5,6 +5,8 @@
       红 = `git checkout HEAD -- lib/features/countdown/countdown_page.dart`（摘掉整块实现）后
       `Expected: exactly one matching candidate / Actual: _TextWidgetFinder:<Found 0 widgets with text "还有 3 年": []>`
       与 `"已 5 年"` 同形失败 ⇒ 缺的正是「点了没换单位」；
+      ⚠️ 上面 `"已 5 年"` 是**改词前**的读数：`ed53c8c` 按《01-添加倒数纪念日.md:106》把前缀收成「已过」，
+      该断言现为 `"已过 5 年"`。旧读数保留作修订前证据，不当作当前用例内容。
       绿 = `flutter test test/features/countdown/countdown_unit_toggle_test.dart` ⇒ `00:00 +5: All tests passed!`
 - [x] 反向探针：上面那次「摘实现」即探针（4 条切换用例红），`cp` 还原后 `cmp -s` 判 **byte-identical OK**
 - [x] 换算由用例钉死：1095 天 → 3 年 / 156 周；2000 天 → 5 年 / 285 周（年 = 天 ~/ 365、周 = 天 ~/ 7）
@@ -50,3 +52,33 @@ run #1 日志 `/tmp/r41_gates.log`（`gate3 rc=1` 那遍）、run #2 `/tmp/r41_g
 - [ ] 同页其余四面（①样式入口与样式列表、②自定义颜色、③自定义图片、⑤备注）未动：
       ① ③ 的契约列已有（`style`、`backgroundImage`）只是 UI 没接；② ⑤ 缺列 ⇒ 已开 `zh-cloud-service` Issue **#280**。
 - [ ] 矩阵第 49 行：合并后把 ④ 的「已实现待合并 !303」换成合并 SHA，并复校本 PR 改过的 `countdown_page.dart` 行号。
+
+## 合并轮写回（!303 → develop `90320057c`，2026-09-24）
+冲突形态：`countdown_page.dart` 同一组件被两侧重写（本分支按 117 行的旧行体写，develop 已把整行搬进
+`_CountdownTile` 并接了 `showAge`）。处置不是「选一侧」，而是**以 develop 的行体为宿主**重挂单位切换
+（`d1f7252`），因此用例从 5 条变 **6 条**：新增「正数日关掉『显示已过天数』：只显示目标日期，不给单位入口」，
+且该用例的日期由 fixture 同一份输入算出（上一版我手写日期，直接红）。
+
+六项门禁跑在**合并后的 develop**上，并用树等价把读数搬给分支：
+
+| 门禁 | 读数 |
+| --- | --- |
+| 树等价 | `git rev-parse origin/develop^{tree}` == `9032005^{tree}` == `ed53c8c^{tree}` == `d6c5504d50d5be3b9f4d941400d25f148ded9184` |
+| 1 `git diff --check` | rc=0 |
+| 2 `dart format --output=none --set-exit-if-changed`（本轮 2 个显式 dart 文件） | `Formatted 2 files (0 changed)`、rc=0 |
+| 3 `flutter analyze` | `No issues found!`、rc=0 |
+| 4 `flutter test --tags golden` | `00:08 +9: All tests passed!`（基线 9 张，**未重录**） |
+| 5 全量非 golden | `02:52 +898 ~26: All tests passed!`、rc=0 |
+| 6 `flutter build web --release --dart-define=…` | `✓ Built build/web`、rc=0 |
+| `pubspec.lock` | 合并后已还原到分叉基线，脏文件数 0（本机镜像不得进 PR） |
+
+## 本轮（spec 写回）未达成项
+- [ ] **!303 的合并轮没有只读复核**：objective 要求的 `VERDICT` 环节没跑（预算耗尽）。
+      树等价只证明「分支上的门禁读数适用于合并后的 develop」，**不等于**有人审过这次冲突解决后
+      `_CountdownTile` 的语义归属与 develop 行体的复用。该缺口不得当成已通过，下一轮若再动这一页应连带补审。
+- [ ] `spec.md` 与代码的三处不一致（前缀「已」→「已过」、`showAge` 门控、读屏 label 措辞）本轮按「代码为准」修订了文档；
+      反过来说：**修订前那三处文档误导过任何人**，改动记录只写在文档里，没有回查其它引用点。
+      回查命令（已跑，**除本文件那两处刻意保留的旧读数外 0 命中**；正对照 `已过` 在 specs 命中 9 处，证明搜索路径有效）：
+      `rg -n '已 [0-9]+ 天|已 [0-9]+ 年|点卡片即切换' specs/`（todo-flutter）与
+      `git grep -n -E '已 [0-9]+ 天|已 [0-9]+ 年|点卡片即切换' origin/develop -- todo`（docs，0 命中；
+      正对照 `已过` 在矩阵命中 3 处）。
