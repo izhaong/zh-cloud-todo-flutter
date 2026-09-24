@@ -39,6 +39,9 @@ void main() {
       fixture.database,
       TodoVisualFixture.secondaryTodayTaskId,
     );
+    final queuedBefore = await fixture.database
+        .select(fixture.database.todoSyncChanges)
+        .get();
 
     await rightClickCard(tester, TodoVisualFixture.secondaryTodayTaskId);
     await tester.tap(find.text('分配给'));
@@ -49,14 +52,17 @@ void main() {
       fixture.database,
       TodoVisualFixture.secondaryTodayTaskId,
     );
-    expect(after.updatedAt, before.updatedAt);
-    expect(after.assigneeUserId, before.assigneeUserId);
-    expect(after.assigneeUserName, before.assigneeUserName);
-    expect(after.serverId, isNull);
+    // 整行比对，不是挑三个字段看：任务表任何一列被动过都该红。
+    expect(after.toJson(), before.toJson());
+    // 发件箱行数一丁点都没涨（基线是 fixture 自己种下的，不假设它是 0）。
+    final queuedAfter = await fixture.database
+        .select(fixture.database.todoSyncChanges)
+        .get();
+    expect(queuedAfter.length, queuedBefore.length);
   });
 
   testWidgets('任务与清单都已同步时，「分配给」真的打开指派页（不是只弹个菜单）', (tester) async {
-    // 用「工作」清单：它是 todoLists 里真实存在的一行，收集箱('inbox')是虚拟入口。
+    // 用「工作」清单：它在 todoLists 里是一行真实的清单（收集箱的行由 sync 建立，见 #318 的撤证）。
     const workTaskId = 'visual-task-work-list';
     final fixture = await pumpKanbanOnInbox(
       tester,
@@ -81,15 +87,20 @@ void main() {
     expect(find.text('清单尚未同步，无法选择执行人'), findsNothing);
   });
 
-  testWidgets('清单未同步时不 push 指派页，而是给那一句可见提示', (tester) async {
-    final fixture = await pumpKanbanOnInbox(tester);
-    await (fixture.database.update(fixture.database.todoTasks)..where(
-          (row) => row.id.equals(TodoVisualFixture.secondaryTodayTaskId),
-        ))
+  testWidgets('清单自己还没同步时不 push 指派页，而是给那一句可见提示', (tester) async {
+    // 「本地建了清单、服务端还没回 serverId」是生产里真会发生的一种：
+    // 用工作清单，只给任务补 serverId，清单行的 serverId 保持为空。
+    const workTaskId = 'visual-task-work-list';
+    final fixture = await pumpKanbanOnInbox(
+      tester,
+      listId: TodoVisualFixture.workListId,
+    );
+    await (fixture.database.update(fixture.database.todoTasks)
+          ..where((row) => row.id.equals(workTaskId)))
         .write(const TodoTasksCompanion(serverId: Value(4401)));
     await tester.pumpAndSettle();
 
-    await rightClickCard(tester, TodoVisualFixture.secondaryTodayTaskId);
+    await rightClickCard(tester, workTaskId);
     await tester.tap(find.text('分配给'));
     await tester.pumpAndSettle();
 
@@ -110,14 +121,35 @@ void main() {
     expect(find.text('指派执行人'), findsOneWidget);
   });
 
-  testWidgets('判定钉住 :198 —— 详情里有「任务动态」这一节，未同步时给可见说明', (tester) async {
+  testWidgets('判定钉住 :198（未同步那一支）—— 详情里有「任务动态」这一节并给可见说明', (tester) async {
     await pumpKanbanOnInbox(tester);
 
     await leftClickCard(tester, TodoVisualFixture.secondaryTodayTaskId);
     await scrollDetailTo(tester, '任务动态');
 
-    expect(find.text('任务动态'), findsWidgets);
+    expect(find.text('任务动态'), findsOneWidget);
     expect(find.text('任务同步后可查看动态'), findsOneWidget);
+  });
+
+  testWidgets('判定钉住 :198（已同步那一支）—— 任务 serverId 到位才真的挂上动态区', (tester) async {
+    final fixture = await pumpKanbanOnInbox(tester);
+    await (fixture.database.update(fixture.database.todoTasks)..where(
+          (row) => row.id.equals(TodoVisualFixture.secondaryTodayTaskId),
+        ))
+        .write(const TodoTasksCompanion(serverId: Value(4401)));
+    await tester.pumpAndSettle();
+
+    await leftClickCard(tester, TodoVisualFixture.secondaryTodayTaskId);
+    final activity = find.byKey(
+      const ValueKey(
+        'task-activities-${TodoVisualFixture.secondaryTodayTaskId}',
+      ),
+    );
+    await scrollDetailTo(tester, '任务动态', target: activity);
+
+    // 这一支不再走"同步后可查看"的说明，而是真的构建 _ActivitySection（私有类，按它自己的 key 认）。
+    expect(find.text('任务同步后可查看动态'), findsNothing);
+    expect(activity, findsOneWidget);
   });
 
   testWidgets('右键菜单在 320px + 1.3 倍字号下不溢出，且卡片自己的读屏语义还在', (tester) async {
@@ -221,14 +253,18 @@ Future<void> leftClickCard(WidgetTester tester, String taskId) async {
   await tester.pumpAndSettle();
 }
 
-Future<void> scrollDetailTo(WidgetTester tester, String text) async {
-  final target = find.text(text);
-  if (tester.any(target)) return;
+Future<void> scrollDetailTo(
+  WidgetTester tester,
+  String text, {
+  Finder? target,
+}) async {
+  final finder = target ?? find.text(text);
+  if (tester.any(finder)) return;
   final detail = find.byType(TaskDetailPage);
   expect(detail, findsOneWidget, reason: '详情没开，滚它没有意义');
   final scrollable = find
       .descendant(of: detail, matching: find.byType(Scrollable))
       .first;
-  await tester.scrollUntilVisible(target, 200, scrollable: scrollable);
+  await tester.scrollUntilVisible(finder, 200, scrollable: scrollable);
   await tester.pumpAndSettle();
 }

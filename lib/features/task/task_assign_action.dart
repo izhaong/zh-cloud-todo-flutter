@@ -10,11 +10,15 @@ import '../../state/providers.dart';
 ///
 /// 前置条件不满足时必须**可见**：任务/清单还没同步或本地库未就绪，各给一句提示后返回，
 /// 不静默早退、也不改动任务数据。
+///
+/// [stillCurrent]：详情 Sheet 可以切任务，所以异步反查清单回来之后必须再确认"用户还在看这条任务"，
+/// 否则旧任务的指派页会盖到新任务上（原实现里这一句就在 `_openCollaborationHub` 内部）。
 Future<void> openTaskAssignAction(
   BuildContext context,
   WidgetRef ref,
-  TodoTask task,
-) async {
+  TodoTask task, {
+  bool Function()? stillCurrent,
+}) async {
   final messenger = ScaffoldMessenger.of(context);
   final taskServerId = task.serverId;
   if (taskServerId == null) {
@@ -27,6 +31,7 @@ Future<void> openTaskAssignAction(
     return;
   }
   final list = await db.listByLocalId(task.listId);
+  if (stillCurrent != null && !stillCurrent()) return;
   final listServerId = list?.serverId;
   if (listServerId == null) {
     messenger.showSnackBar(const SnackBar(content: Text('清单尚未同步，无法选择执行人')));

@@ -301,7 +301,7 @@ class _KanbanColumn extends StatelessWidget {
     this.onTasksReordered,
     this.onCardMove,
     this.onAdd,
-    this.onAssignCard,
+    required this.onAssignCard,
   });
 
   final _KanbanColumnData data;
@@ -315,7 +315,8 @@ class _KanbanColumn extends StatelessWidget {
   final VoidCallback? onAdd;
 
   /// 嘀嗒《02-看板视图：分类管理任务》`:175`「在看板视图右键任务，选择「分配给」即可。」
-  final ValueChanged<TodoTask>? onAssignCard;
+  /// 必填：这一列只要有卡片就得能指派，留成可空就会多出一道永远走不到的判空。
+  final ValueChanged<TodoTask> onAssignCard;
 
   /// 卡片右键菜单：项目只有「分配给」一项 —— 帮助页 `:175` 只写了这一条，
   /// 不自创没在原文里出现的菜单项。
@@ -324,8 +325,6 @@ class _KanbanColumn extends StatelessWidget {
     Offset globalPosition,
     TodoTask task,
   ) async {
-    final callback = onAssignCard;
-    if (callback == null) return;
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
     final action = await showMenu<String>(
       context: context,
@@ -342,7 +341,7 @@ class _KanbanColumn extends StatelessWidget {
       ],
     );
     if (!context.mounted || action != 'assign') return;
-    callback(task);
+    onAssignCard(task);
   }
 
   @override
@@ -477,13 +476,11 @@ class _KanbanColumn extends StatelessWidget {
                       // 所以 key 留在这一层，Padding 只是它的孩子。
                       key: ValueKey('kanban-task-${data.tasks[i].id}'),
                       behavior: HitTestBehavior.translucent,
-                      onSecondaryTapDown: onAssignCard == null
-                          ? null
-                          : (details) => _showCardContextMenu(
-                              context,
-                              details.globalPosition,
-                              data.tasks[i],
-                            ),
+                      onSecondaryTapDown: (details) => _showCardContextMenu(
+                        context,
+                        details.globalPosition,
+                        data.tasks[i],
+                      ),
                       child: Padding(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: _KanbanCard(

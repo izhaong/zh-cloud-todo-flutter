@@ -1243,7 +1243,12 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     if (choice == null || !mounted || widget.taskId != t.id) return;
     final taskServerId = t.serverId;
     if (choice == 'assign') {
-      await openTaskAssignAction(context, ref, t);
+      await openTaskAssignAction(
+        context,
+        ref,
+        t,
+        stillCurrent: () => mounted && widget.taskId == t.id,
+      );
       return;
     }
     if (choice == 'comments') {
