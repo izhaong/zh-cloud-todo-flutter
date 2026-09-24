@@ -106,7 +106,7 @@ void main() {
       reason: '画布必须有可滚动范围，否则后面的对照没有牙齿',
     );
     // 正向对照：横向画布的滚轮取 scrollDelta.dx，轴翻转只在 pointerAxisModifiers
-    // （默认 Shift）下发生（scrollable.dart:933-950）⇒ 用 Shift 证明"这个面确实会被滚轮推动"。
+    // （默认 Shift）下发生（scrollable.dart:932-951）⇒ 用 Shift 证明"这个面确实会被滚轮推动"。
     await wheel(tester, 240, modifier: LogicalKeyboardKey.shiftLeft);
     final afterShift = canvasOffset(tester);
     expect(

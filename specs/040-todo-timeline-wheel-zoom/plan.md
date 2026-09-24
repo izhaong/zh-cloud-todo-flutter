@@ -16,7 +16,7 @@
 double? timelineWheelZoomTarget(PointerSignalEvent event, {required double zoom})
 ```
 
-返回 `null` 表示这次滚轮不该被接管（非 `PointerScrollEvent`、`scrollDelta.dy == 0`、没有 Ctrl/⌘、或已在边界算出同一个值）。步长取 `_TimelineZoomToolbar._step`（`timeline_view.dart:502`）；上下限 `0.75 ~ 1.5` 与 `:614`/`:632` 两颗按钮的禁用条件同值——**该 widget 里没有 min/max 常量**，所以 `:753` 是第三处字面量，本轮按「不顺手重构」不收拢（已记在 tasks.md 的「仍缺」）。
+返回 `null` 表示这次滚轮不该被接管（非 `PointerScrollEvent`、`scrollDelta.dy == 0`、没有 Ctrl/⌘、或已在边界算出同一个值）。步长取 `_TimelineZoomToolbar._step`（`timeline_view.dart:502`）；上下限 `0.75 ~ 1.5` 与 `:614`/`:632` 两颗按钮的禁用条件同值——**该 widget 里没有 min/max 常量**，所以 `:753` 只是又添一处 —— 连同 `:616`/`:634` 的 clamp，文件里共五处，本轮按「不顺手重构」不收拢（已记在 tasks.md 的「仍缺」）。
 
 方向：**向上放大、向下缩小**。嘀嗒 `:107` 那句确实没写方向；取这个方向的理由是它同时满足两处既有语义——同页相邻的《调整界面字号》（`:109` 小节、`:111` 正文）用 `Ctrl` + `+` / `-` 放大/缩小，`+` 在上；浏览器与日历里 `Ctrl` + 滚轮向上也是放大。第一版实现把方向写反过（`zoom + dy.sign * step`），补边界用例时对照 `:614`/`:632` 按钮语义才发现，现改为 `zoom - dy.sign * step`，依据写在代码注释里。
 
