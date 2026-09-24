@@ -89,3 +89,27 @@
 - [ ] 真机上 1.3 倍字号与 320px 的实际表现未测（本机只有 web 构建可用；`github.com` 超时 ⇒ iOS SPM 编译不可用）。
 - [ ] 弹层里格子的点击目标尺寸未实测（只按 320px 均分目测过，没量；也未对照 44px 触控下限评估 —— 源页没给尺寸，自算阈值属发明）。
 - [ ] 矩阵 #45 的 ⑥/⑦ 回写：合并后把「已实现待合并 PR !305」换成合并 SHA 并复算行号。
+
+
+## 合并轮（rebase 到 develop 后重跑）—— 2026-09-24，终态 `794fea4`，合入为 `13892e5d0`
+
+原「点列表行直接弹表」与 develop 的「点行进详情页」抢同一个手势 ⇒ 按源页 `:77` 收回偏离，入口移到详情页「...」。
+红测先行：新增的入口用例与既有「恰好含」穷举断言在实现前 `+16 -2` 双红，实现后该文件 `+18 All tests passed!`；
+本文件自带的 8 条月度表用例因入口搬家先红 6 条（`openMonthSheet` 仍点行），改共用 helper 走新路径后 `+8 All tests passed!`，
+并在 helper 里加「表标题真在」的前置断言，防止后续断言在空树上假绿。
+
+| 门禁 | 终态读数 |
+| --- | --- |
+| 1 `git diff --check` | `rc=0` |
+| 2 `dart format --output=none --set-exit-if-changed`（4 个文件逐个写死） | `Formatted 4 files (0 changed)`、`rc=0`。**中途真红一次**：新增用例未格式化 → `Formatted 1 file (1 changed)` `rc=1`，只对那个文件原地格式化后复跑转绿（本轮自己引入，非存量欠债） |
+| 3 `flutter analyze` | `rc=0`（`No issues found!`） |
+| 4 `flutter test --tags golden` | `00:04 +9: All tests passed!`、`rc=0`（9 张基线未重录；菜单加项未动任何黄金图） |
+| 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:44 +885 ~26: All tests passed!`、`rc=0`。计数可核：develop 基线 876 + 本 PR 自带 8 例 + 本轮新增入口用例 1 例 = 885 |
+| 6 `flutter build web --release --dart-define=…` | `✓ Built build/web`、`rc=0` |
+
+门禁跑在**已提交**的终态上（`status=[]` 记在日志首行），跑完 `pubspec.lock` 仍与 develop 一致（本轮没有把本机镜像带进去）。
+合并后 develop 的 tree 与本树同一枚（`a9aae454095e`）⇒ 上表读数对合并后的 develop 直接成立，无需重跑。
+
+复核：本轮未派只读复核子代理（会话轮次预算已尽），改动限于「入口换宿主 + 用例跟随」，
+其中我改动了 `!291` 已验收的详情页菜单 ⇒ **合前/合后应补一次只读复核**，重点核「月度打卡表」这一文案是否真是源页用词、
+以及菜单加项是否影响 `settings`/`detail` 两处既有黄金断言。此项记为**未达成**，不写成已通过。
