@@ -153,13 +153,25 @@ priority 四列时代列名是固定短词（未开始/进行中/紧急/归档�
    如果这里将来变高（比如再加"移动到文件夹"），要先复测这一条而不是假设它仍然过。
 
 ## 一条静态读出来的既有缺陷 + 一条我没查清的撤证
-**（一）静态成立**：`providers.dart` 的 `taskSectionRepositoryProvider` 是
-`Provider<TaskSectionRepository?>`，在 `appDatabaseProvider`/`syncChangeQueueProvider` 未就绪时返回 null；
-而 `_createTaskSection`/`_renameTaskSection`/`_deleteTaskSection` 三处都写成 `?.method(...)`，
+**（一）这条"缺陷"在写完的当天就被我自己否掉了 —— 记全过程**：
+`providers.dart:174-179` 的 `taskSectionRepositoryProvider` 是 `Provider<TaskSectionRepository?>`，
+在 `appDatabaseProvider`/`syncChangeQueueProvider` 未就绪时返回 null；而
+`_createTaskSection`/`_renameTaskSection`/`_deleteTaskSection` 三处都写成 `?.method(...)`，
 `catch` 只在**调用抛错**时才走 ⇒ 仓储为 null 时点击确认是**静默 no-op，没有任何反馈**。
-清单侧一直如此，本 PR 的三个新入口只是多一处暴露面，没有新增机制。
-⇒ 立 todo-flutter Issue #316 要求给可见提示（与 `TaskQuickAddSheet`"未登录不能静默吞掉点击"同口径）；
-本轮不顺手改（属清单侧既有路径，objective 禁止顺手重构）。
+这个"形状"读得没错，我据此在第 1 轮立了 Issue #316 说它是**用户会遇到**的缺陷。**这一步跨得太快**：
+我没有查过那条 null 分支在真机上到不到得了。现在查了，结论是**到不了**：
+
+- `app.dart:76-85`：`sessionBootstrappedProvider == false` 时应用根只渲染一个 loading `Scaffold`，
+  router 压根还没挂 ⇒ 不存在"启动窗口里先看到工作区"这一帧；
+- `app.dart:19-27`：bootstrapped 之后未登录一律重定向 `/login`，而 `TasksByListPage` 全仓只有
+  一个调用点 —— `home_shell.dart:679`（挂在 `/`），且 `main.dart:7` 只有一个 `runApp`，没有绕过路由的宿主入口；
+- `providers.dart:96-99`：`session != null` ⇒ `appDatabaseProvider` 同步构造出真库（不返回 null）；
+  `:114-118` 同一个 db ⇒ `syncChangeQueueProvider` 非 null；`:174-179` ⇒ 仓储非 null。
+
+⇒ 那三处 `?.` 是**死防御分支**（analyzers 也不会报，因为类型上确实可空），不是"点了确认什么都没发生"的线上缺陷。
+**#316 已按这条链撤销并关闭**；`?.` 本身不动（objective 禁止顺手重构，且它现在只是冗余不是有害）。
+留这一节的意义：我两次把"读出来成立"当成"用户会遇到"，第一次被复核否的是因果，第二次被自己复验否的是可达性 ——
+**静态读出来的缺陷，在写进 Issue 之前要先查一遍它到不到得了**。
 
 **（二）撤掉的用例与它没被证实的"原因"**：写页面级用例时「确认删除后 B 组列消失」那条是红的
 （确认框文案对、点完确认列还在）。我第一版把红因写成"就是上面那个 null no-op"，
@@ -171,7 +183,7 @@ priority 四列时代列名是固定短词（未开始/进行中/紧急/归档�
 确认框 `删除“B组”？` 且 `删除“A组”？` findsNothing），第 2 轮复核用两处变异证过它们真会红
 （对调页面两个回调 ⇒ 这两条 `[E]`；把视图改成恒取首列 ⇒ 4 条红）。
 端到端"删除后列消失"这条**待补**：先定准红因（怀疑方向：菜单项与确认按钮同为 `Text('删除')` 的命中歧义，
-未经证实），再决定是补回本 PR 还是并入 #316 一起做。
+未经证实），再决定是补回本 PR 还是另立一轮。
 
 ## 仍缺（不谎称完成）
 - 团队看板三面（`:175`「在看板视图右键任务，选择「分配给」」、`:188` 任务评论、`:198` 任务动态）
