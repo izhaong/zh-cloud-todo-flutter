@@ -5,7 +5,8 @@ import '../../state/efficiency_providers.dart';
 import 'habit_repository.dart';
 
 /// 嘀嗒《02-功能指南/05-习惯打卡/02-更好地完成习惯.md》的两面：
-/// `:72`-`:88`「月度打卡表」（`:77`「点击查看当月打卡情况」）与
+/// `:72`-`:88`「月度打卡表」（`:77` 原文「点击习惯进入打卡页面，向上滑动即可查看当月打卡情况」——
+/// 本端点一下就出表、不等向上滑动，这一处与源页不一致已记在 spec 的取舍里）与
 /// `:94`「在「月度打卡表」中点击任意日期，即可补记打卡」。
 Future<void> showHabitMonthSheet(BuildContext context, HabitDto habit) {
   return showModalBottomSheet<void>(
@@ -99,7 +100,7 @@ class _HabitMonthSheetState extends ConsumerState<HabitMonthSheet> {
     }
     await _load();
     if (!mounted) return;
-    // 补记会改变「打卡概览」三张卡的累计值，所以刷的是概览 provider；
+    // 补记会改变「打卡概览」那一排统计的累计值，所以刷的是概览 provider；
     // 月表自己的次数走上面那次 _load，两者不是同一条通道。
     ref.invalidate(habitStatsProvider);
   }

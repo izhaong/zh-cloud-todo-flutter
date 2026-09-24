@@ -7,7 +7,7 @@
 
 ## 数据来源（含一处被纠正的错判）
 `HabitRepository.stats(habitId, period: 'MONTH')` → `dailyCounts: [{date, count}]`。
-首稿据此写「不改契约」——**错了**：`TodoHabitServiceImpl.java:143`-`:145` 的 `dailyCounts` 是 `i % 2` 造的假数且固定只回 7 天
+首稿据此写「不改契约」——**错了**：`TodoHabitServiceImpl.java:140`-`:145`（在 `service/efficiency/habit/` 下）的 `dailyCounts` 是 `i % 2` 造的假数且固定只回 7 天
 ⇒ 真实月度次数要先修后端（`zh-cloud-service` Issue #281）。
 `checkIn` 的 `date:` 那条通道是真的，补记不需要改契约。
 `date` 串按 `yyyy-MM-dd`（与 `checkIn` 发出的 `checkedAt` 的日期部分同源）。

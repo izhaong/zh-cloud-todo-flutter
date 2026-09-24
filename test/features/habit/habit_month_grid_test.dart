@@ -275,8 +275,8 @@ class _FakeHabitRepository implements HabitRepository {
   int? lastCheckInHabitId;
   DateTime? lastCheckInDate;
 
-  /// 造竞态用：第 n 次 `stats`（n ≥ 2 且 `queuedCounts` 够长）先等 `gates[n-1]`，
-  /// 再回 `queuedCounts[n-1]`，从而手动控制回包顺序。
+  /// 造竞态用：第 n 次 `stats`（n ≥ 2 且 `queuedCounts` 够长）先等 `gates[n-2]`，
+  /// 再回 `queuedCounts[n-2]`（n=1 是首屏加载，直接回默认可见数据）⇒ 回包顺序由测试手动放行。
   final List<Completer<void>> gates = [];
   final List<List<Map<String, dynamic>>> queuedCounts = [];
 
