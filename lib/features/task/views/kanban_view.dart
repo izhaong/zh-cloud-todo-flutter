@@ -570,8 +570,9 @@ class _KanbanColumn extends StatelessWidget {
                     enabled: onCollapsedChanged != null,
                     child: Text('折叠${data.title}'),
                   ),
-                  // 分组管理三项的文案照抄清单分组条那套菜单（`todo-section-menu-*`：
-                  // 重命名 / 删除；新建那枚 chip 的 tooltip 是「新建分组」），不另起同义词。
+                  // 文案照抄清单侧既有说法：`重命名`/`删除` 取自分组条那枚
+                  // `todo-section-menu-*` 的两个 PopupMenuItem，`新建分组` 取自 appbar 那枚
+                  // IconButton 的 tooltip（`todo-section-create` 那枚 chip 只写「分组」，没有 tooltip）。
                   if (sectionsManaged)
                     PopupMenuItem(
                       value: 'rename-section',

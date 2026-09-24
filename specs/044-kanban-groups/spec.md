@@ -152,20 +152,28 @@ priority 四列时代列名是固定短词（未开始/进行中/紧急/归档�
    在该面上开菜单 `takeException()` 为空（用例 `320px + 1.3 倍字号下分组管理菜单不溢出`）。
    如果这里将来变高（比如再加"移动到文件夹"），要先复测这一条而不是假设它仍然过。
 
-## 仍缺（不谎称完成）
-## 复核抓到的一处既有缺陷（不掩盖，转成 Issue）
-写这一格的页面级用例时，「确认删除后 B 组列应当消失」是**红的**：确认框文案正确、点确认之后列还在、
-也没有任何提示。回源后确认不是测试环境的问题：`providers.dart` 的 `taskSectionRepositoryProvider`
-在 `appDatabaseProvider`/`syncChangeQueueProvider` 未就绪时返回 null，而
-`_createTaskSection`/`_renameTaskSection`/`_deleteTaskSection` 三处都写成 `?.` ⇒
-**仓储为 null 时静默 no-op，且不进 catch**，于是"点了确认 = 什么都没发生 = 什么都没提示"。
-看板的这三个新入口复用同一批方法，只是把老毛病的暴露面扩大一处，没有新增机制。
-⇒ 已立 todo-flutter Issue #316（要求与 `TaskQuickAddSheet`"未登录不能静默吞掉点击"同口径给可见提示）；
-本轮**不顺手改**（清单侧既有路径 + objective 禁止顺手重构）。
-那条端到端删除用例因此从本 PR 撤掉；留下的两条页面级用例钉的是
-**回调拿到哪一列的分组**（改名框 `initialValue == 'B组'`、确认框是 `删除“B组”？` 而不是 A 组），
-这两条正是防"两个回调用反"的判据。
+## 一条静态读出来的既有缺陷 + 一条我没查清的撤证
+**（一）静态成立**：`providers.dart` 的 `taskSectionRepositoryProvider` 是
+`Provider<TaskSectionRepository?>`，在 `appDatabaseProvider`/`syncChangeQueueProvider` 未就绪时返回 null；
+而 `_createTaskSection`/`_renameTaskSection`/`_deleteTaskSection` 三处都写成 `?.method(...)`，
+`catch` 只在**调用抛错**时才走 ⇒ 仓储为 null 时点击确认是**静默 no-op，没有任何反馈**。
+清单侧一直如此，本 PR 的三个新入口只是多一处暴露面，没有新增机制。
+⇒ 立 todo-flutter Issue #316 要求给可见提示（与 `TaskQuickAddSheet`"未登录不能静默吞掉点击"同口径）；
+本轮不顺手改（属清单侧既有路径，objective 禁止顺手重构）。
 
+**（二）撤掉的用例与它没被证实的"原因"**：写页面级用例时「确认删除后 B 组列消失」那条是红的
+（确认框文案对、点完确认列还在）。我第一版把红因写成"就是上面那个 null no-op"，
+**第 2 轮复核当场否掉**：这套 harness 的 `test/support/todo_visual_fixture.dart:75` 用真库覆盖了
+`appDatabaseProvider` ⇒ 仓储非 null；同文件保留的两条用例能渲染出 A 组/B 组两列，
+而列来自 `taskSectionsByListProvider`，仓储若为 null 只会退回 priority 四列 —— 这是反证。
+⇒ **真实红因未定位**，我没有继续查而是撤了那条用例。撤测试这件事本身要记在账上：
+留下的两条页面级用例钉的是"回调拿到哪一列的分组"（改名框 `initialValue == 'B组'`、
+确认框 `删除“B组”？` 且 `删除“A组”？` findsNothing），第 2 轮复核用两处变异证过它们真会红
+（对调页面两个回调 ⇒ 这两条 `[E]`；把视图改成恒取首列 ⇒ 4 条红）。
+端到端"删除后列消失"这条**待补**：先定准红因（怀疑方向：菜单项与确认按钮同为 `Text('删除')` 的命中歧义，
+未经证实），再决定是补回本 PR 还是并入 #316 一起做。
+
+## 仍缺（不谎称完成）
 - 团队看板三面（`:175`「在看板视图右键任务，选择「分配给」」、`:188` 任务评论、`:198` 任务动态）
   **从看板入口是否可达还没判过** ⇒ 即便 #313/#315 都合并，矩阵 #15 也不该直接升「有」，
   要先把这三面按同一口径判一遍。
