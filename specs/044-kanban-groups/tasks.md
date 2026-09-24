@@ -7,16 +7,20 @@
       （`git diff origin/develop...HEAD -- lib/features/task/views/kanban_view.dart` 全为 `+///`/`-///`）。
       **注意口径**：这一条只说那一个文件；第 1 轮复核抓到整个 commit 还混进了 `pubspec.lock`，见下方处置。
 - [x] 七处源页引文逐字命中（python 扫 `02-看板视图：分类管理任务.md`）：`:14/:64/:99/:100/:101/:108/:115` **全部 OK**，行号与 spec 表一致
-- [x] 六项门禁（日志 `/tmp/r45_gates.log`；跑两遍的原因见「rc 口径」）
+- [x] 六项门禁（**终态日志 `/tmp/r45_gates_final.log`**，首行 `head=37528da`、`status_before_gates=[]` ⇒ 跑在已提交的干净树上；下表数字即该日志原文）
   | 门禁 | 结果 |
   | --- | --- |
   | 1 `git diff --check` | `rc=0`、无输出 |
-  | 2 `dart format --output=none --set-exit-if-changed lib/features/task/views/kanban_view.dart` | `Formatted 1 file (0 changed)`、`rc=0` |
-  | 3 `flutter analyze` | `No issues found! (ran in 3.7s)`、`rc=0` |
-  | 4 `flutter test --tags golden` | `00:04 +9: All tests passed!`、`rc=0`（9 张基线未重录） |
-  | 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:14 +709 ~26: All tests passed!`、`rc=0`。计数 = develop 基线 709，本轮**没加用例**（无行为改动），所以数字不动是预期的，不是漏跑 |
+  | 2 `dart format --output=none --set-exit-if-changed lib/features/task/views/kanban_view.dart` | `Formatted 1 file (0 changed) in 0.01 seconds.`、`rc=0` |
+  | 3 `flutter analyze` | `No issues found! (ran in 2.1s)`、`rc=0` |
+  | 4 `flutter test --tags golden` | `00:03 +9: All tests passed!`、`rc=0`（9 张基线未重录） |
+  | 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:11 +709 ~26: All tests passed!`、`rc=0`。计数 = develop 基线 709，本轮**没加用例**（无行为改动），所以数字不动是预期的，不是漏跑 |
   | 6 `flutter build web --release --dart-define=…` | `✓ Built build/web`、`rc=0` |
   **rc 口径**：3/4/5/6 各跑两遍 —— 一遍 `\| tail -1` 留末行输出（退出码是 tail 的，不可信），一遍把输出丢弃单取 `$?`。
+  **两份日志的关系**：`/tmp/r45_gates.log` 是修复前那一次，首行只记 `head=a1d7733` 而树上还挂着未提交编辑 ⇒
+  正是它让 `pubspec.lock` 漏进提交（复核 finding 1）。上表数字已全部换成终态那一次；
+  旧日志的 `00:04 +9` / `ran in 3.7s` / `02:14` 只是同一棵树的计时抖动，测试计数一致。
+  本次六个 `rc=` 全为 0，且门禁跑完后 `lock_pubdev=149 lock_mirror=0`（本机镜像没有覆盖回来）。
 
 ## 仍缺（不谎称完成）
 - [ ] 看板**列定义未绑定 `TodoTaskSection`**：列只认 `orderedColumnIds` 那一套固定列 id（四列顺序可由
