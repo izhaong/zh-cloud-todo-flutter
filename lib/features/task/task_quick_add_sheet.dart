@@ -51,15 +51,16 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
   }
 
   Future<void> _save() async {
-    final text = _titleCtrl.text.trim();
-    if (text.isEmpty) {
-      setState(() => _titleError = '请填写任务标题');
-      return;
-    }
     final repo = ref.read(taskRepositoryProvider);
     if (repo == null) {
       // 与 _addFromTemplate 同一措辞：未登录点「保存」不能静默吞掉这一次点击。
+      // 排在标题校验之前：未登录是阻断性前置条件，不该让人点两次才知道自己没登录。
       _report('请先登录');
+      return;
+    }
+    final text = _titleCtrl.text.trim();
+    if (text.isEmpty) {
+      setState(() => _titleError = '请输入任务标题');
       return;
     }
     try {

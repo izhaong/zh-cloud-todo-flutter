@@ -296,12 +296,13 @@ $ flutter build web --release --dart-define=…        ✓ Built build/web
 ### 仍缺（不写成已完成）
 
 - 「生产形态」用例只覆盖 320×568 + 键盘 260 + 1.3 倍字体这一格；键盘高度分布、真机 VoiceOver 朗读顺序未测（本机无第二台设备）。
-- `_save()` 的 `:51`（空标题）与 `:53`（未登录）两个静默出口仍**未修**，拆给 `izhaong/zh-cloud-todo-flutter#292`。
+- ~~`_save()` 的两个静默出口仍未修~~ ⇒ **已由 #292 收掉**，见下面「第 4 轮」「第 5 轮」两节（未合并前矩阵 #7 行不动）。
 - 矩阵 #7 行状态翻转要等 !288 合并；未合并前只写「已实现待合并」。
 
 ### 下一轮入口
 
-1. **#292**：给 `_save()` 两个静默出口补反馈（未登录 `_report('请先登录')` 与既有措辞同源；空标题走 `TextField.decoration.errorText`），各配反向探针。
+1. ~~#292~~ 已完成（第 4、5 轮）。下一个可自主推进的门槛是**轨道 A**：矩阵仍有 29 行证据列里出现 `zh-cloud-client`
+   （其中 #34/#35/#36/#37/#38/#41 那几行的 WEB 引用仍是**当前证据**而非「作废注记」，因为 docs !76 与 !79 是从 develop 各自拉出的**平行分支**、彼此不含对方的改写）。
 2. !288 合并后回写矩阵 #7：把「已实现待合并」换成已合并 SHA，并复评该行状态列。
 3. 嘀嗒《02-更好地完成习惯》的 #45 剩余面（打卡方式三档、多时间点提示、月度打卡表与补记）——需先在 Service 定 `reminderAt` 的重复语义。
 
@@ -316,3 +317,94 @@ $ flutter build web --release --dart-define=…        ✓ Built build/web
 - **不采纳 N-2（两处 helper 重复，提到 `test/support/`）**：目前正好 2 处、且都在同一功能目录，抽公共 helper 是未被要求的抽象；
   第三处出现时再提。
 - **不采纳 N-4（`_feedback` 不随重试清空）**：`_report` 覆盖旧值是 #288 已验收行为，本轮只换了调用方，改它会顺带改掉「已应用模板」那条的语义。
+
+---
+
+## 第 4 轮（#292：`_save()` 的两条静默早退改成可见反馈）— 提交 `ece22f2`
+
+**门槛**：未登录点「保存」不能再被静默吞掉；空标题点「保存」要在标题框自己下面给校验提示，且不触达写入。
+
+**红→绿**：`/tmp/r24-red.log`（两条新用例红在缺失项上）→ `/tmp/r24-green.log` 本文件 **5** 条全绿（3→5）。
+实现：未登录复用 `_report('请先登录')`（与 `_addFromTemplate` 逐字同源）；空标题走 `TextField.decoration.errorText`，
+由 `_maybeResolveDate()` 在下一次输入非空时清除。
+
+**反向探针 P1–P4**（脚本 `/tmp/r24_probes.py`，日志 `/tmp/r24-probes.log`）：四条都「True」——但该日志只留了布尔值，
+没留红用例名与失败断言（第 4 轮复核 NIT2 指出，第 5 轮已改脚本）。
+
+**门禁（最终字节一次跑完）**
+
+```
+$ cat /tmp/r24-gates-a.log        gate1 git diff --check exit=0 ｜ gate2 format "Formatted 2 files (0 changed)" exit=0 ｜ gate3 analyze "No issues found! (ran in 1.6s)"
+$ cat /tmp/r24-gates-b.log        gate4 golden "00:03 +9: All tests passed!" ｜ gate5 全量 "01:54 +725 ~26: All tests passed!"
+$ cat /tmp/r24-gate6-web.log      gate6 "✓ Built build/web"
+```
+
+计数对账：上一轮 `709 + 12 + 2 = 723` ⇒ 本轮 `723 + 2 = **725**`（本文件 `testWidgets(` 3→5），`~26` 不变。
+
+**复核**：`claude` CLI 本机不可用（`unrecognized_model`）⇒ 由本会话只读子代理替代审本轮 FR（复核手段的替换与理由，按目标口径记录）。
+**`VERDICT: FAIL`** —— 2 BLOCKER / 6 NIT，处置见下一节。两条 BLOCKER 我先各自回源码复核过才接受：
+`lib/state/repositories/task_repository.dart:92-94` 确实在 `:97` 的 `_db.transaction` **之前**就对空标题抛 `ArgumentError`。
+
+---
+
+## 第 5 轮（按第 4 轮复核的 `VERDICT: FAIL` 处置）
+
+**复核手段**：同第 4 轮 —— `claude` CLI 本机不可用（`unrecognized_model`），改由本会话只读子代理审本轮 FR，
+在 rsync 副本上跑探针（仓库字节未动，`git diff --quiet HEAD -- lib test specs` exit 0、两文件 sha256 与 `ece22f2` 一致）。
+
+### B1（采纳，且我先回源码复验过）：「不发任何写请求」那两条判据是假的
+
+复核员实测：摘掉 `_save()` 的空标题 `return` 后，`title.equals('')` 与 `orderedEquals(changesBeforeAttempt)` **仍然全绿**。
+我自己对着源码确认了机制 —— `TaskRepository.create` 在 `task_repository.dart:92-94` 就对空标题抛 `ArgumentError`，
+**早于** `:97` 的 `_db.transaction` ⇒ 空标题永远不落库、outbox 永远不留行，两条断言恒真。
+另核实：`TodoVisualFixture._seed` 从不插 `todoSyncChanges` ⇒ `changesBeforeAttempt` 实测 0 行，它等价于 `isEmpty`；
+我在用例里写的「夹具是 populated、本来就有 outbox 行」是**事实错误**（该文件 `:80-83` 那条 `isEmpty` 断言就是现成反证）。
+
+**修法（已落）**：判据搬到**调用边界** —— 新增 `_RecordingTaskRepository extends TaskRepository`（同文件已有
+`_BrokenDefaultsRepository extends TaskCaptureDefaultsRepository` 的先例），override `create` 只记录不写入，
+用例断言 `recorder.createCalls` 为空；两条恒真的 DB 断言与那段错注释一并删掉。
+
+### B2（采纳）：specs/036 三处措辞随第 4 轮修复失效、且第 4 轮没落盘
+
+`plan.md` 的「`_save()` 两个出口仍静默 return」与 `tasks.md` 的「两个静默出口仍未修」在 `ece22f2` 之后均为假 ⇒ 两处已改写；
+第 4、5 轮两节（含门禁原文、探针表、计数对账、复核手段替换）就是本条的处置。
+
+### 六条 NIT：采纳 5 条、1 条按事实改写
+
+- **NIT1 采纳**：`getRect(error).bottom <= 308.5` 结构上不可能失败 —— `SingleChildScrollView(reverse: true)` 底对齐，
+  字体越大顶部裁得越狠而 `bottom` 反而越小。改为整矩形必须落在 `Rect.fromLTRB(0,0,320,308)` 内（`topLeft`/`bottomRight` 各判一次）。
+- **NIT2 采纳**：`/tmp/r26_probes.py` 改成解析 `--reporter=json` 的 `print` 事件，判据从「文件退出码非 0」升级为
+  `红用例集合 == {期望那一条}`，并把**失败断言原文**写进日志（`/tmp/r26-probes.log`）。
+- **NIT3 采纳**：P2 与 P3 的失败签名逐字相同（`Expected: '请输入任务标题' / Actual: <null>`）—— 二者互不包含（各删一行都坏），
+  但把这条写进下表，免得读者以为 P3 被 P2 顺带咬住。
+- **NIT4 采纳**：用例注释里的 `_addFromTemplate 的 :84` 是父提交的行号、已漂移 ⇒ 去掉行号，改按符号描述。
+- **NIT5 采纳**：`请填写任务标题` → `请输入任务标题`。`请填写` 在 `lib/` 此前 0 次、`请输入` 16 次，
+  最近先例是同仓 `quadrant_rules_page.dart` 的「请输入规则名称」（同为 submit→trim→setState error→return 形态）。
+- **NIT6 采纳**：`repo == null` 提到标题校验之前 —— 未登录是阻断性前置条件，不该让人点两次才知道自己没登录。
+
+### 反向探针 P1–P5（第 5 轮重跑，脚本 `/tmp/r26_probes.py`，日志 `/tmp/r26-probes.log`）
+
+| 探针 | 摘掉什么 | 期望红的那一条 | 实测失败断言（原文摘要） |
+| ---- | -------- | -------------- | ------------------------ |
+| P1 | 未登录分支的 `_report('请先登录')` | 未登录那条 | `Expected: exactly one matching candidate / Actual: …Found 0 widgets with text containing 请先登录` |
+| P2 | 空标题分支的 `_titleError` 赋值 | 空标题那条 | `Expected: '请输入任务标题' / Actual: <null>` |
+| P3 | `decoration` 上的 `errorText` 通道 | 空标题那条 | 与 P2 逐字相同（见 NIT3） |
+| P4 | 输入时清除校验态的分支 | 空标题那条 | `Expected: null / Actual: '请输入任务标题'` |
+| **P5** | **空标题分支的 `return` 本身**（第 4 轮缺的那条） | 空标题那条 | `Expected: empty / Actual: ['']` ＝ `recorder.createCalls` |
+
+P5 就是 B1 要补的那一条：把 `createCalls` 断言搬到 `findsNothing` **之前**后，它才第一次真正咬红（`['']` 就是那次空标题调用）。
+五条都 `恢复字节一致=True`（`cmp -s` 对 `/tmp/r26_sheet.orig`）。
+
+### 门禁（第 5 轮最终字节，一次跑完）
+
+```
+$ cat /tmp/r26-gates-a.log   gate1 git diff --check exit=0
+                             gate2 format "Formatted 2 files (0 changed)" exit=0
+                             gate3 analyze "No issues found! (ran in 1.9s)"
+$ cat /tmp/r26-gates-b.log   gate4 golden  "00:03 +9: All tests passed!"
+                             gate5 全量    "01:55 +725 ~26: All tests passed!"
+                             gate6 web     "✓ Built build/web"
+```
+
+计数与第 4 轮相同（**725 / ~26**）：本轮只把恒真的 DB 判据换成调用边界判据，用例条数不变（本文件仍 5 条）。
+`dart format` 本轮在**显式两个文件**上原地跑过一次（`Formatted 2 files (1 changed)`），随后 `--set-exit-if-changed` 才 exit=0 —— 没有整仓格式化。

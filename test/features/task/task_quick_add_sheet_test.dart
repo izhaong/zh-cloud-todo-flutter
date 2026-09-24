@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
+import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
 import 'package:zh_cloud_todo_flutter/features/task/task_quick_add_sheet.dart';
 import 'package:zh_cloud_todo_flutter/state/providers.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_capture_defaults_repository.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/task_repository.dart';
 
 import '../../support/todo_visual_fixture.dart';
 
@@ -16,6 +18,37 @@ class _BrokenDefaultsRepository extends TaskCaptureDefaultsRepository {
   @override
   Future<TaskCaptureDefaults> get() async {
     throw Exception('本地数据库被占用');
+  }
+}
+
+/// 「这次点击没有发起写入」只能钉在**调用边界**上。
+///
+/// 查数据库（有没有空标题行、outbox 有没有多行）是假判据：`TaskRepository.create`
+/// 自己在进事务前就对空标题抛 `ArgumentError`，所以摘掉弹窗里的早退守卫后，
+/// 那两条断言依然绿 —— 它们咬不住 #292 要挡的那个回归。
+class _RecordingTaskRepository extends TaskRepository {
+  _RecordingTaskRepository(AppDatabase db) : super(db, SyncChangeQueue(db));
+
+  final List<String> createCalls = <String>[];
+
+  @override
+  Future<TodoTask> create({
+    required String listId,
+    required String title,
+    String? sectionId,
+    String? description,
+    int priority = 0,
+    DateTime? startAt,
+    DateTime? endAt,
+    DateTime? dueAt,
+    bool allDay = false,
+    String? timeZone,
+    bool fixedTimezone = false,
+    String? parentTaskId,
+    bool isPinned = false,
+  }) async {
+    createCalls.add(title);
+    throw StateError('被早退守卫挡住的点击不应走到 create');
   }
 }
 
@@ -235,7 +268,7 @@ void main() {
       sheetMessage('请先登录'),
       findsOneWidget,
       reason:
-          '措辞与同文件 _addFromTemplate 的 :84 同源；摘掉这句 _report 这条用例必须红（Issue #292）',
+          '措辞与同文件 _addFromTemplate 的未登录分支同源；摘掉这句 _report 这条用例必须红（Issue #292）',
     );
     expect(
       find.byType(TaskQuickAddSheet),
@@ -266,11 +299,14 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.view.resetViewInsets);
 
-    final fixture = await TodoVisualFixture.create();
+    late _RecordingTaskRepository recorder;
+    final fixture = await TodoVisualFixture.create(
+      overridesBuilder: (database) {
+        recorder = _RecordingTaskRepository(database);
+        return [taskRepositoryProvider.overrideWithValue(recorder)];
+      },
+    );
     addTearDown(fixture.dispose);
-    final changesBeforeAttempt = await fixture.database
-        .select(fixture.database.todoSyncChanges)
-        .get();
 
     await tester.pumpWidget(
       UncontrolledProviderScope(
@@ -301,8 +337,13 @@ void main() {
 
     expect(
       tester.widget<TextField>(find.byType(TextField)).decoration?.errorText,
-      '请填写任务标题',
+      '请输入任务标题',
       reason: '嘀嗒是「空标题不可提交」而不是「点了没反应」；提示归表单自己，不占反馈行',
+    );
+    expect(
+      recorder.createCalls,
+      isEmpty,
+      reason: '被早退守卫挡住的那次点击不该触达仓库；查数据库是假判据（见 _RecordingTaskRepository 注释）',
     );
     // `sheetMessage` 只证「在弹窗这棵子树里」，而 errorText 也在那棵树里 ⇒ 按文本判不出它落在哪一行。
     // 所以这里改成按 key 判「反馈行根本没出现」。
@@ -313,22 +354,16 @@ void main() {
     );
     expect(find.byType(TaskQuickAddSheet), findsOneWidget);
     expect(tester.takeException(), isNull);
-    final error = find.text('请填写任务标题');
+    final error = find.text('请输入任务标题');
+    // 反向滚动视图是底对齐的：字体越大，顶部被裁得越狠，而 bottom 反而更小 ⇒ 只量 bottom 恒真。
+    // 必须整矩形钉在「键盘以上」才算看得见。
+    const visibleAboveKeyboard = Rect.fromLTRB(0, 0, 320, 568 - 260);
+    final errorRect = tester.getRect(error);
     expect(
-      tester.getRect(error).bottom,
-      lessThanOrEqualTo(568 - 260 + 0.5),
-      reason: '多出来的这行要看得见，被键盘盖住等于没提示',
-    );
-    // 夹具是 populated（本来就有任务和 outbox 行）⇒ 只能查「这次有没有多出空标题行 / 多出一条变更」，
-    // 不能整表 isEmpty，否则永远红。
-    final emptyTitles = await (fixture.database.select(
-      fixture.database.todoTasks,
-    )..where((row) => row.title.equals(''))).get();
-    expect(emptyTitles, isEmpty, reason: '空标题不能落一条空任务');
-    expect(
-      await fixture.database.select(fixture.database.todoSyncChanges).get(),
-      orderedEquals(changesBeforeAttempt),
-      reason: '被早退守卫挡住的那次点击不能登记任何 outbox 变更',
+      visibleAboveKeyboard.contains(errorRect.topLeft) &&
+          visibleAboveKeyboard.contains(errorRect.bottomRight),
+      isTrue,
+      reason: '多出来的这行要整行看得见，被键盘或视口上沿裁掉等于没提示（实测 $errorRect）',
     );
 
     await tester.enterText(find.byType(TextField), '补上标题');
