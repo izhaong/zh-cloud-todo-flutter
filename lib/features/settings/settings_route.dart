@@ -11,6 +11,7 @@ import '../achievement/achievement_page.dart';
 import '../account/account_security_page.dart';
 import '../calendar_sub/calendar_subscription_page.dart';
 import '../import/task_import_page.dart';
+import '../home/keyboard_shortcuts_dialog.dart';
 import '../native/native_entry_page.dart';
 import '../shell/app_theme_controller.dart';
 
@@ -121,6 +122,13 @@ class SettingsRoute extends ConsumerWidget {
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const NativeEntryPage()),
                   ),
+                ),
+                _Tile(
+                  icon: Icons.keyboard_outlined,
+                  title: '键盘快捷键',
+                  subtitle: '查看当前可用的组合键（?）',
+                  colors: colors,
+                  onTap: () => showKeyboardShortcutsDialog(context),
                 ),
               ],
             ),
