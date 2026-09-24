@@ -47,6 +47,10 @@ class _HabitMonthSheetState extends ConsumerState<HabitMonthSheet> {
   bool _loading = true;
   String? _error;
 
+  /// 连点两格会先后发两次 `stats`：只有最后一次的回包能写进 state，
+  /// 先发后到的旧包直接丢弃（否则旧次数会盖掉刚补记回来的新次数）。
+  int _loadSeq = 0;
+
   @override
   void initState() {
     super.initState();
@@ -55,6 +59,7 @@ class _HabitMonthSheetState extends ConsumerState<HabitMonthSheet> {
 
   Future<void> _load() async {
     final repo = ref.read(habitRepositoryProvider);
+    final seq = ++_loadSeq;
     try {
       final stats = await repo.stats(widget.habit.id, period: 'MONTH');
       final counts = <String, int>{};
@@ -67,14 +72,14 @@ class _HabitMonthSheetState extends ConsumerState<HabitMonthSheet> {
           counts[date] = (entry['count'] as num?)?.toInt() ?? 0;
         }
       }
-      if (!mounted) return;
+      if (!mounted || seq != _loadSeq) return;
       setState(() {
         _counts = counts;
         _loading = false;
         _error = null;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || seq != _loadSeq) return;
       setState(() {
         _loading = false;
         _error = '当月打卡情况加载失败：$e';
@@ -93,6 +98,9 @@ class _HabitMonthSheetState extends ConsumerState<HabitMonthSheet> {
       return;
     }
     await _load();
+    if (!mounted) return;
+    // 补记会改变「打卡概览」三张卡的累计值，所以刷的是概览 provider；
+    // 月表自己的次数走上面那次 _load，两者不是同一条通道。
     ref.invalidate(habitStatsProvider);
   }
 
@@ -153,10 +161,14 @@ class _HabitMonthSheetState extends ConsumerState<HabitMonthSheet> {
                               ? colors.primaryContainer
                               : colors.surfaceContainerHighest,
                           child: Center(
-                            child: Text(
-                              _countOf(day) > 0
-                                  ? '${_countOf(day)}'
-                                  : '${day.day}',
+                            // 这一格的 Semantics(label:) 会把子 Text 并进同一个节点
+                            // （实测 label = 「N 日，打卡 M 次\nM」），读屏会重复播报。
+                            child: ExcludeSemantics(
+                              child: Text(
+                                _countOf(day) > 0
+                                    ? '${_countOf(day)}'
+                                    : '${day.day}',
+                              ),
                             ),
                           ),
                         ),
