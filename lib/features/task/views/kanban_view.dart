@@ -19,8 +19,23 @@ import '../task_view_mutation_feedback.dart';
 /// 卡片：title + due 摘要 + priority 标签 + 子任务进度
 /// 点击进 TaskDetailPage。
 ///
-/// 注：拖拽改 priority 暂不实现（commit c2 摘要注明），保留在 TaskDetailPage
-/// 内通过编辑面板调整。
+/// 跨列拖拽**已实现**（`LongPressDraggable` + `DragTarget`，写操作走 `onTaskMove`，
+/// 由 `tasks_by_list_page.dart:380` 落到共享任务 mutation），
+/// 对应嘀嗒《01-任务/07-不同的视图查看任务/02-看板视图：分类管理任务.md》`:64`
+/// 「你可以点击任务直接拖动到其他分组中」。
+///
+/// 与本文件曾有的一处矛盾已纠正：旧注释写着「拖拽改 priority 暂不实现」，与上面的代码相反。
+/// 仍然缺的是**列定义该绑到清单分组**：同页 `:99`-`:101` 说分组可按主题/按进度自定义、
+/// `:115` 说入口在清单的「...」-「管理分组」，而 develop 上「管理分组」的重命名/新建/
+/// 删除/重排已经存在（`tasks_by_list_page.dart:1829`-`:1862`：`todo-section-create` 这个
+/// Key 下的 rename/up/down/delete 分支，操作对象就是 `TodoTaskSection`）——
+/// 只是本视图的列集合不读 `TodoTaskSection`，只认构造参数 `orderedColumnIds` 那一套固定列 id。
+/// 默认值 `['todo','doing','urgent','archive']` 语义是 priority 0/1/2/3；调用方
+/// `tasks_by_list_page.dart:338` 传的是 `boardPreference.orderedColumnIds`，
+/// 用户能重排这四列的顺序，但 `board_preference_repository.dart:58`/`:226` 用
+/// `BoardViewPreference.defaultColumnIds.contains` 把 id 词汇锁死在这四个 ⇒ 建不出新列。
+/// ⇒ 这是纯客户端接线缺口，不需要改契约。
+/// 逐面判定与证据见 `specs/044-kanban-groups/`。
 class KanbanView extends ConsumerWidget {
   const KanbanView({
     super.key,
