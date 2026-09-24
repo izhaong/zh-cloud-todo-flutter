@@ -6,7 +6,7 @@ import 'package:zh_cloud_todo_flutter/core/api/efficiency_api.dart';
 import 'package:zh_cloud_todo_flutter/features/countdown/countdown_page.dart';
 import 'package:zh_cloud_todo_flutter/state/efficiency_providers.dart';
 
-/// 嘀嗒《02-功能指南/06-倒数纪念日/02-打造专属纪念页.md:97》：「点击中间的天数，就能在天、年、周三种单位间快速切换」。
+/// 嘀嗒《02-功能指南/06-倒数纪念日/02-打造专属纪念页.md:97》：「点击中间的天数，就能在**天、年、周**三种单位间快速切换」。
 /// 桌面那一档（`:106`）是「点击倒数纪念日卡片上的天数」—— 本端只有列表卡片、没有详情页，
 /// 所以按 `:106` 的落点做，详情页那一档另记欠账。
 ///
