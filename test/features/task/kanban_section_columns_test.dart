@@ -62,6 +62,9 @@ void main() {
     void Function(String, String?)? onSectionMove,
     void Function(int, bool)? onPriorityMove,
     void Function(List<String>)? onSectionOrderChanged,
+    void Function(TodoTaskSection)? onSectionRename,
+    VoidCallback? onSectionCreate,
+    void Function(TodoTaskSection)? onSectionDelete,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -81,6 +84,15 @@ void main() {
             onSectionOrderChanged: onSectionOrderChanged == null
                 ? null
                 : (ordered) async => onSectionOrderChanged(ordered),
+            onSectionRename: onSectionRename == null
+                ? null
+                : (section) => onSectionRename(section),
+            onSectionCreate: onSectionCreate == null
+                ? null
+                : () => onSectionCreate(),
+            onSectionDelete: onSectionDelete == null
+                ? null
+                : (section) => onSectionDelete(section),
           ),
         ),
       ),
@@ -104,6 +116,26 @@ void main() {
     await tester.pump();
     await gesture.up();
     await tester.pumpAndSettle();
+  }
+
+  /// 打开某一列的「···」菜单。
+  Future<void> openColumnMenu(WidgetTester tester, Key columnKey) async {
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(columnKey),
+        matching: find.byType(PopupMenuButton<String>),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  PopupMenuItem<String> menuItem(WidgetTester tester, String label) {
+    return tester.widget<PopupMenuItem<String>>(
+      find.ancestor(
+        of: find.text(label),
+        matching: find.byType(PopupMenuItem<String>),
+      ),
+    );
   }
 
   testWidgets('清单有分组时看板按分组开列，列名取分组名', (tester) async {
@@ -467,6 +499,172 @@ void main() {
 
     expect(repository.capturedSectionId, 'sec-en');
     expect(repository.capturedListId, 'list-inbox');
+  });
+
+  testWidgets('分组列头「···」可就地重命名/新建/删除分组（`:108`）', (tester) async {
+    TodoTaskSection? renamed;
+    TodoTaskSection? deleted;
+    var created = 0;
+    await pump(
+      tester,
+      tasks: [task('a', sectionId: 'sec-en')],
+      sections: sections,
+      onSectionRename: (section) => renamed = section,
+      onSectionCreate: () => created++,
+      onSectionDelete: (section) => deleted = section,
+    );
+
+    await openColumnMenu(tester, const ValueKey('col-sec-en'));
+    expect(menuItem(tester, '重命名').enabled, isTrue);
+    expect(menuItem(tester, '新建分组').enabled, isTrue);
+    expect(menuItem(tester, '删除').enabled, isTrue);
+
+    await tester.tap(find.text('重命名'));
+    await tester.pumpAndSettle();
+    await openColumnMenu(tester, const ValueKey('col-sec-en'));
+    await tester.tap(find.text('新建分组'));
+    await tester.pumpAndSettle();
+    await openColumnMenu(tester, const ValueKey('col-sec-en'));
+    await tester.tap(find.text('删除'));
+    await tester.pumpAndSettle();
+
+    expect(renamed?.id, 'sec-en');
+    expect(created, 1);
+    expect(deleted?.id, 'sec-en');
+  });
+
+  testWidgets('未分组列不能改名/删除，但能新建分组', (tester) async {
+    await pump(
+      tester,
+      tasks: [task('a')],
+      sections: sections,
+      onSectionRename: (_) {},
+      onSectionCreate: () {},
+      onSectionDelete: (_) {},
+    );
+
+    await openColumnMenu(tester, const ValueKey('col-unsectioned'));
+
+    expect(menuItem(tester, '重命名').enabled, isFalse);
+    expect(menuItem(tester, '删除').enabled, isFalse);
+    expect(menuItem(tester, '新建分组').enabled, isTrue);
+  });
+
+  testWidgets('没有分组时列头菜单不含分组管理三项（正向对照）', (tester) async {
+    await pump(
+      tester,
+      tasks: [task('a')],
+      onSectionRename: (_) {},
+      onSectionCreate: () {},
+      onSectionDelete: (_) {},
+    );
+
+    await openColumnMenu(tester, const ValueKey('col-todo'));
+
+    expect(find.text('重命名'), findsNothing);
+    expect(find.text('新建分组'), findsNothing);
+    expect(find.text('删除'), findsNothing);
+    expect(find.text('左移未开始'), findsOneWidget);
+    expect(find.text('折叠未开始'), findsOneWidget);
+    expect(find.byTooltip('调整未开始列'), findsOneWidget);
+  });
+
+  testWidgets('分组列的「···」tooltip 照抄清单侧「管理分组 <名称>」', (tester) async {
+    await pump(
+      tester,
+      tasks: [task('a', sectionId: 'sec-en')],
+      sections: sections,
+      onSectionRename: (_) {},
+      onSectionCreate: () {},
+      onSectionDelete: (_) {},
+    );
+
+    expect(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('col-sec-en')),
+            matching: find.byTooltip('管理分组 英语'),
+          )
+          .first,
+      findsOneWidget,
+    );
+    expect(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('col-unsectioned')),
+            matching: find.byTooltip('管理分组 未分组'),
+          )
+          .first,
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('320px + 1.3 倍字号下分组管理菜单不溢出', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: const TextScaler.linear(1.3)),
+          child: child!,
+        ),
+        home: Scaffold(
+          body: KanbanView(
+            tasks: [task('a', sectionId: 'sec-en')],
+            listId: 'list-inbox',
+            sections: [
+              section('sec-en', '全年英语语法与词汇复习计划', 0),
+              section('sec-pol', '政治', 1),
+            ],
+            onTaskSectionMove: (_, _) async {},
+            onSectionRename: (_) {},
+            onSectionCreate: () {},
+            onSectionDelete: (_) {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('col-sec-en')),
+            matching: find.byType(PopupMenuButton<String>),
+          )
+          .first,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('重命名'), findsOneWidget);
+    expect(find.text('新建分组'), findsOneWidget);
+    expect(find.text('删除'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('视图不自己改名/删列：点菜单项只交回调，列标题与列集合不变', (tester) async {
+    await pump(
+      tester,
+      tasks: [task('a', sectionId: 'sec-en')],
+      sections: sections,
+      onSectionRename: (_) {},
+      onSectionCreate: () {},
+      onSectionDelete: (_) {},
+    );
+
+    await openColumnMenu(tester, const ValueKey('col-sec-en'));
+    await tester.tap(find.text('删除'));
+    await tester.pumpAndSettle();
+    await openColumnMenu(tester, const ValueKey('col-sec-en'));
+    await tester.tap(find.text('重命名'));
+    await tester.pumpAndSettle();
+
+    // 英语列既没被删掉也没换名（数据只由调用方的仓储流回来）。
+    expect(find.text('英语'), findsOneWidget);
+    expect(find.text('政治'), findsOneWidget);
+    expect(find.text('未分组'), findsOneWidget);
   });
 }
 

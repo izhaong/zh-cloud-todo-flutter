@@ -26,10 +26,9 @@ import '../task_view_mutation_feedback.dart';
 ///
 /// 卡片：title + due 摘要 + priority 标签 + 子任务进度；点击进 TaskDetailPage。
 ///
-/// 仍然缺的两件（逐面判定与证据见 `specs/044-kanban-groups/`）：
-///   - 看板列头没有「重命名 / 新建 / 删除」分组入口：同页 `:108`「点击「分组」右上角的「···」」、
-///     `:115`「点击右上角「...」-「管理分组」」。清单侧那套 CRUD 已经能用
-///     （`tasks_by_list_page.dart` 里 `todo-section-create` 那一组 Key），只是没挂到看板列头。
+/// 仍然缺的（逐面判定与证据见 `specs/044-kanban-groups/`）：
+///   - 团队看板三面还没判：同页 `:175` 右键任务「分配给」、`:188` 任务评论、`:198` 任务动态 ——
+///     从看板入口能不能走到，本文件没给结论（列头「···」→ 重命名/新建分组/删除 已在 Issue #315 那轮补上）。
 ///   - 分组模式没有「归档」列，也不提供列折叠：折叠状态存不进偏好
 ///     （`board_preference_repository.dart` 用 `defaultColumnIds.contains` 把列 id 词汇锁在固定四列）
 ///     ⇒ 这一模式不给 `onColumnCollapsedChanged`，菜单里的「折叠<列名>」与 develop 一样灰显。
@@ -52,6 +51,9 @@ class KanbanView extends ConsumerWidget {
     this.sections = const [],
     this.onTaskSectionMove,
     this.onSectionOrderChanged,
+    this.onSectionRename,
+    this.onSectionCreate,
+    this.onSectionDelete,
   });
 
   /// 渲染用的任务列表（已应用 list/filter 的客户端过滤结果）。
@@ -77,9 +79,18 @@ class KanbanView extends ConsumerWidget {
   final Future<void> Function(List<String> orderedSectionIds)?
   onSectionOrderChanged;
 
+  /// 列头「···」里的「重命名 / 新建分组 / 删除」（嘀嗒同页 `:108`
+  /// 「点击「分组」右上角的「···」，你可以对分组进行重命名、新建和删除等操作。」）。
+  /// 三项都只把**这一列对应的分组**交给调用方，对话框与写库都在调用方那边；
+  /// 「新建分组」是清单级动作，所以「未分组」哨兵列也给它，改名/删除不给。
+  final void Function(TodoTaskSection section)? onSectionRename;
+  final VoidCallback? onSectionCreate;
+  final void Function(TodoTaskSection section)? onSectionDelete;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sectionMode = sections.isNotEmpty;
+    final sectionById = {for (final section in sections) section.id: section};
     final columns = sectionMode
         ? _sectionColumns(sections, tasks)
         : _priorityColumns(tasks);
@@ -139,6 +150,16 @@ class KanbanView extends ConsumerWidget {
                           )
                           ? () => _moveColumn(ordered, index, 1)
                           : null,
+                      sectionsManaged: sectionMode,
+                      onRenameSection: _sectionCallback(
+                        sectionById[ordered[index].sectionId],
+                        onSectionRename,
+                      ),
+                      onCreateSection: sectionMode ? onSectionCreate : null,
+                      onDeleteSection: _sectionCallback(
+                        sectionById[ordered[index].sectionId],
+                        onSectionDelete,
+                      ),
                       onCardTap: (t) => _openDetail(context, t),
                       onCardMove: !sectionMode
                           ? (onTaskMove == null
@@ -298,6 +319,15 @@ class KanbanView extends ConsumerWidget {
         ordered[target].sectionId != null;
   }
 
+  /// 「未分组」哨兵列在 `sectionById` 里查不到 ⇒ 返回 null，菜单里那一项就灰显。
+  static VoidCallback? _sectionCallback<T>(
+    T? section,
+    void Function(T)? callback,
+  ) {
+    if (section == null || callback == null) return null;
+    return () => callback(section);
+  }
+
   Future<void> _moveColumn(
     List<_KanbanColumnData> columns,
     int index,
@@ -425,6 +455,10 @@ class _KanbanColumn extends StatelessWidget {
     this.onTasksReordered,
     this.onCardMove,
     this.onAdd,
+    this.sectionsManaged = false,
+    this.onRenameSection,
+    this.onCreateSection,
+    this.onDeleteSection,
   });
 
   final _KanbanColumnData data;
@@ -436,6 +470,12 @@ class _KanbanColumn extends StatelessWidget {
   final Future<void> Function(List<String> taskIds)? onTasksReordered;
   final Future<void> Function(TodoTask task)? onCardMove;
   final VoidCallback? onAdd;
+
+  /// 这一列是不是「按分组开列」那套分组方式；决定列头「···」要不要列分组管理三项。
+  final bool sectionsManaged;
+  final VoidCallback? onRenameSection;
+  final VoidCallback? onCreateSection;
+  final VoidCallback? onDeleteSection;
 
   @override
   Widget build(BuildContext context) {
@@ -508,7 +548,11 @@ class _KanbanColumn extends StatelessWidget {
               ),
               _ColumnCount(count: data.tasks.length, color: data.color),
               PopupMenuButton<String>(
-                tooltip: '调整${data.title}列',
+                // 分组模式下这一枚「···」管的是分组本身，tooltip 照抄清单分组条那枚
+                // （`todo-section-menu-*` 的 `管理分组 <名称>`）；固定四列仍是调列。
+                tooltip: sectionsManaged
+                    ? '管理分组 ${data.title}'
+                    : '调整${data.title}列',
                 itemBuilder: (_) => [
                   PopupMenuItem(
                     value: 'left',
@@ -525,11 +569,37 @@ class _KanbanColumn extends StatelessWidget {
                     enabled: onCollapsedChanged != null,
                     child: Text('折叠${data.title}'),
                   ),
+                  // 分组管理三项的文案照抄清单分组条那套菜单（`todo-section-menu-*`：
+                  // 重命名 / 删除；新建那枚 chip 的 tooltip 是「新建分组」），不另起同义词。
+                  if (sectionsManaged)
+                    PopupMenuItem(
+                      value: 'rename-section',
+                      enabled: onRenameSection != null,
+                      child: const Text('重命名'),
+                    ),
+                  if (sectionsManaged)
+                    PopupMenuItem(
+                      value: 'create-section',
+                      enabled: onCreateSection != null,
+                      child: const Text('新建分组'),
+                    ),
+                  if (sectionsManaged)
+                    PopupMenuItem(
+                      value: 'delete-section',
+                      enabled: onDeleteSection != null,
+                      child: Text(
+                        '删除',
+                        style: TextStyle(color: colors.destructive),
+                      ),
+                    ),
                 ],
                 onSelected: (value) {
                   if (value == 'left') onMoveLeft?.call();
                   if (value == 'right') onMoveRight?.call();
                   if (value == 'collapse') onCollapsedChanged?.call(true);
+                  if (value == 'rename-section') onRenameSection?.call();
+                  if (value == 'create-section') onCreateSection?.call();
+                  if (value == 'delete-section') onDeleteSection?.call();
                 },
               ),
               if (onAdd != null)

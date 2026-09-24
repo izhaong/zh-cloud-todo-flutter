@@ -357,6 +357,9 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
               sectionId: sectionId,
             );
           },
+          onSectionRename: _renameTaskSection,
+          onSectionCreate: listId == null ? null : _createTaskSection,
+          onSectionDelete: _deleteTaskSection,
           onSectionOrderChanged: listId == null
               ? null
               : (ordered) async {
