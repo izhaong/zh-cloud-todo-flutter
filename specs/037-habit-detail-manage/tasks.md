@@ -208,6 +208,11 @@ NEW_SHEET_320_1_3 maxScrollExtent=0.0 pixels=0.0 viewport=559.6
 所以这六道门禁检验的是"新用例本身不与任何既有行为冲突"，不是"新行为可用"。
 格式与门禁顺序照惯例：先 commit 再跑门禁，`pubspec.lock` 未被顺手改（门禁后工作区只剩本轮的 markdown）。
 
+复核 R1 修完后在 `5da193d` 上把六道门禁**整套重跑一遍**（日志 `/tmp/g63/gates2.out`）：
+G1 `rc=0`、G2 `0 changed`、G3 `No issues found! (ran in 2.0s)`、G4 `00:05 +9: All tests passed!`（基线仍未重录）、
+G5 `02:23 +906 ~26: All tests passed!`、G6 `✓ Built build/web`，跑完工作区 0 项。
+（本轮之后只剩下面这段 markdown 追加，它不参与这六道判据。）
+
 ## 复核（PR !346 第 1 轮）：`VERDICT: FAIL`
 
 复核员跑在自建 detached 副本上（未动本 worktree），三条必修全部回源复验后**都成立**，逐条处置：
