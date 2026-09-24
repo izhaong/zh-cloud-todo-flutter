@@ -94,69 +94,63 @@ void main() {
     );
   });
 
-  testWidgets(
-    '当月每一天都占一格：有记录的按后端给的 ISO 串对上次数，没记录的也在',
-    (tester) async {
-      await pumpHabit(tester);
-      await openMonthSheet(tester);
+  testWidgets('当月每一天都占一格：有记录的按后端给的 ISO 串对上次数，没记录的也在', (tester) async {
+    await pumpHabit(tester);
+    await openMonthSheet(tester);
 
-      // 精确到当月天数（不是「至少 28」）：多排、少排都要红。
-      expect(monthCells(), findsNWidgets(monthDayCount));
+    // 精确到当月天数（不是「至少 28」）：多排、少排都要红。
+    expect(monthCells(), findsNWidgets(monthDayCount));
 
-      // 后端回的是 yyyy-MM-dd ⇒ 客户端 key 必须与它同形，否则次数落不到格子上。
-      expect(
-        find.descendant(
-          of: find.byKey(ValueKey(cellKey(dayA))),
-          matching: find.text('2'),
-        ),
-        findsOneWidget,
-        reason: 'dailyCounts 的日期串解析不上就显示不出次数',
-      );
-      expect(
-        find.descendant(
-          of: find.byKey(ValueKey(cellKey(dayB))),
-          matching: find.text('1'),
-        ),
-        findsOneWidget,
-      );
-      // 没记录的日子也占位并明确说未打卡（当月末号一定没有记录）。
-      expect(find.byKey(ValueKey(cellKey(lastDay))), findsOneWidget);
-      expect(
-        find.descendant(
-          of: find.byKey(ValueKey(cellKey(lastDay))),
-          matching: find.text('${lastDay.day}'),
-        ),
-        findsOneWidget,
-        reason: '空格子显示的是几号，不是次数',
-      );
-    },
-  );
+    // 后端回的是 yyyy-MM-dd ⇒ 客户端 key 必须与它同形，否则次数落不到格子上。
+    expect(
+      find.descendant(
+        of: find.byKey(ValueKey(cellKey(dayA))),
+        matching: find.text('2'),
+      ),
+      findsOneWidget,
+      reason: 'dailyCounts 的日期串解析不上就显示不出次数',
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(ValueKey(cellKey(dayB))),
+        matching: find.text('1'),
+      ),
+      findsOneWidget,
+    );
+    // 没记录的日子也占位并明确说未打卡（当月末号一定没有记录）。
+    expect(find.byKey(ValueKey(cellKey(lastDay))), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(ValueKey(cellKey(lastDay))),
+        matching: find.text('${lastDay.day}'),
+      ),
+      findsOneWidget,
+      reason: '空格子显示的是几号，不是次数',
+    );
+  });
 
-  testWidgets(
-    '点某一格就是补记该日：checkIn 收到那一天的 date，并刷打卡概览',
-    (tester) async {
-      await pumpHabit(tester);
-      await openMonthSheet(tester);
-      final overviewBefore = repo.overviewStatsCalls;
+  testWidgets('点某一格就是补记该日：checkIn 收到那一天的 date，并刷打卡概览', (tester) async {
+    await pumpHabit(tester);
+    await openMonthSheet(tester);
+    final overviewBefore = repo.overviewStatsCalls;
 
-      await tester.tap(find.byKey(ValueKey(cellKey(dayB))));
-      await tester.pumpAndSettle();
+    await tester.tap(find.byKey(ValueKey(cellKey(dayB))));
+    await tester.pumpAndSettle();
 
-      expect(repo.lastCheckInHabitId, 7);
-      expect(
-        repo.lastCheckInDate,
-        isNotNull,
-        reason: '补记必须把日期传下去（develop 上唯一调用方从不传）',
-      );
-      expect(iso(repo.lastCheckInDate!), iso(dayB));
-      expect(repo.statsCalls, greaterThan(1), reason: '补记后要重新拉当月数据');
-      expect(
-        repo.overviewStatsCalls,
-        greaterThan(overviewBefore),
-        reason: '补记会改变累计值 ⇒ 刷的是「打卡概览」那条通道，不是月表自己的',
-      );
-    },
-  );
+    expect(repo.lastCheckInHabitId, 7);
+    expect(
+      repo.lastCheckInDate,
+      isNotNull,
+      reason: '补记必须把日期传下去（develop 上唯一调用方从不传）',
+    );
+    expect(iso(repo.lastCheckInDate!), iso(dayB));
+    expect(repo.statsCalls, greaterThan(1), reason: '补记后要重新拉当月数据');
+    expect(
+      repo.overviewStatsCalls,
+      greaterThan(overviewBefore),
+      reason: '补记会改变累计值 ⇒ 刷的是「打卡概览」那条通道，不是月表自己的',
+    );
+  });
 
   testWidgets('补记失败：已渲染的格子不丢，并在表内给可见错误', (tester) async {
     repo.failCheckIn = true;
@@ -179,9 +173,7 @@ void main() {
     expect(find.textContaining('补记失败'), findsOneWidget);
   });
 
-  testWidgets('每格是读屏可够到的按钮，announce 出几号与当日次数', (
-    tester,
-  ) async {
+  testWidgets('每格是读屏可够到的按钮，announce 出几号与当日次数', (tester) async {
     final handle = tester.ensureSemantics();
     try {
       await pumpHabit(tester);
@@ -210,9 +202,7 @@ void main() {
     await pumpHabit(tester, textScale: 1.3);
     await openMonthSheet(tester);
 
-    final scaler = MediaQuery.textScalerOf(
-      tester.element(find.text('月度打卡表')),
-    );
+    final scaler = MediaQuery.textScalerOf(tester.element(find.text('月度打卡表')));
     expect(
       scaler.scale(10),
       closeTo(13, 0.001),
@@ -250,11 +240,7 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(ValueKey(cellKey(dayB))));
     await tester.pump();
-    expect(
-      repo.statsCalls,
-      3,
-      reason: '两次补记各触发一次刷新且都还挂着，竞态才真的成立',
-    );
+    expect(repo.statsCalls, 3, reason: '两次补记各触发一次刷新且都还挂着，竞态才真的成立');
 
     repo.gates[1].complete(); // 后发的先回
     await tester.pump();
