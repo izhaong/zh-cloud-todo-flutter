@@ -5,7 +5,8 @@ import '../../core/api/efficiency_api.dart';
 import '../../state/efficiency_providers.dart';
 
 /// 嘀嗒《02-功能指南/06-倒数纪念日/02-打造专属纪念页.md:97》：
-/// 点天数就能在**天、年、周**三种单位间快速切换，循环顺序即源页列举顺序。
+/// 「点击中间的天数，就能在**天、年、周**三种单位间快速切换」。
+/// 源页只给了单位集合，没规定切换顺序；本端的循环顺序（天→年→周→天）是实现选择，见 spec 取舍。
 enum TodoCountdownUnit {
   day('天'),
   year('年'),
