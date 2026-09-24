@@ -233,8 +233,8 @@ class _NoteDraft {
 /// 光标折叠时插入成对标记并把光标落在中间，让「先点样式再打字」也成立。
 TextEditingValue noteWrapWithMarker(TextEditingValue value, String marker) {
   final selection = value.selection;
-  if (!selection.isValid || selection.isCollapsed) {
-    if (!selection.isValid) return value;
+  if (!selection.isValid) return value;
+  if (selection.isCollapsed) {
     final at = selection.start;
     return TextEditingValue(
       text: value.text.replaceRange(at, at, marker + marker),
@@ -243,12 +243,26 @@ TextEditingValue noteWrapWithMarker(TextEditingValue value, String marker) {
   }
   final start = selection.start;
   final end = selection.end;
+  final selected = value.text.substring(start, end);
+  // 取消：选中内容本身已被同一对标记包住时，剥掉这一对（嘀嗒《03-编辑与排版.md:56》
+  // 「也可以取消不需要的格式」）。只剥最外一层，不递归。
+  if (selected.length >= marker.length * 2 &&
+      selected.startsWith(marker) &&
+      selected.endsWith(marker)) {
+    final inner = selected.substring(
+      marker.length,
+      selected.length - marker.length,
+    );
+    return TextEditingValue(
+      text: value.text.replaceRange(start, end, inner),
+      selection: TextSelection(
+        baseOffset: start,
+        extentOffset: start + inner.length,
+      ),
+    );
+  }
   return TextEditingValue(
-    text: value.text.replaceRange(
-      start,
-      end,
-      marker + value.text.substring(start, end) + marker,
-    ),
+    text: value.text.replaceRange(start, end, marker + selected + marker),
     selection: TextSelection(
       baseOffset: start,
       extentOffset: end + marker.length * 2,

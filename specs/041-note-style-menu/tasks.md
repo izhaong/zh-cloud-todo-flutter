@@ -1,6 +1,8 @@
 # 041 任务清单
 
 ## 已证实
+- [x] FR-006 取消样式：2 条新用例（成对包围→剥一层并退回 (0,4)；只选到一半→不误剥），`flutter test test/features/note/note_style_menu_test.dart` ⇒ `00:01 +7: All tests passed!`
+- [x] 第 38 轮第 1 轮只读复核 **VERDICT: PASS**；其 NIT 全部收下：FR-005 措辞收紧、`note_page.dart` 里那条排版畸形的引用改写、以及「取消样式曾被错误排除」（复核员引《03-编辑与排版.md:56》），改成 FR-006 实现而不是记成欠账
 - [x] FR-001..FR-005 的 5 条用例存在且**先红后绿**：红 = `00:01 +0 -5: Some tests failed.`
       （`Expected: exactly one matching candidate / Actual: ... Found 0 widgets with widget matching predicate`，
       即 tooltip「加粗」不存在）；实现后 `00:01 +5: All tests passed!`

@@ -75,8 +75,42 @@ void main() {
     expect(_text(title), '会议纪要', reason: '嘀嗒那一节只说「给内容设置样式」');
   });
 
+  testWidgets('再点同一个样式是取消（嘀嗒《03-编辑与排版.md:56》「也可以取消不需要的格式」）', (tester) async {
+    await _openEditor(tester);
+    final content = find.byKey(const Key('todo-note-content'));
+    await tester.enterText(content, '截止时间');
+    await tester.pump();
+    await _selectFromStart(tester, content, skip: 0, take: 4);
+    await tester.tap(find.byTooltip('加粗'));
+    await tester.pump();
+    expect(_text(content), '**截止时间**');
+
+    // 选区此时含标记（0,8）—— 再点一次应剥掉最外一层，并把选区退回被包住的正文
+    await _selectFromStart(tester, content, skip: 0, take: 8);
+    await tester.tap(find.byTooltip('加粗'));
+    await tester.pump();
+    expect(_text(content), '截止时间');
+    expect(_range(content), const _Range(0, 4));
+  });
+
+  testWidgets('只选到一半标记时不误剥（取消只在成对包围时发生）', (tester) async {
+    await _openEditor(tester);
+    final content = find.byKey(const Key('todo-note-content'));
+    await tester.enterText(content, '**截止时间**');
+    await tester.pump();
+    await _selectFromStart(tester, content, skip: 2, take: 4);
+
+    await tester.tap(find.byTooltip('加粗'));
+    await tester.pump();
+    // 选区 (2,6) 是纯正文「截止时间」，前后各留一层标记不动 ⇒ 只做包裹、不误剥
+    expect(_text(content), '****截止时间****');
+  });
+
   testWidgets('320px + 1.3 倍字号下样式菜单不溢出', (tester) async {
     await _openEditor(tester, width: 320, textScale: 1.3);
+    // 只证「窄屏 + 大字号下两个按钮仍在树里、无异常」；不宣称「证明不会溢出」：
+    // Dialog 左右各留 40px 内缩、AlertDialog 的非滚动 content 被 Flexible 夹住，
+    // 所以宽度由框架收敛，测不到溢出。
     expect(tester.takeException(), isNull);
     expect(find.byTooltip('加粗'), findsOneWidget);
     expect(find.byTooltip('高亮'), findsOneWidget);
