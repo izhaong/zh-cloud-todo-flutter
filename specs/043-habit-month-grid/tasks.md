@@ -6,12 +6,12 @@
 ## 门禁（最终状态一次跑完，日志 `/tmp/r43_gates.log`）
 | 门禁 | 结果 |
 | --- | --- |
-| 1 `git diff --check origin/develop...HEAD` |  |
-| 2 `dart format --output=none --set-exit-if-changed <本轮显式文件>` |  |
-| 3 `flutter analyze` |  |
-| 4 `flutter test --tags golden` |  |
-| 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` |  |
-| 6 `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` |  |
+| 1 `git diff --check origin/develop...HEAD` | `gate1 rc=0`、无输出 |
+| 2 `dart format --output=none --set-exit-if-changed`（3 个显式文件） | `Formatted 3 files (0 changed)`、`gate2 rc=0` |
+| 3 `flutter analyze` | `No issues found! (ran in 1.7s)`、`gate3 rc=0` |
+| 4 `flutter test --tags golden` | `00:04 +9: All tests passed!`、`gate4 rc=0`（基线 9 张，**未重录**） |
+| 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `01:52 +715 ~26: All tests passed!`、`gate5 rc=0`。715 = develop 基线 709 + 本轮 6 例 |
+| 6 `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web`、`gate6 rc=0` |
 
 ## 已证实
 - [x] FR-001..FR-006 的 6 条用例**先红后绿**：
@@ -27,6 +27,8 @@
 - [ ] ~~契约无需改动~~ **本条已作废**（复核前自查推翻）：`TodoHabitServiceImpl.java:143`-`:145` 的 `dailyCounts` 是 `i % 2` 造的假数，
       且循环固定 7 天 ⇒ `period=MONTH` 也只回最近 7 天。真实「当月每天次数」要先修后端 ⇒ `zh-cloud-service` Issue #281。
       客户端只渲染 API 给的 `dailyCounts`，不补假数据；`checkIn(date:)` 那条通道是真的，补记不需要改契约。
+
+门禁跑在 `6a67047`（代码终态）。之后的两个 commit 只动 markdown —— `45df60b` 只加 `specs/043-habit-month-grid/plan.md`，`17a55ed` 只改 `specs/043-habit-month-grid/{spec,plan,tasks}.md`（用 `git show --stat` 可复核），所以不重跑；`.dart_tool` 与 `pubspec.lock` 按约定不入库。
 
 ## 复核
 `claude` CLI 本机不可用（`unrecognized_model`），替代 = 本会话只读子代理审 FR-001..FR-006，必须拿到 `VERDICT`；
