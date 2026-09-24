@@ -37,3 +37,55 @@
 ## 四件套自查
 本轮**不新增界面能力**（只改注释 + 写 spec），四件套不适用；
 下一轮做「列绑分组」时必须按四件套补齐，已在「仍缺」里点名。
+
+---
+
+# 后半轮（Issue #313 / PR 见 Gitea）：看板列已绑定 `TodoTaskSection`
+
+上面那张表里「分组可按主题/按进度自定义」那一行，本轮从**半**变成**已实现（待合并）**。
+锚点一律用符号名而不是行号：新代码不在这页写作时的 `origin/develop` 上，写行号必漂。
+
+## 改了什么（四处，全是客户端接线）
+| 面 | 源页行 | 落地 |
+| --- | --- | --- |
+| 列集合=分组集合、列名=分组名 | `:99`-`:101` | `KanbanView.sections` 非空 ⇒ `KanbanView._sectionColumns`：一列一个分组，列标题取 `TodoTaskSection.name` |
+| 跨列拖动换分组 | `:64` | 该模式下列的 `DragTarget` 走 `KanbanView.onTaskSectionMove` ⇒ `TaskViewActionRepository.moveKanbanTaskToSection`，**只写 `sectionId`，不碰 priority/completed** |
+| 拖动分组排序 | `:129` | `KanbanView.onSectionOrderChanged` ⇒ 既有的 `TaskSectionRepository.reorder`（不新增仓储方法） |
+| 分组内「+」新建任务 | `:141`/`:148` | 分组模式每列都给「+」，`TaskQuickAddSheet.sectionId` → `TaskRepository.create(sectionId:)`（`_requireSectionInList` 已在校验） |
+| 拖到「未分组」 | 源页**没写** | `sectionId = NULL`。措辞沿用 app 内既有说法：`TasksByListPage._deleteTaskSection` 的确认文案「分组内任务不会删除，将回到“未分组”」 |
+
+清单**没有**分组时仍是 priority 四列，行为与列名一字未改（正向对照用例：`没有分组时仍是 priority 四列`）。
+
+## 取舍要写在台面上
+1. **切换条件是推断的**：嘀嗒 `:217`-`:219`「需要先在清单右上角的「排序」中将「分组」改为「自定义」，才可以管理分组」
+   ⇒ 分组只是"当前分组方式"的一种。本仓还没有可选的分组轴（那是矩阵 #20 的缺口），
+   所以这里用「该清单有没有分组」当开关。**这不是嘀嗒原文的交互**，等 #20 补上分组轴后应改成显式选轴。
+2. **分组模式不给列折叠入口**：`BoardViewPreference` 的列 id 词汇被 `board_preference_repository.dart`
+   的 `defaultColumnIds.contains` 锁死 ⇒ 分组列的折叠状态存不进去。
+   与其留一个「点了当下生效、重进就丢」的开关，这一项在分组模式下直接不出现在列头菜单里。
+   固定四列那条路径的折叠行为没变。
+3. **`sectionId` 悬空（分组被删/属于别的清单）不算异常**：这类任务落到「未分组」列而不是从看板上消失。
+   用例 `指向不存在分组的任务落在未分组列而不是消失` 钉住它。
+   （`TaskSectionRepository.delete` 本来就会把任务清空回未分组，这里是防脏数据兜底。）
+4. **过期顺序不覆盖新数据是"拒绝"而不是"合并"**：`TaskSectionRepository.reorder` 要求提交
+   清单内的**全部**分组 id，否则抛 `必须包含清单内的全部分组`。所以"点左移时列表里已经多了一个新分组"
+   这种竞态会以 `分组排序失败，请重试` 可见失败收场（沿用 `_moveTaskSection` 的既有措辞），
+   而不是把新分组悄悄排到最后。
+5. **列头读屏**：三个分组的「+」如果都叫 `新建任务`，读屏分不出是哪一列 ⇒ tooltip 改为 `在<列名>新建任务`
+   （嘀嗒源页只写「点击「分组」右上角的「+」」，没有给出标签文案，所以这里不冲突）。
+6. **仍然不需要改契约**（重申前半轮否掉 Issue #282 的结论，这次是正面确认）：
+   push 侧 `SyncCoordinator._resolvePayloadRefs` 已把 task payload 的本地 `sectionId` 换成服务端 id；
+   服务侧 `TodoSyncServiceImpl.applySyncTaskSection` + `resolvePayloadEntityRef(…, "sectionId", "section_id")`
+   接收并校验，`TodoTaskMapper.clearSectionId` 负责删分组时清空任务。
+
+## 一处实测出来的溢出（改动把它从潜伏变成可达）
+`320px + 1.3 倍字号` 下分组列头 `Row` **溢出 141px**（`RenderFlex overflowed by 141 pixels on the right`）。
+priority 四列时代列名是固定短词（未开始/进行中/紧急/归档）所以看不出来，分组名由用户输入、长度不受控。
+⇒ 列标题改成 `Expanded` + `maxLines: 1` + `TextOverflow.ellipsis`，
+用例 `320px + 1.3 倍字号下分组列头不溢出` 钉住（先红后绿，红测原文就是上面那句 141px）。
+
+## 仍缺（不谎称完成）
+- 看板**列头没有「···」→ 重命名/新建/删除分组**入口（`:108`/`:115` 的看板侧）。
+  现在只能在清单的「管理分组」里改，改完列标题会跟着变（列名直接读 `TodoTaskSection.name`），
+  但"在看板上就地建列"这一步还没有。
+- 「未分组」列的位置固定在最后，嘀嗒没说该在哪，也没说要不要这一列 —— 见上面取舍 1。

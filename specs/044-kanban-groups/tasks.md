@@ -23,12 +23,40 @@
   本次六个 `rc=` 全为 0，且门禁跑完后 `lock_pubdev=149 lock_mirror=0`（本机镜像没有覆盖回来）。
 
 ## 仍缺（不谎称完成）
-- [ ] 看板**列定义未绑定 `TodoTaskSection`**：列只认 `orderedColumnIds` 那一套固定列 id（四列顺序可由
-      `boardPreference` 重排，但 id 词汇被 `board_preference_repository.dart:58`/`:226` 锁死），
-      所以 `:99`-`:101` 的「按主题自定义分组」在看板上不成立（清单里能建分组，看板上看不见也选不了）。矩阵 #15 的判定因此**不因本轮而翻**。
-- [ ] 看板列头无「···」管理入口（源页 `:108`/`:115` 的看板侧），分组改名/删除后列标题如何回显未定义
-- [ ] 「拖到未分组」的落库语义未定（嘀嗒没写，不猜）
-- [ ] 四件套本轮**不适用**（无新增界面）；做上面那条时必须补：320px+1.3 倍、读屏语义、失败保留已加载数据、过期响应不覆盖新响应
+- [ ] 看板列头无「···」管理入口（源页 `:108`/`:115` 的看板侧）。
+      后半轮之后这一条的含义收窄了：列名**已经**直接读 `TodoTaskSection.name`，清单侧改了名看板立刻跟着变，
+      缺的只是"在看板上就地新建/改名/删除"这一步。
+- [ ] 「未分组」列固定排在最后 —— 嘀嗒没说该排哪、也没说要这么一列。切换条件（有分组就按分组开列）
+      本身也是推断，见 `spec.md` 后半轮「取舍」1。
+
+## 后半轮（Issue #313）已证实
+- [x] **看板列绑定 `TodoTaskSection`**：`KanbanView.sections` 非空即按分组开列（列名=分组名、
+      顺序=`sortOrder`、末尾「未分组」兜底），跨列拖拽写 `sectionId`，左右移列写 `TaskSectionRepository.reorder`，
+      每列「+」按该分组建任务 ⇒ `:99`-`:101`/`:129`/`:141` 成立。矩阵 #15 **不在本轮翻状态**（PR 未合并 + 列头管理入口仍缺）。
+- [x] 「拖到未分组」的落库语义已定：`sectionId = NULL`（`TaskViewActionRepository.moveKanbanTaskToSection`
+      的 `Value(sectionId)` 直接写 null）。措辞沿用 app 内既有说法，见 `spec.md` 表格最后一行。
+- [x] 不需要改后端契约（正面确认，不再是推断）：
+      FL 侧 `SyncCoordinator._resolvePayloadRefs` 把 payload 的本地 `sectionId` 换成服务端 id（未同步的走负数临时 id）；
+      服务侧 `TodoSyncServiceImpl.applySyncTaskSection` 校验分组存在、`resolvePayloadEntityRef(…, "sectionId", "section_id")`
+      做批内解析、`TodoTaskMapper.clearSectionId` 负责删分组清空任务。
+- [x] 四件套补齐（本轮**新增界面行为**，所以不再是"不适用"）：
+      | 项 | 结果 |
+      | --- | --- |
+      | 320px + 1.3 倍字号 | 首跑**红**：`A RenderFlex overflowed by 141 pixels on the right.` ⇒ 列标题改 `Expanded` + `ellipsis` 后绿（用例 `320px + 1.3 倍字号下分组列头不溢出`） |
+      | 独立读屏语义 | 「+」tooltip 从 `新建任务` 改成 `在<列名>新建任务`；用例 `分组列的「+」读屏能分清是哪一列` 断言三个列各自的 tooltip |
+      | 失败保留已加载数据 | 写入抛错 → `移动任务失败，请重试` + `重试`，任务仍在原列（用例 `分组列写入失败会提示并保留原列，不静默吞掉`）；仓储侧拒绝写入时任务与 outbox 都不动（用例 `分组不属于任务所在清单时拒绝写入，任务与 outbox 都不变`） |
+      | 过期响应不覆盖新响应 | `reorder` 要求提交全部分组 id，否则抛 `必须包含清单内的全部分组` ⇒ 竞态下可见失败而非静默重排（用例 `分组列左移只提交分组 id，不含未分组哨兵` 钉住提交内容） |
+- [x] 六项门禁跑在**最终字节**上（日志 `/tmp/g53/gates-final.log`；格式化在前、门禁在后，`pubspec.lock` 未入库）
+      | 门禁 | 结果 |
+      | --- | --- |
+      | 1 `git diff --check` | `rc=0`、无输出 |
+      | 2 `dart format --output=none --set-exit-if-changed <本轮 6 个显式文件>` | 首跑 4 个文件 Changed ⇒ 原地格式化这 4 个；终跑 `Formatted 6 files (0 changed)`、`rc=0` |
+      | 3 `flutter analyze` | `No issues found! (ran in 2.8s)` |
+      | 4 `flutter test --tags golden` | `00:04 +9: All tests passed!`（9 张基线未重录；`test/support/todo_visual_test_harness.dart` 里没有 `TaskViewMode`/`TodoTaskSection` 的引用 ⇒ 黄金面是列表视图，本轮碰不到） |
+      | 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:25 +913 ~26: All tests passed!`（其中本轮新增 15 条：11 widget + 4 仓储） |
+      | 6 `flutter build web --release --dart-define=…` | `✓ Built build/web`、`rc=0` |
+      红测的三次形态都留了痕：① 首跑编译红（`moveKanbanTaskToSection` 未定义）；② 两条拖拽用例红在
+      "落点算到列的右边缘外"（`Actual: <null>` 而不是数字差）⇒ 改成落进列内「空」占位；③ 320px 溢出 141px。
 
 ## 一处自我更正要写在台面上
 初判「看板自定义分组缺后端契约」→ 立了 `zh-cloud-service` Issue #282，**错了**：
