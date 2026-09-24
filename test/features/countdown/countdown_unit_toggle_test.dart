@@ -47,12 +47,16 @@ void main() {
     required int id,
     required String title,
     required int days,
+    // 后端默认 false（`efficiency_api.dart:299`）：正数且关掉时只显示目标日期，
+    // 那时中间没有天数 ⇒ 不提供单位入口（源页 :97 说的是「点击中间的天数」）。
+    bool showAge = false,
   }) {
     return CountdownDto(
       id: id,
       title: title,
       targetDate: DateTime(2026, 1, 1).add(Duration(days: days)),
       daysRemaining: days,
+      showAge: showAge,
     );
   }
 
@@ -75,17 +79,34 @@ void main() {
     expect(find.text('还有 1095 天'), findsOneWidget);
   });
 
-  testWidgets('正数日（已过）同样按天·年·周切换，前缀保持「已」', (tester) async {
-    await pump(tester, [item(id: 2, title: '恋爱纪念日', days: -2000)]);
-    expect(find.text('已 2000 天'), findsOneWidget);
+  testWidgets('正数日（已过）同样按天·年·周切换，前缀取源页词「已过」', (tester) async {
+    await pump(tester, [
+      item(id: 2, title: '恋爱纪念日', days: -2000, showAge: true),
+    ]);
+    expect(find.text('已过 2000 天'), findsOneWidget);
 
-    await tester.tap(find.text('已 2000 天'));
+    await tester.tap(find.text('已过 2000 天'));
     await tester.pump();
-    expect(find.text('已 5 年'), findsOneWidget);
+    expect(find.text('已过 5 年'), findsOneWidget);
 
-    await tester.tap(find.text('已 5 年'));
+    await tester.tap(find.text('已过 5 年'));
     await tester.pump();
-    expect(find.text('已 285 周'), findsOneWidget);
+    expect(find.text('已过 285 周'), findsOneWidget);
+  });
+
+  testWidgets('正数日关掉「显示已过天数」：只显示目标日期，不给单位入口', (tester) async {
+    await pump(tester, [item(id: 3, title: '生日', days: -2000)]);
+
+    // 与 develop 已验收的行为一致：这一支显示目标日期而非天数。
+    // 断言值由 fixture 同一份输入算出，不手写日期（我上一版就是靠猜日期红的）。
+    final d = DateTime(2026, 1, 1).add(const Duration(days: -2000));
+    expect(find.text('${d.year}-${d.month}-${d.day}'), findsOneWidget);
+    expect(find.textContaining('已过'), findsNothing);
+    expect(
+      find.byKey(const Key('todo-countdown-unit-3')),
+      findsNothing,
+      reason: '中间没有天数可点，硬塞一个按钮就是自创交互',
+    );
   });
 
   testWidgets('单位切换按行独立：点一行不影响另一行', (tester) async {

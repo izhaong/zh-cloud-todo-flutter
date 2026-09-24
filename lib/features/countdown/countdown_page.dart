@@ -24,6 +24,13 @@ enum TodoCountdownUnit {
       TodoCountdownUnit.values[(index + 1) % TodoCountdownUnit.values.length];
 }
 
+/// 正数且关掉 showAge 时，源页那一行只显示目标日期（develop 既有行为，`!259`）。
+/// 顶层而非页面私有：tile 与页面都要用同一份文案，别让 tile 反向依赖页面类。
+String countdownDateSubtitle(CountdownDto c) {
+  final d = c.targetDate;
+  return '${d.year}-${d.month}-${d.day}';
+}
+
 /// 前缀取源页用词：《01-添加倒数纪念日.md:106》「显示距离该日期已过/还有多少天」
 /// ⇒ 正数「已过」、倒数「还有」，不自创「已 N 天」。只给整数档：
 /// 源页 `:93` 问的是「这是多少年，或是多少周」，带余数就得自己发明格式。
@@ -77,7 +84,7 @@ class _CountdownTileState extends State<_CountdownTile> {
             daysRemaining: item.daysRemaining,
             unit: _unit,
           )
-        : CountdownPage.subtitleOf(item);
+        : countdownDateSubtitle(item);
     return InkWell(
       key: Key('countdown-row-${item.id}'),
       onTap: widget.writePending ? null : widget.onEdit,
@@ -216,19 +223,6 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
         },
       ),
     );
-  }
-
-  /// 供 `_CountdownTile` 复用：正数且关掉 showAge 时只显示目标日期。
-  static String subtitleOf(CountdownDto c) => _subtitle(c);
-
-  static String _subtitle(CountdownDto c) {
-    if (!c.isCountUp) return '还有 ${c.daysRemaining} 天';
-    // 嘀嗒的 showAge 即“显示已过天数”；关闭时过期项只显示目标日期。
-    if (!c.showAge) {
-      final d = c.targetDate;
-      return '${d.year}-${d.month}-${d.day}';
-    }
-    return '已过 ${-c.daysRemaining} 天';
   }
 
   Future<void> _confirmDelete(CountdownDto countdown) async {
