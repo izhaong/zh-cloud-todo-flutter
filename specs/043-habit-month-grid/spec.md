@@ -9,10 +9,13 @@
 | 回顾：月度打卡表 | `:72`-`:88` | `:77`「点击习惯进入打卡页面，向上滑动即可查看**当月打卡情况**」；`:84`「点击习惯后，可在右侧查看当月打卡情况」；`:72` 点名「打卡概览」和「**月度打卡表**」 | 列表页顶部只有三张统计卡（`habit_page.dart:38`-`:52`），点习惯行**不导航**（该文件的 `Navigator` 只出现在新建弹窗的 `pop`，`:95`、`:106`）⇒ 无月度表 |
 | 补记打卡 | `:94` | 「**移动端 / 桌面端**：在「月度打卡表」中点击任意日期，即可补记打卡」 | `checkIn(int habitId, {DateTime? date})` 已支持按日期（`habit_repository.dart:72`），但全仓唯一调用方 `habit_page.dart:195` 从不传 `date` ⇒ 有通道、没入口 |
 
-**为什么这一轮不需要动契约**：`AppTodoHabitStatsRespVO` 已带 `dailyCounts: List<DailyCountVO>`
-（`zh-cloud-service` 的 `.../vo/AppTodoHabitStatsRespVO.java:16`，`DailyCountVO` 有 `date` 与 `count` 两个字段），
-且 `TodoHabitServiceImpl.java:126`/`:128` 已按 `WEEK` / `MONTH` 分支响应 `period` ⇒
-「当月每日打卡次数」这份数据**后端已经在给**，缺的是客户端渲染与把 `date` 传下去。
+**契约现状（本 spec 首稿写错过，已改）**：`AppTodoHabitStatsRespVO.DailyCountVO` 确实有 `date` + `count`，
+但后端 `TodoHabitServiceImpl.java:143`-`:145` 是**造出来的**：`for (int i = 6; i >= 0; i--) { setDate(today.minusDays(i)); setCount(i % 2 == 0 ? 1 : 0); }`
+⇒ 每日次数与真实打卡无关，且**固定只回最近 7 天**（`period=MONTH` 只影响 `total`，`:129`）。
+所以「补记」（FR-003）不需要改契约：`checkIn` 的 `date:` 已是真通道；
+但「月度打卡表显示真实次数」（FR-002）**被服务端挡住**，已开 `zh-cloud-service` Issue #281。
+客户端只做「渲染 API 给的 `dailyCounts`」这一件事：格子上有记录就显示次数、没有就显示未打卡，
+**不在客户端补任何假数据**。
 
 ## 用户故事
 我周一忘了打卡，周二想补上：点进这个习惯，看到当月的格子，点周一那一格就补记了。

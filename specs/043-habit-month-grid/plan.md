@@ -5,9 +5,11 @@
 `habitMonthDays` / `habitDayKey`），改 `lib/features/habit/habit_page.dart` 一处
 （`_HabitTile` 的 `AppCard` 加 `onTap`，该组件本来就有 `onTap` 形参 ⇒ 不包新 widget、不改布局）。
 
-## 数据来源（不改契约）
-`HabitRepository.stats(habitId, period: 'MONTH')` → `dailyCounts: [{date, count}]`
-（后端 `AppTodoHabitStatsRespVO.DailyCountVO` 就这两个字段；`TodoHabitServiceImpl` 按 `WEEK`/`MONTH` 分支）。
+## 数据来源（含一处被纠正的错判）
+`HabitRepository.stats(habitId, period: 'MONTH')` → `dailyCounts: [{date, count}]`。
+首稿据此写「不改契约」——**错了**：`TodoHabitServiceImpl.java:143`-`:145` 的 `dailyCounts` 是 `i % 2` 造的假数且固定只回 7 天
+⇒ 真实月度次数要先修后端（`zh-cloud-service` Issue #281）。
+`checkIn` 的 `date:` 那条通道是真的，补记不需要改契约。
 `date` 串按 `yyyy-MM-dd`（与 `checkIn` 发出的 `checkedAt` 的日期部分同源）。
 
 ## 步骤 → 验证

@@ -24,14 +24,19 @@
       —— 红的正是「补记该日 date 要传对」那条，其余 5 条仍绿 ⇒ 「把日期传下去」这件事被单独钉住，不是靠整块代码混过去
 - [x] 两次探针后都用 `cp` 还原，`cmp -s` 判两份生产文件 **byte-identical**，复跑 `00:00 +6: All tests passed!`
 - [x] `flutter analyze` ⇒ `No issues found! (ran in 3.1s)`（本轮没有 deprecated/unused 告警）
-- [x] 契约无需改动：`AppTodoHabitStatsRespVO.DailyCountVO` 有 `date` + `count`，
-      `TodoHabitServiceImpl.java:126`/`:128` 已按 `WEEK`/`MONTH` 分支响应 `period`
+- [ ] ~~契约无需改动~~ **本条已作废**（复核前自查推翻）：`TodoHabitServiceImpl.java:143`-`:145` 的 `dailyCounts` 是 `i % 2` 造的假数，
+      且循环固定 7 天 ⇒ `period=MONTH` 也只回最近 7 天。真实「当月每天次数」要先修后端 ⇒ `zh-cloud-service` Issue #281。
+      客户端只渲染 API 给的 `dailyCounts`，不补假数据；`checkIn(date:)` 那条通道是真的，补记不需要改契约。
 
 ## 复核
 `claude` CLI 本机不可用（`unrecognized_model`），替代 = 本会话只读子代理审 FR-001..FR-006，必须拿到 `VERDICT`；
 `FAIL` 就照结论改，不采纳的在本文件写理由。
 
 ## 仍缺（不谎称完成）
+- [ ] **⑥ 月度打卡表在真实数据上还没通**：后端 `dailyCounts` 是占位假数（只 7 天、`i % 2`），
+      修好前本弹层展示的「当月次数」不成立。矩阵 #45 的 ⑥ 面因此**不能因本 PR 合并就判达成**，
+      只有 ⑦ 补记（点日期 → `checkIn(date:)`）是完整闭环。
+
 - [ ] 落点是**弹层**，源页 `:77` 是「点进打卡页面、向上滑动」、`:84` 是「右侧查看」。
       按决策规则先不动导航结构，但这一档与源页不严格一致，需产品确认是否要真做成页面/右侧面板。
 - [ ] 「过期响应不覆盖新响应」这一件套**本面不适用**（无月份切换、无并发请求），不声称已证。
