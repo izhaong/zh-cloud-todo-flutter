@@ -46,17 +46,38 @@
       | 独立读屏语义 | 「+」tooltip 从 `新建任务` 改成 `在<列名>新建任务`；用例 `分组列的「+」读屏能分清是哪一列` 断言三个列各自的 tooltip |
       | 失败保留已加载数据 | 写入抛错 → `移动任务失败，请重试` + `重试`，任务仍在原列（用例 `分组列写入失败会提示并保留原列，不静默吞掉`）；仓储侧拒绝写入时任务与 outbox 都不动（用例 `分组不属于任务所在清单时拒绝写入，任务与 outbox 都不变`） |
       | 过期响应不覆盖新响应 | `reorder` 要求提交全部分组 id，否则抛 `必须包含清单内的全部分组` ⇒ 竞态下可见失败而非静默重排（用例 `分组列左移只提交分组 id，不含未分组哨兵` 钉住提交内容） |
-- [x] 六项门禁跑在**最终字节**上（日志 `/tmp/g53/gates-final.log`；格式化在前、门禁在后，`pubspec.lock` 未入库）
+- [x] 六项门禁跑在**已提交终态** `7a56a49` 上。日志 `/tmp/g53/gates-round2.log`
+      首行是溯源头 `### head=7a56a49  工作树未提交改动：[]  时间=2026-09-24T19:07:33Z`
+      （第 45 轮复核立的规矩：日志必须同时记 head 与工作树状态，否则 `pubspec.lock` 会像那次一样漏进提交）。
       | 门禁 | 结果 |
       | --- | --- |
-      | 1 `git diff --check` | `rc=0`、无输出 |
-      | 2 `dart format --output=none --set-exit-if-changed <本轮 6 个显式文件>` | 首跑 4 个文件 Changed ⇒ 原地格式化这 4 个；终跑 `Formatted 6 files (0 changed)`、`rc=0` |
-      | 3 `flutter analyze` | `No issues found! (ran in 2.8s)` |
-      | 4 `flutter test --tags golden` | `00:04 +9: All tests passed!`（9 张基线未重录；`test/support/todo_visual_test_harness.dart` 里没有 `TaskViewMode`/`TodoTaskSection` 的引用 ⇒ 黄金面是列表视图，本轮碰不到） |
-      | 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:25 +913 ~26: All tests passed!`（其中本轮新增 15 条：11 widget + 4 仓储） |
-      | 6 `flutter build web --release --dart-define=…` | `✓ Built build/web`、`rc=0` |
-      红测的三次形态都留了痕：① 首跑编译红（`moveKanbanTaskToSection` 未定义）；② 两条拖拽用例红在
-      "落点算到列的右边缘外"（`Actual: <null>` 而不是数字差）⇒ 改成落进列内「空」占位；③ 320px 溢出 141px。
+      | 1 `git diff --check` 与 `git diff --check origin/develop...HEAD` | 两条都 `rc=0`、无输出 |
+      | 2 `dart format --output=none --set-exit-if-changed <本轮 6 个显式文件>` | 首跑 `Formatted 6 files (4 changed)` ⇒ 只对这 4 个原地格式化；终跑 `Formatted 6 files (0 changed)`、`rc=0` |
+      | 3 `flutter analyze` | `No issues found! (ran in 1.9s)`、`rc=0` |
+      | 4 `flutter test --tags golden` | `00:04 +9: All tests passed!`、`rc=0`（9 张基线未重录。推理已由第 1 轮复核**独立跑过**：`test/visual/todo_workspace_golden_test.dart` 只 pump `home_shell`/`quick_add_bar`/`task_detail_page`，三个 support/visual 文件里 `TaskViewMode|TodoTaskSection|Kanban|board` 零命中） |
+      | 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:25 +919 ~26: All tests passed!`（本轮新增 21 条：16 widget + 5 仓储；修复核前是 +913/15 条） |
+      | 6 `flutter build web --release --dart-define=…` | `✓ Built build/web`；门禁跑完 `git status --porcelain` 为空 ⇒ `pubspec.lock` 没被本机镜像改脏，也不在 PR 文件表里 |
+      红测的三次形态：① 首跑编译红（`moveKanbanTaskToSection` 未定义）；② 两条拖拽用例红在
+      "落点算到列的右边缘外"（`Actual: <null>` 而不是数字差）⇒ 改成落进列内「空」占位；
+      ③ `320px + 1.3 倍字号` 报 `A RenderFlex overflowed by 141 pixels on the right.`
+      ⇒ 列标题改 `Expanded` + `ellipsis`。**141 这个数只存在于那次运行输出里，树上锁不住**
+      （要复现得把修复改回去），所以本轮补的是形态断言而不是数字：
+      `长分组名的列标题用省略号而不是撑破列头` 断言 `overflow == TextOverflow.ellipsis` 且 `maxLines == 1`。
+
+## 后半轮第 1 轮只读复核处置（`VERDICT: FAIL`，2 BLOCKING + 2 NIT）
+复核手段同第 45 轮：本机 `claude` CLI 的模型别名仍不可用，改由本会话的只读子代理审。
+4 条全部**回源复验成立**，无一条驳回（复验命令与结论逐条如下）：
+
+| # | 级别 | 复核员说的 | 我复验到的 | 处置 |
+| --- | --- | --- | --- | --- |
+| 1 | BLOCKING | 分组模式没有「归档」列、已完成任务混排在各自分组列，且看板上改不了完成状态，而 spec 六条取舍与两条仍缺都没提 | `git show origin/develop:…kanban_view.dart` 的归档列是 `t.completed \|\| t.priority >= 3`；`_sectionColumns` 从头到尾不看 `completed` | 承认漏登记。`spec.md` 加取舍 3（写清这是分组方式的必然结果 + 明说代价"看板上改不了完成状态"），`kanban_view.dart` 类注释同步，补 2 条用例（列不聚合、拖进分组列不改 completed） |
+| 2 | BLOCKING | 两处文档口径不成立：①「固定四列一字未改」——`新建任务` tooltip 其实两条路径都变了；②我把折叠项从灰显改成不渲染，连带改掉了智能清单（`listId == null` 时回调本就是 null）的老菜单形态，且与同菜单仍灰显的「左移/右移」自相矛盾 | `git show origin/develop:…kanban_view.dart` 第 391-392 行是 `value: 'collapse'` + `enabled: onCollapsedChanged != null`、第 404 行是 `tooltip: '新建任务'`；HEAD 一度变成 `if (onCollapsedChanged != null)` 与 `tooltip: '在${data.title}新建任务'` | ②**回滚代码**：折叠项恢复 `enabled:` 灰显；①**改文档**：spec 点名这一处 tooltip 确实在两条路径上都变了，并说明它是向同列头 `调整X列`/`折叠X`/`展开X` 的既有带列名写法对齐。补 3 条用例（折叠 enabled=false 而右移 enabled=true、偏好塞分组 id 不折叠、固定四列 tooltip） |
+| 3 | NIT | `/tmp/g53/gates-final.log` 里没有门禁 1/2 的输出，也缺 `head=` / `status_before_gates=[]` 溯源行 | 那份日志确实只有 analyze/golden/full/build 四段 | 换一份完整日志 `/tmp/g53/gates-round2.log`，六段齐全 + 溯源头，数字全部重跑（+919） |
+| 4 | NIT | 「溢出 141px」在树上只是散文，没有断言锁得住 | 确实只有 `expect(takeException(), isNull)` | 用形态断言替代数字（见上面门禁 3 段末），并在 tasks 里写明"数字锁不住"的原因 |
+
+**一处复核员自己标为「仅提示」的**：`tasks_by_list_page.dart` 里 `repository == null` 时静默 `return`
+（拖拽/移列点了没反应也没提示）。我复验：这是 develop 上 `onTaskMove` 的同款写法，本轮照抄而非新引入
+⇒ 不在本 PR 顺手改（objective 的"不顺手重构"），但记在这里作为下轮候选。
 
 ## 一处自我更正要写在台面上
 初判「看板自定义分组缺后端契约」→ 立了 `zh-cloud-service` Issue #282，**错了**：
