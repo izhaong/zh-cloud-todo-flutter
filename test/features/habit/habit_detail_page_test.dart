@@ -252,8 +252,7 @@ void main() {
     );
   });
 
-  testWidgets('详情页「...」→「月度打卡表」开的是当月表（嘀嗒《02-更好地完成习惯》:77/:84）',
-      (tester) async {
+  testWidgets('详情页「...」→「月度打卡表」开的是当月表（嘀嗒《02-更好地完成习惯》:77/:84）', (tester) async {
     await pumpHabits(tester);
     await tester.tap(find.text('喝水'));
     await tester.pumpAndSettle();
