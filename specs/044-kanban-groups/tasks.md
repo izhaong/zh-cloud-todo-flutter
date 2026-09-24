@@ -72,6 +72,40 @@
       （要复现得把修复改回去），所以本轮补的是形态断言而不是数字：
       `长分组名的列标题用省略号而不是撑破列头` 断言 `overflow == TextOverflow.ellipsis` 且 `maxLines == 1`。
 
+## Issue #315 那一格（列头「···」→ 重命名/新建分组/删除）已证实
+- [x] 三项挂在**列头已有的那枚「···」**上，不新增按钮：分组模式下 `KanbanView.onSectionRename` /
+      `onSectionCreate` / `onSectionDelete` 只交出「这一列对应的 `TodoTaskSection`」，
+      页面侧复用已有的 `_createTaskSection` / `_renameTaskSection` / `_deleteTaskSection`
+      ⇒ **没有新仓储方法、没有新契约**（源页 `:108`/`:115` 的那张脸由此闭合）。
+- [x] 「未分组」哨兵列只给 `新建分组`，`重命名`/`删除` 灰显（与第 1 轮复核立下的「折叠项灰显不消失」同口径）。
+- [x] 「···」tooltip 按模式分开：分组模式照抄清单侧 `管理分组 <名称>`（`todo-section-menu-*` 的原文），
+      固定四列仍是 `调整<列名>列` —— 同一枚按钮在两种模式下管的对象不同，读屏必须能分辨。
+- [x] 视图不持有分组状态：点 `删除` 后列还在，等仓储流回来（用例
+      `视图不自己改名/删列：点菜单项只交回调，列标题与列集合不变`）。
+- [x] 四件套：`320px + 1.3 倍字号下分组管理菜单不溢出` 是**实测**（菜单从 3 项变 6 项，`takeException()` 为空）；
+      失败保留已加载数据 = 视图侧无本地写路径；过期响应不覆盖 = 回调交出的是**渲染时那一份** section 对象，
+      仓储侧 `rename`/`delete` 走 `_sectionOrThrow`，实体已不在就抛错、由页面提示，不会静默改到别的分组。
+- [x] **反向探针**（不是"跑绿就算"）：把 `sectionsManaged: sectionMode` 钉成 `false`
+      ⇒ 本轮 5 条用例同时 `[E]` 红（就地三项 / 未分组列 / tooltip / 320px 菜单 / 不自己改列），
+      `cp` 还原后 `cmp -s` 判 IDENTICAL；正向对照 `没有分组时列头菜单不含分组管理三项` 在探针下仍绿，
+      说明它咬的是"不该出现"而不是恒真。
+- [x] 六项门禁跑在**已提交终态** `5fa649f`，日志 `/tmp/g54/gates.log`：
+      溯源头 `### head=5fa649f  status_before_gates=[]  time=2026-09-24T19:39:00Z` +
+      尾行 `### status_after_gates=[]` 与 `### pr_files=…`（8 个文件，无 `pubspec.lock`）。
+      | 门禁 | 结果 |
+      | --- | --- |
+      | 1 `git diff --check` / `git diff --check origin/develop...HEAD` | `rc=0` / `rc=0` |
+      | 2 `dart format --output=none --set-exit-if-changed <6 个显式文件>` | `Formatted 6 files (0 changed)`、`rc=0`（N=6 == 本轮文件数，见第 53 轮的假绿教训） |
+      | 3 `flutter analyze` | `No issues found! (ran in 1.8s)`、`rc=0` |
+      | 4 `flutter test --tags golden` | `00:04 +9: All tests passed!`、`rc=0`（9 张基线未重录） |
+      | 5 全量非 golden | `02:25 +926 ~26: All tests passed!`、`rc=0`（本轮 +6：23 widget + 5 仓储） |
+      | 6 `flutter build web --release --dart-define=…` | `✓ Built build/web`、`rc=0` |
+
+## 矩阵 #15 现在到底差什么（别急着重言）
+#313 + #315 把「分组开列 / 跨列拖动 / 拖动分组排序 / 分组内新建 / 列头管理分组」五格都补完了，
+但**还不能判「有」**：源页团队看板那三面（`:175`「在看板视图右键任务，选择「分配给」」、`:188` 任务评论、
+`:198` 任务动态）**从看板入口是否可达**还没按同一口径判过。下一格先判这三面，再谈翻转状态。
+
 ## 后半轮第 1 轮只读复核处置（`VERDICT: FAIL`，2 BLOCKING + 2 NIT）
 复核手段同第 45 轮：本机 `claude` CLI 的模型别名仍不可用，改由本会话的只读子代理审。
 4 条全部**回源复验成立**，无一条驳回（复验命令与结论逐条如下）：
