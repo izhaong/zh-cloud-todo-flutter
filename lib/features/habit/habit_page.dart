@@ -5,6 +5,7 @@ import '../../core/theme/brand_colors.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../state/efficiency_providers.dart';
 import 'habit_repository.dart';
+import 'habit_month_grid.dart';
 
 /// M11-B4 习惯列表 + 打卡
 class HabitPage extends ConsumerWidget {
@@ -160,6 +161,8 @@ class _HabitTile extends ConsumerWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: AppCard(
+        // 嘀嗒《02-更好地完成习惯.md:77》/`:84`：点习惯即可看当月打卡情况
+        onTap: () => showHabitMonthSheet(context, habit),
         child: Row(
           children: [
             CircleAvatar(
