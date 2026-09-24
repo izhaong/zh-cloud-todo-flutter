@@ -38,6 +38,7 @@ class TasksByListPage extends ConsumerStatefulWidget {
     this.initialListId,
     this.initialDueRange,
     this.initialCompleted,
+    this.initialFilter,
     this.lockedListId = false,
     this.hideAppBar = false,
     this.selectedTaskId,
@@ -50,6 +51,9 @@ class TasksByListPage extends ConsumerStatefulWidget {
   final String? initialListId;
   final String? initialDueRange;
   final bool? initialCompleted;
+
+  /// 从「筛选器」页套用进来的已保存条件；与 `initialDueRange` 同属外部播种。
+  final TaskFilter? initialFilter;
   final bool lockedListId;
   final bool hideAppBar;
   final String? selectedTaskId;
@@ -91,10 +95,12 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   void initState() {
     super.initState();
     _selectedListId = widget.initialListId;
-    _filter = TaskFilter(
-      dueRange: widget.initialDueRange,
-      completed: widget.initialCompleted,
-    );
+    _filter =
+        widget.initialFilter ??
+        TaskFilter(
+          dueRange: widget.initialDueRange,
+          completed: widget.initialCompleted,
+        );
     Future<void>.microtask(_restoreSortPreference);
     Future<void>.microtask(_restoreViewPreference);
   }
@@ -106,7 +112,8 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         widget.lockedListId && widget.initialListId != oldWidget.initialListId;
     final filterSourceChanged =
         widget.initialDueRange != oldWidget.initialDueRange ||
-        widget.initialCompleted != oldWidget.initialCompleted;
+        widget.initialCompleted != oldWidget.initialCompleted ||
+        !identical(widget.initialFilter, oldWidget.initialFilter);
     if (listSourceChanged || filterSourceChanged) {
       _viewRestoreRevision++;
       setState(() {
@@ -117,10 +124,12 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           _batchSelectedTaskIds.clear();
         }
         if (filterSourceChanged) {
-          _filter = TaskFilter(
-            dueRange: widget.initialDueRange,
-            completed: widget.initialCompleted,
-          );
+          _filter =
+              widget.initialFilter ??
+              TaskFilter(
+                dueRange: widget.initialDueRange,
+                completed: widget.initialCompleted,
+              );
         }
         _mode = TaskViewMode.list;
         _timelineZoom = 1;
@@ -1405,9 +1414,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     );
     if (name == null || !mounted) return;
     try {
-      await ref
-          .read(taskSectionRepositoryProvider)
-          ?.rename(section.id, name);
+      await ref.read(taskSectionRepositoryProvider)?.rename(section.id, name);
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -1435,10 +1442,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     }
   }
 
-  Future<void> _moveTaskSection(
-    TodoTaskSection section,
-    int direction,
-  ) async {
+  Future<void> _moveTaskSection(TodoTaskSection section, int direction) async {
     final listId = _selectedListId;
     if (listId == null) return;
     final sections =

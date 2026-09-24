@@ -161,7 +161,7 @@ class _SmartListSection extends ConsumerWidget {
             const ListTile(
               dense: true,
               title: Text('已保存的智能清单'),
-              subtitle: Text('通过任务页"保存为智能清单"创建'),
+              subtitle: Text('通过任务页「保存为智能清单」创建（旧入口已改为保存为过滤器）'),
             ),
             ...(_userSmartLists(ref).map(
               (l) => ListTile(
