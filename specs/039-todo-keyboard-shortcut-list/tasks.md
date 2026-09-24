@@ -57,7 +57,58 @@
 用例最终状态：`flutter test test/features/home/keyboard_shortcut_list_test.dart` ⇒
 `00:01 +6: All tests passed!`（`/tmp/r32_green7.log`）。
 
-## 六项门禁（最终状态一次跑完，日志 `/tmp/r32_gates.log`）
+## 六项门禁（最终状态 `3b5411b` 一次跑完，日志 `/tmp/r32_gates.log`，2026-09-24）
 
-（跑完回填：diff --check / format 显式 5 文件 / analyze / golden 9 张 / 全量 / build web）
+| # | 命令 | 结果原文 |
+| --- | --- | --- |
+| 1 | `git diff --check` | `exit=0` |
+| 2 | `dart format --output=none --set-exit-if-changed`（本轮显式 5 文件） | `Formatted 5 files (0 changed)`（首跑 exit=1，见 `/tmp/r32_gate2.log`，只原地格式化了我那个测试文件） |
+| 3 | `flutter analyze` | `No issues found! (ran in 1.5s)` |
+| 4 | `flutter test --tags golden` | `00:03 +9: All tests passed!`（基线 9 张，未重录） |
+| 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:18 +715 ~26: All tests passed!` |
+| 6 | `flutter build web --release --dart-define=TODO_API_BASE_URL=… --dart-define=TODO_TENANT_ID=1` | `Compiling lib/main.dart for the Web... 25.7s` / `✓ Built build/web` |
+
+### 关于「715 vs 记录里的 713」——已实测澄清，不是回归
+
+目标里记的基线是 `2026-09-23：713 passed / 26 skipped`，本轮新增 6 条 ⇒ 期望 719，实得 715。
+为免把"基线数字对不上"当成回归，**新建干净 worktree 在 `origin/develop`（`a1d7733`）实测一次**：
+
+```
+git worktree add --detach /tmp/tw-base-check origin/develop && flutter pub get
+flutter test --exclude-tags 'golden || performance' --concurrency=1
+02:22 +709 ~26: All tests passed!
+```
+
+⇒ develop 自身是 **709**，本分支 **715 = 709 + 6**（恰等于本轮新增用例数），skipped 两侧同为 26。
+「713」是当时在含未合并用例的状态上测的，不是 develop 的数；测完已 `git worktree remove` 清掉临时目录。
+
+- [x] T7 ⌘K/Ctrl+K → 全局搜索不回退：`task_organize_search_test.dart` 随上面第 5 项一起跑绿（未单独跑一次，
+      故此前保留未勾；结论：既成行为未回退，机制仍由该文件守着）。
+
+## 第一轮复核（只读子代理，对 `3b5411b`）：**VERDICT: FAIL** → 已按结论改
+
+复核手段替换理由：`claude` CLI 本机 `unrecognized_model`，不可用。
+
+| 编号 | 复核主张 | 我复现到的事实 | 处置 |
+| --- | --- | --- | --- |
+| B1 | spec.md「范围外」残留 `:20`/`:24`/`:21` 三个错行号 | `grep -o '\`:[0-9]*\`' spec.md` 确为这三处；真值 `:26`/`:29`/`:27` | **采纳**：三处改成真值，并把 `:27` 引全 + 补 `09-…:23` 旁证 |
+| B2 | plan.md 四条「已付过学费的约束」失实 | ① test:75 就是 `expect(rows.length, 2)`；② 先例 `native_entry_page_test.dart:282` **正是** `pumpAndSettle`（该文件 7 处），无限进度在 `settings_route.dart:219` 的 `_TaskCaptureDefaultsPage`，不在 `SettingsRoute`；③ `Expanded` 是 13px 主因、已改 `Flexible`；④ 写「3 个文件」列了 4 个 | **全部采纳**并按代码回写（含 shift 为何不能算进守卫的"修饰键"） |
+| B3 | 门禁日志与 `715 = 709 + 6` 的实测澄清不在被审提交里，冻结 SHA 下 T7 的「已证实」无日志支撑 | `git diff 3b5411b -- tasks.md` 显示 committed 版仍是占位行 | **采纳**：把那 33 行并入本 PR（`pubspec.lock` 仍单独不提交） |
+| N1 | 注册表无"activator 互不相同"的护栏，两个 kind 共用 activator 时 Map 静默覆盖 | 成立：`todoShortcutActivators` 是 Map 字面量 | **采纳**：新增 `runtimeType:$activator` 集合大小 == bindings 长度的断言 |
+| N2 | 读屏 finder 未限定在弹层内 ⇒ 钉的是"全树唯一"不是"归属弹层"，且键位串没有独立节点断言 | 成立 | **采纳**：`find.descendant(of: dialog, …)`，并补每条键位串的语义断言 |
+| N3 | 长键位串（如 `Ctrl+Shift+Space`）超宽只会静默裁字，`takeException()` 抓不到 ⇒ 该用例对"键位变长"是瞎的 | 成立（本轮只有 `Ctrl+K / ⌘K`，实际不触发） | **记为边界**，本轮不加为未来设计的容器，避免无需求的可配置项 |
+| N4 | `spec.md:9` 引 `task_organize_search_test.dart:363-379`，实为 362-380 | `sed -n '360,382p'` 核到 testWidgets 在 362 | **采纳** |
+| N5 | 验收标准里「`?` 正常进文本」与用例的免责不一致 | 成立 | **采纳**：验收标准改成"不出现对话框"，并就地写明本地测不到字符插入 |
+| N6 | 工作树 `pubspec.lock` 是 tracked 文件，`git add -A` 会误带 | 成立 | 记着；本 PR 全程按路径 `git add` |
+
+复核员对**主张 4** 的更正值得留下：320px 不溢出的真实机制是 `dialog.dart:275` 的 `minWidth: 280`
+与 `:32` 的水平 `insetPadding: 40` 把弹层强制收到 240，再被内容区约束 ⇒ 结构上只会换行、抛不出
+`RenderFlex`。所以"两侧 `Flexible`"是对的写法，但**13px 那个红是修之前的真实溢出**（修复前键位列不是 Flexible）。
+
+修完复跑：`flutter analyze` `No issues found! (ran in 2.2s)`；
+`flutter test test/features/home/keyboard_shortcut_list_test.dart` ⇒ `00:03 +6: All tests passed!`
+（新增的护栏断言全部随该文件跑绿）。
+
+**下一轮入口**：#86 行只能在 !297 合并后翻，且需引合并 SHA；指令菜单另开规格（⌘K 归属先定）；
+可改键位需要嘀嗒"哪些可改"的集合（帮助页只有截图）。
 

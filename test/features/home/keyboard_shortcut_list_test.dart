@@ -200,18 +200,38 @@ void main() {
     await _pumpDialog(tester, viewport: const Size(1440, 900), textScale: 1.0);
     await tester.pump();
 
+    final dialog = find.byType(KeyboardShortcutsDialog);
+    // 限定 in dialog：否则钉的是"全树存在且唯一"，不是"归属这个弹层"。
     expect(
-      find.bySemanticsLabel('键盘快捷键'),
+      find.descendant(of: dialog, matching: find.bySemanticsLabel('键盘快捷键')),
       findsOneWidget,
       reason: '未 ensureSemantics 时该 finder 恒空，这里已开启',
     );
     for (final row in todoShortcutRows) {
       expect(
-        find.bySemanticsLabel(row.label),
+        find.descendant(of: dialog, matching: find.bySemanticsLabel(row.label)),
         findsOneWidget,
         reason: '读屏要能单独念出动作名：${row.label}',
       );
+      expect(
+        find.descendant(
+          of: dialog,
+          matching: find.bySemanticsLabel(row.displays.join(' / ')),
+        ),
+        findsOneWidget,
+        reason: '键位串也要各有一个语义节点，否则读屏只念得出动作名',
+      );
     }
+    // 注册表护栏：两个动作绝不能共用同一个 activator，
+    // 否则 todoShortcutActivators 的 Map 字面量会静默覆盖成一条，界面却仍列两条。
+    expect(
+      todoShortcutBindings
+          .map((b) => '${b.activator.runtimeType}:${b.activator}')
+          .toSet()
+          .length,
+      todoShortcutBindings.length,
+      reason: '每条 binding 的 activator 必须互不相同',
+    );
     handle.dispose();
   });
 }
