@@ -125,9 +125,95 @@ Compiling lib/main.dart for the Web...    19.8s
 四行「状态」列一个字未改（`origin/develop` 仍在 `a1d7733` ⇒ !291 未合并）。#43 落点端 `BE(admin)/WEB` → `BE(admin)/FL` 是**证据口径替换**而非能力升级：图例里 `WEB=apps/todo` 已废弃，行内写明「撤回」二字留痕。
 `!291` 合并后回来做第二遍：把「已实现待合并」换成已合并 SHA，并复评 #43/#44 的状态列。
 
+## 第 63 轮（Issue #308）：新建表单的 6 条负路径与四件套 —— 只补测，不改行为
+
+先把结论摆正：**这 6 条行为在 `origin/develop@9032005` 上本来就是对的**，缺的是用例，所以本轮 `lib/` 一行未改。
+这不等于"顺手补个测试"——探针 P0 从测试基建里挖出一条真漏口（见下）。
+
+| Issue #308 条目 | 用例（`test/features/habit/habit_detail_page_test.dart`） | 判据 |
+| --------------- | -------------------------------------------------------- | ---- |
+| 1、2 目标填 0 / 负数 / 空 / 非数字 | 「目标填「0」「-3」「」「abc」」4 条（`for` 参数化） | 字段 `decoration.errorText == '目标至少为 1'`、错误文案在弹层内可见、`server.writeRequests` 为空、弹层没关 |
+| 3 创建失败保留输入 | 「新建失败：名称、频率、目标全都留着，不用重填」 | 名称仍 '晨跑'、目标仍 '5'、`ChoiceChip(period-2).selected == true`、弹层内出现「保存失败」 |
+| 4 320px + 1.3 不溢出 | 「320px + 1.3 倍字体：新建表单（含字数计数器）排得下且用自己的档位」 | 档位取的是**弹层自己 context** 的 `textScaler`、`takeException()` 为 null、「保存」可命中 |
+| 5 「频率」「目标」读屏 | 「读屏：『频率』组名与『目标』字段各自念得出来…」 | `ensureSemantics()` + `bySemanticsLabel` 限定在弹层内 |
+| 6 默认「每天 / 1 次」 | 「新建默认值是『每天 / 1 次』，且不带上一条习惯的回填」 | 三档 chip 只有 period-1 `selected`、目标文本 '1'、名称为空 |
+
+字段名回源：`频率` 见《05-习惯打卡/01-开始坚持一个习惯》:85，`目标` 见同页 :95 —— 与实现里的
+`habit_editor.dart:232`、`:251` 一致，没有自造同义词。
+读屏那条只证到"有可读标签"，`频率` 组名用的是 `Text` 而非 `Semantics(label:)`：这一组是三个
+`ChoiceChip`，chip 自带文案，组名走普通文本即可被念出，不需要第 1 轮 B-1 那种显式包一层。
+
+### 反向探针（每条先跑"未打补丁"的对照组）
+
+第一轮就踩了坑：把被打补丁的 `lib/...` 直接喂给 `flutter test` ⇒ 6 条全 `rc=64`（生产代码不是测试入口），
+看着像"全都红"其实一条都没跑。另外 `--plain-name` 命中 0 条时 `flutter test` 也报绿，
+所以每条探针必须先跑对照组，否则分不清"用例不会红"和"根本没跑到用例"。
+
+| 探针 | 抽掉什么 | 对照（未打补丁） | 打补丁后 |
+| ---- | -------- | ---------------- | -------- |
+| PA | `_targetError` 恒 null（`:86`） | `+4` 全绿 | `-4`：四条「目标填」全红 |
+| PB | 失败分支顺手 `pop`（`:122` 后） | `+1` | `-1`：「新建失败保留输入」红 |
+| PC | 默认频率 1 → 2（`:63`） | `+1` | `-1`：默认值用例红 |
+| PD | `labelText: '目标'` → '数值'（`:251`） | `+1` | `-1`：读屏用例红 |
+| PE | 「选择时间」文案撑爆操作行（`:273`） | `+1` | `-1`：320px + 1.3 用例红 |
+| P0 | 假服务对 `/todo/habit/create` 的接住（改的是测试文件） | `+1` | `-1`：**FR-5 红**，`Actual: Found 1 widget with key <'habit-editor-sheet'>` |
+
+P0 证明了两件事：
+
+1. 本轮给 `FakeHabitServer` 补的 create 分支不是装饰——抽掉就有用例红。
+2. **原本一直绿的 FR-5 其实是在一次失败的 create 里读请求体**：create 落到 `handler.next()` ⇒ dio 报错 ⇒
+   走 catch ⇒ 弹层不关并显示「保存失败」，但请求体照样被拦截器记下，而旧用例只断言请求体。
+   补上「弹层收掉 + 不出现失败提示」这两条正向对照后它才会红。
+   ⇒ 教训：**请求体对 ≠ 这一面走得通**，成功路径要断言"看得见成功"。
+
+### 320px + 1.3 的实测读数（不要把"要滚动"当结论）
+
+```
+NEW_SHEET_320_1_3 maxScrollExtent=0.0 pixels=0.0 viewport=559.6
+                  hitTestable(保存): true→true bottom=692.0 sheetBottom=704.0
+```
+
+⇒ 这一档下新建表单**本来就排得下**，不需要滚动。我最初写的注释是"计数器在 1.3 倍下多占一行、
+要滚到底才建得出来"，这个说法被上面的读数否掉，已按实测改掉。
+用例里保留 `if (maxScrollExtent > 0) expect(pixels, greaterThan(0))` 这条条件对照：
+将来表单加高到需要滚时，它仍在检验可达性，不会悄悄退化成"只读一屏就算过"。
+
+### 修测试基建时踩到的两个"找不到"
+
+- `find.descendant(of: <habit-editor-sheet>, matching: SingleChildScrollView)` 恒 findsNothing：
+  那个 key 就打在 `SingleChildScrollView` 自己身上（`habit_editor.dart:158`），而 descendant 不含起点。
+- 想按类型在 sheet 子树里找 `Scrollable` 取 position ⇒ `Bad state: Too many elements`
+  （每个 `TextField` 内部各有一个 Scrollable）。改成从「保存」往上取最近祖先，才是这张表自己的。
+
+### 用例计数
+
+`test/features/habit/habit_detail_page_test.dart`：声明数 18 → 22（`grep -cE '^  (testWidgets|test)\('`），
+运行时用例 18 → 26（+8）。差额是那 4 条「目标填 X」由一条 `for` 循环展开、缩进 4 空格所以不进声明计数。
+本文件单跑：`00:02 +26: All tests passed!`。
+
+## 门禁原文记录（跑在 `45c5dc3` 上，日志 `/tmp/g63/gates/`）
+
+| 门禁 | 结果 |
+| ---- | ---- |
+| `git diff --check` | `rc=0`，无输出 |
+| `dart format --output=none --set-exit-if-changed test/features/habit/habit_detail_page_test.dart` | `Formatted 1 file (0 changed)`，`rc=0` |
+| `flutter analyze` | `No issues found! (ran in 3.4s)`，`rc=0` |
+| `flutter test --tags golden` | `00:04 +9: All tests passed!`，`rc=0`，9 张基线未重录（日志里 golden 文件变更 0 处） |
+| `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:23 +906 ~26: All tests passed!`，`rc=0` |
+| `flutter build web --release --dart-define=TODO_API_BASE_URL=… --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web`，`rc=0` |
+
+`lib/` 本轮 0 改动（`git diff --stat 9032005..HEAD` 只有 1 个测试文件 + 1 个 markdown），
+所以这六道门禁检验的是"新用例本身不与任何既有行为冲突"，不是"新行为可用"。
+格式与门禁顺序照惯例：先 commit 再跑门禁，`pubspec.lock` 未被顺手改（门禁后工作区只剩本轮的 markdown）。
+
 ## 下一轮入口（本轮不接，避免顺手扩面）
 
 1. **habit 归档 / 恢复接线**：端点在 `zh-cloud-service!276`（未合并）。合并后在详情页菜单加第 3 项，反向断言 `find.text('归档')` findsNothing 要同步改成正向断言。
 2. **#45 打卡提示的多时点**：契约侧 `reminderAt` 是单个 `LocalDateTime`（绝对时点），嘀嗒是「每天 9:00/12:00/18:00/21:00」重复 ⇒ 需先在 Service 定义重复语义或改字段（spec 边界①-b），客户端不改。
 3. **Service #277**：删除习惯不级联清打卡记录（`deleteHabit` 只 `deleteById`，`TodoHabitCheckInMapper` 无按 habitId 删除）⇒ 矩阵文案与嘀嗒口径差异取决于这张单的结论。
 4. **同族时间字段**：全仓仍有 21 处 `toIso8601String`，未逐处判定是否同样与 `TimestampLocalDateTimeSerializer` 冲突（FR-6 已留痕）。
+5. **#308 收尾（需先拿到合并授权）**：合并后把本轮用例路径写进矩阵 #44 的 FL 证据列（状态列一个字不改——本轮没有新增能力），并在 Issue #308 留言贴合并 SHA 后关闭。
+   顺带记一条判据（不是待办，是复用时别再踩）：**"请求体对 ≠ 这一面走得通"**。本轮 FR-5 就栽在这里。
+   我一开始想把它写成"`specs/043`、`specs/044` 也照抄了这个错判据"，抽查后否掉了：
+   `habit_month_grid_test.dart:96` 断言弹层关闭、`:183` 断言「补记失败」可见，043 的成功/失败都看得见，不在这条漏口里。
+   其余测试文件未逐个核查，将来要扩先按同一判据抽查再下结论。
