@@ -12,11 +12,23 @@ PR **!322** 已开，**待合并授权**（合并我只问不做）⇒ 本轮不
 | # | 复核的话 | 我的回源复验 | 处置 |
 | - | -------- | ------------ | ---- |
 | 1 | 8 种宽度×字号组合合成**一条** `testWidgets`，`takeException()` 只吐第一条待报异常 ⇒ 后 7 格永远红不了；且第二条断言 `getSize(headerRow()).width ≤ 视口` **恒真** | 成立。溢出的那一帧 `RenderFlex.size` 仍是被约束夹住的 304，孩子已画到 340 —— 我那条断言量的根本不是"有没有越界" | 拆成**每格一条** `testWidgets`（8 条）；断言换成遍历 `flex.visitChildren` 取 `parentData.offset.dx + size.width` 的最大值 vs `flex.size.width`。反向探针 PM（阈值改 0 永不折叠）读到 `≤ <304.0> Actual: <340.0>` 与 `≤ <339.0> Actual: <340.0>` ⇒ 新断言真的会红，还能报出 1px 那一档 |
-| 2 | 阈值 `356` 是**绑平台**的：`adaptivePlatformDensity` 下桌面/紧凑密度一枚图标只有 40dp，写死会让窄面板白折 | **不成立，驳回**（照它改过一次，实测被否）。本仓主题 `useMaterial3: true`（`lib/app.dart:109`、`:150`），M3 的 `IconButton` 把样式里的 `visualDensity` 硬编成 standard（SDK `material/icon_button.dart:1152`/`:1294`/`:1436`/`:1576`），只有 legacy 分支 `:779` 才读主题密度。实测：主题设成 compact、面板 300dp ⇒ `A RenderFlex overflowed by 56 pixels`（= 7×48+4 − 284），图标压根没缩 | 阈值不跟密度；改成一条 compact 用例**钉住 48dp 这个读数**（复核提的"cheap pin"我用上了，只是钉的是 48 不是 40）。理由写进 `spec.md` 取舍 7 |
+| 2 | 阈值 `356` 是**绑平台**的：`adaptivePlatformDensity` 下桌面/紧凑密度一枚图标只有 40dp，写死会让窄面板白折 | **不成立，驳回**（照它改过一次，实测被否）。本仓主题 `useMaterial3: true`（`lib/app.dart:109`、`:150`），M3 的 `IconButton` 把样式里的 `visualDensity` 硬编成 standard（SDK `material/icon_button.dart:1152`/`:1294`/`:1436`/`:1573`），只有 legacy 分支 `:779` 才读主题密度。实测：主题设成 compact、面板 300dp ⇒ `A RenderFlex overflowed by 56 pixels`（= 7×48+4 − 284），图标压根没缩 | 阈值不跟密度；改成一条 compact 用例**钉住 48dp 这个读数**（复核提的"cheap pin"我用上了，只是钉的是 48 不是 40）。理由写进 `spec.md` 取舍 7 |
 | 3 | 顺着 2 核对公式时发现的我自己的错：`LayoutBuilder` 的 `maxWidth` 已扣掉 `Padding` 的 16dp，我再加 16 等于**数两遍** | 成立。真实比较对象是内容宽 ⇒ 阈值应是 340；写 356 把折叠线推到面板 372，356~371 那一带白折 | 常量改名 `_embeddedActionRowContentMinWidth = 340`；`355 折 / 356 不折` 两档各一条用例钉住。反向探针 PL（改回 356）→ **恰好 356.0 的两格红**，其余 11 条绿 |
 | 4 | `task_detail_pane.dart:34` 的注释把"355 溢 1px"的来源指向随 PR 提交的那条用例，而**那条用例检测不到 1px**（旧断言恒真） | 成立。旧版只能报出 36px 那一格 | 注释改为引用现用例的读数（逐格几何断言 + PM 的 1px 报数）；口径同时写进 `spec.md` 的「量法说明」 |
 | 5 | `spec.md` 四处文档缺陷：判据源"全页 406 行"（镜像实为 **405**）、把未合并的 `specs/045 :175` 当已有依据、`取舍` 里两条都编号"5."、把「破坏性」写成嘀嗒的原话 | 全部成立。镜像行数按 develop 重量 = 405（并补上真实路径 `todo/99_参考资料/…`，我原来引成 `todo/01_需求阶段/对照矩阵/99_参考资料/…` 也是错的）；`git ls-tree origin/develop specs/` 只到 **044** ⇒ specs/045 确在 PR !319 分支上未合并；「破坏性」原文没有这个词 | 四处都改了；「破坏性」标成"我的归类，不是原文用词"；specs/045 那条显式标**未合并** |
 | 6 | PR 正文写的门禁 SHA 与实际不符（门禁跑在 `5b8f514`，HEAD 已是 `8fb446d`） | 成立 | 本轮门禁在 `8d9cc53` 的最终字节上**全部重跑**（下表），PR 正文按新 SHA 重写并贴日志计数 |
+
+## 第 2 轮只读复核：`VERDICT: PASS`（无 BLOCKING，3 条 NIT 全部采纳）
+
+复核员独立复现了 PF（`+6 -7`，与我记的逐字一致）、PL（`+11 -2`，红的恰是 356.0 两档）、
+compact 用例 `headerIconExtent == 48.0`、`898 + 13 = 911` 与 `903 − 5 + 13 = 911` 两侧算术、
+镜像 405 行、`origin/develop` 的 `specs/` 末项是 044、还原后 `sha256` 与 `git status --porcelain` 干净。
+
+| # | NIT | 复验 | 处置 |
+| - | --- | ---- | ---- |
+| R2-1 | lib 注释自相矛盾：写「面板 320dp … 56 pixels（= 340 − 284）」，而 320 那档不折叠报的是 **36px**，56px 对应面板 **300** | 成立。我自己回算：内容 304 与 284 两档，需要量都是 340 ⇒ 溢出 36 与 56。我把两档的数拼在一句里了 | 注释改成两条分开写（320→36px、300→56px），并写明**用例只钉 320 那一档**，56px 是"按复核建议改过"的读数、不在提交用例里 |
+| R2-2 | `spec.md` 第四个 getter 是 `:1573` 不是 `:1576` | 成立，`grep -n "VisualDensity? get visualDensity"` 实得 1152/1294/1436/**1573** | spec 与 tasks 两处都改成 `:1573`（并同步修了我记忆里的那条错位） |
+| R2-3 | "与 `link_parent_task_test.dart` 的既有断言相互印证"是归因夸大：那个文件在 320dp 只有 `takeException()` isNull（`:271`），没有任何 355/356 边界断言 | 成立 | 边界的证据只算本文件的逐格 `expectHeaderFits` + PF/PL 探针；那句话不再出现在 lib/spec/PR 里 |
 
 ## 已完成
 

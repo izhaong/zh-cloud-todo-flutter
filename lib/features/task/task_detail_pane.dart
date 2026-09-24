@@ -36,9 +36,11 @@ const String kInboxListId = 'inbox';
 /// `useMaterial3: true`（`lib/app.dart:109`、`:150`），而 M3 的 `IconButton` 把样式里的
 /// `visualDensity` 硬编成 `VisualDensity.standard`（SDK `material/icon_button.dart:1152`
 /// 等四处 getter），所以 `ThemeData.visualDensity` 改不动这几枚图标的占位。
-/// 实测：把主题设成 `VisualDensity.compact`、面板 320dp，折叠仍要发生 —— 若不折叠就报
-/// `A RenderFlex overflowed by 56 pixels`（= 340 − 284，见
-/// `test/features/task/embedded_detail_header_narrow_test.dart` 那条 compact 用例）。
+/// 实测两条读数（都不折叠时的溢出量）：`VisualDensity.compact` 下面板 320dp（内容 304）溢 **36px**、
+/// 面板 300dp（内容 284）溢 **56px**（= 340 − 284）—— 两个数都指向"图标仍是 48dp"，
+/// 即主题密度改不动这几枚按钮。随 PR 提交的那条 compact 用例钉的是 320dp 那一档
+/// （`headerIconExtent('关闭详情') == 48.0`）；56px 那档是我按复核建议把阈值改成"随密度算"时
+/// 拿到的读数，留在这里当"为什么不跟密度"的证据，用例里没有它。
 ///
 /// 调用点比的是 `LayoutBuilder` 给的 `constraints.maxWidth`，那个值已经扣掉了左右各 8 的内边距，
 /// 所以 340 对应面板 356：实测面板 355 溢 1px、356 刚好（再加一次 16 就是把同一份 padding 数两遍，
