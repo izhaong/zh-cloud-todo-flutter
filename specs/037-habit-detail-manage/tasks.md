@@ -239,13 +239,35 @@ G5 `02:23 +906 ~26: All tests passed!`、G6 `✓ Built build/web`，跑完工作
 **保持全局**：那条断言要证的正是"整个界面没有任何地方挂着失败提示"，而此刻弹层按预期已经收掉 ——
 换成 `sheetChild(...)` 会在 surface 不存在时恒为 findsNothing，变成新的永真断言（就是 R1-③(a) 那类错）。
 
+## 复核（PR !346 第 2 轮）：`VERDICT: PASS`
+
+第 2 轮在 detached 副本上跑，`/tmp/wt-flutter-308` 全程未被动过（复核员 `git status` 自证 0 项）。A..E 全部成立：
+
+- B 复核员自己复现了 R1-②：基线 `9032005` 版本文件 `+18 All tests passed`、且假服务里 `_createPath` 0 命中；
+  HEAD 上删掉 create 分支 ⇒ `+25 -1`，唯一红项是 FR-5。
+- C 复核员补了我没做的一层：不只抽 `maxLength`（红在 `Expected: <64> Actual: <null>`），
+  还另塞 `counterText: ''` 单独证第二条可红（红在 `Found 0 widgets with text containing /64`），
+  并确认全 `lib/` 只有 `habit_editor.dart:172` 一处 `64` ⇒ `/64` 不会撞到别的文案。
+- D 全量在副本上重跑：`02:21 +906 ~26: All tests passed!`；`5da193d..262b242` 的 `test/` 差异 0 行，
+  所以"门禁跑在 `5da193d`"对 HEAD 仍然有效。
+- E 我那条驳回被实测支持：同一破坏下把全局查找换成 `sheetChild(...)`，第二条**根本轮不到执行**
+  （死在第一条），边际判据恒为 0 ⇒ 正是 R1-③(a) 那一类永真断言。
+  复核员另给了一条我没想到的加强理由：若哪天提示搬到 sheet 之外（SnackBar / 根 `ScaffoldMessenger`），
+  scoped 会漏、全局仍能抓住。
+
+### 复核员留的一处非阻塞观察（本轮不接）
+
+`habit_month_grid_test.dart:183` 用的是全局 `find.textContaining('补记失败')`，而用例名写「在表内给可见错误」
+⇒ 与本仓 `inSurface` 口径有出入（不影响可红性）。那是 043 的文件，不跟本 PR 混改；
+下一轮碰 043 时顺手收紧，或单开一条小单。
+
 ## 下一轮入口（本轮不接，避免顺手扩面）
 
 1. **habit 归档 / 恢复接线**：端点在 `zh-cloud-service!276`（未合并）。合并后在详情页菜单加第 3 项，反向断言 `find.text('归档')` findsNothing 要同步改成正向断言。
 2. **#45 打卡提示的多时点**：契约侧 `reminderAt` 是单个 `LocalDateTime`（绝对时点），嘀嗒是「每天 9:00/12:00/18:00/21:00」重复 ⇒ 需先在 Service 定义重复语义或改字段（spec 边界①-b），客户端不改。
 3. **Service #277**：删除习惯不级联清打卡记录（`deleteHabit` 只 `deleteById`，`TodoHabitCheckInMapper` 无按 habitId 删除）⇒ 矩阵文案与嘀嗒口径差异取决于这张单的结论。
 4. **同族时间字段**：全仓仍有 21 处 `toIso8601String`，未逐处判定是否同样与 `TimestampLocalDateTimeSerializer` 冲突（FR-6 已留痕）。
-5. **#308 收尾（需先拿到合并授权）**：合并后把本轮用例路径写进矩阵 #44 的 FL 证据列（状态列一个字不改——本轮没有新增能力），并在 Issue #308 留言贴合并 SHA 后关闭。
+5. **#308 收尾（已实现待合并：PR !346 两轮复核 PASS，只等合并授权）**：合并后把本轮用例路径写进矩阵 #44 的 FL 证据列（状态列一个字不改——本轮没有新增能力），并在 Issue #308 留言贴合并 SHA 后关闭。
    顺带记一条判据（不是待办，是复用时别再踩）：**"请求体对 ≠ 这一面走得通"**。本轮 FR-5 就栽在这里。
    这条漏口**不止习惯一处**：`habit_month_grid_test.dart:142-163`（043 的补记成功）同样只断言假仓库计数器
    （`lastCheckIn*`、`overviewStatsCalls`），没有一条"看得见成功"。
