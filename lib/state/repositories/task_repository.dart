@@ -880,6 +880,12 @@ class TaskRepository {
     }
   }
 
+  /// 任务的全部后代 id。「关联主任务」候选列表用它排除自己与后代，避免成环。
+  Future<Set<String>> descendantIds(String taskId) async {
+    final descendants = await _collectDescendants(taskId);
+    return {for (final task in descendants) task.id};
+  }
+
   Future<List<TodoTask>> _collectDescendants(String parentId) async {
     final result = <TodoTask>[];
     final queue = [parentId];
