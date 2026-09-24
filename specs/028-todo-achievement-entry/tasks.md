@@ -49,9 +49,9 @@
   ① 原句「9 张黄金图只 pump `HomeShell()`，push 路由零视觉覆盖」只对 **8/9** 成立 ——
   `test/visual/todo_workspace_golden_test.dart:112-114` 后 `mobile-detail` 经 `:130-140` tap 进
   `TaskDetailPage`，`:263-268` 就是拍它；② 该行引的四个 `AppBar` 行号各差 1（实际 17/14/18/1125）。
-- 与 `specs/001-todo-dida-core-parity/spec.md:66` 的措辞冲突**只登记未改**：那条验收场景写的是
-  「打开效率中心的成就勋章页签」。要么后续把 001 改成「打开设置 → 成就与勋章」，
-  要么等 hub 路线（四个子页 chrome 重写，或批准重录 9 张基线的 dock 第 4 按钮）落地后一并收口。
+- 与 `specs/001-todo-dida-core-parity/spec.md:66` 的措辞冲突**已收口**：那条验收场景原写「打开效率中心的成就勋章页签」，
+  本分支上已改成「打开设置页「账号」分组的「成就与勋章」」，与实装入口和已交付页面标题一致；
+  `specs/028/spec.md` 的登记段同步改掉。hub 路线（四个子页 chrome 重写，或批准重录 9 张基线的 dock 第 4 按钮）仍不采纳。
 - `lib/features/efficiency/efficiency_hub_page.dart` 仍是**无调用点的死页**（本轮不接线也不删，归属留给 specs/027）。
   本切片的用例还 import 它做负断言，将来按 027 结论删 hub 时要同步改 `test/settings_achievement_entry_test.dart:24-28`。
 - 下一轮候选（都不需要外部条件）：#18 文件夹管理入口（要先申请黄金图重录）、
