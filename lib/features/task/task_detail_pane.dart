@@ -30,9 +30,20 @@ import 'task_view_mutation_feedback.dart';
 /// 收集箱的本地清单 id（synthetic inbox）：listId 为该值的任务视为"未归清单"。
 const String kInboxListId = 'inbox';
 
-/// 嵌入态操作头放得下 7 枚图标的最小面板宽度：7×48（IconButton 默认下限）+ 4 间距 + 左右内边距 16。
-/// 实测口径见 `test/features/task/embedded_detail_header_narrow_test.dart`（355 溢 1px、356 刚好）。
-const double _embeddedActionRowMinWidth = 356;
+/// 嵌入态操作头放得下 7 枚图标所需的**内容宽度**（不含包裹层左右各 8 的内边距）：7×48 + 4 间距 = 340。
+///
+/// 48 = `kMinInteractiveDimension`。**这个数不跟随主题密度**：本仓主题是
+/// `useMaterial3: true`（`lib/app.dart:109`、`:150`），而 M3 的 `IconButton` 把样式里的
+/// `visualDensity` 硬编成 `VisualDensity.standard`（SDK `material/icon_button.dart:1152`
+/// 等四处 getter），所以 `ThemeData.visualDensity` 改不动这几枚图标的占位。
+/// 实测：把主题设成 `VisualDensity.compact`、面板 320dp，折叠仍要发生 —— 若不折叠就报
+/// `A RenderFlex overflowed by 56 pixels`（= 340 − 284，见
+/// `test/features/task/embedded_detail_header_narrow_test.dart` 那条 compact 用例）。
+///
+/// 调用点比的是 `LayoutBuilder` 给的 `constraints.maxWidth`，那个值已经扣掉了左右各 8 的内边距，
+/// 所以 340 对应面板 356：实测面板 355 溢 1px、356 刚好（再加一次 16 就是把同一份 padding 数两遍，
+/// 会把折叠线错推到面板 372）。
+const double _embeddedActionRowContentMinWidth = 340;
 
 enum _TaskDetailAction {
   startPomodoro,
@@ -838,7 +849,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     ];
   }
 
-  /// 窄面板（< 356dp）才把「移至收集箱」与「删除」折进「...」：
+  /// 窄面板（内容宽放不下 7 枚图标，即面板 < 356dp）才折进「...」：
   /// 7 枚固定 48dp 图标 + 4dp 间距 + 左右 8dp 内边距要 356dp，320px 屏上实测溢出 36px
   /// （Issue #279；与字号无关，1.0 与 1.3 溢出量相同）。宽面板保持原样，
   /// 免得折叠把已有的图标形状改掉。
@@ -2627,7 +2638,8 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final folded = constraints.maxWidth < _embeddedActionRowMinWidth;
+              final folded =
+                  constraints.maxWidth < _embeddedActionRowContentMinWidth;
               return Row(
                 children: [
                   IconButton(
