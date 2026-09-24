@@ -1075,8 +1075,7 @@ class TodoRestApi {
       note = NoteApi(client),
       calSubscription = CalendarSubscriptionApi(client),
       taskImport = TodoTaskImportApi(client),
-      security = SecurityApi(client),
-      templates = TemplateApi(client);
+      security = SecurityApi(client);
 
   final TaskRestApi task;
   final TodoTaskBatchApi taskBatch;
@@ -1096,54 +1095,6 @@ class TodoRestApi {
   final CalendarSubscriptionApi calSubscription;
   final TodoTaskImportApi taskImport;
   final SecurityApi security;
-  final TemplateApi templates;
-}
-
-/// 一条可用于笔记的模板（服务端 `todo_template`）。
-class NoteTemplateDto {
-  const NoteTemplateDto({
-    required this.id,
-    required this.name,
-    required this.content,
-    required this.isPublic,
-  });
-
-  factory NoteTemplateDto.fromJson(Map<String, dynamic> json) =>
-      NoteTemplateDto(
-        id: (json['id'] as num).toInt(),
-        name: json['name'] as String? ?? '',
-        content: json['content'] as String? ?? '',
-        isPublic: json['isPublic'] as bool? ?? false,
-      );
-
-  final int id;
-  final String name;
-  final String content;
-
-  /// 分组靠服务端给的 `isPublic`，不靠「来自哪个接口」推断。
-  final bool isPublic;
-}
-
-/// 模板 REST：`/template/list-my`、`/template/list-public`
-/// （契约见 service 的 `AppTodoSummaryAndTemplateController`）。
-class TemplateApi {
-  TemplateApi(this._client);
-
-  final ApiClient _client;
-
-  Future<List<NoteTemplateDto>> listMy() => _list('/template/list-my');
-
-  Future<List<NoteTemplateDto>> listPublic() => _list('/template/list-public');
-
-  Future<List<NoteTemplateDto>> _list(String path) async {
-    final response = await _client.get<Map<String, dynamic>>(path);
-    return _unwrapListBody(response.data)
-        .map(
-          (item) =>
-              NoteTemplateDto.fromJson(Map<String, dynamic>.from(item as Map)),
-        )
-        .toList(growable: false);
-  }
 }
 
 /// 提醒动作（`/reminder-action/**`）直达 REST：收件箱 / 完成 / 忽略 / 延后；不走
