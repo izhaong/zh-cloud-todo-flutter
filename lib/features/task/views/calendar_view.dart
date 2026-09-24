@@ -30,12 +30,18 @@ class CalendarView extends ConsumerStatefulWidget {
     DateTime? now,
     this.onTaskSelected,
     this.onTaskDateChanged,
+    this.filterCompleted = true,
   }) : _now = now;
 
   final DateTime? _now;
   final List<TodoTask> tasks;
   final ValueChanged<String>? onTaskSelected;
   final Future<void> Function(TodoTask task, DateTime dueAt)? onTaskDateChanged;
+
+  /// 日历自身的「显示已完成」设置是否参与过滤。清单页的日历由清单筛选决定，
+  /// 传 false —— 否则用户筛「只看已完成」再切到日历会被叠成空列表；
+  /// 此时「显示设置」入口一并隐藏，因为这个开关在这里没有可见效果。
+  final bool filterCompleted;
 
   @override
   ConsumerState<CalendarView> createState() => _CalendarViewState();
@@ -44,6 +50,20 @@ class CalendarView extends ConsumerStatefulWidget {
 class _CalendarViewState extends ConsumerState<CalendarView> {
   late DateTime _anchor;
   CalendarMode _mode = CalendarMode.month;
+  bool _showCompleted = false;
+
+  /// 用户是否已经动过显示设置。恢复偏好是异步的，若期间用户已切了视图或拨了开关，
+  /// 迟到的旧值必须作废 —— 否则表现为「刚点的档位被弹回上一次的选择」。
+  bool _displayTouched = false;
+
+  /// 嘀嗒默认隐藏已完成任务，由「显示设置」里的开关控制。
+  List<TodoTask> get _visibleTasks {
+    if (!widget.filterCompleted || _showCompleted) return widget.tasks;
+    return [
+      for (final t in widget.tasks)
+        if (!t.completed) t,
+    ];
+  }
 
   @override
   void initState() {
@@ -51,7 +71,7 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
     _anchor = widget._now ?? DateTime.now();
     // 锚点归零到当天 00:00
     _anchor = DateTime(_anchor.year, _anchor.month, _anchor.day);
-    Future<void>.microtask(_restoreMode);
+    Future<void>.microtask(_restoreDisplay);
   }
 
   @override
@@ -64,13 +84,14 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
           onModeChanged: _changeMode,
           onPrev: () => setState(() => _shift(-1)),
           onNext: () => setState(() => _shift(1)),
+          onOpenSettings: widget.filterCompleted ? _showDisplaySettings : null,
         ),
         const Divider(height: 1),
         Expanded(
           child: switch (_mode) {
             CalendarMode.month => _MonthGrid(
               anchor: _anchor,
-              tasks: widget.tasks,
+              tasks: _visibleTasks,
               onTaskDateChanged: widget.onTaskDateChanged,
               onDayTap: (day) {
                 setState(() => _anchor = day);
@@ -79,24 +100,24 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
             ),
             CalendarMode.week => _WeekView(
               anchor: _anchor,
-              tasks: widget.tasks,
+              tasks: _visibleTasks,
               onTaskTap: (t) => _openDetail(context, t),
             ),
             CalendarMode.year => _YearView(
               anchor: _anchor,
-              tasks: widget.tasks,
+              tasks: _visibleTasks,
               onMonthTap: (m) {
                 setState(() => _anchor = DateTime(_anchor.year, m, 1));
                 _changeMode(CalendarMode.month);
               },
             ),
             CalendarMode.list => _ListView(
-              tasks: widget.tasks,
+              tasks: _visibleTasks,
               onTaskTap: (t) => _openDetail(context, t),
             ),
             CalendarMode.agenda => _AgendaView(
               anchor: _anchor,
-              tasks: widget.tasks,
+              tasks: _visibleTasks,
               onTaskTap: (t) => _openDetail(context, t),
             ),
           },
@@ -125,29 +146,52 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
     }
   }
 
-  Future<void> _restoreMode() async {
+  Future<void> _restoreDisplay() async {
     final repository = ref.read(taskViewActionRepositoryProvider);
-    final savedMode = await repository?.getCalendarViewMode();
-    if (!mounted || savedMode == null) return;
-    for (final mode in CalendarMode.values) {
-      if (mode.name == savedMode) {
-        setState(() => _mode = mode);
-        return;
+    final saved = await repository?.getCalendarDisplay();
+    if (!mounted || saved == null || _displayTouched) return;
+    setState(() {
+      if (saved.viewType != null) {
+        for (final mode in CalendarMode.values) {
+          if (mode.name == saved.viewType) _mode = mode;
+        }
       }
-    }
+      _showCompleted = saved.showCompletedTasks ?? false;
+    });
   }
 
   Future<void> _changeMode(CalendarMode mode) async {
+    _displayTouched = true;
     if (mounted) setState(() => _mode = mode);
+    await _persistDisplay();
+  }
+
+  Future<void> _showDisplaySettings() async {
+    _displayTouched = true;
+    final next = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (sheetContext) =>
+          _DisplaySettingsSheet(showCompleted: _showCompleted),
+    );
+    if (next == null || !mounted) return;
+    setState(() => _showCompleted = next);
+    await _persistDisplay();
+  }
+
+  /// 模式与开关必须成对写：单写开关会让偏好层的 viewType 兜底成 list。
+  Future<void> _persistDisplay() async {
     try {
       await ref
           .read(taskViewActionRepositoryProvider)
-          ?.saveCalendarViewMode(mode.name);
+          ?.saveCalendarDisplay(
+            viewMode: _mode.name,
+            showCompletedTasks: _showCompleted,
+          );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.maybeOf(
         context,
-      )?.showSnackBar(const SnackBar(content: Text('日历视图设置保存失败，请重试')));
+      )?.showSnackBar(const SnackBar(content: Text('日历显示设置保存失败，当前修改仅本次生效')));
     }
   }
 
@@ -251,6 +295,37 @@ Future<void> showExternalCalendarEventDialog(
   );
 }
 
+/// 日历「显示设置」抽屉：对应嘀嗒日历右上角 ··· → 显示设置。
+class _DisplaySettingsSheet extends StatelessWidget {
+  const _DisplaySettingsSheet({required this.showCompleted});
+
+  final bool showCompleted;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text('显示设置', style: TextStyle(fontSize: 16)),
+            ),
+          ),
+          SwitchListTile(
+            key: const Key('calendar-show-completed'),
+            title: const Text('显示已完成'),
+            value: showCompleted,
+            onChanged: (value) => Navigator.pop(context, value),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// 月模式网格：6 行 × 7 列（周一起），包含 anchor 月的所有日期及上下月填充。
 List<List<DateTime>> buildMonthGrid(DateTime anchor) {
   final firstOfMonth = DateTime(anchor.year, anchor.month, 1);
@@ -275,6 +350,7 @@ class _Toolbar extends StatelessWidget {
     required this.onModeChanged,
     required this.onPrev,
     required this.onNext,
+    required this.onOpenSettings,
   });
 
   final CalendarMode mode;
@@ -282,6 +358,7 @@ class _Toolbar extends StatelessWidget {
   final ValueChanged<CalendarMode> onModeChanged;
   final VoidCallback onPrev;
   final VoidCallback onNext;
+  final VoidCallback? onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -316,6 +393,23 @@ class _Toolbar extends StatelessWidget {
           icon: const Icon(Icons.chevron_right),
           onPressed: onNext,
         );
+        final settingsButton = onOpenSettings == null
+            ? const SizedBox.shrink()
+            : Semantics(
+                container: true,
+                button: true,
+                enabled: true,
+                label: '显示设置',
+                onTap: onOpenSettings,
+                child: ExcludeSemantics(
+                  child: IconButton(
+                    key: const Key('calendar-display-settings'),
+                    tooltip: '显示设置',
+                    icon: const Icon(Icons.tune),
+                    onPressed: onOpenSettings,
+                  ),
+                ),
+              );
         final labelText = Text(
           label,
           maxLines: 1,
@@ -340,6 +434,7 @@ class _Toolbar extends StatelessWidget {
                         previousButton,
                         Expanded(child: labelText),
                         nextButton,
+                        settingsButton,
                       ],
                     ),
                   ],
@@ -351,6 +446,7 @@ class _Toolbar extends StatelessWidget {
                     previousButton,
                     labelText,
                     nextButton,
+                    settingsButton,
                   ],
                 ),
         );
