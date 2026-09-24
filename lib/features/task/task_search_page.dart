@@ -27,6 +27,8 @@ class _TaskSearchPageState extends ConsumerState<TaskSearchPage> {
   TaskQueryFilter _taskFilter = const TaskQueryFilter();
   List<TaskSearchResult> _results = const [];
   int _total = 0;
+  // 分页游标必须按去重前的已消费行数计，否则重复行被丢弃后游标停住，尾部条目永远取不到。
+  int _consumed = 0;
   int _request = 0;
   String _loadedFingerprint = '';
   bool _loading = false;
@@ -166,7 +168,7 @@ class _TaskSearchPageState extends ConsumerState<TaskSearchPage> {
             title: Text('${_labelFor(result.type)} · ${result.title}'),
             onTap: () => _openResult(context, result),
           ),
-        if (_results.length < _total)
+        if (_consumed < _total)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Center(
@@ -174,7 +176,7 @@ class _TaskSearchPageState extends ConsumerState<TaskSearchPage> {
                 container: true,
                 label: _loadingMore
                     ? '正在加载更多搜索结果'
-                    : '加载更多 ${_total - _results.length} 条搜索结果',
+                    : '加载更多 ${_total - _consumed} 条搜索结果',
                 button: true,
                 onTap: _loadingMore ? null : () => _reload(append: true),
                 child: ExcludeSemantics(
@@ -184,9 +186,7 @@ class _TaskSearchPageState extends ConsumerState<TaskSearchPage> {
                         ? null
                         : () => _reload(append: true),
                     child: Text(
-                      _loadingMore
-                          ? '正在加载'
-                          : '加载更多 ${_total - _results.length} 条',
+                      _loadingMore ? '正在加载' : '加载更多 ${_total - _consumed} 条',
                     ),
                   ),
                 ),
@@ -260,7 +260,7 @@ class _TaskSearchPageState extends ConsumerState<TaskSearchPage> {
         _query.trim().isEmpty) {
       return;
     }
-    if (append && (_loadingMore || _results.length >= _total)) return;
+    if (append && (_loadingMore || _consumed >= _total)) return;
 
     final request = ++_request;
     final fingerprint = _fingerprint;
@@ -277,7 +277,7 @@ class _TaskSearchPageState extends ConsumerState<TaskSearchPage> {
         keyword: _query,
         scope: _scope,
         filter: _taskFilter,
-        offset: append ? _results.length : 0,
+        offset: append ? _consumed : 0,
       );
       final page = widget.searchPage == null
           ? await repository!.searchPage(searchRequest)
@@ -286,15 +286,13 @@ class _TaskSearchPageState extends ConsumerState<TaskSearchPage> {
         return;
       }
       setState(() {
-        if (append) {
-          final seen = _results.map((result) => result.identity).toSet();
-          _results = [
-            ..._results,
-            ...page.results.where((result) => seen.add(result.identity)),
-          ];
-        } else {
-          _results = page.results;
-        }
+        final seen = <String>{};
+        _results = (append ? [..._results, ...page.results] : page.results)
+            .where((result) => seen.add(result.identity))
+            .toList(growable: false);
+        _consumed = append
+            ? _consumed + page.results.length
+            : page.results.length;
         _total = page.total;
         _loadedFingerprint = fingerprint;
       });

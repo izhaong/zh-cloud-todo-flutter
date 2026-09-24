@@ -897,7 +897,7 @@ class PomodoroApi {
   }
 }
 
-/// 倒数日：list / get / create
+/// 倒数日：list / create / update / delete
 class CountdownApi {
   CountdownApi(this._dio);
   final Dio _dio;
@@ -918,7 +918,7 @@ class CountdownApi {
   Future<int> create({
     required String title,
     required DateTime targetDate,
-    bool isCountUp = false,
+    bool showAge = false,
     int style = 1,
   }) async {
     final r = await _dio.post<Map<String, dynamic>>(
@@ -927,13 +927,41 @@ class CountdownApi {
         'name': title,
         'targetDate': _dateOnly(targetDate),
         'style': style,
-        'showAge': isCountUp,
+        'showAge': showAge,
       },
     );
     final data = _unwrapData(r.data);
     if (data is num) return data.toInt();
     if (data is Map) return (data['id'] as num?)?.toInt() ?? 0;
     return int.tryParse('$data') ?? 0;
+  }
+
+  Future<void> update({
+    required int id,
+    required String title,
+    required DateTime targetDate,
+    required int style,
+    required bool showAge,
+  }) async {
+    final response = await _dio.put<Map<String, dynamic>>(
+      '${ApiConfig.todoPrefix}/countdown/update',
+      data: {
+        'id': id,
+        'name': title,
+        'targetDate': _dateOnly(targetDate),
+        'style': style,
+        'showAge': showAge,
+      },
+    );
+    _unwrapData(response.data);
+  }
+
+  Future<void> delete(int id) async {
+    final response = await _dio.delete<Map<String, dynamic>>(
+      '${ApiConfig.todoPrefix}/countdown/delete',
+      queryParameters: {'id': id},
+    );
+    _unwrapData(response.data);
   }
 }
 

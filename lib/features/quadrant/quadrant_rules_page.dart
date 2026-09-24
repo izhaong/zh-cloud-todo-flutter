@@ -303,6 +303,7 @@ class _RuleEditorDialogState extends State<_RuleEditorDialog> {
               ),
               DropdownButtonFormField<QuadrantRuleType>(
                 initialValue: _type,
+                isExpanded: true,
                 decoration: const InputDecoration(labelText: '分类方式'),
                 items: [
                   for (final type in QuadrantRuleType.values)

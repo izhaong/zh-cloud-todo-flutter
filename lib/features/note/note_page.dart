@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/todo_api.dart';
 import '../../state/providers.dart';
+import 'task_summary_sheet.dart';
 
 class NotePage extends ConsumerStatefulWidget {
   const NotePage({super.key});
@@ -307,6 +308,26 @@ class _NoteEditorDialogState extends State<_NoteEditorDialog> {
     _content.value = noteWrapWithMarker(_content.value, marker);
   }
 
+  /// 嘀嗒的摘要只从笔记插入；确认后写进光标处，光标无效时追加到末尾。
+  Future<void> _insertSummary() async {
+    final summary = await showNoteTaskSummarySheet(context);
+    if (summary == null || !mounted) return;
+    final value = _content.value;
+    final caret = value.selection.isValid
+        ? value.selection.start.clamp(0, value.text.length)
+        : value.text.length;
+    final before = value.text.substring(0, caret);
+    final after = value.text.substring(caret);
+    final joined =
+        '${before.isEmpty || before.endsWith('\n') ? before : '$before\n'}'
+        '$summary'
+        '${after.isEmpty || after.startsWith('\n') ? after : '\n$after'}';
+    _content.value = TextEditingValue(
+      text: joined,
+      selection: TextSelection.collapsed(offset: joined.length - after.length),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -343,6 +364,15 @@ class _NoteEditorDialogState extends State<_NoteEditorDialog> {
                     onPressed: () => _applyMarker('=='),
                   ),
                 ],
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: const Key('todo-note-insert-summary'),
+                  onPressed: _insertSummary,
+                  icon: const Icon(Icons.article_outlined, size: 18),
+                  label: const Text('插入摘要'),
+                ),
               ),
               TextField(
                 key: const Key('todo-note-content'),

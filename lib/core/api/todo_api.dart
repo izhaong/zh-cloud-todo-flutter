@@ -546,11 +546,18 @@ class RecommendationTask {
   final int score;
 
   factory RecommendationTask.fromJson(Map<String, dynamic> json) {
+    // 服务端 `AppTodoRecommendTaskRespVO.dueAt` 是裸 `LocalDateTime` 且无 `@JsonFormat`，
+    // 被 `TimestampLocalDateTimeSerializer` 写成 **epoch 毫秒数字**（同文件 1113/1495/1598 已是毫秒口径）；
+    // 只认字符串会让 dueAt 恒 null ⇒ 「即将到来」的明天/后天子档在真实数据下永远不出现。
     final dueRaw = json['dueAt'];
     return RecommendationTask(
       taskServerId: (json['taskId'] as num?)?.toInt() ?? 0,
       title: json['title']?.toString() ?? '',
-      dueAt: dueRaw is String ? DateTime.tryParse(dueRaw) : null,
+      dueAt: dueRaw is num
+          ? DateTime.fromMillisecondsSinceEpoch(dueRaw.toInt())
+          : (dueRaw is String && dueRaw.isNotEmpty
+                ? DateTime.tryParse(dueRaw)
+                : null),
       reasonCode: json['reasonCode']?.toString() ?? '',
       reason: json['reason']?.toString() ?? '',
       score: (json['score'] as num?)?.toInt() ?? 0,

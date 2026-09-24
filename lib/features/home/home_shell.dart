@@ -17,6 +17,8 @@ import '../../state/repositories/task_query_repository.dart';
 import '../../state/session_state.dart';
 import '../habit/habit_page.dart';
 import '../countdown/countdown_page.dart';
+import '../filter/filter_bar.dart';
+import '../filter/saved_filters_page.dart';
 import '../note/note_page.dart';
 import '../pomodoro/pomodoro_page.dart';
 import '../reminder/reminder_inbox_page.dart';
@@ -47,6 +49,9 @@ class _HomeShellState extends ConsumerState<HomeShell>
     with WidgetsBindingObserver {
   Section _section = Section.tasks;
   SmartList _smart = SmartList.inbox;
+
+  /// 从「筛选器」页套用进来的已保存条件；切换侧栏选择时清空。
+  TaskFilter? _appliedFilter;
   String? _listId;
   String? _selectedTaskId;
   final _workspaceScaffoldKey = GlobalKey<ScaffoldState>();
@@ -288,6 +293,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
     setState(() {
       _section = section;
       _selectedTaskId = null;
+      _appliedFilter = null;
     });
     if (hadTaskSelection) _dismissDetailPresentation();
   }
@@ -299,6 +305,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
       _smart = smart;
       _listId = null;
       _selectedTaskId = null;
+      _appliedFilter = null;
     });
     if (hadTaskSelection) _dismissDetailPresentation();
   }
@@ -311,6 +318,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
       _smart = smart;
       _listId = id;
       _selectedTaskId = null;
+      _appliedFilter = null;
     });
     if (hadTaskSelection) _dismissDetailPresentation();
   }
@@ -448,10 +456,12 @@ class _HomeShellState extends ConsumerState<HomeShell>
     }
   }
 
-  void _openFilters() {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const _FiltersPage()));
+  Future<void> _openFilters() async {
+    final applied = await Navigator.of(context).push<TaskFilter>(
+      MaterialPageRoute(builder: (_) => const SavedFiltersPage()),
+    );
+    if (applied == null) return;
+    setState(() => _appliedFilter = applied);
   }
 
   void _openSettings() {
@@ -673,6 +683,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
             initialListId: _effectiveListId,
             initialDueRange: _dueRange,
             initialCompleted: _smart == SmartList.completed ? true : null,
+            initialFilter: _appliedFilter,
             selectedTaskId: _selectedTaskId,
             onTaskSelected: _selectTask,
             onSelectionInvalidated: _invalidateTaskSelection,
@@ -838,25 +849,6 @@ class _MinePane extends ConsumerWidget {
           onTap: () => ref.read(sessionProvider.notifier).signOut(),
         ),
       ],
-    );
-  }
-}
-
-class _FiltersPage extends StatelessWidget {
-  const _FiltersPage();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('筛选器')),
-      body: ListView(
-        padding: const EdgeInsets.all(12),
-        children: const [
-          ListTile(title: Text('今日任务')),
-          ListTile(title: Text('已完成')),
-          ListTile(title: Text('已过期')),
-        ],
-      ),
     );
   }
 }

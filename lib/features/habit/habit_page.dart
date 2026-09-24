@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/brand_colors.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../state/efficiency_providers.dart';
+import 'habit_detail_page.dart';
+import 'habit_editor.dart';
 import 'habit_repository.dart';
 
 /// M11-B4 习惯列表 + 打卡
@@ -20,7 +22,12 @@ class HabitPage extends ConsumerWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: () => _showCreate(context, ref),
+            onPressed: () async {
+              if (await showHabitEditor(context) && context.mounted) {
+                ref.invalidate(myHabitsProvider);
+                ref.invalidate(habitStatsProvider);
+              }
+            },
           ),
         ],
       ),
@@ -78,46 +85,6 @@ class HabitPage extends ConsumerWidget {
       ),
     );
   }
-
-  void _showCreate(BuildContext context, WidgetRef ref) {
-    final ctl = TextEditingController();
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('新建习惯'),
-        content: TextField(
-          controller: ctl,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: '习惯名'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final name = ctl.text.trim();
-              if (name.isEmpty) return;
-              try {
-                await ref.read(habitRepositoryProvider).create(name: name);
-                ref.invalidate(myHabitsProvider);
-                ref.invalidate(habitStatsProvider);
-                if (ctx.mounted) Navigator.pop(ctx);
-              } catch (e) {
-                if (ctx.mounted) {
-                  ScaffoldMessenger.of(
-                    ctx,
-                  ).showSnackBar(SnackBar(content: Text('创建失败: $e')));
-                }
-              }
-            },
-            child: const Text('保存'),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _Stat extends StatelessWidget {
@@ -157,48 +124,61 @@ class _HabitTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = brandColors(context);
+    // 嘀嗒：点习惯先进详情页，管理动作在详情页的「...」里，不在列表行上做菜单。
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: AppCard(
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: _parseColor(habit.color),
-              child: const Icon(Icons.check, color: Colors.white, size: 18),
+        child: InkWell(
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) =>
+                  HabitDetailPage(habitId: habit.id, initial: habit),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    habit.name,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: colors.foreground,
-                    ),
-                  ),
-                  Text(
-                    _targetLabel(habit),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: colors.mutedForeground,
-                    ),
-                  ),
-                ],
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: habitColor(habit.color, colors.success),
+                child: Icon(
+                  habitIconChoices[habit.icon] ?? Icons.check,
+                  color: Colors.white,
+                  size: 18,
+                ),
               ),
-            ),
-            AppButton(
-              onPressed: () async {
-                await ref.read(habitRepositoryProvider).checkIn(habit.id);
-                ref.invalidate(myHabitsProvider);
-                ref.invalidate(habitStatsProvider);
-              },
-              child: const Text('打卡'),
-            ),
-          ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      habit.name,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: colors.foreground,
+                      ),
+                    ),
+                    Text(
+                      _targetLabel(habit),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colors.mutedForeground,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              AppButton(
+                onPressed: () async {
+                  await ref.read(habitRepositoryProvider).checkIn(habit.id);
+                  ref.invalidate(myHabitsProvider);
+                  ref.invalidate(habitStatsProvider);
+                },
+                child: const Text('打卡'),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -206,20 +186,5 @@ class _HabitTile extends ConsumerWidget {
 }
 
 String _targetLabel(HabitDto habit) {
-  final unit = switch (habit.period) {
-    2 => '周',
-    3 => '月',
-    _ => '天',
-  };
-  return '目标 ${habit.targetCount} 次/$unit';
-}
-
-Color _parseColor(String? hex) {
-  if (hex == null || hex.isEmpty) return Colors.green;
-  try {
-    final s = hex.startsWith('#') ? hex : '#$hex';
-    return Color(int.parse(s.substring(1), radix: 16) | 0xFF000000);
-  } catch (_) {
-    return Colors.green;
-  }
+  return '${habitPeriodLabel(habit.period)} ${habit.targetCount} 次';
 }

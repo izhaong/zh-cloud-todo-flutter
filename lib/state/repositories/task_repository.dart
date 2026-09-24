@@ -468,8 +468,41 @@ class TaskRepository {
               : null,
         },
       );
+      // 嘀嗒口径：检查事项全部完成后主任务自动完成；反向取消不把主任务改回未完成。
+      if (next.completed) await _completeTaskWhenChecklistDone(parent);
     });
     return next;
+  }
+
+  /// 检查事项已全部完成时把任务一并标记完成并写一条 task upsert。
+  /// 已完成或已作废的任务不动：前者会重复入队，后者等于把回收站里的任务复活；
+  /// 只读清单不替用户改父任务（勾选项本身照常入库，但不再追加一条 DONE）。
+  Future<void> _completeTaskWhenChecklistDone(TodoTask task) async {
+    if (task.completed || task.cancelled) return;
+    final list = await (_db.select(
+      _db.todoLists,
+    )..where((row) => row.id.equals(task.listId))).getSingleOrNull();
+    if (list != null && !list.writable) return;
+    final items = await (_db.select(
+      _db.todoChecklistItems,
+    )..where((item) => item.taskId.equals(task.id))).get();
+    if (items.any((item) => !item.completed)) return;
+    final now = DateTime.now();
+    final completed = task.copyWith(
+      completed: true,
+      completedAt: Value(now),
+      updatedAt: now,
+    );
+    await (_db.update(
+      _db.todoTasks,
+    )..where((row) => row.id.equals(task.id))).write(completed);
+    await _queue.enqueue(
+      entity: SyncEntities.task,
+      op: SyncOps.upsert,
+      localId: completed.id,
+      serverId: completed.serverId,
+      payload: _taskPayload(completed),
+    );
   }
 
   /// 离线更新检查事项文本或顺序；变更复用 checklist task 的同步载荷。
@@ -847,6 +880,12 @@ class TaskRepository {
     }
   }
 
+  /// 任务的全部后代 id。「关联主任务」候选列表用它排除自己与后代，避免成环。
+  Future<Set<String>> descendantIds(String taskId) async {
+    final descendants = await _collectDescendants(taskId);
+    return {for (final task in descendants) task.id};
+  }
+
   Future<List<TodoTask>> _collectDescendants(String parentId) async {
     final result = <TodoTask>[];
     final queue = [parentId];
@@ -962,10 +1001,7 @@ class TaskRepository {
     return task;
   }
 
-  Future<void> _requireSectionInList(
-    String listId,
-    String? sectionId,
-  ) async {
+  Future<void> _requireSectionInList(String listId, String? sectionId) async {
     if (sectionId == null) return;
     final section = await (_db.select(
       _db.todoTaskSections,

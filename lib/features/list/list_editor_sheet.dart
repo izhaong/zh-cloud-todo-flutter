@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/app_database.dart';
 import '../../state/providers.dart';
+import 'list_actions.dart';
 
 /// M11-B2 清单创建 / 重命名 / 删除 弹窗。
 class ListEditorSheet extends ConsumerStatefulWidget {
@@ -44,35 +45,8 @@ class _ListEditorSheetState extends ConsumerState<ListEditorSheet> {
   }
 
   Future<void> _delete() async {
-    final list = widget.existing!;
-    final db = ref.read(appDatabaseProvider);
-    if (db == null) return;
-    final open = await db.countOpenTasksByList(list.id);
-    if (!mounted) return;
-    if (open > 0) {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('清单有未完成任务'),
-          content: Text('"${list.name}" 仍有 $open 项未完成。\n确认删除？'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('删除'),
-            ),
-          ],
-        ),
-      );
-      if (ok != true) return;
-    }
-    final repo = ref.read(listRepositoryProvider);
-    if (repo == null) return;
-    await repo.delete(list.id);
-    if (mounted) Navigator.pop(context);
+    final deleted = await confirmAndDeleteList(context, ref, widget.existing!);
+    if (deleted && mounted) Navigator.pop(context);
   }
 
   @override
