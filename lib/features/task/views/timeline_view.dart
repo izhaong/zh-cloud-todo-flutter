@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -464,15 +465,22 @@ class _TimelineWindowState extends State<_TimelineWindow> {
           onZoomChanged: widget.onZoomChanged,
           onScaleChanged: widget.onScaleChanged,
         ),
-        _TimelineContinuousCanvas(
-          now: _anchor,
-          scale: widget.scale,
-          zoom: widget.zoom,
-          tasks: widget.tasks,
-          onTaskTap: widget.onTaskTap,
-          onTaskTimeChange: widget.onTaskTimeChange,
-          onSlotTap: widget.onSlotTap,
-          onTaskDropped: widget.onTaskDropped,
+        Listener(
+          // 嘀嗒 :107 的 Ctrl/⌘ + 滚轮缩放；纯计算在 timelineWheelZoomTarget 里。
+          onPointerSignal: (event) {
+            final next = timelineWheelZoomTarget(event, zoom: widget.zoom);
+            if (next != null) widget.onZoomChanged?.call(next);
+          },
+          child: _TimelineContinuousCanvas(
+            now: _anchor,
+            scale: widget.scale,
+            zoom: widget.zoom,
+            tasks: widget.tasks,
+            onTaskTap: widget.onTaskTap,
+            onTaskTimeChange: widget.onTaskTimeChange,
+            onSlotTap: widget.onSlotTap,
+            onTaskDropped: widget.onTaskDropped,
+          ),
         ),
       ],
     );
@@ -723,6 +731,28 @@ class _TimelineSlot {
   final DateTime startAt;
   final DateTime endAt;
   final bool allDay;
+}
+
+/// 嘀嗒《03-特色功能/09-桌面快捷操作.md:107》：
+/// 「按住 **Ctrl**（或 Mac 上的 **Command**）再滚动鼠标滚轮，即可缩放日视图或周视图中的时间轴」。
+///
+/// 返回 null 表示这次滚轮不该被快捷键接管（无修饰键、非滚轮事件、或已在边界）。
+/// 步长与上下限复用工具栏按钮那一份常量，避免两处各写一套 0.25 / 0.75~1.5。
+double? timelineWheelZoomTarget(
+  PointerSignalEvent event, {
+  required double zoom,
+}) {
+  if (event is! PointerScrollEvent) return null;
+  if (event.scrollDelta.dy == 0) return null;
+  final keyboard = HardwareKeyboard.instance;
+  if (!keyboard.isControlPressed && !keyboard.isMetaPressed) return null;
+  final step = _TimelineZoomToolbar._step;
+  // 方向沿用浏览器/日历惯例：滚轮向上放大、向下缩小，
+  // 与本文件 :614（zoom <= 0.75 时禁用「减小」）和 :632（zoom >= 1.5 时禁用「放大」）两颗按钮同源。
+  final next = (zoom - event.scrollDelta.dy.sign * step)
+      .clamp(0.75, 1.5)
+      .toDouble();
+  return next == zoom ? null : next;
 }
 
 class _TimelineContinuousCanvas extends StatelessWidget {
