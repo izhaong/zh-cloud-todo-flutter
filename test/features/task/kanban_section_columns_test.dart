@@ -533,6 +533,28 @@ void main() {
     expect(deleted?.id, 'sec-en');
   });
 
+  testWidgets('改的是被点的那一列，不是第一列（闭包不许抓错 index）', (tester) async {
+    TodoTaskSection? renamed;
+    TodoTaskSection? deleted;
+    await pump(
+      tester,
+      tasks: [task('a', sectionId: 'sec-pol')],
+      sections: sections,
+      onSectionRename: (section) => renamed = section,
+      onSectionDelete: (section) => deleted = section,
+    );
+
+    await openColumnMenu(tester, const ValueKey('col-sec-pol'));
+    await tester.tap(find.text('重命名'));
+    await tester.pumpAndSettle();
+    await openColumnMenu(tester, const ValueKey('col-sec-pol'));
+    await tester.tap(find.text('删除'));
+    await tester.pumpAndSettle();
+
+    expect(renamed?.id, 'sec-pol');
+    expect(deleted?.id, 'sec-pol');
+  });
+
   testWidgets('未分组列不能改名/删除，但能新建分组', (tester) async {
     await pump(
       tester,
@@ -580,23 +602,21 @@ void main() {
     );
 
     expect(
-      find
-          .descendant(
-            of: find.byKey(const ValueKey('col-sec-en')),
-            matching: find.byTooltip('管理分组 英语'),
-          )
-          .first,
+      find.descendant(
+        of: find.byKey(const ValueKey('col-sec-en')),
+        matching: find.byTooltip('管理分组 英语'),
+      ),
       findsOneWidget,
     );
+    // 「未分组」不是分组，读屏不该念成"管理分组 未分组"。
     expect(
-      find
-          .descendant(
-            of: find.byKey(const ValueKey('col-unsectioned')),
-            matching: find.byTooltip('管理分组 未分组'),
-          )
-          .first,
+      find.descendant(
+        of: find.byKey(const ValueKey('col-unsectioned')),
+        matching: find.byTooltip('调整未分组列'),
+      ),
       findsOneWidget,
     );
+    expect(find.byTooltip('管理分组 未分组'), findsNothing);
   });
 
   testWidgets('320px + 1.3 倍字号下分组管理菜单不溢出', (tester) async {

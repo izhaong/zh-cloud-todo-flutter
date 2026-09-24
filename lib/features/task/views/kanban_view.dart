@@ -549,8 +549,9 @@ class _KanbanColumn extends StatelessWidget {
               _ColumnCount(count: data.tasks.length, color: data.color),
               PopupMenuButton<String>(
                 // 分组模式下这一枚「···」管的是分组本身，tooltip 照抄清单分组条那枚
-                // （`todo-section-menu-*` 的 `管理分组 <名称>`）；固定四列仍是调列。
-                tooltip: sectionsManaged
+                // （`todo-section-menu-*` 的 `管理分组 <名称>`）。「未分组」不是分组、
+                // 改名与删除对它都不成立 ⇒ 仍叫 `调整未分组列`；固定四列也一样。
+                tooltip: sectionsManaged && data.sectionId != null
                     ? '管理分组 ${data.title}'
                     : '调整${data.title}列',
                 itemBuilder: (_) => [
