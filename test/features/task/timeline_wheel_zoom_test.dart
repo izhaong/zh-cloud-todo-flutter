@@ -26,14 +26,10 @@ void main() {
         // 否则时间轴上的 IconButton(tooltip:) 会抛 "No Overlay widget found"。
         child: MaterialApp(
           home: Scaffold(
-            body: TimelineView(
-              tasks: const [],
-              now: DateTime(2026, 9, 24, 10),
-              zoom: zoom,
+            body: _WheelZoomHost(
+              initialZoom: zoom,
               scale: scale,
-              onZoomChanged: writable
-                  ? (value) async => calls.add(value)
-                  : null,
+              onZoom: writable ? calls.add : null,
             ),
           ),
         ),
@@ -146,4 +142,43 @@ void main() {
     await wheel(tester, 120, modifier: LogicalKeyboardKey.controlLeft);
     expect(tester.takeException(), isNull);
   });
+}
+
+/// 受控宿主：把 `onZoomChanged` 报来的新值真喂回 `TimelineView.zoom`。
+///
+/// 生产组件的缩放是外部受控的，若测试直接把 zoom 写成常量，则画布宽度永不随缩放变化，
+/// 「Ctrl+滚轮只缩放、不推动画布」那句 `pixels` 断言就结构性无法失败。
+class _WheelZoomHost extends StatefulWidget {
+  const _WheelZoomHost({
+    required this.initialZoom,
+    required this.scale,
+    this.onZoom,
+  });
+
+  final double initialZoom;
+  final TimelineScale scale;
+  final void Function(double zoom)? onZoom;
+
+  @override
+  State<_WheelZoomHost> createState() => _WheelZoomHostState();
+}
+
+class _WheelZoomHostState extends State<_WheelZoomHost> {
+  late double _zoom = widget.initialZoom;
+
+  @override
+  Widget build(BuildContext context) {
+    return TimelineView(
+      tasks: const [],
+      now: DateTime(2026, 9, 24, 10),
+      zoom: _zoom,
+      scale: widget.scale,
+      onZoomChanged: widget.onZoom == null
+          ? null
+          : (value) async {
+              widget.onZoom!(value);
+              setState(() => _zoom = value);
+            },
+    );
+  }
 }
