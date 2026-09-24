@@ -624,9 +624,10 @@ void main() {
         'sortOrder': 0,
       },
     );
-    // 请求体对不等于"这一面走得通"：还得看得见成功。探针 P0 实测——把假服务对
-    // `/habit/create` 的接住抽掉后，本文件 26 条仍然全绿，因为 create 落进 catch
-    // 分支也能留下同样的请求体。这两条断言就是把那条漏口钉住。
+    // 请求体对不等于"这一面走得通"：还得看得见成功。基线（`9032005`，本文件 18 条）上
+    // 把 `/habit/create` 的接住抽掉照样全绿 —— create 落进 catch 分支也会留下同样的请求体，
+    // 而旧用例只断言请求体。补上下面两条后，同一处抽掉（探针 P0）就变红：
+    // `Actual: Found 1 widget with key <'habit-editor-sheet'>`。
     expect(
       find.byKey(const Key('habit-editor-sheet')),
       findsNothing,
@@ -872,10 +873,19 @@ void main() {
       reason: '「保存」点不到就建不出习惯（320px + 1.3 下这条路径必须走得通）',
     );
     expect(tester.takeException(), isNull, reason: '新建表单在 320px + 1.3 下溢出');
+    // 用例名承诺了「含字数计数器」，就得把计数器钉住。探针 PJ 实测：去掉 `maxLength: 64`
+    // 会让计数器整行消失（视口 559.6→534.6），而补这两句之前本条用例仍然全绿。
+    // 原先这里写的对照组是 `find.text('目标至少为 1')` findsNothing —— 本条用例根本不点
+    // 「保存」，校验错误不可能出现，那句永远为真，已删。
     expect(
-      sheetChild(find.text('目标至少为 1')),
-      findsNothing,
-      reason: '对照组：这一档下没有任何校验错误被顺带触发',
+      tester.widget<TextField>(sheetField('name')).maxLength,
+      64,
+      reason: 'maxLength 是计数器的来源，不钉住等于没测这一档下的计数器',
+    );
+    expect(
+      sheetChild(find.textContaining('/64')),
+      findsOneWidget,
+      reason: '计数器必须真的画在弹层里，才算"这一档下含字数计数器"那一格',
     );
   });
 
