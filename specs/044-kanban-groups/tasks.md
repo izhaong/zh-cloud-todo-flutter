@@ -100,6 +100,15 @@
 **静默 no-op 且不进 catch**。清单侧一直如此，本 PR 只是多暴露一个入口 ⇒ 立 todo-flutter **#316**，本轮不顺手改；
 那条端到端用例撤掉（撤的不是"覆盖"，是"在缺陷未修前把它写成绿的"）。
 
+> ⚠️ 上面这段是**第 1 轮的原始记账**，其中「该用例红 ⇒ 因为 provider 返回 null 走 `?.` no-op」这条**归因已被第 2 轮否掉**：
+> 该 harness 用 `TodoVisualFixture` 把 `appDatabaseProvider` 覆盖成了真库（`test/support/todo_visual_fixture.dart:75`），
+> 而 `syncChangeQueueProvider` 只依赖同一个 db（`providers.dart:114-118`）⇒ `taskSectionRepositoryProvider`
+> 在这个上下文里**非 null**（`providers.dart:174-179`）。反证：同文件保留的两条用例能从真库读出 A组/B组
+> （`kanban_section_menu_page_test.dart:94`、`:103`、`:113`）。所以「红因未定位」，不是这条缺陷的证据。
+> 处置与复核过程见 `spec.md` 的「一条静态读出来的既有缺陷 + 一条我没查清的撤证」。
+> **#316 本身仍然成立** —— `?.` 的静默 no-op 是按上面那条链静态读出来的真缺陷（只在 db 未就绪时可达），
+> 只是它没有本用例这份运行时证据。
+
 ## Issue #315 那一格（列头「···」→ 重命名/新建分组/删除）已证实
 - [x] 三项挂在**列头已有的那枚「···」**上，不新增按钮：分组模式下 `KanbanView.onSectionRename` /
       `onSectionCreate` / `onSectionDelete` 只交出「这一列对应的 `TodoTaskSection`」，
