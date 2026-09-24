@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/core/theme/app_theme.dart';
 
 import 'todo_visual_fixture.dart';
@@ -28,11 +29,15 @@ Future<TodoVisualFixture> pumpTodoVisualScenario(
   WidgetTester tester, {
   required Size viewport,
   required TodoVisualFixtureSet fixtureSet,
+  List<Override> Function(AppDatabase database)? overridesBuilder,
   required Widget child,
   Brightness brightness = Brightness.light,
 }) async {
   await tester.runAsync(_ensureVisualFontsLoaded);
-  final fixture = await TodoVisualFixture.create(set: fixtureSet);
+  final fixture = await TodoVisualFixture.create(
+    set: fixtureSet,
+    overridesBuilder: overridesBuilder,
+  );
   addTearDown(fixture.dispose);
 
   tester.view.physicalSize = viewport;

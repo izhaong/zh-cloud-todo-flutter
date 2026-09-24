@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../state/providers.dart';
+import 'saved_filter_mapping.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class TaskAssigneeOption {
@@ -12,7 +13,7 @@ class TaskAssigneeOption {
 
 /// M11-B2 过滤条：list / folder / tag / priority / due 范围 / completed 状态。
 class TaskFilter {
-  TaskFilter({
+  const TaskFilter({
     this.listId,
     this.folderId,
     this.tagIds = const [],
@@ -179,20 +180,9 @@ class FilterBar extends ConsumerWidget {
           const SizedBox(width: 4),
           if (!filter.isEmpty)
             TextButton.icon(
-              onPressed: () async {
-                final name = await _promptSmartName(context);
-                if (name == null || name.isEmpty) return;
-                final repo = ref.read(listRepositoryProvider);
-                if (repo == null) return;
-                await repo.saveSmart(filterName: name, filter: filter.toJson());
-                if (context.mounted) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text('已保存为智能清单：$name')));
-                }
-              },
+              onPressed: () => _saveAsFilter(context, ref, filter),
               icon: const Icon(Icons.bookmark_add_outlined),
-              label: const Text('保存为智能清单'),
+              label: const Text('保存为过滤器'),
             ),
         ],
       ),
@@ -427,32 +417,70 @@ class FilterBar extends ConsumerWidget {
     );
   }
 
-  static Future<String?> _promptSmartName(BuildContext context) async {
-    final ctrl = TextEditingController();
-    return showDialog<String?>(
+  /// 保存成「已保存过滤器」（真表 `todoFilters` + outbox）。
+  /// 服务端 `conditions` 契约放不下的维度（文件夹、负责人、已过期/将来）在对话框里点名，
+  /// 不静默存成半个过滤器。
+  static Future<void> _saveAsFilter(
+    BuildContext context,
+    WidgetRef ref,
+    TaskFilter filter,
+  ) async {
+    final mapped = savedFilterOf(filter);
+    final name = await showDialog<String?>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('保存为智能清单'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: '智能清单名',
-            border: OutlineInputBorder(),
+      builder: (ctx) {
+        final ctrl = TextEditingController();
+        return AlertDialog(
+          title: const Text('保存为过滤器'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                key: const Key('saved-filter-name'),
+                controller: ctrl,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: '过滤器名称',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              if (mapped.skipped.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text('本过滤器不保存：${mapped.skipped.join('、')}'),
+              ],
+            ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-            child: const Text('保存'),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+              child: const Text('保存'),
+            ),
+          ],
+        );
+      },
     );
+    if (name == null || name.isEmpty) return;
+    if (mapped.conditions.toJson().isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('当前条件本机还存不住，未保存')));
+      }
+      return;
+    }
+    final repo = ref.read(filterRepositoryProvider);
+    if (repo == null) return;
+    await repo.save(name: name, conditions: mapped.conditions);
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('已保存过滤器：$name')));
+    }
   }
 }
 
@@ -507,6 +535,12 @@ String dueRangeChipLabel(String? v) {
   switch (v) {
     case 'today':
       return '今日';
+    case 'tomorrow':
+      return '明天';
+    case 'last7days':
+      return '近 7 天';
+    case 'next7days':
+      return '未来 7 天';
     case 'overdue':
       return '已过期';
     case 'future':

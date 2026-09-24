@@ -12,6 +12,7 @@ import '../core/sync/sync_coordinator.dart';
 import '../core/time/task_time_formatter.dart';
 import '../state/session_state.dart';
 import 'repositories/board_preference_repository.dart';
+import 'repositories/filter_repository.dart';
 import 'repositories/folder_repository.dart';
 import 'repositories/activity_repository.dart';
 import 'repositories/list_repository.dart';
@@ -30,6 +31,7 @@ import 'repositories/task_repository.dart';
 import 'repositories/task_section_repository.dart';
 import 'repositories/task_sort_preference_repository.dart';
 import 'repositories/task_view_action_repository.dart';
+import 'repositories/summary_repository.dart';
 
 /// UI-facing clock. Production reads the current instant on each rebuild;
 /// deterministic widget/golden fixtures override the callback explicitly.
@@ -148,6 +150,20 @@ final tagRepositoryProvider = Provider<TagRepository?>((ref) {
   return TagRepository(db, queue);
 });
 
+final filterRepositoryProvider = Provider<FilterRepository?>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  final queue = ref.watch(syncChangeQueueProvider);
+  if (db == null || queue == null) return null;
+  return FilterRepository(db, queue);
+});
+
+/// 已保存过滤器（本地 Drift 事实源，含服务端 pull 落库的）。
+final savedFiltersStreamProvider = StreamProvider<List<TodoFilter>>((ref) {
+  final repo = ref.watch(filterRepositoryProvider);
+  if (repo == null) return Stream<List<TodoFilter>>.value(const []);
+  return repo.watchAll();
+});
+
 final taskRepositoryProvider = Provider<TaskRepository?>((ref) {
   final db = ref.watch(appDatabaseProvider);
   final queue = ref.watch(syncChangeQueueProvider);
@@ -164,6 +180,13 @@ final taskSectionRepositoryProvider = Provider<TaskSectionRepository?>((ref) {
 
 final noteRepositoryProvider = Provider<NoteRepository>((ref) {
   return ApiNoteRepository(ref.watch(todoApiProvider).note);
+});
+
+/// 摘要只读本地任务库；未登录时无库可查，下游按 null 降级为不可生成。
+final summaryRepositoryProvider = Provider<SummaryRepository?>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  if (db == null) return null;
+  return DriftSummaryRepository(db);
 });
 
 /// 推荐为只读服务端投影，成功拉取后落入 Drift；不使用 outbox。

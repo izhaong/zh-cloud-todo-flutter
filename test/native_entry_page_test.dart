@@ -278,6 +278,8 @@ void main() {
     );
 
     expect(find.text('原生增强'), findsOneWidget);
+    // 「账号」分组加了一行后，800x600 默认视口里该行已贴到折线外，tap 不会自己滚动。
+    await tester.ensureVisible(find.text('原生增强'));
     await tester.tap(find.text('原生增强'));
     await tester.pumpAndSettle();
 

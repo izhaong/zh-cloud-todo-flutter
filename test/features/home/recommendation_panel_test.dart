@@ -234,6 +234,56 @@ void main() {
     }
   });
 
+  testWidgets('320px + 1.3 倍字体：面板头部三个动作不溢出', (tester) async {
+    // 第 11 轮补：头部这一行从两个动作变成三个（刷新 / 添加到今天 / 查看推荐任务），
+    // 而本文件其余用例都用默认 800×600 ⇒ 窄屏这一条通道此前零覆盖。
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    await db
+        .into(db.todoRecommendations)
+        .insert(
+          TodoRecommendationsCompanion.insert(
+            taskServerId: const Value(91),
+            title: '一条非常长足以在窄屏挤爆面板头部的推荐任务名称',
+            reasonCode: 'DUE_SOON',
+            reason: '即将到期',
+            score: 900,
+            refreshedAt: DateTime.utc(2026, 9, 23),
+          ),
+        );
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          recommendationRepositoryProvider.overrideWithValue(
+            RecommendationRepository(db, _OfflineRecommendationApi()),
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: RecommendationPanel(
+              onTaskSelected: (_) {},
+              onAddToToday: (_) async {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('推荐任务'), findsOneWidget);
+    expect(find.byTooltip('查看推荐任务'), findsOneWidget);
+    expect(tester.takeException(), isNull, reason: '头部多了第三个动作后窄屏不能被挤爆');
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('添加到今天失败时保留推荐并发布可恢复的 live region', (tester) async {
     final semantics = tester.ensureSemantics();
     final db = AppDatabase.forTesting(NativeDatabase.memory());

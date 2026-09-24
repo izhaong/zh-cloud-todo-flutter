@@ -346,17 +346,32 @@ void main() {
       expect(createdHabit, 6);
       expect(checkInCount, 9);
       expect(habitStats['continuousDays'], 3);
+      // specs/037 FR-5：create 与 update 共用同一份字段，未填的按契约原样上送 null。
       expect(
         requests
             .firstWhere((request) => request.path.endsWith('/habit/create'))
             .data,
-        {'name': '跑步', 'period': 1, 'targetCount': 1},
+        {
+          'name': '跑步',
+          'icon': null,
+          'color': null,
+          'period': 1,
+          'targetCount': 1,
+          'reminderAt': null,
+          'sortOrder': 0,
+        },
       );
       expect(
         requests
             .firstWhere((request) => request.path.endsWith('/habit/check-in'))
             .data,
-        {'habitId': 5, 'checkedAt': '2026-07-30T08:00:00.000'},
+        // 服务端全局把 LocalDateTime 注册成 epoch 毫秒
+        // （TimestampLocalDateTimeSerializer/Deserializer），
+        // 之前这里钉的 ISO 字符串不是契约形状 —— 见 specs/037 spec FR-6。
+        {
+          'habitId': 5,
+          'checkedAt': DateTime(2026, 7, 30, 8).millisecondsSinceEpoch,
+        },
       );
       expect(
         requests
