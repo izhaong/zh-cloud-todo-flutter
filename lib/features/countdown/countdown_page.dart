@@ -8,6 +8,154 @@ import '../../state/efficiency_providers.dart';
 const Map<int, String> _countdownStyles = {1: '默认', 2: '翻页', 3: '圆环'};
 
 /// M11-B4 倒数日列表 + 新建；024 补编辑、删除与样式呈现。
+/// 嘀嗒《02-打造专属纪念页.md:97》（mobile：详情页）/`:106`（desktop：卡片）：
+/// 「点击中间的天数，就能在**天、年、周**三种单位间快速切换」。
+/// 源页只给单位集合，未规定循环顺序 ⇒ 天→年→周→天 是实现选择，记在 spec 取舍。
+enum TodoCountdownUnit {
+  day('天'),
+  year('年'),
+  week('周');
+
+  const TodoCountdownUnit(this.suffix);
+
+  final String suffix;
+
+  TodoCountdownUnit get next =>
+      TodoCountdownUnit.values[(index + 1) % TodoCountdownUnit.values.length];
+}
+
+/// 正数且关掉 showAge 时，源页那一行只显示目标日期（develop 既有行为，`!259`）。
+/// 顶层而非页面私有：tile 与页面都要用同一份文案，别让 tile 反向依赖页面类。
+String countdownDateSubtitle(CountdownDto c) {
+  final d = c.targetDate;
+  return '${d.year}-${d.month}-${d.day}';
+}
+
+/// 前缀取源页用词：《01-添加倒数纪念日.md:106》「显示距离该日期已过/还有多少天」
+/// ⇒ 正数「已过」、倒数「还有」，不自创「已 N 天」。只给整数档：
+/// 源页 `:93` 问的是「这是多少年，或是多少周」，带余数就得自己发明格式。
+String countdownCountLabel({
+  required bool isCountUp,
+  required int daysRemaining,
+  required TodoCountdownUnit unit,
+}) {
+  final days = daysRemaining.abs();
+  final amount = switch (unit) {
+    TodoCountdownUnit.day => days,
+    TodoCountdownUnit.year => days ~/ 365,
+    TodoCountdownUnit.week => days ~/ 7,
+  };
+  return '${isCountUp ? '已过 ' : '还有 '}$amount ${unit.suffix}';
+}
+
+/// 单位切换是按行的会话内状态 ⇒ 整行搬进有状态组件。
+/// 行体沿用 develop 的自建布局：`ListTile` 会把 trailing 并进整行语义节点，
+/// 编辑与删除就不再独立可读 ⇒ 不用 ListTile，三个动作各留自己的语义。
+class _CountdownTile extends StatefulWidget {
+  const _CountdownTile({
+    required this.item,
+    required this.writePending,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final CountdownDto item;
+  final bool writePending;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  State<_CountdownTile> createState() => _CountdownTileState();
+}
+
+class _CountdownTileState extends State<_CountdownTile> {
+  TodoCountdownUnit _unit = TodoCountdownUnit.day;
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final theme = Theme.of(context);
+    // 正数且关掉「显示已过天数」时源页那一行只有目标日期：中间没有天数，
+    // 就没有可点的单位入口（:97 说的是「点击中间的天数」，不另造按钮）。
+    final showDays = item.isCountUp ? item.showAge : true;
+    final label = showDays
+        ? countdownCountLabel(
+            isCountUp: item.isCountUp,
+            daysRemaining: item.daysRemaining,
+            unit: _unit,
+          )
+        : countdownDateSubtitle(item);
+    return InkWell(
+      key: Key('countdown-row-${item.id}'),
+      onTap: widget.writePending ? null : widget.onEdit,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(
+          children: [
+            _CountdownBadge(countdown: item),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.title,
+                    style: theme.textTheme.titleMedium,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (showDays)
+                    Semantics(
+                      container: true,
+                      button: true,
+                      label: '切换天数单位 $label',
+                      child: InkWell(
+                        key: Key('todo-countdown-unit-${item.id}'),
+                        onTap: widget.writePending
+                            ? null
+                            : () => setState(() => _unit = _unit.next),
+                        child: ExcludeSemantics(
+                          child: Text(label, style: theme.textTheme.bodySmall),
+                        ),
+                      ),
+                    )
+                  else
+                    Text(label, style: theme.textTheme.bodySmall),
+                ],
+              ),
+            ),
+            Semantics(
+              container: true,
+              button: true,
+              label: '编辑 ${item.title}',
+              onTap: widget.writePending ? null : widget.onEdit,
+              child: ExcludeSemantics(
+                child: IconButton(
+                  key: Key('countdown-edit-${item.id}'),
+                  icon: const Icon(Icons.edit_outlined),
+                  onPressed: widget.writePending ? null : widget.onEdit,
+                ),
+              ),
+            ),
+            Semantics(
+              container: true,
+              button: true,
+              label: '删除 ${item.title}',
+              onTap: widget.writePending ? null : widget.onDelete,
+              child: ExcludeSemantics(
+                child: IconButton(
+                  key: Key('countdown-delete-${item.id}'),
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: widget.writePending ? null : widget.onDelete,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class CountdownPage extends ConsumerStatefulWidget {
   const CountdownPage({super.key});
 
@@ -64,88 +212,17 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
             separatorBuilder: (_, _) => const Divider(height: 1),
             itemBuilder: (_, i) {
               final c = items[i];
-              final theme = Theme.of(context);
-              // ListTile 会把 trailing 合并进整行的语义节点，两个动作就不再独立可读，
-              // 因此自建行布局让编辑与删除各自保留自己的语义节点。
-              return InkWell(
-                key: Key('countdown-row-${c.id}'),
-                onTap: _writePending ? null : () => _showEditor(existing: c),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  child: Row(
-                    children: [
-                      _CountdownBadge(countdown: c),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              c.title,
-                              style: theme.textTheme.titleMedium,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Text(
-                              _subtitle(c),
-                              style: theme.textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
-                      ),
-                      Semantics(
-                        container: true,
-                        button: true,
-                        label: '编辑 ${c.title}',
-                        onTap: _writePending
-                            ? null
-                            : () => _showEditor(existing: c),
-                        child: ExcludeSemantics(
-                          child: IconButton(
-                            key: Key('countdown-edit-${c.id}'),
-                            icon: const Icon(Icons.edit_outlined),
-                            onPressed: _writePending
-                                ? null
-                                : () => _showEditor(existing: c),
-                          ),
-                        ),
-                      ),
-                      Semantics(
-                        container: true,
-                        button: true,
-                        label: '删除 ${c.title}',
-                        onTap: _writePending ? null : () => _confirmDelete(c),
-                        child: ExcludeSemantics(
-                          child: IconButton(
-                            key: Key('countdown-delete-${c.id}'),
-                            icon: const Icon(Icons.delete_outline),
-                            onPressed: _writePending
-                                ? null
-                                : () => _confirmDelete(c),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+              return _CountdownTile(
+                item: c,
+                writePending: _writePending,
+                onEdit: () => _showEditor(existing: c),
+                onDelete: () => _confirmDelete(c),
               );
             },
           );
         },
       ),
     );
-  }
-
-  static String _subtitle(CountdownDto c) {
-    if (!c.isCountUp) return '还有 ${c.daysRemaining} 天';
-    // 嘀嗒的 showAge 即“显示已过天数”；关闭时过期项只显示目标日期。
-    if (!c.showAge) {
-      final d = c.targetDate;
-      return '${d.year}-${d.month}-${d.day}';
-    }
-    return '已过 ${-c.daysRemaining} 天';
   }
 
   Future<void> _confirmDelete(CountdownDto countdown) async {
