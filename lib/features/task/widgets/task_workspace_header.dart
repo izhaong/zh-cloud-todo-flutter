@@ -15,6 +15,7 @@ enum _TaskWorkspaceHeaderCommand {
   createdAt,
   batchEdit,
   createSection,
+  editQuadrantRules,
 }
 
 extension on _TaskWorkspaceHeaderCommand {
@@ -26,6 +27,7 @@ extension on _TaskWorkspaceHeaderCommand {
     _TaskWorkspaceHeaderCommand.createdAt => TaskSort.createdAt,
     _TaskWorkspaceHeaderCommand.batchEdit => null,
     _TaskWorkspaceHeaderCommand.createSection => null,
+    _TaskWorkspaceHeaderCommand.editQuadrantRules => null,
   };
 }
 
@@ -54,6 +56,7 @@ class TaskWorkspaceHeader extends StatelessWidget {
     this.batchSelectionActive = false,
     this.onBatchPressed,
     this.onCreateSection,
+    this.onEditQuadrantRules,
   });
 
   final String title;
@@ -67,6 +70,7 @@ class TaskWorkspaceHeader extends StatelessWidget {
   final bool batchSelectionActive;
   final VoidCallback? onBatchPressed;
   final VoidCallback? onCreateSection;
+  final VoidCallback? onEditQuadrantRules;
 
   @override
   Widget build(BuildContext context) {
@@ -141,6 +145,8 @@ class TaskWorkspaceHeader extends StatelessWidget {
                       onBatchPressed?.call();
                     case _TaskWorkspaceHeaderCommand.createSection:
                       onCreateSection?.call();
+                    case _TaskWorkspaceHeaderCommand.editQuadrantRules:
+                      onEditQuadrantRules?.call();
                     case _TaskWorkspaceHeaderCommand.smart:
                     case _TaskWorkspaceHeaderCommand.priorityDesc:
                     case _TaskWorkspaceHeaderCommand.dueDate:
@@ -170,6 +176,14 @@ class TaskWorkspaceHeader extends StatelessWidget {
                       key: Key('todo-section-create-menu'),
                       value: _TaskWorkspaceHeaderCommand.createSection,
                       child: Text('新建分组'),
+                    ),
+                  // 嘀嗒：四象限页面右上角「...」里选「编辑」进象限规则编辑页。
+                  if (onEditQuadrantRules != null) const PopupMenuDivider(),
+                  if (onEditQuadrantRules != null)
+                    const PopupMenuItem(
+                      key: Key('todo-quadrant-rules-entry'),
+                      value: _TaskWorkspaceHeaderCommand.editQuadrantRules,
+                      child: Text('编辑象限规则'),
                     ),
                 ],
               ),

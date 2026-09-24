@@ -17,6 +17,7 @@ import '../../state/repositories/task_batch_edit_repository.dart';
 import '../../state/repositories/task_query_repository.dart';
 import '../../state/repositories/task_repository.dart';
 import '../filter/filter_bar.dart';
+import '../quadrant/quadrant_rules_page.dart';
 import '../shell/app_dialog.dart';
 import '../shell/quick_add_bar.dart';
 import 'task_view_mutation_feedback.dart';
@@ -210,6 +211,9 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 onBatchPressed: _toggleBatchSelection,
                 onCreateSection: _mode == TaskViewMode.list && listId != null
                     ? _createTaskSection
+                    : null,
+                onEditQuadrantRules: _mode == TaskViewMode.eisenhower
+                    ? _openQuadrantRules
                     : null,
               ),
             if (showQuickAdd && !_batchSelectionActive)
@@ -519,6 +523,13 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         context,
       ).showSnackBar(const SnackBar(content: Text('排序偏好保存失败，请稍后重试')));
     }
+  }
+
+  /// 嘀嗒《03-四象限/02-如何编辑四象限规则》：四象限页面右上角「...」里选「编辑」进规则页。
+  void _openQuadrantRules() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const QuadrantRulesPage()));
   }
 
   Future<void> _changeMode(TaskViewMode mode) async {
