@@ -1,9 +1,14 @@
+import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
+import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
 import 'package:zh_cloud_todo_flutter/features/task/task_quick_add_sheet.dart';
 import 'package:zh_cloud_todo_flutter/features/task/views/kanban_view.dart';
+import 'package:zh_cloud_todo_flutter/state/providers.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/task_repository.dart';
 
 /// 看板列绑清单分组（`TodoTaskSection`）。
 ///
@@ -434,4 +439,78 @@ void main() {
     expect(find.byTooltip('在未开始新建任务'), findsOneWidget);
     expect(find.byTooltip('新建任务'), findsNothing);
   });
+
+  testWidgets('「+」→ 保存真的把 sectionId 交给仓储（不是只挂在弹窗参数上）', (tester) async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = _CapturingTaskRepository(database);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          taskRepositoryProvider.overrideWithValue(repository),
+          taskCaptureDefaultsRepositoryProvider.overrideWithValue(null),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: TaskQuickAddSheet(listId: 'list-inbox', sectionId: 'sec-en'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.enterText(
+      find.byType(TextField).first,
+      '分组内新任务',
+    ); // ignore: avoid_slow_async_io
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    expect(repository.capturedSectionId, 'sec-en');
+    expect(repository.capturedListId, 'list-inbox');
+  });
+}
+
+/// 只记参数不写库：这一环要钉的是「弹窗把 `sectionId` 交出去了」，
+/// 真落库由 `TaskRepository._requireSectionInList` 自己的用例负责。
+class _CapturingTaskRepository extends TaskRepository {
+  _CapturingTaskRepository(AppDatabase db) : super(db, SyncChangeQueue(db));
+
+  String? capturedSectionId;
+  String? capturedListId;
+
+  @override
+  Future<TodoTask> create({
+    required String listId,
+    required String title,
+    String? sectionId,
+    String? description,
+    int priority = 0,
+    DateTime? startAt,
+    DateTime? endAt,
+    DateTime? dueAt,
+    bool allDay = false,
+    String? timeZone,
+    bool fixedTimezone = false,
+    String? parentTaskId,
+    bool isPinned = false,
+  }) async {
+    capturedListId = listId;
+    capturedSectionId = sectionId;
+    final now = DateTime.utc(2026, 7, 15, 9);
+    return TodoTask(
+      id: 'task-created',
+      listId: listId,
+      sectionId: sectionId,
+      title: title,
+      completed: false,
+      cancelled: false,
+      allDay: false,
+      fixedTimezone: false,
+      priority: priority,
+      isPinned: false,
+      sortOrder: 0,
+      updatedAt: now,
+      createdAt: now,
+    );
+  }
 }

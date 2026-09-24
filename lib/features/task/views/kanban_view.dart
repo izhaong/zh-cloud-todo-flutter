@@ -492,7 +492,8 @@ class _KanbanColumn extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               // 分组名由用户输入（长度不设视觉上限），列宽固定 260：
-              // 320px 面 + 1.3 倍字号下不给它 flex 会溢出 141px，只能省略号截断。
+              // 不给它 flex，长名字在 320px 面 + 1.3 倍字号下实测溢出过（短名字不溢出），
+              // 所以只能省略号截断。
               Expanded(
                 child: Text(
                   data.title,
