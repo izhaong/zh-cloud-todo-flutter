@@ -1,7 +1,80 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/efficiency_api.dart';
 import '../../state/efficiency_providers.dart';
+
+/// 嘀嗒《02-功能指南/06-倒数纪念日/02-打造专属纪念页.md:97》：
+/// 点天数就能在**天、年、周**三种单位间快速切换，循环顺序即源页列举顺序。
+enum TodoCountdownUnit {
+  day('天'),
+  year('年'),
+  week('周');
+
+  const TodoCountdownUnit(this.suffix);
+
+  final String suffix;
+
+  TodoCountdownUnit get next =>
+      TodoCountdownUnit.values[(index + 1) % TodoCountdownUnit.values.length];
+}
+
+/// 只给整数档：源页 `:93` 问的是「这是多少年，或是多少周」，带余数要自创格式。
+String countdownCountLabel({
+  required bool isCountUp,
+  required int daysRemaining,
+  required TodoCountdownUnit unit,
+}) {
+  final days = daysRemaining.abs();
+  final amount = switch (unit) {
+    TodoCountdownUnit.day => days,
+    TodoCountdownUnit.year => days ~/ 365,
+    TodoCountdownUnit.week => days ~/ 7,
+  };
+  return '${isCountUp ? '已' : '还有'} $amount ${unit.suffix}';
+}
+
+/// 单位切换是**按行**的会话内状态，所以整行搬到有状态组件里。
+class _CountdownTile extends StatefulWidget {
+  const _CountdownTile({required this.item});
+
+  final CountdownDto item;
+
+  @override
+  State<_CountdownTile> createState() => _CountdownTileState();
+}
+
+class _CountdownTileState extends State<_CountdownTile> {
+  TodoCountdownUnit _unit = TodoCountdownUnit.day;
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final label = countdownCountLabel(
+      isCountUp: item.isCountUp,
+      daysRemaining: item.daysRemaining,
+      unit: _unit,
+    );
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundColor: Colors.blue,
+        child: Text(
+          item.isCountUp ? '正' : '倒',
+          style: const TextStyle(color: Colors.white),
+        ),
+      ),
+      title: Text(item.title),
+      subtitle: Semantics(
+        button: true,
+        child: InkWell(
+          key: Key('todo-countdown-unit-${item.id}'),
+          onTap: () => setState(() => _unit = _unit.next),
+          child: Text(label),
+        ),
+      ),
+    );
+  }
+}
 
 /// M11-B4 倒数日列表 + 新建
 class CountdownPage extends ConsumerWidget {
@@ -32,21 +105,7 @@ class CountdownPage extends ConsumerWidget {
             separatorBuilder: (_, _) => const Divider(height: 1),
             itemBuilder: (_, i) {
               final c = items[i];
-              return ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: Colors.blue,
-                  child: Text(
-                    c.isCountUp ? '正' : '倒',
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                ),
-                title: Text(c.title),
-                subtitle: Text(
-                  c.isCountUp
-                      ? '已 ${-c.daysRemaining} 天'
-                      : '还有 ${c.daysRemaining} 天',
-                ),
-              );
+              return _CountdownTile(item: c);
             },
           );
         },
