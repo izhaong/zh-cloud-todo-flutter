@@ -224,6 +224,18 @@ void main() {
     }
     // 注册表护栏：两个动作绝不能共用同一个 activator，
     // 否则 todoShortcutActivators 的 Map 字面量会静默覆盖成一条，界面却仍列两条。
+    // 直接钉「建出来的映射没有少一条」：重复 activator 会被 Map 字面量静默覆盖，
+    // 而 todoShortcutBindings 是 const 列表 ⇒ 常量规范化让重复项成为同一实例，映射长度必降。
+    // 复核第二轮 NIT5：这条比下面的字符串去重更硬（不依赖 Diagnosticable.toString 的 debug 排版）。
+    expect(
+      todoShortcutActivators(
+        forKind: (kind) => kind == TodoShortcutKind.openSearch
+            ? _LocalIntentA()
+            : _LocalIntentB(),
+      ).length,
+      todoShortcutBindings.length,
+      reason: '每条 binding 都必须占一个独立的映射位，不能被静默覆盖',
+    );
     expect(
       todoShortcutBindings
           .map((b) => '${b.activator.runtimeType}:${b.activator}')

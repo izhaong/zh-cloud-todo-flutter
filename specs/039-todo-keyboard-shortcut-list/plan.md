@@ -27,7 +27,11 @@
    本轮用例仍用 `pump()`（够用且与该页解耦），但**理由不是"SettingsRoute 有持续动画"**。
 5. 四件套：对话框 320px + 1.3 倍不溢出。行**两侧都用 `Flexible`（3:2）**——
    只把动作名放成 `Expanded` 时键位列按自身宽度参与布局，实测 `RenderFlex overflowed by 13 pixels`。
-   标题与每行动作名各自独立语义节点（不用 `ListTile`，它会把两列合成一个节点）。
+   标题与每行动作名各自独立语义节点（不用 `ListTile`：实测裸 `ListTile(title, subtitle)`
+   只出一个节点，label = `成就与勋章\n成就值、等级与勋章墙`，`^成就与勋章$` 0 命中）。
+   机制更正（第二轮复核 NIT）：`list_tile.dart` 里没有 `MergeSemantics`，显式合并语义的是
+   `checkbox_list_tile.dart:604`（radio/switch 同）；`ListTile` 是把自己的 `Semantics` 容器
+   节点收下了 title+subtitle 两条文案。**行为不变，别据此改回 `ListTile`。**
 
 ## 不在本轮
 

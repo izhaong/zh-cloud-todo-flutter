@@ -6,9 +6,10 @@
 - [x] T4 设置页有「键盘快捷键」入口，打开与 `?` 同一个界面。
 - [x] T5 对话框内容逐行等于注册表（动作名 + 键位文案），列表不会多写也不漏写。
 - [x] T6 四件套之适用项：320px + 1.3 倍不溢出（对话框自身 context 自检）；标题与每行动作名独立读屏语义。
-- [ ] T7 ⌘K/Ctrl+K → 全局搜索的既成行为不回退（由 `task_organize_search_test.dart` 的
+- [x] T7 ⌘K/Ctrl+K → 全局搜索的既成行为不回退（由 `task_organize_search_test.dart` 的
       `wide workspace opens local search with control K` 守着）。
-      已证实：该文件在全量门禁里未红；仍缺：本轮未单独跑它一次留日志。
+      已证实：该文件随下面第 5 项全量门禁一起跑绿（`+715 All tests passed!`）；
+      未单独跑它一次留日志 ⇒ 证据是「全量里未红」，不是单文件日志。
 - [ ] T8 六项门禁 + 反向探针。已证实：探针三条 + 新用例 6 条绿；门禁日志见下（跑完回填）。
 - [ ] T9 回写矩阵 #86 —— 属 `zh-cloud-docs`，且**未合并前只能写「已实现待合并」**。
 - [ ] T10 指令菜单（⌘K 键位归属）与「可修改键位」：本轮不做，理由见 spec.md。
@@ -82,8 +83,8 @@ flutter test --exclude-tags 'golden || performance' --concurrency=1
 ⇒ develop 自身是 **709**，本分支 **715 = 709 + 6**（恰等于本轮新增用例数），skipped 两侧同为 26。
 「713」是当时在含未合并用例的状态上测的，不是 develop 的数；测完已 `git worktree remove` 清掉临时目录。
 
-- [x] T7 ⌘K/Ctrl+K → 全局搜索不回退：`task_organize_search_test.dart` 随上面第 5 项一起跑绿（未单独跑一次，
-      故此前保留未勾；结论：既成行为未回退，机制仍由该文件守着）。
+上面第 5 项的全量日志即 T7 的证据来源（`task_organize_search_test.dart` 未红）；
+第二轮复核 NIT2 指出这里曾出现同编号两条状态，已把本条降为说明、勾选统一在上方 T7。
 
 ## 第一轮复核（只读子代理，对 `3b5411b`）：**VERDICT: FAIL** → 已按结论改
 
@@ -111,4 +112,42 @@ flutter test --exclude-tags 'golden || performance' --concurrency=1
 
 **下一轮入口**：#86 行只能在 !297 合并后翻，且需引合并 SHA；指令菜单另开规格（⌘K 归属先定）；
 可改键位需要嘀嗒"哪些可改"的集合（帮助页只有截图）。
+
+## 第二轮复核（只读子代理，对 `cd3e4f0`）：**VERDICT: PASS**，无 BLOCKER，6 条 NIT
+
+复核手段同上（`claude` CLI 不可用 ⇒ 本会话只读子代理，判据看 `VERDICT`）。
+它逐条确认：B1/B2/B3 的修法成立（含 spec.md 七个行号全部命中真值、`plan.md` 五条约束逐条对源码）、
+`lib/` 在 `3b5411b..cd3e4f0` 零改动、`pubspec.lock` 两提交都没带、N1 的字符串护栏**不是假护栏**
+（本 SDK `SingleActivator`/`CharacterActivator` 都不实现 `==` ⇒ 走 identity，而 `const` 列表会把重复项
+规范化成同一实例，所以字符串与 identity 同时相等 ⇒ 写重复必红）。
+
+| NIT | 内容 | 处置 |
+| --- | --- | --- |
+| N1 | `plan.md:30` 说 `ListTile` "合成节点"的**归因**不准：`list_tile.dart` 无 `MergeSemantics`（只有 `:995` 的 `Semantics(button:/selected:/enabled:)`），显式合并的是 `checkbox_list_tile.dart:604` | **部分采纳**：结论不动，归因改写。**自己量了一次**再决定 —— 裸 `ListTile(title, subtitle)` + `ensureSemantics()` + 一帧 pump ⇒ `node.label` = `成就与勋章\n成就值、等级与勋章墙`，`^成就与勋章$` **0** 命中、`^成就与勋章` **1**、`bySemanticsLabel('成就与勋章')`（裸字符串）**0**。⇒ 行为成立、机制是 `ListTile` 自己的语义节点而非 `MergeSemantics`；顺带证出 `bySemanticsLabel(String)` 走**全等**。探针文件跑完即删，未入库 |
+| N2 | `tasks.md` 出现两条 T7（一条未勾、一条已勾） | **采纳**：勾选统一在上方，门禁段那条降为说明 |
+| N3 | 「范围外」三处引文略去句末 `。`，与上方表格体例不齐 | **采纳**：`:26`/`:27`/`:29` 补回 `。`，补前先 `sed -n '26,29p'` 逐字确认原文确实带句号 |
+| N4 | `test:235` 的 `handle.dispose()` 在末尾而非 `finally`/`addTearDown`，建议改 `addTearDown` | **不采纳**：specs/026 实测过 `A SemanticsHandle was active at the end of the test`，收尾校验跑在 `addTearDown` **之前** ⇒ 本仓既有写法是 `try/finally`；当前形态（测试体内末尾显式 dispose）已在同一位置避开该问题，改成 `addTearDown` 反而回到已知会炸的写法 |
+| N5 | 更硬的护栏写法：直接断 `todoShortcutActivators(...).length == todoShortcutBindings.length` | **采纳**：新增该断言（不依赖 `Diagnosticable.toString` 的 debug 排版），原字符串断言保留 |
+| N6 | 验收标准 Then 仍写「不出现对话框」，而用例实为合成 harness（无 dialog） | **采纳**：Then 改钉"守卫本身"（`primaryFocusIsEditing()` 为真 + intent 未 invoke），并写明该 harness 不挂对话框 ⇒ 这同时**修正第一轮 N5 的处置措辞**（当时改成「不出现对话框」是不准的） |
+
+新护栏的反向探针 P6：把 `:32` 的 `SingleActivator(keyK, control: true)` 改成与 `:38` 同参 ⇒
+`flutter test` 红在**新增那条**断言上（`Expected: <4>` / `Actual: <3>`，reason 命中"不能被静默覆盖"），
+恢复后 `cmp -s` 与备份逐字节一致。
+
+### 最终状态六项门禁（`cd3e4f0` + 本轮 NIT 修复，日志 `/tmp/r32_gates2.log`）
+
+```
+### G1 git diff --check                              exit=0
+### G2 dart format --set-exit-if-changed <3 files>   Formatted 3 files (0 changed) in 0.01 seconds.  exit=0
+### G3 flutter analyze                               No issues found! (ran in 1.5s)
+### G4 flutter test --tags golden                     00:03 +9: All tests passed!
+### G5 flutter test --exclude-tags 'golden || performance' --concurrency=1
+                                                     01:53 +715 ~26: All tests passed!
+### G6 flutter build web --release --dart-define=…   ✓ Built build/web
+```
+
+⇒ 第 32 轮的门槛到此有绿证；`+715` 与上表 `709 + 6` 的算式一致。
+
+**下一轮入口（更新）**：!297 已 PASS，等合并；合并后才可在 docs 侧把 #86 写成「已实现待合并 → 引合并 SHA」。
+
 
