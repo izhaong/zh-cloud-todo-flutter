@@ -37,3 +37,26 @@
 golden、全量测试、web 构建三项**没有退出码**——本机 zsh 没有 bash 的 `${PIPESTATUS[0]}`，管道后取到的是空值，
 所以这三项按输出末行判定（`00:04 +9: All tests passed!` / `02:18 +716 ~26: All tests passed!` / `✓ Built build/web`）。
 空 `rc=` 意味着测量方式断了，不代表通过，也不代表失败。
+
+
+## 合并轮（同步 develop 后的终态读数）—— 2026-09-24
+`note_page.dart` 与已合并的 `!275`（插入摘要）撞在同一处，但两侧是**各自新增不同东西**（不同于 !305 那种抢同一手势），
+故双侧保留：`_applyMarker` 与 `_insertSummary` 并列、`Wrap(加粗/高亮)` 与 `Align(插入摘要)` 并列为两个 Column 子项，
+中间补回被共用行吃掉的一层 `),`。合并提交 `089df1d`，合入 develop 为 `c9ec5d663`。
+
+| 门禁 | 终态读数（跑在已提交树上） |
+| --- | --- |
+| 1 `git diff --check` | `rc=0` |
+| 2 `dart format --output=none --set-exit-if-changed`（本轮 2 个显式文件逐个写死） | `Formatted 2 files (0 changed)`、`rc=0`（本轮未红） |
+| 3 `flutter analyze` | `No issues found!`、`rc=0` |
+| 4 `flutter test --tags golden` | `00:04 +9: All tests passed!`、`rc=0`（9 张基线未重录） |
+| 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:55 +892 ~26: All tests passed!`、`rc=0`。计数可核：合并前 develop 基线 885 + 本 PR 自带 7 例 = 892 |
+| 6 `flutter build web --release --dart-define=…` | `✓ Built build/web`、`rc=0` |
+
+回归侧证据（证明没挤坏已合并功能）：`test/features/note/note_task_summary_test.dart` 单独跑 `+22: All tests passed!`。
+`pubspec.lock` 在门禁跑完仍与 develop 一致（未被本机镜像覆盖）。
+合并后 develop 的 tree 与本树同为 `3eeb1b3a96cb` ⇒ 上表读数对合并后的 develop 直接成立。
+
+**未达成项（如实记）**：本轮未派只读复核子代理（会话轮次预算耗尽）。合并动作动到了 `!275` 已验收的笔记弹窗布局 ⇒
+「复核拿到 VERDICT」这一条按口径算**没通过**，需补一次只读复核，重点核
+「加粗/高亮 与 插入摘要 并排后是否仍各自独立可读屏、以及 Wrap 里两个 IconButton 的 tooltip 语义是否被摘要按钮挤掉」。
