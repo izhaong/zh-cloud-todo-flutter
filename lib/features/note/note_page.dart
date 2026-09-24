@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/todo_api.dart';
 import '../../state/providers.dart';
+import 'task_summary_sheet.dart';
 
 class NotePage extends ConsumerStatefulWidget {
   const NotePage({super.key});
@@ -228,6 +229,48 @@ class _NoteDraft {
   final String content;
 }
 
+/// 嘀嗒《09-桌面快捷操作》之外的《11-笔记与摘要.md:43》样式菜单：把选中片段用成对
+/// Markdown 标记包起来（`**…**` 加粗、`==…==` 高亮，形态取自《03-编辑与排版.md:48》`-``:49`）。
+/// 光标折叠时插入成对标记并把光标落在中间，让「先点样式再打字」也成立。
+TextEditingValue noteWrapWithMarker(TextEditingValue value, String marker) {
+  final selection = value.selection;
+  if (!selection.isValid) return value;
+  if (selection.isCollapsed) {
+    final at = selection.start;
+    return TextEditingValue(
+      text: value.text.replaceRange(at, at, marker + marker),
+      selection: TextSelection.collapsed(offset: at + marker.length),
+    );
+  }
+  final start = selection.start;
+  final end = selection.end;
+  final selected = value.text.substring(start, end);
+  // 取消：选中内容本身已被同一对标记包住时，剥掉这一对（嘀嗒《03-编辑与排版.md:56》
+  // 「也可以取消不需要的格式」）。只剥最外一层，不递归。
+  if (selected.length >= marker.length * 2 &&
+      selected.startsWith(marker) &&
+      selected.endsWith(marker)) {
+    final inner = selected.substring(
+      marker.length,
+      selected.length - marker.length,
+    );
+    return TextEditingValue(
+      text: value.text.replaceRange(start, end, inner),
+      selection: TextSelection(
+        baseOffset: start,
+        extentOffset: start + inner.length,
+      ),
+    );
+  }
+  return TextEditingValue(
+    text: value.text.replaceRange(start, end, marker + selected + marker),
+    selection: TextSelection(
+      baseOffset: start,
+      extentOffset: end + marker.length * 2,
+    ),
+  );
+}
+
 class _NoteEditorDialog extends StatefulWidget {
   const _NoteEditorDialog({this.note});
 
@@ -261,6 +304,30 @@ class _NoteEditorDialogState extends State<_NoteEditorDialog> {
     Navigator.pop(context, _NoteDraft(title: title, content: _content.text));
   }
 
+  void _applyMarker(String marker) {
+    _content.value = noteWrapWithMarker(_content.value, marker);
+  }
+
+  /// 嘀嗒的摘要只从笔记插入；确认后写进光标处，光标无效时追加到末尾。
+  Future<void> _insertSummary() async {
+    final summary = await showNoteTaskSummarySheet(context);
+    if (summary == null || !mounted) return;
+    final value = _content.value;
+    final caret = value.selection.isValid
+        ? value.selection.start.clamp(0, value.text.length)
+        : value.text.length;
+    final before = value.text.substring(0, caret);
+    final after = value.text.substring(caret);
+    final joined =
+        '${before.isEmpty || before.endsWith('\n') ? before : '$before\n'}'
+        '$summary'
+        '${after.isEmpty || after.startsWith('\n') ? after : '\n$after'}';
+    _content.value = TextEditingValue(
+      text: joined,
+      selection: TextSelection.collapsed(offset: joined.length - after.length),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -281,6 +348,32 @@ class _NoteEditorDialogState extends State<_NoteEditorDialog> {
                 ),
               ),
               const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                children: [
+                  IconButton(
+                    key: const Key('todo-note-style-bold'),
+                    tooltip: '加粗',
+                    icon: const Icon(Icons.format_bold),
+                    onPressed: () => _applyMarker('**'),
+                  ),
+                  IconButton(
+                    key: const Key('todo-note-style-highlight'),
+                    tooltip: '高亮',
+                    icon: const Icon(Icons.format_color_fill),
+                    onPressed: () => _applyMarker('=='),
+                  ),
+                ],
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: const Key('todo-note-insert-summary'),
+                  onPressed: _insertSummary,
+                  icon: const Icon(Icons.article_outlined, size: 18),
+                  label: const Text('插入摘要'),
+                ),
+              ),
               TextField(
                 key: const Key('todo-note-content'),
                 controller: _content,

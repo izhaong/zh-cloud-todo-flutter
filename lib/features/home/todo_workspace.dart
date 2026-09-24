@@ -1,15 +1,16 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/brand_colors.dart';
 import '../../core/theme/todo_layout_tokens.dart';
 import '../../state/repositories/task_query_repository.dart';
+import '../../core/shortcuts/todo_shortcut_registry.dart';
 import '../shell/section.dart';
 import '../shell/sidebar.dart';
 import '../task/task_search_page.dart';
+import 'keyboard_shortcuts_dialog.dart';
 
 enum TodoWorkspaceProfile { wide, compact, tablet, mobile }
 
@@ -90,13 +91,15 @@ class TodoWorkspace extends StatelessWidget {
       TodoWorkspaceProfile.tablet => _tablet(context),
       TodoWorkspaceProfile.mobile => _mobile(context),
     };
-    return Shortcuts(
-      shortcuts: const {
-        SingleActivator(LogicalKeyboardKey.keyK, control: true):
-            _OpenGlobalSearchIntent(),
-        SingleActivator(LogicalKeyboardKey.keyK, meta: true):
-            _OpenGlobalSearchIntent(),
-      },
+    return Shortcuts.manager(
+      manager: TodoShortcutManager(
+        todoShortcutActivators(
+          forKind: (kind) => switch (kind) {
+            TodoShortcutKind.openSearch => _OpenGlobalSearchIntent(),
+            TodoShortcutKind.showShortcuts => _ShowKeyboardShortcutsIntent(),
+          },
+        ),
+      ),
       child: Actions(
         actions: {
           _OpenGlobalSearchIntent: CallbackAction<_OpenGlobalSearchIntent>(
@@ -105,6 +108,13 @@ class TodoWorkspace extends StatelessWidget {
               return null;
             },
           ),
+          _ShowKeyboardShortcutsIntent:
+              CallbackAction<_ShowKeyboardShortcutsIntent>(
+                onInvoke: (_) {
+                  unawaited(showKeyboardShortcutsDialog(context));
+                  return null;
+                },
+              ),
         },
         child: Focus(
           autofocus: true,
@@ -417,6 +427,8 @@ class TodoRail extends StatelessWidget {
     );
   }
 }
+
+class _ShowKeyboardShortcutsIntent extends Intent {}
 
 class _OpenGlobalSearchIntent extends Intent {
   const _OpenGlobalSearchIntent();

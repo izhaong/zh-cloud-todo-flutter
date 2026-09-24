@@ -7,6 +7,8 @@ import '../../core/db/app_database.dart';
 import '../../core/sync/sync_change_queue.dart';
 import '../../core/sync/sync_entities.dart';
 
+/// 服务端 `todo_filter.conditions` 的形状见
+/// `TodoFilterConditionsDO`：listIds / tagIds / dateRange / priorities / statuses / keyword。
 class TodoFilterConditions {
   const TodoFilterConditions({
     this.listIds = const [],
@@ -14,6 +16,7 @@ class TodoFilterConditions {
     this.priorities = const [],
     this.statuses = const [],
     this.keyword,
+    this.dateRange,
   });
 
   final List<String> listIds;
@@ -21,6 +24,7 @@ class TodoFilterConditions {
   final List<int> priorities;
   final List<String> statuses;
   final String? keyword;
+  final TodoFilterDateRange? dateRange;
 
   Map<String, dynamic> toJson() => {
     if (listIds.isNotEmpty) 'listIds': listIds,
@@ -28,6 +32,68 @@ class TodoFilterConditions {
     if (priorities.isNotEmpty) 'priorities': priorities,
     if (statuses.isNotEmpty) 'statuses': statuses,
     if (keyword?.trim().isNotEmpty == true) 'keyword': keyword!.trim(),
+    if (dateRange != null) 'dateRange': dateRange!.toJson(),
+  };
+
+  /// 容忍服务端下发的多余键与单值/多值差异；无法表示的键留到 `unsupportedKeys`。
+  static ({TodoFilterConditions conditions, Set<String> unsupportedKeys})
+  fromJson(Map<String, dynamic> json) {
+    final unsupported = <String>{};
+    final known = {
+      'listIds',
+      'tagIds',
+      'priorities',
+      'statuses',
+      'keyword',
+      'dateRange',
+    };
+    unsupported.addAll(json.keys.where((key) => !known.contains(key)));
+    final rawRange = json['dateRange'];
+    return (
+      conditions: TodoFilterConditions(
+        listIds: _strings(json['listIds']),
+        tagIds: _strings(json['tagIds']),
+        priorities: _ints(json['priorities']),
+        statuses: _strings(json['statuses']),
+        keyword: json['keyword']?.toString(),
+        dateRange: rawRange is Map
+            ? TodoFilterDateRange(
+                preset: rawRange['preset']?.toString(),
+                from: DateTime.tryParse(rawRange['from']?.toString() ?? ''),
+                to: DateTime.tryParse(rawRange['to']?.toString() ?? ''),
+              )
+            : null,
+      ),
+      unsupportedKeys: unsupported,
+    );
+  }
+
+  static List<String> _strings(Object? raw) => raw is List
+      ? raw.map((item) => '$item').toList(growable: false)
+      : const [];
+
+  static List<int> _ints(Object? raw) => raw is List
+      ? raw
+            .map((item) => item is num ? item.toInt() : int.tryParse('$item'))
+            .whereType<int>()
+            .toList(growable: false)
+      : const [];
+}
+
+/// 到期日范围：`preset` 与 `from`/`to` 可并存（与服务端 DateRange 字段一致）。
+class TodoFilterDateRange {
+  const TodoFilterDateRange({this.preset, this.from, this.to});
+
+  final String? preset;
+  final DateTime? from;
+  final DateTime? to;
+
+  bool get isEmpty => preset == null && from == null && to == null;
+
+  Map<String, dynamic> toJson() => {
+    if (preset != null) 'preset': preset,
+    if (from != null) 'from': from!.toIso8601String(),
+    if (to != null) 'to': to!.toIso8601String(),
   };
 }
 
@@ -97,5 +163,30 @@ class FilterRepository {
     return (_db.select(
       _db.todoFilters,
     )..where((row) => row.id.equals(id))).getSingle();
+  }
+
+  Stream<List<TodoFilter>> watchAll() {
+    return (_db.select(_db.todoFilters)..orderBy([
+          (t) => OrderingTerm(expression: t.sortOrder),
+          (t) => OrderingTerm(expression: t.createdAt),
+        ]))
+        .watch();
+  }
+
+  Future<void> remove(String id) async {
+    final row = await (_db.select(
+      _db.todoFilters,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (row == null) return;
+    await _db.transaction(() async {
+      await (_db.delete(_db.todoFilters)..where((t) => t.id.equals(id))).go();
+      await _queue.enqueue(
+        entity: SyncEntities.filter,
+        op: SyncOps.delete,
+        localId: id,
+        serverId: row.serverId,
+        payload: {'id': id, 'serverId': row.serverId},
+      );
+    });
   }
 }

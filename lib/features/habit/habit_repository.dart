@@ -7,17 +7,23 @@ import '../../core/api/api_config.dart';
 class HabitDto {
   final int id;
   final String name;
+  final String? icon;
   final String? color;
   final int period;
   final int targetCount;
+  final DateTime? reminderAt;
+  final int sortOrder;
   final bool archived;
 
   HabitDto({
     required this.id,
     required this.name,
+    this.icon,
     this.color,
     this.period = 1,
     this.targetCount = 1,
+    this.reminderAt,
+    this.sortOrder = 0,
     this.archived = false,
   });
 
@@ -25,15 +31,45 @@ class HabitDto {
     return HabitDto(
       id: (j['id'] as num?)?.toInt() ?? 0,
       name: j['name']?.toString() ?? '',
+      icon: j['icon']?.toString(),
       color: j['color']?.toString(),
       period: (j['period'] as num?)?.toInt() ?? 1,
       targetCount:
           (j['targetCount'] as num?)?.toInt() ??
           (j['targetPerWeek'] as num?)?.toInt() ??
           1,
+      reminderAt: _epochMillisToDateTime(j['reminderAt']),
+      sortOrder: (j['sortOrder'] as num?)?.toInt() ?? 0,
       archived: j['archived'] == true,
     );
   }
+}
+
+/// 服务端 `LocalDateTime` 全局走 epoch 毫秒（`TimestampLocalDateTimeSerializer`）。
+DateTime? _epochMillisToDateTime(Object? value) {
+  final millis = (value as num?)?.toInt();
+  if (millis == null) return null;
+  return DateTime.fromMillisecondsSinceEpoch(millis);
+}
+
+Map<String, Object?> _habitBody({
+  required String name,
+  String? icon,
+  String? color,
+  required int period,
+  required int targetCount,
+  DateTime? reminderAt,
+  int sortOrder = 0,
+}) {
+  return {
+    'name': name,
+    'icon': icon,
+    'color': color,
+    'period': period,
+    'targetCount': targetCount,
+    'reminderAt': reminderAt?.millisecondsSinceEpoch,
+    'sortOrder': sortOrder,
+  };
 }
 
 class HabitRepository {
@@ -58,24 +94,71 @@ class HabitRepository {
 
   Future<int> create({
     required String name,
+    String? icon,
+    String? color,
     int period = 1,
     int targetCount = 1,
+    DateTime? reminderAt,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '${ApiConfig.todoPrefix}/habit/create',
-      data: {'name': name, 'period': period, 'targetCount': targetCount},
+      data: _habitBody(
+        name: name,
+        icon: icon,
+        color: color,
+        period: period,
+        targetCount: targetCount,
+        reminderAt: reminderAt,
+      ),
     );
     return _unwrapInt(response.data);
+  }
+
+  /// 更新习惯。`reminderAt` / `icon` 等传 null 表示「不改动」而非「清除」：
+  /// 服务端 `updateHabit` 走整行 `updateById`，而 MyBatis-Plus 默认
+  /// `NOT_NULL` 更新策略不会把 null 写进 SET 子句（见 specs/037 spec FR-3 边界②）。
+  Future<void> update({
+    required int id,
+    required String name,
+    String? icon,
+    String? color,
+    required int period,
+    required int targetCount,
+    DateTime? reminderAt,
+    int sortOrder = 0,
+  }) async {
+    final response = await _dio.put<Map<String, dynamic>>(
+      '${ApiConfig.todoPrefix}/habit/update',
+      data: {
+        ..._habitBody(
+          name: name,
+          icon: icon,
+          color: color,
+          period: period,
+          targetCount: targetCount,
+          reminderAt: reminderAt,
+          sortOrder: sortOrder,
+        ),
+        'id': id,
+      },
+    );
+    _unwrapBool(response.data);
+  }
+
+  Future<void> delete(int id) async {
+    final response = await _dio.delete<Map<String, dynamic>>(
+      '${ApiConfig.todoPrefix}/habit/delete',
+      queryParameters: {'id': id},
+    );
+    _unwrapBool(response.data);
   }
 
   /// 打卡：返回当日累计打卡次数（后端计算）。
   Future<int> checkIn(int habitId, {DateTime? date}) async {
     final d = date ?? DateTime.now();
-    final key =
-        '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
     final r = await _dio.post<Map<String, dynamic>>(
       '${ApiConfig.todoPrefix}/habit/check-in',
-      data: {'habitId': habitId, 'checkedAt': '${key}T${_timeOnly(d)}'},
+      data: {'habitId': habitId, 'checkedAt': d.millisecondsSinceEpoch},
     );
     return _unwrapInt(r.data);
   }
@@ -147,9 +230,12 @@ dynamic _unwrapHabitData(Map<String, dynamic>? body) {
   return body.containsKey('code') ? body['data'] : body;
 }
 
-String _timeOnly(DateTime value) {
-  String two(int number) => number.toString().padLeft(2, '0');
-  String three(int number) => number.toString().padLeft(3, '0');
-  return '${two(value.hour)}:${two(value.minute)}:${two(value.second)}.'
-      '${three(value.millisecond)}';
+void _unwrapBool(Map<String, dynamic>? body) {
+  if (body == null) return;
+  if (body.containsKey('code') && body['code'] != 0) {
+    throw DioException(
+      requestOptions: RequestOptions(path: ApiConfig.todoPrefix),
+      error: body['msg'] ?? '请求失败',
+    );
+  }
 }

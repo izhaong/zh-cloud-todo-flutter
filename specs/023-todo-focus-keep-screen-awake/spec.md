@@ -1,7 +1,7 @@
 # Todo 专注屏幕常亮规格
 
 **Issue:** #256
-**状态：** 实现完成；iOS Runner、Claude CLI 和 Android/iOS 真机自动锁屏效果仍是独立验收门槛。
+**状态：** 实现已合入 `develop`（PR #257 / 合并提交 `a1d7733`），Dart 全量门禁与 Claude CLI 只读交叉复核已通过；**验收未完成**——iOS Runner 编译、Android JVM/Kotlin 复核、Android/iOS 真机自动锁屏效果与远端 CI 仍是独立门槛，对应 `tasks.md` T005 未勾选。本行只描述交付状态，不得读作「验收完成」。
 
 ## 目标
 

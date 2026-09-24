@@ -6,6 +6,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/theme/brand_colors.dart';
 import '../../core/theme/todo_layout_tokens.dart';
 import '../../state/providers.dart';
+import '../list/list_actions.dart';
 import '../list/list_editor_sheet.dart';
 import 'section.dart';
 import 'sidebar_hierarchy.dart';
@@ -600,7 +601,7 @@ class _TagRow extends StatelessWidget {
   }
 }
 
-class _ListRow extends StatelessWidget {
+class _ListRow extends ConsumerWidget {
   const _ListRow({
     required this.list,
     required this.selected,
@@ -614,7 +615,7 @@ class _ListRow extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return _SidebarRow(
       rowKey: ValueKey('todo-sidebar-list-${list.id}'),
       icon: Icons.list_alt_outlined,
@@ -622,6 +623,7 @@ class _ListRow extends StatelessWidget {
       selected: selected,
       colors: colors,
       onTap: onTap,
+      onLongPress: () => showListActions(context, ref, list),
     );
   }
 }
@@ -636,6 +638,7 @@ class _SidebarRow extends StatefulWidget {
     required this.onTap,
     this.trailing,
     this.contentIndent = 0,
+    this.onLongPress,
   });
 
   final Key rowKey;
@@ -646,6 +649,7 @@ class _SidebarRow extends StatefulWidget {
   final VoidCallback onTap;
   final Widget? trailing;
   final double contentIndent;
+  final VoidCallback? onLongPress;
 
   @override
   State<_SidebarRow> createState() => _SidebarRowState();
@@ -689,6 +693,7 @@ class _SidebarRowState extends State<_SidebarRow> {
                 TodoLayoutTokens.selectedRowRadius,
               ),
               onTap: widget.onTap,
+              onLongPress: widget.onLongPress,
               child: Padding(
                 padding: EdgeInsets.only(
                   left:

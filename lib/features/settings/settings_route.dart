@@ -7,13 +7,15 @@ import '../../core/widgets/app_widgets.dart';
 import '../../state/providers.dart';
 import '../../state/repositories/task_capture_defaults_repository.dart';
 import '../../state/session_state.dart';
+import '../achievement/achievement_page.dart';
 import '../account/account_security_page.dart';
 import '../calendar_sub/calendar_subscription_page.dart';
 import '../import/task_import_page.dart';
+import '../home/keyboard_shortcuts_dialog.dart';
 import '../native/native_entry_page.dart';
 import '../shell/app_theme_controller.dart';
 
-/// 设置页：分组列表（账户/主题/关于）+ 账户安全入口。
+/// 设置页：分组列表（账户/任务/主题/关于）+ 账户安全与成就入口。
 class SettingsRoute extends ConsumerWidget {
   const SettingsRoute({super.key, this.signedInMobile});
 
@@ -49,6 +51,16 @@ class SettingsRoute extends ConsumerWidget {
                     MaterialPageRoute(
                       builder: (_) => const AccountSecurityPage(),
                     ),
+                  ),
+                ),
+                _Tile(
+                  icon: Icons.emoji_events_outlined,
+                  title: '成就与勋章',
+                  subtitle: '成就值、等级与勋章墙；成就值每天凌晨更新',
+                  trailing: Icons.chevron_right,
+                  colors: colors,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const AchievementPage()),
                   ),
                 ),
                 _Tile(
@@ -110,6 +122,13 @@ class SettingsRoute extends ConsumerWidget {
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const NativeEntryPage()),
                   ),
+                ),
+                _Tile(
+                  icon: Icons.keyboard_outlined,
+                  title: '键盘快捷键',
+                  subtitle: '查看当前可用的组合键（?）',
+                  colors: colors,
+                  onTap: () => showKeyboardShortcutsDialog(context),
                 ),
               ],
             ),

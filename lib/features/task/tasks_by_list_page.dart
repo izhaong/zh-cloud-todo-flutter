@@ -17,6 +17,7 @@ import '../../state/repositories/task_batch_edit_repository.dart';
 import '../../state/repositories/task_query_repository.dart';
 import '../../state/repositories/task_repository.dart';
 import '../filter/filter_bar.dart';
+import '../quadrant/quadrant_rules_page.dart';
 import '../shell/app_dialog.dart';
 import '../shell/quick_add_bar.dart';
 import 'task_view_mutation_feedback.dart';
@@ -38,6 +39,7 @@ class TasksByListPage extends ConsumerStatefulWidget {
     this.initialListId,
     this.initialDueRange,
     this.initialCompleted,
+    this.initialFilter,
     this.lockedListId = false,
     this.hideAppBar = false,
     this.selectedTaskId,
@@ -50,6 +52,9 @@ class TasksByListPage extends ConsumerStatefulWidget {
   final String? initialListId;
   final String? initialDueRange;
   final bool? initialCompleted;
+
+  /// 从「筛选器」页套用进来的已保存条件；与 `initialDueRange` 同属外部播种。
+  final TaskFilter? initialFilter;
   final bool lockedListId;
   final bool hideAppBar;
   final String? selectedTaskId;
@@ -91,10 +96,12 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   void initState() {
     super.initState();
     _selectedListId = widget.initialListId;
-    _filter = TaskFilter(
-      dueRange: widget.initialDueRange,
-      completed: widget.initialCompleted,
-    );
+    _filter =
+        widget.initialFilter ??
+        TaskFilter(
+          dueRange: widget.initialDueRange,
+          completed: widget.initialCompleted,
+        );
     Future<void>.microtask(_restoreSortPreference);
     Future<void>.microtask(_restoreViewPreference);
   }
@@ -106,7 +113,8 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         widget.lockedListId && widget.initialListId != oldWidget.initialListId;
     final filterSourceChanged =
         widget.initialDueRange != oldWidget.initialDueRange ||
-        widget.initialCompleted != oldWidget.initialCompleted;
+        widget.initialCompleted != oldWidget.initialCompleted ||
+        !identical(widget.initialFilter, oldWidget.initialFilter);
     if (listSourceChanged || filterSourceChanged) {
       _viewRestoreRevision++;
       setState(() {
@@ -117,10 +125,12 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           _batchSelectedTaskIds.clear();
         }
         if (filterSourceChanged) {
-          _filter = TaskFilter(
-            dueRange: widget.initialDueRange,
-            completed: widget.initialCompleted,
-          );
+          _filter =
+              widget.initialFilter ??
+              TaskFilter(
+                dueRange: widget.initialDueRange,
+                completed: widget.initialCompleted,
+              );
         }
         _mode = TaskViewMode.list;
         _timelineZoom = 1;
@@ -201,6 +211,9 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 onBatchPressed: _toggleBatchSelection,
                 onCreateSection: _mode == TaskViewMode.list && listId != null
                     ? _createTaskSection
+                    : null,
+                onEditQuadrantRules: _mode == TaskViewMode.eisenhower
+                    ? _openQuadrantRules
                     : null,
               ),
             if (showQuickAdd && !_batchSelectionActive)
@@ -452,6 +465,8 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       case TaskViewMode.calendar:
         return CalendarView(
           tasks: items,
+          // 已完成显隐由清单筛选决定，不再叠一层日历自身的开关。
+          filterCompleted: false,
           onTaskSelected: widget.onTaskSelected,
           onTaskDateChanged: (task, dueAt) async {
             final repository = ref.read(taskViewActionRepositoryProvider);
@@ -508,6 +523,13 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         context,
       ).showSnackBar(const SnackBar(content: Text('排序偏好保存失败，请稍后重试')));
     }
+  }
+
+  /// 嘀嗒《03-四象限/02-如何编辑四象限规则》：四象限页面右上角「...」里选「编辑」进规则页。
+  void _openQuadrantRules() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const QuadrantRulesPage()));
   }
 
   Future<void> _changeMode(TaskViewMode mode) async {
@@ -1403,9 +1425,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     );
     if (name == null || !mounted) return;
     try {
-      await ref
-          .read(taskSectionRepositoryProvider)
-          ?.rename(section.id, name);
+      await ref.read(taskSectionRepositoryProvider)?.rename(section.id, name);
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -1433,10 +1453,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     }
   }
 
-  Future<void> _moveTaskSection(
-    TodoTaskSection section,
-    int direction,
-  ) async {
+  Future<void> _moveTaskSection(TodoTaskSection section, int direction) async {
     final listId = _selectedListId;
     if (listId == null) return;
     final sections =

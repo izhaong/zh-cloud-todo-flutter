@@ -16,7 +16,9 @@ import '../../core/widgets/app_widgets.dart';
 import '../../native/native_intents.dart';
 import '../../state/providers.dart';
 import '../../state/repositories/reminder_repository.dart';
+import '../../state/repositories/task_query_repository.dart';
 import '../shell/app_dialog.dart';
+import 'task_detail_page.dart';
 import 'task_quick_add_sheet.dart';
 import '../collaboration/task_comments_page.dart';
 import '../collaboration/task_assign_page.dart';
@@ -36,6 +38,7 @@ enum _TaskDetailAction {
   copy,
   share,
   convertToNote,
+  linkParent,
   abandon,
   collaboration,
   delete,
@@ -594,6 +597,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
   DateTime? _startAt;
   DateTime? _endAt;
   bool _loading = true;
+  var _linkParentOpen = false;
   bool _clearStartAt = false;
   bool _clearEndAt = false;
   DateTime? _dueAt;
@@ -823,6 +827,10 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
         value: _TaskDetailAction.convertToNote,
         child: Text('转为笔记'),
       ),
+      const PopupMenuItem(
+        value: _TaskDetailAction.linkParent,
+        child: Text('关联主任务'),
+      ),
     ];
   }
 
@@ -834,9 +842,159 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       case _TaskDetailAction.convertToNote:
         unawaited(_convertToNote(task));
         return;
+      case _TaskDetailAction.linkParent:
+        unawaited(_linkParentTask(task));
+        return;
       default:
         return;
     }
+  }
+
+  /// 嘀嗒《多级任务》「关联主任务」：详情「...」里选一个同清单任务当主任务，
+  /// 已关联时显示当前主任务并可取消关联。成环、五级上限与只读清单由
+  /// [TaskRepository.reparent] 兜底，这里只负责把失败说清楚。
+  Future<void> _linkParentTask(TodoTask task) async {
+    if (_linkParentOpen) return;
+    _linkParentOpen = true;
+    try {
+      await _prepareAndShowParentSheet(task);
+    } finally {
+      _linkParentOpen = false;
+    }
+  }
+
+  /// 候选要先等三次 await，加载期间再点一次「...」→「关联主任务」会叠两层弹层：
+  /// 「取消关联」只退一层，看起来像按钮失灵。一次打开只允许一个在飞的加载。
+  Future<void> _prepareAndShowParentSheet(TodoTask task) async {
+    final taskRepository = ref.read(taskRepositoryProvider);
+    final queryRepository = ref.read(taskQueryRepositoryProvider);
+    if (taskRepository == null || queryRepository == null) {
+      _showTaskDetailFeedback('任务暂不可用，请稍后重试');
+      return;
+    }
+    final excluded = {task.id, ...await taskRepository.descendantIds(task.id)};
+    final candidates = (await queryRepository.filter(
+      TaskQueryFilter(listId: task.listId),
+    )).where((item) => !excluded.contains(item.id)).toList(growable: false);
+    final currentParent = task.parentTaskId == null
+        ? null
+        : await taskRepository.getById(task.parentTaskId!);
+    if (!mounted || _task?.id != task.id) return;
+    if (candidates.isEmpty && currentParent == null) {
+      _showTaskDetailFeedback('暂无可关联的主任务');
+      return;
+    }
+    // 弹层离场动画期间 sheetContext 仍然 mounted，连点两个候选会把下层路由一起弹掉，
+    // 所以一次打开只允许提交一次。
+    var handled = false;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        Future<void> apply(String? parentTaskId) async {
+          if (handled) return;
+          handled = true;
+          await _applyReparent(task.id, parentTaskId, sheetContext);
+        }
+
+        return _ParentTaskSheet(
+          currentParentTitle: currentParent?.title,
+          candidates: candidates,
+          onSelect: (parentTaskId) => unawaited(apply(parentTaskId)),
+          onUnlink: () => unawaited(apply(null)),
+        );
+      },
+    );
+  }
+
+  Future<void> _applyReparent(
+    String taskId,
+    String? newParentId,
+    BuildContext sheetContext,
+  ) async {
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    try {
+      await repo.reparent(taskId, newParentId);
+    } catch (error) {
+      if (sheetContext.mounted) Navigator.of(sheetContext).pop();
+      if (!mounted) return;
+      _showTaskDetailFeedback(_reparentFailureMessage(error));
+      return;
+    }
+    if (sheetContext.mounted) Navigator.of(sheetContext).pop();
+  }
+
+  /// 仓储的规则裁决（只读清单、五级上限、成环）都是确定性失败，
+  /// 不能对用户说「请重试」，直接把它的原因转成提示。
+  String _reparentFailureMessage(Object error) {
+    if (error is StateError) return error.message;
+    // `ArgumentError.message` 是 `Object?`，`'${...}'` 会渲染出字面量 "null"。
+    if (error is ArgumentError) {
+      return error.message?.toString() ?? '关联主任务失败，请重试';
+    }
+    return taskViewMutationFailureMessage(error, '关联主任务失败，请重试');
+  }
+
+  void _showTaskDetailFeedback(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// 标题上方的主任务行：点击跳转到主任务详情（嘀嗒「点主任务标题跳主任务详情」）。
+  Widget _buildParentTaskRow(TodoTask task) {
+    final parentTaskId = task.parentTaskId;
+    if (parentTaskId == null) return const SizedBox.shrink();
+    final repo = ref.watch(taskRepositoryProvider);
+    if (repo == null) return const SizedBox.shrink();
+    return StreamBuilder<TodoTask?>(
+      stream: repo.watchById(parentTaskId),
+      builder: (context, snapshot) {
+        final parent = snapshot.data;
+        if (parent == null) return const SizedBox.shrink();
+        final colors = brandColors(context);
+        return InkWell(
+          key: const Key('task-detail-parent-row'),
+          borderRadius: BorderRadius.circular(6),
+          onTap: () => unawaited(showTaskDetailSheet(context, parent.id)),
+          child: Semantics(
+            container: true,
+            button: true,
+            // 嘀嗒可见文案就是裸的主任务标题；「主任务：」只给读屏，避免读出来不知道是什么。
+            label: '主任务：${parent.title}',
+            onTap: () => unawaited(showTaskDetailSheet(context, parent.id)),
+            child: ExcludeSemantics(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(4, 2, 4, 10),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.account_tree_outlined,
+                      size: 16,
+                      color: colors.mutedForeground,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        parent.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: colors.mutedForeground,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -2219,6 +2377,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       padding: const EdgeInsets.all(16),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       children: [
+        _buildParentTaskRow(t),
         Semantics(
           identifier: 'todo_task_detail_title',
           child: TextField(
@@ -2538,6 +2697,9 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                       case _TaskDetailAction.convertToNote:
                         unawaited(_convertToNote(t));
                         return;
+                      case _TaskDetailAction.linkParent:
+                        unawaited(_linkParentTask(t));
+                        return;
                       case _TaskDetailAction.abandon:
                         unawaited(_abandon(t));
                         return;
@@ -2579,6 +2741,10 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                     const PopupMenuItem(
                       value: _TaskDetailAction.convertToNote,
                       child: Text('转为笔记'),
+                    ),
+                    const PopupMenuItem(
+                      value: _TaskDetailAction.linkParent,
+                      child: Text('关联主任务'),
                     ),
                     const PopupMenuItem(
                       value: _TaskDetailAction.abandon,
@@ -2677,6 +2843,94 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     return Scaffold(
       appBar: AppBar(title: const Text('任务不存在')),
       body: const Center(child: Text('任务不存在或已删除')),
+    );
+  }
+}
+
+/// 「关联主任务」弹层：已关联时显示当前主任务与 ✖️ 取消关联，下面列同清单内
+/// 可作为主任务的候选（自己与自己的后代已在调用侧排除）。
+class _ParentTaskSheet extends StatelessWidget {
+  const _ParentTaskSheet({
+    required this.currentParentTitle,
+    required this.candidates,
+    required this.onSelect,
+    required this.onUnlink,
+  });
+
+  final String? currentParentTitle;
+  final List<TodoTask> candidates;
+  final void Function(String parentTaskId) onSelect;
+  final VoidCallback onUnlink;
+
+  @override
+  Widget build(BuildContext context) {
+    final currentParent = currentParentTitle;
+    return SafeArea(
+      key: const ValueKey('task-parent-sheet'),
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * 0.6,
+        child: Column(
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '关联主任务',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+            if (currentParent != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 8, 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '当前主任务：$currentParent',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    // M3 IconButton 只把 tooltip 交给 Tooltip，语义节点本身没有
+                    // label（tooltip 文案只在气泡出现时存在），所以「取消关联」这个
+                    // 动作必须由外层显式给读屏节点。
+                    Semantics(
+                      container: true,
+                      button: true,
+                      label: '取消关联',
+                      onTap: onUnlink,
+                      child: ExcludeSemantics(
+                        child: IconButton(
+                          key: const Key('task-parent-unlink'),
+                          tooltip: '取消关联',
+                          onPressed: onUnlink,
+                          icon: const Icon(Icons.close),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            // 无候选又无当前主任务时调用侧已早退（「暂无可关联的主任务」），
+            // 有主任务则主任务本身必在候选内，故这里不再摆空态分支。
+            Expanded(
+              child: ListView(
+                children: [
+                  for (final task in candidates)
+                    ListTile(
+                      key: ValueKey('task-parent-candidate-${task.id}'),
+                      leading: const Icon(Icons.account_tree_outlined),
+                      title: Text(task.title),
+                      onTap: () => onSelect(task.id),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
