@@ -30,6 +30,10 @@ import 'task_view_mutation_feedback.dart';
 /// 收集箱的本地清单 id（synthetic inbox）：listId 为该值的任务视为"未归清单"。
 const String kInboxListId = 'inbox';
 
+/// 嵌入态操作头放得下 7 枚图标的最小面板宽度：7×48（IconButton 默认下限）+ 4 间距 + 左右内边距 16。
+/// 实测口径见 `test/features/task/embedded_detail_header_narrow_test.dart`（355 溢 1px、356 刚好）。
+const double _embeddedActionRowMinWidth = 356;
+
 enum _TaskDetailAction {
   startPomodoro,
   previewMarkdown,
@@ -834,6 +838,26 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     ];
   }
 
+  /// 窄面板（< 356dp）才把「移至收集箱」与「删除」折进「...」：
+  /// 7 枚固定 48dp 图标 + 4dp 间距 + 左右 8dp 内边距要 356dp，320px 屏上实测溢出 36px
+  /// （Issue #279；与字号无关，1.0 与 1.3 溢出量相同）。宽面板保持原样，
+  /// 免得折叠把已有的图标形状改掉。
+  List<PopupMenuEntry<_TaskDetailAction>> _embeddedMoreActions(
+    TodoTask task, {
+    required bool foldedActions,
+  }) {
+    return [
+      ..._compactMoreActions(task),
+      if (foldedActions)
+        const PopupMenuItem(
+          value: _TaskDetailAction.moveToInbox,
+          child: Text('移至收集箱'),
+        ),
+      if (foldedActions)
+        const PopupMenuItem(value: _TaskDetailAction.delete, child: Text('删除')),
+    ];
+  }
+
   void _onCompactMoreAction(TodoTask task, _TaskDetailAction action) {
     switch (action) {
       case _TaskDetailAction.startPomodoro:
@@ -844,6 +868,12 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
         return;
       case _TaskDetailAction.linkParent:
         unawaited(_linkParentTask(task));
+        return;
+      case _TaskDetailAction.moveToInbox:
+        unawaited(_moveToInboxAndClose(task));
+        return;
+      case _TaskDetailAction.delete:
+        unawaited(_delete(task));
         return;
       default:
         return;
@@ -2595,57 +2625,65 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Row(
-            children: [
-              IconButton(
-                tooltip: '关闭详情',
-                onPressed: _close,
-                icon: const Icon(Icons.close),
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  '任务详情',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-              IconButton(
-                tooltip: t.isPinned ? '取消置顶' : '置顶',
-                onPressed: () => _togglePin(t),
-                icon: Icon(
-                  t.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-                ),
-              ),
-              IconButton(
-                tooltip: t.completed ? '取消勾选' : '勾选完成',
-                onPressed: () => _toggleComplete(t),
-                icon: Icon(
-                  t.completed
-                      ? Icons.check_circle
-                      : Icons.radio_button_unchecked,
-                ),
-              ),
-              IconButton(
-                tooltip: '移至收集箱',
-                onPressed: () => _moveToInboxAndClose(t),
-                icon: const Icon(Icons.move_to_inbox_outlined),
-              ),
-              IconButton(
-                tooltip: '协作（指派/评论/成员）',
-                onPressed: () => _openCollaborationHub(t),
-                icon: const Icon(Icons.people_outline),
-              ),
-              PopupMenuButton<_TaskDetailAction>(
-                tooltip: '更多任务操作',
-                onSelected: (action) => _onCompactMoreAction(t, action),
-                itemBuilder: (context) => _compactMoreActions(t),
-              ),
-              IconButton(
-                tooltip: '删除',
-                onPressed: () => _delete(t),
-                icon: const Icon(Icons.delete_outline),
-              ),
-            ],
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final folded = constraints.maxWidth < _embeddedActionRowMinWidth;
+              return Row(
+                children: [
+                  IconButton(
+                    tooltip: '关闭详情',
+                    onPressed: _close,
+                    icon: const Icon(Icons.close),
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      '任务详情',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: t.isPinned ? '取消置顶' : '置顶',
+                    onPressed: () => _togglePin(t),
+                    icon: Icon(
+                      t.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: t.completed ? '取消勾选' : '勾选完成',
+                    onPressed: () => _toggleComplete(t),
+                    icon: Icon(
+                      t.completed
+                          ? Icons.check_circle
+                          : Icons.radio_button_unchecked,
+                    ),
+                  ),
+                  if (!folded)
+                    IconButton(
+                      tooltip: '移至收集箱',
+                      onPressed: () => _moveToInboxAndClose(t),
+                      icon: const Icon(Icons.move_to_inbox_outlined),
+                    ),
+                  IconButton(
+                    tooltip: '协作（指派/评论/成员）',
+                    onPressed: () => _openCollaborationHub(t),
+                    icon: const Icon(Icons.people_outline),
+                  ),
+                  PopupMenuButton<_TaskDetailAction>(
+                    tooltip: '更多任务操作',
+                    onSelected: (action) => _onCompactMoreAction(t, action),
+                    itemBuilder: (context) =>
+                        _embeddedMoreActions(t, foldedActions: folded),
+                  ),
+                  if (!folded)
+                    IconButton(
+                      tooltip: '删除',
+                      onPressed: () => _delete(t),
+                      icon: const Icon(Icons.delete_outline),
+                    ),
+                ],
+              );
+            },
           ),
         ),
         const Divider(height: 1),
