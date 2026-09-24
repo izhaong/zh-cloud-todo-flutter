@@ -19,6 +19,7 @@
       ⇒ 这条文件 `+14` 全绿。
 - [x] 六项门禁跑在**最终字节**上（日志 `/tmp/g61/`）。
 - [ ] 只读复核（VERDICT 待回写）。
+- [x] PR 已开：见 Issue #279 与本 PR 互链；**合并前不关单、不翻矩阵状态**。
 - [ ] 矩阵：本轮是治理修复，不动 89 行状态；`#8 任务详情与编辑` 那一行的"操作头折叠形状"要不要写进去，
       等复核结论后判（**不在没读原文前乱改**）。
 
@@ -27,7 +28,7 @@
 | # | 门禁 | 读数 |
 | - | ---- | ---- |
 | 1 | `git diff --check` | rc=0（工作树范围；提交后再跑 `git diff --check origin/develop HEAD` 同 rc=0，见 PR 追加提交） |
-| 2 | `dart format --output=none --set-exit-if-changed <本轮 3 个显式文件>` | 第一跑 `Formatted 3 files (2 changed)` ⇒ 对**本轮文件**原地格式化后重跑：`Formatted 3 files (0 changed)` rc=0。**没有**跑过全仓格式化 |
+| 2 | `dart format --output=none --set-exit-if-changed <本轮 3 个显式文件>` | 第一跑 `Formatted 3 files (2 changed)` ⇒ 对**本轮文件**原地格式化后重跑：`Formatted 3 files (0 changed)` rc=0。**没有**跑过全仓格式化。改动面自查：`git diff --stat origin/develop HEAD` = 89/51，`git diff -w` 同范围 = 40/2 ⇒ 差的 ~49 行是把 `Row` 包进 `LayoutBuilder` 造成的**纯缩进位移**，`-w` 逐行读过只剩常量、菜单函数、两条 case 与两个 `if (!folded)` |
 | 3 | `flutter analyze` | `No issues found!` rc=0（中途报过 1 条 `unnecessary_brace_in_string_interps`，已改） |
 | 4 | `flutter test --tags golden` | `00:04 +9: All tests passed!` ⇒ **9 张基线一张都没重录** |
 | 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:25 +903 ~26: All tests passed!` rc=0 |
