@@ -74,32 +74,23 @@ develop 字节的弹层根本不 watch `foldersStreamProvider` ⇒ 没人订阅 
 探针把"红"伪装成"没结论"。改成 `broadcast()` 后同一份字节一秒收口 `+1 -12`。
 教训：**探针跑不完先怀疑夹具**，别把"runner 不退出"读成"实现没问题"。
 
-## 门禁原文记录（跑在最终字节 `840af71`，日志 `/tmp/r68/gates/final.log`）
+## 门禁原文记录（跑在最终字节 `aad865c`，日志 `/tmp/r68/gates/final_r2.log`）
 
 | 门禁 | 结果 |
 | ---- | ---- |
 | `git diff --check origin/develop...HEAD` 与工作区 | `rc=0`，无输出 |
 | `dart format --output=none --set-exit-if-changed <本轮 2 个 dart 文件>` | `Formatted 2 files (0 changed)`，`rc=0` |
-| `flutter analyze` | `No issues found! (ran in 1.8s)`，`rc=0` |
-| `flutter test --tags golden` | `00:09 +9: All tests passed!`，`rc=0`；`git status --short test/goldens` 为空 ⇒ 9 张基线未重录 |
-| `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:56 +908 ~26: All tests passed!`，`rc=0` |
+| `flutter analyze` | `No issues found! (ran in 2.0s)`，`rc=0` |
+| `flutter test --tags golden` | `00:04 +9: All tests passed!`，`rc=0`；`git status --short test/goldens` 为空 ⇒ 9 张基线未重录（复核另用 `diff -rq` 逐字节比对副本，同样未变） |
+| `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:39 +911 ~26: All tests passed!`，`rc=0` |
 | `flutter build web --release --dart-define=…` | `✓ Built build/web`，`rc=0` |
 
-**第一遍是 5/6**：`e231bf4` 上门禁 3 报 `1 issue found`（测试文件那条
-`import 'package:drift/drift.dart' hide isNull;` 是 unused_import，`app_database.dart` 已经把符号导出了）
-⇒ 单提 `style(test)` 提交 `840af71` 后**六条全部重跑**，本表就是重跑后的字节（第一遍日志留在 `/tmp/r68/gates/attempt1.log`）。
+计数对账：`+911 = 898 + 13`（898 = 本轮在 develop 副本实测，见下节；13 = 本轮新增用例）。`~26` 未新增 skip。
+`pubspec.lock` 未进提交，门禁跑完后 `git status --short` 为空（**前提：带 `source ~/development/env-flutter.sh`**）。
 
-计数对账：`+911 = 898 + 13`。
-**基线 898 是本轮自己实测的**：`git worktree add --detach /tmp/r68-baseline origin/develop` 后在该副本里跑
-`flutter test --exclude-tags 'golden || performance' --concurrency=1` ⇒ `02:53 +898 ~26: All tests passed!`
-（日志 `/tmp/r68/baseline_develop.log`）。13 = 本轮新增用例数；`~26` 与基线一致，未新增 skip。
-（第一版这里写的是"沿用第 64 轮实跑值，见 `specs/045-sort-direction/tasks.md`"——复核指出
-**那个目录在本分支与 `origin/develop` 上都不存在**（`git ls-tree origin/develop specs/` 最大 044），
-引用不可达 ⇒ 已换成本轮可复现的量法，而不是继续 hedge。）
-`pubspec.lock` 未进提交：`git log --stat origin/develop..HEAD -- pubspec.lock` 为空。
-**门禁必须带镜像 env**（`source ~/development/env-flutter.sh`）：不带时 `flutter analyze`/`test` 的隐式 `pub get`
-会把 `pubspec.lock` 的 150 行 `url:` 从 `pub.flutter-io.cn` 翻成 `pub.dev`（复核在副本上实测）
-⇒ 本表这些"`git status` 为空"只在带镜像时成立；CI（`Jenkinsfile:205-207`）不设镜像，这条也解释了为什么 lock 不能随手提交。
+**这是第 3 遍**：第 1 遍（`e231bf4`）5/6，门禁 3 报 `unused_import` ⇒ 单提 `840af71` 后第 2 遍 6/6；
+复核 FAIL 补了 3 条用例与注释/规格修订后（`aad865c`）**六条再全部重跑**，本表是这一遍的字节。
+前两遍日志：`/tmp/r68/gates/attempt1.log`、`/tmp/r68/gates/final.log`。
 
 ## 复核（第 1 版 `VERDICT: FAIL`：1 条 P1 + 5 条 P2 + 1 条 nit，全部采纳）
 
