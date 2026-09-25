@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
@@ -10,7 +11,11 @@ import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
 import 'package:zh_cloud_todo_flutter/features/task/view_mode.dart';
 import 'package:zh_cloud_todo_flutter/features/task/widgets/task_workspace_header.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_query_repository.dart';
+import 'package:zh_cloud_todo_flutter/core/theme/app_theme.dart';
+import 'package:zh_cloud_todo_flutter/features/task/tasks_by_list_page.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_sort_preference_repository.dart';
+
+import 'support/todo_visual_fixture.dart';
 
 /// 嘀嗒《01-任务/09-如何管理海量任务/03-用分组和排序管理任务》（develop 镜像 292 行）：
 /// `:169`「## 按创建时间排序（新增）」→ `:173-176`「支持：- 从旧到新；- 从新到旧。」；
@@ -339,5 +344,100 @@ void main() {
       );
     }
     expect(tester.takeException(), isNull, reason: '多两行方向后窄屏大字体下菜单溢出');
+  });
+
+  testWidgets('工作区列表真的按方向反序（页面级：只钉仓储不等于界面接上了）', (tester) async {
+    final fixture = await TodoVisualFixture.create(
+      set: TodoVisualFixtureSet.empty,
+    );
+    addTearDown(fixture.dispose);
+    final base = fixture.fixedNow;
+    await fixture.database.batch((batch) {
+      batch.insertAll(fixture.database.todoTasks, [
+        TodoTasksCompanion.insert(
+          id: 'page-older',
+          listId: 'inbox',
+          title: '页面里早创建的',
+          createdAt: base.subtract(const Duration(days: 5)),
+          updatedAt: base,
+        ),
+        TodoTasksCompanion.insert(
+          id: 'page-newer',
+          listId: 'inbox',
+          title: '页面里晚创建的',
+          createdAt: base,
+          updatedAt: base.subtract(const Duration(days: 5)),
+        ),
+      ]);
+    });
+
+    Future<void> pumpWorkspace() async {
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: fixture.container,
+          child: MaterialApp(
+            theme: ThemeData.light().copyWith(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            home: const Scaffold(body: TasksByListPage(hideAppBar: true)),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    Future<double> rowTop(String id) async {
+      final finder = find.byKey(Key('task-row-surface-$id'));
+      expect(
+        finder,
+        findsOneWidget,
+        reason: '这一行不在屏上 ⇒ 比几何位置没有意义（列表被筛选掉了会假通过）',
+      );
+      return tester.getRect(finder).top;
+    }
+
+    await pumpWorkspace();
+    await tester.tap(find.byKey(const Key('todo-sort-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('创建时间'));
+    await tester.pumpAndSettle();
+
+    // 默认「从新到旧」：晚创建的在上。
+    expect(
+      await rowTop('page-newer'),
+      lessThan(await rowTop('page-older')),
+      reason: '没切方向之前就该是既有行为（降序）',
+    );
+
+    await tester.tap(find.byKey(const Key('todo-sort-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('从旧到新'));
+    await tester.pumpAndSettle();
+
+    expect(
+      await rowTop('page-older'),
+      lessThan(await rowTop('page-newer')),
+      reason: '仓储排对了但页面没接上方向 ⇒ 用户在界面上看不到这一档',
+    );
+
+    // 方向要跟着偏好走：重进清单（**新的 State**）不该弹回降序。
+    // 必须先真的卸载：`pumpWidget` 复用同类型同位置的 State ⇒ 不卸载就等于
+    // 没重进，探针 PG（回读时把方向写死成 newestFirst）在补这句之前是绿的。
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await pumpWorkspace();
+    expect(
+      await rowTop('page-older'),
+      lessThan(await rowTop('page-newer')),
+      reason: '重启即丢方向 = 每次都得重选一遍',
+    );
+    final preference = await fixture.database
+        .select(fixture.database.todoViewPreferences)
+        .getSingle();
+    expect(
+      preference.valueJson,
+      allOf(contains('createdAt'), contains('oldestFirst')),
+      reason: '上送与重启都靠这一列，缺 direction 键就是没存住',
+    );
   });
 }
