@@ -17,6 +17,8 @@ enum _TaskWorkspaceHeaderCommand {
   batchEdit,
   createSection,
   editQuadrantRules,
+  directionNewestFirst,
+  directionOldestFirst,
 }
 
 extension on _TaskWorkspaceHeaderCommand {
@@ -30,6 +32,16 @@ extension on _TaskWorkspaceHeaderCommand {
     _TaskWorkspaceHeaderCommand.batchEdit => null,
     _TaskWorkspaceHeaderCommand.createSection => null,
     _TaskWorkspaceHeaderCommand.editQuadrantRules => null,
+    _TaskWorkspaceHeaderCommand.directionNewestFirst => null,
+    _TaskWorkspaceHeaderCommand.directionOldestFirst => null,
+  };
+
+  TaskSortDirection? get direction => switch (this) {
+    _TaskWorkspaceHeaderCommand.directionNewestFirst =>
+      TaskSortDirection.newestFirst,
+    _TaskWorkspaceHeaderCommand.directionOldestFirst =>
+      TaskSortDirection.oldestFirst,
+    _ => null,
   };
 }
 
@@ -41,6 +53,19 @@ extension TaskSortX on TaskSort {
     TaskSort.title => '标题',
     TaskSort.createdAt => '创建时间',
     TaskSort.updatedAt => '修改时间',
+  };
+
+  /// 嘀嗒《03-用分组和排序管理任务》只在 `:169-176`「按创建时间排序」与
+  /// `:185-190`「按修改时间排序」两节下列出「从旧到新 / 从新到旧」；
+  /// 「按时间排序」(:141) 与「按优先级排序」(:153) 没有方向一说 ⇒ 不给方向行。
+  bool get hasDirection =>
+      this == TaskSort.createdAt || this == TaskSort.updatedAt;
+}
+
+extension TaskSortDirectionX on TaskSortDirection {
+  String get label => switch (this) {
+    TaskSortDirection.newestFirst => '从新到旧',
+    TaskSortDirection.oldestFirst => '从旧到新',
   };
 }
 
@@ -56,6 +81,8 @@ class TaskWorkspaceHeader extends StatelessWidget {
     required this.onModeChanged,
     required this.onSortChanged,
     required this.onFilterPressed,
+    this.sortDirection = TaskSortDirection.newestFirst,
+    this.onSortDirectionChanged,
     this.batchSelectionActive = false,
     this.onBatchPressed,
     this.onCreateSection,
@@ -70,6 +97,13 @@ class TaskWorkspaceHeader extends StatelessWidget {
   final ValueChanged<TaskViewMode> onModeChanged;
   final ValueChanged<TaskSort> onSortChanged;
   final VoidCallback onFilterPressed;
+
+  /// 时间轴的当前方向。默认值等于本参数存在之前唯一的行为，所以不传也不会改变排序。
+  final TaskSortDirection sortDirection;
+
+  /// 为 null 时不渲染方向行。嘀嗒把方向放在同一个「分组排序」面板里（`:136`），
+  /// 所以这里不另开端子菜单，只有能表达方向的调用方给了回调才出现这两行。
+  final ValueChanged<TaskSortDirection>? onSortDirectionChanged;
   final bool batchSelectionActive;
   final VoidCallback? onBatchPressed;
   final VoidCallback? onCreateSection;
@@ -138,6 +172,11 @@ class TaskWorkspaceHeader extends StatelessWidget {
                 tooltip: '排序与批量编辑',
                 icon: const Icon(Icons.sort, size: 20),
                 onSelected: (command) {
+                  final nextDirection = command.direction;
+                  if (nextDirection != null) {
+                    onSortDirectionChanged?.call(nextDirection);
+                    return;
+                  }
                   final nextSort = command.sort;
                   if (nextSort != null) {
                     onSortChanged(nextSort);
@@ -156,6 +195,8 @@ class TaskWorkspaceHeader extends StatelessWidget {
                     case _TaskWorkspaceHeaderCommand.title:
                     case _TaskWorkspaceHeaderCommand.createdAt:
                     case _TaskWorkspaceHeaderCommand.updatedAt:
+                    case _TaskWorkspaceHeaderCommand.directionNewestFirst:
+                    case _TaskWorkspaceHeaderCommand.directionOldestFirst:
                       break;
                   }
                 },
@@ -167,6 +208,24 @@ class TaskWorkspaceHeader extends StatelessWidget {
                       ),
                       child: Text(candidate.label),
                     ),
+                  // 嘀嗒 :173-176/:186-190 只给两档时间轴列方向 ⇒ 其余档位不出现方向行。
+                  if (sort.hasDirection && onSortDirectionChanged != null) ...[
+                    const PopupMenuDivider(),
+                    for (final candidate in TaskSortDirection.values)
+                      PopupMenuItem(
+                        key: Key('todo-sort-direction-${candidate.name}'),
+                        value: candidate == TaskSortDirection.newestFirst
+                            ? _TaskWorkspaceHeaderCommand.directionNewestFirst
+                            : _TaskWorkspaceHeaderCommand.directionOldestFirst,
+                        child: Row(
+                          children: [
+                            Expanded(child: Text(candidate.label)),
+                            if (candidate == sortDirection)
+                              Icon(Icons.check, size: 16, color: colors.accent),
+                          ],
+                        ),
+                      ),
+                  ],
                   if (onBatchPressed != null) const PopupMenuDivider(),
                   if (onBatchPressed != null)
                     PopupMenuItem(
