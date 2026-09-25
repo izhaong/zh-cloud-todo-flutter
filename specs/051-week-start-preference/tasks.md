@@ -96,8 +96,10 @@ $ flutter test test/core/time/week_start_test.dart test/week_start_preference_re
 当前的进度和**未来的计划**"；入口小节《如何开启日程视图？》= 日历右上角切换视图选「日程视图」。
 本仓缺口逐字可复现：`calendar_view.dart:904-910` 的 `_AgendaView` 只按 `anchor` **单日**过滤
 （year/month/day 三重相等），既不是跨日时间轴，也不呈现"过去已完成 + 未来计划"同屏。
-落点已在 develop 存在，不需要新路由、不需要 BE 契约、不动 9 张黄金基线（黄金集是否覆盖日程视图
-这一条**尚未取证** —— 上一轮我用 `grep agenda test/visual` 得 0 命中，但缺正向对照，
-下轮要先按"图里到底有没有日程态"重判，不能拿这个 0 命中当免检依据）。
+落点已在 develop 存在，不需要新路由、不需要 BE 契约、不动 9 张黄金基线。
+"黄金集不覆盖日程视图"这一条**已取证（成对判据）**：唯一带 `@Tags('golden')` 的文件是
+`test/visual/todo_workspace_golden_test.dart`，其中 `CalendarView` 命中 **0**；
+正向对照 `git grep -l "CalendarView" -- test` = 3 个文件（`calendar_display_settings_test.dart`、
+`week_start_consumers_test.dart`、`m11_b3_calendar_test.dart`）⇒ 0 命中不是抓取失效。
 候选替代：#28 年视图缺"按日热力图"、#8 任务详情缺"复制链接"（单面，不足以翻行）、#50 倒数纪念日缺
 "四类自动分组/置顶/归档"（归档卡在未合并的 service `!276`）。
