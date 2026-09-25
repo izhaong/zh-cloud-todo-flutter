@@ -10,6 +10,7 @@ import '../core/notification/reminder_notification_poller.dart';
 import '../core/sync/sync_change_queue.dart';
 import '../core/sync/sync_coordinator.dart';
 import '../core/time/task_time_formatter.dart';
+import '../core/time/week_start.dart';
 import '../state/session_state.dart';
 import 'repositories/board_preference_repository.dart';
 import 'repositories/filter_repository.dart';
@@ -31,6 +32,7 @@ import 'repositories/task_repository.dart';
 import 'repositories/task_section_repository.dart';
 import 'repositories/task_sort_preference_repository.dart';
 import 'repositories/task_view_action_repository.dart';
+import 'repositories/week_start_preference_repository.dart';
 import 'repositories/summary_repository.dart';
 
 /// UI-facing clock. Production reads the current instant on each rebuild;
@@ -310,6 +312,28 @@ final taskSortPreferenceRepositoryProvider =
       if (db == null || queue == null) return null;
       return TaskSortPreferenceRepository(db, queue);
     });
+
+final weekStartPreferenceRepositoryProvider =
+    Provider<WeekStartPreferenceRepository?>((ref) {
+      final db = ref.watch(appDatabaseProvider);
+      final queue = ref.watch(syncChangeQueueProvider);
+      if (db == null || queue == null) return null;
+      return WeekStartPreferenceRepository(db, queue);
+    });
+
+/// 「星期开始于」当前档位。
+///
+/// FR-7：库未就绪时直接给默认档（Stream.value 立刻进 data），
+/// 这样日历/时间线的读法统一是 `valueOrNull ?? default`。首值未到达或
+/// 读取报错时 `valueOrNull` 为 null，退回周一，与 develop 既有行为一致；
+/// AsyncError 仍带旧值时 `valueOrNull` 保留旧值，不会被兜底盖掉。
+final weekStartProvider = StreamProvider<int>((ref) {
+  final repository = ref.watch(weekStartPreferenceRepositoryProvider);
+  if (repository == null) {
+    return Stream.value(WeekStart.defaultFirstDay);
+  }
+  return repository.watch();
+});
 
 final activityRepositoryProvider = Provider<ActivityRepository?>((ref) {
   final db = ref.watch(appDatabaseProvider);
