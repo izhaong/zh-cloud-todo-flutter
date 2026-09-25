@@ -18,7 +18,7 @@
       ②读屏 label 全等 + `isButton` + `bySemanticsLabel` 成对；③失败提示出现时侧栏仍在；
       ④「过期响应不覆盖新响应」**不适用**（零异步新增，理由见 `spec.md` 五-4）
 - [x] 反向探针六条 X1–X6 + 成对 grep 判据，`/tmp/r79/probes-all.log` 末行「异常计数 = 0」
-- [ ] **六道门禁读数未填** ⇒ 跑在终态字节上的那张表还欠着，本节不得当作已通过
+- [x] 六道门禁跑在**已提交终态 `e3c9d88`** 的字节上，六项 rc 全 0，日志 `/tmp/r79/gates79.log`（下表读数由脚本从该日志现算）
 - [ ] 只读复核未派 ⇒ 同上，欠着
 - [ ] 矩阵 #52 回写（形态偏差 + 「添加新成员」无对应控件这两条要落进说明格；未合并只写「已实现、未进 develop」）
 
@@ -30,6 +30,30 @@ $ flutter test test/features/list/list_share_entry_test.dart
 $ flutter test test/collaboration_widget_test.dart test/features/list/list_share_entry_test.dart
 00:01 +16: All tests passed!         # 既有协作套件 10 条不回归
 ```
+
+## 六道门禁（基准：已提交终态 `e3c9d88`；日志 `/tmp/r79/gates79.log`）
+
+⚠️ 这张表是**填值那一笔**写进来的；门 1–6 跑在 `e3c9d88` 上。
+填值之后多出的那一笔只动本文件 —— 用 `git diff --name-only e3c9d88..HEAD` 复验。
+
+| # | 命令 | 读数 | rc |
+| --- | --- | --- | --- |
+| 1 | `git diff --check origin/develop HEAD` / `git diff --check HEAD` | 两条均无输出（`HEAD=e3c9d88 工作树：0 项脏`） | 0 / 0 |
+| 2 | `dart format --output=none --set-exit-if-changed` 本轮 3 个显式文件 | `Formatted 3 files (0 changed) in 0.07 seconds.` | 0 |
+| 3 | `flutter analyze` | `No issues found! (ran in 1.8s)` | 0 |
+| 4 | `flutter test --tags golden` | `00:09 +9: All tests passed!`；`基线目录脏项数=0` ⇒ **9 张基线一张都没重录** | 0 |
+| 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:38 +904 ~26: All tests passed!` | 0 |
+| 6 | `flutter build web --release --dart-define=TODO_API_BASE_URL=… --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web` | 0 |
+
+计数对账：门 5 末行 `+904` 减掉本轮新增 6 条 = **898** = develop 全量基线。
+**898 不靠减法取证**（第 77 轮复核 F1 的教训），它有自己的实跑日志：
+`/tmp/r68/baseline_develop.log:1152` = `02:53 +898 ~26: All tests passed!`（在 `origin/develop` 副本上直接跑出来的末行）。
+⚠️ 本来还想引 `specs/045-sort-direction/tasks.md:120` 作第二处佐证，落笔前 `ls` 过：**这个目录不在本分支**
+（`specs/045-sort-direction/` No such file or directory，它在未合并的分支上）⇒ 不引，
+免得又写成一个指不到的指针（第 77 轮复核 F1 的原罪就是这个）。
+新增 6 条这一侧的前提也可验：`git diff --name-status origin/develop..HEAD -- test` 只有一个 `A`，
+`grep -c "  testWidgets(" test/features/list/list_share_entry_test.dart` = 6。
+`~26` 与既有各轮一致（未新增 skip）。收尾 `工作树脏项数=0`、`pubspec.lock` 未进提交。
 
 ## 反向探针（六条，`/tmp/r79/probes-all.log`）
 
@@ -66,7 +90,10 @@ PRESENT 正对照：侧栏仍把长按接到 showListActions           命中 1
 
 ## 遗留与下一轮
 
-- **门禁与复核未做**（见上两格）⇒ 本 PR 不谈合并。
+- **门禁已跑在 `e3c9d88`**（上表）；**只读复核未派** ⇒ 本 PR 不谈合并。
+  要它咬定的：① FR-2 的「共用一份口径」是真做了还是只改文案（`openListCollaboration` 消费者数 + 四条分支行为等价性，含原实现`title: list?.name ?? t.title` 那个兜底到底是不是死代码）；
+  ② X6「只改 key 名就 5 条全红」到底算覆盖面证据还是算锚得太死；
+  ③「智能清单结构性拿不到动作表」这条负断言够不够硬（将来给 `_SmartRow` 加了长按，会不会仍然绿）。
 - 形态偏差两条（入口在侧栏长按而非清单详情右上角「···」；「添加新成员」在本仓是内联提交流程、无对应控件）
   要写进矩阵 #52 说明格，**不能算"已与嘀嗒一致"**。
 - 下一轮候选（不撞本单也不撞 !364）：docs #104 里剩下 5 条**非第三方凭据**的弱证据行
