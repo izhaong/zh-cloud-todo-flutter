@@ -220,8 +220,15 @@ class TaskWorkspaceHeader extends StatelessWidget {
                         child: Row(
                           children: [
                             Expanded(child: Text(candidate.label)),
+                            // semanticLabel 让读屏能分辨"哪一行是当前方向"：
+                            // 勾是视觉符号，光有 Icon 时读屏只念得出两行文案。
                             if (candidate == sortDirection)
-                              Icon(Icons.check, size: 16, color: colors.accent),
+                              Icon(
+                                Icons.check,
+                                size: 16,
+                                color: colors.accent,
+                                semanticLabel: '当前方向',
+                              ),
                           ],
                         ),
                       ),

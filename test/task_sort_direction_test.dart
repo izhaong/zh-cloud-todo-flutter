@@ -331,6 +331,24 @@ void main() {
       closeTo(13, 0.001),
       reason: '菜单是独立路由，档位要在它自己的 context 上复检',
     );
+    // 「读屏能分辨当前方向」（Issue #320 四件套第 2 条）。
+    // 判据要正负各一条：只断"有一处当前方向"会在两行都打标时照样绿。
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('todo-sort-direction-newestFirst')),
+        matching: find.bySemanticsLabel(RegExp('当前方向')),
+      ),
+      findsOneWidget,
+      reason: '当前档位没有可读标记 ⇒ 读屏只知道有两行，不知道现在是哪一行',
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('todo-sort-direction-oldestFirst')),
+        matching: find.bySemanticsLabel(RegExp('当前方向')),
+      ),
+      findsNothing,
+      reason: '两行都标"当前方向"等于没标',
+    );
     for (final label in const ['从新到旧', '从旧到新']) {
       expect(
         find.text(label).hitTestable(),
@@ -439,5 +457,34 @@ void main() {
       allOf(contains('createdAt'), contains('oldestFirst')),
       reason: '上送与重启都靠这一列，缺 direction 键就是没存住',
     );
+
+    // 验收③：切方向不许动其它视图的既有顺序。看板按优先级分列、时间线按日期分组，
+    // 都不该读到这个方向参数（`compareTodoTasks` 在本仓只有列表铺平与仓储 filter 两处调用）。
+    for (final modeLabel in const ['看板', '时间线']) {
+      await tester.tap(find.byKey(const Key('todo-view-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(modeLabel));
+      await tester.pumpAndSettle();
+
+      final olderTop = tester.getRect(find.text('页面里早创建的').first).top;
+      final newerTop = tester.getRect(find.text('页面里晚创建的').first).top;
+      expect(
+        find.text('页面里早创建的'),
+        findsWidgets,
+        reason: '$modeLabel 视图里连卡片都没渲染 ⇒ 这条对比是空的',
+      );
+
+      await tester.tap(find.byKey(const Key('todo-sort-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('从新到旧'));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.getRect(find.text('页面里早创建的').first).top,
+        olderTop,
+        reason: '$modeLabel 的顺序被方向带跑了（它有自己的分组轴）',
+      );
+      expect(tester.getRect(find.text('页面里晚创建的').first).top, newerTop);
+    }
   });
 }
