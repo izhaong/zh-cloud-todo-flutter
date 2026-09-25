@@ -6,7 +6,7 @@ import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
 import 'package:zh_cloud_todo_flutter/features/tag/hash_tag_input.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/tag_repository.dart';
 
-/// 嘀嗒《01-任务/08-如何管理海量任务/04-用标签管理任务.md》:48/:61
+/// 嘀嗒《01-任务/09-如何管理海量任务/04-用标签管理任务.md》:48/:61
 /// 「创建任务时输入「#」快速创建标签」——这一层钉的是"「#」这个词法到底解析出什么"，
 /// 界面接线在 `test/features/shell/quick_add_hash_tag_test.dart`。
 void main() {
