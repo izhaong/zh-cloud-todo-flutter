@@ -33,6 +33,16 @@ List<DateTime> habitMonthDays(DateTime month) {
   );
 }
 
+/// 这一格的日子到了没有。嘀嗒《02-更好地完成习惯》`:94`「在「月度打卡表」中点击任意日期，
+/// 即可补记打卡」补的是**已经发生而漏记**的日子；后端 `TodoHabitServiceImpl.getStats`
+/// 的窗口写死 `to = LocalDateTime.now()`（`:125`）而 `checkIn`（`:105`）不校验未来时间 ⇒
+/// 补到未来的记录能落库，却永远进不了 `dailyCounts` 与 `total`：用户点了、存了、看不见。
+bool habitIsFutureDay(DateTime day, DateTime today) {
+  final startOfToday = DateTime(today.year, today.month, today.day);
+  // 两边都削到「当天零点」再比：只比时间戳的话，今天 23:59 会被判成未来日（用例钉着）。
+  return DateTime(day.year, day.month, day.day).isAfter(startOfToday);
+}
+
 class HabitMonthSheet extends ConsumerStatefulWidget {
   const HabitMonthSheet({required this.habit, super.key});
 
@@ -43,10 +53,19 @@ class HabitMonthSheet extends ConsumerStatefulWidget {
 }
 
 class _HabitMonthSheetState extends ConsumerState<HabitMonthSheet> {
-  final DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
+  final DateTime _today = DateTime(
+    DateTime.now().year,
+    DateTime.now().month,
+    DateTime.now().day,
+  );
+  late final DateTime _month = DateTime(_today.year, _today.month);
   Map<String, int> _counts = const {};
   bool _loading = true;
   String? _error;
+
+  /// 「这一天还没到」的提示：不是错误，所以不借用错误条（错误条一说「失败」就等于
+  /// 承认刚才那一下本该成功）。
+  String? _notice;
 
   /// 连点两格会先后发两次 `stats`：只有最后一次的回包能写进 state，
   /// 先发后到的旧包直接丢弃（否则旧次数会盖掉刚补记回来的新次数）。
@@ -89,6 +108,16 @@ class _HabitMonthSheetState extends ConsumerState<HabitMonthSheet> {
   }
 
   Future<void> _backfill(DateTime day) async {
+    if (habitIsFutureDay(day, _today)) {
+      // 静默早退是不行的（同 Issue #292 的口径）：这一格看着和别的格子一模一样，
+      // 点了没反应只会让人以为「补记没生效」，然后去重试或者怪 App。
+      setState(() {
+        _error = null;
+        _notice = '这个日期还没到，不能补记';
+      });
+      return;
+    }
+    setState(() => _notice = null);
     final repo = ref.read(habitRepositoryProvider);
     try {
       await repo.checkIn(widget.habit.id, date: day);
@@ -108,6 +137,10 @@ class _HabitMonthSheetState extends ConsumerState<HabitMonthSheet> {
   int _countOf(DateTime day) => _counts[habitDayKey(day)] ?? 0;
 
   String _cellLabel(DateTime day) {
+    if (habitIsFutureDay(day, _today)) {
+      // 「未打卡」是一句关于过去的断言，安在还没到的日子上是假话（读屏会念「26 日，未打卡」）。
+      return '${day.day} 日，还没到';
+    }
     final count = _countOf(day);
     return count > 0 ? '${day.day} 日，打卡 $count 次' : '${day.day} 日，未打卡';
   }
@@ -135,6 +168,12 @@ class _HabitMonthSheetState extends ConsumerState<HabitMonthSheet> {
                 _error!,
                 key: const ValueKey('todo-habit-month-error'),
                 style: TextStyle(color: colors.error),
+              ),
+            if (_notice != null)
+              Text(
+                _notice!,
+                key: const ValueKey('todo-habit-month-notice'),
+                style: Theme.of(context).textTheme.bodyMedium,
               ),
             if (_loading)
               const Padding(

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zh_cloud_todo_flutter/features/habit/habit_month_grid.dart';
 import 'package:zh_cloud_todo_flutter/features/habit/habit_page.dart';
 import 'package:zh_cloud_todo_flutter/features/habit/habit_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/efficiency_providers.dart';
@@ -88,6 +89,30 @@ void main() {
         {'date': iso(dayA), 'count': 2},
         {'date': iso(dayB), 'count': 1},
       ],
+    );
+  });
+
+  test('「还没到」只按日子判：今天及以下都不算，跨到明天才算（字面日期，不随今天漂移）', () {
+    final today = DateTime(2026, 9, 25);
+    expect(habitIsFutureDay(DateTime(2026, 9, 24), today), isFalse);
+    expect(
+      habitIsFutureDay(today, today),
+      isFalse,
+      reason: '今天必须还能补记；这条判据写宽了会把整月一起封掉',
+    );
+    expect(
+      habitIsFutureDay(DateTime(2026, 9, 25, 23, 59), today),
+      isFalse,
+      reason: '同一天的时间戳不算未来',
+    );
+    expect(habitIsFutureDay(DateTime(2026, 9, 26), today), isTrue);
+    // 月末当天：整月都已到 ⇒ 不许有一格是「还没到」。
+    final endOfMonth = DateTime(2026, 9, 30);
+    expect(habitIsFutureDay(endOfMonth, endOfMonth), isFalse);
+    expect(
+      habitIsFutureDay(DateTime(2026, 10, 1), endOfMonth),
+      isTrue,
+      reason: '要按整天比，不能拿 day 数字比（1 > 30 会把跨月判反）',
     );
   });
 
@@ -200,12 +225,116 @@ void main() {
         isTrue,
         reason: '摘掉生产里的 button: true 这条必须红（InkWell 自己不给 isButton）',
       );
-      // 空日子也要能被读屏 announce，而不是只有有记录的格子有 label。
-      final empty = tester.getSemantics(find.byKey(ValueKey(cellKey(lastDay))));
-      expect(empty.label, '${lastDay.day} 日，未打卡');
+      // 这里原来还断了一句 `lastDay` 的标签是「N 日，未打卡」——那钉的是缺陷
+      // （月末之外的日子里 lastDay 是**还没到**的一天，被读成了「没打卡」）。
+      // 逐格的档位判定已由下面那条整月用例穷举，留两处只会互相打脸。
     } finally {
       handle.dispose();
     }
+  });
+
+  testWidgets('整月逐格按「日子到没到」分档：已到才谈打卡/未打卡，没到只说还没到', (tester) async {
+    final handle = tester.ensureSemantics();
+    try {
+      await pumpHabit(tester);
+      await openMonthSheet(tester);
+
+      final today = DateTime(now.year, now.month, now.day);
+      for (var i = 1; i <= monthDayCount; i++) {
+        final day = DateTime(now.year, now.month, i);
+        final node = tester.getSemantics(find.byKey(ValueKey(cellKey(day))));
+        // 判据在测试里自己算，不调生产的那个 helper ⇒ 生产把「已到」判成「没到」时这里必红。
+        final arrived = !day.isAfter(today);
+        final seeded = day == dayA ? 2 : (day == dayB ? 1 : 0);
+        expect(
+          node.label,
+          arrived
+              ? (seeded > 0 ? '${day.day} 日，打卡 $seeded 次' : '${day.day} 日，未打卡')
+              : '${day.day} 日，还没到',
+          reason: '${day.day} 日这格判错了档（今天=$today）',
+        );
+      }
+    } finally {
+      handle.dispose();
+    }
+  });
+
+  testWidgets('点还没到的格子：不发补记请求，但提示要看得见（不许静默早退）', (tester) async {
+    await pumpHabit(tester);
+    await openMonthSheet(tester);
+
+    if (now.day == monthDayCount) {
+      // 月末当天：整月都已到 ⇒ 一格「还没到」都不许出现（反向对照，别留静默通道）。
+      expect(find.text('这个日期还没到，不能补记'), findsNothing);
+      expect(monthCells(), findsNWidgets(monthDayCount));
+      return;
+    }
+    final futureDay = DateTime(now.year, now.month, now.day + 1);
+    final statsBefore = repo.statsCalls;
+
+    await tester.tap(find.byKey(ValueKey(cellKey(futureDay))));
+    await tester.pumpAndSettle();
+
+    expect(
+      repo.checkInCalls,
+      0,
+      reason: 'BE getStats 的窗口是 to = now ⇒ 补到未来日的记录永远看不见',
+    );
+    expect(repo.statsCalls, statsBefore, reason: '没补记就不该再刷一次当月数据');
+    expect(
+      find.text('这个日期还没到，不能补记'),
+      findsOneWidget,
+      reason: '提示必须落在弹层可见区，同 Issue #292 的口径',
+    );
+    expect(
+      find.byKey(const ValueKey('todo-habit-month-notice')),
+      findsOneWidget,
+      reason: '提示走自己的槽位：借用错误条等于承认这一发本该成功',
+    );
+    expect(find.byKey(const ValueKey('todo-habit-month-error')), findsNothing);
+    expect(find.textContaining('补记失败'), findsNothing, reason: '这不是失败，别借用错误条');
+  });
+
+  testWidgets('今天照样能补记：提示不挡已到的日子，也不残留到下一次操作', (tester) async {
+    final today = DateTime(now.year, now.month, now.day);
+    await pumpHabit(tester);
+    await openMonthSheet(tester);
+
+    if (now.day < monthDayCount) {
+      await tester.tap(
+        find.byKey(
+          ValueKey(cellKey(DateTime(now.year, now.month, now.day + 1))),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('这个日期还没到，不能补记'), findsOneWidget);
+    }
+
+    await tester.tap(find.byKey(ValueKey(cellKey(today))));
+    await tester.pumpAndSettle();
+
+    expect(repo.checkInCalls, 1, reason: '今天不是未来日，必须还能补记');
+    expect(iso(repo.lastCheckInDate!), iso(today));
+    expect(find.text('这个日期还没到，不能补记'), findsNothing, reason: '上一次的提示不能盖住这一次的结果');
+  });
+
+  testWidgets('320px + 1.3 倍字号：提示落在可见区且不溢出', (tester) async {
+    await pumpHabit(tester, surface: const Size(320, 720), textScale: 1.3);
+    await openMonthSheet(tester);
+
+    if (now.day == monthDayCount) {
+      expect(tester.takeException(), isNull);
+      expect(monthCells(), findsNWidgets(monthDayCount));
+      return;
+    }
+    await tester.tap(
+      find.byKey(ValueKey(cellKey(DateTime(now.year, now.month, now.day + 1)))),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('这个日期还没到，不能补记'), findsOneWidget);
+    expect(monthCells(), findsNWidgets(monthDayCount));
   });
 
   testWidgets('1.3 倍字号真的落在弹层自己的 context 上', (tester) async {
@@ -282,6 +411,7 @@ class _FakeHabitRepository implements HabitRepository {
   bool failCheckIn = false;
   int statsCalls = 0;
   int overviewStatsCalls = 0;
+  int checkInCalls = 0;
   int? lastCheckInHabitId;
   DateTime? lastCheckInDate;
 
@@ -317,6 +447,7 @@ class _FakeHabitRepository implements HabitRepository {
 
   @override
   Future<int> checkIn(int habitId, {DateTime? date}) async {
+    checkInCalls += 1;
     if (failCheckIn) throw StateError('boom');
     lastCheckInHabitId = habitId;
     lastCheckInDate = date;
