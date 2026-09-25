@@ -5,7 +5,7 @@
 - [x] `spec.md` 来源表：4 个锚点逐字引用（`01-欢迎/03-常见问题.md:125/:134/:143/:159`、`02-功能指南/02-日历/08-常见问题.md:145/:149/:155`）；移动端「星期开始于」/ 桌面「每周开始于」的措辞差异如实登记，本仓采移动端措辞
 - [x] 红测（步骤 2）
 - [x] `WeekStart` 纯函数 + 偏好仓储 + provider（步骤 3–5）
-- [x] 日历/时间线 7 处周一硬编码接线（步骤 6）
+- [x] 日历/时间线 8 处周一硬编码接线（步骤 6；判据见 `spec.md` 现状表两条 `git grep`）
 - [x] 设置「日期与时间」-「星期开始于」三档入口 + 四件套（步骤 7）
 - [ ] 六道门禁（见下表，跑在最终字节上）
 - [ ] 只读复核 `VERDICT`
@@ -27,6 +27,7 @@ $ flutter test test/core/time/week_start_test.dart test/week_start_preference_re
 | 现象 | 根因 | 处置 |
 | --- | --- | --- |
 | `+19 -1`：`offsetOf 给出某天距本周起点要回退的天数` 红，报 `Expected <7> Actual <2>`（`firstDay=7 weekday=1`） | **我的断言算错了方向**：把"回退 offset 天"写成了"前进 offset 天" | 实现是对的（同组 `startOf` 的周日档用例同时是绿的）。改断言为 `((weekday - 1 - offset) % 7 + 7) % 7 + 1`，复跑转绿。先怀疑预期值，不先改实现 |
+| 提交后自查发现**同一个数字在四处写错**（spec / plan / tasks / PR 描述 / Issue 评论都写「7 处，全部同型表达式」） | 数的时候把 `calendar_view.dart:333` 的 `leadingBlanks = firstOfMonth.weekday - 1`（不是 `subtract` 式）和整行 `const` 表头都算进了"同型"，又把总数少算成 7 | `git grep -nE "Duration\(days: [a-zA-Z]+\.weekday - 1\)" origin/develop -- lib` = **6**，加 `weekday - 1` 非 subtract **1** 与 const 表头 **1** ⇒ 共 **8 处**，其中只有 6 处同型。四处文档已按实测改写，判据命令本身写进 `spec.md` 现状表。**这一条是派复核之前自己量出来的**，不是复核抓的 |
 | `dart analyze` 4 条 error：`Expected to find '}'` ×3 + `Undefined name 'weekStartProvider'` | 脚本给三个公开函数加命名参数时写成 `… scale, { int firstDay = …,\n) {`，漏掉收尾的 `}`；`timeline_view.dart` 本来没 import `state/providers.dart` | 三处补 `}) {`；按 `calendar_view.dart` 的既有 import 顺序补 import。**教训：脚本换函数签名时，带 `{` 的命名参数列表必须整段自己写全，不能只改参数行** |
 
 ## 用例账

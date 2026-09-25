@@ -4,7 +4,7 @@
 
 | # | 步骤 | 产出 | 验证 |
 | --- | --- | --- | --- |
-| 1 | 读帮助页 + 现状取证 | `spec.md` 的来源表与现状表（7 处周一硬编码） | 行号逐行读源码核对；`日期与时间` 0 命中配 `_Section(title:` 正控 |
+| 1 | 读帮助页 + 现状取证 | `spec.md` 的来源表与现状表（**8 处**周一硬编码：6 同型 + 1 非 subtract + 1 const 表头行） | 行号逐行读源码核对；`日期与时间` 0 命中配 `_Section(title:` 正控 |
 | 2 | 红测（纯函数 + 仓储） | `test/core/time/week_start_test.dart`、`test/week_start_preference_repository_test.dart` | 首跑必须红；红因是「文件不存在」的编译红，如实标注，不冒充行为红 |
 | 3 | `WeekStart` 纯函数 | `lib/core/time/week_start.dart` | 三档往返 + 默认=周一 |
 | 4 | 偏好仓储 | `lib/state/repositories/week_start_preference_repository.dart` | 复用 `todoViewPreferences`，不升 `schemaVersion`；出箱一条 `view_preference` |

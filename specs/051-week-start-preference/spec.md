@@ -18,18 +18,25 @@
 
 ## 现状（基准 `origin/develop@9032005`，`git grep` 逐行读取）
 
-一周起点在 7 处被写成「周一」字面量，全部是 `subtract(Duration(days: x.weekday - 1))` 这一同型表达式：
+一周起点在 **8 处**被写成「周一」。判据是两条可复跑的命令，实测计数不是估的：
 
-| 文件:行 | 现状 | 作用面 |
-| --- | --- | --- |
-| `lib/features/task/views/calendar_view.dart:333` | `final leadingBlanks = firstOfMonth.weekday - 1;` | 月视图网格起点 |
-| `lib/features/task/views/calendar_view.dart:487-493` | `const [_DayHeader('一'), … _DayHeader('日')]` | 月视图表头顺序（整行是 `const`，无参数可注入） |
-| `lib/features/task/views/calendar_view.dart:732` | `anchor.subtract(Duration(days: anchor.weekday - 1))` | 周视图取哪 7 天 |
-| `lib/features/task/views/timeline_view.dart:242-246` | `todayStart.subtract(Duration(days: todayStart.weekday - 1))` | 「本周 / 下周」分桶边界 |
-| `lib/features/task/views/timeline_view.dart:377` | `day.subtract(Duration(days: day.weekday - 1))` | 周档窗口标签 `M/d–M/d` |
-| `lib/features/task/views/timeline_view.dart:682` | `today.subtract(Duration(days: today.weekday - 1))` | 周档时间轴取值范围 |
-| `lib/features/task/views/timeline_view.dart:916` | `today.subtract(Duration(days: today.weekday - 1))` | 周档 7 个全天槽 |
-| `lib/features/task/views/timeline_view.dart:1280` | `weekStart ?? todayStart.subtract(Duration(days: todayStart.weekday - 1))` | 分桶函数的兜底默认值 |
+```
+$ git grep -nE "Duration\(days: [a-zA-Z]+\.weekday - 1\)" origin/develop -- lib   # 6 命中
+$ git grep -nE "weekday - 1" origin/develop -- lib | grep -v "Duration(days:"    # 1 命中
+```
+
+= **6 处**同型 `subtract(Duration(days: x.weekday - 1))` + **1 处**把 `weekday - 1` 直接当填充天数 + **1 处**整行 `const` 表头（它不是算式，但同样是"周一"这个决定）：
+
+| 文件:行 | 现状 | 形态 | 作用面 |
+| --- | --- | --- | --- |
+| `lib/features/task/views/calendar_view.dart:732` | `anchor.subtract(Duration(days: anchor.weekday - 1))` | 同型 | 周视图取哪 7 天 |
+| `lib/features/task/views/timeline_view.dart:242-246` | `todayStart.subtract(Duration(days: todayStart.weekday - 1))` | 同型（跨 3 行） | 「本周 / 下周」分桶边界 |
+| `lib/features/task/views/timeline_view.dart:377` | `day.subtract(Duration(days: day.weekday - 1))` | 同型 | 周档窗口标签 `M/d–M/d` |
+| `lib/features/task/views/timeline_view.dart:682` | `today.subtract(Duration(days: today.weekday - 1))` | 同型 | 周档时间轴取值范围 |
+| `lib/features/task/views/timeline_view.dart:916` | `today.subtract(Duration(days: today.weekday - 1))` | 同型 | 周档 7 个全天槽 |
+| `lib/features/task/views/timeline_view.dart:1280` | `weekStart ?? todayStart.subtract(Duration(days: todayStart.weekday - 1))` | 同型（兜底支） | 分桶函数的默认周界 |
+| `lib/features/task/views/calendar_view.dart:333` | `final leadingBlanks = firstOfMonth.weekday - 1;` | 非 subtract | 月视图网格起点 |
+| `lib/features/task/views/calendar_view.dart:487-493` | `const [_DayHeader('一'), … _DayHeader('日')]` | `const` 行 | 月视图表头顺序（整行是 `const`，无参数可注入） |
 
 设置侧：`git grep -n "日期与时间" origin/develop -- lib` **0 命中**（同形态正控 `git grep -c "_Section(title:" origin/develop -- lib/features/settings/settings_route.dart` = 4：账号/任务/主题/关于 ⇒ grep 确实在扫，词也确实没有）。
 
