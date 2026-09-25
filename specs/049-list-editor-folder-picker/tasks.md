@@ -13,7 +13,7 @@
 - [x] FR-6 四件套（见下表；第 1 版的③是假绿，复核后补了「移入失败」才真锁住；第 2 轮又抓到"仓库为 null"与"新建失败文案"两格 0 覆盖，已补）
 - [ ] #339 的另两子面：**颜色** 与 **Emoji 图标** 未做（要新增本地列 + 后端 `TodoListDO` 字段 ⇒ 属"先修契约再动前端"），Issue 保持 open
 - [x] 只读复核第 1 版 `VERDICT: FAIL` → 补测后第 2 版仍 `VERDICT: FAIL`（3 条覆盖缺口 + 文档措辞）→ 第 3 版仍 `FAIL`，但**只抓到 2 条 P2 + 3 条 nit，全是文档/口径级**（无新增覆盖缺口）⇒ 5 条全部采纳并落到 `plan.md`/`spec.md`/本文件与 `5475e63`
-- [ ] 第 4 版复核（范围只圈在本轮 3 处文档改动 + `5475e63` 的拓扑改动与其 `PV`/PM′ 复测）尚未派
+- [x] 第 4 版复核（范围只圈在 3 处文档改动 + `5475e63` 的拓扑改动与其 `PV`/PM′ 复测）：**`VERDICT: PASS`**，0 条 P1、0 条 P2、2 条 nit ⇒ nit-1 已采纳（`b0bf131`）⇒ 复核循环收口，不再刷第 5 版
 - [ ] 矩阵 #19 回写 —— 第 3 版复核时 `state=open` 实测 **10 条**（本 PR !352 + !311 !314 !319 !322 !346 !347 !350 !351 !354），**除 !352 外一条都没合并** ⇒ 只能写「已实现待合并」，状态列不翻转
 
 ## 四件套（新增可见界面 = 编辑器里那一格下拉）
@@ -54,8 +54,8 @@
 **口径：全部跑单文件**（`flutter test test/features/list/list_editor_folder_picker_test.dart`），
 15 条用例的最终版本。这套数字**每次增删用例都整批重测**：第一版是 10 条、复核补测后 13 条、
 本轮补 FR-6 与新建失败两格后 15 条 ⇒ 旧数字一律作废（脚本 `/tmp/r68/probes_final14.py`，
-汇总 `/tmp/r68/PROBES_final15d.log`（15d = 生产拓扑那条改完、tip `5475e63` 的最终字节；上一版 15c 跑在 `015a31a`，
-两者**共有探针的数字逐条相同**，15d 只多出 `PV` 一条），每条完整日志 `/tmp/r68/probe14/<码>.log`，跑完 `RESTORE cmp: SAME`）。
+汇总 `/tmp/r68/PROBES_final15e.log`（15e = 第 4 版复核 nit-1 之后的最终字节，tip `b0bf131`）。15e / 15d（`5475e63`）/ 15c（`015a31a`）
+**三版 19 条探针的 `+N -M` 逐条相同**，只差 `00:01`/`00:02` 的计时 ⇒ 后两次补的断言没有改变任何一条探针的红集。，每条完整日志 `/tmp/r68/probe14/<码>.log`，跑完 `RESTORE cmp: SAME`）。
 
 | 探针 | 抽掉什么 | 结果 | 红在哪条 |
 | ---- | -------- | ---- | -------- |
@@ -112,9 +112,9 @@ develop 字节的弹层根本不 watch `foldersStreamProvider` ⇒ 没人订阅 
 探针把"红"伪装成"没结论"。改成 `broadcast()` 后同一份字节一秒收口（当时 13 条口径是 `+1 -12`，15 条口径是 `+1 -14`）。
 教训：**探针跑不完先怀疑夹具**，别把"runner 不退出"读成"实现没问题"。
 
-## 门禁原文记录（跑在 tip `5475e63` 的 dart 字节上，日志 `/tmp/r68/gates/final_r4.log`）
+## 门禁原文记录（跑在 tip `b0bf131` 的 dart 字节上，日志 `/tmp/r68/gates/final_r5.log`）
 
-表里记的是**代码字节**：`5475e63` 之后本文件与 `plan.md` 还各有文档改动（未提交），
+表里记的是**代码字节**：`b0bf131` 之后本文件还会有文档改动（只改 `specs/*.md`、不动 dart），
 它们不动任何 dart ⇒ 这六条对它照样成立。门禁跑之前工作区里已有的 `specs/*.md` 改动
 会在"收尾 `git status --short`"那一栏露出来，已核对不含 `pubspec.lock`。
 
@@ -122,9 +122,9 @@ develop 字节的弹层根本不 watch `foldersStreamProvider` ⇒ 没人订阅 
 | ---- | ---- |
 | `git diff --check origin/develop...HEAD` 与工作区 | `rc=0`，无输出 |
 | `dart format --output=none --set-exit-if-changed <本轮 2 个 dart 文件>` | `Formatted 2 files (0 changed)`，`rc=0` |
-| `flutter analyze` | `No issues found! (ran in 2.2s)`，`rc=0` |
+| `flutter analyze` | `No issues found! (ran in 2.0s)`，`rc=0` |
 | `flutter test --tags golden` | `00:04 +9: All tests passed!`，`rc=0`；`git status --short test/goldens` 为空 ⇒ 9 张基线未重录（第 1 轮复核另用 `diff -rq` 逐字节比对副本，同样未变） |
-| `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:45 +913 ~26: All tests passed!`，`rc=0` |
+| `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:47 +913 ~26: All tests passed!`，`rc=0` |
 | `flutter build web --release --dart-define=…` | `✓ Built build/web`，`rc=0` |
 
 计数对账：`+913 = 898 + 15`（898 = 在 develop 副本 `/tmp/r68-baseline` 实测，日志
@@ -136,9 +136,9 @@ lock 里 150 行 url 翻成 pub.dev）。
 **这是第 5 遍**：第 1 遍（`e231bf4`）5/6，门禁 3 报 `unused_import` ⇒ 单提 `840af71` 后第 2 遍 6/6；
 第 1 轮复核补 3 条用例后（`aad865c`）第 3 遍 6/6（`+911`）；
 第 2 轮复核再补 2 条用例并撤掉 1 条恒真断言后（`015a31a`）第 4 遍 6/6（`+913`）；
-第 3 轮复核 nit-3（320 那条要按生产拓扑量）改完测试后（`5475e63`）**六条再一次全部重跑** = 本表。
-前四遍日志：`/tmp/r68/gates/attempt1.log`、`/tmp/r68/gates/final.log`、`/tmp/r68/gates/final_r2.log`、
-`/tmp/r68/gates/final_r3.log`。
+第 3 轮复核 nit-3（320 那条要按生产拓扑量）改完测试后（`5475e63`）第 5 遍 6/6（`final_r4.log`，`02:45 +913`）；
+第 4 版复核 `PASS` 后采纳它的 nit-1（三个失败出口各补一句显式「弹层还开着」，`b0bf131`）⇒ **六条又全部重跑** = 本表（第 6 遍）。
+前五遍日志都在 `/tmp/r68/gates/`：`attempt1.log`、`final.log`、`final_r2.log`、`final_r3.log`、`final_r4.log`。
 
 ## 复核（第 1 版 `VERDICT: FAIL`：1 条 P1 + 5 条 P2 + 1 条 nit，全部采纳）
 
@@ -196,6 +196,30 @@ lock 里 150 行 url 翻成 pub.dev）。
 第 3 轮复核还独立复核了"撤销展开态溢出断言"这一决定，结论是**作者结论成立**（它自己量到
 `_DropdownMenu` 的候选列表被 `getConstraintsForChild` + `ListView` 夹在可用尺寸内），
 所以那条撤销不是我在给自己找台阶 ⇒ 记在这里，免得下一轮又有人去补那句恒真断言。
+
+### 第 4 版复核（只圈第 3 轮的文档改动 + `5475e63` 的拓扑改动）：`VERDICT: PASS`，0 条 P1、0 条 P2、2 条 nit
+
+复核在副本 `/tmp/rev68d-copy` 上做（它特意不用 `git checkout` 还原，因为副本的 `.git` 指针与我这个
+linked worktree 共享索引），跑完 `WORKTREE_CLEAN: yes`。七条主张逐条判定，全部 **TRUE**：
+
+| 主张 | 它量到什么 |
+| ---- | ---------- |
+| ① `lib/` 自 `aad865c` 起未动 | `git diff aad865c HEAD -- lib/` = 0 字节；实现活在 `fcb291b`（`aad865c` 的祖先） |
+| ② `plan.md` 的 15 条口径 | `grep -c testWidgets` = 15；`4+4+6+1 = 15` 对得上 |
+| ③ 三个失败出口各有"弹层不关 + 已填不丢 + 已选还在 + 库里没写" | 逐条点到 `list_editor_sheet.dart:47-49`/`:62-65` 与三条用例；判"无假绿"，但**指出前两条的『弹层不关』是隐含断言**（靠 error 文案的 finder 在 pop 后查不到才生效）⇒ 见 nit-1 |
+| ④ 探针数字是真的 | 在副本上重跑 `PA +1 -14`、`PM +2 -13`、`P0 +14 -1`、`PV +14 -1`（PV 红因正是 `RenderFlex overflowed by 250 pixels`，且只红 320 那条）⇒ 与表一致 |
+| ⑤ 门禁表 = 日志 | `final_r4.log` 里 `### HEAD=5475e63`、`2.2s`、`+9`、`02:45 +913 ~26`、`✓ Built build/web`、收尾无 `pubspec.lock`；另核 `+913 = 898 + 15` 与 `baseline_develop.log` 的 `02:53 +898 ~26` 对得上 |
+| ⑥ 生产拓扑那条没有偷偷退化 | 它从组件树里量到 `MediaQuery.textScalerOf(...ListEditorSheet...).scale(100)` = **130.0**（对照组 `textScale: 1.0` ⇒ 100.0 且那条红）⇒ 1.3 真到了 sheet 自己的 context；`openMenu` 的自检仍在（`test:158`），PM 的红因就是它 |
+| ⑦ "展开态溢出量不到"这句边界没有夸大 | 它自己注入 `SizedBox(height: 2000)` 且保留文案 ⇒ `+8 -7`、**320 那条不红**、日志里 0 个 `overflowed` ⇒ 撤销那句是对的 |
+
+处置：
+
+| 发现 | 复验 | 落点 |
+| ---- | ---- | ---- |
+| **nit-1** 「弹层不关」在 仓库为 null / 移动失败 两条里是**隐含**的（只有 新建失败 那条写了 `find.byType(ListEditorSheet)`） | 读代码确认：那两条只靠 error 文案与 `TextField` 的 finder 间接挡 pop ⇒ 判据强度不均匀，某天 error 文案挪到框外就悄悄变弱 | **采纳**（`b0bf131`）：三个出口各补一句显式 `expect(find.byType(ListEditorSheet), findsOneWidget)` ⇒ 15 条仍全绿；**探针 19 条与门禁 6 条整批重跑**（`PROBES_final15e.log` / `final_r5.log`），`+N -M` 与红集**逐条未变** |
+| **nit-2** 320 那条里 `expect(find.text('项目'), findsWidgets)` 单独看是弱的（预选状态下收起态也有「项目」） | 对，但「撤销展开态溢出断言」那节与用例注释里已经明写"这句靠 `openMenu` 自检才有力" ⇒ 文档没有夸大 | 不改（措辞已如实） |
+
+`PASS` ⇒ 第 68 轮的复核循环到此收口（第 1/2/3 版 FAIL 都是实质缺口，第 4 版只剩一条判据强度 nit，已采纳）。
 
 ## 相撞面
 
