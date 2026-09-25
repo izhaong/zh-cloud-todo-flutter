@@ -139,6 +139,45 @@ void main() {
     await tester.pump(const Duration(milliseconds: 250));
     expect(focusTag(), findsNothing);
   });
+
+  // 四件套 ③「失败保留已加载数据」在这一面上的落点：已经读到过「隐藏」之后流才报错，
+  // 不许退回兜底默认把条目闪回来。
+  testWidgets('已经读到过值之后流出错：保留上次读到的「隐藏」，不闪回「显示」', (tester) async {
+    final gate = StreamController<bool>();
+    addTearDown(gate.close);
+    await pumpTodoVisualScenario(
+      tester,
+      viewport: TodoVisualViewports.wide,
+      fixtureSet: TodoVisualFixtureSet.populated,
+      overridesBuilder: (database) => [
+        sidebarVisibilityRepositoryProvider.overrideWithValue(
+          _SilentVisibilityRepository(
+            database,
+            SyncChangeQueue(database),
+            values: gate.stream,
+          ),
+        ),
+      ],
+      child: const Align(
+        alignment: Alignment.topLeft,
+        child: _TestSidebar(width: 300),
+      ),
+    );
+
+    gate.add(false);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(focusTag(), findsNothing, reason: '读到「隐藏」后条目本就该不在');
+
+    gate.addError(StateError('故意在出过一次值之后让流失败'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(
+      focusTag(),
+      findsNothing,
+      reason: '错在有值之后 ⇒ 该保留上次读到的「隐藏」；退回兜底默认会让标签条目闪回来',
+    );
+  });
 }
 
 /// 只替换 `watch()`：首值何时到达由用例决定。`get()`/`save()` 仍走真库。
