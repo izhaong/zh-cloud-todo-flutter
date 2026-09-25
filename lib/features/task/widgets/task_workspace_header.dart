@@ -56,8 +56,8 @@ extension TaskSortX on TaskSort {
   };
 
   /// 嘀嗒《03-用分组和排序管理任务》只在 `:169-176`「按创建时间排序」与
-  /// `:185-190`「按修改时间排序」两节下列出「从旧到新 / 从新到旧」；
-  /// 「按时间排序」(:141) 与「按优先级排序」(:153) 没有方向一说 ⇒ 不给方向行。
+  /// `:186` + `:192-193`「按修改时间排序」两节下列出「从旧到新 / 从新到旧」；
+  /// 「按时间排序」(:143) 与「按优先级排序」(:156) 没有方向一说 ⇒ 不给方向行。
   bool get hasDirection =>
       this == TaskSort.createdAt || this == TaskSort.updatedAt;
 }
@@ -208,7 +208,7 @@ class TaskWorkspaceHeader extends StatelessWidget {
                       ),
                       child: Text(candidate.label),
                     ),
-                  // 嘀嗒 :173-176/:186-190 只给两档时间轴列方向 ⇒ 其余档位不出现方向行。
+                  // 嘀嗒 :173-176/:192-193 只给两档时间轴列方向 ⇒ 其余档位不出现方向行。
                   if (sort.hasDirection && onSortDirectionChanged != null) ...[
                     const PopupMenuDivider(),
                     for (final candidate in TaskSortDirection.values)

@@ -24,7 +24,7 @@ enum TaskSort { smart, priorityDesc, dueDate, title, createdAt, updatedAt }
 /// 时间轴方向的档位。
 ///
 /// 嘀嗒《03-用分组和排序管理任务》只在「按创建时间排序」(:169-176) 与
-/// 「按修改时间排序」(:185-190) 两节下列出「从旧到新 / 从新到旧」，
+/// 「按修改时间排序」(:186，方向条目在 :192-193) 两节下列出「从旧到新 / 从新到旧」，
 /// 其余档位没有方向 ⇒ [compareTodoTasks] 只在这两档读取本参数。
 /// [newestFirst] 排第一是因为它是默认值，也是本参数出现之前唯一的行为。
 enum TaskSortDirection { newestFirst, oldestFirst }

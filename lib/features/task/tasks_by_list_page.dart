@@ -536,7 +536,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     }
   }
 
-  /// 嘀嗒《03-用分组和排序管理任务》:173-176/:186-190：两档时间轴各有方向，
+  /// 嘀嗒《03-用分组和排序管理任务》:173-176/:192-193：两档时间轴各有方向，
   /// 且方向与档位一样是"每个清单一份"的偏好 ⇒ 存法与 `_changeSort` 同一条路。
   Future<void> _changeSortDirection(TaskSortDirection direction) async {
     setState(() => _sortDirection = direction);
