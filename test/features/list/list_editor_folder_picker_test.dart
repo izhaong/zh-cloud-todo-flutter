@@ -41,6 +41,11 @@ void main() {
     return fixture;
   }
 
+  /// 按**生产拓扑**泵这个弹层：`sidebar.dart:899 _CreateListSheet.show` 与
+  /// `list_actions.dart:96 showListActions` 都是 `showModalBottomSheet(isScrollControlled: true)`。
+  /// 直接把 sheet 塞进 `Scaffold.body` 会量到另一套约束（全高、无 bottom sheet 的
+  /// `constraints.maxHeight`），320px 那条就成了"在测试的容器里不溢出"而不是"在生产的容器里不溢出"
+  /// （复核第 3 轮 nit；同仓先例 `test/features/task/task_quick_add_sheet_test.dart:171`）。
   Future<void> pumpSheet(
     WidgetTester tester,
     TodoVisualFixture fixture, {
@@ -68,14 +73,25 @@ void main() {
                 ),
           home: Scaffold(
             resizeToAvoidBottomInset: false,
-            body: ListEditorSheet(
-              existing: existing,
-              folderLocalId: folderLocalId,
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => showModalBottomSheet<void>(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (_) => ListEditorSheet(
+                    existing: existing,
+                    folderLocalId: folderLocalId,
+                  ),
+                ),
+                child: const Text('打开清单编辑器'),
+              ),
             ),
           ),
         ),
       ),
     );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('打开清单编辑器'));
     await tester.pumpAndSettle();
   }
 
