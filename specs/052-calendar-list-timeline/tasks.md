@@ -43,18 +43,24 @@ $ flutter test test/features/task/calendar_list_timeline_test.dart
 ```
 九条探针的**对照组**在 `324f23d` 上重跑也全是 `+18` ⇒ 新增那一条不靠改既有用例取绿。
 
-## 六道门禁（基准：已提交 `899dcf2`；日志 `/tmp/r77/gates.log`）
+## 六道门禁（基准：已提交终态 `f21a5c8`；日志 `/tmp/r77/gates-r3.log`）
+
+⚠️ 这张表是**填值那一笔**写进来的，门 1–6 跑在 `f21a5c8` 上。
+填值之后本文件多出的那一笔**只动本节**；用 `git diff --name-only f21a5c8..HEAD` 可复验
+（它只该列出 `specs/052-calendar-list-timeline/tasks.md`）。
+上一版表（跑在 `899dcf2`、日志 `/tmp/r77/gates.log`）在复核 F1 里被判"数字对账靠减法"，已按现日志替换。
 
 | # | 命令 | 读数 |
 | --- | --- | --- |
-| 1 | `git diff --check origin/develop HEAD` / `git diff --check HEAD` | rc=0 / rc=0（另：每次提交前 `git diff --cached --check` 均 rc=0） |
-| 2 | `dart format --output=none --set-exit-if-changed <本轮 3 个显式文件>` | `Formatted 3 files (0 changed)` rc=0 |
-| 3 | `flutter analyze` | `No issues found! (ran in 2.6s)` rc=0 |
-| 4 | `flutter test --tags golden` | `00:06 +9: All tests passed!` rc=0；`git status --porcelain -- test` 为空 ⇒ **9 张基线一张都没重录** |
-| 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:38 +915 ~26: All tests passed!` rc=0 |
+| 1 | `git diff --check origin/develop HEAD` / `git diff --check HEAD` | 两条均 rc=0（`HEAD=f21a5c8 工作树：0 项脏`） |
+| 2 | `dart format --output=none --set-exit-if-changed <本轮 3 个显式文件>` | `Formatted 3 files (0 changed) in 0.05 seconds.` rc=0 |
+| 3 | `flutter analyze` | `No issues found! (ran in 3.5s)` rc=0 |
+| 4 | `flutter test --tags golden` | `00:07 +9: All tests passed!` rc=0；`基线目录脏项数=0` ⇒ **9 张基线一张都没重录** |
+| 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:39 +916 ~26: All tests passed!` rc=0 |
 | 6 | `flutter build web --release --dart-define=TODO_API_BASE_URL=… --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web` rc=0 |
 
-计数对账：门 5 末行的新增数减掉本轮新增用例数，落回 develop 的全量基线 **898**。
+计数对账：门 5 末行 `+916` 减掉本轮新增 18 条 = **898** = develop 全量基线（实跑日志，非减法反推）：
+
 基线 898 有**实跑日志**，不靠减法反推：
 
 - `/tmp/r68/baseline_develop.log:1152` = `02:53 +898 ~26: All tests passed!`（在 `origin/develop` 副本上直接跑出来的末行）；
@@ -67,7 +73,9 @@ $ flutter test test/features/task/calendar_list_timeline_test.dart
 **教训**：两条互不相干的分支各自减回同一个数不是证据，是算术自洽；能当证据的只有"在 develop 副本上直接跑出末行"那种日志。
 `~26` 与既有各轮一致（未新增 skip）。`pubspec.lock` 未进提交：`git log --stat origin/develop..HEAD -- pubspec.lock` 为空。
 
-## 反向探针（九条，`/tmp/r77/probes-final.log`，末行「异常计数 = 0」）
+## 反向探针（九条；**表内读数是 `324f23d` 上的重跑**，日志 `/tmp/r77/probes-r2.log`，
+末行「异常计数 = 0」；脏检查已扩到 `lib/` + `pubspec.lock`（日志末行标签仍只写 `lib/`，是文案没跟着改）。
+首跑日志 `/tmp/r77/probes-final.log` 保留，读数差 1 条用例）
 
 每条都：起跑前 `lib/` 干净 → 对照组先绿 → 打补丁 → 跑测试 → copy 回 + `cmp -s` 逐字节一致。
 
