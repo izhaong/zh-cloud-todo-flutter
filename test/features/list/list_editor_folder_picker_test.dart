@@ -378,6 +378,44 @@ void main() {
     expect(after!.folderLocalId, isNull, reason: '失败不该写库');
   });
 
+  testWidgets('本地库还没就绪：不关弹层、给可见提示、不写库', (tester) async {
+    // 复核第 2 轮 P2：FR-6 写着"仓库为 null / 移动抛错"两种失败都有提示，
+    // 但 repo==null 那半句 0 覆盖（把它的 setState 摘掉，13 条全绿）。
+    final fixture = await createFixture(
+      overridesBuilder: (database) => [
+        listRepositoryProvider.overrideWith((ref) => null),
+      ],
+    );
+    final before = await fixture.database
+        .select(fixture.database.todoLists)
+        .get();
+    await pumpSheet(tester, fixture);
+
+    await pick(tester, '项目');
+    await tester.enterText(find.widgetWithText(TextField, '清单名'), '骑行');
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('本地数据库尚未就绪，清单没能保存'),
+      findsOneWidget,
+      reason: 'provider 为 null 时原先是静默 return，用户以为保存成功',
+    );
+    expect(
+      tester
+          .widget<TextField>(find.widgetWithText(TextField, '清单名'))
+          .controller
+          ?.text,
+      '骑行',
+      reason: '已填内容不能因为失败就没了',
+    );
+    expectSelected(tester, '项目', reason: '已选归属也要留着，等库就绪后直接重试');
+    final after = await fixture.database
+        .select(fixture.database.todoLists)
+        .get();
+    expect(after.length, before.length, reason: '这条路径一个字都不该写');
+  });
+
   testWidgets('一个文件夹都没有时：只有「无」，保存照常可用', (tester) async {
     final fixture = await pump(
       tester,
