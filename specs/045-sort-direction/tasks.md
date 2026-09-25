@@ -150,6 +150,17 @@ PG 首轮**没红**：页面级用例里"重进清单"是再 `pumpWidget` 一次
 不相等的另一种情形，别拿红测数当波及面。
 这四处是靠"先 commit 再跑门禁"的顺序才发现的，如果先跑测试再提交就会被格式化噪音混过去。
 
+## 相撞面（在 tip `3e96ba0` 上重测）
+
+对 6 条 open PR 逐条 `git fetch origin refs/pull/N/head` 后比文件与行号：
+只有 **!314** 共享 `lib/features/task/tasks_by_list_page.dart`，
+本分支改动行 1097 处 vs !314 的 1712 处 ⇒ **交集 0**，`git merge-tree` **0 条 CONFLICT**；
+`origin/develop` 仍是 `9032005`（= 本分支 merge-base）。
+另记两个坑：① `refs/pull/314/head` **不在本地默认 fetch 的 refspec 里** —— 不显式 fetch 时
+`theirs=0`，会被读成"没有相撞"，其实那次测量作废；判据是 `theirs` 为 0 就报错重来。
+② push 完立刻查 `pulls/347` 会拿到 `mergeable: false`（Gitea 异步重算），几秒后重查是 `true` ⇒
+`mergeable` 不能当"刚刚"的证据。
+
 ## 下一轮入口
 
 1. 矩阵 #20 的证据列与状态列要等本 PR 合并后按已合并 SHA 写；本轮不翻状态。
