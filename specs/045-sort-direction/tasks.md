@@ -11,7 +11,7 @@
 - [x] FR-5 未改表结构、未 bump `schemaVersion`（`git diff origin/develop...HEAD -- lib/core/db/` 为空）
 - [x] 四件套：320px+1.3 与读屏已实测；「失败保留已加载数据」沿用既有 `_changeSort` 分支；
       「过期响应不覆盖新响应」对本面不适用（本地单一写入者），理由写在 spec 表里而不是空勾
-- [ ] 六道门禁日志 —— 见下节，跑完填
+- [x] 六道门禁日志 —— 见「门禁原文记录」节（`97f21e6`，六项全 `rc=0`）
 - [ ] 只读复核 `VERDICT` —— 待派
 - [ ] 矩阵 #20 回写 —— **合并后**才动状态与证据列，本轮只允许写「已实现待合并」
 
@@ -44,9 +44,28 @@ PG 首轮**没红**：页面级用例里"重进清单"是再 `pumpWidget` 一次
 "菜单压根没开"上通过的。两条都已修：回调由调用方持有 + helper 结尾断言"智能（置顶优先）"在屏上
 + 每轮收尾把菜单收掉并断言收掉了。
 
-## 门禁原文记录（跑在最终字节上）
+## 门禁原文记录（跑在最终字节 `97f21e6` 上，日志 `/tmp/g64/gates2.out`）
 
-待填。
+| 门禁 | 结果 |
+| ---- | ---- |
+| `git diff --check` | `rc=0`，无输出 |
+| `dart format --output=none --set-exit-if-changed <本轮 7 个显式文件>` | `Formatted 7 files (0 changed)`，`rc=0` |
+| `flutter analyze` | `No issues found! (ran in 1.0s)`，`rc=0` |
+| `flutter test --tags golden` | `00:04 +9: All tests passed!`，9 张基线未重录（golden 文件变更提示 0） |
+| `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:25 +906 ~26: All tests passed!`，`rc=0` |
+| `flutter build web --release --dart-define=…` | `✓ Built build/web`，`rc=0` |
+
+计数对账：干净 worktree 实跑基线 `9032005` ⇒ `02:29 +898 ~26`；本分支 `+906 = 898 + 8`（新文件 8 条），逐条对上。
+`pubspec.lock` 未进 PR（门禁跑完工作区 0 项）。
+
+### 门禁 5 第一次是红的：三处既有断言被我的返回类型变更打断
+
+第一版 `get()` 从 `TaskSort` 改成 `TaskSortPreference` 后全量跑出 3 条红：
+`task_sort_updated_at_test.dart` 两处（`Expected: TaskSort:<TaskSort.updatedAt> / Actual: <Instance of 'TaskSortPreference'>`）、
+`sync_coordinator_organize_search_test.dart` 一处（上行 payload 的 `valueJson` 现在是
+`{"sort":"dueDate","direction":"newestFirst"}` 而不是 `{"sort":"dueDate"}`）。
+⇒ A→B 那条顺手升级成同时断言**方向也同步过去了**。
+这三处是靠"先 commit 再跑门禁"的顺序才发现的，如果先跑测试再提交就会被格式化噪音混过去。
 
 ## 下一轮入口
 
