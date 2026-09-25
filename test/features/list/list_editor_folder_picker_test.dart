@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:drift/drift.dart' hide isNull;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -188,8 +189,57 @@ void main() {
     expect(
       created.folderId,
       projectsFolderServerId,
-      reason: '服务端整数 ID 要一起带上，否则同步会丢归属',
+      reason:
+          '钉的是"顺手把反范式的服务端整数一起缓存上"这条写路径：'
+          '归属的真正权威是 folderLocalId（sync_coordinator 回放时按它重算 folderId）',
     );
+  });
+
+  testWidgets('嵌套文件夹在候选里念成「父 / 子」，不与子项同名', (tester) async {
+    final fixture = await createFixture();
+    final now = DateTime(2026, 7, 11, 8);
+    final parentRows =
+        await (fixture.database.update(fixture.database.todoFolders)
+              ..where((row) => row.id.equals(projectsFolderId)))
+            .write(TodoFoldersCompanion(name: const Value('项目父夹')));
+    expect(parentRows, 1, reason: '前提不成立就别往下断（update 命中 0 行不报错）');
+    await fixture.database
+        .into(fixture.database.todoFolders)
+        .insert(
+          TodoFoldersCompanion.insert(
+            id: 'r68-nested-folder',
+            parentId: const Value(projectsFolderId),
+            name: '项目',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    await pumpSheet(tester, fixture);
+
+    final labels = await optionLabels(tester);
+    expect(labels, contains('项目父夹 / 项目'), reason: 'FR-1：只给名字会撞车，看不出层级');
+    expect(labels.where((l) => l == '项目'), isEmpty, reason: '子项不能顶着一个看不出归属的名字');
+  });
+
+  testWidgets('文件夹还没同步到服务端（serverId 为空）⇒ 本地归属照样成立', (tester) async {
+    final fixture = await createFixture();
+    final rows =
+        await (fixture.database.update(fixture.database.todoFolders)
+              ..where((row) => row.id.equals(projectsFolderId)))
+            .write(const TodoFoldersCompanion(serverId: Value(null)));
+    expect(rows, 1, reason: '前提不成立 ⇒ 后面的断言都是空的');
+    await pumpSheet(tester, fixture);
+
+    await pick(tester, '项目');
+    await tester.enterText(find.widgetWithText(TextField, '清单名'), '本地新建');
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    final created = await (fixture.database.select(
+      fixture.database.todoLists,
+    )..where((row) => row.name.equals('本地新建'))).getSingle();
+    expect(created.folderLocalId, projectsFolderId);
+    expect(created.folderId, isNull, reason: '没有整数可写，别塞个 0 冒充');
   });
 
   testWidgets('编辑：预选当前归属，选「无」保存后真的移出，并留下同步记录', (tester) async {
@@ -292,6 +342,42 @@ void main() {
     expect(after.name, '工作', reason: '失败后也不该被顺手改名');
   });
 
+  testWidgets('移入失败（原来没有归属）：已选的文件夹不能被失败清空', (tester) async {
+    // 「移出失败」那条点的是「无」⇒ 它抓不住"失败时顺手把归属清掉"这个 bug：
+    // 清空与"停在用户选的「无」"在界面上长一样（复核 P1，变异实测 10 条全绿）。
+    // 这条从**无归属**的清单进入、选一个非 null 的文件夹，失败后必须还是它。
+    final fixture = await createFixture(
+      overridesBuilder: (database) => [
+        listRepositoryProvider.overrideWith(
+          (ref) => _MoveFailingRepository(database, SyncChangeQueue(database)),
+        ),
+      ],
+    );
+    final personal = (await listById(
+      fixture.database,
+      TodoVisualFixture.personalListId,
+    ))!;
+    expect(personal.folderLocalId, isNull, reason: '前提：这条清单本来不在任何文件夹里');
+    await pumpSheet(tester, fixture, existing: personal);
+
+    await pick(tester, '项目');
+    expectSelected(tester, '项目');
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('移动到文件夹失败，请重试'),
+      findsOneWidget,
+      reason: '移入与移出都是"移动"，失败都要看得见',
+    );
+    expectSelected(tester, '项目', reason: '失败后用户刚选的归属必须还在，不然重试要点第二遍');
+    final after = await listById(
+      fixture.database,
+      TodoVisualFixture.personalListId,
+    );
+    expect(after!.folderLocalId, isNull, reason: '失败不该写库');
+  });
+
   testWidgets('一个文件夹都没有时：只有「无」，保存照常可用', (tester) async {
     final fixture = await pump(
       tester,
@@ -326,8 +412,9 @@ void main() {
     expect(tester.takeException(), isNull, reason: '弹层在 320px + 1.3 下溢出');
     expect(find.text('所属文件夹'), findsOneWidget);
     expect(find.text('保存'), findsOneWidget);
-    await tester.tap(find.byKey(folderFieldKey));
-    await tester.pumpAndSettle();
+    // openMenu 自带"菜单真的展开了"的断言：少了它，下面那句「展开的候选菜单不溢出」
+    // 就永远在测收起态（删掉那次 tap 也照样 10 条全绿，实测）。
+    await openMenu(tester);
     expect(tester.takeException(), isNull, reason: '展开的候选菜单在 320px + 1.3 下溢出');
     expect(find.text('项目'), findsWidgets);
   });

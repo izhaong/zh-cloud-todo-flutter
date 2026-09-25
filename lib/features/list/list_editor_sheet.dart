@@ -129,9 +129,11 @@ class _ListEditorSheetState extends ConsumerState<ListEditorSheet> {
                         // 嵌套文件夹念成「父 / 子」：只给名字会撞车，看不出层级。
                         child: Text(_folderPath(folder, byId)),
                       ),
-                    // 清单已有的归属必须出现在候选里，否则 DropdownButton 会断言
-                    // "exactly one item with the value"。文件夹 stream 是异步的，
-                    // 首帧还没数据时先占一格；真取不到（文件夹已不存在）也照样不炸。
+                    // 清单已有的归属必须出现在候选里：DropdownButton 会抛
+                    // "There should be exactly one item with [DropdownButton]'s value: …"
+                    // （本机 3.44.8 的原文，复核逐字纠正过我的转述）。
+                    // 文件夹 stream 是异步的，首帧还没数据时先占一格；
+                    // 真取不到（文件夹已不存在）也照样不炸。
                     if (selected != null && byId[selected] == null)
                       DropdownMenuItem<String?>(
                         value: selected,
