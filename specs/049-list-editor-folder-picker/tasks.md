@@ -74,16 +74,25 @@
 教训：**探针跑不完 ≠ 实现没问题**，先怀疑自己的夹具；"没人订阅就挂住"这种 teardown 依赖
 一旦进了对照组就会把"红"伪装成"没结论"。
 
-## 门禁原文记录（跑在最终字节，日志 `/tmp/r68/gates/final.log`）
+## 门禁原文记录（跑在最终字节 `840af71`，日志 `/tmp/r68/gates/final.log`）
 
 | 门禁 | 结果 |
 | ---- | ---- |
-| `git diff --check origin/develop...HEAD` 与工作区 | 待跑 |
-| `dart format --output=none --set-exit-if-changed <本轮 2 个 dart 文件>` | 待跑 |
-| `flutter analyze` | 待跑 |
-| `flutter test --tags golden` | 待跑 |
-| `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | 待跑 |
-| `flutter build web --release --dart-define=…` | 待跑 |
+| `git diff --check origin/develop...HEAD` 与工作区 | `rc=0`，无输出 |
+| `dart format --output=none --set-exit-if-changed <本轮 2 个 dart 文件>` | `Formatted 2 files (0 changed)`，`rc=0` |
+| `flutter analyze` | `No issues found! (ran in 1.8s)`，`rc=0` |
+| `flutter test --tags golden` | `00:09 +9: All tests passed!`，`rc=0`；`git status --short test/goldens` 为空 ⇒ 9 张基线未重录 |
+| `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:56 +908 ~26: All tests passed!`，`rc=0` |
+| `flutter build web --release --dart-define=…` | `✓ Built build/web`，`rc=0` |
+
+**第一遍是 5/6**：`e231bf4` 上门禁 3 报 `1 issue found`（测试文件那条
+`import 'package:drift/drift.dart' hide isNull;` 是 unused_import，`app_database.dart` 已经把符号导出了）
+⇒ 单提 `style(test)` 提交 `840af71` 后**六条全部重跑**，本表就是重跑后的字节（第一遍日志留在 `/tmp/r68/gates/attempt1.log`）。
+
+计数对账（诚实记法）：`+908 = 898 + 10`。其中 **898 不是本轮实测的**——它来自第 64 轮在同一基线
+`origin/develop@9032005` 上实跑干净 worktree 记下的 `+898 ~26`（见 `specs/045-sort-direction/tasks.md`），
+本轮没有重跑基线；10 = 本轮新增用例数。`~26` 与基线一致，未新增 skip。`pubspec.lock` 未进提交
+（门禁跑完后 `git status --short` 为空）。
 
 ## 相撞面
 
