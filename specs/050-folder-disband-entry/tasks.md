@@ -75,15 +75,18 @@
 `VERDICT: PASS` ⇒ 按"两轮无新结论就停下请示"的规矩不再刷第 2 版复核；F2 挖出的契约缺口
 按"后端缺契约先修契约"的规矩转成 service Issue，不藏在客户端里。
 
-## 门禁原文记录（跑在 tip `8273c56` 的字节上，日志 `/tmp/r69/gates_12.log`）
+## 门禁原文记录（跑在 tip `3b7fa6e` 的 dart 字节上，日志 `/tmp/r69/gates_13.log`）
+
+这是**第 2 遍**：第 1 遍跑在 `8273c56`（日志 `/tmp/r69/gates_12.log`，`02:42 +910 ~26`）；
+复核后的判据改造只动了一个测试文件与两处注释 ⇒ 用例数没增减，但六条**全部重跑**，本表是这一遍。
 
 | 门禁 | 结果 |
 | ---- | ---- |
 | `git diff --check origin/develop...HEAD` 与工作区 | `rc=0`，无输出 |
 | `dart format --output=none --set-exit-if-changed <本轮 4 个显式文件>` | `Formatted 4 files (0 changed)`，`rc=0` |
-| `flutter analyze` | `No issues found! (ran in 1.6s)`，`rc=0` |
-| `flutter test --tags golden` | `00:06 +9: All tests passed!`，`rc=0`；`git status --short test/goldens` 为空 ⇒ 9 张基线未重录 |
-| `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:42 +910 ~26: All tests passed!`，`rc=0` |
+| `flutter analyze` | `No issues found! (ran in 2.3s)`，`rc=0` |
+| `flutter test --tags golden` | `00:05 +9: All tests passed!`，`rc=0`；`git status --short test/goldens` 为空 ⇒ 9 张基线未重录 |
+| `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:28 +910 ~26: All tests passed!`，`rc=0` |
 | `flutter build web --release --dart-define=…` | `✓ Built build/web`，`rc=0` |
 
 计数对账：`+910 = 898 + 12`。898 是第 68 轮在 develop 副本 `/tmp/r68-baseline` 实测的基线
@@ -105,4 +108,18 @@
 2. `:12` 拖动清单到另一清单上方建文件夹 ⇒ 要改侧栏可见布局，按约定先申请重录 9 张黄金基线。
 3. `FolderPage` 与它的宿主 `ListPage` 在 develop 上仍**不可达**（`ListPage` 全仓无人 push）：
    新建/重命名这两件事还没有入口。`spec.md` 取舍 1 已记，本轮不顺手删；单独立项。
-4. 矩阵 #18 的「已实现待合并」注记走 docs !105 留言，不再新开第 12 条同文件 PR。
+4. **矩阵 #18 主表行是过期的**：docs 分支 `docs/104-repeat-rule-parity`（PR !105）上
+   `dida-parity-matrix.md:79` 仍写「有 / BE/WEB/FL」+「FL 文件夹 UI 待 B2」，
+   而同一文件 `:295`（第 0 轮表）早就判「有 → 部分 / 管理 UI 不可达」。行号基准是 !105 的 head，
+   不是 develop（那边同一文件行号不同）。下一轮 docs 按代码现况把**主表行**
+   重判为「部分 / BE/FL」，注记：解散入口 = 本 PR !354、所属文件夹 = !352（两条都还没合并 ⇒ 只写「已实现待合并」），
+   并把 **zh-cloud-service #285**（服务端 DELETE 不是"解散"语义 ⇒ 非空文件夹解散不收敛）写成缺口。
+   走 !105 追加，不再新开第 12 条同文件 PR。
+5. **service #285 的修法要先定**：推荐服务端把 `DELETE /app-api/todo/folder` 改成嘀嗒的「解散」
+   （清空清单归属 + 提升子文件夹 + 删夹，一个事务，去掉 `TODO_FOLDER_HAS_LISTS`）。
+   若那边改完，本仓 `folder_repository.dart:87` 的 ABSENT 断言要连带复核（清单移出是否需要补 `list/upsert`）。
+6. 复核 F5：侧栏长按无重入 ⇒ 连按两次叠两个确认框（静态读成立、未跑成用例）⇒ 与 #312 的
+   「对话框叠层」一并处理，别单独立小单。
+7. 复核 F6：「解散」入口只有手势、没有语义动作 ⇒ 读屏用户到不了。与 specs/026 的侧栏读屏债并一条。
+8. 复核 F4：`folder_actions.dart:85`「移至"未分组"」不是嘀嗒的词（帮助中心全文 0 命中），
+   是从 develop `folder_page.dart` 原样搬来的 ⇒ 要改就连 develop 的口径一起改，单独一轮。
