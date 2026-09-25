@@ -47,20 +47,23 @@ $ flutter test test/features/task/calendar_list_timeline_test.dart
 ```
 九条探针的**对照组**在 `324f23d` 上重跑也全是 `+18` ⇒ 新增那一条不靠改既有用例取绿。
 
-## 六道门禁（基准：已提交终态 `f21a5c8`；日志 `/tmp/r77/gates-r3.log`）
+## 六道门禁（基准：已提交终态 `5e81146`；日志 `/tmp/r77/gates-r4.log`）
 
-⚠️ 这张表是**填值那一笔**写进来的，门 1–6 跑在 `f21a5c8` 上。
-填值之后本文件多出的那一笔**只动本节**；用 `git diff --name-only f21a5c8..HEAD` 可复验
-（它只该列出 `specs/052-calendar-list-timeline/tasks.md`）。
-上一版表（跑在 `899dcf2`、日志 `/tmp/r77/gates.log`）在复核 F1 里被判"数字对账靠减法"，已按现日志替换。
+这张表随每轮终态推进：`899dcf2` → `gates.log`（首版，F1 判过"对账靠减法"）、
+`f21a5c8` → `gates-r3.log`（第 1 轮复核修完）、**`5e81146` → `gates-r4.log`（本表，第 2 轮复核修完）**。
+门 5 末行三次分别是 `+915 / +916 / +916` —— 第 2 轮那笔只动 md 与一句 `reason` 文案，
+不改任何用例名与结果（可复验：`git diff --name-only f21a5c8..HEAD` 列出的全是 md 与该测试文件，
+且该测试文件的 diff 只落在 `reason:` 字符串上）。
+⚠️ 本节的**推进这一笔**只动 `tasks.md`（门禁不再重跑，重跑的是上面两处独立 LOGDIR 探针）⇒
+拿 `git diff --name-status 5e81146..HEAD` 复验，它只该列出本文件。
 
 | # | 命令 | 读数 |
 | --- | --- | --- |
-| 1 | `git diff --check origin/develop HEAD` / `git diff --check HEAD` | 两条均 rc=0（`HEAD=f21a5c8 工作树：0 项脏`） |
-| 2 | `dart format --output=none --set-exit-if-changed <本轮 3 个显式文件>` | `Formatted 3 files (0 changed) in 0.05 seconds.` rc=0 |
-| 3 | `flutter analyze` | `No issues found! (ran in 3.5s)` rc=0 |
-| 4 | `flutter test --tags golden` | `00:07 +9: All tests passed!` rc=0；`基线目录脏项数=0` ⇒ **9 张基线一张都没重录** |
-| 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:39 +916 ~26: All tests passed!` rc=0 |
+| 1 | `git diff --check origin/develop HEAD` / `git diff --check HEAD` | 两条均无输出 rc=0（`HEAD=5e81146 工作树：0 项脏`） |
+| 2 | `dart format --output=none --set-exit-if-changed` 本轮 3 个显式文件 | `Formatted 3 files (0 changed) in 0.05 seconds.` rc=0 |
+| 3 | `flutter analyze` | `No issues found! (ran in 1.4s)` rc=0 |
+| 4 | `flutter test --tags golden` | `00:04 +9: All tests passed!` rc=0；`基线目录脏项数=0` ⇒ **9 张基线一张都没重录** |
+| 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:40 +916 ~26: All tests passed!` rc=0 |
 | 6 | `flutter build web --release --dart-define=TODO_API_BASE_URL=… --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web` rc=0 |
 
 计数对账：门 5 末行 `+916` 减掉本轮新增 18 条 = **898** = develop 全量基线（实跑日志，非减法反推）：
@@ -107,7 +110,9 @@ $ flutter test test/features/task/calendar_list_timeline_test.dart
 但**红因换了**：首跑那条红是旧测试里"无日期任务进轴后 `endAt!` 抛"撞出来的；
 新守卫在 PN 下红在 `hasLength(10)` 前提（不按天过滤 ⇒ 选中日从 10 条变 11 条，是**多**不是少，
 `missing` 列表为空），这一点由复核第 2 轮 E4 复跑实测并在此后作为唯一口径。
-两处都不解释成「判据变强/变弱」。日志 `/tmp/r77/probes-r2.log`。
+两处都不解释成「判据变强/变弱」。日志 `/tmp/r77/probes-r2.log`；第 2 轮修完又在**独立 LOGDIR** 复跑 PN/PP 两次
+（`/tmp/r77b/pn.log` = `+3 -15` 判据面 5/15、`/tmp/r77b/pp.log` = `+16 -2` 2/2，
+对照组均 `+18` 绿、`cmp -s` 还原均为「是」、末行异常计数 0）⇒ 上表两句结论现在是我自己复跑出来的。
 
 ⚠️ 顺带一条纪律（本轮踩过）：`probes77.py` 的 per-file 日志写在固定 `LOGDIR`，**重跑会原地覆盖**
 —— 我在 F3 处置表里引的 `probes/PP_0_*.log:132-155` 就是被覆盖成 78 行后失效的指针。
