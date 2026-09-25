@@ -42,23 +42,28 @@ $ flutter test test/collaboration_widget_test.dart test/features/list/list_share
                                      #    探针日志里参考面恒绿正是同一件事（复核 N10）
 ```
 
-## 六道门禁（基准：已提交终态 `3ea931e`；日志 `/tmp/r79e/gates-r2.log`）
+## 六道门禁（基准：已提交终态 `3fcd1c6`；日志 `/tmp/r79h/gates-r2.log`）
 
 这张表随每轮终态推进：`e3c9d88` → `gates79.log`（第 1 轮复核前的终态）、
-**`3ea931e` → `gates-r2.log`（本表，第 1 轮修完 + 一句 `dart format`）**。
-⚠️ 本节的**填值这一笔只动 `tasks.md`** ⇒ 用 `git diff --name-status 3ea931e..HEAD` 复验，
-它只该列 `specs/053-list-share-entry/tasks.md`。
+`3ea931e` → `/tmp/r79e/gates-r2.log`（第 1 轮修完 + 一句 `dart format`）、
+**`3fcd1c6` → `/tmp/r79h/gates-r2.log`（本表，第 2 轮修完）**。
+⚠️ `3fcd1c6` 这一笔**动了代码**（T5 的两条负断言），所以门禁必须重跑 —— 就是本表。
+它之后如果还有填值笔，那笔只动 md ⇒ 用 `git diff --name-only 3fcd1c6..HEAD` 复验。
+三次末行读数：门 5 `+904 / +904 / +904`（`gates79.log`、`r79e/gates-r2.log`、本表），
+第 2 轮只加强了**已有**用例里的断言、没新增用例 ⇒ 计数本该不动（可复验：
+`git diff --name-status 3ea931e..3fcd1c6 -- test` 只有一个 `M`，且
+`grep -c "  testWidgets("` 前后都是 6）。
 ⚠️ 中途有一次门禁**没跑完就被我自己停掉**：门 2 在 `53d55d1` 上报 `Changed list_share_entry_test.dart`
 rc=1（我手写换行不合 formatter），所以那一份日志不作证据；`3ea931e` 才是最终字节。
 另留了一次**同字节重复跑** `/tmp/r79g/gates-final.log`（两次都得七 rc 全 0 才算稳）。
 
 | # | 命令 | 读数 | rc |
 | --- | --- | --- | --- |
-| 1 | `git diff --check origin/develop HEAD`（**有信息量的那条**）；`git diff --check HEAD` 在同一树状态下必然空 ⇒ 只作附带 | 两条都无输出（`HEAD=3ea931e 工作树：0 项脏`） | 0 / 0 |
+| 1 | `git diff --check origin/develop HEAD`（**有信息量的那条**）；`git diff --check HEAD` 在同一树状态下必然空 ⇒ 只作附带 | 两条都无输出（`HEAD=3fcd1c6 工作树：0 项脏`） | 0 / 0 |
 | 2 | `dart format --output=none --set-exit-if-changed` 本轮 3 个显式文件 | `Formatted 3 files (0 changed) in 0.07 seconds.` | 0 |
-| 3 | `flutter analyze` | `No issues found! (ran in 1.6s)` | 0 |
-| 4 | `flutter test --tags golden` | `00:04 +9: All tests passed!`；`基线目录脏项数=0` ⇒ **9 张基线一张都没重录** | 0 |
-| 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:36 +904 ~26: All tests passed!` | 0 |
+| 3 | `flutter analyze` | `No issues found! (ran in 2.1s)` | 0 |
+| 4 | `flutter test --tags golden` | `00:05 +9: All tests passed!`；`基线目录脏项数=0` ⇒ **9 张基线一张都没重录** | 0 |
+| 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:38 +904 ~26: All tests passed!` | 0 |
 | 6 | `flutter build web --release --dart-define=TODO_API_BASE_URL=… --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web` | 0 |
 
 计数对账：门 5 末行 `+904` 减掉本轮新增 6 条 = **898** = develop 全量基线。
@@ -67,11 +72,11 @@ rc=1（我手写换行不合 formatter），所以那一份日志不作证据；
 ⚠️ 本来还想引 `specs/045-sort-direction/tasks.md:120` 作第二处佐证，落笔前 `ls` 过：**这个目录不在本分支**
 （`specs/045-sort-direction/` No such file or directory，它在未合并的分支上）⇒ 不引，
 免得又写成一个指不到的指针（第 77 轮复核 F1 的原罪就是这个）。
-新增 6 条这一侧的前提也可验：`git diff --name-status origin/develop..HEAD -- test` 只有一个 `A`，
+新增 6 条这一侧的前提也可验：`git diff --name-status origin/develop..HEAD -- test` 只有一个 `A`（本表日志收尾 `工作树脏项数=0`），
 `grep -c "  testWidgets(" test/features/list/list_share_entry_test.dart` = 6。
 `~26` 与既有各轮一致（未新增 skip）。收尾 `工作树脏项数=0`、`pubspec.lock` 未进提交。
 
-## 反向探针（六条 X1–X6 + 一条反例 CX1）
+## 反向探针（六条 X1–X6 + 四条反例 CX1–CX4）
 
 每条都：起跑前 `lib` + `pubspec.lock` 干净 → 对照组先绿 → 锚点干跑（`check` 模式 6/6 命中 1）
 → 打补丁跑 → `cmp -s` 逐字节还原。判据面 = 本面新套件；参考面 = 既有 `collaboration_widget_test.dart`。
@@ -90,6 +95,20 @@ rc=1（我手写换行不合 formatter），所以那一份日志不作证据；
 红的那条用例名逐字打印在日志里），首次复现在 `/tmp/r79d/`）：
 **不是**摘代码，而是**造一个违反嘀嗒 `:6` 的实现**——给 `_SmartRow` 的长按接 `showDialog` +
 `AlertDialog(content: Text('共享协作'))`（既不用 `BottomSheet`、也不用那两个私有键）。
+
+反例 CX2–CX4（**第 2 轮复核 N-A 的修法验证**，脚本 `/tmp/r79h/probe_cx2.py`，
+日志 `/tmp/r79h/run.log`）—— N-A 量出 `find.text` 只认"恰好等于"，三种真违反的形状放过：
+
+| 编号 | 逃逸形状 | 读数 | 是哪条断言咬住的（按 reason 现读，不是猜） |
+| --- | --- | --- | --- |
+| CX2 | `AlertDialog(content: Text('共享协作 · 邀请成员'))` —— 文案带后缀 | `+5 -1`，红的就是 T5 | `textContaining`（reason 命中「不支持共享协作」） |
+| CX3 | 长按弹 `SnackBar(content: Text('去共享协作'))` —— 文案在别处 | `+5 -1`，红的就是 T5 | `textContaining`（同上） |
+| CX4 | `IconButton(icon: Icon(Icons.share))` —— **树上根本没有 Text** | `+5 -1`，红的就是 T5 | `byIcon`（reason 命中「图标型共享入口没有任何」） |
+
+三条各自 `cmp -s` 逐字节还原（日志里 3 次「还原后 … 是」），对照组 `+6` 绿，末行「异常计数 = 0」。
+⚠️ **每条都指定了"该由哪条断言咬住"**：只判"红没红"的话，两条新断言里白写一条也测不出来 ——
+CX2/CX3 只有 `textContaining` 能咬、CX4 只有 `byIcon` 能咬，脚本对 reason 字符串做了断言。
+判据**上界**仍然如实写：这三形是复核员量出来的，不是全部；不声称拦得下任意形态（见 spec FR-4）。
 
 | 面 | 读数 | 判读 |
 | --- | --- | --- |
@@ -157,7 +176,7 @@ N-H（`协作成员` 在 develop 另有 `:1214` 注释与 `list_member_page.dart
 
 ## 遗留与下一轮
 
-- **门禁现跑在 `3ea931e`**（上表；`e3c9d88` 是第 1 轮那一版的基准，已被推进）；**复核第 1 轮 FAIL 已修、第 2 轮 FAIL 本笔在修、第 3 轮未派** ⇒ 本 PR 不谈合并。
+- **门禁现跑在 `3fcd1c6`**（上表；`e3c9d88`、`3ea931e` 是前两版的基准，已被推进）；**复核第 1、2 轮 FAIL 已修并各有反例证明修上了、第 3 轮未派** ⇒ 本 PR 不谈合并。
   要它咬定的：① FR-2 的「共用一份口径」是真做了还是只改文案（`openListCollaboration` 消费者数 + 四条分支行为等价性，含原实现`title: list?.name ?? t.title` 那个兜底到底是不是死代码）；
   ② X6「只改 key 名就全红」算覆盖面还是锚得太死 —— **已判**：主读法是锚得太死（失4 采纳），
      改键名的误红**只由 T6 一处贡献**（第 1 轮那版里 T5 本就不因改名红；它今天还留着一句 `expect(find.byKey(_shareKey), findsNothing)` ⇒ 说"T5/T6 两处都解耦"偏强，复核 N-B），现读数 `+2 -4`；
