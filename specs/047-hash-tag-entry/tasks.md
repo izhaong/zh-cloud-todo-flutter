@@ -119,11 +119,16 @@ merge-tree 复测结果见下节。
 
 ## 门禁原文记录（复核修复轮）
 
+跑在提交后的最终字节 `bc9e68c` 上，日志 `/tmp/r66-gates.log`（对照：修复前的 tip 是 `727da2f`）。
+
 | 门禁 | 结果 |
 | ---- | ---- |
-| `git diff --check` | 见下 |
-| `dart format --output=none --set-exit-if-changed <本轮显式文件>` | 见下 |
-| `flutter analyze` | `No issues found!` `rc=0` |
-| `flutter test --tags golden` | 见下 |
-| `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | 见下 |
-| `flutter build web --release --dart-define=…` | 见下 |
+| `git diff --check 9032005..HEAD` + 工作区 | `rc=0`，无输出 |
+| `dart format --output=none --set-exit-if-changed <本轮 5 个 dart 文件>` | `Formatted 5 files (0 changed)`，`rc=0`（第一遍 `rc=1`：新补的用例里有 4 行没合格式 ⇒ 单提 `style(test) bc9e68c` 后六条全部重跑） |
+| `flutter analyze` | `No issues found!`，`rc=0` |
+| `flutter test --tags golden` | `+9: All tests passed!`，`rc=0`；`git diff --name-only 9032005..HEAD -- test/goldens` 为空 ⇒ 9 张基线未重录 |
+| `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:57 +930 ~26: All tests passed!`，`rc=0` |
+| `flutter build web --release --dart-define=…` | `✓ Built build/web`，`rc=0` |
+
+计数对账：`+930 = 924 + 6`——924 是本 PR 修复前 tip 上刚跑过的数（见上一节），6 = 复核修复轮新增用例（F1 两条、F5 三条、F2 一条）。未新增 skip。
+`pubspec.lock` 未进提交：门禁跑完 `git status --short` 为空。
