@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -159,25 +161,40 @@ void main() {
     expect(await syncRows(fixture), before, reason: '取消不产生任何写入');
   });
 
-  testWidgets('连点两次「解散」只解散一次', (tester) async {
-    late _SpyFolderRepository spy;
+  testWidgets('解散请求挂起时再点一次「解散」：只发一次', (tester) async {
+    // 探针 PC 逼出来的写法：原先是"同帧连点两下 + 假仓库立刻返回"，
+    // 但第一次点击后弹层已经开始关闭、第二下打在退出动画里的按钮上没触发 handler
+    // ⇒ 把 `_busy` 闸门整块摘掉，10 条仍全绿（= 这条用例当时什么都没钉）。
+    // 正解：让 delete 挂起（Completer 门控），第一次点击停在 await 里，
+    // 框还开着、按钮还可命中，第二下才真的走到 handler。
+    late _GatedFolderRepository gated;
     await pumpSidebar(
       tester,
       overridesBuilder: (database) {
-        spy = _SpyFolderRepository(database, SyncChangeQueue(database));
-        return [folderRepositoryProvider.overrideWith((ref) => spy)];
+        gated = _GatedFolderRepository(database, SyncChangeQueue(database));
+        return [folderRepositoryProvider.overrideWith((ref) => gated)];
       },
     );
     await expandAndLongPressFolder(tester);
 
-    final button = find.text('解散');
-    // 同一帧内两次点击：中间不 pump，禁用态只在下一次 build 才生效 ⇒
-    // 少一个同步闸门就会真的调两次 delete。
-    await tester.tap(button);
-    await tester.tap(button);
-    await tester.pumpAndSettle();
+    await tester.tap(find.text('解散'));
+    await tester.pump();
+    expect(gated.pending.length, 1, reason: '前提：第一次点击确实发出去了，且此刻还挂着');
 
-    expect(spy.deleteCalls, 1, reason: '重复解散会二次清空归属并多打 outbox');
+    await tester.tap(find.text('解散'));
+    await tester.pump();
+    expect(gated.pending.length, 1, reason: '第二次点击不该绕过 _busy 再发一次解散');
+
+    for (final c in gated.pending) {
+      c.complete();
+    }
+    await tester.pumpAndSettle();
+    expect(gated.pending.length, 1);
+    expect(
+      find.byKey(const ValueKey('todo-sidebar-folder-$projectsFolderId')),
+      findsNothing,
+      reason: '闸门不能把唯一那次真的解散也吞掉',
+    );
   });
 
   testWidgets('解散失败：框不关、文件夹还在、错误写在框里，重试能成', (tester) async {
@@ -302,18 +319,6 @@ void main() {
   });
 }
 
-/// 只记调用次数，不碰数据库：钉"同帧连点只发一次"。
-class _SpyFolderRepository extends FolderRepository {
-  _SpyFolderRepository(super.db, super.queue);
-
-  int deleteCalls = 0;
-
-  @override
-  Future<void> delete(String folderId) async {
-    deleteCalls++;
-  }
-}
-
 /// 第一次失败、第二次成功：钉"失败可重试"这条路径。
 class _FlakyFolderRepository extends FolderRepository {
   _FlakyFolderRepository(super.db, super.queue);
@@ -354,3 +359,18 @@ void _noopSection(Section _) {}
 void _noopSmart(SmartList _) {}
 void _noopList(String? _) {}
 void _noopVoid() {}
+
+/// delete 挂起直到测试放行：让"第二次点击落在还开着的框上"成为可能。
+class _GatedFolderRepository extends FolderRepository {
+  _GatedFolderRepository(super.db, super.queue);
+
+  final List<Completer<void>> pending = <Completer<void>>[];
+
+  @override
+  Future<void> delete(String folderId) {
+    final c = Completer<void>();
+    pending.add(c);
+    // 放行之后才真的走仓库 ⇒ 最后那句"侧栏那一行没了"才有意义
+    return c.future.then((_) => super.delete(folderId));
+  }
+}
