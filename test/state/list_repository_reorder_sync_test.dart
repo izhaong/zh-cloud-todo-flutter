@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -17,21 +16,21 @@ import 'package:zh_cloud_todo_flutter/state/repositories/list_repository.dart';
 /// 每个写方法都登记 ⇒ 换设备 pull 回来顺序是旧的，界面上却"刚刚拖好了"。
 /// 本套用例钉的是**跨端成立**，不是"本地排个序"。
 void main() {
-  Future<(AppDatabase, ListRepository)> _open() async {
+  Future<(AppDatabase, ListRepository)> openRepo() async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
     return (db, ListRepository(db, SyncChangeQueue(db)));
   }
 
   /// 表里现在的 `id → sortOrder`。
-  Future<Map<String, int>> _order(AppDatabase db) async {
+  Future<Map<String, int>> orderOf(AppDatabase db) async {
     final rows = await db.select(db.todoLists).get();
     return {for (final r in rows) r.id: r.sortOrder};
   }
 
   /// 只看本步新增的 outbox 行（`create()` 自己每条都会登记一行，
   /// 不先做快照就等不到"reorder 登记了几条"这个数）。
-  Future<List<TodoSyncChange>> _added(
+  Future<List<TodoSyncChange>> addedAfter(
     AppDatabase db,
     Set<String> before,
   ) async {
@@ -41,22 +40,22 @@ void main() {
     return rows.where((r) => !before.contains(r.clientMutationId)).toList();
   }
 
-  Future<Set<String>> _snapshot(AppDatabase db) async {
+  Future<Set<String>> snapshotOf(AppDatabase db) async {
     final rows = await db.select(db.todoSyncChanges).get();
     return rows.map((r) => r.clientMutationId).toSet();
   }
 
   test('拖完顺序：每个位次都登记一条 list/upsert，payload 的 sortOrder 就是位次', () async {
-    final (db, repo) = await _open();
+    final (db, repo) = await openRepo();
     final a = await repo.create(name: '工作');
     final b = await repo.create(name: '生活');
     final c = await repo.create(name: '学习');
-    final before = await _snapshot(db);
+    final before = await snapshotOf(db);
 
     await repo.reorder([c.id, a.id, b.id]);
 
-    expect(await _order(db), {c.id: 0, a.id: 1, b.id: 2}, reason: '本地位次');
-    final added = await _added(db, before);
+    expect(await orderOf(db), {c.id: 0, a.id: 1, b.id: 2}, reason: '本地位次');
+    final added = await addedAfter(db, before);
     expect(added, hasLength(3), reason: '三条都改了位次 ⇒ 三条都要登记，另一台才收敛得到');
     expect(added.map((r) => r.op).toSet(), {SyncOps.upsert});
     final byPayload = <int, String>{
@@ -74,16 +73,16 @@ void main() {
   });
 
   test('登记 payload 取自读回的那一行，不是传入参数拼的', () async {
-    final (db, repo) = await _open();
+    final (db, repo) = await openRepo();
     final a = await repo.create(name: '旧名');
     final b = await repo.create(name: 'B');
     // 建完再改名：outbox 里"这条清单最新的样子"是改后的名字。
     await repo.rename(a.id, '新名');
-    final before = await _snapshot(db);
+    final before = await snapshotOf(db);
 
     await repo.reorder([b.id, a.id]);
 
-    final added = await _added(db, before);
+    final added = await addedAfter(db, before);
     final forA = added.where((r) => r.entityLocalId == a.id).toList();
     expect(forA, hasLength(1), reason: 'a 也要登记一行');
     expect(
@@ -100,8 +99,8 @@ void main() {
     final a = await creating.create(name: 'A');
     final b = await creating.create(name: 'B');
     final c = await creating.create(name: 'C');
-    final before = await _snapshot(db);
-    final orderBefore = await _order(db);
+    final before = await snapshotOf(db);
+    final orderBefore = await orderOf(db);
 
     // 失败注入打在**依赖层**（queue），仓储与它的事务仍跑真身：
     // 若哪天把 enqueue 挪出事务，这条当场红。
@@ -111,35 +110,39 @@ void main() {
       throwsA(isA<StateError>()),
     );
 
-    expect(await _order(db), orderBefore, reason: '半途失败不许留下"前几条已改、后一条没改"的半截顺序');
     expect(
-      await _added(db, before),
+      await orderOf(db),
+      orderBefore,
+      reason: '半途失败不许留下"前几条已改、后一条没改"的半截顺序',
+    );
+    expect(
+      await addedAfter(db, before),
       isEmpty,
       reason: '整批回滚 ⇒ outbox 也不该留下已回滚位次对应的登记行',
     );
   });
 
   test('传入的 id 有一条已不存在 ⇒ 跳过它，位次不留空洞', () async {
-    final (db, repo) = await _open();
+    final (db, repo) = await openRepo();
     final a = await repo.create(name: 'A');
     final b = await repo.create(name: 'B');
-    final before = await _snapshot(db);
+    final before = await snapshotOf(db);
 
     await repo.reorder([b.id, '已被别的面删掉的清单', a.id]);
 
-    expect(await _order(db), {b.id: 0, a.id: 1}, reason: '留下的两条按实际位次连续排');
+    expect(await orderOf(db), {b.id: 0, a.id: 1}, reason: '留下的两条按实际位次连续排');
     expect(
-      await _added(db, before),
+      await addedAfter(db, before),
       hasLength(2),
       reason: '不存在的 id 不登记（否则同步出去一条指向空 localId 的 upsert）',
     );
   });
 
   test('空列表 reorder 不出事、也不登记', () async {
-    final (db, repo) = await _open();
-    final before = await _snapshot(db);
+    final (db, repo) = await openRepo();
+    final before = await snapshotOf(db);
     await repo.reorder(const []);
-    expect(await _added(db, before), isEmpty);
+    expect(await addedAfter(db, before), isEmpty);
     expect(await db.select(db.todoLists).get(), isEmpty, reason: '别凭空造出行来');
   });
 }
