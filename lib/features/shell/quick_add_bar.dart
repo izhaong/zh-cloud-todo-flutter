@@ -72,13 +72,11 @@ Future<QuickAddRequest?> _buildHashTagRequest({
     onAbort('请输入任务标题');
     return null;
   }
-  final pickedNames = tagOptions
-      .where((option) => pickedTagIds.contains(option.id))
-      .map((option) => option.name)
-      .toSet();
-  final unresolved = draft.tagNames
-      .where((name) => !pickedNames.contains(name))
-      .toList(growable: false);
+  final unresolved = unresolvedHashTagNames(
+    hashTagNames: draft.tagNames,
+    tagOptions: tagOptions,
+    pickedTagIds: pickedTagIds,
+  );
   final tagIds = <String>{...pickedTagIds};
   if (unresolved.isNotEmpty) {
     try {
@@ -99,6 +97,24 @@ Future<QuickAddRequest?> _buildHashTagRequest({
 
 List<String> _hashTagNamesOf(String text, QuickAddTagIdsEnsurer? ensurer) =>
     ensurer == null ? const [] : parseHashTagInput(text).tagNames;
+
+/// 这批 `#名字` 里还有哪些**没被已勾选的标签覆盖**。
+///
+/// 界面上的「标签 N」与提交时喂给 ensurer 的名字必须走同一个函数：各写一份去重时，
+/// 按钮已选「专注」＋文本再打「#专注」会被数两次 ⇒ 界面自称「标签 2」、实际只挂 1 个（复核 F1）。
+List<String> unresolvedHashTagNames({
+  required List<String> hashTagNames,
+  required List<QuickAddTagOption> tagOptions,
+  required Set<String> pickedTagIds,
+}) {
+  final pickedNames = tagOptions
+      .where((option) => pickedTagIds.contains(option.id))
+      .map((option) => option.name)
+      .toSet();
+  return hashTagNames
+      .where((name) => !pickedNames.contains(name))
+      .toList(growable: false);
+}
 
 /// 标签弹层（嘀嗒《…04-用标签管理任务.md》:46 方式一「选择添加已有标签**或创建新标签**」）。
 ///
@@ -183,6 +199,9 @@ class _TagPickerSheetState extends State<_TagPickerSheet> {
         _busy = false;
         for (final id in ids) {
           _selected.add(id);
+          // 第二次建同名标签时 ensurer 返回的是同一个 id（先查后建）⇒
+          // 不判重就长出两个同 key 的行，整弹层抛 Duplicate keys（复核 F2）。
+          if (_created.any((tag) => tag.id == id)) continue;
           _created.add(QuickAddTagOption(id: id, name: name));
         }
         _creatingNew = false;
@@ -270,7 +289,7 @@ class _TagPickerSheetState extends State<_TagPickerSheet> {
                     TextButton(
                       key: const Key('todo-quick-add-create-tag-confirm'),
                       onPressed: _confirmNewTag,
-                      child: const Text('确定'),
+                      child: const Text('保存'),
                     ),
                   ],
                 ),
@@ -420,6 +439,15 @@ class _MobileQuickAddSheetState extends State<_MobileQuickAddSheet> {
     }
   }
 
+  void _syncHashTags() =>
+      setState(() => _pendingTagNames = _pendingTagNamesFor(_controller.text));
+
+  List<String> _pendingTagNamesFor(String text) => unresolvedHashTagNames(
+    hashTagNames: _hashTagNamesOf(text, widget.ensureTagIds),
+    tagOptions: widget.tagOptions,
+    pickedTagIds: _tagIds,
+  );
+
   Future<void> _pickTags() async {
     await _openTagPickerSheet(
       context: context,
@@ -433,6 +461,8 @@ class _MobileQuickAddSheetState extends State<_MobileQuickAddSheet> {
             ..clear()
             ..addAll(selected);
         });
+        // 勾选会让部分 # 名字变成"已覆盖" ⇒ 计数按同一条规则重算。
+        _syncHashTags();
       },
     );
   }
@@ -462,10 +492,7 @@ class _MobileQuickAddSheetState extends State<_MobileQuickAddSheet> {
                     textInputAction: TextInputAction.done,
                     onSubmitted: (_) => _submit(),
                     onChanged: (_) => setState(() {
-                      _pendingTagNames = _hashTagNamesOf(
-                        _controller.text,
-                        widget.ensureTagIds,
-                      );
+                      _pendingTagNames = _pendingTagNamesFor(_controller.text);
                       if (_fieldError != null) _fieldError = null;
                     }),
                     decoration: InputDecoration(
@@ -564,7 +591,11 @@ class _QuickAddBarState extends State<QuickAddBar> {
   }
 
   void _syncHashTags() {
-    final next = _hashTagNamesOf(_ctrl.text, widget.ensureTagIds);
+    final next = unresolvedHashTagNames(
+      hashTagNames: _hashTagNamesOf(_ctrl.text, widget.ensureTagIds),
+      tagOptions: widget.tagOptions,
+      pickedTagIds: _tagIds,
+    );
     if (next.length == _pendingTagNames.length &&
         List.generate(
           next.length,
@@ -674,6 +705,8 @@ class _QuickAddBarState extends State<QuickAddBar> {
             ..clear()
             ..addAll(selected);
         });
+        // 勾选会让部分 # 名字变成"已覆盖" ⇒ 计数按同一条规则重算。
+        _syncHashTags();
       },
     );
   }

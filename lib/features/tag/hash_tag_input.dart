@@ -56,7 +56,8 @@ HashTagDraft parseHashTagInput(String input) {
       index = end;
       removedToken = true;
     }
-    // 只有真剥掉过 token 的行才收拢空白：没井号的行一个字都不该被改动。
+    // 只有真剥掉过 token 的行才把连续空白收成一个空格；
+    // 没井号的行只去首尾空白，中间原样保留（`createBatch` 自己也会再 trim）。
     keptLines.add(
       removedToken
           ? buffer.toString().replaceAll(RegExp(r'\s+'), ' ').trim()

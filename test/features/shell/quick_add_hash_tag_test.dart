@@ -1,8 +1,13 @@
+import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
+import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
 import 'package:zh_cloud_todo_flutter/core/theme/app_theme.dart';
 import 'package:zh_cloud_todo_flutter/features/shell/quick_add_bar.dart';
+import 'package:zh_cloud_todo_flutter/features/tag/hash_tag_input.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/tag_repository.dart';
 
 /// 嘀嗒《01-任务/09-如何管理海量任务/04-用标签管理任务.md》:46/:48/:61。
 ///
@@ -142,6 +147,155 @@ void main() {
     });
   }
 
+  for (final surface in ['desktop', 'mobile']) {
+    final isDesktop = surface == 'desktop';
+    final pump = isDesktop ? pumpDesktop : pumpMobile;
+
+    // 复核 F1：develop 上「标签 N」恒等于实际挂接数（`_tagIds.length`）。
+    // 加了 `#` 之后计数变成"已选 + 文本里的名字"，同名时两边各数一次 ⇒ 界面自称 2、只挂 1。
+    testWidgets('$surface 复核 F1：界面上的「标签 N」必须等于实际挂接的标签数', (tester) async {
+      QuickAddRequest? submitted;
+      await pump(
+        tester,
+        onSubmit: (request) => submitted = request,
+        tagOptions: const [QuickAddTagOption(id: 'focus', name: '专注')],
+        ensureTagIds: (names) async => const ['focus'],
+      );
+
+      if (isDesktop) {
+        await tester.tap(find.byTooltip('标签'));
+      } else {
+        await tester.tap(
+          find.bySemanticsIdentifier('todo_mobile_quick_add_tags'),
+        );
+      }
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('专注'));
+      await tester.tap(find.text('完成'));
+      await tester.pumpAndSettle();
+
+      final input = isDesktop
+          ? find.byKey(const Key('todo-quick-add-input'))
+          : find.byKey(const Key('todo-mobile-add-field'));
+      await tester.enterText(input, '复盘 #专注');
+      await tester.pump();
+
+      expect(
+        find.text('标签 1'),
+        findsOneWidget,
+        reason: '按钮已选与 # 说的是同一个标签，只能数一次',
+      );
+      expect(find.text('标签 2'), findsNothing);
+
+      if (isDesktop) {
+        await tester.testTextInput.receiveAction(TextInputAction.done);
+      } else {
+        await tester.tap(
+          find.bySemanticsIdentifier('todo_mobile_quick_add_submit'),
+        );
+      }
+      await tester.pumpAndSettle();
+      expect(submitted!.tagIds, ['focus']);
+    });
+
+    // 复核 F5(b)：ensurer 到提交那一步才炸 ⇒ 既不静默，也不留下半条任务。
+    testWidgets('$surface 复核 F5：提交时建标签失败 ⇒ 不提交并给可见提示', (tester) async {
+      QuickAddRequest? submitted;
+      await pump(
+        tester,
+        onSubmit: (request) => submitted = request,
+        ensureTagIds: (names) async => throw StateError('标签服务不可用'),
+      );
+
+      final input = isDesktop
+          ? find.byKey(const Key('todo-quick-add-input'))
+          : find.byKey(const Key('todo-mobile-add-field'));
+      await tester.enterText(input, '写周报 #周会');
+      await tester.pump();
+      if (isDesktop) {
+        await tester.testTextInput.receiveAction(TextInputAction.done);
+      } else {
+        await tester.tap(
+          find.bySemanticsIdentifier('todo_mobile_quick_add_submit'),
+        );
+      }
+      await tester.pumpAndSettle();
+
+      expect(submitted, isNull, reason: '标签没建成就不该把任务建出去');
+      expect(
+        find.text('标签服务不可用'),
+        findsOneWidget,
+        reason: '提示必须看得见（桌面 SnackBar／弹层 errorText）',
+      );
+    });
+  }
+
+  // 复核 F5(a)：桌面条的可见反馈只有 `_report` 一条路，删掉它的 body 界面会静默。
+  testWidgets('桌面：整段只有「#周会」⇒ SnackBar 给出「请输入任务标题」', (tester) async {
+    QuickAddRequest? submitted;
+    await pumpDesktop(
+      tester,
+      onSubmit: (request) => submitted = request,
+      ensureTagIds: (names) async => const ['tag-meeting'],
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('todo-quick-add-input')),
+      '#周会',
+    );
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(submitted, isNull);
+    expect(find.text('请输入任务标题'), findsOneWidget);
+  });
+
+  // 复核 F2：同一会话里第二次建同名标签，ensurer 返回的是同一个 id ⇒
+  // 不判重就会长出两个同 key 的行，整弹层抛 Duplicate keys。
+  testWidgets('标签 sheet 里连建两次同名「周会」⇒ 只多一行、不炸', (tester) async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final tags = TagRepository(db, SyncChangeQueue(db));
+
+    await pumpMobile(
+      tester,
+      onSubmit: (_) {},
+      ensureTagIds: (names) => resolveTagIdsByName(repo: tags, names: names),
+    );
+    await tester.tap(find.bySemanticsIdentifier('todo_mobile_quick_add_tags'));
+    await tester.pumpAndSettle();
+
+    for (var round = 0; round < 2; round++) {
+      await tester.tap(find.byKey(const Key('todo-quick-add-create-tag')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('todo-quick-add-create-tag-field')),
+        '周会',
+      );
+      await tester.tap(
+        find.byKey(const Key('todo-quick-add-create-tag-confirm')),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    expect(tester.takeException(), isNull, reason: '同名重建把弹层炸成 Duplicate keys');
+    final rows = await db.select(db.todoTags).get();
+    expect(rows, hasLength(1));
+    expect(
+      find.byKey(Key('todo-quick-add-created-tag-${rows.single.id}')),
+      findsOneWidget,
+      reason: '刚建的标签必须留在表内可勾',
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('todo-quick-add-created-tag-row')),
+        matching: find.byType(CheckboxListTile),
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('「标签 N」的计数含 # 里的名字（视觉与读屏都跟着走）', (tester) async {
     await pumpMobile(
       tester,
@@ -154,8 +308,11 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('标签 2'), findsOneWidget);
-    expect(find.text('标签 2'), findsOneWidget, reason: '计数只该出现一处');
+    expect(
+      find.text('标签 2'),
+      findsOneWidget,
+      reason: '计数只该出现一处，且要跟着 # 的数量走',
+    );
 
     await tester.enterText(
       find.byKey(const Key('todo-mobile-add-field')),
@@ -380,7 +537,7 @@ void main() {
     expect(submits, 1, reason: '失败的那一次不该把 sheet 里的已选一起清掉');
   });
 
-  testWidgets('连点两次「确定」只建一个标签', (tester) async {
+  testWidgets('连点两次「保存」只建一个标签', (tester) async {
     var calls = 0;
     await pumpMobile(
       tester,
@@ -487,6 +644,12 @@ void main() {
         matching: find.text('标签 1'),
       ),
       findsOneWidget,
+    );
+    // 复核：标识符节点自身的 label 是空的，文案挂在它的子节点上 ⇒ 断言要落在语义节点上，不能只停在 widget 树。
+    expect(
+      find.bySemanticsLabel('标签 1'),
+      findsWidgets,
+      reason: '读屏必须能在语义树里念到「标签 1」',
     );
     expect(tester.takeException(), isNull);
     semantics.dispose();
