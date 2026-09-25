@@ -61,10 +61,15 @@ git grep -n "Icons.more_horiz\|more_vert"  origin/develop -- lib/features/task/t
 1. **320px + 1.3 倍字号**：在**动作表 sheet 自己的 context** 上量（`MediaQuery.textScalerOf(
    tester.element(byKey('sidebar-list-action-share')))`），并遍历 `RenderFlex` 子节点量越界
    （specs/052 的做法，不靠 `takeException()` 当唯一判据）。三项 ListTile 在 320px 下不溢出。
-2. **独立读屏语义**：新项 `Semantics(label: '共享协作', button: true, …)` 且 label **全等**断言
-   （不是 `textContaining`）；与 `isButton` 成对。
-3. **失败保留已加载数据**：本面无异步读；但 FR-3 是"失败要说得出"——提示出现时
-   清单页与侧栏**都还在**（断 `todo-sidebar` 仍 findsOneWidget），不吞掉界面。
+2. **独立读屏语义**：新项就是 `ListTile(title: Text('共享协作'))` ——
+   `ListTile` 自己就把 title 变成语义 label 并标成按钮 ⇒ 用例断 `getSemantics(key).label` **全等**
+   '共享协作'（不是 `textContaining`）且 `flagsCollection.isButton`，
+   再加一条 `find.bySemanticsLabel('共享协作')` 成对。**没有另套 `Semantics` 包装**
+   （套了反而多一层节点，specs/052 那次是 `IconButton` 的 tooltip 不常驻才需要包）。
+3. **失败保留已加载数据**：本面无异步读；但 FR-3 是"失败要说得出"——提示出现时侧栏**还在**
+   （断 `find.byType(Sidebar)` findsOneWidget。⚠️ 原来写的 `Key('todo-sidebar')`
+   实测 `Found 0 widgets with key [<'todo-sidebar'>]` —— 这个键在 develop 上不存在，
+   侧栏那些行用的是一组 `todo-sidebar-row-*` 键，故改成按类型断）。
 4. **过期响应不覆盖新响应**：**不适用** —— 入口是同步 push，`serverId` 从已加载的 `TodoList` 取，
    没有新增流/请求。如实写理由。
 
