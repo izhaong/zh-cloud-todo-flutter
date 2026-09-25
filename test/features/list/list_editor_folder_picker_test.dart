@@ -492,15 +492,13 @@ void main() {
     expect(tester.takeException(), isNull, reason: '弹层在 320px + 1.3 下溢出');
     expect(find.text('所属文件夹'), findsOneWidget);
     expect(find.text('保存'), findsOneWidget);
-    // openMenu 里那句"菜单真的展开了"的自检不能省：PM′ 实测（lib 里 `onChanged: null`
-    // + 省掉自检）⇒ 320 这条不红，说明下面两句一直在测收起态。
+    // 展开态只做"菜单真的打开了 + 候选在场"两件事，**不写溢出判据**：
+    // `_DropdownMenu` 把候选列表夹在可用高度里自己滚动，实测把候选塞成
+    // 2000px 高（文案保留）时 `takeException` 照样是 null ⇒ 那句断言恒真。
+    // openMenu 里那句"菜单真的展开了"的自检要留着：PM′ 实测（`onChanged: null`
+    // + 省掉自检）⇒ 这条不红，说明它测的是收起态。
     await openMenu(tester);
-    expect(tester.takeException(), isNull, reason: '展开的候选菜单在 320px + 1.3 下溢出');
     expect(find.text('项目'), findsWidgets);
-    // 横向**不写**判据：候选项的框被 `_DropdownMenu` 的父约束夹住，
-    // 把 item 塞成 500dp 宽时 `box.size.width` 读回来仍是菜单宽 ⇒ 按量框断"不超出视口"
-    // 是恒真判据（复核第 2 轮 MENU500_plus_rect 实测不红）。这句只覆盖纵向溢出
-    // （同一位复核员用 60 行文本的变异证明纵向咬得住）。
   });
 
   testWidgets('读屏：一个节点同时念出「所属文件夹」与当前值，且仍是按钮', (tester) async {
