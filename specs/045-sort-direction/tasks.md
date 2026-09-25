@@ -47,8 +47,8 @@
 
 > **复核 !347 第 1 轮之后重跑过一遍全表**：320px 那条从"只跑一个方向"改成两个方向各一轮，
 > 用例数从 8 变 9，旧数字不沿用。PA 对照仍是 `+2`（两条互逆用例共享 `互为逆序` 这个名字），
-> PB–PL 对照都是 `+1`；12 条打补丁后全部 `-1`，每条红的都是**该咬的那一条**（逐条比对
-> `/tmp/g65/<探针>.log` 里的 `[E]` 行）。PJ 就是复核员那条 finding：补 loop 之前它对绿。
+> PB–PN 共 12 条对照都是 `+1`；**13 条打补丁后全部 `-1`**，每条红的都是**该咬的那一条**（逐条比对
+> `/tmp/g66/<探针>.log` 里的 `[E]` 行）。PJ 就是复核员那条 finding：补 loop 之前它对绿。
 >
 > **跑的基准要写清**：PA–PI 跑在 `a639484`，PJ/PK/PL 在门禁 3 修好后又跑了一次（`b823e7c`，
 > 日志 `/tmp/g65/rerun-*.log`，三条仍 `-1` 且 `lib/` 逐字节还原一致）。
@@ -105,15 +105,15 @@ PG 首轮**没红**：页面级用例里"重进清单"是再 `pumpWidget` 一次
 "菜单压根没开"上通过的。两条都已修：回调由调用方持有 + helper 结尾断言"智能（置顶优先）"在屏上
 + 每轮收尾把菜单收掉并断言收掉了。
 
-## 门禁原文记录（跑在**最终字节 `b823e7c`** 上，日志 `/tmp/g65/gates/g1..g6.log`）
+## 门禁原文记录（跑在**最终字节 `cb26cb2`** 上，日志 `/tmp/g66/gates/g1..g6.log`）
 
 | 门禁 | 结果 |
 | ---- | ---- |
 | `git diff --check` | `rc=0`，无输出 |
 | `dart format --output=none --set-exit-if-changed <本轮 9 个 .dart 显式文件>` | `Formatted 9 files (0 changed)`，`rc=0` |
-| `flutter analyze` | `No issues found! (ran in 1.5s)`，`rc=0` |
+| `flutter analyze` | `No issues found! (ran in 1.7s)`，`rc=0` |
 | `flutter test --tags golden` | `00:05 +9: All tests passed!`，9 张基线未重录（golden 文件变更提示 0） |
-| `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:54 +907 ~26: All tests passed!`，`rc=0` |
+| `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:54 +907 ~26: All tests passed!`，`rc=0`（用例数没变，改的是那条的断言形状） |
 | `flutter build web --release --dart-define=…` | `✓ Built build/web`，`rc=0` |
 
 计数对账：干净 worktree 实跑基线 `9032005` ⇒ `02:29 +898 ~26`；本分支 `+907 = 898 + 9`
