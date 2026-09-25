@@ -465,6 +465,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       case TaskViewMode.calendar:
         return CalendarView(
           tasks: items,
+          now: now,
           // 已完成显隐由清单筛选决定，不再叠一层日历自身的开关。
           filterCompleted: false,
           onTaskSelected: widget.onTaskSelected,
