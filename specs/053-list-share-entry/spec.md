@@ -53,10 +53,27 @@ git grep -n "Icons.more_horiz\|more_vert"  origin/develop -- lib/features/task/t
   今天/明天/收集箱是**合成行**，走的是另外的 row 组件 ⇒ 天然满足 `:6`。
   **但这条必须有用例钉住**（否则将来谁给合成行接上 `showListActions` 就静默违反 `:6`）：
   判据 = 收集箱行长按**不出现**「共享协作」，正对照 = 普通清单行长按**出现**。
-  负断言一律按**文案**判（`find.textContaining('共享协作')` / `find.text('编辑')`），不按私有键判：
-  只断 `BottomSheet` + 两个键会被"换个弹层类型给出共享入口"绕过。两处日志各管一半，别混引：
-  **旧版拦不住** = `/tmp/r79c/R1_counterexample.log`（`+6` 全绿）、**补强后有牙** = `/tmp/r79g/cx/CX1.log`（同一形状 `+5 -1`，红的正是这条）。
-  ⚠️ **判据上界（第 2 轮复核 N-A，这条之前没写下来）**：`find.text` 只认全等 ⇒ 带前后缀的`'共享协作 · 邀请成员'`、`SnackBar(Text('去共享协作'))` 当时都漏过 ⇒ 已改 `textContaining` 兜子串；**图标型入口**（`IconButton(icon: Icons.share, tooltip: '共享协作')`，压根没有 Text）则用`find.byIcon(Icons.share) findsNothing` 单独钉。本面**不声称**这张网拦得下任意形态，它声称的是：**给智能清单/收集箱行接上任何"文字含『共享协作』或分享图标"的入口，六条必红**。
+  负断言一律按**结果**判，不按"形状清单"判，也不按私有键判（只断 `BottomSheet` + 两个键会被
+  "换个弹层类型给出共享入口"绕过；`_shareKey` 那条只是附带），理由是被追过两轮：`find.text` 只认全等 ⇒ 带后缀的
+  `'共享协作 · 邀请成员'` 漏过（改 `textContaining`）；图标型入口压根没有 Text ⇒ 补了
+  `find.byIcon(Icons.share)`，而**第 3 轮复核又量出五种仍逃逸的形状**（裸 `RichText`——
+  `find.textContaining` 默认 `findRichText:false` 看不见、`Icons.people_outline`——本仓真入口用的
+  就是它、`Icons.share_outlined`、只给 `Semantics(label:)`、`Image` 图标）⇒ 逐形枚举追不完。
+  现在 T5 是**三件仪器**，每件都拿补丁量过射程和盲区（`/tmp/r79h/cx7-run4.log`，九形状 + 反向对照）：
+
+  | 仪器 | 拦得住（实测） | 拦不住（实测） |
+  | --- | --- | --- |
+  | ① `ModalBarrier` 数不变 | 任何弹层形态（对话框、底部弹层、下拉菜单都自带屏障），不看文案也不看图标 —— S2/S4/S5/S6/S7/S8 六种形状全红在这里 | 不起浮层的行内改动 |
+  | ② `ListMemberPage`、`SnackBar` 都 `findsNothing` | 无屏障的整页 push（①的射程外）、把提示位当第二入口 —— S3 红在这里 | —— |
+  | ③ 那一行子树组件数钉 **47**（绝对基线，不是前后差） | 往那一行里**加**组件：S9（`trailing:` 换成 `Row(徽章, Icon)`）把 47 顶到 54 ⇒ 红 | **等量替换**：A（`trailing:` 整个换成一个 `Icon`）计数一动不动、T5 仍绿 |
+
+  ③ 那格盲区由**像素**兜：同一个 A 补丁在 `flutter test --tags golden` 下红 5/9 张
+  （`wide-empty`、`wide-long-content`、`wide-populated`、`wide-selected`、`compact-selected`，
+  diff 0.16%–0.20%）⇒ 两张网互补，各自的洞都写在这里，不合并成一句"任何形态必红"。
+  所以本面对 `:6` 的声称是：**长不出浮层、跳不进成员页、弹不出提示，且那一行不会多出组件**；
+  "任意形态的静态等量替换"不由 T5 声称，由那五张含侧栏的基线帧负责。
+  两处日志各管一半，别混引：**旧版拦不住** = `/tmp/r79c/R1_counterexample.log`（`+6` 全绿）、
+  **补强后有牙** = `/tmp/r79g/cx/CX1.log`（同一形状 `+5 -1`，红的正是这条）。
 - **FR-5 只做入口与传参，不动后端契约**：成员页本身、`/app-api/todo` 的共享接口都在 develop 已存在
   （矩阵 #52 现状列已取证）⇒ 本面无 BE 改动。
 
@@ -72,7 +89,7 @@ git grep -n "Icons.more_horiz\|more_vert"  origin/develop -- lib/features/task/t
    （套了反而多一层节点，specs/052 那次是 `IconButton` 的 tooltip 不常驻才需要包）。
 2b. **档位自检的定位器按文案取**：`MediaQuery.textScalerOf(tester.element(find.text('共享协作')))`，
    **不取 `Key('sidebar-list-action-share')`** —— 键名是内部契约，改个私有键名不该让"溢出量测"这条红
-   （复核第 1 轮 X6 读数里 T6 的红是纯假警报）。测试文件 `:219` 与此处必须同口径
+   （复核第 1 轮 X6 读数里 T6 的红是纯假警报）。测试文件里同一句是 `MediaQuery.textScalerOf(tester.element(find.text('共享协作')))`，本行所述口径与之必须一致（当前字节位于该文件 `:276`；行号会随编辑漂，重定位用 `grep -n textScalerOf test/features/list/list_share_entry_test.dart`）
    （第 2 轮复核 F2：N3 当时只改了测试、规格没跟着走）。
 3. **失败保留已加载数据**：本面无异步读；但 FR-3 是"失败要说得出"——提示出现时侧栏**还在**
    （断 `find.byType(Sidebar)` findsOneWidget）。

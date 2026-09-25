@@ -110,6 +110,23 @@ rc=1（我手写换行不合 formatter），所以那一份日志不作证据；
 CX2/CX3 只有 `textContaining` 能咬、CX4 只有 `byIcon` 能咬，脚本对 reason 字符串做了断言。
 判据**上界**仍然如实写：这三形是复核员量出来的，不是全部；不声称拦得下任意形态（见 spec FR-4）。
 
+反例 CX5–CX8（**第 3 轮复核 N1 的修法验证**，脚本 `/tmp/r79h/probe_cx7.py`，日志
+`/tmp/r79h/cx7-run4.log`；像素那条另见 `/tmp/r79h/cx8/`）—— 复核员量出 CX2–CX4 那一版仍放过
+五种形状（裸 `RichText`、`Icons.people_outline`、`Icons.share_outlined`、只给 `Semantics(label:)`、
+`Image` 图标）⇒ T5 从"列形状"改成"**看结果**"（三件仪器，分工见 spec FR-4 的表）。九个形状逐个
+指定该由哪条咬住，末行「异常计数 = 0」：
+
+| 编号 | 形状 | 读数 | 该由哪条咬住（按 reason 现读，不是猜） |
+| --- | --- | --- | --- |
+| CX5 | 对话框里文案带后缀 `共享协作 · 邀请成员` | `+5 -1` | ① `ModalBarrier`（reason「都自带屏障」） |
+| CX6 | 长按弹 `SnackBar(Text('去共享协作'))` | `+5 -1` | ② `SnackBar` 那条（不在 ①，屏障数不变） |
+| CX7 | 复核点名的四种图标/语义形状 + 下拉菜单：`IconButton(Icons.share)`、裸 `RichText`、`Icons.people_outline`、`Semantics(label:)`、`PopupMenuItem(Icons.share_outlined)` | 各 `+5 -1` | ① 一条全包 —— 这正是"按结果判"要买的东西：不认文案、不认 codepoint |
+| CX8 | 不起浮层，直接往那一行的 `trailing:` 里加一层 `Row(徽章, Icon)` | `+5 -1`，计数 47 → **54** | ③ 行子树组件数（reason「那一行的子树比 develop 形态多了组件」） |
+| 反向对照 A | `trailing:` 整个换成一个 `Icon`（**等量**替换，组件数不变） | `+6` **仍绿** ⇒ 判据按预期看不见 | 不由 ③ 负责；同一补丁在 `flutter test --tags golden` 下红 **5/9** 张（`wide-empty`、`wide-long-content`、`wide-populated`、`wide-selected`、`compact-selected`，diff 0.16%–0.20%）⇒ 计数网与像素网互补，各自的洞都写明 |
+
+⚠️ A 这条是**故意留下的反向对照**（脚本里判据是"必须仍绿"）：哪天有人把 ③ 改成"什么都能咬"
+（比如去数整棵侧栏），它就先红，逼着重新交代两张网的分工。
+
 | 面 | 读数 | 判读 |
 | --- | --- | --- |
 | 对照组（未打补丁） | `00:01 +6: All tests passed!` | 反例本身没把基线弄脏 |
@@ -127,6 +144,21 @@ PRESENT openListCollaboration（1 定义 + 2 调用点）        命中 3（期�
 PRESENT 正对照：动作表仍是 showModalBottomSheet 起的       命中 2
 PRESENT 正对照：侧栏仍把长按接到 showListActions           命中 1
 ```
+
+## 第 78 轮只读复核（第 3 轮）：`VERDICT: FAIL`（N1 成立 —— 判据从"列形状"改成"看结果"）
+
+| # | 复核指什么 | 我复验的命令与读数 | 处置 |
+| --- | --- | --- | --- |
+| N1 | CX2–CX4 那一版仍是**按形状枚举**，复核员量出五种继续逃逸：裸 `RichText`（`find.textContaining` 默认 `findRichText:false` 不读）、`Icons.people_outline`（**本仓真入口自己用的就是它**）、`Icons.share_outlined`、只给 `Semantics(label:)`、`Image` 图标 | 我把这五种逐个做成补丁自己跑（`/tmp/r79h/probe_cx7.py` → `/tmp/r79h/cx7-run4.log`）：五种各 `+5 -1`，且改判据后**全部红在同一条** ① `ModalBarrier`（reason 命中「都自带屏障」）⇒ 不再需要认形状 | T5 负断言换成三件"看结果"的仪器（屏障数 / 成员页与 SnackBar / 那一行的组件数），spec FR-4 用一张表写明每张网的射程与**实测**盲区 |
+| N2 | 我上一版的正向声称「任何"文字含『共享协作』或分享图标"的入口，六条必红」不实 | 被 N1 那五种证伪（我自己复现） | 该句删除 ⇒ 改成四条正面声称（长不出浮层、跳不进成员页、弹不出提示、那一行不多出组件）+ 一句"静态等量替换不由 T5 声称，由那五张含侧栏的基线帧负责" |
+
+两处我自己造的假读数（比复核抓到的更该记）：
+
+| 现象 | 根因 | 处置 |
+| --- | --- | --- |
+| 我上一轮认定"S9 这条形状从 ③ 的缝里漏了"，并据此把判据作用域从行键扩到**整棵侧栏** | **探针自己没生效**：`trailing: badge > 0 ? _Badge : Icon` 只改了 `badge == 0` 分支，对被数的那一行很可能是运行期空操作，却被我读成"计数判据漏形" | 反证实验 `/tmp/r79h/probe_cx8.py`（两个变体各跑一次）：把补丁改成**严格追加**（`Row(徽章, Icon)`）⇒ 47 顶到 **54**、当场红；把 `trailing:` 整个换成一个 `Icon` ⇒ 计数一动不动。作用域已收回行键（数整棵侧栏会让任何无关的侧栏改动假红，而这条只管这一行）。**教训：探针绿了先证补丁在运行期真被求值，再谈判据够不够** |
+| 我据此在测试注释里写了一句未求证的机制话（「`trailing:` 槽位挂在带键元素**外面**」） | 从一次读数反推机制、没去读装配字节 | 已删。字节是：行键挂在 `_SidebarRow` 最外层的 `SizedBox`（`sidebar.dart:665`），`?widget.trailing` 渲染在它**内部**的 `Row` 末尾（`:728`）⇒ 那句话不成立。⚠️ 但"为什么追加式 +7、等量替换 +0"我**没有**解释清楚，两处只按实测读数记，不编机制 |
+| 探针首跑只打印了对照组就到「收尾」，而我把整条命令的退出码当成功（`tail` 吃掉 python 的 rc） | 脚本 `GREEN` 常量忘了定义 ⇒ `NameError`，九个形状一个没跑；我先看的是 `EXIT=0` | 补上 `GREEN` 定义后重跑，并把 `EXIT=$?` 直接写进日志文件末尾（不靠管道）⇒ 复跑留痕 `/tmp/r79h/cx7-run4.log`（结论行「异常计数 = 0」）。**判一份日志跑没跑完要看它自己打了几个形状，不是看 rc** |
 
 ## 第 78 轮只读复核（第 2 轮）：`VERDICT: FAIL`（三条都是文档字节，代码未再动）
 

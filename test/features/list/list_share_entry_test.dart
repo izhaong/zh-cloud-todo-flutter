@@ -181,23 +181,70 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     expect(inbox, findsOneWidget);
+    // ⚠️ 取"改动前"的快照**必须先 settle**：`scrollUntilVisible` 之后惯性滚动还在跑，
+    // 没 settle 就数，数到的是动画中途的树 ⇒ 后面那条相等判据会假红（实测对照组就红了）。
+    await tester.pumpAndSettle();
+    // 负断言**按形态判，不按文案/图标判**（第 3 轮复核给出的教训）。
+    // 前两版都是"列举形状"：`find.text` 只认恰好等于 ⇒ 放过 `Text('共享协作 · 邀请成员')`、
+    // `SnackBar(Text('去共享协作'))`、`IconButton(icon: Icons.share)`；换成
+    // `textContaining` + `byIcon(Icons.share)` 之后，复核员又量出**至少五种**仍逃逸的形状：
+    // 裸 `RichText`（屏上真有那四个字，但 `find.textContaining` 默认 `findRichText:false` 看不见）、
+    // `Icons.people_outline`（**正是本仓真入口自己用的图标**）、`Icons.share_outlined`、
+    // 只给 `Semantics(label:)`、以及 `Image` 图标。⇒ 逐形枚举是追不完的。
+    //
+    // 所以这里断的是**结果**，且分三件仪器 —— 每件都拿补丁量过射程（形状与读数记在
+    // `specs/053/tasks.md` 的 CX 表里），不声称哪一条单独覆盖"任何形态"：
+    //   ① ModalBarrier 数不变 ⇒ 拦 AlertDialog / showModalBottomSheet / showMenu。这三类自带
+    //      屏障；复核员点名的裸 `RichText`、`Icons.people_outline`、只给 `Semantics(label:)`
+    //      的下拉项都在这里被咬住（实测 6 种浮层形状无一漏网）。
+    //   ② 成员页没被推进去 + 没有 SnackBar ⇒ 拦"无屏障的整页 push"和"提示位"这两条 ① 的射程外
+    //      （`ScaffoldMessenger.showSnackBar` 起的入口就红在这里，不在 ①）。
+    //   ③ 下面那条"这一行的子树组件数 = 47" ⇒ 拦"往行里静态塞组件"：实测往 `trailing:` 里加一层
+    //      `Row(_Badge, Icon)` 会把 47 顶到 54（红）；但**等量替换看不见** —— 把
+    //      `badge > 0 ? _Badge : null` 整个换成一个 `Icon`，计数一动不动还是 47（绿）。
+    //      那一种由黄金基线兜：同一个补丁在 `flutter test --tags golden` 下红 5/9 张。
+    //      ⇒ ③ 与像素基线是互补的两张网，各有各实测到的洞（不画像素的组件、不涨组件数的重绘）。
+    // 机制（同一件事的另一面，写进 spec FR-4）：`sidebar.dart:91` 构造 `_SmartRow` 时只给 `onTap`
+    // （类定义 `:448`，参数表里没有 `onLongPress`，build 也不向下传），动作表唯一调用点只挂在
+    // 真实清单行 `:626` ⇒ 拿不到是**结构性**的，不是某条 if 拦住的；别读成"我们显式实现了 :6"。
+    // ③ 的作用域收在行键 `todo-sidebar-row-inbox` 上，不数整棵侧栏：那样任何无关的侧栏改动都会
+    // 把它顶红，而这条只管这一行。
+    int rowWidgets() => tester
+        .widgetList(
+          find.descendant(
+            of: inbox,
+            matching: find.byWidgetPredicate((_) => true),
+          ),
+        )
+        .length;
+    final barriersBefore = find.byType(ModalBarrier).evaluate().length;
     await tester.longPress(inbox);
     await tester.pumpAndSettle();
-    // 断的是**机制**而不是"少了某一项"：`sidebar.dart:91` 构造 `_SmartRow` 时只给 `onTap`
-    // （类定义在 `sidebar.dart:448`，构造参数表里根本没有 `onLongPress`，build 也不向下传），
-    // 动作表唯一调用点只挂在真实清单行（`sidebar.dart:626` `onLongPress: () => showListActions(...)`）
-    // ⇒ 智能清单/收集箱拿不到「共享协作」是**结构性**的，不是某条 if 拦住的。
-    // 这条如实写进 spec 取舍，别把它读成"我们显式实现了嘀嗒 :6 的边界判定"。
-    //
-    // 负断言按**文案**判，不按键判（spec.md FR-4 的判据原文就是"不出现「共享协作」"）：
-    // 只断 `BottomSheet` + 两个私有键，会被"换个弹层类型给出共享入口"整条绕过 ——
-    // 复核第 1 轮的反例实测：给 `_SmartRow` 的长按接 `AlertDialog(child: Text('共享协作'))`，
-    // 六条仍 `+6 All tests passed!`。下面那句文案断言就是把这条反例钉住的。
-    // ⚠️ 判据**上界**（第 78 轮第 2 轮复核 N-A 量的）：`find.text` 只认"文案恰好等于"，
-    // 所以第 1 轮那版漏得过三种真违反的形状：`Text('共享协作 · 邀请成员')`、
-    // `SnackBar(Text('去共享协作'))`、以及**连 Text 都没有**的
-    // `IconButton(icon: Icons.share, tooltip: '共享协作')`。⇒ 这里用 `textContaining` 兜子串，
-    // 再按图标单独钉一条；本用例不声称拦得下任意形态（口径写进 spec FR-4）。
+    // 绝对基线，不是"前后差"：静态塞进那一行的组件在 before/after 两张快照里都在，差值判据
+    // 永远看不见它（上一版就是这么漏的）⇒ 只能钉住一个数。
+    // 47 = develop 形态（这一轮没改实现）下该行子树的实测组件数；量法是把这里临时写成一个
+    // 不可能的数（-1）、读失败输出的 Actual ⇒ 这个数不是抄来的，是同一棵树量出来的。
+    expect(
+      rowWidgets(),
+      47,
+      reason:
+          '那一行的子树比 develop 形态多了组件 ⇒ 给智能清单加了这个入口；'
+          '（只声称"多了"：等量替换它看不见，那一种由黄金基线兜，见上面 ③）'
+          '若确要改这一行的结构，改这个数并在 spec 里说明为什么',
+    );
+    expect(
+      find.byType(ModalBarrier),
+      findsNWidgets(barriersBefore),
+      reason: '对话框/底部弹层/下拉菜单都自带屏障 ⇒ 按"有没有新浮层"判，不按文案与图标判',
+    );
+    expect(
+      find.byType(ListMemberPage),
+      findsNothing,
+      reason: '无屏障的整页 push 不在 ModalBarrier 射程内，单独钉（复核第 3 轮的 ③）',
+    );
+    expect(find.byType(SnackBar), findsNothing, reason: 'SnackBar 也不许成为第二个入口');
+    // 下面两条是**次级**判据（钉的是"即便有浮层，也不许出现共享协作那四个字/那个图标"），
+    // 不承担上界：`byIcon` 只认 `Icons.share` 那一个 codepoint，`textContaining` 默认不读 RichText。
     expect(
       find.textContaining('共享协作'),
       findsNothing,
@@ -206,7 +253,7 @@ void main() {
     expect(
       find.byIcon(Icons.share),
       findsNothing,
-      reason: '图标型共享入口没有任何 Text ⇒ 文案判据对它无效，单独钉（复核 N-A 第 3 种逃逸形状）',
+      reason: '只钉 Icons.share 这一个 codepoint；分享族其它图标与 RichText 由上面三条兜',
     );
     expect(find.text('编辑'), findsNothing, reason: '连「编辑」都没有 ⇒ 不是只把共享这一项筛掉了');
     expect(
