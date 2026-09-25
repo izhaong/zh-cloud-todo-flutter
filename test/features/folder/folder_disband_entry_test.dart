@@ -101,6 +101,16 @@ void main() {
         .length;
   }
 
+  /// outbox 要钉"是哪几条"，不只是"有几条"：条数判据对 1 条和 2 条都给绿，
+  /// 分不出"子文件夹的提升有没有排队"。
+  Future<List<String>> syncSignatures(TodoVisualFixture fixture) async {
+    final rows = await fixture.database
+        .select(fixture.database.todoSyncChanges)
+        .get();
+    return rows.map((r) => '${r.entity}/${r.op}#${r.entityLocalId}').toList()
+      ..sort();
+  }
+
   testWidgets('侧栏长按文件夹行 ⇒ 「解散文件夹」确认框，用词照抄嘀嗒', (tester) async {
     await pumpSidebar(tester);
     await expandAndLongPressFolder(tester);
@@ -120,7 +130,7 @@ void main() {
     await seedChildFolder(fixture);
     await tester.pumpAndSettle();
 
-    final before = await syncRows(fixture);
+    final before = await syncSignatures(fixture);
     await expandAndLongPressFolder(tester);
     await tester.tap(find.text('解散'));
     await tester.pumpAndSettle();
@@ -133,9 +143,17 @@ void main() {
     expect(work!.folderLocalId, isNull);
     expect(work.folderId, isNull, reason: '服务端整数归属也要清空');
     expect(
-      await syncRows(fixture),
-      greaterThan(before),
-      reason: '解散与提升都要出 outbox，否则另一台设备组织关系不一致',
+      (await syncSignatures(fixture)).toSet().difference(before.toSet()),
+      {'folder/upsert#$childFolderId', 'folder/delete#$projectsFolderId'},
+      reason: '解散与提升都要出 outbox，否则另一台设备组织关系不一致（逐条对上，条数判据分不出少排了哪条）',
+    );
+    // 钉住一个已知缺口，不是钉住"正确"：被移出的清单没有 list/upsert ⇒ 服务端
+    // deleteFolder 会按 TODO_FOLDER_HAS_LISTS 拒掉那条 folder/delete ⇒ 解散不收敛。
+    // 契约见 zh-cloud-service Issue #285；那边修好后这条 ABSENT 要连带复核。
+    expect(
+      (await syncSignatures(fixture)).where((s) => s.startsWith('list/')),
+      isEmpty,
+      reason: '现状：清单回顶层只改本地，没有进 outbox（service#285 要改的就是这个）',
     );
     expect(
       find.byKey(const ValueKey('todo-sidebar-folder-$projectsFolderId')),

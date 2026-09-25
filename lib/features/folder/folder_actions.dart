@@ -44,8 +44,9 @@ class _DisbandFolderDialogState extends ConsumerState<_DisbandFolderDialog> {
   bool _busy = false;
 
   Future<void> _confirm() async {
-    // 同步闸门：禁用态要到下一次 build 才生效，同一帧连点两下会真的解散两次
-    // ⇒ 第二次会把已经空掉的归属再清一遍、多打一条 outbox。
+    // 同步闸门：FilledButton 的禁用态要到下一次 build 才生效 ⇒ 同一帧连点两下会
+    // 真的进 _confirm 两次。第二次的实际代价只是把空分支再走一遍（复核实测：outbox
+    // 不会多一条），挡它是为了让"只发一次解散"这条判据成立，不是防数据损坏。
     if (_busy) return;
     setState(() {
       _busy = true;
