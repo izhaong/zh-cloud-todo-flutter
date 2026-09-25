@@ -265,6 +265,43 @@ void main() {
     expect(await syncRows(fixture), rowsBefore);
   });
 
+  testWidgets('仓库后来就绪：提示清掉、重试真的解散（失败不能把框卡死）', (tester) async {
+    // 上一条钉"null 分支要给提示"，这条钉它的另一半：那个分支必须把 _busy 放回去。
+    // 少了 `_busy = false`，框会永远停在禁用态 ⇒ 用户只能取消重来。
+    var ready = false;
+    final fixture = await pumpSidebar(
+      tester,
+      overridesBuilder: (database) => [
+        folderRepositoryProvider.overrideWith(
+          (ref) => ready
+              ? FolderRepository(database, SyncChangeQueue(database))
+              : null,
+        ),
+        foldersStreamProvider.overrideWith(
+          (ref) =>
+              FolderRepository(database, SyncChangeQueue(database)).watchAll(),
+        ),
+      ],
+    );
+
+    await expandAndLongPressFolder(tester);
+    await tester.tap(find.text('解散'));
+    await tester.pumpAndSettle();
+    expect(find.text('本地数据库尚未就绪，文件夹没有解散'), findsOneWidget);
+
+    ready = true;
+    fixture.container.invalidate(folderRepositoryProvider);
+    await tester.tap(find.text('解散'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('本地数据库尚未就绪，文件夹没有解散'), findsNothing, reason: '重试必须清掉上一条提示');
+    expect(
+      await folderById(fixture.database, projectsFolderId),
+      isNull,
+      reason: '_busy 没复位的话这一次点击会被闸门吞掉，文件夹就永远解不散',
+    );
+  });
+
   testWidgets('读屏念得出「解散文件夹」，且念的是被解散的那一个', (tester) async {
     final handle = tester.ensureSemantics();
     await pumpSidebar(tester);
