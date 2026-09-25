@@ -53,8 +53,10 @@ $ python3 /tmp/r80/probes80.py all      # Y1 = 摘掉 enqueue（= develop 行为
 实测 4 行含测试文件 ⇒ 那句话被自家 diff 反驳。
 现状：下表的读数是 `186527f` 那一次（旧字节）；`f616190` 的全六门在
 `/tmp/r80r2/gates-r2.sh.log`（七行 rc 全 0、门 4 `+9` 脏项 0、门 5 `+903 ~26`、门 6 `✓ Built build/web`）；
-本笔（能力名与注释收口）又动了 `lib/`+`test/` ⇒ 基准将随本轮**新终态**再推进一次，
-推进笔只动 md，用 `git diff --name-only <新基准>..HEAD` 复验。
+本笔（能力名与注释收口 `8de8c7c`）动了 `lib/`+`test/` 的注释字节 ⇒ 六门已在它之上重跑：
+`/tmp/r80r3/gates-r2.log` 首行 `HEAD=8de8c7c 工作树脏项数=0`，七行 rc 全 0；门 2 `Formatted 2 files (0 changed)`、
+门 3 `No issues found!`、门 4 `+9`（基线目录脏项 0 ⇒ 9 张未重录）、门 5 `02:39 +903 ~26 All tests passed!`、
+门 6 `✓ Built build/web`。**基准 = `8de8c7c`**；之后的填值笔只动 md，用 `git diff --name-only 8de8c7c..HEAD` 复验。
 
 | # | 命令 | 读数 | rc |
 | --- | --- | --- | --- |
