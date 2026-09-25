@@ -178,7 +178,7 @@ final showTags =
 | 6 | `flutter build web --release --dart-define=…` | `✓ Built build/web` |
 
 计数对账：`+914 = 912 + 2`。912 是**本分支自己**第 67 轮门禁 5 的实测末行（上面那张旧表 `f7df38e` 那一列），
-本轮新增 2 条用例、没动任何既有用例 ⇒ 本轮改动集用 `git diff --name-only f11cdb1~2..f11cdb1 -- test` 量，
+本轮新增 2 条用例、没动任何既有用例 ⇒ 本轮改动集用 `git diff --name-only f11cdb1~3..f11cdb1 -- test` 量，（**这里原先写的是 `~2`**：`~2` 的起点正好是 `04cc0ac`，把它自己的测试改动排除在外了。复核员两种区间都跑过，文件清单相同 ⇒ 结论不翻，但命令本身要写对）
 只有 `sidebar_show_tags_test.dart` 一个文件（口径别搞混：整条分支对 `develop` 是 3 个测试文件，那是第 67 轮的账）。
 `~26` 与第 67 轮一致（未新增 skip）。`pubspec.lock` 未进提交：`git log --stat origin/develop..HEAD -- pubspec.lock` 为空。
 
@@ -203,12 +203,33 @@ final showTags =
 
 ### 复核
 
-第 74 轮的只读复核**还没拿到 `VERDICT`** —— 这一格是欠的，不得当作已通过。
-派单基准：`origin/develop..feat/328-sidebar-show-tags`（tip `f11cdb1` 及其后的文档提交）。
-专项要问的两条：
-① #353 是否真被修到位 —— 尤其"loading 不画"有没有把第 67 轮的默认值语义改坏，
-以及**我自己怀疑的那一点**：`hasError` 这一支是不是真的只在"从没读到过值"时才生效，
-带旧值的 `AsyncError` 走 `valueOrNull` 这件事在当前 riverpod 版本上是实测还是想当然（QE 探针给了答案，要它独立复验）；
-② **同一类错误是否还在别处** —— 病灶是"把两个语义不同的态折成一个"，
-`sidebar.dart` 里另外 4 处 `valueOrNull ??` 与全仓 17 处同形写法，哪些是"集合回落空 = 正确的没值画空"、
-哪些是"布尔/对象回落默认 = 会撒谎"，要它按同一把尺逐处判，别只查我改的那一处。
+#### 第 1 轮（只读，基准 `dc61721`）⇒ `VERDICT: FAIL`；1 条 F-1 已修，2 条非阻塞已登记
+
+行为侧**全部通过**（复核员独立跑绿、我给的六类反例逐条对到了具体断言），否的是**举证**。
+
+| 编号 | 否的是什么 | 我回源复验 | 处置 |
+| --- | --- | --- | --- |
+| F-1 | **PR !351 正文与 head 不一致**：「第 74 轮追加」那段贴的实现是 `.when(data: …, loading: …, error: …)` —— 正是 `f11cdb1` 提交信息里写明"会把带旧值的 `AsyncError` 折进 error ⇒ 条目闪回来"而**被我自己否掉**的那一形；读数写 `+913 = 912 + 1`、探针写「QA–QD 四条」，而终态是 `valueOrNull ?? (hasError …)`、`+914 = 912 + 2`、QA–QE 五条。合并时 `Fixes #353` 以这段描述为凭据自动关单 ⇒ 审计轨迹自相矛盾 | 自己 GET 回来数标记：`'.when('` 在=True、`'+913'`=True、`'+914'`=False、`'QE'`=False ⇒ **成立**。它否的是举证不是行为，与我自己的判断一致 | 已 `PATCH` 重写该段：贴终态代码 + `sidebar.dart:81-86` 锚点 + `+914 = 912 + 2` + QA–QE 五条，并明写"本段原先贴的是第一轮实现，已被 `f11cdb1` 取代"。读回（判据按"旧实现代码块"而非任何 `.when` 字样，因为新正文要**提到**那个被否的形）：`sidebarShowTagsProvider).when(`=False、`+913`=False、`+914 = 912 + 2`=True、`QE`=True、`sidebar.dart:81-86`=True、`Closes #328` 仍在。脚本 `/tmp/r77/fix_pr351_body.py` |
+
+**我点名要它答的两条**：
+
+- **① 「带旧值的 `AsyncError` 走 `valueOrNull`」是实测还是想当然** ⇒ **成立，且两路证实**。
+  QE 探针（退回 `.when` 那一版）只有「出过一次值之后流才失败」那条红；复核员另读 riverpod 2.6.1
+  源码 `common.dart:572`（`valueOrNull => hasValue ? value : null`）、`:528`
+  （`AsyncError.copyWithPrevious` 把 `hasValue: previous.hasValue` 带过去）、`:605`
+  （`hasError => error != null`）独立对上。
+- **② 同类折叠是否还在别处** ⇒ **它没按我的口径做完**。我要的是"全仓 17 处 `valueOrNull ??` 逐处判"，
+  它判了 `sidebar.dart` 的门控读法、把"别处"落成两条建议，没给全仓逐处的表。
+  这条我记下来：**下次派单要把"逐处列表"写成硬性交付物（表格 + 每处一行结论），否则会被降级成建议。**
+
+非阻塞、本轮不改，**已立 FL #363**「设置面『显示标签』取值文字用 `.when(error:)` 折掉带旧值的失败（与 #353 同形）」：
+
+- `settings_route.dart:149-155` 用 `.when(error: (_, _) => '读取失败')` 读值 ⇒ 出过一次值之后流失败时，
+  已加载的取值显示被换成「读取失败」。写入侧不受影响（`:221` 的 `current` 走 `valueOrNull`，PG 钉住字面值）。
+- `providers.dart:155-156` 那句注释「一个读不到的偏好不该把侧栏标签区清空」与本面定的三态口径不同调
+  （首值失败才回兜底默认；加载中不回、不画）⇒ 归到 #363 的验收第 3 条一起改。
+
+F-1 改的是 **PR 正文**，代码字节一字未动（head 仍是 `dc61721`，本节的文档提交不碰 `lib/`、不碰 `test/`）
+⇒ **不重派第 2 轮复核**：它否的那条证据链已按读回校验闭合，再派一轮只会重跑同一批绿灯。
+需要合并前再要一次独立 `VERDICT` 的话说一声即可（成本约一轮）。门禁读数不因本提交改变，
+理由：本提交 `git diff --name-only` 只有 `specs/048-sidebar-show-tags/tasks.md` 一个文件。
