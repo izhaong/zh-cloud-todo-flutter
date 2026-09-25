@@ -378,6 +378,48 @@ void main() {
     expect(after!.folderLocalId, isNull, reason: '失败不该写库');
   });
 
+  testWidgets('新建失败（不是移动失败）：提示要说「新建清单失败」，不能拿移动那句顶', (tester) async {
+    // catch 里的文案是三元表达式，两条分支各有自己的用户。此前只有"移动失败"那侧被钉过：
+    // 把「新建清单失败，请重试」换成任意字符串，13 条全绿（复核第 2 轮，变异名 CREATE_fail_msg）。
+    final fixture = await createFixture(
+      overridesBuilder: (database) => [
+        listRepositoryProvider.overrideWith(
+          (ref) =>
+              _CreateFailingRepository(database, SyncChangeQueue(database)),
+        ),
+      ],
+    );
+    final before = await fixture.database
+        .select(fixture.database.todoLists)
+        .get();
+    await pumpSheet(tester, fixture);
+
+    await pick(tester, '项目');
+    await tester.enterText(find.widgetWithText(TextField, '清单名'), '骑行');
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('新建清单失败，请重试'), findsOneWidget);
+    expect(
+      find.text('移动到文件夹失败，请重试'),
+      findsNothing,
+      reason: '新建态根本没有"移动"可言，走错分支等于念错话',
+    );
+    expect(find.byType(ListEditorSheet), findsOneWidget, reason: '失败不许把弹层收掉');
+    expect(
+      tester
+          .widget<TextField>(find.widgetWithText(TextField, '清单名'))
+          .controller
+          ?.text,
+      '骑行',
+    );
+    expectSelected(tester, '项目', reason: '已选归属要留着，让用户改完直接重试');
+    final after = await fixture.database
+        .select(fixture.database.todoLists)
+        .get();
+    expect(after.length, before.length, reason: '失败不该留下半条清单');
+  });
+
   testWidgets('本地库还没就绪：不关弹层、给可见提示、不写库', (tester) async {
     // 复核第 2 轮 P2：FR-6 写着"仓库为 null / 移动抛错"两种失败都有提示，
     // 但 repo==null 那半句 0 覆盖（把它的 setState 摘掉，13 条全绿）。
@@ -450,11 +492,21 @@ void main() {
     expect(tester.takeException(), isNull, reason: '弹层在 320px + 1.3 下溢出');
     expect(find.text('所属文件夹'), findsOneWidget);
     expect(find.text('保存'), findsOneWidget);
-    // openMenu 自带"菜单真的展开了"的断言：少了它，下面那句「展开的候选菜单不溢出」
-    // 就永远在测收起态（删掉那次 tap 也照样 10 条全绿，实测）。
+    // openMenu 里那句"菜单真的展开了"的自检不能省：省掉之后 PM 变异
+    // （`onChanged: null` ⇒ 菜单永不展开）就红不到这条，下面两句一直在测收起态。
     await openMenu(tester);
     expect(tester.takeException(), isNull, reason: '展开的候选菜单在 320px + 1.3 下溢出');
     expect(find.text('项目'), findsWidgets);
+    // 横向单独量一次：`takeException` 抓不到候选项超宽（实测把候选撑到 500dp 宽，
+    // 上面两句都不红）⇒ "展开态不溢出"必须有按框量的判据才算数。
+    for (final item in menuItems(tester)) {
+      final box = item.renderObject! as RenderBox;
+      expect(
+        box.localToGlobal(Offset.zero).dx + box.size.width,
+        lessThanOrEqualTo(321),
+        reason: '候选项「${itemLabel(item)}」超出 320px 视口',
+      );
+    }
   });
 
   testWidgets('读屏：一个节点同时念出「所属文件夹」与当前值，且仍是按钮', (tester) async {
@@ -558,5 +610,19 @@ class _MoveFailingRepository extends ListRepository {
   @override
   Future<TodoList> moveToFolder(String listId, String? folderLocalId) {
     throw StateError('文件夹服务不可用');
+  }
+}
+
+/// 只让"新建清单"失败 ⇒ 钉住 catch 三元表达式的另一侧文案。
+class _CreateFailingRepository extends ListRepository {
+  _CreateFailingRepository(super.db, super.queue);
+
+  @override
+  Future<TodoList> create({
+    required String name,
+    String? folderLocalId,
+    int sortOrder = 0,
+  }) {
+    throw StateError('故意让新建失败');
   }
 }
