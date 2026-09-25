@@ -198,11 +198,7 @@ void main() {
       findsNothing,
       reason: '「今天」「明天」等智能清单以及「收集箱」不支持共享协作（嘀嗒 :6）',
     );
-    expect(
-      find.text('编辑'),
-      findsNothing,
-      reason: '连「编辑」都没有 ⇒ 不是只把共享这一项筛掉了',
-    );
+    expect(find.text('编辑'), findsNothing, reason: '连「编辑」都没有 ⇒ 不是只把共享这一项筛掉了');
     expect(
       find.byType(BottomSheet),
       findsNothing,
