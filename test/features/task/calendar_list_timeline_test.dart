@@ -22,7 +22,8 @@ import 'package:zh_cloud_todo_flutter/state/repositories/task_section_repository
 /// 术语照抄嘀嗒《02-功能指南/02-日历/04-列表视图：按天查看任务.md》：
 /// `:16` 小节标题「显示时间轴」、`:18`「以时间为线，串起一天的日程」、
 /// `:23`「打开方式：「日历列表视图」 - 「显示时间轴」图标」、
-/// 《08-常见问题.md》`:32`「将全天任务栏里的任务拖拽…」⇒ 「全天」是这条轴的一部分。
+/// 《08-常见问题.md》`:32`「将全天任务栏里的任务拖拽至时间轴上的对应时间点即可」——
+/// 这句的拖拽两端是**两个区域** ⇒ 「全天任务栏」在轴**之外**（本面把它画成轴上方的独立栏，全天行不画轴线）。
 void main() {
   final anchor = DateTime(2026, 10, 1, 12);
 
@@ -435,10 +436,34 @@ void main() {
   });
 
   group('四件套 1：320px + 1.3 倍字号', () {
+    /// 最坏内容：选中日 9 条时点任务（含 2 条 20 字以上长标题，压横向换行与行高）
+    /// + 1 条全天，另加次日 1 条做「按天过滤」的反例。
+    List<TodoTask> heavyDayTasks() => [
+      for (var i = 0; i < 9; i++)
+        task(
+          id: 'h-$i',
+          title: switch (i) {
+            0 => '长标题甲：这一条故意写到二十个汉字以上用来压横向',
+            1 => '长标题乙：同样超过二十个汉字，用来压最坏行高与换行',
+            _ => '时点事项 $i',
+          },
+          startAt: DateTime(2026, 10, 1, 9, i * 5),
+          dueAt: DateTime(2026, 10, 1, 9, i * 5),
+        ),
+      task(
+        id: 'h-allday',
+        title: '全天事项：这一条也故意写得很长，用来压全天栏的横向',
+        dueAt: DateTime(2026, 10, 1),
+        allDay: true,
+      ),
+      task(id: 'h-other', title: '次日事项', dueAt: DateTime(2026, 10, 2, 9)),
+    ];
+
     testWidgets('320x568、1.3 倍字号下时间轴与工具条零溢出', (tester) async {
+      final tasks = heavyDayTasks();
       await pumpCalendar(
         tester,
-        tasks: fixtureTasks(),
+        tasks: tasks,
         viewport: const Size(320, 568),
         textScale: 1.3,
       );
@@ -446,13 +471,82 @@ void main() {
       await toListMode(tester);
       await toggleTimeline(tester);
 
-      expect(
-        find.byKey(const Key('calendar-timeline-allday')),
-        findsOneWidget,
-        reason: '先确认最坏内容真在树里，再量几何',
-      );
+      // 复核 F3：原来只断「全天」栏这一个键（它是 ListView 的第一个子节点，恒在），
+      // 等于没有断过「最坏内容真在树里」。现在逐行断：选中日**每一条**任务的行键都要在场，
+      // 少一条就说明懒建窗口没覆盖到它，那次几何测量就不带信息。
+      final dayTasks = tasksOnDayByTime(tasks, DateTime(2026, 10, 1));
+      expect(dayTasks, hasLength(10), reason: '本用例前提：选中日 10 条（9 时点 + 1 全天）');
+      final missing = [
+        for (final t in dayTasks)
+          if (find
+              .byKey(ValueKey('calendar-timeline-row-${t.id}'))
+              .evaluate()
+              .isEmpty)
+            t.id,
+      ];
+      expect(missing, isEmpty, reason: '这些行没被建出来，几何测量覆盖不到它们：$missing');
       final overflows = _flexOverflows(tester, find.byType(CalendarView));
       expect(overflows, isEmpty, reason: '横向/纵向越界明细：\n$overflows');
+      expect(tester.takeException(), isNull);
+    });
+
+    // 尺子自己的对照：这条判据此前在九条探针里从没开过火（复核 F3）。
+    // 不报「量不到」的尺子和不报溢出的尺子长一样，所以阳性对照必须常驻本套件。
+    testWidgets('反向自检：量溢出的尺子对已知溢出必须开火、对不溢出必须沉默', (tester) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      Widget wrap({required List<Widget> children}) => MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              key: const Key('ruler-scope'),
+              width: 320,
+              height: 200,
+              child: Row(children: children),
+            ),
+          ),
+        ),
+      );
+
+      // 阳性：两个 200px 固定宽子节点放进 320px 的 Row ⇒ 越界 80px。
+      await tester.pumpWidget(
+        wrap(
+          children: const [
+            SizedBox(width: 200, height: 20),
+            SizedBox(width: 200, height: 20),
+          ],
+        ),
+      );
+      await tester.pump();
+      final hits = _flexOverflows(tester, find.byKey(const Key('ruler-scope')));
+      expect(hits, hasLength(1), reason: '已知溢出 80px 却没报 ⇒ 这把尺子是死的：$hits');
+      expect(hits.single, contains('横向溢出'));
+      expect(
+        hits.single,
+        contains('80.0'),
+        reason: '报出来的像素数要跟手算一致（400−320）：$hits',
+      );
+      // RenderFlex 溢出本身会抛绘制异常，这里只负责取走，不让它漏到下一条用例。
+      expect(tester.takeException(), isNotNull);
+
+      // 阴性：同样两个子节点各让一半宽度 ⇒ 不越界，尺子必须沉默。
+      await tester.pumpWidget(
+        wrap(
+          children: const [
+            SizedBox(width: 160, height: 20),
+            SizedBox(width: 160, height: 20),
+          ],
+        ),
+      );
+      await tester.pump();
+      expect(
+        _flexOverflows(tester, find.byKey(const Key('ruler-scope'))),
+        isEmpty,
+        reason: '不溢出也报 ⇒ 这把尺子只会恒红',
+      );
       expect(tester.takeException(), isNull);
     });
   });
