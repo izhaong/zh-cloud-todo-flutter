@@ -60,14 +60,22 @@
 
 ## 门禁（最终字节，commit 之后跑）
 
-| # | 门禁 | rc | 日志 |
-| - | ---- | -- | ---- |
-| 1 | `git diff --check` | 待跑 | — |
-| 2 | `dart format --output=none --set-exit-if-changed <本轮 7 个文件>` | 待跑 | — |
-| 3 | `flutter analyze` | 待跑 | — |
-| 4 | `flutter test --tags golden`（9 张，不重录） | 待跑 | — |
-| 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | 待跑 | — |
-| 6 | `flutter build web --release --dart-define=…` | 待跑 | — |
+跑在提交后的最终字节 `2dd3dc1` 上，日志 `/tmp/r67-gates.log`。
+
+| # | 门禁 | 结果 |
+| - | ---- | ---- |
+| 1 | `git diff 9032005..HEAD --check` 与工作区 | `rc=0`，无输出 |
+| 2 | `dart format --output=none --set-exit-if-changed <本轮 7 个显式文件>` | `Formatted 7 files (0 changed)`，`rc=0` |
+| 3 | `flutter analyze` | 第一遍 `rc=1`（`prefer_is_not_empty` 一条，见下）⇒ 改完重跑 `No issues found!`，`rc=0` |
+| 4 | `flutter test --tags golden` | `+9: All tests passed!`，`rc=0`；`git status --short` 为空 ⇒ 9 张基线未重录 |
+| 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:24 +912 ~26: All tests passed!`，`rc=0` |
+| 6 | `flutter build web --release --dart-define=TODO_API_BASE_URL=… --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web`，`rc=0` |
+
+计数对账（诚实记法）：`+912 = 898 + 14`。14 = 本轮新增（仓库层 6 + 侧栏 3 + 设置 5）。
+**898 不是本轮实测的**——沿用第 64/66 轮在同一基线 `origin/develop@9032005` 上实跑干净 worktree 记下的 `+898 ~26`（第 66 轮的 `+924 = 898 + 26` 与本轮 `+912 = 898 + 14` 互相对得上），本轮未重跑基线。`~26` 跳过数与基线一致，未新增 skip。
+`pubspec.lock` 未进提交：六道门禁跑完后 `git status --short` 为空。
+
+第一遍只有门禁 3 红（测试里 `!finder.isEmpty` 应写成 `finder.isNotEmpty`）⇒ 单提 `style(test)` 提交 `2dd3dc1` 后**六条全部重跑**，本表是重跑后的字节。
 
 ## 复核
 
