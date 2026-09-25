@@ -113,3 +113,42 @@
 复核：本轮未派只读复核子代理（会话轮次预算已尽），改动限于「入口换宿主 + 用例跟随」，
 其中我改动了 `!291` 已验收的详情页菜单 ⇒ **合前/合后应补一次只读复核**，重点核「月度打卡表」这一文案是否真是源页用词、
 以及菜单加项是否影响 `settings`/`detail` 两处既有黄金断言。此项记为**未达成**，不写成已通过。
+
+## 第 72 轮（2026-09-25）：Issue #348 —— 未来日不得被念成「未打卡」，也不得被补记
+
+起因是 service PR !283 的只读复核（S7）指出本文件旧「取舍」里那句**「客户端自己把还没到的格子留空」与实现不符**：
+格子从来不空，一直是日期数字。顺源回读两端代码才挖出真缺陷（!305 已合并 `13892e5d0`，判据按 `origin/develop@9032005` 的最终字节重取）：
+
+| 主张 | 实测（develop 最终字节） |
+| ---- | ---- |
+| 语义只有两档 | `habit_month_grid.dart:110-113` `_cellLabel` 只分 `count > 0` / 「未打卡」⇒ 26 号被读屏念成「26 日，未打卡」 |
+| 未来日可点且真发请求 | 同文件 `:159` `onTap: () => _backfill(day)` 无任何日期判断 |
+| 补到未来的记录进不了统计 | BE `TodoHabitServiceImpl.java:105` `checkIn` 不校验未来时间（直接 `insert`），而 `:125` 的窗口写死 `to = LocalDateTime.now()` ⇒ 记录落库但 `dailyCounts`/`total` 永远取不到它。**用户点了、存了、看不见** |
+
+**改动**：新增 `habitIsFutureDay(day, today)`（两边都削到当天零点再比）；`_cellLabel` 拆成三档；
+`_backfill` 对未来日**不发请求**并写 `_notice`（`这个日期还没到，不能补记`，`todo-habit-month-notice` 槽位，
+不借错误条），下一次操作前清场。判据与取舍的翻转已写进 `spec.md`（含一条诚实边界：**嘀嗒源页没有一句明文规定未来日不可点**，
+本条是按统计窗口与「补记」语义做的取舍，服务端不改）。
+
+**红测 → 绿**：`+8 -4` → `+13`。新用例不是白加的：整月 30 格逐格穷举标签（判据在测试里自己算），
+且第一次实现把「今天 23:59」判成了未来日 —— 正是那条字面日期用例把它咬红的。
+
+| 门禁（跑在已提交的 `b83b4dd` 上，日志 `/tmp/r72/`） | 读数 |
+| --- | --- |
+| 1 `git diff --check` | `rc=0` |
+| 2 `dart format --output=none --set-exit-if-changed`（2 个文件点名） | `Formatted 2 files (0 changed)`、`rc=0`。中途真红一次：新增用例未格式化 ⇒ 只对那个文件原地格式化后复跑转绿（未跑全仓） |
+| 3 `flutter analyze` | `No issues found!` |
+| 4 `flutter test --tags golden` | `+9: All tests passed!`（9 张基线 0 改动、未重录） |
+| 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:38 +903 ~26: All tests passed!` |
+| 6 `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web` |
+| `pubspec.lock` | 全程未被改（`git status` 只列出本轮点名的文件）⇒ 没把本机镜像带进 PR |
+
+**反向探针 8 条全部为红**（每条只抽掉一个行为，日志 `/tmp/r72_PROBES.log`，还原后 `cmp` 一致且复跑 `+13` 全绿）：
+`PA` 摘掉「还没到」那一档 / `PB` 摘掉未来日守卫 / `PC` 只拦不提示（静默早退）/ `PD` 只归一化一侧（今天 23:59 判成未来）/
+`PE` 判据放宽成「今天也算没到」/ `PF` 提示不清场 / `PG` 提示借用错误条槽位 / `PH` 提示只成语义不渲染。
+
+**计数口径（别误读）**：本轮只数了本文件 `8 → 13` 条用例，**没有**重跑 develop 的全量基线 ⇒
+「+903 里多出的就是这 5 条」这句话本轮没证，需要下一轮或复核员去量。
+
+**复核**：本轮结论未过只读复核 ⇒ 「合前拿到 `VERDICT`」这一格是**欠的**，不得当作已通过。
+
