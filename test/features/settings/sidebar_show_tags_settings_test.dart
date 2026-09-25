@@ -159,7 +159,7 @@ Future<TodoVisualFixture> _pumpSettings(
 /// 直接 `ensureVisible` 会 "No element"。先滚到被构建，再滚进可视区。
 Future<void> _revealTile(WidgetTester tester) async {
   final finder = find.byKey(tileKey);
-  if (!finder.evaluate().isEmpty) {
+  if (finder.evaluate().isNotEmpty) {
     final top = tester.getRect(finder).top;
     if (top > 0 && top < tester.view.physicalSize.height) return;
   }
