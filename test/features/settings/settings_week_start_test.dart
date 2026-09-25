@@ -65,6 +65,21 @@ Future<WeekStartPreferenceRepository> _pumpSettings(
   return repository;
 }
 
+/// 收尾必须**在测试体内**卸载 ProviderScope。
+///
+/// drift 取消流订阅时会排一个零时长定时器（`StreamQueryStore.markAsClosed`）。
+/// 留给 binding 在下一帧的 unmount 里跑，就会炸
+/// 「A Timer is still pending even after the widget tree was disposed」，
+/// 而且表现成"整份文件 7 条全红 + 每条卡满 10 分钟"，看着像功能坏了。
+/// 先拆树再 pump 一帧，让那个定时器在 fakeAsync 内走完。
+Future<void> _settleUnmount(WidgetTester tester) async {
+  await tester.pumpWidget(const SizedBox.shrink());
+  // 必须真的推进时钟：drift 的取消回调跑在**这一帧之后的 microtask** 里，
+  // `pump()`（时长 0）会把那个零时长定时器留在队列里 —— 实测这样仍报 pending timer。
+  await tester.pump(const Duration(milliseconds: 1));
+  await tester.pump(const Duration(milliseconds: 1));
+}
+
 void main() {
   testWidgets('设置页有「日期与时间」分组，里面有「星期开始于」并显示当前档位', (tester) async {
     await _pumpSettings(tester);
@@ -73,6 +88,8 @@ void main() {
     expect(find.byKey(_tile), findsOneWidget);
     expect(find.text('星期开始于'), findsOneWidget);
     expect(find.text('周一'), findsOneWidget, reason: '默认档要显示在行上');
+
+    await _settleUnmount(tester);
   });
 
   testWidgets('点开后正好三档、文案逐字取嘀嗒，且当前档带勾选标记（四件套 ②）', (tester) async {
@@ -96,10 +113,23 @@ void main() {
       ),
       findsNWidgets(3),
     );
-    expect(find.text('周日'), findsOneWidget);
-    expect(find.text('周一'), findsOneWidget);
-    expect(find.text('周六'), findsOneWidget);
-    expect(find.byIcon(Icons.check), findsOneWidget, reason: '只有当前档该有勾选');
+    // 三条档位文案必须**限定在弹层子树里**数：设置行自己的副标题也写着「周一」，
+    // 按全局 find.text('周一') 断 findsOneWidget 会被两处同时命中（实测 `-1: Found 2 widgets`）。
+    final sheet = find.byType(BottomSheet);
+    for (final label in ['周日', '周一', '周六']) {
+      expect(
+        find.descendant(of: sheet, matching: find.text(label)),
+        findsOneWidget,
+        reason: '弹层里该有「$label」这一档',
+      );
+    }
+    expect(
+      find.descendant(of: sheet, matching: find.byIcon(Icons.check)),
+      findsOneWidget,
+      reason: '只有当前档该有勾选',
+    );
+
+    await _settleUnmount(tester);
   });
 
   testWidgets('点「周日」立刻生效：出箱写库、行上副标题跟着换（FR-8）', (tester) async {
@@ -113,6 +143,8 @@ void main() {
     expect(await repository.get(), DateTime.sunday);
     expect(find.text('周日'), findsOneWidget, reason: '行上应显示新档位');
     expect(find.text('周一'), findsNothing);
+
+    await _settleUnmount(tester);
   });
 
   testWidgets('保存失败：给可见提示，档位保持原样（四件套 ③）', (tester) async {
@@ -133,6 +165,8 @@ void main() {
     );
     expect(await repository.get(), DateTime.monday, reason: '失败不能改档位');
     expect(find.text('周一'), findsOneWidget);
+
+    await _settleUnmount(tester);
   });
 
   testWidgets('库未就绪时点档位给提示，不静默（四件套 ③）', (tester) async {
@@ -162,6 +196,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('本地数据库尚未就绪，暂时无法修改星期开始于'), findsOneWidget);
+
+    await _settleUnmount(tester);
   });
 
   testWidgets('点选写入的是"那一个字面值"：重复点同一档不变、连点两档停在后点的（四件套 ④）', (tester) async {
@@ -184,6 +220,8 @@ void main() {
     await tester.tap(find.byKey(_option(DateTime.saturday)));
     await tester.pumpAndSettle();
     expect(await repository.get(), DateTime.saturday);
+
+    await _settleUnmount(tester);
   });
 
   testWidgets('320px + 1.3 倍字号：设置行与档位弹层都不溢出（四件套 ①）', (tester) async {
@@ -198,5 +236,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull, reason: '三档弹层在 320px + 1.3 倍字号下溢出');
     expect(find.byKey(_option(DateTime.sunday)), findsOneWidget);
+
+    await _settleUnmount(tester);
   });
 }
