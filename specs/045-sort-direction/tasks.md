@@ -50,14 +50,14 @@ PG 首轮**没红**：页面级用例里"重进清单"是再 `pumpWidget` 一次
 "菜单压根没开"上通过的。两条都已修：回调由调用方持有 + helper 结尾断言"智能（置顶优先）"在屏上
 + 每轮收尾把菜单收掉并断言收掉了。
 
-## 门禁原文记录（跑在最终字节 `97f21e6` 上，日志 `/tmp/g64/gates2.out`）
+## 门禁原文记录（跑在**最终字节 `e21f2f2`** 上，日志 `/tmp/g64/gates2.out` 与末次终端输出）
 
 | 门禁 | 结果 |
 | ---- | ---- |
 | `git diff --check` | `rc=0`，无输出 |
 | `dart format --output=none --set-exit-if-changed <本轮 7 个显式文件>` | `Formatted 7 files (0 changed)`，`rc=0` |
-| `flutter analyze` | `No issues found! (ran in 1.0s)`，`rc=0` |
-| `flutter test --tags golden` | `00:04 +9: All tests passed!`，9 张基线未重录（golden 文件变更提示 0） |
+| `flutter analyze` | `No issues found! (ran in 1.8s)`，`rc=0` |
+| `flutter test --tags golden` | `00:05 +9: All tests passed!`，9 张基线未重录（golden 文件变更提示 0） |
 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:25 +906 ~26: All tests passed!`，`rc=0` |
 | `flutter build web --release --dart-define=…` | `✓ Built build/web`，`rc=0` |
 
