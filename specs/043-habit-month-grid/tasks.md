@@ -151,3 +151,45 @@
 「+903 里多出的就是这 5 条」这句话本轮没证，需要下一轮或复核员去量。
 
 **复核**：本轮结论未过只读复核 ⇒ 「合前拿到 `VERDICT`」这一格是**欠的**，不得当作已通过。
+
+## 复核第二轮处置（D1 / D2 两条阻塞，提交 `a838461`）
+
+第一轮只对 tip `6e24b80` 判 `VERDICT: FAIL`，两条阻塞。逐条回源后的处置：
+
+| 复核发现 | 我的复验 | 处置 |
+| -------- | -------- | ---- |
+| **D1** `git diff origin/develop HEAD --check` 在最终字节上 **rc=2**（`tasks.md:154: new blank line at EOF.`），而门禁表把这一项报成 `rc=0` | 复跑确认：删掉那行空行前 rc=2、之后 rc=0。机制是**只写 md 的那次提交自己**在文件末尾留了空行 —— 六项里只有门禁 1 会随 md-only 提交改变，所以它恰好是唯一被漏掉的一项 | **采纳**。空行已删；本轮起门禁 1 **在两处各跑一次**并分别记数（下表）；写文件的脚本结尾一律断言 `endswith('\n') and not endswith('\n\n')` |
+| **D2** `_load` 的 catch 不清 `_notice`、未来守卫不动 `_loadSeq` ⇒ 「在飞的刷新失败」与「刚点的未来格提示」可同屏；PR 正文那句「下一次操作前清场，不残留」对这条例外说过头 | 读 `_backfill`（非未来路径先清提示）与 `_load` catch（只写 `_error`）⇒ 路径成立。**但结论不同**：两条消息各说各的事（错误 = 上一次刷新失败；提示 = 这一次点按被拒），同屏不互相否定；按建议清掉 `_notice` 等于让**较早那次操作**的失败抹掉**较晚一次点按**的反馈，正是四件套 ④ 的反向病 | **措辞采纳、代码修法驳回**。补 2 条用例把该行为钉成设计（含 320px + 1.3 倍字号同屏不溢出，`takeException()` 为 null）；FR-009 的清场范围收窄为「下一次点按格子时」。**反向证据（探针 PI）**：把建议那一行 `_notice = null;` 加进 `_load` 的 catch ⇒ 单文件 `+13 -2`，两条新用例同时红 ⇒ 它们钉的方向不是恒真 |
+
+### 门禁（跑在最终字节 `a838461`，日志 `/tmp/r72b/gates.log`）
+
+| # | 门禁 | 读数 |
+| - | ---- | ---- |
+| 1a | `git diff --check`（工作区） | `rc=0` |
+| 1b | `git diff origin/develop HEAD --check`（对整条分支的 diff，D1 就是这一项红的） | `rc=0` |
+| 2 | `dart format --output=none --set-exit-if-changed <本轮 2 个显式文件>` | `Formatted 2 files (0 changed)`，`rc=0` |
+| 3 | `flutter analyze` | `No issues found!` |
+| 4 | `flutter test --tags golden` | `00:19 +9: All tests passed!` ⇒ 9 张基线未重录 |
+| 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:47 +905 ~26: All tests passed!` |
+| 6 | `flutter build web --release --dart-define=…` | `✓ Built build/web` |
+
+计数对账：`+905 = 903 + 2`（903 是本表上一轮那格「复核后重跑」的全量末行），本轮只新增 2 条用例、
+未改任何既有用例 ⇒ 改动集 `git show --name-only a838461` 只含 1 个测试文件 + 2 个 md。
+`~26` 未新增 skip。**注意**：其中 2 条新用例在**月末当天**会走 `markTestSkipped` 分支（没有可点的未来格），
+那时末行会变成 `+903 ~28` 而不是 `+905 ~26` —— 这个跳法差异是显式的，不是静默通道。
+`pubspec.lock` 未进提交：`git log --stat origin/develop..HEAD -- pubspec.lock` 为空。
+
+### 探针 PI（本轮新增，口径 = 单文件 `test/features/habit/habit_month_grid_test.dart`，15 条）
+
+| 探针 | 变异 | 读数 | 结论 |
+| ---- | ---- | ---- | ---- |
+| PI | 按复核 D2 的建议在 `_load` 的 catch 里加 `_notice = null;` | `+13 -2` | 红掉的正是两条新用例 ⇒ 它们测的是「失败不得顶掉提示」，不是恒真断言；这也构成本轮**驳回该修法**的证据 |
+
+⚠️ 时序如实记：PI 是在**删 D1 那行空行之前**的树上打的（空行只影响 md，不影响 dart 语义），
+我没有另开一份"删空行之后再打一次"的日志，别把这条读成跑在最终字节上。
+
+### 仍未结的账（不藏）
+
+- 本轮及第一轮的**全量 develop 基线**（不含本分支的 `origin/develop` 跑一次）始终没有实跑日志，
+  只对账到「分支内 903 → 905 的加减」。要证"分支没引入回归"仍缺这一份。
+- 第二轮只读复核的 `VERDICT` 还没回来 —— 这一格是欠的，不得当作已通过。
