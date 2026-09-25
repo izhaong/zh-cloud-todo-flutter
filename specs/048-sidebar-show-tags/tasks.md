@@ -125,68 +125,90 @@
 - 矩阵 #21 其余面：任务详情输入 `#`、`TaskQuickAddSheet` 的 `#` 入口仍被未合并的 `!319/!322/!314` 挡着。
 - 移动端「清单管理页」界面本身（嘀嗒 `:16` 的入口位置）——需要单独立项，属矩阵 #19。
 
-## 第 74 轮：#353 落地（侧栏标签区在偏好首值未到达前不画）
+## 第 74 轮：#353 落地（侧栏标签区在偏好首值未到达前不画）（两轮红绿）
 
 ### 病灶（一句话）
 
 `valueOrNull ?? 默认` 把 **loading** 与 **error** 折成同一态：`valueOrNull` 在两种状态下都是 `null`，
-于是"还没读到"被当成"读到了、值是显示" ⇒ 库里存着 `showTags=false` 的账号冷启动会**先画出标签条目再收走**。
+于是"还没读到"被当成"读到了、值是显示" ⇒ 库里存着 `showTags=false` 的账号冷启动会先画出标签条目再收走。
 FR-4 的"默认必须是显示"真正的兑现处在仓库层（`_decode(null) ⇒ true`：库里没有这一行 = 用户从没设过），
-widget 只需要兜 `error`。修法选「loading 不画」而不是 #353 列的那两条，理由与代价见 `spec.md` 取舍 4。
+widget 只管三态各自落点。**这条最终版前后走了两轮，第一轮自己修出同一个病的新形态**，见下。
 
-### 红测（改代码之前，跑在 `ada7eb7`）
+### 第一轮（`04cc0ac`）：改对了 loading，改坏了 error
 
-`/tmp/r74/red.log`：`00:00 +3 -1`，红的正是新加的那条，且失败点落在**首值未到达那一帧**
-（`sidebar_show_tags_test.dart:121`，`focusTag()` 实测 `Found 1 widget`）。
-同一条用例里先跑了两条正向对照（智能清单行在、`todo-sidebar-row-tags` 入口行在）⇒
-红不是"整棵侧栏还没数据"造成的，条目确实是被门控画出来的。
+红测（跑在 `ada7eb7`，日志 `/tmp/r74/red.log`）：`00:00 +3 -1`，红的正是新加那条，
+失败点落在**首值未到达那一帧**（`sidebar_show_tags_test.dart:121`，`focusTag()` 实测 `Found 1 widget`）。
+同一条用例里先跑两条正向对照（智能清单行在、`todo-sidebar-row-tags` 入口行在）⇒
+红不是"整棵侧栏还没数据"造成的。
 
-### 门禁（跑在 `04cc0ac`，日志 `/tmp/r74/gates.log`）
+第一版实现写成三参数 `.when(data/loading/error)`，四条反向探针全绿（`/tmp/r74/PROBES.log` 的第一轮记录）。
+**但 `.when` 把"出过一次值之后流才报错"也送进 `error` 分支**（带旧值的 `AsyncError` 不走 `data`）⇒
+这种时候退回兜底默认 = 标签条目在流失败那一刻**闪回来**，
+既违反四件套 ③「失败保留已加载数据」，也恰好是 #353 同一类错误（把两件事折成一个态）。
+这条是我自己在写第二条用例时撞出来的（`gate.add(false)` 之后 `gate.addError(…)` ⇒ `+4 -1`），
+不是复核抓的。
+
+### 第二轮（`f11cdb1`，最终版）：三态各自落点
+
+```dart
+final showTagsAsync = ref.watch(sidebarShowTagsProvider);
+final showTags =
+    showTagsAsync.valueOrNull ??
+    (showTagsAsync.hasError
+        ? SidebarVisibilityRepository.defaultShowTags
+        : false);
+```
+
+- 有值就用值 —— 含"出过一次值之后流才报错"（`valueOrNull` 在这种态下仍是旧值）；
+- 无值且 `error` ⇒ 兜底默认（首值就读不到，FR-4 的口径）；
+- 无值且 `loading` ⇒ 不画，与同文件 `lists`/`folders`/`tags` 的"没值画空"同一套。
+
+两条新用例：`首值未到达前不画`（含放行 `true`/`false` 的双向对照）与
+`出过一次值之后流失败仍保留「隐藏」`。修法不选 #353 列的「同步首值」「等高占位」，理由与代价见 `spec.md` 取舍 4。
+
+### 门禁（跑在最终字节 `f11cdb1`，日志 `/tmp/r74/gates2.log`；第一轮那批读数在 `gates.log`）
 
 | # | 门禁 | 读数 |
 | - | ---- | ---- |
-| 1 | `git diff --check`（工作区） | `rc=0`，无输出 |
-| 2 | `dart format --output=none --set-exit-if-changed lib/features/shell/sidebar.dart test/features/shell/sidebar_show_tags_test.dart` | `Formatted 2 files (0 changed)`，`rc=0`（第一遍是 2 changed ⇒ 原地格式化这两个文件后复跑） |
+| 1 | `git diff --check` | `rc=0`，无输出；**所有提交落完后复跑一次**（第 72 轮 `!356` 复核 D1 抓到"md-only 提交给文件末尾添空行 ⇒ `git diff --check` 对自己所在 diff 不成立"，本轮起门禁 1 一律复跑） |
+| 2 | `dart format --output=none --set-exit-if-changed <本轮 2 个显式文件>` | `Formatted 2 files (0 changed)`，`rc=0` |
 | 3 | `flutter analyze` | `No issues found!` |
-| 4 | `flutter test --tags golden` | `+9: All tests passed!` ⇒ **9 张基线一张都没重录**（`#353` 当年就是拿"可能要求重录基线"挂起的，这条把它证伪） |
-| 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:45 +913 ~26: All tests passed!` |
+| 4 | `flutter test --tags golden` | `00:17 +9: All tests passed!` ⇒ **9 张基线一张都没重录**（"可能要重录基线"正是 #353 当年挂起的理由，本轮证伪） |
+| 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:31 +914 ~26: All tests passed!` |
 | 6 | `flutter build web --release --dart-define=…` | `✓ Built build/web` |
 
-**门禁 1 在 md 提交之后复跑**：第 72 轮 `!356` 的复核（D1）抓到"md-only 提交给文件末尾添了空行，
-使 `git diff --check` 对自己所在 diff 不成立"，本轮因此把这一项改成**所有提交落完后各复跑一次**，
-读数记在下方「追加门禁」行里，不沿用表里的 `rc=0`。
+计数对账：`+914 = 912 + 2`。912 是**本分支自己**第 67 轮门禁 5 的实测末行（上面那张旧表 `f7df38e` 那一列），
+本轮新增 2 条用例、没动任何既有用例 ⇒ 本轮改动集用 `git diff --name-only f11cdb1~2..f11cdb1 -- test` 量，
+只有 `sidebar_show_tags_test.dart` 一个文件（口径别搞混：整条分支对 `develop` 是 3 个测试文件，那是第 67 轮的账）。
+`~26` 与第 67 轮一致（未新增 skip）。`pubspec.lock` 未进提交：`git log --stat origin/develop..HEAD -- pubspec.lock` 为空。
 
-计数对账：`+913 = 912 + 1`。912 是**本分支自己**第 67 轮门禁 5 的实测末行（上面那张门禁表 `f7df38e` 那一列），
-本轮只新增 1 条用例、没动任何既有用例 ⇒ 本轮提交的改动集用
-`git diff --name-only 04cc0ac~1..04cc0ac -- test` 量，只有 `sidebar_show_tags_test.dart` 一个文件
-（注意口径：整条分支对 `develop` 是 3 个测试文件，那是第 67 轮的账，不能拿来对账本轮）。
-`~26` 跳过数与第 67 轮一致（未新增 skip）。
-`pubspec.lock` 未进提交：`git log --stat origin/develop..HEAD -- pubspec.lock` 为空。
-
-### 反向探针（口径 = **单文件** `test/features/shell/sidebar_show_tags_test.dart`，4 条；日志 `/tmp/r74/PROBES.log`）
+### 反向探针（口径 = **单文件** `test/features/shell/sidebar_show_tags_test.dart`，最终版 5 条；日志 `/tmp/r74/PROBES.log`）
 
 | 探针 | 变异 | 读数 | 红掉的那条 |
-| ---- | ---- | ----| ---------- |
-| QA | `loading: () => false` → `true`（回到缺陷形态） | `+3 -1` | 首值未到达那条 ⇒ 用例确有牙 |
-| QB | `error:` 兜底 → `false`（读不到就清空侧栏） | `+3 -1` | 既有「读不到按默认显示」那条 ⇒ 第 67 轮那条防线没被本轮改坏 |
-| QC | `data: (value) => value` → `true`（无视取值） | `+2 -2` | 首值那条的**末段**（放行「隐藏」仍不收）+ 第 67 轮的默认在/关掉就没那条 ⇒ 证明门控读的是值本身，不是"来过消息就算显示" |
-| QD | 整段退回 `valueOrNull ?? 默认`（第 67 轮原字节） | `+3 -1` | 只有首值那条红 ⇒ 新用例钉的就是本病灶，没有顺带依赖 |
+| ---- | ---- | ---- | ---------- |
+| QA | 三元式 else（loading 无值）翻 `true` | `+4 -1` | 首值未到达那条 ⇒ 用例有牙 |
+| QB | `hasError` 兜底改成 `false`（读不到就清空） | `+4 -1` | 第 67 轮那条「读不到按默认显示」⇒ 老防线没被改坏 |
+| QC | 有值也无视、恒按默认「显示」 | `+2 -3` | 首值 + 隐藏两向 + 出错保旧值那条 ⇒ 证明门控读的是值本身 |
+| QD | 整段退回第 67 轮原字节（`valueOrNull ?? 默认`） | `+4 -1` | 只有首值那条红 ⇒ 新用例钉的就是本病灶，没有顺带依赖 |
+| QE | 退回本轮**第一版** `.when(…)` | `+4 -1` | **只有**「出过一次值之后流失败」那条红 ⇒ 第二轮那次修改是承重墙，其余四条都测不到它 |
 
-每条探针之后 `git checkout -- lib/…` 并 `cmp` 回 `HEAD` 的字节（日志里 4 条 `restore-ok`），
-最后同一文件复跑 `+4: All tests passed!`。
+每条之后 `git checkout -- lib/…` 还原（HEAD 已是最终字节，FINAL 行 `+5: All tests passed!` 即还原自证）。
 
 ### 矩阵与跨仓
 
-- **矩阵 #21 本轮不动**：它由未合并的 docs `!105` 重判为「部分 / BE/FL」，且那一行的基准写死
+- **矩阵 #21 本轮不动**：那一行由未合并的 docs `!105` 重判为「部分 / BE/FL」，且基准写死
   `zh-cloud-todo-flutter origin/develop@9032005` —— #328 与 #353 都还没进 `develop`，
-  按"矩阵翻转只引已合并 SHA"这条，本轮既不能翻状态、也不该去改 `!105` 已占的行。
-- 修法只覆盖 FL 一侧，无后端契约变化（`todo_view_preferences` 与 outbox 都在第 67 轮就定了）。
+  按"矩阵翻转只引已合并 SHA"，本轮既不能翻状态、也不该去改 `!105` 已占的那一行。
+- 只改 FL 一侧，无后端契约变化（`todo_view_preferences` 与 outbox 在第 67 轮就定了）。
 
 ### 复核
 
 第 74 轮的只读复核**还没拿到 `VERDICT`** —— 这一格是欠的，不得当作已通过。
-派单基准：`origin/develop..feat/328-sidebar-show-tags`（tip `04cc0ac` 及其后的文档提交），
-专项要问的两条：① #353 是不是真被修到位（含"loading 不画"是否把第 67 轮的默认值语义改坏）；
-② **同一类错误是否还在别处** —— 本轮病灶是"把 loading 折进默认值"，
-`sidebar.dart:61-64` 与全仓 17 处 `valueOrNull ?? …` 是不是同一形（集合回落空 = 正确的"没值画空"，
-布尔回落默认 = 会撒谎），要它按同一把尺逐处判，别只查我改的那一处。
+派单基准：`origin/develop..feat/328-sidebar-show-tags`（tip `f11cdb1` 及其后的文档提交）。
+专项要问的两条：
+① #353 是否真被修到位 —— 尤其"loading 不画"有没有把第 67 轮的默认值语义改坏，
+以及**我自己怀疑的那一点**：`hasError` 这一支是不是真的只在"从没读到过值"时才生效，
+带旧值的 `AsyncError` 走 `valueOrNull` 这件事在当前 riverpod 版本上是实测还是想当然（QE 探针给了答案，要它独立复验）；
+② **同一类错误是否还在别处** —— 病灶是"把两个语义不同的态折成一个"，
+`sidebar.dart` 里另外 4 处 `valueOrNull ??` 与全仓 17 处同形写法，哪些是"集合回落空 = 正确的没值画空"、
+哪些是"布尔/对象回落默认 = 会撒谎"，要它按同一把尺逐处判，别只查我改的那一处。
