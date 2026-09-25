@@ -8,7 +8,9 @@ import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_entities.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/list_repository.dart';
 
-/// specs/054 / FL Issue #341：清单拖拽排序要能同步出去。
+/// specs/054 / FL Issue #341：清单排序（上移/下移按钮）要能同步出去。
+/// ⚠️ 本面修的是仓储层契约；唯一入口页 `ListPage` 在 `lib/` 内零引用、无路由
+/// （`specs/026-todo-sidebar-list-management/spec.md:9-10`）⇒ 症状今天**潜伏**，不写成可复现。
 ///
 ///  develop 上的病灶（逐条实测，见 spec.md 二）：`ListRepository.reorder`
 /// （`list_repository.dart:163`）写完 `sortOrder` 就返回，**一条 outbox 都不登记**，
@@ -104,6 +106,8 @@ void main() {
 
     // 失败注入打在**依赖层**（queue），仓储与它的事务仍跑真身：
     // 若哪天把 enqueue 挪出事务，这条当场红。
+    // failOnCall 必须 >= 2：注入在第 1 次 enqueue 就抛时，第 1 条 UPDATE 写进去的 sortOrder
+    // 恰好等于 create() 的默认 0 ⇒ 位次 map 没变、outbox 也还没写 ⇒ 摘掉事务照样全绿（实测）。
     final repo = ListRepository(db, _ThrowingQueue(db, failOnCall: 2));
     await expectLater(
       repo.reorder([c.id, a.id, b.id]),
