@@ -48,6 +48,11 @@
 > PB–PL 对照都是 `+1`；12 条打补丁后全部 `-1`，每条红的都是**该咬的那一条**（逐条比对
 > `/tmp/g65/<探针>.log` 里的 `[E]` 行）。PJ 就是复核员那条 finding：补 loop 之前它对绿。
 >
+> **跑的基准要写清**：PA–PI 跑在 `a639484`，PJ/PK/PL 在门禁 3 修好后又跑了一次（`b823e7c`，
+> 日志 `/tmp/g65/rerun-*.log`，三条仍 `-1` 且 `lib/` 逐字节还原一致）。
+> `a639484 → b823e7c` 只动了测试文件里假仓储的构造签名，`lib/` 两边相同，
+> 所以 PA–PI 不需要重跑 —— 但这句是**推断**，写下来是为了让人能检查它。
+>
 > 另两条顺手学到的：`--plain-name "320px + 1.3 倍"` 的命中数**不能**用同名正则去 grep 输出
 > （`+` 在正则里是量词，数出来恒 0，会让人以为"根本没跑到用例"）—— 以对照组的
 > `+1: All tests passed!` 为准；`TaskWorkspaceHeader` 那个 `sortDirection:` 调用点在
@@ -79,19 +84,29 @@ PG 首轮**没红**：页面级用例里"重进清单"是再 `pumpWidget` 一次
 "菜单压根没开"上通过的。两条都已修：回调由调用方持有 + helper 结尾断言"智能（置顶优先）"在屏上
 + 每轮收尾把菜单收掉并断言收掉了。
 
-## 门禁原文记录（跑在**最终字节 `e21f2f2`** 上，日志 `/tmp/g64/gates2.out` 与末次终端输出）
+## 门禁原文记录（跑在**最终字节 `b823e7c`** 上，日志 `/tmp/g65/gates/g1..g6.log`）
 
 | 门禁 | 结果 |
 | ---- | ---- |
 | `git diff --check` | `rc=0`，无输出 |
-| `dart format --output=none --set-exit-if-changed <本轮 7 个显式文件>` | `Formatted 7 files (0 changed)`，`rc=0` |
-| `flutter analyze` | `No issues found! (ran in 1.8s)`，`rc=0` |
+| `dart format --output=none --set-exit-if-changed <本轮 9 个 .dart 显式文件>` | `Formatted 9 files (0 changed)`，`rc=0` |
+| `flutter analyze` | `No issues found! (ran in 1.5s)`，`rc=0` |
 | `flutter test --tags golden` | `00:05 +9: All tests passed!`，9 张基线未重录（golden 文件变更提示 0） |
-| `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:25 +906 ~26: All tests passed!`，`rc=0` |
+| `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:54 +907 ~26: All tests passed!`，`rc=0` |
 | `flutter build web --release --dart-define=…` | `✓ Built build/web`，`rc=0` |
 
-计数对账：干净 worktree 实跑基线 `9032005` ⇒ `02:29 +898 ~26`；本分支 `+906 = 898 + 8`（新文件 8 条），逐条对上。
+计数对账：干净 worktree 实跑基线 `9032005` ⇒ `02:29 +898 ~26`；本分支 `+907 = 898 + 9`
+（新文件 9 条 = 复核后从 8 条加到 9 条），逐条对上。`~26` 与基线一致。
 `pubspec.lock` 未进 PR（门禁跑完工作区 0 项）。
+
+### 这一版之前门禁 3 是红的（`rc=1`，1 个 info）
+
+新增的假仓储写成 `_FailingSortPreferenceRepository(AppDatabase database, SyncChangeQueue queue) : super(database, queue);`
+被 `use_super_parameters` 挑出来 —— 生产代码一行没错，门禁照样挂。本仓 `lib/` 与 `test/` 里
+`// ignore:` **零先例**（`rg "// ignore: (use_super_parameters|prefer_const|unused)"` 0 命中），
+所以按 lint 改写成位置型 super 参数 `Foo(super.database, super.queue)`（父类构造是 `this._db` 也没关系，
+位置型按位置转发，不要求同名），而不是压掉它。改完 `No issues found!`，9 条用例仍全绿。
+⇒ 门禁必须在**提交之后**跑，并且要认「红的那条是不是我这一版引入的」。
 
 ### 门禁 5 第一次是红的：四处既有断言被我的返回类型变更打断
 
