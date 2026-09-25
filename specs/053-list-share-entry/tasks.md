@@ -124,6 +124,8 @@ CX2/CX3 只有 `textContaining` 能咬、CX4 只有 `byIcon` 能咬，脚本对 
 | CX7 | 复核点名的四种图标/语义形状 + 下拉菜单：`IconButton(Icons.share)`、裸 `RichText`、`Icons.people_outline`、`Semantics(label:)`、`PopupMenuItem(Icons.share_outlined)` | 各 `+5 -1` | ① 一条全包 —— 这正是"按结果判"要买的东西：不认文案、不认 codepoint |
 | CX8 | 不起浮层，直接往那一行的 `trailing:` 里加一层 `Row(徽章, Icon)` | `+5 -1`，计数 47 → **54** | ③ 行子树组件数（reason「那一行的子树比 develop 形态多了组件」） |
 | 反向对照 A | `trailing:` 整个换成一个 `Icon`（**等量**替换，组件数不变） | `+6` **仍绿** ⇒ 判据按预期看不见 | 不由 ③ 负责；同一补丁在 `flutter test --tags golden` 下红 **5/9** 张（`wide-empty`、`wide-long-content`、`wide-populated`、`wide-selected`、`compact-selected`，diff 0.16%–0.20%）⇒ 计数网与像素网互补，各自的洞都写明 |
+| S10（第 4 轮新增） | **不起路由也不带屏障**：`Overlay.insert` 一个手写面板，文案还故意不写"共享协作" | `+5 -1` | ③ 整棵树元素数（reason「整棵树的元素数变了」）—— ①② 实测都躲过了，这条就是复核 F1 抓到的那个洞 |
+
 
 ⚠️ A 这条是**故意留下的反向对照**（脚本里判据是"必须仍绿"）：哪天有人把 ③ 改成"什么都能咬"
 （比如去数整棵侧栏），它就先红，逼着重新交代两张网的分工。

@@ -192,23 +192,28 @@ void main() {
     // `Icons.people_outline`（**正是本仓真入口自己用的图标**）、`Icons.share_outlined`、
     // 只给 `Semantics(label:)`、以及 `Image` 图标。⇒ 逐形枚举是追不完的。
     //
-    // 所以这里断的是**结果**，且分三件仪器 —— 每件都拿补丁量过射程（形状与读数记在
-    // `specs/053/tasks.md` 的 CX 表里），不声称哪一条单独覆盖"任何形态"：
-    //   ① ModalBarrier 数不变 ⇒ 拦 AlertDialog / showModalBottomSheet / showMenu。这三类自带
-    //      屏障；复核员点名的裸 `RichText`、`Icons.people_outline`、只给 `Semantics(label:)`
-    //      的下拉项都在这里被咬住（实测 6 种浮层形状无一漏网）。
-    //   ② 成员页没被推进去 + 没有 SnackBar ⇒ 拦"无屏障的整页 push"和"提示位"这两条 ① 的射程外
-    //      （`ScaffoldMessenger.showSnackBar` 起的入口就红在这里，不在 ①）。
-    //   ③ 下面那条"这一行的子树组件数 = 47" ⇒ 拦"往行里静态塞组件"：实测往 `trailing:` 里加一层
-    //      `Row(_Badge, Icon)` 会把 47 顶到 54（红）；但**等量替换看不见** —— 把
-    //      `badge > 0 ? _Badge : null` 整个换成一个 `Icon`，计数一动不动还是 47（绿）。
-    //      那一种由黄金基线兜：同一个补丁在 `flutter test --tags golden` 下红 5/9 张。
-    //      ⇒ ③ 与像素基线是互补的两张网，各有各实测到的洞（不画像素的组件、不涨组件数的重绘）。
+    // 所以这里断的是**结果**，分四件仪器 —— 每件都拿补丁量过射程与盲区（形状与读数记在
+    // `specs/053-list-share-entry/tasks.md` 的 CX 表里），没有一条单独声称覆盖"任何形态"：
+    //   ① ModalBarrier 数不变 ⇒ 拦自带屏障的三类：对话框、底部弹层、下拉菜单。第 4 轮复核点名的
+    //      裸 `RichText`、`IconButton(Icons.share)`、`Icons.people_outline`、带 `Semantics(label:)`
+    //      的对话框按钮、`PopupMenuItem(Icons.share_outlined)` 都在这里被咬住（实测 6 个形状）。
+    //   ② 成员页与 SnackBar 都不出现 ⇒ 拦"整页 push"与"提示位"这两条 ① 之外还要给人话的入口。
+    //   ③ 长按之后**整棵树的元素数一字不变** ⇒ 兜"不起路由、也不带屏障"那一族：
+    //      `Overlay.insert` 的手写面板就是这种（第 4 轮复核实测它能躲过 ①②，红在 ③）。
+    //      ③ 是**前后差**，所以看不见"静态就塞在那一行里"的东西 ⇒ 那一行由 ④ 钉。
+    //   ④ 这一行的子树组件数 = 47（**相等**判据，不是差值）⇒ 多一个、少一个都会红（实测
+    //      `Row(_Badge, Icon)` 47→54 红、`SizedBox.shrink` 47→42 红）。但**等量替换不一定看得见**：
+    //      `trailing:` 整个换成一个 `Icon` 时 47 一动不动（实测仍绿），那一种由像素兜 ——
+    //      同一个补丁在 `flutter test --tags golden` 下红 5/9 张。
+    //      ⇒ ③④ 与像素基线是三张互补的网，各自的洞写在这段与 spec FR-4 的表里，不合并成一句话。
     // 机制（同一件事的另一面，写进 spec FR-4）：`sidebar.dart:91` 构造 `_SmartRow` 时只给 `onTap`
     // （类定义 `:448`，参数表里没有 `onLongPress`，build 也不向下传），动作表唯一调用点只挂在
     // 真实清单行 `:626` ⇒ 拿不到是**结构性**的，不是某条 if 拦住的；别读成"我们显式实现了 :6"。
-    // ③ 的作用域收在行键 `todo-sidebar-row-inbox` 上，不数整棵侧栏：那样任何无关的侧栏改动都会
-    // 把它顶红，而这条只管这一行。
+    // 断言**顺序是故意的**：④ → ① → ② → ③。③ 数整棵树，放在前面会抢在 ①② 之前红，
+    // 那两条就再也证不出自己有牙（实测过一次：顺序写错时七个浮层形状全部"红了但不在预期判据上"，
+    // 见 tasks.md 的 CX 表下方那条自造缺陷）。
+    // ④ 的作用域收在行键 `todo-sidebar-row-inbox` 上，不数整棵侧栏：那样任何无关的侧栏改动都会
+    // 把它顶红，而这条只管这一行。③ 反过来**故意**数整棵树 —— 它是前后差，无关改动不会让它红。
     int rowWidgets() => tester
         .widgetList(
           find.descendant(
@@ -218,6 +223,8 @@ void main() {
         )
         .length;
     final barriersBefore = find.byType(ModalBarrier).evaluate().length;
+    // ③ 的基数：整棵树的元素数。必须在长按**之前**、且 settle 之后取。
+    final treeBefore = tester.allWidgets.length;
     await tester.longPress(inbox);
     await tester.pumpAndSettle();
     // 绝对基线，不是"前后差"：静态塞进那一行的组件在 before/after 两张快照里都在，差值判据
@@ -228,9 +235,9 @@ void main() {
       rowWidgets(),
       47,
       reason:
-          '那一行的子树比 develop 形态多了组件 ⇒ 给智能清单加了这个入口；'
-          '（只声称"多了"：等量替换它看不见，那一种由黄金基线兜，见上面 ③）'
-          '若确要改这一行的结构，改这个数并在 spec 里说明为什么',
+          '那一行的子树组件数不再是 develop 基线 47 ⇒ 这一行的结构被动过，而它只该在'
+          '「给智能清单加了这个入口」时被动过（诚实边界：这是**相等**判据，等量替换不一定'
+          '看得见，那一种由像素基线兜，见上面 ④）；确要改这一行的结构就改这个数并在 spec 说明',
     );
     expect(
       find.byType(ModalBarrier),
@@ -243,6 +250,13 @@ void main() {
       reason: '无屏障的整页 push 不在 ModalBarrier 射程内，单独钉（复核第 3 轮的 ③）',
     );
     expect(find.byType(SnackBar), findsNothing, reason: 'SnackBar 也不许成为第二个入口');
+    expect(
+      tester.allWidgets.length,
+      treeBefore,
+      reason:
+          '长按收集箱行之后整棵树的元素数变了 ⇒ 长按确实起了东西（哪怕是 '
+          '`Overlay.insert` 这种不带路由、也不带屏障的手写面板 —— 第 4 轮复核实测它能躲过 ①②）',
+    );
     // 下面两条是**次级**判据（钉的是"即便有浮层，也不许出现共享协作那四个字/那个图标"），
     // 不承担上界：`byIcon` 只认 `Icons.share` 那一个 codepoint，`textContaining` 默认不读 RichText。
     expect(
