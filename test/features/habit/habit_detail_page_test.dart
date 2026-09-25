@@ -511,6 +511,34 @@ void main() {
     expect(tester.takeException(), isNull, reason: '编辑弹层在 320px + 1.3 下溢出');
   });
 
+  testWidgets('读屏：「...」菜单三项各自念得出且是按钮（复核 F-3 补的钉）', (tester) async {
+    // 复核第 1 轮 F-3：换宿主之后菜单是**新表面**，全仓当时没有任何一条对它三项的语义断言
+    // （只钉了触发器「更多操作」）。按第 43 轮给格子补 isButton + label 的同一标准补这一钉。
+    final handle = tester.ensureSemantics();
+    try {
+      await pumpHabits(tester);
+      await tester.tap(find.text('喝水'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('habit-detail-menu')));
+      await tester.pumpAndSettle();
+
+      for (final label in const ['月度打卡表', '编辑', '删除']) {
+        expect(
+          find.bySemanticsLabel(label),
+          findsOneWidget,
+          reason: '菜单项「$label」念不出来，读屏用户只能靠猜',
+        );
+        expect(
+          tester.getSemantics(find.text(label)).flagsCollection.isButton,
+          isTrue,
+          reason: '「$label」要带按钮标志，否则读屏不知道它能按',
+        );
+      }
+    } finally {
+      handle.dispose();
+    }
+  });
+
   testWidgets('读屏：详情页「...」与颜色选项各有独立语义', (tester) async {
     final handle = tester.ensureSemantics();
     try {
