@@ -193,10 +193,20 @@ void main() {
     // 只断 `BottomSheet` + 两个私有键，会被"换个弹层类型给出共享入口"整条绕过 ——
     // 复核第 1 轮的反例实测：给 `_SmartRow` 的长按接 `AlertDialog(child: Text('共享协作'))`，
     // 六条仍 `+6 All tests passed!`。下面那句文案断言就是把这条反例钉住的。
+    // ⚠️ 判据**上界**（第 78 轮第 2 轮复核 N-A 量的）：`find.text` 只认"文案恰好等于"，
+    // 所以第 1 轮那版漏得过三种真违反的形状：`Text('共享协作 · 邀请成员')`、
+    // `SnackBar(Text('去共享协作'))`、以及**连 Text 都没有**的
+    // `IconButton(icon: Icons.share, tooltip: '共享协作')`。⇒ 这里用 `textContaining` 兜子串，
+    // 再按图标单独钉一条；本用例不声称拦得下任意形态（口径写进 spec FR-4）。
     expect(
-      find.text('共享协作'),
+      find.textContaining('共享协作'),
       findsNothing,
       reason: '「今天」「明天」等智能清单以及「收集箱」不支持共享协作（嘀嗒 :6）',
+    );
+    expect(
+      find.byIcon(Icons.share),
+      findsNothing,
+      reason: '图标型共享入口没有任何 Text ⇒ 文案判据对它无效，单独钉（复核 N-A 第 3 种逃逸形状）',
     );
     expect(find.text('编辑'), findsNothing, reason: '连「编辑」都没有 ⇒ 不是只把共享这一项筛掉了');
     expect(

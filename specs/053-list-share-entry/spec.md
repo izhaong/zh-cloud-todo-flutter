@@ -14,7 +14,7 @@
 ## 二、现状（基准 `zh-cloud-todo-flutter origin/develop@9032005`，逐条实测）
 
 ```
-git grep -n "showListActions"              origin/develop -- lib   # 定义 list_actions.dart:65（:64 是文档注释、:63 是 `];`）；唯一调用点 sidebar.dart:626
+git grep -n "showListActions"              origin/develop -- lib   # 定义 list_actions.dart:65（按 develop 字节：`:62` 是 `];`、`:63` 空行、`:64` 文档注释）；唯一调用点 sidebar.dart:626
 git grep -n "ListMemberPage"               origin/develop -- lib   # 定义 list_member_page.dart:48；唯一调用点 task_detail_pane.dart:1332
 git grep -n "共享协作"                      origin/develop -- lib   # 0 命中
 git grep -n "协作成员"                      origin/develop -- lib   # task_detail_pane.dart:1235 / :1327
@@ -30,7 +30,7 @@ git grep -n "Icons.more_horiz\|more_vert"  origin/develop -- lib/features/task/t
   这是**形态偏差**，不是能力缺失 ⇒ 记在下面的「取舍 1」，并回写矩阵缺口列。
 - 成员页的加人**没有独立入口**：owner 视角下邀请表单常驻（`list_member_page.dart:221`/`:246` 的
   「邀请权限」「邀请」是**提交按钮**，不是"打开表单"的入口）。⇒ 嘀嗒 `:8` 的「添加新成员」
-  在本仓**没有对应的控件**，把它当成"把『邀请』改名成『添加新成员』"是**错的**（那是提交动作）。见「取舍 2」。
+  在本仓**没有独立入口**（加人由 owner 视角下常驻的「邀请」提交按钮内联承担），把它当成"把『邀请』改名成『添加新成员』"是**错的**（那是提交动作）。见「取舍 2」。
 
 ## 三、用户故事
 
@@ -53,10 +53,10 @@ git grep -n "Icons.more_horiz\|more_vert"  origin/develop -- lib/features/task/t
   今天/明天/收集箱是**合成行**，走的是另外的 row 组件 ⇒ 天然满足 `:6`。
   **但这条必须有用例钉住**（否则将来谁给合成行接上 `showListActions` 就静默违反 `:6`）：
   判据 = 收集箱行长按**不出现**「共享协作」，正对照 = 普通清单行长按**出现**。
-  负断言一律按**文案**判（`find.text('共享协作')` / `find.text('编辑')`），不按私有键判：
-  只断 `BottomSheet` + 两个键会被"换个弹层类型给出共享入口"绕过
-  —— 复核第 1 轮反例（`/tmp/r79d/CX1.log`：给 `_SmartRow` 长按接 `AlertDialog(Text('共享协作'))`，
-  旧版六条仍全绿；补文案断言后同一反例 `+5 -1`，红的正是这条）。
+  负断言一律按**文案**判（`find.textContaining('共享协作')` / `find.text('编辑')`），不按私有键判：
+  只断 `BottomSheet` + 两个键会被"换个弹层类型给出共享入口"绕过。两处日志各管一半，别混引：
+  **旧版拦不住** = `/tmp/r79c/R1_counterexample.log`（`+6` 全绿）、**补强后有牙** = `/tmp/r79g/cx/CX1.log`（同一形状 `+5 -1`，红的正是这条）。
+  ⚠️ **判据上界（第 2 轮复核 N-A，这条之前没写下来）**：`find.text` 只认全等 ⇒ 带前后缀的`'共享协作 · 邀请成员'`、`SnackBar(Text('去共享协作'))` 当时都漏过 ⇒ 已改 `textContaining` 兜子串；**图标型入口**（`IconButton(icon: Icons.share, tooltip: '共享协作')`，压根没有 Text）则用`find.byIcon(Icons.share) findsNothing` 单独钉。本面**不声称**这张网拦得下任意形态，它声称的是：**给智能清单/收集箱行接上任何"文字含『共享协作』或分享图标"的入口，六条必红**。
 - **FR-5 只做入口与传参，不动后端契约**：成员页本身、`/app-api/todo` 的共享接口都在 develop 已存在
   （矩阵 #52 现状列已取证）⇒ 本面无 BE 改动。
 
@@ -67,9 +67,13 @@ git grep -n "Icons.more_horiz\|more_vert"  origin/develop -- lib/features/task/t
    （specs/052 的做法，不靠 `takeException()` 当唯一判据）。三项 ListTile 在 320px 下不溢出。
 2. **独立读屏语义**：新项就是 `ListTile(title: Text('共享协作'))` ——
    `ListTile` 自己就把 title 变成语义 label 并标成按钮 ⇒ 用例断 `getSemantics(key).label` **全等**
-   '共享协作'（不是 `textContaining`）且 `flagsCollection.isButton`，
+   '共享协作'（**正向**判据用全等；反向的 :6 判据用 `textContaining`，见 FR-4 的上界说明）且 `flagsCollection.isButton`，
    再加一条 `find.bySemanticsLabel('共享协作')` 成对。**没有另套 `Semantics` 包装**
    （套了反而多一层节点，specs/052 那次是 `IconButton` 的 tooltip 不常驻才需要包）。
+2b. **档位自检的定位器按文案取**：`MediaQuery.textScalerOf(tester.element(find.text('共享协作')))`，
+   **不取 `Key('sidebar-list-action-share')`** —— 键名是内部契约，改个私有键名不该让"溢出量测"这条红
+   （复核第 1 轮 X6 读数里 T6 的红是纯假警报）。测试文件 `:219` 与此处必须同口径
+   （第 2 轮复核 F2：N3 当时只改了测试、规格没跟着走）。
 3. **失败保留已加载数据**：本面无异步读；但 FR-3 是"失败要说得出"——提示出现时侧栏**还在**
    （断 `find.byType(Sidebar)` findsOneWidget）。
    ⚠️ 这里**不**用 `Key('todo-sidebar')`，理由要说准：该键**在 develop 上存在**
