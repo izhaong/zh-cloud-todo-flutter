@@ -15,7 +15,7 @@ import 'package:zh_cloud_todo_flutter/state/repositories/list_repository.dart';
 ///  develop 上的病灶（逐条实测，见 spec.md 二）：`ListRepository.reorder`
 /// （`list_repository.dart:163`）写完 `sortOrder` 就返回，**一条 outbox 都不登记**，
 /// 而同文件 `create:85 / rename:103 / moveToFolder:141 / delete:181 / saveSmart:212`
-/// 每个写方法都登记 ⇒ 换设备 pull 回来顺序是旧的，界面上却"刚刚拖好了"。
+/// 每个写方法都登记 ⇒ 换设备 pull 回来顺序是旧的，界面上却"刚刚排好了"。
 /// 本套用例钉的是**跨端成立**，不是"本地排个序"。
 void main() {
   Future<(AppDatabase, ListRepository)> openRepo() async {
@@ -47,7 +47,7 @@ void main() {
     return rows.map((r) => r.clientMutationId).toSet();
   }
 
-  test('拖完顺序：每个位次都登记一条 list/upsert，payload 的 sortOrder 就是位次', () async {
+  test('排完顺序：每个位次都登记一条 list/upsert，payload 的 sortOrder 就是位次', () async {
     final (db, repo) = await openRepo();
     final a = await repo.create(name: '工作');
     final b = await repo.create(name: '生活');

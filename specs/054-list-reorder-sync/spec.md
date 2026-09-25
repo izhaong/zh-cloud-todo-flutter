@@ -14,7 +14,7 @@
 `list_page.dart:40` 的 `_move(TodoList list, int delta)`，`:308` 与 `:313` 是两个
 `IconButton(tooltip: '上移')` / `IconButton(tooltip: '下移')`；该文件内 `Draggable`、
 `LongPressDraggable`、`ReorderableList`、`onPan` 命中数 **0**（`grep -cE` 实测）。
-⇒ 全篇能力名统一写**「清单排序（上移/下移）」**，不写"拖拽"。逐字引用那格去掉了我自加的
+⇒ 能力名一律写**「清单排序（上移/下移）」**。这条不靠"全篇已统一"这种全称句担保，自扫命令：`grep -rn "拖" specs/054-list-reorder-sync test/state/list_repository_reorder_sync_test.dart lib/state/repositories/list_repository.dart`，剩下的每一处命中都必须是**引用旧措辞的历史句**（本节与 tasks 的复核表），出现活的断言即失项。逐字引用那格去掉了我自加的
 三对 `**`（源页 `:78` 的字节里没有）。
 
 ## 二、现状（基准 `zh-cloud-todo-flutter origin/develop@9032005`，逐条实测）
@@ -31,7 +31,7 @@ git grep -n "_queue.enqueue" origin/develop -- lib/state/repositories/list_repos
 
 - **本地改得动、跨端不成立**：`reorder` 只写 `todo_lists.sortOrder` + `updatedAt`，
   **不往 `todo_sync_changes` 登记任何一行**。同文件其余**五个**写方法每个都 `enqueue(entity: list, op: upsert, …)`，
-  只有它漏了。⇒ 换设备 / 重装后按 pull 恢复出来的仍是旧顺序，而界面上"刚刚拖好了"。
+  只有它漏了。⇒ 换设备 / 重装后按 pull 恢复出来的仍是旧顺序，而界面上"刚刚排好了"。
   这不是"缺功能"，是**已有功能的主张说过头**：矩阵 #19 的「清单可排序」这一格，
   在补上同步登记之前只能算**本地半面**。
 - ⚠️ **而这条缺陷今天是"潜伏"，不是用户可复现的症状**（第 1 轮复核 C-2；我上一轮把静态读出的
@@ -90,7 +90,7 @@ git grep -n "_queue.enqueue" origin/develop -- lib/state/repositories/list_repos
    结果是 `a=0, b=1`，不是 `a=0, b=2`。理由：`sortOrder` 的语义是"同一可见序列里的位次"，
    留空洞会让下一次排序的读数依赖"曾经有多少条被删"，而 `watchAll` 只按值排、不看连续性 ⇒
    两种实现界面等价，但"无空洞"更好验证，也避免长期漂移成大整数。
-2. **不做"只登记变化的那几条"**：整批 upsert 里包含位次没变的行（拖一条会把后面所有行的 `sortOrder` 都重写）。
+2. **不做"只登记变化的那几条"**：整批 upsert 里包含位次没变的行（一次上移/下移会把该文件夹内所有行的 `sortOrder` 都重写）。
    代价是 outbox 行数 = 该文件夹内清单数；收益是"payload 与库内一致"这条判据可以无例外地成立。
    真嫌啰嗦时再做差量，但**那要另开一单**并给出"少登记但不能少收敛"的判据。
 3. 不引入 `PUT /list/reorder` 这类新端点：清单是同步白名单实体，走既有 `list/upsert` outbox 即可
