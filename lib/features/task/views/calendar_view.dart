@@ -80,8 +80,7 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
   Widget build(BuildContext context) {
     // FR-7：首值未到达或读失败都退回默认档（周一 = develop 既有行为）。
     // 这里不能用 when(error:)，那条分支会丢掉 AsyncError 里留存的旧值。
-    final firstDay =
-        ref.watch(weekStartProvider).valueOrNull ?? WeekStart.defaultFirstDay;
+    final firstDay = resolveWeekStartFirstDay(ref.watch(weekStartProvider));
     return Column(
       children: [
         _Toolbar(

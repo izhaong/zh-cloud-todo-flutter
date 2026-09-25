@@ -10,7 +10,6 @@ import '../../../core/theme/brand_colors.dart';
 import '../../../core/time/task_time_formatter.dart';
 import '../../../core/time/week_start.dart';
 import '../../../core/widgets/app_widgets.dart';
-import '../../../state/providers.dart';
 import '../task_detail_page.dart';
 import '../task_view_mutation_feedback.dart';
 
@@ -45,6 +44,7 @@ class TimelineView extends ConsumerWidget {
     this.onTaskSchedule,
     this.onCreateTask,
     this.zoom = 1,
+    this.firstDay = WeekStart.defaultFirstDay,
     this.scale = TimelineScale.week,
     this.collapsedGroupIds = const {},
     this.onZoomChanged,
@@ -56,6 +56,10 @@ class TimelineView extends ConsumerWidget {
   final List<TodoTask> tasks;
   final ValueChanged<String>? onTaskSelected;
   final double zoom;
+
+  /// 嘀嗒「设置-日期与时间-星期开始于」。默认周一 = develop 改造前行为。
+  /// 由调用方注入（本仓既有 `now`/`zoom` 也是注入的），这样裸 pump 的既有用例不受影响。
+  final int firstDay;
   final TimelineScale scale;
   final Set<String> collapsedGroupIds;
   final Future<void> Function(double zoom)? onZoomChanged;
@@ -84,10 +88,6 @@ class TimelineView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final now = _effectiveNow;
-    // FR-7：首值未到达或读失败都退回默认档（周一 = develop 既有行为）。
-    // 不能用 when(error:)，那条分支会丢掉 AsyncError 里留存的旧值。
-    final firstDay =
-        ref.watch(weekStartProvider).valueOrNull ?? WeekStart.defaultFirstDay;
     final groups = _buildGroups(tasks, now, firstDay: firstDay);
     final empty = groups.every((g) => g.items.isEmpty);
     final normalizedZoom = zoom.clamp(0.75, 1.5).toDouble();

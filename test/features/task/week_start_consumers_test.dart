@@ -55,10 +55,18 @@ String _headerGlyphOrder(WidgetTester tester) {
       .join();
 }
 
+/// 先回一帧「周日」，随后抛错 —— 让 provider 自己产生"带旧值的 AsyncError"。
+/// 不自己拼 AsyncValue：riverpod 2.6.1 没有"带着旧值构造 error"的公开入口。
+Stream<int> _sundayThenError() async* {
+  yield DateTime.sunday;
+  throw StateError('刷新偏好失败');
+}
+
 Future<void> _pumpCalendar(
   WidgetTester tester, {
   int? firstDay,
   bool pendingForever = false,
+  Stream<int>? stream,
 }) async {
   tester.view.physicalSize = const Size(900, 1600);
   tester.view.devicePixelRatio = 1;
@@ -66,6 +74,7 @@ Future<void> _pumpCalendar(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        if (stream != null) weekStartProvider.overrideWith((ref) => stream),
         // pendingForever = 首值未到（FR-7 的 loading 态）：给一条不回包也不报错的流
         if (pendingForever)
           weekStartProvider.overrideWith((ref) => const Stream<int>.empty()),
@@ -82,29 +91,19 @@ Future<void> _pumpCalendar(
   await tester.pumpAndSettle();
 }
 
-Future<void> _pumpTimeline(
-  WidgetTester tester, {
-  int? firstDay,
-  bool pendingForever = false,
-}) async {
+Future<void> _pumpTimeline(WidgetTester tester, {int firstDay = 1}) async {
   tester.view.physicalSize = const Size(1400, 4000);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
+  // 时间线不自己 watch provider（生产由 tasks_by_list_page.dart 注入），
+  // 所以这里按同样的方式喂参数：裸 pump、不套 ProviderScope。
   await tester.pumpWidget(
-    ProviderScope(
-      overrides: [
-        // pendingForever = 首值未到（FR-7 的 loading 态）：给一条不回包也不报错的流
-        if (pendingForever)
-          weekStartProvider.overrideWith((ref) => const Stream<int>.empty()),
-        if (firstDay != null)
-          weekStartProvider.overrideWith((ref) => Stream<int>.value(firstDay)),
-      ],
-      child: MaterialApp(
-        home: Scaffold(
-          body: TimelineView(
-            tasks: [_task(id: 'sun', dueAt: DateTime(2026, 9, 27, 9))],
-            now: _now,
-          ),
+    MaterialApp(
+      home: Scaffold(
+        body: TimelineView(
+          tasks: [_task(id: 'sun', dueAt: DateTime(2026, 9, 27, 9))],
+          now: _now,
+          firstDay: firstDay,
         ),
       ),
     ),
@@ -216,6 +215,24 @@ void main() {
     });
   });
 
+  group('resolveWeekStartFirstDay（FR-7 三态）', () {
+    test('有值用值', () {
+      expect(resolveWeekStartFirstDay(const AsyncValue<int>.data(7)), 7);
+    });
+
+    test('首值未到退回默认周一（不抛、不留空）', () {
+      expect(
+        resolveWeekStartFirstDay(const AsyncValue<int>.loading()),
+        WeekStart.defaultFirstDay,
+      );
+    });
+
+    test('报错且没有旧值时退回默认周一', () {
+      final v = AsyncValue<int>.error(StateError('故意读失败'), StackTrace.empty);
+      expect(resolveWeekStartFirstDay(v), WeekStart.defaultFirstDay);
+    });
+  });
+
   group('日历接线（FR-5 端到端）', () {
     testWidgets('默认档表头从左到右是 一…日', (tester) async {
       await _pumpCalendar(tester);
@@ -227,14 +244,26 @@ void main() {
       expect(_headerGlyphOrder(tester), '日一二三四五六');
     });
 
+    testWidgets('先给周日、随后流报错：旧档位保留，不被兜底盖回周一', (tester) async {
+      // 第 74 轮教训：这种"带旧值的 AsyncError"若走 when(error:) 就会被丢回默认档。
+      // 这里不自己造 AsyncValue（riverpod 2.6.1 没有那种公开构造），
+      // 用真实流先回包再报错，让 provider 自己产生该状态。
+      await _pumpCalendar(tester, stream: _sundayThenError());
+      expect(
+        _headerGlyphOrder(tester),
+        '日一二三四五六',
+        reason: '报错后应继续用已到达的旧档位（周日），而不是退回周一',
+      );
+    });
+
     testWidgets('首值未到（loading）时日历按默认周一画，不留空表头', (tester) async {
       await _pumpCalendar(tester, pendingForever: true);
       expect(_headerGlyphOrder(tester), '一二三四五六日');
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('首值未到（loading）时时间线也按默认周一分桶', (tester) async {
-      await _pumpTimeline(tester, pendingForever: true);
+    testWidgets('不传档位时按默认周一分桶（= develop 行为）', (tester) async {
+      await _pumpTimeline(tester);
       expect(find.text('本周'), findsOneWidget);
       expect(find.text('下周'), findsNothing);
       expect(tester.takeException(), isNull);

@@ -327,6 +327,14 @@ final weekStartPreferenceRepositoryProvider =
 /// 这样日历/时间线的读法统一是 `valueOrNull ?? default`。首值未到达或
 /// 读取报错时 `valueOrNull` 为 null，退回周一，与 develop 既有行为一致；
 /// AsyncError 仍带旧值时 `valueOrNull` 保留旧值，不会被兜底盖掉。
+/// 「星期开始于」三态读法（FR-7）：有值用值；首值未到或读失败退回默认档（周一）。
+///
+/// 只用 `valueOrNull`，不用 `when(error:)` —— 后者会把"带旧值的 AsyncError"里的
+/// 旧值丢掉（第 74 轮实测）。单独抽出来是因为消费面有两类：一类在 build 里能 watch
+/// （日历），一类是纯参数注入（时间线，既有 17 条用例裸 pump 无 ProviderScope）。
+int resolveWeekStartFirstDay(AsyncValue<int> value) =>
+    value.valueOrNull ?? WeekStart.defaultFirstDay;
+
 final weekStartProvider = StreamProvider<int>((ref) {
   final repository = ref.watch(weekStartPreferenceRepositoryProvider);
   if (repository == null) {
