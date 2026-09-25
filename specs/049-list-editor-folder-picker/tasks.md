@@ -12,8 +12,9 @@
 - [x] FR-5 从文件夹里点新建 ⇒ 预选那个文件夹（隐式行为，探针 PG 证）
 - [x] FR-6 四件套（见下表；第 1 版的③是假绿，复核后补了「移入失败」才真锁住；第 2 轮又抓到"仓库为 null"与"新建失败文案"两格 0 覆盖，已补）
 - [ ] #339 的另两子面：**颜色** 与 **Emoji 图标** 未做（要新增本地列 + 后端 `TodoListDO` 字段 ⇒ 属"先修契约再动前端"），Issue 保持 open
-- [x] 只读复核第 1 版 `VERDICT: FAIL` → 补测后第 2 版仍 `VERDICT: FAIL`（3 条覆盖缺口 + 文档措辞）→ 已按发现补测并重跑门禁；**第 3 版复核待派**
-- [ ] 矩阵 #19 回写 —— 本轮开工时 `state=open` 实测 9 条（本 PR !352 + !351 !350 !347 !346 !322 !319 !314 !311），**除 !352 外一条都没合并** ⇒ 只能写「已实现待合并」，状态列不翻转
+- [x] 只读复核第 1 版 `VERDICT: FAIL` → 补测后第 2 版仍 `VERDICT: FAIL`（3 条覆盖缺口 + 文档措辞）→ 第 3 版仍 `FAIL`，但**只抓到 2 条 P2 + 3 条 nit，全是文档/口径级**（无新增覆盖缺口）⇒ 5 条全部采纳并落到 `plan.md`/`spec.md`/本文件与 `5475e63`
+- [ ] 第 4 版复核（范围只圈在本轮 3 处文档改动 + `5475e63` 的拓扑改动与其 `PV`/PM′ 复测）尚未派
+- [ ] 矩阵 #19 回写 —— 第 3 版复核时 `state=open` 实测 **10 条**（本 PR !352 + !311 !314 !319 !322 !346 !347 !350 !351 !354），**除 !352 外一条都没合并** ⇒ 只能写「已实现待合并」，状态列不翻转
 
 ## 四件套（新增可见界面 = 编辑器里那一格下拉）
 
@@ -21,7 +22,7 @@
 | -- | ---- | ---- |
 | 320px + 1.3 倍 | 在弹层自己的 context 上 `textScaler: TextScaler.linear(1.3)` + 320×700。收起态用 `takeException`（有力：复核员的 `ROW_overflow` 变异红在 `overflowed by 185 pixels`）；**展开态不写溢出判据**（PS/PR/PU 三条变异实测它是恒真的，见下节） | `320px + 1.3 倍字号：名称、所属文件夹与按钮都排得下` |
 | 独立读屏语义 | `MergeSemantics` 包住 `InputDecorator` ⇒ 一个节点念「所属文件夹 无」，且 `isButton`/`tap`/`focus` 一个没丢（实测对照见下节） | `读屏：一个节点同时念出「所属文件夹」与当前值，且仍是按钮` |
-| 失败保留已加载数据 | **三条**覆盖三个失败分支，每条都断"框不关 + 已填名称 + 已选归属 + 库里没写"：移出失败、移入失败（无归属→「项目」）、新建失败（`create` 抛错）。只测移出的版本放过过真 bug，见 PL；新建那半句此前 0 覆盖，见 PQ | `移动失败…` + `移入失败…` + `新建失败（不是移动失败）…` |
+| 失败保留已加载数据 | **四条**覆盖四个失败出口：移出失败（原归属→「无」）、移入失败（无归属→「项目」）、新建失败（`create` 抛错）、仓库为 null。断言按各条实际填的内容分两种：移出/新建/仓库 null 三条断"框不关 + 已填名称 + 已选归属 + 库里没写"，**移入失败那条不填名称**（它只改归属），只断框不关 + 已选归属还在 + 库里没写。只测移出的版本放过过真 bug，见 PL；新建与 null 两格此前 0 覆盖，见 PQ / P0 | `移动失败…` + `移入失败…` + `新建失败（不是移动失败）…` + `本地库还没就绪…` |
 | 过期响应不覆盖新响应 | 归属是 State 里的**点中字面值**，文件夹 stream 只是补候选；stream 再发一次也不回退已选 | `文件夹列表晚到：占位换成真名，之后再来一次也不覆盖已选` |
 
 ### 读屏是实测出来的，不是推的
@@ -47,10 +48,14 @@
 
 ## 反向探针（每条先证探针本身打上了：目标串在 HEAD 字节里恰好命中 1 次）
 
+探针代号的读法：`PA`–`PN` 是字母序；`P0` 里是**数字零**（取自复核员的变异名 `NULL_branch_silent`，
+它不在字母序列里，别读成 `PO`）；`PQ`/`PR`/`PS`/`PV` 是第 3 轮复核之后续的。区间记法一律写全，不写"PB…PK 之类"。
+
 **口径：全部跑单文件**（`flutter test test/features/list/list_editor_folder_picker_test.dart`），
 15 条用例的最终版本。这套数字**每次增删用例都整批重测**：第一版是 10 条、复核补测后 13 条、
 本轮补 FR-6 与新建失败两格后 15 条 ⇒ 旧数字一律作废（脚本 `/tmp/r68/probes_final14.py`，
-汇总 `/tmp/r68/PROBES_final15c.log`（15c = 撤掉恒真断言后的最终字节），每条完整日志 `/tmp/r68/probe14/<码>.log`，跑完 `RESTORE cmp: SAME`）。
+汇总 `/tmp/r68/PROBES_final15d.log`（15d = 生产拓扑那条改完、tip `5475e63` 的最终字节；上一版 15c 跑在 `015a31a`，
+两者**共有探针的数字逐条相同**，15d 只多出 `PV` 一条），每条完整日志 `/tmp/r68/probe14/<码>.log`，跑完 `RESTORE cmp: SAME`）。
 
 | 探针 | 抽掉什么 | 结果 | 红在哪条 |
 | ---- | -------- | ---- | -------- |
@@ -63,7 +68,7 @@
 | PG | 打开时不预选 | `+10 -5` | 预选、编辑移出、只改名、晚到、已删除 |
 | PH | 去掉 `MergeSemantics` | `+14 -1` | 读屏那条（四件套②唯一锚点） |
 | PI | 去掉占位候选 | `+8 -7` | 「踩到的断言」那节列的 7 条（新增的两条失败用例不受影响 ⇒ 它们走的是 catch，不是占位） |
-| PJ | 显示值改回入参派生（非受控） | `+8 -7` | 晚到（四件套④）+ 新建 + 两条失败用例 + 本地库未就绪 + 读屏 |
+| PJ | 显示值改回入参派生（非受控） | `+8 -7` | 晚到（四件套④）+ 新建 + 移出失败 + 移入失败 + 新建失败 + 本地库未就绪 + 读屏（共 7 条） |
 | PK | 先改名再移动 | `+14 -1` | 移出失败那条（断言 `after.name == '工作'`） |
 | **PL** | **失败时顺手清空已选归属**（复核 P1 的那个 bug） | `+13 -2` | 移入失败 + 新建失败 ⇒ 两条"失败后已选还在"的断言都咬得住 |
 | PM | 候选菜单永不展开（`onChanged: null`） | `+2 -13` | 13 条红，含 320 那条（靠 `openMenu` 自带的自检，见 PM′） |
@@ -73,12 +78,14 @@
 | PR | 候选项塞成 500dp 宽（横向溢出） | `+8 -7` | **320 那条不红** ⇒ 横向没有可失败的判据（`_DropdownMenu` 的父约束把框宽夹住） |
 | PS | 候选项灌 60 行文本（复核 `MENU_tall_text` 原样） | `+4 -11` | 320 那条红，但失败原因是 `find.text('项目')` 查不到（文案被换掉了），**不是** `takeException` |
 | **PU** | 候选项塞成 2000px 高、**文案保留**（复核 `MENU_tall_item`） | `+8 -7` | **320 那条不红** ⇒ 展开态连纵向也没有判据（这条是决定性的一条） |
+| **PV** | **收起态**操作行的「取消」文案撑成 12 个字（复核第 3 轮 nit：换生产拓扑后要重新证明这条有力） | `+14 -1` | 只有 320 那条红，红在 `A RenderFlex overflowed by 250 pixels on the right.` ⇒ 生产拓扑（`showModalBottomSheet`）下收起态那句 `takeException` 依然量得到溢出 |
 
 ### PM′：证明「320 那条红是因为有自检」，不是靠自己发现菜单没开
 
-两个文件一起改（脚本 `/tmp/r68/probe_PM_prime.py`，日志 `/tmp/r68/PROBE_PM_prime_c.log`）：
-lib 里 `onChanged: null` + 测试里删掉 `expect(menuItems(tester), isNotEmpty)`。
-结果 `+3 -12`，且 **320 那条不红** ⇒ 它红在 PM 完全靠 `openMenu` 那句自检。
+两个文件一起改：lib 里 `onChanged: null` + 测试里删掉 `expect(menuItems(tester), isNotEmpty)`。
+脚本 `/tmp/r68/probe_PM_prime.py`，日志 `/tmp/r68/PROBE_PM_prime_c.log`（跑在 `015a31a`）；
+320 那条换成生产拓扑后（`5475e63`）整探针重跑一遍 = `/tmp/r68/PROBE_PM_prime_d.log`，**结论一字未变**。
+两遍都是 `+3 -12`，且 **320 那条不红**（12 条失败清单里没有它）⇒ 它红在 PM 完全靠 `openMenu` 那句自检。
 这条是复核第 1 轮 P2 的闭环：省掉自检，展开态的那两句就永远在测收起态。
 
 ### 「展开态不溢出」这句主张已撤销（复核第 2 轮 P2，两条变异实测它是恒真的）
@@ -95,7 +102,8 @@ lib 里 `onChanged: null` + 测试里删掉 `expect(menuItems(tester), isNotEmpt
 `MENU500_plus_rect` 也测不到），纵向不报错 ⇒ **"展开的候选菜单不溢出"是一句恒真断言**，
 已从用例里删掉，改成只保留「菜单真打开 + 候选文案在场」。
 收起态那句 `takeException` **有力**：复核员的 `ROW_overflow`（操作行塞长文案）实测红在
-`A RenderFlex overflowed by 185 pixels`。
+`A RenderFlex overflowed by 185 pixels`；换生产拓扑后我用 `PV` 在同一处重测，红在
+`A RenderFlex overflowed by 250 pixels on the right.` ⇒ 那句判据不是靠 `Scaffold.body` 的宽松约束侥幸过关的。
 
 
 **PA 第一次跑出来的不是"红"，是 8 分钟不退出 —— 根因在我自己的用例里**：
@@ -104,19 +112,19 @@ develop 字节的弹层根本不 watch `foldersStreamProvider` ⇒ 没人订阅 
 探针把"红"伪装成"没结论"。改成 `broadcast()` 后同一份字节一秒收口（当时 13 条口径是 `+1 -12`，15 条口径是 `+1 -14`）。
 教训：**探针跑不完先怀疑夹具**，别把"runner 不退出"读成"实现没问题"。
 
-## 门禁原文记录（跑在 tip `015a31a` 的 dart 字节上，日志 `/tmp/r68/gates/final_r3.log`）
+## 门禁原文记录（跑在 tip `5475e63` 的 dart 字节上，日志 `/tmp/r68/gates/final_r4.log`）
 
-表里记的是**代码字节**：`015a31a` 之后还有一笔只改 `specs/*.md` 的提交（本文件自己），
-它不动任何 dart ⇒ 这六条对它照样成立。门禁跑之前工作区里已有的 `specs/*.md` 改动
+表里记的是**代码字节**：`5475e63` 之后本文件与 `plan.md` 还各有文档改动（未提交），
+它们不动任何 dart ⇒ 这六条对它照样成立。门禁跑之前工作区里已有的 `specs/*.md` 改动
 会在"收尾 `git status --short`"那一栏露出来，已核对不含 `pubspec.lock`。
 
 | 门禁 | 结果 |
 | ---- | ---- |
 | `git diff --check origin/develop...HEAD` 与工作区 | `rc=0`，无输出 |
 | `dart format --output=none --set-exit-if-changed <本轮 2 个 dart 文件>` | `Formatted 2 files (0 changed)`，`rc=0` |
-| `flutter analyze` | `No issues found! (ran in 1.6s)`，`rc=0` |
+| `flutter analyze` | `No issues found! (ran in 2.2s)`，`rc=0` |
 | `flutter test --tags golden` | `00:04 +9: All tests passed!`，`rc=0`；`git status --short test/goldens` 为空 ⇒ 9 张基线未重录（第 1 轮复核另用 `diff -rq` 逐字节比对副本，同样未变） |
-| `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:27 +913 ~26: All tests passed!`，`rc=0` |
+| `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:45 +913 ~26: All tests passed!`，`rc=0` |
 | `flutter build web --release --dart-define=…` | `✓ Built build/web`，`rc=0` |
 
 计数对账：`+913 = 898 + 15`（898 = 在 develop 副本 `/tmp/r68-baseline` 实测，日志
@@ -125,10 +133,12 @@ develop 字节的弹层根本不 watch `foldersStreamProvider` ⇒ 没人订阅 
 `pubspec.lock` 未进提交（**前提：门禁与 `source ~/development/env-flutter.sh` 同 shell**，否则 analyze 会把
 lock 里 150 行 url 翻成 pub.dev）。
 
-**这是第 4 遍**：第 1 遍（`e231bf4`）5/6，门禁 3 报 `unused_import` ⇒ 单提 `840af71` 后第 2 遍 6/6；
+**这是第 5 遍**：第 1 遍（`e231bf4`）5/6，门禁 3 报 `unused_import` ⇒ 单提 `840af71` 后第 2 遍 6/6；
 第 1 轮复核补 3 条用例后（`aad865c`）第 3 遍 6/6（`+911`）；
-第 2 轮复核再补 2 条用例并撤掉 1 条恒真断言后（`015a31a`）**六条全部重跑**，本表是这一遍。
-前三遍日志：`/tmp/r68/gates/attempt1.log`、`/tmp/r68/gates/final.log`、`/tmp/r68/gates/final_r2.log`。
+第 2 轮复核再补 2 条用例并撤掉 1 条恒真断言后（`015a31a`）第 4 遍 6/6（`+913`）；
+第 3 轮复核 nit-3（320 那条要按生产拓扑量）改完测试后（`5475e63`）**六条再一次全部重跑** = 本表。
+前四遍日志：`/tmp/r68/gates/attempt1.log`、`/tmp/r68/gates/final.log`、`/tmp/r68/gates/final_r2.log`、
+`/tmp/r68/gates/final_r3.log`。
 
 ## 复核（第 1 版 `VERDICT: FAIL`：1 条 P1 + 5 条 P2 + 1 条 nit，全部采纳）
 
@@ -169,10 +179,31 @@ lock 里 150 行 url 翻成 pub.dev）。
 ③ FR-1「与侧栏同一套父子关系」我这轮只证到分隔符同源（`folder_page.dart` 与 `list_editor_sheet.dart`
 都是 `join(' / ')`），**侧栏渲染路径未测**，不声称一致。
 
+### 第 3 版复核（补测 + 撤销恒真断言之后）：`VERDICT: FAIL`，2 条 P2 + 3 条 nit，**全是文档/口径级**，无新增覆盖缺口
+
+复核在副本 `/tmp/rev68c-copy`（全量跑 `/tmp/rev68c-full`）上做，跑完 `WORKTREE_CLEAN: yes`。
+本轮值得记的是：**没有一条 P1**，也没有一条"某分支 0 覆盖" ⇒ 前两轮的补测把实质缺口堵住了；
+剩下 5 条都是"文档写的和代码/实测对不上"。逐条回源复验后的处置：
+
+| 发现 | 我的复验 | 处置 |
+| ---- | -------- | ---- |
+| **P2-1** `plan.md:10` 的用例分解写成 14 条（归属读写 4 + 四件套 4 + 负路径 5 + 嵌套 1），与 `tasks.md` 的 15 条口径不一致 | `grep -c "testWidgets" test/features/list/list_editor_folder_picker_test.dart` = **15** ⇒ 复核对，是我的 `plan.md` 落后一轮 | **采纳**。`plan.md` 改成 15 = 归属读写 4 + 四件套 4 + 负路径/降级 6 + 嵌套命名 1 |
+| **P2-2** 四件套③「失败保留已加载数据」在 `spec.md`/`tasks.md` 只写了两条出口（移动失败、仓库为 null），代码实际是**三条**（新建失败那句文案不同） | 读 `list_editor_sheet.dart` 的 catch：`existing == null ? '新建清单失败，请重试' : '移动到文件夹失败，请重试'` ⇒ 三出口成立 | **采纳**。两处措辞补齐三出口，且每出口各有用例（PQ/P0/PL 分别只红一条） |
+| **nit-1** 「相撞面」一段仍写 9 条 open PR，且 PJ 那条的描述与表里数字对不上 | 重新过一遍 `list_pull_requests(state=open)`：**10 条**（!354 是第 69 轮新开的，我数 PR 时它还没落地） | **采纳**。相撞面改成 10 条并列出编号；PJ 行改成"共 7 条"并逐条点名 |
+| **nit-2** 探针代号 `P0` 极易读成字母 O；`PQ`–`PU` 的来历没交代 | 对，`P0` 取自复核员的变异名 `NULL_branch_silent`，不在字母序里 | **采纳**。表前加"探针代号的读法"一段，并规定区间记法一律写全 |
+| **nit-3** 320px 那条把 `ListEditorSheet` 直接放在 `Scaffold.body` 里量，与生产入口（`showModalBottomSheet(isScrollControlled: true)`）不同拓扑 ⇒ 宽松约束可能掩盖溢出 | 查同仓先例：`test/features/task/task_quick_add_sheet_test.dart:171` 就是从 `showModalBottomSheet` 入口量。复核对，我这层的"body 也能量"是推理不是证据 | **采纳**（`5460283`→`5475e63`）。改按生产拓扑：主页放一个按钮 → `showModalBottomSheet` → `ListEditorSheet`。**改完必须重证这条有力** ⇒ 新增探针 `PV`（操作行「取消」撑长）实测 `+14 -1`、只红 320 那条、红在 `RenderFlex overflowed by 250 pixels`；PM′ 也重跑一遍仍是 `+3 -12` 且 320 不红 |
+
+第 3 轮复核还独立复核了"撤销展开态溢出断言"这一决定，结论是**作者结论成立**（它自己量到
+`_DropdownMenu` 的候选列表被 `getConstraintsForChild` + `ListView` 夹在可用尺寸内），
+所以那条撤销不是我在给自己找台阶 ⇒ 记在这里，免得下一轮又有人去补那句恒真断言。
+
 ## 相撞面
 
 `lib/features/list/list_editor_sheet.dart`、`test/features/list/`、`specs/049-*` 与
-**8 条 open PR 的改动文件表逐条比对（`/pulls/N/files`）命中 0** ⇒ 不同文件，无需 merge-tree 复测。
+**10 条 open PR 的改动文件表逐条比对（`/pulls/N/files`）命中 0** ⇒ 不同文件，无需 merge-tree 复测。
+（清单第 3 版复核时是 10 条：!311 !314 !319 !322 !346 !347 !350 !351 !352 !354；
+新开的 !354 动的是 `folder_actions.dart`/`folder_page.dart`/`sidebar.dart`/`specs/050-*`/`test/features/folder/`，
+与本 PR 的两个 dart 文件无交集。）
 （第 69 轮那条 `feat/312-folder-disband-entry` 也过 `list_editor_sheet.dart` 吗？不过 —— 它动的是
 `folder_actions.dart`/`sidebar.dart`/`folder_page.dart`；但它与 !351 在 `sidebar.dart` 撞了一处，
 记在 `specs/050-*/tasks.md`。）

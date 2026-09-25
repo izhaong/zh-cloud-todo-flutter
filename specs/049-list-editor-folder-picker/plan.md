@@ -7,7 +7,7 @@
 | 文件 | 动什么 |
 | ---- | ------ |
 | `lib/features/list/list_editor_sheet.dart` | 唯一的实现文件：State 多持有 `_folderLocalId` 与 `_error`；`build` 里加一格 `InputDecorator(labelText: '所属文件夹')` 包受控 `DropdownButton<String?>`；`_save` 改成"先移动后改名"，失败写可见提示且不关弹层 |
-| `test/features/list/list_editor_folder_picker_test.dart` | 新增 14 条用例（归属读写 4 + 四件套 4 + 负路径/降级 5 + 嵌套命名 1）；最终数字见 `tasks.md` 探针表 |
+| `test/features/list/list_editor_folder_picker_test.dart` | 新增 15 条用例（归属读写 4 + 四件套 4 + 负路径/降级 6 + 嵌套命名 1）；每条钉什么见 `tasks.md` 探针表 |
 | `specs/049-list-editor-folder-picker/*.md` | 本规格 |
 
 **不改**：数据模型（`folderLocalId`/`folderId` 列已在 `app_database.dart`）、`ListRepository`（`create` 已收 `folderLocalId`，`moveToFolder` 已含 `list/upsert` outbox）、`providers.dart`、路由、侧栏、`schemaVersion`（仍 22）。
@@ -35,5 +35,6 @@
 
 ## 相撞面
 
-`lib/features/list/list_editor_sheet.dart` 与 `test/features/list/` 在 8 条 open PR（!351 !350 !347 !346 !322 !319 !314 !311）
-的改动文件表里**均无命中**（逐条 `/pulls/N/files` 对过）⇒ 无同文件相撞，不需要 merge-tree。
+`lib/features/list/list_editor_sheet.dart` 与 `test/features/list/` 在 10 条 open PR
+（!311 !314 !319 !322 !346 !347 !350 !351 !352 !354）的改动文件表里**均无命中**（逐条 `/pulls/N/files` 对过）
+⇒ 无同文件相撞，不需要 merge-tree。
