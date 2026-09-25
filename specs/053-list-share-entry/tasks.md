@@ -134,6 +134,7 @@ PRESENT 正对照：侧栏仍把长按接到 showListActions           命中 1
 | `pageBack()` 之后弹层仍在 | 动作表是 `showModalBottomSheet`，`pageBack()` 找路由返回按钮（实测 `Found 0 widgets with type "CupertinoNavigationBarBackButton"`）⇒ 它关不掉 sheet，于是"收集箱没有这一项"是在**旧弹层之上**测的 ⇒ 假绿通道 | 先用 `ModalBarrier` 关，实测关掉后 `scrollUntilVisible` 又抛 `Bad state: No element`（那棵树的滚动容器不可依赖）⇒ **最终改成反例另起一条用例、正对照留在第 1 条**，不在同一棵用过的树上断负结论 |
 | 一条用例里 `_pump` 两次，drift 打 `WARNING … AppDatabase multiple times` | 为了在同一条里做"正对照 + 反例"而复用了场景 | 拆成两条用例各自一棵树；正对照的引用写进注释。负向断言不建立在"上一棵树的残留状态"上 |
 | 未使用的 `providers.dart` import | 改版过程中留下的 | 删（门 3 `flutter analyze` 会报 `unused_import`，不是可忽略项） |
+| N8 的留痕指针**两处写偏**（派复核前自查出来的）：① 写成「`probes-r2.log` **首行**」，实际那文件第 7 行才是「锚点干跑：异常 0」；② 那份日志是**改判据之前**那次的产物，而最终字节的 `/tmp/r79g/probes-all.log` 里**根本没有干跑留痕**（`grep -c 锚点干跑` = 0，因为 `all` 模式不会自动打印 `check`） | 位置词（"首行"）凭印象写、没 `head` 过；以及把"我跑过 check"当成"最终日志里有 check 的留痕" | ① 措辞改成标行号；② 在最终字节上另出 `/tmp/r79g/probes-check.log`（X1–X6 各命中 1、第 7 行异常 0）并引它，**不往已引为证据的 `probes-all.log` 里追加**（追加会让"末两行是结论 + 收尾"那句失效） |
 
 ## 遗留与下一轮
 
@@ -145,7 +146,9 @@ PRESENT 正对照：侧栏仍把长按接到 showListActions           命中 1
      按文案补强并由 CX1 反例证明现在有牙。
 - **复核第 1 轮的 11 条非阻塞**：N1（FR-1 自相矛盾）、N3（T6 解耦）、N4（`:6` 引文加粗范围照抄原文）、
   N5（取舍 2 措辞 + `:242`/`:246` 定位）、N6（138→137）、N7（「末行」实为日志第 62 行）、
-  N8（`check` 干跑留痕：`/tmp/r79e/probes-r2.log` 首行「锚点干跑：异常 0」）、N10（套件不相交）、
+  N8（`check` 干跑留痕：最终字节上**另出一文件** `/tmp/r79g/probes-check.log`，第 7 行
+  「锚点干跑：异常 0」，X1–X6 各命中 1；改前我先引 `/tmp/r79e/probes-r2.log` 并写成"首行"，
+  实为第 7 行，且那份是改判据前那次的产物 ⇒ 两处都已按实测改见下表最后一行）、N10（套件不相交）、
   N11（门 1 两读数的信息量差）已在本笔与 spec.md 一并改掉；
   **N2**（名单外的红）改的是判据脚本本身；
   **N9 未在本面补测**：详情面板 `members` 分支的新提示语与共用函数调用**零用例覆盖**（只由那条 ABSENT grep 守着，
