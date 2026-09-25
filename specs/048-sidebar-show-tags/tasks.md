@@ -68,16 +68,19 @@
 
 ## 门禁（最终字节，commit 之后跑）
 
-跑在提交后的最终字节 `2dd3dc1` 上，日志 `/tmp/r67-gates.log`。
+跑在提交后的最终字节上。第一版 `2dd3dc1`（日志 `/tmp/r67-gates.log`）六条全绿；
+复核补了 PG 那一步之后**六条在 `f7df38e` 上全部重跑**（日志 `/tmp/r67/gates_r2.log`），本表是重跑后的字节。
 
-| # | 门禁 | 结果 |
+| # | 门禁 | 结果（`f7df38e`） |
 | - | ---- | ---- |
-| 1 | `git diff 9032005..HEAD --check` 与工作区 | `rc=0`，无输出 |
+| 1 | `git diff --check origin/develop...HEAD` 与工作区 | `rc=0`，无输出 |
 | 2 | `dart format --output=none --set-exit-if-changed <本轮 7 个显式文件>` | `Formatted 7 files (0 changed)`，`rc=0` |
-| 3 | `flutter analyze` | 第一遍 `rc=1`（`prefer_is_not_empty` 一条，见下）⇒ 改完重跑 `No issues found!`，`rc=0` |
-| 4 | `flutter test --tags golden` | `+9: All tests passed!`，`rc=0`；`git status --short` 为空 ⇒ 9 张基线未重录 |
-| 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:24 +912 ~26: All tests passed!`，`rc=0` |
+| 3 | `flutter analyze` | 第一遍（`2dd3dc1` 之前）`rc=1`（`prefer_is_not_empty` 一条）⇒ 改完重跑；重跑后 `No issues found!`，`rc=0` |
+| 4 | `flutter test --tags golden` | `+9: All tests passed!`，`rc=0`；`git status --short test/goldens` 为空 ⇒ 9 张基线未重录 |
+| 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:46 +912 ~26: All tests passed!`，`rc=0` |
 | 6 | `flutter build web --release --dart-define=TODO_API_BASE_URL=… --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web`，`rc=0` |
+
+补的那一步在**既有用例内部** ⇒ 用例数不变，`+912` 与补之前一致（不是"没跑到"）。
 
 计数对账：`+912 = 898 + 14`。14 = 本轮新增（仓库层 6 + 侧栏 3 + 设置 5）。
 基线 898 **本轮由本轮自己的证据反算**：`git diff --name-status origin/develop...HEAD -- test` 全为 `A`（只新增测试文件、没改任何既有用例）
@@ -107,6 +110,10 @@
 
 复核对 2/3/4/6 项的独立实测（默认值三条降级路径、写失败后界面停在原值、读屏两条配对断言各自变异都红、
 `analyze` 干净、`diff --check` 干净、`pubspec.lock` 未进提交、本分支没碰 docs）与我的自述一致，无需返工。
+
+**两处计数口径差异，记下来不藏**：复核在**单文件**口径下量到 PA 红 `-1`、PB `+4 -10`，
+我在**全量**口径下记的是 `-2` 与 `-5` ⇒ 数字不同不是结论不同（都红、红在该门控上），
+但探针表里的数字标明口径才有意义。本轮起：探针一律跑**单文件**并写明，全量口径交给门禁 5。
 
 ## 已知偏差（本轮不修，除 #353 外）
 
