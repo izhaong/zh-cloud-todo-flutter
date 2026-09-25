@@ -23,7 +23,8 @@ import 'support/todo_visual_fixture.dart';
 /// `:186`「## 按修改时间排序（新增）」同样给两个方向（`:192-193`）；`:219` 场景写「排序：创建时间（从新到旧）」。
 /// `:143`「按时间排序」与 `:156`「按优先级排序」两节**没有**方向 ⇒ 方向只属于这两档时间轴。
 ///
-/// develop 上方向是写死的降序（`task_query_repository.dart:38-39` 两条 `right.compareTo(left)`），
+/// develop 上方向是写死的降序（`task_query_repository.dart:36-37`：
+/// `TaskSort.createdAt => right.createdAt.compareTo(left.createdAt)` 与同形的 `updatedAt` 一条），
 /// `lib/` 里 `从旧到新`、`ascending` 全 0 命中。本文件钉的就是"用户可切"这一格。
 void main() {
   Future<AppDatabase> seededDb() async {
@@ -86,12 +87,12 @@ void main() {
     expect(
       TaskSortDirection.newestFirst.label,
       '从新到旧',
-      reason: '措辞照《…03-用分组和排序管理任务》:175/:219，不写「倒序」「降序」',
+      reason: '措辞照《…03-用分组和排序管理任务》:176/:219，不写「倒序」「降序」',
     );
     expect(
       TaskSortDirection.oldestFirst.label,
       '从旧到新',
-      reason: '同上 :174，不写「升序」「正序」',
+      reason: '同上 :175，不写「升序」「正序」',
     );
     const fallback = TaskQueryFilter(sort: TaskSort.createdAt);
     expect(
@@ -111,7 +112,7 @@ void main() {
     expect(
       await orderOf(db, TaskSort.createdAt, TaskSortDirection.oldestFirst),
       ['older-created', 'newer-created'],
-      reason: '嘀嗒 :174 给了「从旧到新」这一档 ⇒ 切方向必须真的反序',
+      reason: '嘀嗒 :175 给了「从旧到新」这一档 ⇒ 切方向必须真的反序',
     );
   });
 
@@ -263,7 +264,7 @@ void main() {
       expect(
         find.text('从旧到新'),
         findsOneWidget,
-        reason: '${timeSort.name} 档按嘀嗒 :174 有方向可选，菜单里找不到这一行',
+        reason: '${timeSort.name} 档按嘀嗒 :173-176 有方向可选，菜单里找不到这一行',
       );
       expect(find.text('从新到旧'), findsOneWidget);
       expect(tapped, isNull, reason: '只是展开菜单不该顺手改方向');
@@ -513,18 +514,15 @@ void main() {
     }
   });
 
-  testWidgets('方向保存失败：界面仍是刚选的方向 + 有可见失败提示（四件套第 3 条）', (tester) async {
-    late _FailingSortPreferenceRepository failing;
+  testWidgets('方向保存失败：界面仍是刚选的方向、有可见提示，且偏好不落半条（四件套第 3 条）', (tester) async {
+    // 让**入队**失败，而不是替换掉仓储：`save` 的写库与入队在同一个 `_db.transaction` 里，
+    // 所以这条用例同时测到"失败不留半条偏好行"（探针 PN 摘掉事务就会红）。
+    late _ThrowingEnqueueQueue queue;
     final fixture = await TodoVisualFixture.create(
       set: TodoVisualFixtureSet.empty,
       overridesBuilder: (database) {
-        failing = _FailingSortPreferenceRepository(
-          database,
-          SyncChangeQueue(database),
-        );
-        return [
-          taskSortPreferenceRepositoryProvider.overrideWithValue(failing),
-        ];
+        queue = _ThrowingEnqueueQueue(database);
+        return [syncChangeQueueProvider.overrideWithValue(queue)];
       },
     );
     addTearDown(fixture.dispose);
@@ -579,14 +577,28 @@ void main() {
     await tester.tap(find.text('从旧到新'));
     await tester.pumpAndSettle();
 
-    // 调用边界：不先证"页面确实带着新方向去存了"，下面两条断言可能只是在测
-    // "一条没被调用的路径"（查数据库来证明"没写"更是恒真 —— 假仓库压根不写库）。
+    // 调用边界：先证"页面确实带着新方向去存了"，再谈失败后的界面行为。
+    // 记的是**真实** `save` 交给队列的 `valueJson`，不是我自己造的参数 —— 所以这条
+    // 同时钉住了"档位没被弄丢、方向带上了"。
     expect(
-      failing.calls,
-      ['createdAt/newestFirst', 'createdAt/oldestFirst'],
+      queue.valueJsons,
+      [
+        '{"sort":"createdAt","direction":"newestFirst"}',
+        '{"sort":"createdAt","direction":"oldestFirst"}',
+      ],
       reason:
-          '选档与选方向各应落到 save 一次，且第二次带上新方向；'
+          '选档与选方向各应落到入队一次，且第二次带上新方向；'
           '少了任何一条 ⇒ 界面点了但没走保存，本用例的判据错位',
+    );
+    final storedPreferences = await fixture.database
+        .select(fixture.database.todoViewPreferences)
+        .get();
+    expect(
+      storedPreferences,
+      isEmpty,
+      reason:
+          '入队失败必须连偏好写入一起回滚 ⇒ 留下半条（界面一个方向、库里另一个方向）'
+          '会让下次重进清单跳到一个用户没选过的档位',
     );
 
     expect(
@@ -626,22 +638,25 @@ void main() {
   });
 }
 
-/// 让 `save` 必然失败，同时记下页面到底带了什么参数进来。
+/// 让入队必然失败，并记下真实 `save` 交进来的 `valueJson`。
 ///
-/// 用 `extends` 而不是实现接口：`TaskSortPreferenceRepository` 是具体类，
-/// 读取分支（`get`）要保持真实行为，本用例只关心写失败后界面的表现。
-class _FailingSortPreferenceRepository extends TaskSortPreferenceRepository {
-  _FailingSortPreferenceRepository(super.database, super.queue);
+/// 只替换队列、不替换仓储：偏好写入 + 入队同在 `_db.transaction` 里，
+/// 队列抛错才能连带着验证"事务回滚 ⇒ 不留半条偏好"（探针 PN）。
+class _ThrowingEnqueueQueue extends SyncChangeQueue {
+  _ThrowingEnqueueQueue(super.database);
 
-  final List<String> calls = [];
+  final List<String> valueJsons = [];
 
   @override
-  Future<void> save(
-    String? listId,
-    TaskSort sort, [
-    TaskSortDirection direction = TaskSortDirection.newestFirst,
-  ]) async {
-    calls.add('${sort.name}/${direction.name}');
-    throw StateError('模拟排序偏好写入失败');
+  Future<void> enqueue({
+    required String entity,
+    required String op,
+    String? localId,
+    int? serverId,
+    String? clientMutationId,
+    required Map<String, dynamic> payload,
+  }) async {
+    valueJsons.add('${payload['valueJson']}');
+    throw StateError('模拟同步入队失败');
   }
 }
