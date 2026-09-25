@@ -631,8 +631,7 @@ void main() {
 /// 用 `extends` 而不是实现接口：`TaskSortPreferenceRepository` 是具体类，
 /// 读取分支（`get`）要保持真实行为，本用例只关心写失败后界面的表现。
 class _FailingSortPreferenceRepository extends TaskSortPreferenceRepository {
-  _FailingSortPreferenceRepository(AppDatabase database, SyncChangeQueue queue)
-    : super(database, queue);
+  _FailingSortPreferenceRepository(super.database, super.queue);
 
   final List<String> calls = [];
 
