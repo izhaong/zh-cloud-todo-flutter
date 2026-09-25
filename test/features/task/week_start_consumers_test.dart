@@ -20,6 +20,12 @@ const _glyphs = ['一', '二', '三', '四', '五', '六', '日'];
 /// 今天 = 2026-09-25（周五）。2026-06-01 是周一，用来钉月视图的填充方向。
 final _now = DateTime(2026, 9, 25, 12);
 
+/// 生产接线那组另用一个「今天」：它必须**落在真实时钟那一周之外**，
+/// 否则「注入 `now:`」和「漏注入、退回 `DateTime.now()`」会算出同一个周窗口，
+/// 探针就钉不住 `tasks_by_list_page.dart` 那句 `now: now`（见 specs/051 复核 F-1）。
+/// 2026-10-01（周四）：周一档窗口 9/28–10/4、周日档窗口 9/27–10/3，两者都不含 9 月下旬。
+final _pageNow = DateTime(2026, 10, 1, 12);
+
 TodoTask _task({required String id, required DateTime dueAt}) {
   return TodoTask(
     id: id,
@@ -330,8 +336,8 @@ void main() {
           );
       await taskRepository.create(
         listId: 'list-a',
-        title: '任务 sun',
-        dueAt: DateTime(2026, 9, 27, 9),
+        title: '任务 10/1',
+        dueAt: DateTime(2026, 10, 1, 9),
         allDay: true,
       );
       final container = ProviderContainer(
@@ -340,7 +346,7 @@ void main() {
           taskSectionRepositoryProvider.overrideWithValue(
             TaskSectionRepository(db, queue),
           ),
-          currentDateTimeProvider.overrideWithValue(() => _now),
+          currentDateTimeProvider.overrideWithValue(() => _pageNow),
           weekStartProvider.overrideWith((ref) => Stream<int>.value(firstDay)),
         ],
       );
@@ -373,27 +379,38 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('周一档：生产入口的周窗口标题是 9/21–9/27', (tester) async {
+    testWidgets('周一档：生产入口的周窗口标题是 9/28–10/4', (tester) async {
       await pumpWorkspace(tester, firstDay: DateTime.monday);
-      expect(find.text('任务 sun'), findsOneWidget);
+      expect(find.text('任务 10/1'), findsOneWidget);
       // 判据取"时间线自己算出来的周窗口标题"（围绕**今天**，不是围绕任务）：
-      // 周一档 = 9/21–9/27、周日档 = 9/20–9/26，差整整一天，只能由喂进来的 firstDay 决定，
-      // 所以这一行等价于"注入线通了"。上面那组直接 pump TimelineView 断的是段标题（本周/
-      // 下周）—— 页面里那套带日期列的布局不渲染段标题，照抄过来会恒 0 命中（实测撞过）。
-      expect(find.text('9/21–9/27'), findsOneWidget);
-      expect(find.text('9/20–9/26'), findsNothing);
+      // 注入的今天 = 10/1（周四）⇒ 周一档 9/28–10/4、周日档 9/27–10/3，差整整一天，
+      // 只能由喂进来的 firstDay 决定 ⇒ 钉住 `firstDay:` 那句注入（探针 PL）。
+      // 上面那组直接 pump TimelineView 断的是段标题（本周/下周）—— 页面里那套带日期列的
+      // 布局不渲染段标题，照抄过来会恒 0 命中（实测撞过）。
+      expect(find.text('9/28–10/4'), findsOneWidget);
+      expect(find.text('9/27–10/3'), findsNothing);
+      // 另一条负判据钉的是 `now: now` 那句：真实时钟（跑测当天）算出的窗口是 9/21–9/27，
+      // 一旦漏注入就会退回 DateTime.now()，这个字符串就会出现在屏幕上（探针 PM）。
+      // 它的判别力随日期失效（真实今天进入 9/28–10/4 那周后变成恒真），
+      // 但主判据 `find.text('9/28–10/4')` 用的是注入值，不随墙钟漂——这正是本轮补的。
+      expect(find.text('9/21–9/27'), findsNothing);
 
       await _unmountAndSettle(tester);
     });
 
-    testWidgets('周日档：同一入口把周窗口挪成 9/20–9/26', (tester) async {
+    testWidgets('周日档：同一入口把周窗口挪成 9/27–10/3', (tester) async {
       await pumpWorkspace(tester, firstDay: DateTime.sunday);
-      expect(find.text('任务 sun'), findsOneWidget);
-      expect(find.text('9/20–9/26'), findsOneWidget);
+      expect(find.text('任务 10/1'), findsOneWidget);
+      expect(find.text('9/27–10/3'), findsOneWidget);
       expect(
-        find.text('9/21–9/27'),
+        find.text('9/28–10/4'),
         findsNothing,
-        reason: '注入线断掉时静默退回默认周一，标题就还是 9/21–9/27',
+        reason: 'firstDay 注入线断掉时静默退回默认周一，标题就还是 9/28–10/4',
+      );
+      expect(
+        find.text('9/20–9/26'),
+        findsNothing,
+        reason: 'now 注入线断掉时退回 DateTime.now()，窗口就贴着真实今天',
       );
 
       await _unmountAndSettle(tester);
