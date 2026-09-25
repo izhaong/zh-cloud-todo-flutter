@@ -27,7 +27,7 @@ class SettingsRoute extends ConsumerWidget {
     final colors = brandColors(context);
     // 读不到偏好时按默认档显示，不让设置页出现空副标题。
     final weekStartLabel = WeekStart.labelOf(
-      ref.watch(weekStartProvider).valueOrNull ?? WeekStart.defaultFirstDay,
+      resolveWeekStartFirstDay(ref.watch(weekStartProvider)),
     );
     return Scaffold(
       appBar: AppBar(title: const Text('设置')),
@@ -210,8 +210,7 @@ class SettingsRoute extends ConsumerWidget {
       ).showSnackBar(const SnackBar(content: Text('本地数据库尚未就绪，暂时无法修改星期开始于')));
       return;
     }
-    final current =
-        ref.read(weekStartProvider).valueOrNull ?? WeekStart.defaultFirstDay;
+    final current = resolveWeekStartFirstDay(ref.read(weekStartProvider));
     final picked = await showModalBottomSheet<int>(
       context: context,
       builder: (sheetContext) => SafeArea(
