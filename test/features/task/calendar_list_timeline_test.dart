@@ -264,7 +264,10 @@ void main() {
       expect(
         tester.getRect(band).top < tester.getRect(timed).top,
         isTrue,
-        reason: '嘀嗒的轴是"全天任务栏"在上、日程在下',
+        reason:
+            '本面定口径：全天栏排在轴上方（位置是方形态选择，不是嘀嗒明文——'
+            '《04-列表视图》:18 只说"串起一天的日程"，《08-常见问题》:32 只给出拖拽两端点；'
+            '见 spec.md N4「形态余留未证」）',
       );
       expect(
         tester
