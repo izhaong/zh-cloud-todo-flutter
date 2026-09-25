@@ -40,6 +40,7 @@ $ flutter test test/core/time/week_start_test.dart test/week_start_preference_re
 | **F-1**：新增的两条生产接线用例**绑在真实墙钟上**——本机走到 9/27、9/28 就会静默变红，而红的原因与档位无关 | 我只补了 `firstDay:` 注入线，**漏了同处该喂的 `now:`**；`TimelineView._effectiveNow` 有 `?? DateTime.now()` 兜底，所以漏喂不会报错、只会悄悄换时钟。而我选的断言日期（9/25）恰好和真实今天在同一周里 ⇒ **当天看不出耦合** | `c360379`：调用点补 `now: now`（provider 默认就是 `DateTime.now` ⇒ 生产行为不变）；用例改用 `_pageNow = 2026-10-01`，它**落在真实今天那一周之外**，于是"漏注入 now"第一次有可红的判据，并新增探针 **PM** 专门摘这句（实测 `+18 -2`，两条生产用例全红）。教训：**日期敏感的用例要让注入值和真实时钟落在不同的桶里**，否则"今天绿"不含信息 |
 | **F-2**：探针表里 PF/PH 的失败数**抄错了**（记 `+13 -5`、`+12 -6`，实际 `+14 -6`、`+12 -8`） | 脚本按 `[E]` 行归因时只打印前 6 条（`hits[:6]`），我照那份截断清单数了数，而**摘要行 `+N -M` 才是计数来源** | 脚本改为全列 `[E]` 并显式打印"失败用例共 N 条"；上表所有数按 `c360379` 的整轮重跑重写。教训同「数字要能复算」：**从摘要行取数，不从被截断的明细里数** |
 | PK 的重跑第一次被判"归因未证实" | 我给 PK 写的预期用例名列表（`有值用值`/`周日档`/`周六档`）没有覆盖设置页侧那条真红的用例名 `点「周日」立刻生效：出箱写库…（FR-8）`——**红是对的红，是我给的名单太窄** | 预期名单补 `立刻生效`，单独重跑 PK ⇒ `异常计数 = 0`。不改判据、不改测试，只改归因名单（改的是探针配置，不是被测行为） |
+| 门禁 1 在 `7ffcdf0` 那一次**跑晚了**：我先 `git commit` 才跑 `git diff --check`，它报 `tasks.md:176: new blank line at EOF` ⇒ rc=2 | 我用 Edit 换掉了文件末尾整节，新内容自带一个尾随空行；而"提交前跑门禁 1"这条纪律那一小步没走（不是 `--no-verify`，是压根没跑就提交了） | `1fad90c` 单独把尾随空行去掉并复跑 `git diff --check` ⇒ rc=0；**不改历史、不 amend**。终态 head 的门禁 1 已重跑为 rc=0，这一条如实记在门禁表第 1 行，不当没发生。教训：门禁 1 要在 `commit` **之前**跑，否则红的是已入库的历史 |
 
 ## 复核第 1 轮（`VERDICT: FAIL`）→ 逐条回源复验 → 三条全部采纳
 
@@ -89,16 +90,19 @@ FAIL 全落在**测试判据**上。三条我逐条回源码复验，都成立�
 > 现在四个数（13 / 7 / 20 / 8 = **48**）每个都对应一次实际运行的 `+N` 读数，
 > 全量门禁 5 的 `+946` 也与上一 head 的 `+944` 相差 2（正是本轮新增的两条生产接线用例）。
 
-## 六道门禁（终态 head `1f50929`，日志 `/tmp/r76/gates-1f50929.log`）
+## 六道门禁（终态 head `1fad90c`，日志 `/tmp/r77/gates-c360379.log`；上一终态 `1f50929` 的读数见脚注）
 
 | # | 门禁 | 跑在哪 | 读数 |
 | --- | --- | --- | --- |
-| 1 | `git diff --check` | 每次提交前 | 本轮五个后续提交（`52b2c6f` `5fb1d30` `0f6bd64` `859963d` `1f50929`）各 `rc=0`；终态工作树 `dirty=0` |
-| 2 | `dart format --output=none --set-exit-if-changed <11 个显式文件>` | head `1f50929`；11 = 7 个 `lib/`（含 `tasks_by_list_page.dart`）+ 4 个测试 | `Formatted 11 files (0 changed)`、`G2 rc=0`。脚本标题那行写着「10 个」是旧注释，实列表 11 项 |
-| 3 | `flutter analyze` | head `1f50929` | `No issues found!`、`G3 rc=0` |
-| 4 | `flutter test --tags golden` | head `1f50929` | `00:09 +9: All tests passed!`、`G4 rc=0`，且紧随的 `git status --porcelain -- test` **输出为空** ⇒ 9 张基线一张没重录 |
-| 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | head `1f50929` | `02:49 +946 ~26: All tests passed!`、`G5 rc=0`（`~26` 是仓库存量 skip，非本轮引入） |
-| 6 | `flutter build web --release --dart-define=TODO_API_BASE_URL=… --dart-define=TODO_TENANT_ID=1` | head `1f50929` | `✓ Built build/web`、`G6 rc=0` |
+| 1 | `git diff --check` | 每次提交前 | 终态 head `1fad90c`：**rc=0**，`origin/develop..HEAD` 同样 rc=0，首行 `dirty_files_before=0`、末行工作树干净。⚠️ 但 `7ffcdf0` 那一次我是**提交后**才跑门禁 1，它报了 `tasks.md:176: new blank line at EOF` ⇒ **rc=2**，我随后用 `1fad90c` 单独修回（见缺陷表纪律行） |
+| 2 | `dart format --output=none --set-exit-if-changed <11 个显式文件>` | head `1fad90c`；11 = 7 个 `lib/`（含 `tasks_by_list_page.dart`）+ 4 个测试 | `Formatted 11 files (0 changed)`、`G2 rc=0` |
+| 3 | `flutter analyze` | head `1fad90c` | `No issues found! (ran in 1.8s)`、`G3 rc=0` |
+| 4 | `flutter test --tags golden` | head `1fad90c` | `00:10 +9: All tests passed!`、`G4 rc=0`，且紧随的 `git status --porcelain -- test` **输出为空** ⇒ 9 张基线一张没重录 |
+| 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | head `1fad90c` | `02:41 +946 ~26: All tests passed!`、`G5 rc=0`（`~26` 是仓库存量 skip，非本轮引入。`+946` 与 `1f50929` 那次**同为 946** ⇒ 自 F-1 修复以来只换了判据内容、没有增删用例，这条对得上） |
+| 6 | `flutter build web --release --dart-define=TODO_API_BASE_URL=… --dart-define=TODO_TENANT_ID=1` | head `1fad90c` | `✓ Built build/web`、`G6 rc=0` |
+
+> 收尾 `pubspec.lock` **没有**被 pub get 改写（脚本里那段"检测到就还原"的分支未触发，日志中无 `NOTE` 行），
+> 最终工作树仍为空 ⇒ 本 PR 不含 `pubspec.lock`。
 
 两处必须说清的限定，都是第 1 轮复核逼出来的（不写就等于把证据说过头）：
 
@@ -112,9 +116,11 @@ FAIL 全落在**测试判据**上。三条我逐条回源码复验，都成立�
   推理方法它认（`git show HEAD:<file>` 版那 4 个既有文件 format-clean ⇒ 脏必然来自本轮 diff），
   但**证据链断了** ⇒ 这句降级为「方法成立、读数丢失」，不当已证。
 
-> 三份日志的分工：`gates-1f50929.log` = **终态**（首行 `head=1f50929 dirty_files=0`，末行收尾 `dirty=0`）。
-> `gates-5fb1d30.log` = 上一个 head 的同构读数（G4 `00:10 +9`、G5 `+944 ~26`）——留着是为了能复算
-> 「用例集变化会不会推动计数」：`+944 → +946` 正好等于本轮新增的两条生产接线用例。
+> 日志分工（**别拿旧 head 的读数当终态证据**）：`/tmp/r77/gates-c360379.log` = **终态**，首行
+> `head=1fad90c dirty_files_before=0`，末行工作树为空。
+> `/tmp/r76/gates-1f50929.log` = 第 1 轮复核修复后的那一次终态（G4 `00:09 +9`、G5 `02:49 +946 ~26`）
+> ——留着是为了对账「F-1 只换判据、不增删用例」：`+946 → +946` 不变，正是应有结果。
+> `gates-5fb1d30.log`（G5 `+944`）= 更早一次，其 `+944 → +946` 差额 = 第 1 轮补的两条生产接线用例；
 > `gates-52b2c6f.log` 是我**中途中止**的一次（只有 G2/G3/G4 有读数），不作证据。
 
 ## 反向探针（`/tmp/r76/probes76.py`，8 条全跑在 head `c360379`；整轮输出 `/tmp/r77/probes-all-c360379.log`，PK 归因名单修正后单跑 `/tmp/r77/probe-pk-retry.log`，逐条日志 `/tmp/r76/probes/*.log`）
