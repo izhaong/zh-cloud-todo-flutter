@@ -55,13 +55,20 @@ String _headerGlyphOrder(WidgetTester tester) {
       .join();
 }
 
-Future<void> _pumpCalendar(WidgetTester tester, {int? firstDay}) async {
+Future<void> _pumpCalendar(
+  WidgetTester tester, {
+  int? firstDay,
+  bool pendingForever = false,
+}) async {
   tester.view.physicalSize = const Size(900, 1600);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        // pendingForever = 首值未到（FR-7 的 loading 态）：给一条不回包也不报错的流
+        if (pendingForever)
+          weekStartProvider.overrideWith((ref) => const Stream<int>.empty()),
         if (firstDay != null)
           weekStartProvider.overrideWith((ref) => Stream<int>.value(firstDay)),
       ],
@@ -75,13 +82,20 @@ Future<void> _pumpCalendar(WidgetTester tester, {int? firstDay}) async {
   await tester.pumpAndSettle();
 }
 
-Future<void> _pumpTimeline(WidgetTester tester, {int? firstDay}) async {
+Future<void> _pumpTimeline(
+  WidgetTester tester, {
+  int? firstDay,
+  bool pendingForever = false,
+}) async {
   tester.view.physicalSize = const Size(1400, 4000);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        // pendingForever = 首值未到（FR-7 的 loading 态）：给一条不回包也不报错的流
+        if (pendingForever)
+          weekStartProvider.overrideWith((ref) => const Stream<int>.empty()),
         if (firstDay != null)
           weekStartProvider.overrideWith((ref) => Stream<int>.value(firstDay)),
       ],
@@ -213,9 +227,16 @@ void main() {
       expect(_headerGlyphOrder(tester), '日一二三四五六');
     });
 
-    testWidgets('档位读不到（首值未到）时按默认周一画，不留空表头', (tester) async {
-      await _pumpCalendar(tester);
-      expect(_headerGlyphOrder(tester), isNotEmpty);
+    testWidgets('首值未到（loading）时日历按默认周一画，不留空表头', (tester) async {
+      await _pumpCalendar(tester, pendingForever: true);
+      expect(_headerGlyphOrder(tester), '一二三四五六日');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('首值未到（loading）时时间线也按默认周一分桶', (tester) async {
+      await _pumpTimeline(tester, pendingForever: true);
+      expect(find.text('本周'), findsOneWidget);
+      expect(find.text('下周'), findsNothing);
       expect(tester.takeException(), isNull);
     });
   });
