@@ -117,9 +117,76 @@
 
 ## 已知偏差（本轮不修，除 #353 外）
 
-- 冷启动首帧按默认「显示」画标签区 ⇒ 见 **#353**。
+- ~~冷启动首帧按默认「显示」画标签区~~ ⇒ **#353 已在第 74 轮修于本分支（`04cc0ac`）**；
+  但本分支尚未合并进 `develop`，所以对 `develop` 的口径而言这条**仍然成立**（矩阵 #21 因此不动，见下）。
 
 ## 残留缺口（本轮不做，留下轮）
 
 - 矩阵 #21 其余面：任务详情输入 `#`、`TaskQuickAddSheet` 的 `#` 入口仍被未合并的 `!319/!322/!314` 挡着。
 - 移动端「清单管理页」界面本身（嘀嗒 `:16` 的入口位置）——需要单独立项，属矩阵 #19。
+
+## 第 74 轮：#353 落地（侧栏标签区在偏好首值未到达前不画）
+
+### 病灶（一句话）
+
+`valueOrNull ?? 默认` 把 **loading** 与 **error** 折成同一态：`valueOrNull` 在两种状态下都是 `null`，
+于是"还没读到"被当成"读到了、值是显示" ⇒ 库里存着 `showTags=false` 的账号冷启动会**先画出标签条目再收走**。
+FR-4 的"默认必须是显示"真正的兑现处在仓库层（`_decode(null) ⇒ true`：库里没有这一行 = 用户从没设过），
+widget 只需要兜 `error`。修法选「loading 不画」而不是 #353 列的那两条，理由与代价见 `spec.md` 取舍 4。
+
+### 红测（改代码之前，跑在 `ada7eb7`）
+
+`/tmp/r74/red.log`：`00:00 +3 -1`，红的正是新加的那条，且失败点落在**首值未到达那一帧**
+（`sidebar_show_tags_test.dart:121`，`focusTag()` 实测 `Found 1 widget`）。
+同一条用例里先跑了两条正向对照（智能清单行在、`todo-sidebar-row-tags` 入口行在）⇒
+红不是"整棵侧栏还没数据"造成的，条目确实是被门控画出来的。
+
+### 门禁（跑在 `04cc0ac`，日志 `/tmp/r74/gates.log`）
+
+| # | 门禁 | 读数 |
+| - | ---- | ---- |
+| 1 | `git diff --check`（工作区） | `rc=0`，无输出 |
+| 2 | `dart format --output=none --set-exit-if-changed lib/features/shell/sidebar.dart test/features/shell/sidebar_show_tags_test.dart` | `Formatted 2 files (0 changed)`，`rc=0`（第一遍是 2 changed ⇒ 原地格式化这两个文件后复跑） |
+| 3 | `flutter analyze` | `No issues found!` |
+| 4 | `flutter test --tags golden` | `+9: All tests passed!` ⇒ **9 张基线一张都没重录**（`#353` 当年就是拿"可能要求重录基线"挂起的，这条把它证伪） |
+| 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:45 +913 ~26: All tests passed!` |
+| 6 | `flutter build web --release --dart-define=…` | `✓ Built build/web` |
+
+**门禁 1 在 md 提交之后复跑**：第 72 轮 `!356` 的复核（D1）抓到"md-only 提交给文件末尾添了空行，
+使 `git diff --check` 对自己所在 diff 不成立"，本轮因此把这一项改成**所有提交落完后各复跑一次**，
+读数记在下方「追加门禁」行里，不沿用表里的 `rc=0`。
+
+计数对账：`+913 = 912 + 1`。912 是**本分支自己**第 67 轮门禁 5 的实测末行（上面那张门禁表 `f7df38e` 那一列），
+本轮只新增 1 条用例、没动任何既有用例 ⇒ 本轮提交的改动集用
+`git diff --name-only 04cc0ac~1..04cc0ac -- test` 量，只有 `sidebar_show_tags_test.dart` 一个文件
+（注意口径：整条分支对 `develop` 是 3 个测试文件，那是第 67 轮的账，不能拿来对账本轮）。
+`~26` 跳过数与第 67 轮一致（未新增 skip）。
+`pubspec.lock` 未进提交：`git log --stat origin/develop..HEAD -- pubspec.lock` 为空。
+
+### 反向探针（口径 = **单文件** `test/features/shell/sidebar_show_tags_test.dart`，4 条；日志 `/tmp/r74/PROBES.log`）
+
+| 探针 | 变异 | 读数 | 红掉的那条 |
+| ---- | ---- | ----| ---------- |
+| QA | `loading: () => false` → `true`（回到缺陷形态） | `+3 -1` | 首值未到达那条 ⇒ 用例确有牙 |
+| QB | `error:` 兜底 → `false`（读不到就清空侧栏） | `+3 -1` | 既有「读不到按默认显示」那条 ⇒ 第 67 轮那条防线没被本轮改坏 |
+| QC | `data: (value) => value` → `true`（无视取值） | `+2 -2` | 首值那条的**末段**（放行「隐藏」仍不收）+ 第 67 轮的默认在/关掉就没那条 ⇒ 证明门控读的是值本身，不是"来过消息就算显示" |
+| QD | 整段退回 `valueOrNull ?? 默认`（第 67 轮原字节） | `+3 -1` | 只有首值那条红 ⇒ 新用例钉的就是本病灶，没有顺带依赖 |
+
+每条探针之后 `git checkout -- lib/…` 并 `cmp` 回 `HEAD` 的字节（日志里 4 条 `restore-ok`），
+最后同一文件复跑 `+4: All tests passed!`。
+
+### 矩阵与跨仓
+
+- **矩阵 #21 本轮不动**：它由未合并的 docs `!105` 重判为「部分 / BE/FL」，且那一行的基准写死
+  `zh-cloud-todo-flutter origin/develop@9032005` —— #328 与 #353 都还没进 `develop`，
+  按"矩阵翻转只引已合并 SHA"这条，本轮既不能翻状态、也不该去改 `!105` 已占的行。
+- 修法只覆盖 FL 一侧，无后端契约变化（`todo_view_preferences` 与 outbox 都在第 67 轮就定了）。
+
+### 复核
+
+第 74 轮的只读复核**还没拿到 `VERDICT`** —— 这一格是欠的，不得当作已通过。
+派单基准：`origin/develop..feat/328-sidebar-show-tags`（tip `04cc0ac` 及其后的文档提交），
+专项要问的两条：① #353 是不是真被修到位（含"loading 不画"是否把第 67 轮的默认值语义改坏）；
+② **同一类错误是否还在别处** —— 本轮病灶是"把 loading 折进默认值"，
+`sidebar.dart:61-64` 与全仓 17 处 `valueOrNull ?? …` 是不是同一形（集合回落空 = 正确的"没值画空"，
+布尔回落默认 = 会撒谎），要它按同一把尺逐处判，别只查我改的那一处。
