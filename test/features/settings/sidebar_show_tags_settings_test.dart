@@ -32,6 +32,13 @@ void main() {
     await _pick(tester, '显示');
     expect(_trailingValue(tester), '显示');
     expect(await _storedValue(fixture.database), isTrue);
+
+    // 当前已经是「显示」时再点一次「显示」。少这一步 ⇒ 把实现写成
+    // `save(showTags: !current)`（取反）也永远全绿：上面两次点击恰好都点在
+    // 与当前相反的那一项上，取反与照抄字面值在那条路径上逐点等价。
+    await _pick(tester, '显示');
+    expect(_trailingValue(tester), '显示', reason: '写入的必须是点中的字面值，不是"和当前相反"');
+    expect(await _storedValue(fixture.database), isTrue);
   });
 
   testWidgets('取值由这一行自己的读屏语义念出来，不是只画一个勾', (tester) async {
