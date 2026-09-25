@@ -341,6 +341,7 @@ void main() {
       findsOneWidget,
       reason: '静默早退等于告诉用户"保存成功了"',
     );
+    expect(find.byType(ListEditorSheet), findsOneWidget, reason: '失败不许把弹层收掉');
     expect(
       tester
           .widget<TextField>(find.widgetWithText(TextField, '清单名'))
@@ -386,6 +387,7 @@ void main() {
       findsOneWidget,
       reason: '移入与移出都是"移动"，失败都要看得见',
     );
+    expect(find.byType(ListEditorSheet), findsOneWidget, reason: '失败不许把弹层收掉');
     expectSelected(tester, '项目', reason: '失败后用户刚选的归属必须还在，不然重试要点第二遍');
     final after = await listById(
       fixture.database,
@@ -459,6 +461,7 @@ void main() {
       findsOneWidget,
       reason: 'provider 为 null 时原先是静默 return，用户以为保存成功',
     );
+    expect(find.byType(ListEditorSheet), findsOneWidget, reason: '失败不许把弹层收掉');
     expect(
       tester
           .widget<TextField>(find.widgetWithText(TextField, '清单名'))
