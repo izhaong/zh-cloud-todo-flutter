@@ -26,6 +26,7 @@ Future<WeekStartPreferenceRepository> _pumpSettings(
   WidgetTester tester, {
   double textScale = 1,
   double width = 360,
+  bool pendingForever = false,
   WeekStartPreferenceRepository Function(AppDatabase db, SyncChangeQueue q)?
   build,
 }) async {
@@ -42,6 +43,10 @@ Future<WeekStartPreferenceRepository> _pumpSettings(
     ProviderScope(
       overrides: [
         weekStartPreferenceRepositoryProvider.overrideWithValue(repository),
+        // pendingForever = 首值未到（FR-7 的 loading 态）：给一条永不回包的流，
+        // 这一档必须走兜底而不是 requireValue —— 否则整个设置页第一帧就抛。
+        if (pendingForever)
+          weekStartProvider.overrideWith((ref) => const Stream<int>.empty()),
       ],
       child: MaterialApp(
         builder: (context, child) => MediaQuery(
@@ -88,6 +93,22 @@ void main() {
     expect(find.byKey(_tile), findsOneWidget);
     expect(find.text('星期开始于'), findsOneWidget);
     expect(find.text('周一'), findsOneWidget, reason: '默认档要显示在行上');
+
+    await _settleUnmount(tester);
+  });
+
+  testWidgets('首值未到（loading）时设置行仍显示默认档「周一」，不抛也不空（FR-7 端到端）', (tester) async {
+    // 探针 PH（把 resolveWeekStartFirstDay 改成 requireValue）必须在这一条上红：
+    // 这一档如果直接取值，设置页第一帧就整个抛掉，用户看到的是打不开的「设置」。
+    await _pumpSettings(tester, pendingForever: true);
+
+    expect(
+      tester.takeException(),
+      isNull,
+      reason: '首值未到必须走兜底，不能抛 —— 设置页整页白掉比闪一下严重',
+    );
+    expect(find.text('星期开始于'), findsOneWidget);
+    expect(find.text('周一'), findsOneWidget, reason: '兜底要显示成默认档，不能空着');
 
     await _settleUnmount(tester);
   });
