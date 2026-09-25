@@ -1,12 +1,19 @@
+import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
+import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
+import 'package:zh_cloud_todo_flutter/core/theme/app_theme.dart';
 import 'package:zh_cloud_todo_flutter/core/time/week_start.dart';
+import 'package:zh_cloud_todo_flutter/features/task/tasks_by_list_page.dart';
+import 'package:zh_cloud_todo_flutter/features/task/view_mode.dart';
 import 'package:zh_cloud_todo_flutter/features/task/views/calendar_view.dart';
 import 'package:zh_cloud_todo_flutter/features/task/views/timeline_view.dart';
 import 'package:zh_cloud_todo_flutter/state/providers.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/task_repository.dart';
+import 'package:zh_cloud_todo_flutter/state/repositories/task_section_repository.dart';
 
 const _glyphs = ['一', '二', '三', '四', '五', '六', '日'];
 
@@ -109,6 +116,14 @@ Future<void> _pumpTimeline(WidgetTester tester, {int firstDay = 1}) async {
     ),
   );
   await tester.pumpAndSettle();
+}
+
+/// 收尾必须**在用例体内**卸载，再推进两帧：TaskRepository 用的是 drift 的 `watch()`，
+/// 退订时排了一个零时长定时器，留给 binding 就报「A Timer is still pending」。
+Future<void> _unmountAndSettle(WidgetTester tester) async {
+  await tester.pumpWidget(const SizedBox.shrink());
+  await tester.pump(const Duration(milliseconds: 1));
+  await tester.pump(const Duration(milliseconds: 1));
 }
 
 void main() {
@@ -286,6 +301,102 @@ void main() {
       expect(find.text('任务 sun'), findsOneWidget);
       expect(find.text('下周'), findsOneWidget);
       expect(find.text('本周'), findsNothing, reason: '周首=周日时 9/27 已是下一周的第一天');
+    });
+  });
+
+  group('生产接线（tasks_by_list_page.dart 的注入线）', () {
+    // 上面那组直接 pump `TimelineView(firstDay: …)`，钉的是"给了档位就会分对桶"；
+    // 本组从生产入口进，钉的是 `tasks_by_list_page.dart` 那句
+    // `firstDay: resolveWeekStartFirstDay(ref.watch(weekStartProvider))` 真在喂档位。
+    // 因为 TimelineView 的默认值就是周一，"忘了注入"会静默退回周一 —— 只有走真实
+    // 入口才钉得住这条线，所以这一组不能由上面那组代替。
+    Future<void> pumpWorkspace(
+      WidgetTester tester, {
+      required int firstDay,
+    }) async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final queue = SyncChangeQueue(db);
+      final taskRepository = TaskRepository(db, queue);
+      await db
+          .into(db.todoLists)
+          .insert(
+            TodoListsCompanion.insert(
+              id: 'list-a',
+              name: '工作',
+              updatedAt: _now,
+              createdAt: _now,
+            ),
+          );
+      await taskRepository.create(
+        listId: 'list-a',
+        title: '任务 sun',
+        dueAt: DateTime(2026, 9, 27, 9),
+        allDay: true,
+      );
+      final container = ProviderContainer(
+        overrides: [
+          taskRepositoryProvider.overrideWithValue(taskRepository),
+          taskSectionRepositoryProvider.overrideWithValue(
+            TaskSectionRepository(db, queue),
+          ),
+          currentDateTimeProvider.overrideWithValue(() => _now),
+          weekStartProvider.overrideWith((ref) => Stream<int>.value(firstDay)),
+        ],
+      );
+      addTearDown(container.dispose);
+      tester.view.physicalSize = const Size(1400, 4000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            theme: ThemeData(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            home: const Scaffold(
+              body: TasksByListPage(
+                initialListId: 'list-a',
+                lockedListId: true,
+                hideAppBar: true,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.tap(find.byKey(const Key('todo-view-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(TaskViewMode.timeline.label).last);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('周一档：生产入口的周窗口标题是 9/21–9/27', (tester) async {
+      await pumpWorkspace(tester, firstDay: DateTime.monday);
+      expect(find.text('任务 sun'), findsOneWidget);
+      // 判据取"时间线自己算出来的周窗口标题"（围绕**今天**，不是围绕任务）：
+      // 周一档 = 9/21–9/27、周日档 = 9/20–9/26，差整整一天，只能由喂进来的 firstDay 决定，
+      // 所以这一行等价于"注入线通了"。上面那组直接 pump TimelineView 断的是段标题（本周/
+      // 下周）—— 页面里那套带日期列的布局不渲染段标题，照抄过来会恒 0 命中（实测撞过）。
+      expect(find.text('9/21–9/27'), findsOneWidget);
+      expect(find.text('9/20–9/26'), findsNothing);
+
+      await _unmountAndSettle(tester);
+    });
+
+    testWidgets('周日档：同一入口把周窗口挪成 9/20–9/26', (tester) async {
+      await pumpWorkspace(tester, firstDay: DateTime.sunday);
+      expect(find.text('任务 sun'), findsOneWidget);
+      expect(find.text('9/20–9/26'), findsOneWidget);
+      expect(
+        find.text('9/21–9/27'),
+        findsNothing,
+        reason: '注入线断掉时静默退回默认周一，标题就还是 9/21–9/27',
+      );
+
+      await _unmountAndSettle(tester);
     });
   });
 }

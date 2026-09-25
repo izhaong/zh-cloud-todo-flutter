@@ -12,13 +12,26 @@ import 'package:zh_cloud_todo_flutter/state/repositories/week_start_preference_r
 const _tile = Key('todo-settings-week-start');
 Key _option(int firstDay) => Key('todo-settings-week-start-option-$firstDay');
 
-/// 会抛的仓储：用来验「保存失败时当前档位不变、且有可见提示」（四件套 ③）。
-class _ThrowingRepository extends WeekStartPreferenceRepository {
-  _ThrowingRepository(super.db, super.queue);
+/// 让「入队」抛错的写队列：**仓储用真的**，所以 `save()` 里那句
+/// 「写偏好行 + 入队」仍然跑在同一个 `_db.transaction` 内。
+///
+/// 复核 4(a) 指出的坑：原先是 `extends WeekStartPreferenceRepository` + 覆盖 `save` 直接抛，
+/// 那次 fake 在 `super.save` 之前就退出，**任何生产改动都不可能让「档位没变」这句断言变红**
+/// （它测的是 fake 自己）。换成注入坏队列之后：只要有人把写库挪出事务，
+/// 偏好行就会留下，这条断言当场红。
+class _ThrowingQueue extends SyncChangeQueue {
+  _ThrowingQueue(super.db);
 
   @override
-  Future<void> save(int firstDay) async {
-    throw StateError('故意让写入失败');
+  Future<void> enqueue({
+    required String entity,
+    required String op,
+    String? localId,
+    int? serverId,
+    String? clientMutationId,
+    required Map<String, dynamic> payload,
+  }) async {
+    throw StateError('故意让写队列失败');
   }
 }
 
@@ -171,7 +184,9 @@ void main() {
   testWidgets('保存失败：给可见提示，档位保持原样（四件套 ③）', (tester) async {
     final repository = await _pumpSettings(
       tester,
-      build: (db, queue) => _ThrowingRepository(db, queue),
+      // 真仓储 + 坏队列：save() 里「写偏好行」和「入队」在同一个事务内，
+      // 入队抛错 ⇒ 事务回滚 ⇒ 档位不变。谁把写库挪出事务，这条就红。
+      build: (db, _) => WeekStartPreferenceRepository(db, _ThrowingQueue(db)),
     );
 
     await tester.tap(find.byKey(_tile));
