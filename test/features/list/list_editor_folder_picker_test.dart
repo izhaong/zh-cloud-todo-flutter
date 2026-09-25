@@ -365,7 +365,10 @@ void main() {
   });
 
   testWidgets('文件夹列表晚到：占位换成真名，之后再来一次也不覆盖已选', (tester) async {
-    final controller = StreamController<List<TodoFolder>>();
+    // 必须是 broadcast：单订阅的 `close()` 要等"有人订阅完"才回，
+    // 一旦实现退化成"根本不 watch 这个 provider"（对照组 PA 就是），
+    // tearDown 会永久挂住，探针报不出红只报一个文件级错误。
+    final controller = StreamController<List<TodoFolder>>.broadcast();
     addTearDown(controller.close);
     final fixture = await createFixture(
       overridesBuilder: (database) => [
