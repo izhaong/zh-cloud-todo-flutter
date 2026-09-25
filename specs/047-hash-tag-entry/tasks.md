@@ -64,9 +64,24 @@
 没证"带空白能命中已有的那条"。⇒ 补第三段：已有 `周会` 时再喂 `'  周会  '`，PJ 才红在该红处。
 ⇒ 结论同第 64 轮：**一条断言只走"新建"这一支时，"命中已有"那一支是没人看的**。
 
-## 门禁（跑在最终字节上，日志 `/tmp/g69/gates/*.log`）
+## 门禁原文记录（跑在最终字节 `112d8b3`，日志 `/tmp/g69/gates/final.log`）
 
-见本文件末尾「门禁原文记录」（复核回来后按最终 SHA 重贴）。
+| 门禁 | 结果 |
+| ---- | ---- |
+| `git diff --check origin/develop...HEAD` 与工作区 | `rc=0`，无输出 |
+| `dart format --output=none --set-exit-if-changed <本轮 5 个显式文件>` | `Formatted 5 files (0 changed)`，`rc=0` |
+| `flutter analyze` | `No issues found! (ran in 2.0s)`，`rc=0` |
+| `flutter test --tags golden` | `00:05 +9: All tests passed!`，`rc=0`；`git status --short test/goldens` 为空 ⇒ 9 张基线未重录 |
+| `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:55 +924 ~26: All tests passed!`，`rc=0` |
+| `flutter build web --release --dart-define=…` | `✓ Built build/web`，`rc=0` |
+
+**第一遍是 5/6**：门禁 2 在 `a5078c9` 上 `rc=1`（两个测试文件不合 `dart format`）⇒ 单提一个
+`style(test)` 提交 `112d8b3` 后**六条全部重跑**，本表就是重跑后的字节。
+
+计数对账（诚实记法）：`+924 = 898 + 26`。其中 **898 不是本轮实测的**——它来自第 64 轮在
+同一基线 `origin/develop@9032005` 上实跑干净 worktree 记下的 `+898 ~26`（见 `specs/045-sort-direction/tasks.md`），
+本轮没有重跑基线；26 = 本轮新增（词法 8 + 落地 6 + 界面 12）。`~26` 跳过数与基线一致，未新增 skip。
+`pubspec.lock` 未进提交（门禁跑完后 `git status --short` 为空）。
 
 ## 相撞面（在 tip 上重测）
 
