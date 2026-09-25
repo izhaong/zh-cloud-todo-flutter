@@ -183,21 +183,32 @@ void main() {
     expect(inbox, findsOneWidget);
     await tester.longPress(inbox);
     await tester.pumpAndSettle();
-    // 断的是**机制**而不是"少了某一项"：`sidebar.dart:91` 的 `_SmartRow` 只有 onTap，
-    // 长按动作表只挂在真实清单行上（`sidebar.dart:626` `onLongPress: () => showListActions(...)`）
+    // 断的是**机制**而不是"少了某一项"：`sidebar.dart:91` 构造 `_SmartRow` 时只给 `onTap`
+    // （类定义在 `sidebar.dart:448`，构造参数表里根本没有 `onLongPress`，build 也不向下传），
+    // 动作表唯一调用点只挂在真实清单行（`sidebar.dart:626` `onLongPress: () => showListActions(...)`）
     // ⇒ 智能清单/收集箱拿不到「共享协作」是**结构性**的，不是某条 if 拦住的。
     // 这条如实写进 spec 取舍，别把它读成"我们显式实现了嘀嗒 :6 的边界判定"。
+    //
+    // 负断言按**文案**判，不按键判（spec.md FR-4 的判据原文就是"不出现「共享协作」"）：
+    // 只断 `BottomSheet` + 两个私有键，会被"换个弹层类型给出共享入口"整条绕过 ——
+    // 复核第 1 轮的反例实测：给 `_SmartRow` 的长按接 `AlertDialog(child: Text('共享协作'))`，
+    // 六条仍 `+6 All tests passed!`。下面那句文案断言就是把这条反例钉住的。
+    expect(
+      find.text('共享协作'),
+      findsNothing,
+      reason: '「今天」「明天」等智能清单以及「收集箱」不支持共享协作（嘀嗒 :6）',
+    );
+    expect(
+      find.text('编辑'),
+      findsNothing,
+      reason: '连「编辑」都没有 ⇒ 不是只把共享这一项筛掉了',
+    );
     expect(
       find.byType(BottomSheet),
       findsNothing,
       reason: '长按收集箱行起不出任何动作表 ⇒ 这一族根本没有清单级动作入口',
     );
     expect(find.byKey(_shareKey), findsNothing);
-    expect(
-      find.byKey(_editKey),
-      findsNothing,
-      reason: '连「编辑」都没有 ⇒ 不是只把共享这一项筛掉了',
-    );
   });
 
   testWidgets('320px + 1.3：动作表三项在自己的 context 上都不越界', (tester) async {
@@ -206,8 +217,10 @@ void main() {
 
     // 先确认最坏内容真在树里，再量几何。
     expect(find.text('共享协作'), findsOneWidget);
+    // 档位自检取**文案**的 element，不取私有键：键名是内部契约，改个键名不该让
+    // 「溢出量测」这条红（复核第 1 轮 X6 读数里 T6 的红是纯假警报，可见行为零变化）。
     expect(
-      MediaQuery.textScalerOf(tester.element(find.byKey(_shareKey))).scale(10),
+      MediaQuery.textScalerOf(tester.element(find.text('共享协作'))).scale(10),
       closeTo(13, 0.001),
       reason: '档位没传到弹层自己的 context，量出来的溢出数字就没有意义',
     );

@@ -6,7 +6,7 @@
 
 | 锚点 | 原文 | 用在哪条 |
 | --- | --- | --- |
-| `:6` | 「**只有你自己创建的普通清单支持共享**，「今天」、「明天」等智能清单以及「收集箱」不支持共享协作。因此，在开始共享前，请先新建一个用于共享的普通清单。」 | FR-4（可达性边界） |
+| `:6` | 「**只有你自己创建的普通清单支持共享，「今天」、「明天」等智能清单以及「收集箱」不支持共享协作**。因此，在开始共享前，请先新建一个用于共享的普通清单。」 | FR-4（可达性边界） |
 | `:8` | 「接着，进入该清单详情页面，点击右上角的「**···**」 → 选择「**共享协作**」 → 点击「**添加新成员**」，即可邀请对方加入共享清单。」 | FR-1（入口位置与命名）、FR-3（成员页内的「添加新成员」） |
 
 术语照抄：**「共享协作」**。本仓现名是「协作」/「协作成员」，且入口挂在**任务**详情上（见现状）。
@@ -14,7 +14,7 @@
 ## 二、现状（基准 `zh-cloud-todo-flutter origin/develop@9032005`，逐条实测）
 
 ```
-git grep -n "showListActions"              origin/develop -- lib   # 定义 list_actions.dart:63；唯一调用点 sidebar.dart:626
+git grep -n "showListActions"              origin/develop -- lib   # 定义 list_actions.dart:65（:64 是文档注释、:63 是 `];`）；唯一调用点 sidebar.dart:626
 git grep -n "ListMemberPage"               origin/develop -- lib   # 定义 list_member_page.dart:48；唯一调用点 task_detail_pane.dart:1332
 git grep -n "共享协作"                      origin/develop -- lib   # 0 命中
 git grep -n "协作成员"                      origin/develop -- lib   # task_detail_pane.dart:1235 / :1327
@@ -40,9 +40,9 @@ git grep -n "Icons.more_horiz\|more_vert"  origin/develop -- lib/features/task/t
 ## 四、功能需求
 
 - **FR-1 入口**：`showListActions` 的动作表里增加一项**「共享协作」**（术语照抄 `:8`），
-  排在「编辑」之前（共享是比编辑更低频但更"面向协作"的动作，放第一位会让常用项下移 ⇒
-  **实测放最后一条会被复核问"为什么不与嘀嗒的顺序一致"**：嘀嗒 `:8` 只给了路径没给列表顺序 ⇒ 取舍 3：放「编辑」之后、「删除」之前，
-  理由是「删除」永远垫底是破坏性动作的通行约定）。点击后 push `ListMemberPage`。
+  顺序取**「编辑 → 共享协作 → 删除」**（取舍 3）。嘀嗒 `:8` 只给路径、没给列表顺序 ⇒
+  顺序是本仓的形态选择，不是照抄项；「删除」垫底是破坏性动作的通行约定。
+  点击后 push `ListMemberPage`。
 - **FR-2 传参**：`listServerId` 用该清单的 `serverId`，`title` 用清单名。
   与任务详情那条入口共用同一个页面与同一套前置校验，**不抄第二份**。
 - **FR-3 未同步要有可见原因**：`serverId == null`（清单只在本地）⇒ 不 push，
@@ -53,6 +53,10 @@ git grep -n "Icons.more_horiz\|more_vert"  origin/develop -- lib/features/task/t
   今天/明天/收集箱是**合成行**，走的是另外的 row 组件 ⇒ 天然满足 `:6`。
   **但这条必须有用例钉住**（否则将来谁给合成行接上 `showListActions` 就静默违反 `:6`）：
   判据 = 收集箱行长按**不出现**「共享协作」，正对照 = 普通清单行长按**出现**。
+  负断言一律按**文案**判（`find.text('共享协作')` / `find.text('编辑')`），不按私有键判：
+  只断 `BottomSheet` + 两个键会被"换个弹层类型给出共享入口"绕过
+  —— 复核第 1 轮反例（`/tmp/r79d/CX1.log`：给 `_SmartRow` 长按接 `AlertDialog(Text('共享协作'))`，
+  旧版六条仍全绿；补文案断言后同一反例 `+5 -1`，红的正是这条）。
 - **FR-5 只做入口与传参，不动后端契约**：成员页本身、`/app-api/todo` 的共享接口都在 develop 已存在
   （矩阵 #52 现状列已取证）⇒ 本面无 BE 改动。
 
@@ -67,9 +71,12 @@ git grep -n "Icons.more_horiz\|more_vert"  origin/develop -- lib/features/task/t
    再加一条 `find.bySemanticsLabel('共享协作')` 成对。**没有另套 `Semantics` 包装**
    （套了反而多一层节点，specs/052 那次是 `IconButton` 的 tooltip 不常驻才需要包）。
 3. **失败保留已加载数据**：本面无异步读；但 FR-3 是"失败要说得出"——提示出现时侧栏**还在**
-   （断 `find.byType(Sidebar)` findsOneWidget。⚠️ 原来写的 `Key('todo-sidebar')`
-   实测 `Found 0 widgets with key [<'todo-sidebar'>]` —— 这个键在 develop 上不存在，
-   侧栏那些行用的是一组 `todo-sidebar-row-*` 键，故改成按类型断）。
+   （断 `find.byType(Sidebar)` findsOneWidget）。
+   ⚠️ 这里**不**用 `Key('todo-sidebar')`，理由要说准：该键**在 develop 上存在**
+   （`git grep -n "Key('todo-sidebar')" origin/develop -- lib` → `todo_workspace.dart:150`、`:198`；
+   全仓 `grep -rn "Key('todo-sidebar')" test/` → 22 处、6 个既有测试文件在用），
+   红的真因是本用例的 `_TestSidebar` 只泵了裸 `Sidebar`、没渲染 `TodoWorkspace` ⇒ 键不在**这棵树**里。
+   ⇒ 按类型断是**本用例装配下**的选择，不是"工作区级用例也不能用这个键"。
 4. **过期响应不覆盖新响应**：**不适用** —— 入口是同步 push，`serverId` 从已加载的 `TodoList` 取，
    没有新增流/请求。如实写理由。
 
@@ -78,13 +85,16 @@ git grep -n "Icons.more_horiz\|more_vert"  origin/develop -- lib/features/task/t
 1. **形态偏差**：嘀嗒是"清单详情页右上角「···」→ 共享协作"，本仓清单级动作表在**侧栏长按**里。
    本轮**只补能力与命名**，不新增右上角「···」（会动 AppBar 结构并可能惊动黄金基线）。
    ⇒ 这条偏差要写进矩阵 #52 的说明格，不能算"已与嘀嗒一致"。
-2. **「添加新成员」在本仓没有对应控件**：成员页的邀请表单常驻，「邀请」是提交动作。
-   把提交按钮改名成「添加新成员」等于改错东西 ⇒ **不改**，并在矩阵里写明"嘀嗒这一步在本仓是同一屏内联形态"。
+2. **「添加新成员」在本仓没有独立入口**（不是"没有对应控件"）：承担"加新成员"这件事的控件是存在的——
+   owner 视角下邀请表单**无条件渲染**（`list_member_page.dart:221` 是下拉框的 `labelText: '邀请权限'`，
+   `:242` 的 `FilledButton.icon(key: 'collaboration-invite-submit', icon: person_add_alt_1)`、
+   其 `label: Text('邀请')` 在 `:246`）才是提交按钮，缺的是嘀嗒那种"点开表单的入口"与那个命名。
+   把提交按钮改名成「添加新成员」等于改错东西 ⇒ **不改**，并在矩阵里写明"这一步在本仓是同一屏内联提交"。
 3. **顺序**：「编辑 → 共享协作 → 删除」（理由见 FR-1）。
 4. 不做"共享管理"聚合页、不改成员页角色文案（那是 #51/#52 别的格子）。
 
 ## 七、验收（矩阵口径）
 
 - 矩阵 **#52**：这一格从"清单级无入口"变成"清单级有入口，形态与嘀嗒不同" ⇒ 合并后状态仍「部分」
-  （`:8` 的路径三步里，第 1、2 步形态不同、第 3 步本仓无对应控件），
+  （`:8` 的路径三步里，第 1、2 步形态不同；第 3 步在本仓是同一屏内联提交、无独立入口），
   但缺口列要按实测改写。**PR 未合并 ⇒ 不翻状态，措辞用「已实现、未进 develop」**（校验器不允许说明格出现「待合并」）。
