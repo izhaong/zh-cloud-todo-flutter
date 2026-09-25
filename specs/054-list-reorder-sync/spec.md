@@ -27,7 +27,8 @@ git grep -n "_queue.enqueue" origin/develop -- lib/state/repositories/list_repos
   这不是"缺功能"，是**已有功能的主张说过头**：矩阵 #19 的「清单可排序」这一格，
   在补上同步登记之前只能算**本地半面**。
 - 顺带：`reorder` 的循环**没有包事务** ⇒ 中途抛（某条 id 已被删）会留下"前几条已改、后几条没改"的半截顺序。
-  同文件 `moveToFolder:119` 是 `_db.transaction(() async { … })` 的先例。
+  同文件 `moveToFolder:118` 是 `_db.transaction(() async { … })` 的先例。
+  ⚠️ 本节所有行号都按上面声明的基准 `origin/develop@9032005` 给；指不到时按符号名搜，别信行号。
 
 ## 三、用户故事
 
@@ -40,7 +41,7 @@ git grep -n "_queue.enqueue" origin/develop -- lib/state/repositories/list_repos
   `enqueue(entity: SyncEntities.list, op: SyncOps.upsert, localId: id, serverId: row.serverId, payload: row.toJson())`，
   **payload 取自重新读回的那一行**（照 `rename:100-107` 的形，不自己拼 map）。
   位次为 `i` ⇒ `payload['sortOrder'] == i`。
-- **FR-2 整批一个事务**：`reorder` 全体包在 `_db.transaction` 里（先例 `moveToFolder:119`）⇒
+- **FR-2 整批一个事务**：`reorder` 全体包在 `_db.transaction` 里（先例 `moveToFolder` 的事务，develop `:118`）⇒
   任一条抛错 ⇒ 所有 `sortOrder` 与所有 outbox 行都不留（FR-3 的断言据此才有力）。
 - **FR-3 不吞掉不存在的 id**：`orderedIds` 里查不到的 id 不参与写、也不登记（清单可能刚被别的面删掉），
   但**不许**因为"少了一条"就把剩下的位次写歪 ⇒ 位次按**实际写成的那批**连续排。
