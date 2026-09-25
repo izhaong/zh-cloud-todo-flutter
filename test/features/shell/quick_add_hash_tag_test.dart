@@ -462,7 +462,9 @@ void main() {
       find.byKey(const Key('todo-quick-add-create-tag-field')),
       '周会',
     );
-    await tester.tap(find.byKey(const Key('todo-quick-add-create-tag-confirm')));
+    await tester.tap(
+      find.byKey(const Key('todo-quick-add-create-tag-confirm')),
+    );
     await tester.pumpAndSettle();
     for (final key in [
       const Key('todo-quick-add-create-tag'),

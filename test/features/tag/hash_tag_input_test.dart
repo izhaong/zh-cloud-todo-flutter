@@ -109,7 +109,10 @@ void main() {
       // 反方向也要成：库里已有 '周会'，这次输入带首尾空白的 '  周会  '。
       // 少了这一半时，探针 PJ（把匹配改成拿未 trim 的原串比）全绿 ⇒ 说明原先只验过
       // "空白被清掉后存进去"，没验过"空白能被清掉后命中已有"。
-      final withSpaces = await resolveTagIdsByName(repo: tags, names: ['  周会  ']);
+      final withSpaces = await resolveTagIdsByName(
+        repo: tags,
+        names: ['  周会  '],
+      );
       expect(withSpaces, created, reason: '带空白的输入又建了一条 ⇒ 同一个标签长出两行');
       expect(await tags.getAll(), hasLength(1));
     });
