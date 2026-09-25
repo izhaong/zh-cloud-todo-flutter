@@ -70,9 +70,18 @@ class Sidebar extends ConsumerWidget {
     // 嘀嗒《…04-用标签管理任务.md》:10/:23「开启后，标签将显示在清单下面」⇒ 关掉就不显示条目。
     // 「标签」那一行入口不跟着收（spec.md 取舍 1）：本 App 没有嘀嗒的"清单管理页"，
     // 收掉它等于没有回头路。
-    final showTags =
-        ref.watch(sidebarShowTagsProvider).valueOrNull ??
-        SidebarVisibilityRepository.defaultShowTags;
+    //
+    // 不能写成 `valueOrNull ?? 默认`：那等于把"还没读到"当成"读到了、值是显示"，
+    // 存了「隐藏」的账号冷启动会先闪出标签条目再消失（Issue #353）。默认「显示」由
+    // 仓库那层负责（`_decode(null)` ⇒ 库里没有这行就是显示），这里只处理两种状态：
+    // 加载中不画（与同文件 lists/tags 的"没值就画空"一致），真读不到才回兜底默认。
+    final showTags = ref
+        .watch(sidebarShowTagsProvider)
+        .when(
+          data: (value) => value,
+          loading: () => false,
+          error: (_, _) => SidebarVisibilityRepository.defaultShowTags,
+        );
     final tagEntries = !showTags
         ? const <SidebarHierarchyEntry<TodoTag>>[]
         : flattenSidebarHierarchy(

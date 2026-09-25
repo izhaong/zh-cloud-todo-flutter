@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -79,6 +81,74 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull, reason: '切到「隐藏」后侧栏重排溢出');
   });
+
+  // Issue #353：`valueOrNull ?? 默认` 把「首值还没读到」当成了「读到了、值是默认」。
+  testWidgets('偏好首值未到达前不画标签条目：存了「隐藏」的账号冷启动不闪', (tester) async {
+    final gate = StreamController<bool>();
+    addTearDown(gate.close);
+    await pumpTodoVisualScenario(
+      tester,
+      viewport: TodoVisualViewports.wide,
+      fixtureSet: TodoVisualFixtureSet.populated,
+      // 只把「读偏好」这一条通道挂起（首值由用例放行），清单与标签仍走真库 ⇒
+      // 下面那句「条目不在」只能来自门控判定，不是整棵侧栏还没数据。
+      overridesBuilder: (database) => [
+        sidebarVisibilityRepositoryProvider.overrideWithValue(
+          _SilentVisibilityRepository(
+            database,
+            SyncChangeQueue(database),
+            values: gate.stream,
+          ),
+        ),
+      ],
+      child: const Align(
+        alignment: Alignment.topLeft,
+        child: _TestSidebar(width: 300),
+      ),
+    );
+
+    // 正向对照：侧栏本身是活的、渲染完成了的。
+    expect(
+      find.byKey(const Key('todo-sidebar-row-inbox')),
+      findsOneWidget,
+      reason: '智能清单行都没画出来 ⇒ 这棵树是空的，下面的断言就是假绿',
+    );
+    // 取舍 1：「标签」那一行入口不随偏好收起，首值未到也不该被一起藏掉。
+    expect(find.byKey(const Key('todo-sidebar-row-tags')), findsOneWidget);
+    expect(
+      focusTag(),
+      findsNothing,
+      reason: '首值没到就按默认「显示」画 ⇒ 存了「隐藏」的账号冷启动会先闪出标签条目再消失',
+    );
+
+    // 反向对照（同一棵树、同一个仓库）：首值一到就按真值画 ⇒
+    // 证明上一条不是"永远不画"造成的绿。
+    gate.add(true);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.scrollUntilVisible(
+      focusTag(),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(focusTag(), findsOneWidget, reason: '首值为「显示」时条目要回来，否则上一条红得没有意义');
+
+    // 门控读的是值本身，不是"来过消息就算显示"。
+    gate.add(false);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(focusTag(), findsNothing);
+  });
+}
+
+/// 只替换 `watch()`：首值何时到达由用例决定。`get()`/`save()` 仍走真库。
+class _SilentVisibilityRepository extends SidebarVisibilityRepository {
+  _SilentVisibilityRepository(super.db, super.queue, {required this.values});
+
+  final Stream<bool> values;
+
+  @override
+  Stream<bool> watch() => values;
 }
 
 Future<TodoVisualFixture> _pumpSidebar(
