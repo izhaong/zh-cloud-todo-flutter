@@ -402,6 +402,77 @@ void main() {
       reason: '过期响应不得覆盖新响应',
     );
   });
+
+  // 第 72 轮复核 D2：PR 正文原来写「下一次操作前清场，不残留」，那对顺序操作成立、
+  // 对下面这条例外说过头。这条用例把真实行为钉成设计：两条消息各说各的事，不互相顶掉。
+  testWidgets('提示与错误各占一条：先前那次刷新的失败，不顶掉刚给的「还没到」提示', (tester) async {
+    if (now.day == monthDayCount) {
+      // 月末没有未来日可点 ⇒ 这条测不了，显式说明而不是静默通过。
+      markTestSkipped('月末当天没有可点的未来格，这条例外路径不存在');
+      return;
+    }
+    await pumpHabit(tester);
+    await openMonthSheet(tester);
+    final futureDay = DateTime(now.year, now.month, now.day + 1);
+    repo
+      ..failStats = true
+      ..queuedCounts.add(<Map<String, dynamic>>[])
+      ..gates.add(Completer<void>());
+
+    // 先点一个**已到**的日子：补记成功 ⇒ 触发一次重拉，而这次重拉挂在闸门上还没回。
+    await tester.tap(find.byKey(ValueKey(cellKey(dayA))));
+    await tester.pump();
+    expect(repo.statsCalls, 2, reason: '补记后要重拉当月数据，且这一次还挂在闸门上');
+
+    // 在飞期间点未来格 ⇒ 提示出现（守卫不发请求，也就不会自己把在飞的那次顶掉）。
+    await tester.tap(find.byKey(ValueKey(cellKey(futureDay))));
+    await tester.pump();
+    expect(find.text('这个日期还没到，不能补记'), findsOneWidget);
+
+    repo.gates[0].complete();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(
+      find.textContaining('当月打卡情况加载失败'),
+      findsOneWidget,
+      reason: '在飞的那次刷新失败要可见（第 72 轮之前的口径：静默早退会被当成"没生效"）',
+    );
+    expect(
+      find.text('这个日期还没到，不能补记'),
+      findsOneWidget,
+      reason: '错误说的是"上一次刷新失败"，提示说的是"这一次点按被拒"，两件事不该互相顶掉',
+    );
+    expect(monthCells(), findsNWidgets(monthDayCount), reason: '失败后当月格子仍要在');
+  });
+
+  testWidgets('320px + 1.3 倍字号下提示与错误同时可见：不溢出', (tester) async {
+    if (now.day == monthDayCount) {
+      markTestSkipped('月末当天没有可点的未来格，这条例外路径不存在');
+      return;
+    }
+    await pumpHabit(tester, surface: const Size(320, 720), textScale: 1.3);
+    await openMonthSheet(tester);
+    final futureDay = DateTime(now.year, now.month, now.day + 1);
+    repo
+      ..failStats = true
+      ..queuedCounts.add(<Map<String, dynamic>>[])
+      ..gates.add(Completer<void>());
+
+    await tester.tap(find.byKey(ValueKey(cellKey(dayA))));
+    await tester.pump();
+    await tester.tap(find.byKey(ValueKey(cellKey(futureDay))));
+    await tester.pump();
+    repo.gates[0].complete();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    // 一个可见消息条都不许被挤掉：同时两条时布局仍然容得下（容不下就是真缺陷，
+    // 那时该改的是"同屏"这个决定，而不是把这条断言放宽）。
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining('当月打卡情况加载失败'), findsOneWidget);
+    expect(find.text('这个日期还没到，不能补记'), findsOneWidget);
+  });
 }
 
 class _FakeHabitRepository implements HabitRepository {
@@ -409,6 +480,9 @@ class _FakeHabitRepository implements HabitRepository {
 
   List<Map<String, dynamic>> dailyCounts;
   bool failCheckIn = false;
+
+  /// 与 `gates` 配套：放行闸门后让这一次 `stats` 抛错（第 72 轮复核 D2 用）。
+  bool failStats = false;
   int statsCalls = 0;
   int overviewStatsCalls = 0;
   int checkInCalls = 0;
@@ -434,6 +508,7 @@ class _FakeHabitRepository implements HabitRepository {
     final index = statsCalls - 2;
     if (index >= 0 && index < queuedCounts.length) {
       await gates[index].future;
+      if (failStats) throw StateError('故意让当月数据加载失败');
       return {'dailyCounts': queuedCounts[index], 'period': period};
     }
     return {'dailyCounts': dailyCounts, 'period': period};
