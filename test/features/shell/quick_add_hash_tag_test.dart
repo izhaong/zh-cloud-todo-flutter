@@ -308,11 +308,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(
-      find.text('标签 2'),
-      findsOneWidget,
-      reason: '计数只该出现一处，且要跟着 # 的数量走',
-    );
+    expect(find.text('标签 2'), findsOneWidget, reason: '计数只该出现一处，且要跟着 # 的数量走');
 
     await tester.enterText(
       find.byKey(const Key('todo-mobile-add-field')),
