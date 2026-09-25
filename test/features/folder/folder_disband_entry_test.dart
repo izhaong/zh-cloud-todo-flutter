@@ -229,6 +229,42 @@ void main() {
     );
   });
 
+  testWidgets('仓库在点确认时已不可用：框不关、给可见提示、一个字都不写', (tester) async {
+    // 第 68 轮同一个坑的自查：spec 的失败分支有两类（仓库为 null / delete 抛错），
+    // 只测抛错那类时 null 分支是 0 覆盖。
+    // 可达路径：侧栏渲染时仓库还在，用户长按后再点确认 ⇒ 期间库被销毁（退出登录），
+    // `ref.read(folderRepositoryProvider)` 就回 null。
+    // 文件夹行仍然要出现：所以候选流用另一个仓库实例喂，只把**对话框读的那个**换成 null。
+    final fixture = await pumpSidebar(
+      tester,
+      overridesBuilder: (database) => [
+        folderRepositoryProvider.overrideWith((ref) => null),
+        foldersStreamProvider.overrideWith(
+          (ref) =>
+              FolderRepository(database, SyncChangeQueue(database)).watchAll(),
+        ),
+      ],
+    );
+    final rowsBefore = await syncRows(fixture);
+
+    await expandAndLongPressFolder(tester);
+    await tester.tap(find.text('解散'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('本地数据库尚未就绪，文件夹没有解散'),
+      findsOneWidget,
+      reason: '这一支原先是静默 return，用户以为解散好了',
+    );
+    expect(find.text('取消'), findsOneWidget, reason: '提示要看得见就得让框留着');
+    expect(
+      await folderById(fixture.database, projectsFolderId),
+      isNotNull,
+      reason: '这条路径一个字都不该写',
+    );
+    expect(await syncRows(fixture), rowsBefore);
+  });
+
   testWidgets('读屏念得出「解散文件夹」，且念的是被解散的那一个', (tester) async {
     final handle = tester.ensureSemantics();
     await pumpSidebar(tester);
