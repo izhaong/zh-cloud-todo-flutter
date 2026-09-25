@@ -13,6 +13,7 @@ import 'package:zh_cloud_todo_flutter/features/task/widgets/task_workspace_heade
 import 'package:zh_cloud_todo_flutter/state/repositories/task_query_repository.dart';
 import 'package:zh_cloud_todo_flutter/core/theme/app_theme.dart';
 import 'package:zh_cloud_todo_flutter/features/task/tasks_by_list_page.dart';
+import 'package:zh_cloud_todo_flutter/state/providers.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_sort_preference_repository.dart';
 
 import 'support/todo_visual_fixture.dart';
@@ -311,7 +312,7 @@ void main() {
     }
   });
 
-  testWidgets('320px + 1.3 倍：方向行排得下、各自可命中、有独立语义', (tester) async {
+  testWidgets('320px + 1.3 倍：方向行排得下、各自可命中，「当前方向」随方向换行', (tester) async {
     tester.platformDispatcher.textScaleFactorTestValue = 1.3;
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     tester.view.physicalSize = const Size(320, 720);
@@ -319,49 +320,62 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    await pumpHeaderWithOpenMenu(
-      tester,
-      sort: TaskSort.createdAt,
-      direction: TaskSortDirection.newestFirst,
-      onDirection: (_) {},
-    );
-
-    expect(
-      MediaQuery.textScalerOf(tester.element(find.text('从旧到新'))).scale(10),
-      closeTo(13, 0.001),
-      reason: '菜单是独立路由，档位要在它自己的 context 上复检',
-    );
-    // 「读屏能分辨当前方向」（Issue #320 四件套第 2 条）。
-    // 判据要正负各一条：只断"有一处当前方向"会在两行都打标时照样绿。
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('todo-sort-direction-newestFirst')),
-        matching: find.bySemanticsLabel(RegExp('当前方向')),
-      ),
-      findsOneWidget,
-      reason: '当前档位没有可读标记 ⇒ 读屏只知道有两行，不知道现在是哪一行',
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('todo-sort-direction-oldestFirst')),
-        matching: find.bySemanticsLabel(RegExp('当前方向')),
-      ),
-      findsNothing,
-      reason: '两行都标"当前方向"等于没标',
-    );
-    for (final label in const ['从新到旧', '从旧到新']) {
-      expect(
-        find.text(label).hitTestable(),
-        findsOneWidget,
-        reason: '320px + 1.3 下这一行被挤出可视区就等于选不了',
+    // 两个方向各跑一轮。只跑 `newestFirst` 时，把勾写死成 `candidate == newestFirst`
+    // （探针 PJ）也全绿 ⇒ 那条断言钉的是"这行永远有勾"，不是"勾跟着状态走"。
+    for (final current in TaskSortDirection.values) {
+      // 弹层是独立路由且 `pumpWidget` 复用 Navigator 的 State ⇒ 不真卸载的话，
+      // 这一轮读到的是上一轮那张开着的、按旧方向构建的菜单。
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      await pumpHeaderWithOpenMenu(
+        tester,
+        sort: TaskSort.createdAt,
+        direction: current,
+        onDirection: (_) {},
       );
+
       expect(
-        find.bySemanticsLabel(RegExp(label)),
-        findsOneWidget,
-        reason: '只有文字没有语义节点时读屏念不出这一档',
+        MediaQuery.textScalerOf(tester.element(find.text('从旧到新'))).scale(10),
+        closeTo(13, 0.001),
+        reason: '菜单是独立路由，档位要在它自己的 context 上复检',
+      );
+      // 「读屏能分辨当前方向」（Issue #320 四件套第 2 条）。
+      // 判据要正负各一条：只断"有一处当前方向"会在两行都打标时照样绿。
+      for (final candidate in TaskSortDirection.values) {
+        final marking = find.descendant(
+          of: find.byKey(Key('todo-sort-direction-${candidate.name}')),
+          matching: find.bySemanticsLabel(RegExp('当前方向')),
+        );
+        if (candidate == current) {
+          expect(
+            marking,
+            findsOneWidget,
+            reason:
+                'direction=$current 时「${candidate.label}」这一行没有可读标记 ⇒ '
+                '读屏只知道有两行，不知道现在是哪一行',
+          );
+        } else {
+          expect(marking, findsNothing, reason: '两行都标"当前方向"等于没标 ⇒ 勾没跟着状态走');
+        }
+      }
+      for (final label in const ['从新到旧', '从旧到新']) {
+        expect(
+          find.text(label).hitTestable(),
+          findsOneWidget,
+          reason: '320px + 1.3 下这一行被挤出可视区就等于选不了',
+        );
+        expect(
+          find.bySemanticsLabel(RegExp(label)),
+          findsOneWidget,
+          reason: '只有文字没有语义节点时读屏念不出这一档',
+        );
+      }
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: '多两行方向后窄屏大字体下菜单溢出（direction=$current）',
       );
     }
-    expect(tester.takeException(), isNull, reason: '多两行方向后窄屏大字体下菜单溢出');
   });
 
   testWidgets('工作区列表真的按方向反序（页面级：只钉仓储不等于界面接上了）', (tester) async {
@@ -415,6 +429,17 @@ void main() {
     }
 
     await pumpWorkspace();
+    final seededRows = await fixture.database
+        .select(fixture.database.todoTasks)
+        .get();
+    expect(
+      seededRows.where((task) => task.serverId == null),
+      hasLength(2),
+      reason:
+          'Issue #320 验收④ 讲的是"未同步的任务不阻塞切换" ⇒ 种成已同步就测不到那一格。'
+          '夹具本身也不通网（`todo_visual_fixture.dart` 的 `_NoNetworkApiClient` 对任何'
+          '非预期请求直接回 error），所以这条用例能跑完就等于是"切方向一次请求都没发"',
+    );
     await tester.tap(find.byKey(const Key('todo-sort-menu')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('创建时间'));
@@ -487,4 +512,137 @@ void main() {
       expect(tester.getRect(find.text('页面里晚创建的').first).top, newerTop);
     }
   });
+
+  testWidgets('方向保存失败：界面仍是刚选的方向 + 有可见失败提示（四件套第 3 条）', (tester) async {
+    late _FailingSortPreferenceRepository failing;
+    final fixture = await TodoVisualFixture.create(
+      set: TodoVisualFixtureSet.empty,
+      overridesBuilder: (database) {
+        failing = _FailingSortPreferenceRepository(
+          database,
+          SyncChangeQueue(database),
+        );
+        return [
+          taskSortPreferenceRepositoryProvider.overrideWithValue(failing),
+        ];
+      },
+    );
+    addTearDown(fixture.dispose);
+    final base = fixture.fixedNow;
+    await fixture.database.batch((batch) {
+      batch.insertAll(fixture.database.todoTasks, [
+        TodoTasksCompanion.insert(
+          id: 'fail-older',
+          listId: 'inbox',
+          title: '失败态早创建的',
+          createdAt: base.subtract(const Duration(days: 5)),
+          updatedAt: base,
+        ),
+        TodoTasksCompanion.insert(
+          id: 'fail-newer',
+          listId: 'inbox',
+          title: '失败态晚创建的',
+          createdAt: base,
+          updatedAt: base.subtract(const Duration(days: 5)),
+        ),
+      ]);
+    });
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: fixture.container,
+        child: MaterialApp(
+          theme: ThemeData.light().copyWith(
+            extensions: const [AppThemeExtension(AppColors.light)],
+          ),
+          home: const Scaffold(body: TasksByListPage(hideAppBar: true)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('todo-sort-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('创建时间'));
+    await tester.pumpAndSettle();
+    // 选档那一次点击走的是同一条保存、报的是同一句提示：先把它的 SnackBar 收掉，
+    // 否则最后那句「有可见失败提示」可能测的是上一次点击的失败，方向这条分支
+    // 摘掉 catch 也照样绿。
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('排序偏好保存失败，请稍后重试'),
+      findsNothing,
+      reason: '选档那次的提示没收起 ⇒ 后面的失败提示分不清是哪一次点击的',
+    );
+    await tester.tap(find.byKey(const Key('todo-sort-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('从旧到新'));
+    await tester.pumpAndSettle();
+
+    // 调用边界：不先证"页面确实带着新方向去存了"，下面两条断言可能只是在测
+    // "一条没被调用的路径"（查数据库来证明"没写"更是恒真 —— 假仓库压根不写库）。
+    expect(
+      failing.calls,
+      ['createdAt/newestFirst', 'createdAt/oldestFirst'],
+      reason:
+          '选档与选方向各应落到 save 一次，且第二次带上新方向；'
+          '少了任何一条 ⇒ 界面点了但没走保存，本用例的判据错位',
+    );
+
+    expect(
+      find.text('排序偏好保存失败，请稍后重试'),
+      findsOneWidget,
+      reason: '写失败被 catch 吞掉 ⇒ 用户以为方向存住了，重启后弹回原样',
+    );
+    expect(
+      tester.getRect(find.byKey(const Key('task-row-surface-fail-older'))).top,
+      lessThan(
+        tester
+            .getRect(find.byKey(const Key('task-row-surface-fail-newer')))
+            .top,
+      ),
+      reason: '保存失败就回滚界面 ⇒ 用户刚做的选择被吃掉',
+    );
+
+    // 菜单里那一行也得跟着：`sortDirection` 若没接到 header，页面顺序对了也白搭。
+    await tester.tap(find.byKey(const Key('todo-sort-menu')));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('todo-sort-direction-oldestFirst')),
+        matching: find.bySemanticsLabel(RegExp('当前方向')),
+      ),
+      findsOneWidget,
+      reason: '重开菜单显示的还是旧方向 ⇒ 界面自相矛盾',
+    );
+    await tester.tapAt(const Offset(4, 4));
+    await tester.pumpAndSettle();
+
+    // SnackBar 自带 4s 定时收起：不推过它，用例会以"仍有 pending Timer"收场。
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+}
+
+/// 让 `save` 必然失败，同时记下页面到底带了什么参数进来。
+///
+/// 用 `extends` 而不是实现接口：`TaskSortPreferenceRepository` 是具体类，
+/// 读取分支（`get`）要保持真实行为，本用例只关心写失败后界面的表现。
+class _FailingSortPreferenceRepository extends TaskSortPreferenceRepository {
+  _FailingSortPreferenceRepository(AppDatabase database, SyncChangeQueue queue)
+    : super(database, queue);
+
+  final List<String> calls = [];
+
+  @override
+  Future<void> save(
+    String? listId,
+    TaskSort sort, [
+    TaskSortDirection direction = TaskSortDirection.newestFirst,
+  ]) async {
+    calls.add('${sort.name}/${direction.name}');
+    throw StateError('模拟排序偏好写入失败');
+  }
 }
