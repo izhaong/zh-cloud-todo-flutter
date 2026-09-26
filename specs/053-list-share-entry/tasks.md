@@ -6,8 +6,8 @@
 ## 完成情况
 
 - [x] `spec.md` 来源表：《07-共享与协作/01-如何共享清单》`:6`/`:8` 逐字引用（基准 docs `origin/develop`）
-- [x] 现状取证：`showListActions` 定义 `list_actions.dart:65`（第 1 轮复核失3 把 `:63` 改成 `:65`；第 2 轮复核 F1 又抓到我修的时候把 `];` 记成 `:63` —— develop 字节上 `:62` 才是 `];`、`:63` 是空行）；唯一调用点 `sidebar.dart:626`；
-      `ListMemberPage` 唯一调用点 `task_detail_pane.dart:1332`；`共享协作` 在 develop 的 `lib` **0 命中**
+- [x] 现状取证：`showListActions` 定义 `origin/develop:lib/features/list/list_actions.dart:65`（第 1 轮复核失3 把 `:63` 改成 `:65`；第 2 轮复核 F1 又抓到我修的时候把 `];` 记成 `:63` —— develop 字节上 `:62` 才是 `];`、`:63` 是空行）；唯一调用点 `origin/develop:lib/features/shell/sidebar.dart:626`；
+      `ListMemberPage` 唯一调用点 `origin/develop:lib/features/task/task_detail_pane.dart:1332`；`共享协作` 在 develop 的 `lib` **0 命中**
 - [x] FR-1/FR-2 动作表补第三项 + `openListCollaboration`（`serverId` 前置校验、提示语、开成员页一份口径）
 - [x] FR-2 的去重**真的做了**：任务详情面板的 `members` 分支改为调用同一函数，
       不再就地 `push` `ListMemberPage`（成对 grep 判据见下）
@@ -23,7 +23,7 @@
       X4 `1/1`、X5 `1/1`、X6 `4/4`，末两行「结论：异常计数 = 0」+「收尾工作树（lib + pubspec.lock）：干净」
       （每次重跑用**独立 LOGDIR**：`PROBE_LOGDIR=/tmp/r79g/probes`，上一轮的日志不许被覆盖；
       `/tmp/r79f/probes-all.log` 是被格式化那一笔之前的复跑，异常计数同样 0，保留不动）
-- [x] 六道门禁跑在**已提交终态 `e3c9d88`** 的字节上，六项 rc 全 0，日志 `/tmp/r79/gates79.log`（下表读数由脚本从该日志现算）
+- [x] 六道门禁跑在**已提交终态 `e3c9d88`** 的字节上，六项 rc 全 0，日志 `/tmp/r79/gates79.log`（下表每条读数都是对这份日志现跑的 `grep`，门禁的产出器是 `/tmp/r79/gates79.sh`；复算 `grep -c "rc=" /tmp/r79/gates79.log` = **7** 条 `[gates] rc=0`：六道门禁各一条 + 收尾自检一条。**⚠️ 本行原先写「六项 rc 全 0」，少算了收尾那一条**）
 - [ ] 只读复核：**第 1–6 轮各 `VERDICT: FAIL`**（失项逐条回源复验，见下方六个处置节）
       ⇒ 第 5 轮已由 `6ac75af` 消化、第 6 轮由本笔消化（纯 md，逐条见「第 6 轮只读复核」节）；
       **消化的那笔不能给自己发通过 ⇒ 这一格仍是欠的**，不得据此谈合并
@@ -73,10 +73,10 @@ rc=1（我手写换行不合 formatter），所以那一份日志不作证据；
 | 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:35 +904 ~26: All tests passed!` | 0 |
 | 6 | `flutter build web --release --dart-define=TODO_API_BASE_URL=… --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web` | 0 |
 
-计数对账：门 5 统计行 `+904` 减掉本面新增 6 条 = **898** = develop 全量基线。
+计数对账（两端各有实跑来源，不是拿减法反推）：门 5 统计行 `02:38 +904 ~26: All tests passed!` 在 `/tmp/r79/gates79.log:1308`；本面新增 6 条 = `git diff origin/develop..HEAD -- test` 管道到 `grep -cE "^\+[[:space:]]*(testWidgets|test)\("` 的现读（只动 `test/features/list/list_share_entry_test.dart` 一个文件）；898 那一侧的实跑留痕是 develop 全量基线 `/tmp/r68/baseline_develop.log:1152`（同一命令读它得 `02:53 +898 ~26: All tests passed!`）。
 **898 不靠减法取证**（第 77 轮复核 F1 的教训），它有自己的实跑日志：
 `/tmp/r68/baseline_develop.log:1152` = `02:53 +898 ~26: All tests passed!`（在 `origin/develop` 副本上直接跑出来的 `+898` 统计行；该文件全文 1153 行，`:1153` 才是物理末行 `rc=0`）。
-⚠️ 本来还想引 `specs/045-sort-direction/tasks.md:120` 作第二处佐证，落笔前 `ls` 过：**这个目录不在本分支**
+⚠️ 本来还想引第 64 轮那份排序方向台账作第二处佐证（`specs/` 下没有 045 这个目录 ⇒ 它**不能当锚点**，只当说明），落笔前 `ls` 过：**这个目录不在本分支**
 （`specs/045-sort-direction/` No such file or directory，它在未合并的分支上）⇒ 不引，
 免得又写成一个指不到的指针（第 77 轮复核 F1 的原罪就是这个）。
 新增 6 条这一侧的前提也可验：`git diff --name-status 9032005..HEAD -- test` 只有一个 `A`（**基准显式写成 sha**：第 5 轮复核 3C 量出写 `origin/develop` 会随远端漂移，不钉基准的"今天"读数不可复算 ⇒ 钉成 `a1d7733..HEAD` = 21 A + 8 M（第 6 轮复核实测 `9032005..HEAD` 今天是 **1** A，因为 `origin/develop` 已 fast-forward 到 `9032005`）；本表日志收尾 `工作树脏项数=0`），
@@ -119,12 +119,12 @@ CX2/CX3 只有 `textContaining` 能咬、CX4 只有 `byIcon` 能咬，脚本对 
 判据**上界**仍然如实写：这三形是复核员量出来的，不是全部；不声称拦得下任意形态（见 spec FR-4）。
 
 反例 CX5–CX8（**第 3 轮复核 N1 的修法验证**，脚本 `/tmp/r79h/probe_cx7.py`，日志
-`/tmp/r79h/cx7-run4.log`；CX8 那一族见 `/tmp/r79h/cx8/` —— 这个目录**同时**装两种留痕：计数在 `cx8/B.log:66`（`Expected: <47>`）与 `:67`（`Actual: <54>`），像素 diff 图在 `cx8/failures/`（20 个 png；`A.log` 与 `control.log` 各是一次 `+1 All tests passed!` 的对照））—— 复核员量出 CX2–CX4 那一版仍放过
+`/tmp/r79h/cx7-run4.log`；CX8 那一族见 `/tmp/r79h/cx8/` —— 这个目录**同时**装两种留痕：计数在 `/tmp/r79h/cx8/B.log:66`（`Expected: <47>`）与 `:67`（`Actual: <54>`），像素 diff 图在 `cx8/failures/`（20 个 png；`A.log` 与 `control.log` 各是一次 `+1 All tests passed!` 的对照））—— 复核员量出 CX2–CX4 那一版仍放过
 五种形状（裸 `RichText`、`Icons.people_outline`、`Icons.share_outlined`、只给 `Semantics(label:)`、
 `Image` 图标）⇒ T5 从"列形状"改成"**看结果**"（三件仪器，分工见 spec FR-4 的表）。那一版**八个**形状逐个
 指定该由哪条咬住（还没有 S10），结论行「异常计数 = 0」在 `/tmp/r79h/cx7-run4.log:42`（全文 43 行；`:41` 是脚本自打的收尾脏项行、`:43` 是我另外 append 的 `EXIT=0` ⇒ **不叫末行**，上一版就吃过这个亏）。
 ⚠️ 这一句我原先写的是「**九个**形状…在 run4」—— 计数与日志不配对：`grep -c '== S10'` 在 run4 / run5 / run6 上分别是
-**0 / 1 / 1**，全文行数 43 / 40 / 47 ⇒ 九个形状（S2–S10）+ 反向对照 A 的那一份在 **`cx7-run6.log:46`**（全文 47 行）。
+**0 / 1 / 1**，全文行数 43 / 40 / 47 ⇒ 九个形状（S2–S10）+ 反向对照 A 的那一份在 **`/tmp/r79h/cx7-run6.log:46`**（全文 47 行）。
 我第 4 轮补了 S10 却没回头改这句，句子还指着旧日志（登记在下表 F4）：
 
 | 编号 | 形状 | 读数 | 该由哪条咬住（按 reason 现读，不是猜） |
@@ -170,10 +170,10 @@ PRESENT 正对照：侧栏仍把长按接到 showListActions           命中 1
 
 | # | 复核指什么 | 我复验的命令与读数 | 处置 |
 | --- | --- | --- | --- |
-| F1 | 三件仪器里的"屏障数"那张网有实洞：`Overlay.insert` 起的手写面板**不起路由、也不带屏障** ⇒ 长按后界面上多出一块，①② 两条却一动不动 | 我自己做成反例 S10（文案还故意不写"共享协作"）：`/tmp/r79h/probe_cx7.py` → `cx7-run5.log`、`cx7-run6.log:46`（全文 47 行）⇒ `+5 -1`，红在 ③「整棵树的元素数变了」，①② 实测放过 | 补第四张网：长按**前后** `tester.allWidgets.length` 必须相等（`a398a35`，基数在 settle 之后、长按之前取）；spec FR-4 那张表加一行射程/盲区，表头改成"仪器 × 判的是 × 拦得住（实测形状）× 拦不住（实测）"四列 |
+| F1 | 三件仪器里的"屏障数"那张网有实洞：`Overlay.insert` 起的手写面板**不起路由、也不带屏障** ⇒ 长按后界面上多出一块，①② 两条却一动不动 | 我自己做成反例 S10（文案还故意不写"共享协作"）：`/tmp/r79h/probe_cx7.py` → `cx7-run5.log`、`/tmp/r79h/cx7-run6.log:46`（全文 47 行）⇒ `+5 -1`，红在 ③「整棵树的元素数变了」，①② 实测放过 | 补第四张网：长按**前后** `tester.allWidgets.length` 必须相等（`a398a35`，基数在 settle 之后、长按之前取）；spec FR-4 那张表加一行射程/盲区，表头改成"仪器 × 判的是 × 拦得住（实测形状）× 拦不住（实测）"四列 |
 | F2 | 台账写的像素差百分比既**没有留痕日志**、数值也不对（窄空态那张不是 0.16%） | `/tmp/r79h/golden_A.py` 重跑 → `/tmp/r79h/golden-A.log`：按日志出现顺序五张依次 `0.16% / 0.16% / 0.09% / 0.16% / 0.20%`，对应 `wide-populated`、`wide-selected`、`wide-empty`、`wide-long-content`、`compact-selected`（行号 `:66`、`:99`、`:132`、`:164`、`:197`），汇总 `+4 -5` | 数值按日志逐张订正（含上方反向对照 A 那一格），并把这份日志指进 —— 此前那句是一个区间加上"凭记忆"，没有字节支撑 |
 | F3 | 某一形的形状被我写成另一种：S7 的实测是**只给 `Semantics(label:)` 的按钮**，我却顺手套了个弹层说法 | `grep -n '== S7' /tmp/r79h/cx7-run6.log` ⇒ 「只有 `Semantics(label:)` 的按钮（预期：咬住 都自带屏障）」 | 措辞回落到实测形状；同时如实登记：复核点名的 `Image` 图标那一形**我没做成反例**（run6 的九形里没有它），不声称它已被拦 |
-| F4 | 我写「九个形状逐个指定」却把留痕挂在 `cx7-run4.log`，而那一版**只有八个**（S10 是本轮才加的） | `for f in cx7-run4 cx7-run5 cx7-run6; do grep -c '== S10' $f.log; done` → `0 / 1 / 1`；`wc -l` → `43 / 40 / 47` | 计数句改回八个、九个那份另指 `cx7-run6.log:46`（见上方 CX 段的 ⚠️）。**先加形状、后改句子、句子还指着旧日志** —— 与第 77 轮"行号未映射"同一类病 |
+| F4 | 我写「九个形状逐个指定」却把留痕挂在 `cx7-run4.log`，而那一版**只有八个**（S10 是本轮才加的） | `for f in cx7-run4 cx7-run5 cx7-run6; do grep -c '== S10' $f.log; done` → `0 / 1 / 1`；`wc -l` → `43 / 40 / 47` | 计数句改回八个、九个那份另指 `/tmp/r79h/cx7-run6.log:46`（见上方 CX 段的 ⚠️）。**先加形状、后改句子、句子还指着旧日志** —— 与第 77 轮"行号未映射"同一类病 |
 | F5 | ④（那一行的组件数）被我写成"不许多出组件"，读起来像**只拦增加**；它其实是**相等**判据 | `git show HEAD:test/features/list/list_share_entry_test.dart` 的 `:235`/`:236` 逐字是 `rowWidgets(),` 与 `47,` ⇒ 判据形状是 `expect(…, 47)`（**相等**，不是 `<=`）；注释 `:204` 也写明「相等判据，不是差值」 | reason、测试注释 `:204-206`、spec FR-4 的表三处都按"相等 + 等量替换看不见"写；反向对照 A（`trailing:` 整个换成一个 `Icon` ⇒ `+6` 仍绿）就是这条盲区的哨兵，那一种由 9 张像素基线负责 |
 
 ## 第 78 轮只读复核（第 3 轮）：`VERDICT: FAIL`（N1 成立 —— 判据从"列形状"改成"看结果"）
@@ -188,7 +188,7 @@ PRESENT 正对照：侧栏仍把长按接到 showListActions           命中 1
 | 现象 | 根因 | 处置 |
 | --- | --- | --- |
 | 我上一轮认定"S9 这条形状从 ③ 的缝里漏了"，并据此把判据作用域从行键扩到**整棵侧栏** | **探针自己没生效**：`trailing: badge > 0 ? _Badge : Icon` 只改了 `badge == 0` 分支，对被数的那一行很可能是运行期空操作，却被我读成"计数判据漏形" | 反证实验 `/tmp/r79h/probe_cx8.py`（两个变体各跑一次）：把补丁改成**严格追加**（`Row(徽章, Icon)`）⇒ 47 顶到 **54**、当场红；把 `trailing:` 整个换成一个 `Icon` ⇒ 计数一动不动。作用域已收回行键（数整棵侧栏会让任何无关的侧栏改动假红，而这条只管这一行）。**教训：探针绿了先证补丁在运行期真被求值，再谈判据够不够** |
-| 我据此在测试注释里写了一句未求证的机制话（「`trailing:` 槽位挂在带键元素**外面**」） | 从一次读数反推机制、没去读装配字节 | 已删。字节是：行键挂在 `_SidebarRow` 最外层的 `SizedBox`（`sidebar.dart:665`），`?widget.trailing` 渲染在它**内部**的 `Row` 末尾（`:728`）⇒ 那句话不成立。⚠️ 但"为什么追加式 +7、等量替换 +0"我**没有**解释清楚，两处只按实测读数记，不编机制 |
+| 我据此在测试注释里写了一句未求证的机制话（「`trailing:` 槽位挂在带键元素**外面**」） | 从一次读数反推机制、没去读装配字节 | 已删。字节是：行键挂在 `_SidebarRow` 最外层的 `SizedBox`（`lib/features/shell/sidebar.dart:665`），`?widget.trailing` 渲染在它**内部**的 `Row` 末尾（`:728`）⇒ 那句话不成立。⚠️ 但"为什么追加式 +7、等量替换 +0"我**没有**解释清楚，两处只按实测读数记，不编机制 |
 | 探针首跑只打印了对照组就到「收尾」，而我把整条命令的退出码当成功（`tail` 吃掉 python 的 rc） | 脚本 `GREEN` 常量忘了定义 ⇒ `NameError`，九个形状一个没跑；我先看的是 `EXIT=0` | 补上 `GREEN` 定义后重跑，并把 `EXIT=$?` 直接写进日志文件末尾（不靠管道）⇒ 复跑留痕 `/tmp/r79h/cx7-run4.log`（结论行「异常计数 = 0」）。**判一份日志跑没跑完要看它自己打了几个形状，不是看 rc** |
 
 ## 第 78 轮只读复核（第 2 轮）：`VERDICT: FAIL`（三条都是文档字节，代码未再动）
@@ -208,7 +208,7 @@ PRESENT 正对照：侧栏仍把长按接到 showListActions           命中 1
 FR-4 写死"能拦什么、不声称拦什么"。另采纳 N-B（解耦只由 T6 贡献）、N-C（遗留段死句）、
 N-E（一处日志同时背书两件事 ⇒ 拆成 `R1_counterexample.log` / `cx/CX1.log`）、N-F（docs 那笔已完成）、
 N-G（复验命令行号已漂）。**登记不改**：N-D（`probes-check.log` 自身不记 HEAD，时效靠 mtime + `lib` 未变支撑）、
-N-H（`协作成员` 在 develop 另有 `:1214` 注释与 `list_member_page.dart:183` 未枚举）。
+N-H（`协作成员` 在 develop 另有 `:1214` 注释与 `lib/features/collaboration/list_member_page.dart:183` 未枚举）。
 
 ## 第 78 轮只读复核（第 1 轮）：`VERDICT: FAIL`
 
@@ -218,10 +218,10 @@ N-H（`协作成员` 在 develop 另有 `:1214` 注释与 `list_member_page.dart
 
 | # | 复核指什么 | 我复验的命令与读数 | 处置 |
 | --- | --- | --- | --- |
-| 失1 | 我把一次**用例装配错误**写成"develop 上不存在的键" | `git grep -n "Key('todo-sidebar')" origin/develop -- lib` → `todo_workspace.dart:150`、`:198`；`grep -rn` 全 `test/` → **22 处 / 6 个文件**（复核记 7 个文件，本机实测 6） | spec.md 五-3 与缺陷表根因重写；键本身不动 |
+| 失1 | 我把一次**用例装配错误**写成"develop 上不存在的键" | `git grep -n "Key('todo-sidebar')" origin/develop -- lib` → `lib/features/home/todo_workspace.dart:150`、`:198`；`grep -rn` 全 `test/` → **22 处 / 6 个文件**（复核记 7 个文件，本机实测 6） | spec.md 五-3 与缺陷表根因重写；键本身不动 |
 | 失2 | T5 的负断言只断弹层类型 + 私有键，**低于 spec 自述判据** | 我自己跑 CX1（见上表）复现：旧版 `+6` 全绿、补文案断言后 `+5 -1` | 断言换成按文案判；spec.md FR-4 补"按文案不按键"的理由 |
 | 失3 | `showListActions` 定义行写 `:63` | `git grep -n showListActions origin/develop -- lib` → `:65`（`:63` 是 `];`） | 改 `:65` |
-| 失4 | X6 的日志标题（"压回两档宽度"）与实际补丁（改键名）不是同一件事 | 当年能指的字节是 `probes-all.log:45` 那行旧标题；**注意** `probes79.py` 后来被我原地改强（04:20），行号已漂 ⇒ 现在 `sed -n '63,66p'` 落在 X5 的补丁上，这句复验命令只剩日志那一半能用（第 2 轮复核 N-G） | 标题改成与补丁一致；结论改写为"键耦合成本 + 可见行为由 X1/X3/X4/X5 证明"，并按新名单重跑 |
+| 失4 | X6 的日志标题（"压回两档宽度"）与实际补丁（改键名）不是同一件事 | 当年能指的字节是 `/tmp/r79/probes-all.log:45` 那行旧标题；**注意** `probes79.py` 后来被我原地改强（04:20），行号已漂 ⇒ 现在 `sed -n '63,66p'` 落在 X5 的补丁上，这句复验命令只剩日志那一半能用（第 2 轮复核 N-G） | 标题改成与补丁一致；结论改写为"键耦合成本 + 可见行为由 X1/X3/X4/X5 证明"，并按新名单重跑 |
 
 复核**判为通过**的三项也记在这里，免得下轮重查：FR-2 的「共用一份口径」结构成立（HEAD 上构造 `ListMemberPage` 只剩 1 处）
 且 `?? t.title` 确为不可达死代码；`:6`/`:8` 行号与命名照抄无误；门禁表四项 + 898 的独立实跑来源（`/tmp/r68-baseline@9032005`）都对得上。
@@ -230,8 +230,8 @@ N-H（`协作成员` 在 develop 另有 `:1214` 注释与 `list_member_page.dart
 
 | 现象 | 根因 | 处置 |
 | --- | --- | --- |
-| 首版 6 条里 3 条红：`Found 0 widgets with type "ListMemberPage"` | 我以为是跳转坏了，其实是**顶栏文案形状猜错**：成员页 AppBar 打的是 `'协作成员 · 清单名'`（`list_member_page.dart:183`），不是单独一个 `Text(清单名)`；断 `find.text(标题本身)` 是越界要求 | 改成断整串（由 `pushed.title` 现拼，不硬编码清单名）。**同一文件 137 行的 `listServerId` 早已绿**（复核 N6：138 行是 `pushed.title` 那句） ⇒ 跳转本身没坏，红的是我的断言口径 |
-| `Found 0 widgets with key [<'todo-sidebar'>]` | **我写下的根因是假的**（复核失1）：该键在 develop 上**存在**（`todo_workspace.dart:150`/`:198`，`grep -rn "Key('todo-sidebar')" test/` = 22 处、6 个文件在用），红的真因是本用例 `_TestSidebar` 只泵裸 `Sidebar`、没渲染 `TodoWorkspace` ⇒ 键不在**那棵树**里 | 改成 `find.byType(Sidebar)`（**本用例装配下**的选择，不是仓库事实）；`spec.md` 五-3 已按实测重写 |
+| 首版 6 条里 3 条红：`Found 0 widgets with type "ListMemberPage"` | 我以为是跳转坏了，其实是**顶栏文案形状猜错**：成员页 AppBar 打的是 `'协作成员 · 清单名'`（`lib/features/collaboration/list_member_page.dart:183`），不是单独一个 `Text(清单名)`；断 `find.text(标题本身)` 是越界要求 | 改成断整串（由 `pushed.title` 现拼，不硬编码清单名）。**同一文件 137 行的 `listServerId` 早已绿**（复核 N6：138 行是 `pushed.title` 那句） ⇒ 跳转本身没坏，红的是我的断言口径 |
+| `Found 0 widgets with key [<'todo-sidebar'>]` | **我写下的根因是假的**（复核失1）：该键在 develop 上**存在**（`lib/features/home/todo_workspace.dart:150`/`:198`，`grep -rn "Key('todo-sidebar')" test/` = 22 处、6 个文件在用），红的真因是本用例 `_TestSidebar` 只泵裸 `Sidebar`、没渲染 `TodoWorkspace` ⇒ 键不在**那棵树**里 | 改成 `find.byType(Sidebar)`（**本用例装配下**的选择，不是仓库事实）；`spec.md` 五-3 已按实测重写 |
 | `pageBack()` 之后弹层仍在 | 动作表是 `showModalBottomSheet`，`pageBack()` 找路由返回按钮（实测 `Found 0 widgets with type "CupertinoNavigationBarBackButton"`）⇒ 它关不掉 sheet，于是"收集箱没有这一项"是在**旧弹层之上**测的 ⇒ 假绿通道 | 先用 `ModalBarrier` 关，实测关掉后 `scrollUntilVisible` 又抛 `Bad state: No element`（那棵树的滚动容器不可依赖）⇒ **最终改成反例另起一条用例、正对照留在第 1 条**，不在同一棵用过的树上断负结论 |
 | 一条用例里 `_pump` 两次，drift 打 `WARNING … AppDatabase multiple times` | 为了在同一条里做"正对照 + 反例"而复用了场景 | 拆成两条用例各自一棵树；正对照的引用写进注释。负向断言不建立在"上一棵树的残留状态"上 |
 | 未使用的 `providers.dart` import | 改版过程中留下的 | 删（门 3 `flutter analyze` 会报 `unused_import`，不是可忽略项） |
@@ -242,7 +242,7 @@ N-H（`协作成员` 在 develop 另有 `:1214` 注释与 `list_member_page.dart
 复核员四项独立复算**成立**（记在这里，免得台账只留对方的错）：① `git diff --name-only a398a35..HEAD`
 只有本台账一个文件，且逐 blob 比对 `a398a35`↔`HEAD` 的 `test/` 与 `lib/` 一字节不差 ⇒ `gates-r4.log`
 对终态仍有效；② 43 条指针里 40 条命中，CX8 与 S10 的两条 reason 串在交付字节**逐字**命中；
-③ 反向对照 A 的哨兵仍在（`probe_cx7.py:22/:75-77` 的 `__MUST_STAY_GREEN__`，run6 `[A] rc=0 +6`）；
+③ 反向对照 A 的哨兵仍在（`/tmp/r79h/probe_cx7.py:22/:75-77` 的 `__MUST_STAY_GREEN__`，run6 `[A] rc=0 +6`）；
 ④ 它在副本里把 `trailing:` 换成 `Image(image: MemoryImage(1×1 PNG))` 跑 T5 ⇒ `+5 -1`、
 红在 ④、`Expected: <47> Actual: <44>`（与第 5 轮 P5A2 独立同数）⇒ 台账那句「未测 ⇒ 不算已证」是**低报**而不是虚报。
 
@@ -250,10 +250,10 @@ N-H（`协作成员` 在 develop 另有 `:1214` 注释与 `list_member_page.dart
 | --- | --- | --- | --- |
 | F1 | CX4 那格的 reason 串「图标型共享入口没有任何」在交付字节 0 命中 ⇒ 表头「按 reason 现读」对这一格失效 | `grep -c "图标型共享入口没有任何"` 全仓只命中台账自己 1 次；`test:268` 现值是「只钉 Icons.share 这一个 codepoint」 | 改成现值并**点明这是 3A 同类病漏下的第二格**（不是又一种新病） |
 | F2 | 「今天那条串已是 21 A + 8 M」是个不钉基准的"今天"读数，今天跑是 1 A | `git diff --name-status 9032005..HEAD -- test` = 1 A；`a1d7733..HEAD` = 21 A + 8 M | 把读数钉成 `a1d7733..HEAD`，并写明 `origin/develop` 已 fast-forward 到 `9032005` |
-| F3 | 47→54 只指到脚本没指到日志；且 `:121` 把 `cx8/` 说成"像素那条"，该目录其实两种都装 | `cx8/B.log:66`/`:67` 逐字是 `Expected: <47>` / `  Actual: <54>`；`cx8/A.log` 与 `control.log` 尾部都是 `+1 All tests passed!`；`cx8/failures/` 20 个 png | 指针补齐并按实改写目录说明 |
+| F3 | 47→54 只指到脚本没指到日志；且 `:121` 把 `cx8/` 说成"像素那条"，该目录其实两种都装 | `/tmp/r79h/cx8/B.log:66`/`:67` 逐字是 `Expected: <47>` / `  Actual: <54>`；`cx8/A.log` 与 `control.log` 尾部都是 `+1 All tests passed!`；`cx8/failures/` 20 个 png | 指针补齐并按实改写目录说明 |
 | F4 | `:140` 的哨兵句还写着 ③，且括号里的"数整棵侧栏"咬不住计数中性的 A | `:135` 的声明是 ③=整棵树前后差、④=行子树相等计数；A 一个组件换一个组件 ⇒ 两张计数网都不为它红 | 整句重写：先说清 A 为什么对 ③④ 恒绿、今天由像素网兜，再说什么改造才会让它红 |
 | F5 | **同一文件两处自相矛盾（方向是低估）**：`:28`/`:241` 写「第 5 轮未回」，但 `:81`/`:84`/`:135` 正在引第 5 轮的 3A/3B/3C，且 `6ac75af` 的标题就是「消化第 5 轮复核」 | `/tmp/r81rev5/report.md:110` 一句 `VERDICT: FAIL` 即可证伪"未回" | 两处都改成「第 5 轮已消化、第 6 轮本笔消化 ⇒ 欠第 7 轮确认」 |
-| F6 | 47→42 那一格台账自认"无留痕"，其实第 5 轮复核员的日志就在 | `P6_shrink.log:70`/`:71` = `Expected: <47>` / `Actual: <42>`（99 行） | 改引它，并撤销我自己那格欠账（重跑要动代码 ⇒ 会作废门禁，不值） |
+| F6 | 47→42 那一格台账自认"无留痕"，其实第 5 轮复核员的日志就在 | `/tmp/r81rev5/logs/P6_shrink.log:70`/`:71` = `Expected: <47>` / `Actual: <42>`（99 行） | 改引它，并撤销我自己那格欠账（重跑要动代码 ⇒ 会作废门禁，不值） |
 
 **本笔不动代码 ⇒ 不作废 `gates-r4.log`**（复核员第 1 项的逐 blob 比对就是这条的前提）。
 唯一要动代码才能修的是测试注释里两处历史 `③` 标签（`test/features/list/list_share_entry_test.dart:226`
@@ -273,14 +273,14 @@ N-H（`协作成员` 在 develop 另有 `:1214` 注释与 `list_member_page.dart
      按文案补强并由 CX1 反例证明现在有牙。
 - **复核第 1 轮的 11 条非阻塞**：N1（FR-1 自相矛盾）、N3（T6 解耦）、N4（`:6` 引文加粗范围照抄原文）、
   N5（取舍 2 措辞 + `:242`/`:246` 定位）、N6（138→137）、N7（「末行」实为日志第 62 行）、
-  N8（`check` 干跑留痕：最终字节上**另出一文件** `/tmp/r79g/probes-check.log`，第 7 行
+  N8（`check` 干跑留痕：最终字节上**另出一文件** `/tmp/r79g/probes-check.log:7`
   「锚点干跑：异常 0」，X1–X6 各命中 1；改前我先引 `/tmp/r79e/probes-r2.log` 并写成"首行"，
-  实为第 7 行，且那份是改判据前那次的产物 ⇒ 两处都已按实测改见下表最后一行）、N10（套件不相交）、
+  实为第 7 行（复算 `grep -n 锚点干跑 /tmp/r79g/probes-check.log`），且那份是改判据前那次的产物 ⇒ 两处都已按实测改见下表最后一行）、N10（套件不相交）、
   N11（门 1 两读数的信息量差）已改掉。**但第 2 轮复核 F2/F3 抓到 N3、N5 当时各只修了一半**（N3 只改了测试没改 spec 五-1；N5 只改了 §六.2 没改 §二 `:33` ⇒ 同一文件自相矛盾）⇒ 本笔补全；
   **N2**（名单外的红）改的是判据脚本本身；
   **N9 未在本面补测**：详情面板 `members` 分支的新提示语与共用函数调用**零用例覆盖**（只由那条 ABSENT grep 守着，
   而 grep 在探针脚本里、不在 CI）⇒ 已立 **FL Issue #366** 跟踪（判据①②我在建单前自己跑过：
-  `git grep -n "无法打开共享协作" -- test` 只命中 `list_share_entry_test.dart:162`；
+  `git grep -n "无法打开共享协作" -- test` 只命中 `test/features/list/list_share_entry_test.dart:162`；
   `git grep -cE "协作|[Mm]ember" -- test/features/task/task_detail_pane_test.dart` rc=1（0 命中）），
   不在本 PR 里扩面。
 - 形态偏差两条（入口在侧栏长按而非清单详情右上角「···」；「添加新成员」在本仓是内联提交流程、无独立入口）
@@ -289,3 +289,42 @@ N-H（`协作成员` 在 develop 另有 `:1214` 注释与 `list_member_page.dart
 - 下一轮候选（不撞本单也不撞 !364）：docs #104 里剩下 5 条**非第三方凭据**的弱证据行
   #7/#11/#19/#21/#24（`check_parity_matrix.py` 现算：13 条告警里 8 条属 #55–64/#66 那族，
   按口径不排进自主轮次）。
+
+## 第 7 轮派单前先自查：把仓内自扫工具用到本台账上（2026-09-26）
+
+第 1–6 轮判的是同一类病，所以第 7 轮不再靠"我自己再读一遍"。判据换成 !364 那笔落地的
+`tool/check_spec_selfscan.py`。该工具此刻**只在 `feat/361-calendar-list-timeline` 上、没进 develop**，
+所以取字节到仓外再跑，不给本分支塞一个不属于它的文件：
+
+```
+git show f367868:tool/check_spec_selfscan.py > /tmp/r88/selfscan.py
+python3 /tmp/r88/selfscan.py specs/053-list-share-entry/tasks.md
+```
+
+**先红后改**：首跑 **21 条失项**（rc=1）→ 逐条按现读改完再跑 **0 条**（rc=0，就是本笔字节）。三类：
+
+1. **裸文件名当锚点**（12 处）。只写 basename 的引用（`sidebar.dart` 的第 626 行那种）机器解析不到
+   （工具的判据就是 `ls -la sidebar.dart` ⇒ 仓根没这文件）。改法不是"随手补路径"：
+   每条先在 **develop 与本分支两个 ref 上**现读该行，确认内容与主张相符再落名。
+   两处读出了差别 —— `lib/features/list/list_actions.dart` 第 65 行（`showListActions`）与
+   `lib/features/task/task_detail_pane.dart` 第 1332 行（`ListMemberPage` 调用点）**只在 develop 上成立**：本分支里 `showListActions` 已在 `:90`，
+   成员页调用点也因本面新增了一处 ⇒ 这两格改成 `origin/develop:<全路径>:<行>`，其余改成本仓全路径。
+2. **/tmp 留痕缺目录前缀**（5 处）。`cx8/B.log` 第 66 行、`probes-all.log` 第 45 行、`P6_shrink.log` 第 70 行、
+   `probe_cx7.py` 第 22 行这四组的目录在上文给过，但锚点自己不可解析 ⇒ 补成 `/tmp/r79h/…`、`/tmp/r79/…`、
+   `/tmp/r81rev5/logs/…`，并逐条 `sed -n` 复验那一行仍是台账声称的句子
+   （`probes-all.log` 有三份同名文件，只有 `/tmp/r79/probes-all.log:45` 那行是"压回两档宽度"那个旧标题，
+   也就是 F4 要指的那一处 —— 选错目录就会指着另一件事）。
+3. **三句是真账错**（不是格式问题）：
+   - 「六项 rc 全 0」——`grep -c "rc=" /tmp/r79/gates79.log` = **7**（六道门禁各一条 + 收尾自检一条），原先少算一条。
+   - 计数对账只有减法。现在两端各有实跑来源：`/tmp/r79/gates79.log:1308`（`+904`）与
+     `/tmp/r68/baseline_develop.log:1152`（`+898`），中间的 6 条 =
+     `git diff origin/develop..HEAD -- test` 管道 `grep -cE "^[+][[:space:]]*(testWidgets|test)\("` 现读 = 6
+     （只动 `test/features/list/list_share_entry_test.dart` 一个文件）。
+   - `specs/045-sort-direction/tasks.md` 第 120 行那个"第二处佐证"本来就指不到（仓内没有 045 目录），
+     写成锚点形状等于埋雷 ⇒ 降级为说明，并明写"不能当锚点"。
+
+⚠️ 两件不许写成已经安全：① 工具**没进 CI**，仍是本地手跑；② 它自己也还没被复核（第 8 轮正在 !364 上跑）。
+所以"0 失项"只说明**这本台账与工具当前的判据一致**，不等于所有假账都被抓住 —— 语义层的错仍要靠复核。
+顺带记一条自己踩的坑：本轮第一版表格自检按裸 `|` 切列，把两行**正确转义**的 `\|`（门 5 的
+`--exclude-tags 'golden \|\| performance'`、F1 的 `git show … \| awk`）误报成坏行；
+改成只按未转义竖线切列才归零 —— 这正是 docs #100 给矩阵校验器提过的那条要求。
