@@ -54,6 +54,18 @@ void main() {
     expect(find.widgetWithText(FilledButton, '重试'), findsNothing);
   });
 
+  testWidgets('FR-004 防回归：首屏统计就失败时不渲染卡片、也不弹刷新提示', (tester) async {
+    // develop 的形态是 error → SizedBox.shrink()。本轮只新增「有旧值时刷新失败」这一可见面，
+    // 不擅自给首屏失败加 UI —— 这条用例钉的是"别扩"，不是"应该扩"。
+    final repo = _ProbeRepo()..failNext = true;
+    await _pump(tester, repo);
+
+    expect(find.text('连续打卡'), findsNothing);
+    expect(find.text('统计刷新失败，显示的是上一次数据'), findsNothing);
+    // 列表同一批失败 ⇒ 走 FR-003 的整页失败态（有「重试」出口），两个形态不互相顶替。
+    expect(find.widgetWithText(FilledButton, '重试'), findsOneWidget);
+  });
+
   testWidgets('提示条有独立读屏语义（liveRegion），读屏才会播报新增提示', (tester) async {
     final semantics = tester.ensureSemantics();
     final repo = _ProbeRepo();
