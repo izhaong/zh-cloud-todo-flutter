@@ -14,10 +14,10 @@
 
 | 条目 | 判据 | 实跑读数 |
 | --- | --- | --- |
-| FR-1 有「日期与时间 → 时区」开关 | W1 `find.text('日期与时间')` + `ValueKey('settings-timezone-enabled')` 内的 `Switch` | 两份测试合计 `+10`（终态重跑后以「四」的日志为准） |
+| FR-1 有「日期与时间 → 时区」开关 | W1 `find.text('日期与时间')` + `ValueKey('settings-timezone-enabled')` 内的 `Switch` | `+10`（终态实跑见「四·重跑」：门禁 5 = `+908 ~26`，`908 − 10 = 898` 对得上 develop 基线） |
 | FR-2 关掉 ⇒ 「固定时区」不出现、IANA 输入框仍在 | `test/features/task/reminder_timezone_gate_test.dart` 两条（开/关各一条，成对） | 同上；**这条先红过一次**（见「三-1」） |
 | FR-3 开关不改写任务数据 | R2：切三次后逐字段比对 `timeZone` / `fixedTimezone` | 同上 |
-| FR-4 持久化 + 同步 | R1：`get()` 默认开、`todo_view_preferences` 恰 1 行、`todo_sync_changes` 恰 1 条 `entity=viewPreference`、再开仍是 1 行 | 同上 |
+| FR-4 持久化 + 同步 | R1：`get()` 默认开、`todo_view_preferences` 恰 1 行、`todo_sync_changes` 恰 1 条 `entity=viewPreference`、再开仍是 1 行 | 同上。⚠️ 复核 F-3 记一句红因：把 update 分支改成「再插一行」时，红是 **schema 的 UNIQUE(2067) 抛在仓储里**，`hasLength(1)` 那条断言根本没执行到 ⇒ 这一格真正兜住重复行的是库上的唯一索引，我的断言只是第二道网；并发那道的判据在 R3 |
 | FR-5 展示层不受影响 | **无行为测试**，用两条静态判据：`git grep -n "timezoneEnabledProvider" -- lib` ⇒ 3 命中（定义 + 设置页 + 提醒编辑器），`lib/core/time` 内 0 命中；`git status --porcelain lib/core/time \| wc -l` = 0，`task_time_formatter.dart:167` 的「`<IANA> 固定时区`」原样 | 命令已跑（本次会话内），读数如左 |
 | FR-6 「固定时间」档 | **本面不做**，另立 FL #369（前置是 service 的逐任务三态模式位） | — |
 
@@ -90,6 +90,27 @@
 跑完门禁后 `git status --porcelain pubspec.lock` 为空（同日志收尾行 `脏项数=0`）⇒
 `pubspec.lock` 没被本机镜像扫进这笔。
 
+### 重跑（终态基准 **`876c35e`**，日志 **`/tmp/r82/gates-876c35e.log`**，1400 行）
+
+复核 F-1/F-2 之后动了实现 ⇒ 整套六门禁重跑，**六项 rc 全 0**：
+
+| 门禁 | 读数（行号是这份日志内的） |
+| --- | --- |
+| 1 `git diff --check 9032005..HEAD` | 无输出，`rc=0`（`:4`） |
+| 2 `dart format`（本轮 6 个文件） | `Formatted 6 files (0 changed)`，`rc=0`（`:8`） |
+| 3 `flutter analyze` | `rc=0`（`:74`） |
+| 4 `flutter test --tags golden` | `00:11 +9: All tests passed!`（`:148`）⇒ 9 张基线仍一张未重录 |
+| 5 全量非 golden（`--concurrency=1`） | `02:50 +908 ~26: All tests passed!`（`:1315`） |
+| 6 `flutter build web --release` | `✓ Built build/web`（`:1396`），`rc=0`（`:1397`） |
+
+计数对账换了新的锚点：`908 − 本轮新增 10 = 898` = develop 全量基线（两处实跑：
+`/tmp/r68/baseline_develop.log:1152` 与 `/tmp/r77c/rerun-898.log:1154`）⇒ 新增的 10 条 = 上一版的 9 条 + R3。
+跑完 `git status --porcelain pubspec.lock` 仍为空（这份日志的 `脏项数=0` 在 `:1400`）⇒
+**门禁是跑在已提交终态上、且没把本机镜像扫进 `pubspec.lock`**。
+
+台账这几笔（`876c35e` 之后的 md 改动）不动代码字节 ⇒ 上面这份读数对终态仍然有效；
+自证命令：`git diff --name-only 876c35e..HEAD`（只应出现 `specs/055-*/{spec,plan,tasks}.md`）。
+
 
 ## 五、编译红（不充当行为证据，只留名字）
 
@@ -122,7 +143,10 @@
 
 - 矩阵 #12 只去掉「设置里没有『时区』总开关」这条缺口（FL #368 自称的「缺项 ⑥」），
   仍留「任务上没有『固定时间』档」（FL #369 标题写的「缺项 ⑤」）⇒ **状态不翻**（仍「部分」）。
-  ⚠️ 复核 F-6：⑤/⑥ 只在 #368 / #369 的正文里定义，**矩阵行里没有这张编号表** ⇒ 矩阵侧改成写文字缺口 + 指 Issue 号。
+  ⚠️ 复核 F-6 复算后**半对半驳回**：`origin/develop` 的 #12 格确实只有一句
+  「`time_zone/fixed_timezone` 字段有；缺跨时区展示闭环」（`git show origin/develop:… | sed -n 73p`，
+  该文件里 `grep -c ⑤` = 3），**编号清单只活在未合并的 docs 分支**（同文件 `:79`、`grep -c ⑤` = 21）。
+  ⇒ 结论照实写：不是矩阵写错，是 docs 那批 PR 没合的后果；矩阵侧本轮已改写成文字缺口 + Issue 号。
 - PR 未合并前，矩阵措辞用「已实现、未进 develop」。
 - FL #369 已在 Gitea 现读为 `open`（标题「任务档『固定时间』（墙钟锚定）缺实现：先在 zh-cloud-service
   补契约（矩阵 #12 的缺项 ⑤）」）⇒ 第一道门是 service 契约（逐任务三态模式位），排在下一面。
@@ -150,6 +174,6 @@ M7b 真溢出 ⇒ 红 W3 并打出 `RenderFlex overflowed by 638 pixels`）；
 | F-3 | 台账把 M4 的拦截者记成 `hasLength(1)`，实际红因是 schema 的 UNIQUE 抛在仓储里，断言根本没执行到 | `git show` 逐行对：R1 的 `expect(…, hasLength(1))` 在 insert 抛错之后 | 「二」FR-4 那格不改判据但补一句红因；并发那格由 R3 承担 |
 | F-4 | 弹窗前那次 `await` 若流不出首帧 ⇒ 点了没反应也不给反馈 | 不可达论证见「七」最后一条（同一条 `appDatabaseProvider` 的查询在此之前已 `await`；drift 的 `watchSingleOrNull()` 必发首帧） | **登记不修**，复现方式与理由链一并写进「七」 |
 | F-5 | 四处指针/计数不精确：`rerun-898.log:1155`（真身 `:1154`）、三-1 的「第 45 行」、`wc -l` = 2 未钉 sha、spec 二 `:405` 与同文 `:404` 打架 | `sed -n 1154p` = `02:38 +898 ~26: All tests passed!`；`git show 9032005:lib/features/task/task_detail_pane.dart` 里再 `grep -n task-reminder-fixed-timezone` = **404**；`grep -n findsNothing` = `:43` | 逐处订正；行号易漂的两处改成「用命令定位」 |
-| F-6 | 「缺项 ⑤/⑥」矩阵读者无从解析；#369 存在性它没法核（会话里没有 Gitea 凭据） | 我用 API 现读：#369 `state=open`，标题就带「缺项 ⑤」；⑤/⑥ 的定义只在 #368/#369 正文 | 矩阵侧改写：两条缺口写文字 + 指 Issue 号，不再裸用编号（落 docs 那一笔） |
+| F-6 | 「缺项 ⑤/⑥」矩阵读者无从解析；FL #369 存在性它没法核（会话里无 Gitea 凭据，匿名 404） | **半对半驳回**：`origin/develop` 的 #12 只有「字段有；缺跨时区展示闭环」⇒ 它对 develop 成立；但清单在未合并的 docs 分支 `:79` 里就有（`grep -c ⑤`：develop 3 vs 分支 21）⇒ 不是写错，是 docs 没合。#369 我用 API 现读 `state=open`，标题带「缺项 ⑤」 | 矩阵侧本轮已改写成文字缺口 + Issue 号（docs `27525b4`，!102）；编号来源在 spec 七 写清是哪个 ref |
 
 **本笔动了实现** ⇒ 上面「四」节 `b571ef1` 那套门禁作废，终态另跑一份新日志（见「四」末尾的「重跑」）。
