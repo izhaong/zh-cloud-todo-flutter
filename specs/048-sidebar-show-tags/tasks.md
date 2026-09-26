@@ -233,3 +233,103 @@ F-1 改的是 **PR 正文**，代码字节一字未动（head 仍是 `dc61721`�
 ⇒ **不重派第 2 轮复核**：它否的那条证据链已按读回校验闭合，再派一轮只会重跑同一批绿灯。
 需要合并前再要一次独立 `VERDICT` 的话说一声即可（成本约一轮）。门禁读数不因本提交改变，
 理由：本提交 `git diff --name-only` 只有 `specs/048-sidebar-show-tags/tasks.md` 一个文件。
+
+## 第 98 轮：#363 落地（设置面「显示标签」取值改三态读法）（红→绿，三条反向探针全命中）
+
+### 为什么接在 !351 这条分支上，而不是新开第 19 条 FL PR
+
+动手前先枚举 open PR 的触达文件（`GET /repos/izhaong/zh-cloud-todo-flutter/pulls?state=open` 逐条再取
+`/pulls/<N>/files` 的 `filename` —— **不要取 `patch` 字段，它会整段缺失**）：
+`settings_route.dart` 被 !351（本分支）/ !360 / !370 三条未合并分支同时占着，`providers.dart` 同。
+⇒ 另切分支就是再造一条同文件互撞 PR（docs 那边 7 月已经为此返工过一次，见 zh-cloud-docs #98）。
+本笔落在 `feat/328-sidebar-show-tags`，提交 `032cc72`。
+
+### 红测（实现前跑，日志 `/tmp/r98/red.log`）
+
+新增三条用例，只有该否的那条红：
+
+```
+00:01 +7 -1: Some tests failed.
+Expected: '隐藏'
+  Actual: '读取失败'
+reason: 错在有值之后 ⇒ 取值文字要留住上次读到的那个，退回「读取失败」等于把已加载数据丢掉
+```
+
+另两条（首值就失败 ⇒ `读取失败`；加载中 ⇒ `…`）当时就绿 —— 它们是**防我把修复写成"吞掉错误"**的那一半，
+不是凑数用例：QB/QC 两条探针正是打在这两条上（见下）。
+
+### 实现（只改两处读法 + 一句注释）
+
+- `settings_route.dart` 的 `_showTagsLabel` / `_showTagsStale`：与 `lib/features/shell/sidebar.dart`
+  的 `_showTags`（第 74 轮定的口径）同一套 —— 有值用值，没值才区分失败/加载中；
+  并在"留住旧值 + 流已失败"这一格补一句可见提示 `读取偏好失败，显示的是上次读到的值`。
+- `providers.dart` 的 `sidebarShowTagsProvider` 文档注释改到三态口径（原句「一个读不到的偏好不该把侧栏标签区清空」
+  把"首值失败"与"加载中"混成一谈）。
+- **没有**新增界面 ⇒ 四件套里只有「失败保留已加载数据」这条被本笔直接命中，其余三条沿用第 67/74 轮用例。
+
+### 门禁（跑在最终字节上，日志 `/tmp/r98/g*.log`）
+
+| # | 门禁 | 读数 |
+| --- | --- | --- |
+| 1 | `git diff --check` | rc=0 无输出 |
+| 2 | `dart format --output=none --set-exit-if-changed` 只列本笔 3 个文件 | rc=0，`Formatted 3 files (0 changed)` |
+| 3 | `flutter analyze` | rc=0，`No issues found!` |
+| 4 | `flutter test --tags golden` | rc=0，`+9: All tests passed!`；**基线未重录**判据：`git status --porcelain \| grep -i png \| wc -l` = 0 |
+| 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | rc=0，`+917 ~26: All tests passed!` |
+| 6 | `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | rc=0，`✓ Built build/web` |
+
+**我自己的两处错，记下来别掩盖**：① 第一版门禁脚本把 `--dart-define` 打成 `TODO_TENID`，那条读数作废，
+表里第 6 行是重跑正确命令后的读数；② 全量测试我没有"本笔之前"的同分支读数，
+所以**不声明** "+917 比基线多 3" 这种差值 —— 能声明的只有本文件用例数
+`git show HEAD~1:test/features/settings/sidebar_show_tags_settings_test.dart \| grep -c 'testWidgets('` = **5**、
+现值 `grep -c 'testWidgets(' ` = **8**（本笔 +3 条）。
+
+### 反向探针（三条，各自只打红它该打的那条用例）
+
+| 探针 | 改法 | 变红的用例 | 还原 |
+| --- | --- | --- | --- |
+| QA | 实现前那一版就是它（`.when(error: …)` 折态） | 「出过一次值之后流才失败：取值仍是上次读到的」 | 即红测原始状态，见上 |
+| QB | `_showTagsLabel` 里 `return state.hasError ? '读取失败' : '…';` 改成 `return '…';` | 只有「首值就没读到就失败：取值显示『读取失败』」 | `QB_RESTORE_IDENTICAL` |
+| QC | 整段删掉 `if (_showTagsStale(...))` 那个提示节点 | 只有「出过一次值之后流才失败…失败另有可见提示」 | `QC_RESTORE_IDENTICAL` |
+
+`*_RESTORE_IDENTICAL` = 还原后 `cmp -s` 与探针前副本逐字节一致；再核 `git status --porcelain` 为空
+（副本 `/tmp/r98/settings_route.pristine`，脚本 `/tmp/r98/after.sh`）。
+QB/QC 各只打红一条 ⇒ 两条新用例不是互相抄实现的孪生断言。
+
+门禁 5 的计数对账（**标注读数来源，不装作现跑过基线**）：`+917` = 第 74 轮那张表的 `+914` + 本笔 3 条新用例。
+`+914` 来自本台账上一节（同分支 `f11cdb1`），其间只有两笔 markdown 提交
+（`git diff --name-only f11cdb1..HEAD~1` 现读 = `specs/048-sidebar-show-tags/spec.md`、`specs/048-sidebar-show-tags/tasks.md`；
+`... | grep -c '^test/'` = 0）
+⇒ 用例数不可能变；本笔**没有**回跑"实现前"的全量，所以这条是引用先前读数 + 结构推论，不是同批对照实测。
+本文件用例数则是现跑对照：`git show HEAD~1:test/features/settings/sidebar_show_tags_settings_test.dart | grep -c 'testWidgets('` = 5，
+`grep -c 'testWidgets(' test/features/settings/sidebar_show_tags_settings_test.dart` = 8。
+
+### 成对判据（Issue #363 验收第 2 条，按它的口径给）
+
+```bash
+# ABSENT：设置面这一处不再用 .when( 读这个偏好（代码面 0 处，剩下的 1 处是我写的注释）
+grep -n "\.when(" lib/features/settings/settings_route.dart | grep -vc '///'      # ⇒ 0
+# PRESENT：正对照，证明上面那条 grep 不是恒 0
+git grep -c "valueOrNull" -- lib | head    # ⇒ 含 settings_route.dart:4 等多处命中
+```
+
+### 限制（如实写，不当已通过）
+
+**本分支没有 `tool/check_spec_selfscan.py`** ⇒ 「台账必须过仓内自扫判据」这一条本轮**跑不了**。
+复算：`ls tool/check_spec_selfscan.py` ⇒ `No such file or directory`；
+`git branch -a --contains <该文件的引入提交>` ⇒ 只在 `feat/361-calendar-list-timeline`（PR !364，**未合并**）。
+本笔只用手工 grep 做了同类自查（行号自锚、活计数、引用不存在的报告这三类）：本节所有数字都带现跑命令，
+不写"第几行"这类会被下一笔编辑作废的锚点。
+
+### 矩阵与下一轮入口
+
+- **矩阵 #21 仍不翻**：依据是未合并的 docs `!105`，且 #328/#353/#363 三条都还没进 `develop`
+  ⇒ 按「矩阵翻转只引已合并 SHA」「未合并不得翻转状态」。
+- 同形排查**没做完**：`git grep -l "\.when(" -- lib | wc -l` = **16** 个文件，其中**代码面**
+  （`for f in $(git grep -l "\.when(" -- lib); do n=$(grep -n "\.when(" "$f" | grep -vc '///'); [ "$n" -gt 0 ] && echo "$f:$n"; done`）
+  命中 **15 个文件、17 处**（`settings_route.dart` 只剩我写的那条注释，所以不在列）。
+  **本笔没有逐处判过它们是不是同一个"折掉带旧值的失败"的形**，不声明"已排查完"；
+  要判就得连读处（`git grep -c "valueOrNull" -- lib`）一起列成一张表，留作单独一轮，不塞进本 PR（不在 !351 里扩面）。
+- 下轮入口：本 PR 的只读复核（第 2 轮，基准 `032cc72`）回来后回写本节；
+  以及 FL #366（协作入口零用例，纯补测试）、#362（日历「下拉展开日历全景」）。
+
