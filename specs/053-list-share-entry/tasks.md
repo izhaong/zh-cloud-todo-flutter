@@ -62,7 +62,7 @@ $ flutter test test/collaboration_widget_test.dart test/features/list/list_share
 `grep -c "  testWidgets(" test/features/list/list_share_entry_test.dart` = **6** 前后一致）。
 ⚠️ 中途有一次门禁**没跑完就被我自己停掉**：门 2 在 `53d55d1` 上报 `Changed list_share_entry_test.dart`
 rc=1（我手写换行不合 formatter），所以那一份日志不作证据；`3ea931e` 才是最终字节。
-另留了一次**同字节重复跑** `/tmp/r79g/gates-final.log`（两次都得七 rc 全 0 才算稳）。
+另留了一次**同字节重复跑** `/tmp/r79g/gates-final.log`（NIT 修正：该日志实际只留了**一次**运行——7 rc 全 0、首行 `HEAD=3ea931e`；想要两次就得换新文件名再跑，同文件复跑会毁掉上一次的证据）。
 
 | # | 命令 | 读数 | rc |
 | --- | --- | --- | --- |
@@ -265,7 +265,7 @@ N-H（`协作成员` 在 develop 另有 `:1214` 注释与 `lib/features/collabor
 - **门禁现跑在 `a398a35`**（上表；`e3c9d88`、`3ea931e`、`3fcd1c6`、`80f2718` 是前四版基准，已被推进
   —— ⚠️ `80f2718` 那份日志被我误启动的复跑覆盖，读数今天不可回读，见门禁节的登记）；
   **复核第 1、2、3、4 轮各 `VERDICT: FAIL` 已修且各有反例证明修上了（CX1–CX4 + CX5–CX8 + S10
-  + 一条按预期仍绿的反向对照 A）、**第 5 轮已由 `6ac75af` 消化、第 6 轮由本笔消化** ⇒ 还欠第 7 轮复核确认，本 PR 不谈合并。
+  + 一条按预期仍绿的反向对照 A）、**第 5 轮已由 `6ac75af` 消化、第 6 轮由本笔消化** ⇒ 第 7 轮已派并判 `PASS`（见本文「十二」节），本 PR 不谈合并。
   要它咬定的：① FR-2 的「共用一份口径」是真做了还是只改文案（`openListCollaboration` 消费者数 + 四条分支行为等价性，含原实现`title: list?.name ?? t.title` 那个兜底到底是不是死代码）；
   ② X6「只改 key 名就全红」算覆盖面还是锚得太死 —— **已判**：主读法是锚得太死（失4 采纳），
      改键名的误红**只由 T6 一处贡献**（第 1 轮那版里 T5 本就不因改名红；它今天还留着一句 `expect(find.byKey(_shareKey), findsNothing)` ⇒ 说"T5/T6 两处都解耦"偏强，复核 N-B），现读数 `+2 -4`；
