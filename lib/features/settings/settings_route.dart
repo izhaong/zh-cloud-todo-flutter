@@ -145,16 +145,20 @@ class SettingsRoute extends ConsumerWidget {
                   title: '标签',
                   key: const Key('todo-settings-show-tags'),
                   subtitle: '控制标签条目是否出现在侧栏的清单下面',
-                  trailingText: ref
-                      .watch(sidebarShowTagsProvider)
-                      .when(
-                        data: (show) => show ? '显示' : '隐藏',
-                        loading: () => '…',
-                        error: (_, _) => '读取失败',
-                      ),
+                  trailingText: _showTagsLabel(
+                    ref.watch(sidebarShowTagsProvider),
+                  ),
                   colors: colors,
                   onTap: () => _pickShowTags(context, ref),
                 ),
+                if (_showTagsStale(ref.watch(sidebarShowTagsProvider)))
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: Text(
+                      '读取偏好失败，显示的是上次读到的值',
+                      style: TextStyle(color: colors.mutedForeground),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -361,6 +365,20 @@ class _TaskCaptureDefaultsPageState
     );
   }
 }
+
+/// 侧栏「显示标签」取值的三态读法，与 `lib/features/shell/sidebar.dart` 同一口径：
+/// 有值就用值 —— 包括"出过一次值之后流才失败"（四件套 ③ 失败保留已加载数据）；
+/// 没值且失败才显示「读取失败」；没值且未失败是加载中，显示「…」。
+/// 写成 `.when(error: …)` 会把第一态折进第三态（FL Issue #363）。
+String _showTagsLabel(AsyncValue<bool> state) {
+  final value = state.valueOrNull;
+  if (value != null) return value ? '显示' : '隐藏';
+  return state.hasError ? '读取失败' : '…';
+}
+
+/// 只在"留住旧值 + 流已失败"时出现：留住旧值不等于把失败藏起来。
+bool _showTagsStale(AsyncValue<bool> state) =>
+    state.valueOrNull != null && state.hasError;
 
 class _Section extends StatelessWidget {
   const _Section({required this.title});

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -116,23 +117,101 @@ void main() {
     expect(tester.takeException(), isNull, reason: '选项弹层在 320px + 1.3 下溢出');
     expect(find.text('隐藏'), findsOneWidget);
   });
+
+  // FL Issue #363：这一格的取值文字原先用 `.when(error: …)`，把「出过一次值之后流才失败」
+  // 也折进 error 分支 ⇒ 已经读到的取值被换成「读取失败」。与第 74 轮侧栏那条病灶同形
+  // （四件套 ③「失败保留已加载数据」），侧栏那侧已由 `valueOrNull ?? (hasError ? 默认 : …)` 修掉。
+  testWidgets('出过一次值之后流才失败：取值仍是上次读到的，失败另有可见提示', (tester) async {
+    final gate = StreamController<bool>();
+    addTearDown(gate.close);
+    await _pumpSettings(tester, watchStream: gate.stream);
+
+    gate.add(false);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(_trailingValue(tester), '隐藏', reason: '先确认首值真的到达过');
+
+    gate.addError(StateError('故意在出过一次值之后让流失败'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(
+      _trailingValue(tester),
+      '隐藏',
+      reason: '错在有值之后 ⇒ 取值文字要留住上次读到的那个，退回「读取失败」等于把已加载数据丢掉',
+    );
+    expect(
+      find.text('读取偏好失败，显示的是上次读到的值'),
+      findsOneWidget,
+      reason: '留住旧值不等于把失败藏起来：必须另给一句可见提示',
+    );
+  });
+
+  testWidgets('首值就没读到就失败：取值显示「读取失败」，不假装读到了默认值', (tester) async {
+    final gate = StreamController<bool>();
+    addTearDown(gate.close);
+    await _pumpSettings(tester, watchStream: gate.stream);
+
+    gate.addError(StateError('故意让首值就失败'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(_trailingValue(tester), '读取失败');
+    expect(
+      find.text('读取偏好失败，显示的是上次读到的值'),
+      findsNothing,
+      reason: '从来没有旧值时不能说"显示的是上次读到的值"',
+    );
+  });
+
+  testWidgets('加载中取值是「…」，失败提示此时不出现', (tester) async {
+    final gate = StreamController<bool>();
+    addTearDown(gate.close);
+    await _pumpSettings(tester, watchStream: gate.stream);
+
+    expect(_trailingValue(tester), '…');
+    expect(find.text('读取偏好失败，显示的是上次读到的值'), findsNothing);
+  });
+}
+
+/// 只替换 `watch()`，让用例自己决定首值/错误何时到达；`get()`/`save()` 仍走真库。
+class _StreamVisibilityRepository extends SidebarVisibilityRepository {
+  _StreamVisibilityRepository(super.db, super.queue, {required this.values});
+
+  final Stream<bool> values;
+
+  @override
+  Stream<bool> watch() => values;
 }
 
 Future<TodoVisualFixture> _pumpSettings(
   WidgetTester tester, {
   bool failing = false,
+  Stream<bool>? watchStream,
   Size surface = const Size(1000, 900),
   double textScale = 1,
 }) async {
+  List<Override> Function(AppDatabase)? builder;
+  if (watchStream != null) {
+    builder = (database) => [
+      sidebarVisibilityRepositoryProvider.overrideWith(
+        (ref) => _StreamVisibilityRepository(
+          database,
+          SyncChangeQueue(database),
+          values: watchStream,
+        ),
+      ),
+    ];
+  } else if (failing) {
+    builder = (database) => [
+      sidebarVisibilityRepositoryProvider.overrideWith(
+        (ref) => _FailingRepository(database, SyncChangeQueue(database)),
+      ),
+    ];
+  }
   final fixture = await TodoVisualFixture.create(
     set: TodoVisualFixtureSet.populated,
-    overridesBuilder: failing
-        ? (database) => [
-            sidebarVisibilityRepositoryProvider.overrideWith(
-              (ref) => _FailingRepository(database, SyncChangeQueue(database)),
-            ),
-          ]
-        : null,
+    overridesBuilder: builder,
   );
   addTearDown(fixture.dispose);
 

@@ -154,7 +154,9 @@ final sidebarVisibilityRepositoryProvider =
 
 /// 侧栏「显示标签」偏好流（嘀嗒《…04-用标签管理任务.md》:10/:16/:23/:27）。
 ///
-/// 没有仓库（未登录/库未就绪）时按默认「显示」走：一个读不到的偏好不该把侧栏标签区清空。
+/// 没有仓库（未登录/库未就绪）时按默认「显示」走。消费侧的三态口径（侧栏与设置页同一套读法）：
+/// **首值就失败**才回兜底默认；**出过一次值之后失败**要留住那次读到的值（四件套 ③）；
+/// **加载中且从未有值**不回兜底 —— 侧栏不画标签区，设置页显示「…」。
 final sidebarShowTagsProvider = StreamProvider<bool>((ref) {
   final repo = ref.watch(sidebarVisibilityRepositoryProvider);
   if (repo == null) {
