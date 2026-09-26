@@ -8,6 +8,7 @@ import '../../core/db/app_database.dart';
 import '../../core/theme/brand_colors.dart';
 import '../../core/theme/todo_layout_tokens.dart';
 import '../../core/time/task_time_formatter.dart';
+import '../../core/time/task_time_mode.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../native/native_intents.dart';
 import '../../state/nlp_date.dart';
@@ -853,7 +854,8 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           if ((selectedTasks[index].description ?? '').trim().isNotEmpty)
             selectedTasks[index].description!.trim(),
           if (selectedTasks[index].dueAt != null)
-            '截止：${formatTaskDateTime(selectedTasks[index].dueAt!, allDay: selectedTasks[index].allDay, fixedTimezone: selectedTasks[index].fixedTimezone, timeZone: selectedTasks[index].timeZone)}',
+            '截止：${formatTaskDateTime(selectedTasks[index].dueAt!, allDay: selectedTasks[index].allDay,
+                mode: TaskTimeMode.fromWire(selectedTasks[index].timeMode), timeZone: selectedTasks[index].timeZone)}',
         ].join('\n'),
     ].join('\n\n');
     setState(() => _batchApplying = true);
@@ -1926,7 +1928,7 @@ DateTime? _taskDueWallClock(TodoTask task) {
   return taskWallClockDateTime(
     due,
     allDay: task.allDay,
-    fixedTimezone: task.fixedTimezone,
+    mode: TaskTimeMode.fromWire(task.fixedTimezone),
     timeZone: task.timeZone,
   );
 }

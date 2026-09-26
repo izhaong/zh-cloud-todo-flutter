@@ -15,6 +15,7 @@ void main() {
         listId: '1',
         allDay: false,
         fixedTimezone: false,
+        timeMode: 0,
         title: 't',
         completed: false,
         cancelled: false,
@@ -72,6 +73,7 @@ void main() {
         allDay: false,
         timeZone: 'America/Los_Angeles',
         fixedTimezone: true,
+        timeMode: 1,
         updatedAt: base,
         createdAt: base,
       );
@@ -126,6 +128,7 @@ void main() {
         dueAt: DateTime(2026, 6, 20, 18, 30, 15),
         allDay: false,
         fixedTimezone: false,
+        timeMode: 0,
         updatedAt: now,
         createdAt: now,
       );
@@ -151,6 +154,7 @@ void main() {
         allDay: true,
         timeZone: 'America/Los_Angeles',
         fixedTimezone: true,
+        timeMode: 1,
         updatedAt: now,
         createdAt: now,
       );
@@ -177,6 +181,7 @@ void main() {
         allDay: false,
         timeZone: 'America/Los_Angeles',
         fixedTimezone: true,
+        timeMode: 1,
         updatedAt: now,
         createdAt: now,
       );
@@ -196,6 +201,7 @@ void main() {
         listId: '1',
         allDay: false,
         fixedTimezone: false,
+        timeMode: 0,
         title: '本月任务',
         completed: false,
         cancelled: false,
@@ -244,6 +250,7 @@ void main() {
       dueAt: DateTime(2026, 6, 20, 10),
       allDay: false,
       fixedTimezone: false,
+      timeMode: 0,
       updatedAt: now,
       createdAt: now,
     );
@@ -282,6 +289,7 @@ void main() {
       allDay: false,
       timeZone: 'America/Los_Angeles',
       fixedTimezone: true,
+      timeMode: 1,
       updatedAt: now,
       createdAt: now,
     );
@@ -298,6 +306,7 @@ void main() {
       allDay: false,
       timeZone: 'UTC',
       fixedTimezone: true,
+      timeMode: 1,
       updatedAt: now,
       createdAt: now,
     );
@@ -336,6 +345,7 @@ void main() {
       dueAt: DateTime(2026, 6, 20, 18, 30),
       allDay: false,
       fixedTimezone: false,
+      timeMode: 0,
       updatedAt: now,
       createdAt: now,
     );
@@ -381,6 +391,7 @@ void main() {
       dueAt: DateTime(2026, 6, 20, 9),
       allDay: false,
       fixedTimezone: false,
+      timeMode: 0,
       updatedAt: now,
       createdAt: now,
     );
@@ -421,6 +432,7 @@ void main() {
         listId: '1',
         allDay: false,
         fixedTimezone: false,
+        timeMode: 0,
         title: '晚一点',
         completed: false,
         cancelled: false,
@@ -438,6 +450,7 @@ void main() {
         listId: '1',
         allDay: false,
         fixedTimezone: false,
+        timeMode: 0,
         title: '早一点',
         completed: false,
         cancelled: false,
@@ -492,6 +505,7 @@ void main() {
       dueAt: DateTime(2026, 7, 30, 9),
       allDay: false,
       fixedTimezone: false,
+      timeMode: 0,
       updatedAt: now,
       createdAt: now,
     );
@@ -535,6 +549,7 @@ void main() {
           listId: '1',
           allDay: false,
           fixedTimezone: false,
+          timeMode: 0,
           title: '窄屏日历任务',
           completed: false,
           cancelled: false,

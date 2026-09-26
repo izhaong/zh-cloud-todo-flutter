@@ -1,5 +1,6 @@
 import '../../core/db/app_database.dart';
 import '../../core/time/task_time_formatter.dart';
+import '../../core/time/task_time_mode.dart';
 
 DateTime? _taskDueWallClock(TodoTask task) {
   final due = task.dueAt;
@@ -7,7 +8,7 @@ DateTime? _taskDueWallClock(TodoTask task) {
   return taskWallClockDateTime(
     due,
     allDay: task.allDay,
-    fixedTimezone: task.fixedTimezone,
+    mode: TaskTimeMode.fromWire(task.fixedTimezone),
     timeZone: task.timeZone,
   );
 }

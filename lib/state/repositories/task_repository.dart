@@ -82,6 +82,7 @@ class TaskRepository {
     bool allDay = false,
     String? timeZone,
     bool fixedTimezone = false,
+    int timeMode = 0,
     String? parentTaskId,
     bool isPinned = false,
   }) async {
@@ -118,6 +119,7 @@ class TaskRepository {
               allDay: Value(allDay),
               timeZone: Value(timeZone),
               fixedTimezone: Value(fixedTimezone),
+              timeMode: Value(timeMode),
               updatedAt: now,
               createdAt: now,
             ),
@@ -203,6 +205,7 @@ class TaskRepository {
       allDay: original.allDay,
       timeZone: original.timeZone,
       fixedTimezone: original.fixedTimezone,
+      timeMode: original.timeMode,
     );
   }
 
@@ -286,6 +289,7 @@ class TaskRepository {
     bool? allDay,
     String? timeZone,
     bool? fixedTimezone,
+    int? timeMode,
     String? listId,
     String? sectionId,
     bool clearSectionId = false,
@@ -340,6 +344,9 @@ class TaskRepository {
           fixedTimezone: fixedTimezone == null
               ? const Value.absent()
               : Value(fixedTimezone),
+          timeMode: timeMode == null
+              ? const Value.absent()
+              : Value(timeMode),
           listId: listId == null ? const Value.absent() : Value(listId),
           sectionId: clearSectionId
               ? const Value(null)

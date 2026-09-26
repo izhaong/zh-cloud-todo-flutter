@@ -10,6 +10,7 @@ import '../core/notification/reminder_notification_poller.dart';
 import '../core/sync/sync_change_queue.dart';
 import '../core/sync/sync_coordinator.dart';
 import '../core/time/task_time_formatter.dart';
+import '../core/time/task_time_mode.dart';
 import '../state/session_state.dart';
 import 'repositories/board_preference_repository.dart';
 import 'repositories/filter_repository.dart';
@@ -471,7 +472,7 @@ class TaskStats {
           : taskWallClockDateTime(
               dueAt,
               allDay: t.allDay,
-              fixedTimezone: t.fixedTimezone,
+              mode: TaskTimeMode.fromWire(t.fixedTimezone),
               timeZone: t.timeZone,
             );
       if (due != null) {

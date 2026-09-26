@@ -6,6 +6,7 @@ import '../../../core/db/app_database.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/brand_colors.dart';
 import '../../../core/time/task_time_formatter.dart';
+import '../../../core/time/task_time_mode.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../state/providers.dart';
 import '../task_detail_page.dart';
@@ -235,7 +236,7 @@ DateTime? resolveTaskDate(TodoTask t) {
       ? d
       : taskDisplayDateTime(
           d,
-          fixedTimezone: t.fixedTimezone,
+          mode: TaskTimeMode.fromWire(t.fixedTimezone),
           timeZone: t.timeZone,
         );
   return DateTime(display.year, display.month, display.day);
@@ -252,7 +253,7 @@ DateTime calendarDueAtForDay(TodoTask task, DateTime day) {
   return taskDateTimeForDisplayDay(
     source,
     day,
-    fixedTimezone: task.fixedTimezone,
+    mode: TaskTimeMode.fromWire(task.fixedTimezone),
     timeZone: task.timeZone,
   );
 }
@@ -957,7 +958,7 @@ class _AgendaView extends StatelessWidget {
   static DateTime _displayTime(TodoTask task, DateTime instant) {
     return taskDisplayDateTime(
       instant,
-      fixedTimezone: task.fixedTimezone,
+      mode: TaskTimeMode.fromWire(task.fixedTimezone),
       timeZone: task.timeZone,
     );
   }
