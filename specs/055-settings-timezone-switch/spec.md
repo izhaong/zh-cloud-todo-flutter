@@ -16,7 +16,7 @@
 ## 二、现状（基准 `zh-cloud-todo-flutter origin/develop@9032005`，逐条实测）
 
 ```
-git grep -n "task-reminder-fixed-timezone" -- lib          # 1 命中：lib/features/task/task_detail_pane.dart:405
+git grep -n "task-reminder-fixed-timezone" -- lib          # 1 命中：lib/features/task/task_detail_pane.dart:404
 git grep -n "固定时区" -- lib                                # 命中在提醒弹窗、task_time_formatter、app_database 注释
 git grep -n -e 日期与时间 -e 时区 -- lib/features/settings    # 0 命中（正向对照：同命令形态换 "任务" 在 settings_route.dart 有命中）
 ```
@@ -59,32 +59,52 @@ git grep -n -e 日期与时间 -e 时区 -- lib/features/settings    # 0 命中�
    判据是「小节标题 + 『时区』标题 + 『日期与时间』标题」三处 `RenderFlex` 溢出量 = 0；
    ⚠️ 测的是这条新加的 `SwitchListTile` 所在的 `Column`，不是整页根 —— 拿整页当被测对象会恒绿。
 2. **独立读屏语义**：开关的 `Semantics` 要能读出「时区」+ 开/关状态，不许只靠颜色区分。
-   实测判据（探针，不是推断）：`SwitchListTile` 挂 key 的节点与其内部 `Switch` 解析到**同一个**
-   `SemanticsNode`，而该合并节点上 `flagsCollection.isChecked` / `isToggled` = `none`、
-   `isButton` = false ⇒ `Switch` 自带的状态位**到不了读屏**（merge 只合并 label，不合并 flags）。
-   所以判据钉在 label 上：开 ⇒ label 含「已开启」，切换后 ⇒ label 含「已关闭」（正反两条都要，
-   只有正向的那条可能恒真）。名字坑：`dart:ui` 的 `SemanticsFlags` 上叫 `isChecked` / `isToggled`，
-   **没有** `isToggle` / `hasCheckedState`（那两个名字编译不过），`SemanticsNode` 也没有公开的 `actions`。
+   判据用 **`getSemantics(f).getSemanticsData().flagsCollection.isToggled`**：开时 `Tristate.isTrue`、
+   切换后 `Tristate.isFalse`（正反两条都要，只有正向的那条可能恒真）；名称另由
+   `find.bySemanticsLabel(RegExp('时区'))` 钉住。
+   为什么是这份数据（三方独立一致：复核探针、本仓 `/tmp/r82/probe-pre-fix-bad0933.log`、
+   cursor-agent 交叉验证 `/tmp/xcheck/q1.out`）：`SemanticsNode.flagsCollection` 只是**节点自有**的位，
+   子节点被合并时 flags 不回写；而 `SemanticsNode._addToUpdate` 是先 `getSemanticsData()`、再
+   `updateNode(flags: data.flagsCollection)` ⇒ 平台读屏吃的是 `SemanticsData` 那份。
+   名字坑（都实测过）：`Switch` 发的是 `toggled` 不是 `checked`；`dart:ui` 上叫 `isToggled`/`isChecked`，
+   没有 `isToggle`/`hasCheckedState`；本仓这版 SDK 的 `WidgetTester` **没有** `getSemanticsData(finder)`
+   （编译不过），得写 `getSemantics(f).getSemanticsData()`；`SemanticsNode` 也没有公开的 `actions`。
 3. **失败保留已加载数据**：写偏好抛错 ⇒ 开关**回到切换前的值**并给可见反馈（SnackBar），
    且既有任务的 `timeZone` 不受影响（FR-3 的同一套断言，只是这次注入一次失败）。
-4. **过期响应不覆盖新响应**：连开两次（关→开→关）时，若第一次写的读数迟到返回，不得把最终值翻回"开"。
-   本面实现是"写后即读同一行"，若做不到这条判据就在本文件登记取舍，不许悄悄删判据。
+4. **过期响应不覆盖新响应**：判据是 R3 —— 并发 `setEnabled(false)` 与 `setEnabled(true)`，
+   要求不抛异常、`todo_view_preferences` 恰 1 行、`get()` 回**最后一次意图**、outbox 留 2 条。
+   ⚠️ 这一条上一版被我判成"本面不可达"、只登记了取舍。复核第 1 轮 F-2 用实测驳回并被本仓复算接受：
+   "读 → 插"不在事务里时，两次并发都读到"无行"，撞 `{source_type, source_key}` 的 UNIQUE 索引
+   ⇒ `SqliteException(2067)` 且最后一次意图丢失（`get()` 回 false 而不是最后要的 true）。
+   修法不是新增机制，而是**照抄仓内先例**：`task_sort_preference_repository.save()` 本来就整段包
+   `_db.transaction(...)`，我抄形时把事务漏了。留痕：`/tmp/r82/probe-pre-fix-bad0933.log`（修前）。
 
 ## 六、取舍（拿不准的按推荐走，写在这里）
 
-1. **默认值取「开」而不是照嘀嗒默认「关」**。理由：本仓的固定时区能力今天对每个任务**恒可用**（见「二」），
+1. **默认值取「开」**。理由：本仓的固定时区能力今天对每个任务**恒可用**（见「二」），
    默认关会让已有能力对全部老用户凭空消失（数据在、入口没了）—— 那是回归，不是对齐。
-   代价：与嘀嗒"新装即关"的首屏不同。**这条如果复核不认，请指出"默认关且不改写既有任务"这句在本面哪条断言上不可测。**
+   ⚠️ 上一版把这条写成"不照嘀嗒默认「关」"，还留了一句把举证成本推给复核的"这条如果复核不认，请指出……不可测"。
+   两处都要改，且都是我的错：
+   ① 嘀嗒这页**通篇没写默认状态** —— `grep -c 默认` 在那份 64 行的镜像页上 = 0（命令见 `tasks.md` 二），
+      所以"默认关"从来不是原文判据，是我替它加的；
+   ② "默认关不可测"也不成立（复核 F-1′ 驳回、本仓复算接受）：默认值有断言（R1 `get()` 即"无记录=开"）、
+      "不改写既有任务"有 R2、"入口消失"有提醒显隐那两条 ⇒ 三块合起来完全可测，没有哪一块测不到。
+   剩下的只是产品判断：**默认开 = 不破坏既有能力**；代价是新用户首屏比嘀嗒多一个开着的开关。
 2. **不复用 `TASK_CAPTURE/defaults` 那条偏好行**：混进去会让"新任务默认值"页的读写多一个它不该关心的字段，
    且两页各自 watch 同一行会互相触发重建。另立 `DATE_TIME/timezone` 一行，代价是多一行偏好记录。
 3. **不做"关掉总开关就把所有任务的 fixedTimezone 清掉"**：那是把显隐当数据变更，正是 FR-3 要拦住的那种实现。
-4. **开关态只进 `semanticsLabel`，不改屏幕上的文案**：屏幕上的标题照抄嘀嗒的「时区」，
-   播报用 `Text('时区', semanticsLabel: '时区，已开启/已关闭')`。代价：视觉上看不出差别的人
-   仍要看开关颜色（`Switch` 本体在），但读屏用户拿到的是**真状态**（见「五-2」的实测）。
-   「已开启 / 已关闭」用的还是嘀嗒原句里的动词（「开启『时区』开关」），不算自创术语。
+4. **（已撤回，留档防止重犯）**上一版为"读屏读不出开/关"给标题加了 `semanticsLabel: '时区，已开启/已关闭'`。
+   那个前提是**假的**：我读的是 `SemanticsNode.flagsCollection`（节点自有的位，合并时不含子节点），
+   而平台吃的是 `getSemanticsData()` 那份 —— `Switch` 的 `toggled` 本来就出得来（三方实测一致，见「五-2」）。
+   ⇒ 自创文案已删，屏幕与播报都回到"嘀嗒的「时区」+ 系统自带的开关态"。
+   教训（写进 `tasks.md` 三-3）：**判"某个能力不存在"之前，先确认读的是导出给平台的那份数据；
+   名字要按 SDK 里的真名读，读不到名字 ≠ 读不到能力。**
 
 ## 七、验收（矩阵口径）
 
-- 矩阵 **#12「固定时间与固定时区」**：做完本面只去掉缺项 ⑥（总开关），仍留 ⑤（「固定时间」档）
-  ⇒ **状态不翻**（仍「部分」），只把缺口列改窄，并写明「总开关已由 specs/055 落地、剩余缺口是 #369」。
+- 矩阵 **#12「固定时间与固定时区」**：做完本面只去掉「设置里没有『时区』总开关」这一条缺口（即 FL #368
+  自认的那条"缺项 ⑥"），仍留「任务上没有『固定时间』档」这一条（FL #369 标题写的"缺项 ⑤"）
+  ⇒ **状态不翻**（仍「部分」），缺口列改窄并写明「总开关已由 specs/055 落地、剩余缺口是 #369」。
+  ⚠️ 编号 ⑤/⑥ 只在 FL #368 / #369 的正文里定义，**矩阵行里没有这张编号表**（复核 F-6 指出矩阵读者无从解析）
+  ⇒ 矩阵侧改成写文字缺口 + 指向这两个 Issue 号，不再裸用 ⑤/⑥。
 - PR 未合并 ⇒ 矩阵措辞用「已实现、未进 develop」，不写"已支持"。

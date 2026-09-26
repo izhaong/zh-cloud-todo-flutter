@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui' show Tristate;
 
 import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
@@ -121,6 +122,37 @@ void main() {
     );
   });
 
+  test('R3 并发两次切换：不炸 UNIQUE、仍一行、后一次意图不被覆盖（四件套-4）', () async {
+    // 复核第 1 轮 F-2 实测：`setEnabled` 的"读→插"不在事务里时，两次并发写都读到"无行"，
+    // 撞 `{source_type, source_key}` 的 UNIQUE 索引 ⇒ `SqliteException(2067)`、
+    // 且**最后一次意图丢失**（`get()` 回的是 false 而不是最后要的 true）。
+    // 修法照 `task_sort_preference_repository.save()`：整段包进 `_db.transaction`。
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final repository = TimezonePreferenceRepository(db, SyncChangeQueue(db));
+
+    await Future.wait([
+      repository.setEnabled(false),
+      repository.setEnabled(true),
+    ]);
+
+    expect(
+      await db.select(db.todoViewPreferences).get(),
+      hasLength(1),
+      reason: '并发写要么合成一行、要么报错；这里如果炸 2067，本行根本走不到断言',
+    );
+    expect(
+      await repository.get(),
+      isTrue,
+      reason: '排在其后的那次写（true）必须赢，不能被前一次迟到的写覆盖回去',
+    );
+    expect(
+      await db.select(db.todoSyncChanges).get(),
+      hasLength(2),
+      reason: '两次写各留一条 outbox：事务合并不等于把变更吞掉',
+    );
+  });
+
   testWidgets('W1 设置页有「日期与时间 → 时区」：显示取流值，点一下走仓储写一次', (tester) async {
     final repository = _FakeTimezoneRepository(true);
     await _pumpSettings(tester, repository: repository);
@@ -153,20 +185,19 @@ void main() {
     final semantics = tester.ensureSemantics();
     await _pumpSettings(tester, repository: repository);
 
-    // ⚠️ 探针实测（`AppDatabase` 无关，纯语义树）：`SwitchListTile` 上挂 key 的节点与内部
-    // `Switch` 解析到**同一个** `SemanticsNode`（merge 掉了子节点），且合并节点上
-    // `flagsCollection.isChecked` / `isToggled` 恒为 `none`、`isButton` = false
-    // ⇒ 光靠 `Switch` 自己，读屏念不出"开着还是关着"。状态必须由 label 带出来
-    //（merge 只合并 label），所以正反两条都判 label。
+    // ⚠️ 判据用 `getSemanticsData()`，**不是** `getSemantics()`：
+    // 实测 `getSemantics(f).flagsCollection.isToggled` 恒为 `Tristate.none`（那是 `SemanticsNode`
+    // 自己的位，合并子节点的 flags 不带上来），而 `node.getSemanticsData().flagsCollection.isToggled`
+    // 才等于导出给平台（`SemanticsUpdateBuilder.updateNode`）的那份 ⇒ 读屏真听得到开关态。
+    // 我第一版按前者下了"状态位到不了读屏"的结论并为此改了 UI 文案，第 1 轮复核 F-1 把这句驳回。
     expect(
       find.bySemanticsLabel(RegExp('时区')),
       findsOneWidget,
       reason: '没有可读名称时这条要红（嘀嗒术语「时区」照抄，不许只剩一个颜色点）',
     );
-    final on = tester.getSemantics(find.byKey(_settingsKey));
     expect(
-      on.label,
-      allOf(contains('时区'), contains('已开启')),
+      _toggled(tester),
+      Tristate.isTrue,
       reason: '读屏只读出"时区"三个字、读不出开还是关 = 这条对视障用户是坏的',
     );
     expect(
@@ -178,9 +209,9 @@ void main() {
     await tester.tap(find.byKey(_settingsKey));
     await tester.pumpAndSettle();
     expect(
-      tester.getSemantics(find.byKey(_settingsKey)).label,
-      contains('已关闭'),
-      reason: '反向对照：切换后播报要跟着翻，不然上一条可能恒真',
+      _toggled(tester),
+      Tristate.isFalse,
+      reason: '反向对照：切换后状态位要跟着翻，不然上一条可能恒真',
     );
     semantics.dispose();
   });
@@ -288,6 +319,15 @@ class _FakeTimezoneRepository implements TimezonePreferenceRepository {
 
   void dispose() => _changes.close();
 }
+
+/// 读屏拿到的开关状态位。必须从 `getSemanticsData()` 读，不是 `getSemantics()`：
+/// 后者是 `SemanticsNode` 自己的位（合并子节点时 flags 不带上来，实测恒 `none`），
+/// 前者才是 `SemanticsUpdateBuilder.updateNode(...)` 真正导出给平台的那一份。
+Tristate _toggled(WidgetTester tester) => tester
+    .getSemantics(find.byKey(_settingsKey))
+    .getSemanticsData()
+    .flagsCollection
+    .isToggled;
 
 /// 视口宽度就是要测的宽度；高度给足，否则 `ListView(children: …)` 用
 /// SliverChildListDelegate 只构建进视口的行 —— 我第一版就是栽在这里：

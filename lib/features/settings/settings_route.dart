@@ -311,14 +311,7 @@ class _TimezonePreferenceTile extends ConsumerWidget {
       child: SwitchListTile(
         key: const ValueKey('settings-timezone-enabled'),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        title: Text(
-          '时区',
-          // 实测（探针跑在 specs/055/tasks.md 记的那次）：`SwitchListTile` 的合并语义节点上
-          // `isChecked` / `isToggled` 恒为 `none` ⇒ 光靠 `Switch` 自己，读屏念不出开还是关。
-          // 状态挂在 label 上（merge 只合并 label，不合并 flags），屏幕阅读器才真念得出来。
-          semanticsLabel: enabled ? '时区，已开启' : '时区，已关闭',
-          style: TextStyle(color: colors.foreground),
-        ),
+        title: Text('时区', style: TextStyle(color: colors.foreground)),
         subtitle: Text(
           '开启后可为任务选择「固定时区」',
           style: TextStyle(color: colors.mutedForeground),

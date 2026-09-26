@@ -37,41 +37,48 @@ class TimezonePreferenceRepository {
   }
 
   Future<void> setEnabled(bool enabled) async {
-    final now = DateTime.now();
-    final existing = await _row();
-    final id = existing?.id ?? _uuid.v4();
-    final valueJson = jsonEncode({'enabled': enabled});
-    final companion = TodoViewPreferencesCompanion(
-      id: Value(id),
-      serverId: existing?.serverId == null
-          ? const Value.absent()
-          : Value(existing!.serverId),
-      sourceType: const Value(sourceType),
-      sourceKey: const Value(sourceKey),
-      valueJson: Value(valueJson),
-      updatedAt: Value(now),
-      createdAt: existing == null ? Value(now) : Value(existing.createdAt),
-    );
-    if (existing == null) {
-      await _db.into(_db.todoViewPreferences).insert(companion);
-    } else {
-      await (_db.update(
-        _db.todoViewPreferences,
-      )..where((row) => row.id.equals(id))).write(companion);
-    }
-    // payload 不带 viewType：服务端的 AppTodoViewPreferenceSaveReqVO 只有
-    // sourceType / sourceKey 是 @NotBlank，viewType 可空（已读该 VO 字节确认）。
-    await _queue.enqueue(
-      entity: SyncEntities.viewPreference,
-      op: SyncOps.upsert,
-      localId: id,
-      serverId: existing?.serverId,
-      payload: {
-        'sourceType': sourceType,
-        'sourceKey': sourceKey,
-        'valueJson': valueJson,
-      },
-    );
+    // 整段（读 → 写 → 入队）必须在同一个事务里：`todo_view_preferences` 上
+    // `{sourceType, sourceKey}` 是 UNIQUE 索引，"先读后插"不在事务里时两次并发写会
+    // 都读到"无行" ⇒ `SqliteException(2067) UNIQUE constraint failed`，
+    // 且**最后一次意图丢失**（复核实测 + 本仓 R3 钉住）。
+    // 形参照 `task_sort_preference_repository.save()` —— 它本来就是包了事务的。
+    await _db.transaction(() async {
+      final now = DateTime.now();
+      final existing = await _row();
+      final id = existing?.id ?? _uuid.v4();
+      final valueJson = jsonEncode({'enabled': enabled});
+      final companion = TodoViewPreferencesCompanion(
+        id: Value(id),
+        serverId: existing?.serverId == null
+            ? const Value.absent()
+            : Value(existing!.serverId),
+        sourceType: const Value(sourceType),
+        sourceKey: const Value(sourceKey),
+        valueJson: Value(valueJson),
+        updatedAt: Value(now),
+        createdAt: existing == null ? Value(now) : Value(existing.createdAt),
+      );
+      if (existing == null) {
+        await _db.into(_db.todoViewPreferences).insert(companion);
+      } else {
+        await (_db.update(
+          _db.todoViewPreferences,
+        )..where((row) => row.id.equals(id))).write(companion);
+      }
+      // payload 不带 viewType：服务端的 AppTodoViewPreferenceSaveReqVO 只有
+      // sourceType / sourceKey 是 @NotBlank，viewType 可空（已读该 VO 字节确认）。
+      await _queue.enqueue(
+        entity: SyncEntities.viewPreference,
+        op: SyncOps.upsert,
+        localId: id,
+        serverId: existing?.serverId,
+        payload: {
+          'sourceType': sourceType,
+          'sourceKey': sourceKey,
+          'valueJson': valueJson,
+        },
+      );
+    });
   }
 
   Future<TodoViewPreference?> _row() {

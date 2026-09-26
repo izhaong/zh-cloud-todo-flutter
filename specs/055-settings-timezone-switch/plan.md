@@ -20,8 +20,13 @@
 
 - **状态读法**：`_showReminderEditor` 打开弹窗前 `await ref.read(timezoneEnabledProvider.future)`，
   不读 `valueOrNull`。后者在 provider 首帧是 `AsyncLoading` ⇒ `?? true` ⇒ "关掉到底有没有效"取决于手速。
-- **读屏状态**：实测 `SwitchListTile` 的合并语义节点拿不到 `checked/toggled` ⇒ 状态写进 `semanticsLabel`
-  （「时区，已开启 / 已关闭」），屏幕上的文案仍是嘀嗒的「时区」。
+- **读屏状态**：判据用 `getSemantics(f).getSemanticsData().flagsCollection.isToggled`（正反两条）。
+  ⚠️ 这里返过工：先按 `SemanticsNode.flagsCollection` 读到 `none` 就下了「状态位到不了读屏」的结论、
+  并给标题加了 `semanticsLabel`；复核 F-1 指出平台吃的是 `getSemanticsData()` 那份，`Switch` 的
+  `toggled` 本来就出得来 ⇒ 自创文案已撤回。见 `tasks.md` 三-3。
+- **写偏好整段包 `_db.transaction`**：`{sourceType, sourceKey}` 上有 UNIQUE 索引，
+  「读 → 插」不在事务里时并发写会撞 `2067` 并丢最后一次意图（复核 F-2 实测）。
+  仓内先例 `task_sort_preference_repository.save()` 本来就是包事务的 —— 抄形要抄整段。
 
 ## 四、风险与不做的事
 
