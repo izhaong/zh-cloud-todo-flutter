@@ -287,11 +287,16 @@ markdown 只动 `specs/`，不可能影响 dart 侧读数 ⇒ 复跑范围按第
 ⇒ 本轮起 markdown 提交后的复跑一律用 range 形态，plain 形态只算工作区卫生检查。
 （第 74 轮那条注记说的"md-only 提交给文件末尾添空行"是同一件事，当时它写在正文里，这次是真被它咬到。）
 
-**我自己的两处错，记下来别掩盖**：① 第一版门禁脚本把 `--dart-define` 打成 `TODO_TENID`，那条读数作废，
-表里第 6 行是重跑正确命令后的读数；② 全量测试我没有"本笔之前"的同分支读数，
-所以**不声明** "+917 比基线多 3" 这种差值 —— 能声明的只有本文件用例数
-`git show HEAD~1:test/features/settings/sidebar_show_tags_settings_test.dart \| grep -c 'testWidgets('` = **5**、
-现值 `grep -c 'testWidgets(' ` = **8**（本笔 +3 条）。
+**我自己的三处错，记下来别掩盖**：① 第一版门禁脚本把 `--dart-define` 打成 `TODO_TENID`，那条读数作废，
+表里第 6 行是重跑正确命令后的读数；② 门禁 1 第一遍用的是 plain 形态（`git diff --check`，工作区对索引），
+它对已提交的 md 改动恒绿 ⇒ 换 range 形态才抓到 EOF 空行；③ **上一笔提交的信息说过头**：
+`a9150c2` 的正文说"补两条用例的读数"，但那次改动台账的 python 脚本因中文里用了 ASCII 双引号而 `SyntaxError` 整段没执行，
+只有前一笔 Edit（门禁表）与去空行落进了那笔提交 —— 现跑证据：`git show --stat a9150c2` 只含 `specs/048-sidebar-show-tags/tasks.md`，
+而该笔内容里 `+917` 仍在（未改成 `+919`）。本节数字以这一笔为准。
+全量差值只引用先前读数（见下"计数对账"），能现算的只有本文件用例数
+`git show 6e95236:test/features/settings/sidebar_show_tags_settings_test.dart \| grep -c 'testWidgets('` = **5**、
+`grep -c 'testWidgets(' test/features/settings/sidebar_show_tags_settings_test.dart` = **10**（本笔 +5 条）。
+
 
 ### 反向探针（三条，各自只打红它该打的那条用例）
 
@@ -305,10 +310,24 @@ markdown 只动 `specs/`，不可能影响 dart 侧读数 ⇒ 复跑范围按第
 （副本 `/tmp/r98/settings_route.pristine`，脚本 `/tmp/r98/after.sh`）。
 QB/QC 各只打红一条 ⇒ 两条新用例不是互相抄实现的孪生断言。
 
-门禁 5 的计数对账（**标注读数来源，不装作现跑过基线**）：`+917` = 第 74 轮那张表的 `+914` + 本笔 3 条新用例。
-`+914` 来自本台账上一节（同分支 `f11cdb1`），其间只有两笔 markdown 提交
-（`git diff --name-only f11cdb1..HEAD~1` 现读 = `specs/048-sidebar-show-tags/spec.md`、`specs/048-sidebar-show-tags/tasks.md`；
+### 本笔新增的提示节点也走四件套（另两条用例）
+
+- **①「320px + 1.3 倍字号」要量它自己的那一态**：留住旧值 + 失败提示同现才是这行的最宽组合，
+  沿用正常态那条测不到它。读数：`takeException()` 为 null、`隐藏` 与提示各 `findsOneWidget`。
+- **② 读屏语义：实测是"并进本行的合并节点"，不是独立节点。**
+  `tester.getSemantics(find.text('隐藏')).label` 打出的合并 label 依次是
+  `标签` / 副标题 / `隐藏` / `读取偏好失败，显示的是上次读到的值`
+  ⇒ 断言只写"念得到、且与留住的取值同现"（两个 `contains`），**不写成"独立语义节点"**，那会是假陈述。
+- 探这条时查到的两个 harness 事实（写下来免得下轮再猜）：
+  `find.bySemanticsLabel('…')` 比的是节点**整条**合并 label 而非子串 ⇒ 用完整句当参数恒 0 命中；
+  `debugDumpSemanticsTreeInTraversalOrder()` 在 `flutter_test` 作用域里不可直接调用（编译期 `Method not found`）。
+  ⇒ 判语义只能走 `getSemantics(finder).label` + `contains`。
+
+门禁 5 的计数对账（**标注读数来源，不装作现跑过基线**）：`+919` = 第 74 轮那张表的 `+914` + 本笔 5 条新用例。
+`+914` 来自本台账上一节（同分支 `f11cdb1`），其间只有 markdown 提交
+（`git diff --name-only f11cdb1..032cc72~1` 现读 = `specs/048-sidebar-show-tags/spec.md`、`specs/048-sidebar-show-tags/tasks.md`；
 `... | grep -c '^test/'` = 0）
+
 ⇒ 用例数不可能变；本笔**没有**回跑"实现前"的全量，所以这条是引用先前读数 + 结构推论，不是同批对照实测。
 本文件用例数则是现跑对照：`git show HEAD~1:test/features/settings/sidebar_show_tags_settings_test.dart | grep -c 'testWidgets('` = 5，
 `grep -c 'testWidgets(' test/features/settings/sidebar_show_tags_settings_test.dart` = 8。
