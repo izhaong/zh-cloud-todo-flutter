@@ -45,7 +45,31 @@
 
 ## 四、六道门禁
 
-（读数在提交后的终态字节上跑，日志文件名 = 下面登记的那一份，不覆写。）
+基准：已提交终态 **`b571ef1`**（`ac51c0b` 是功能那一笔，`b571ef1` 只把门禁 2 判红的三处换行收齐）；
+日志 **`/tmp/r82/gates-b571ef1.log`**（1397 行；文件名带 sha ⇒ 不会被下一轮覆写）。六项 **rc 全 0**。
+
+| 门禁 | 读数（从上面那份日志现读，行号是日志内的） |
+| --- | --- |
+| 1 `git diff --check 9032005..HEAD` | 无输出，`rc=0`（`:4`） |
+| 2 `dart format --output=none --set-exit-if-changed`（本轮 6 个文件） | `Formatted 6 files (0 changed)`，`rc=0`（`:7`、`:8`） |
+| 3 `flutter analyze` | `rc=0`（`:74`） |
+| 4 `flutter test --tags golden` | `00:09 +9: All tests passed!`（`:148`）⇒ **9 张基线一张没重录**，设置页新增一节没进任何一张的视口 |
+| 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:27 +907 ~26: All tests passed!`（`:1314`） |
+| 6 `flutter build web --release`（带 test 域名与租户两个 dart-define） | `✓ Built build/web`（`:1393`），`rc=0` |
+
+计数对账（不是减法反推，两端各有实跑来源）：`907 − 本轮新增 9 = 898` = develop 全量基线，
+那份基线的实跑留痕是 `/tmp/r68/baseline_develop.log:1152`（`+898 ~26`，全文 1153 行、`:1153` 才是物理末行）
+与 `/tmp/r77c/rerun-898.log:1155`；`~26` 与 develop 的 26 条 skip 一致（本轮没新增 skip）。
+复算命令：`grep -n "All tests passed" /tmp/r82/gates-b571ef1.log`、
+`git log --oneline 9032005..HEAD | wc -l` = 2。
+
+⚠️ 门禁 2 **第一次是红的**：`ac51c0b` 上 `Formatted 6 files (3 changed)` ⇒ `rc=1`
+（第一份日志 `/tmp/r82/gates-ac51c0b.log`，读数留在 `:6-11`，没被覆写）。
+处理方式是把三个文件按 formatter 收齐再重跑全套 —— 没有改判据、没有跳过。
+
+跑完门禁后 `git status --porcelain pubspec.lock` 为空（同日志收尾行 `脏项数=0`）⇒
+`pubspec.lock` 没被本机镜像扫进这笔。
+
 
 ## 五、编译红（不充当行为证据，只留名字）
 
