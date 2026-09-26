@@ -80,7 +80,7 @@ $ flutter test test/features/task/calendar_list_timeline_test.dart
 不改任何用例名与结果（可复验：`git diff --name-only f21a5c8..HEAD` 列出的全是 md 与该测试文件，
 且该测试文件的 diff 只落在 `reason:` 字符串上）。
 ⚠️ **自 `5e81146` 起的每一笔**都只动 `tasks.md`（第 5 轮 ④ 第 5 条：上一版写成「推进这一笔」，而它跨的是 `01fd3bc`+`74a03c3`+`9762f79`+`8cbcaf5`+`eecf28a` 五笔（加本笔六笔）⇒
-拿 `git diff --name-status 5e81146..HEAD` 复验，它只该列出本文件。
+拿 `git diff --name-status 5e81146..HEAD` 复验，现读是**两个**路径（`M tasks.md` + `A tool/check_spec_selfscan.py`）—— 写它时 tool 还没落仓（`eecf28a` 上确实只有本文件），`c53da6a` 落仓后这句就过期了；正确说法是「只动 `specs/**` 与 `tool/**`，不碰 `lib`、`test`」。
 
 | # | 命令 | 读数 |
 | --- | --- | --- |
@@ -427,8 +427,7 @@ Flutter SDK 里的文件（例如 `material/ink_well.dart` 的第 1401 行那种
 
 派复核前我为这轮字节建了个干净克隆（`git clone /tmp/wt-fl-361 /tmp/r83rev`），
 在**完全相同的字节**上自扫，克隆里读出 `失项 3 条`、工作树里读出 `失项 0 条`。
-差的都是分支锚点：`git clone` 只把源仓分支落成 `origin/<分支>`，和本地同名的那根 ref 要有人真
-`git checkout` 过才存在 ⇒ `feat/320-sort-direction:specs/045-sort-direction/tasks.md:120`
+差的都是分支锚点：`git clone` 只把源仓分支落成 `origin/<分支>`，和本地同名的那根 ref 只有源仓 HEAD 那一条会被 clone 顺手建出来（第 9 轮复核抓到：本克隆**有** `feat/361-calendar-list-timeline` 的本地 ref，缺的是被引的 `feat/320-sort-direction`、`fix/348-month-grid-future-day` 两根；上一版把它说成全称，是说过头了） ⇒ `feat/320-sort-direction:specs/045-sort-direction/tasks.md:120`
 这类写法在别人那份新克隆里 `cat-file` 必然失败。别人复现不出的读数不算证据
 （与「矩阵翻转只引已合并 SHA」是同一条规矩的两个方向）。
 
@@ -448,3 +447,25 @@ Flutter SDK 里的文件（例如 `material/ink_well.dart` 的第 1401 行那种
   文案含"既不在本地…也不在 origin…"；
 - 假阳性清掉：`cd /tmp/r83rev && python3 tool/check_spec_selfscan.py specs/052-calendar-list-timeline/tasks.md`
   读出 `失项 0 条`（那 3 条纯属工作树有本地分支缓存）。
+
+## 十、第 9 轮只读复核（审 `ed7b3f3`，结论流 `/tmp/r9out/review.jsonl`）：`VERDICT: PASS`
+
+前 8 轮里 6 轮 FAIL，这轮转绿。它没只看我的语料自证：**自造 6 个新变异**（不抄 CORPUS）逐条投给
+补牙后的判据 ⇒ 全红；②b 先红后绿；③ 只认命令不认 sha；④ 从"静默不执行"变成真回跑。
+承重原文：「判据全部可达、全仓无一条 append 死臂、台账抽查 6/6 对得上……没有发现造空证据或
+判据失效级别的账 ⇒ 不足以判 FAIL」。
+
+它留的三笔记账（非 FAIL 级，但不许粉饰）：
+
+| 项 | 内容 | 处置 |
+| --- | --- | --- |
+| ① | `:83`「只该列出本文件」在 HEAD 上现读为 2 个路径（tool 落仓后过期） | 本笔已按现读改掉，并写明是哪一笔让它过期 |
+| ② | 我把"克隆里没有本地同名分支"说成了全称 | 本笔已改成"只有被引的那两根缺本地 ref" |
+| ③ | `origin/` 兜底留下 **stale-ref 破口**：远端删分支后本地 `origin/<分支>` 不 prune 就继续判绿 | 记此：判据本身不防它（防法要么前置 `fetch --prune`，要么锚点带 SHA）。本 PR 不顺手改，另轮处理 |
+
+**假阳性账（同轮 Q3 实测）**：拿本仓别家台账当探测器 ⇒ 24 份台账报 51 条，约 33 条误伤，
+根因五类（叙述句撞宽判据、缺 `lib/` 前缀解析、自指 `plan.md` 歧义、把 `git diff` 行号当文件行号、
+版本错配）。⇒ 本台账 `失项 0 条` 只代表"052 这面过自家判据"，**不等于工具能拿去扫全仓下结论**。
+
+门禁：`lib`、`test` 两棵 tree hash 仍与 `5e81146` 相同（六道门禁日志继续有效），
+`git diff --check` 干净，自扫 ⇒ 失项 0 条。
