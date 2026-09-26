@@ -172,6 +172,54 @@ void main() {
     expect(_trailingValue(tester), '…');
     expect(find.text('读取偏好失败，显示的是上次读到的值'), findsNothing);
   });
+
+  // 本笔新增的那个提示节点是新界面 ⇒ 四件套 ① 要在**它自己的态**下量，
+  // 不能沿用"正常态 320px"那条用例：旧值 + 提示同时出现才是这行的最宽组合。
+  testWidgets('320px + 1.3 倍字号下的"留住旧值 + 失败提示"这一态不溢出', (tester) async {
+    final gate = StreamController<bool>();
+    addTearDown(gate.close);
+    await _pumpSettings(
+      tester,
+      watchStream: gate.stream,
+      surface: const Size(320, 720),
+      textScale: 1.3,
+    );
+
+    gate.add(false);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    gate.addError(StateError('故意在出过一次值之后让流失败'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(tester.takeException(), isNull, reason: '这一态在 320px + 1.3 下溢出');
+    expect(find.text('隐藏'), findsOneWidget);
+    expect(find.text('读取偏好失败，显示的是上次读到的值'), findsOneWidget);
+  });
+
+  // 四件套 ②：失败提示必须被读屏念到。**实测**它是并进这一行的合并语义节点，不是独立节点
+  // （`tester.getSemantics(find.text('隐藏')).label` 打出的合并 label 依次为
+  // `标签` / 副标题 / `隐藏` / `读取偏好失败，显示的是上次读到的值`），
+  // 所以这里只断言"念得到、且与留住的取值同现"，不假装它是独立语义节点。
+  testWidgets('失败提示会被读屏念到，且与留住的取值在同一个语义节点里', (tester) async {
+    final gate = StreamController<bool>();
+    addTearDown(gate.close);
+    final handle = tester.ensureSemantics();
+    await _pumpSettings(tester, watchStream: gate.stream);
+
+    gate.add(false);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    gate.addError(StateError('故意在出过一次值之后让流失败'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    final label = tester.getSemantics(find.text('隐藏')).label;
+    expect(label, contains('读取偏好失败，显示的是上次读到的值'));
+    expect(label, contains('隐藏'), reason: '读屏要同时念到"留住的取值"和"这次失败了"');
+
+    handle.dispose();
+  });
 }
 
 /// 只替换 `watch()`，让用例自己决定首值/错误何时到达；`get()`/`save()` 仍走真库。
