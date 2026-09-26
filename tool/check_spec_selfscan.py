@@ -41,18 +41,35 @@ EVIDENCE = re.compile(
     r"flutter\s+(test|analyze|build)|dart\s+format|[0-9a-f]{7,40}|(?:#|!)\d{2,4}|"
     r"[\w./-]+\.(?:log|md|dart|py):\d+|命中\s*\d+|rc\s*[=＝]\s*\d)"
 )
+# ③ 只认**命令**。指针（sha、`#123`、`file:12`）只能证明"有这个东西"，
+# 证明不了"是这个数"——第 8 轮复核 F9 就是拿"量词 + 一个 sha"把上一版骗过去的。
+EVIDENCE_CMD = re.compile(
+    r"(grep|rg\s|wc\s+-|ls\s+-|git\s+(?:grep|diff|log|show|rev-parse|rev-list|ls-tree)|awk\s|sed\s+-|python3\s|"
+    r"flutter\s+(?:test|analyze|build)|dart\s+format)"
+)
 # `分支:文件:行` —— 必须有**两个**冒号才认，免得把普通路径误判成分支形态
 BRANCH_REF = re.compile(
     r"(?<![\w/:])((?:refs/heads/|origin/)?[A-Za-z0-9._-]+/[A-Za-z0-9._/-]+):"
     r"([A-Za-z0-9._/-]+\.(?:log|md|dart|txt|py)):(\d+)"
 )
-# 「X 由脚本产出 / 脚本已断言」：必须点名一个**仓内存在**的脚本
-CLAIM_SCRIPT = re.compile(r"(脚本已断言|脚本产出|由脚本|脚本实算|校验器已断言|仓内脚本)")
+# 「X 由脚本产出 / 脚本已断言」：必须点名一个**仓内存在**的脚本。
+# ⚠️ 别只列固定词组：台账的自然写法是「由 `tool/xxx.py` 产出」（脚本名与"由"被路径隔开），
+# 上一版只认「由脚本」四字连着 ⇒ 自测里那条"命令跑不出命中"的语料直接跳过整条判据、假绿
+# （本轮自己抓的：新写的 corpus 期望红、实际绿，才暴露出这个口子）。
+CLAIM_SCRIPT = re.compile(
+    r"(脚本已断言|脚本产出|由脚本|脚本实算|校验器已断言|仓内脚本|"
+    r"(?:由|经|从)\s*`?[\w./-]+\.(?:py|sh)`?\s*(?:产出|实算|断言)|脚本.{0,6}产出)"
+)
 SCRIPT_PATH = re.compile(r"((?:tool|scripts)/[A-Za-z0-9_./-]+\.py)")
 HEADING_ROUND = re.compile(r"^#+ .*(?:（第 ([0-9、,–\-]+) 轮）|第 (\d+) 轮)", re.M)
 FUTURE = re.compile(r"第 ([0-9]+) 轮[^。\n]{0,24}(未回|未派)")
-# 「第 a–b 轮都已判过」：区间的上下界必须等于本文处置节推出的那一个
-DONE_RANGE = re.compile(r"第\s*([0-9]+)\s*[–\-]\s*([0-9]+)\s*轮都已判")
+# 「第 a–b 轮都已判过 / 都判过 / 均已判」这一族区间主张：上下界必须等于本文处置节推出的区间。
+# 上一版只认「都已判」四个字，台账改写成「都判过」就整条漏网（第 8 轮复核 F8：它把区间改成
+# 「第 1–8 轮复核都判过」后仍然绿 ⇒ 这条判据当时是死的）。
+DONE_RANGE = re.compile(r"第\s*([0-9]+)\s*[–\-~]\s*([0-9]+)\s*轮[^。\n]{0,10}?(?:都|均)[^。\n]{0,6}?判")
+# 台账里写「判据：grep -n "X" tool/xxx.py」时，把这条命令真的跑一遍（第 8 轮复核 F10：
+# 上一版只检查"有没有给命令"，不回查命令跑不跑得出东西 ⇒ 「脚本里有这条断言」照样能空口写）
+CLAIMED_GREP = re.compile(r"grep\s+(?:-\w+\s+)*\"([^\"]+)\"\s+((?:tool|scripts)/[A-Za-z0-9_./-]+\.py)")
 # 元语言豁免只认"紧贴"：`不是末行` / `才是末行` / `不叫末行` 这种说法就在锚点旁边
 NEGATION = re.compile(r"[不未]叫|才是|^.*\|\s*不是\s*$|「末行」|\"末行\"")
 # 只盯「末行」这一种主张：把统计行叫末行才是历次判我的那条罪（`r77c6/review_r77_round6_report.md:108`）。
@@ -82,7 +99,7 @@ def rounds_judged(text: str) -> set[int]:
 def resolve(raw: str, repo_root: Path) -> Path | None:
     """锚点路径解析：绝对路径按绝对路径查；其余按**仓库根**（不是 tasks.md 的目录）查。
 
-    返回 None = 这个引用在文件系统上不存在 ⇒ 由调用方判"死锚点"。
+    返回 None = 这个引用在文件系统上不存在 ⇒ 由调用方再走 bare_matches，别急着判死。
     """
     p = Path(raw)
     cand = [p] if p.is_absolute() else [repo_root / p, repo_root / "specs" / p]
@@ -90,6 +107,34 @@ def resolve(raw: str, repo_root: Path) -> Path | None:
         if c.exists():
             return c
     return None
+
+
+_BARE_INDEX: dict[str, dict[str, list[str]]] = {}
+
+
+def bare_matches(raw: str, repo_root: Path) -> list[str]:
+    """裸文件名锚点（`kanban_view.dart:540`）的解析：本仓从矩阵到各台账都这么写。
+
+    上一版只按"仓库根下有没有这个路径"查 ⇒ 全仓 44 份台账里 80% 的锚点被误判成死锚点
+    （第 8 轮复核 F12：它拿 165 条失项实测，133 条说"仓内不存在"的文件其实都在 `lib/` 下）。
+    误伤的后果比漏报更糟：写台账的人会去删**真证据**来让它变绿。
+
+    返回值语义：1 条 = 解析成功；>1 条 = 有歧义（该补路径，但这是"写法不清"不是"没证据"）；
+    0 条 = 真不存在 ⇒ 才允许报死锚点。
+    """
+    global _BARE_INDEX
+    if "/" in raw or raw.startswith("."):
+        return []
+    key = str(repo_root)
+    idx = _BARE_INDEX.get(key)
+    if idx is None:
+        shown = subprocess.run(["git", "ls-files"], cwd=repo_root,
+                               capture_output=True, text=True)
+        idx = {}
+        for rel in shown.stdout.splitlines():
+            idx.setdefault(Path(rel).name, []).append(rel)
+        _BARE_INDEX[key] = idx
+    return idx.get(raw, [])
 
 
 _BRANCH_LINES: dict[tuple[str, str], int | None] = {}
@@ -117,6 +162,27 @@ def branch_blob_lines(repo_root: Path, ref: str, path: str) -> int | None:
             )
             _BRANCH_LINES[key] = len(shown.stdout.splitlines())
     return _BRANCH_LINES[key]
+
+
+def grep_hits(repo_root: Path, pattern: str, rel: str) -> int:
+    """把台账自己写的那条 `grep -n "X" tool/….py` 真的跑一遍（只用 argv，不进 shell）。
+
+    先按 BRE 跑，跑不出再试 `-E`、`-F`：三把都不中才算"没命中"。
+    这不是放水 —— 判的是「这条证据在不在」，不该被 BSD / GNU 对 `\\|` 的方言差异决定
+    （本机是 BSD grep，`QUANT = \\|CLAIM_SCRIPT = ` 这种 GNU 写法 BRE 跑不通，
+    要是不试三种，台账里所有真命令都会被误判成假）。
+    """
+    best = 0
+    for extra in ([], ["-E"], ["-F"]):
+        run = subprocess.run(["grep", "-c", *extra, "-e", pattern, rel],
+                             cwd=repo_root, capture_output=True, text=True)
+        try:
+            best = max(best, int((run.stdout or "0").strip() or 0))
+        except ValueError:
+            pass
+        if best:
+            break
+    return best
 
 
 def check(text: str, repo_root: Path) -> list[str]:
@@ -148,11 +214,21 @@ def check(text: str, repo_root: Path) -> list[str]:
                 continue
             target = resolve(raw, repo_root)
             if target is None:
+                hits = bare_matches(raw, repo_root)
+                if len(hits) == 1:
+                    target = repo_root / hits[0]
+                elif len(hits) > 1:
+                    errs.append(
+                        f":{n} 锚点 `{raw}:{want}` 在仓内有 {len(hits)} 个同名文件"
+                        f"（如 {hits[0]}、{hits[1]}）⇒ 写法不清：补上目录，别让人猜是哪一份"
+                    )
+                    continue
+            if target is None:
                 # 只有当这行确实在"引用一份日志/文件"时才判死锚点（sha 之类不误伤）
                 if re.search(r"\.(log|md|dart|txt|py)$", raw):
                     errs.append(
-                        f":{n} 锚点 `{raw}:{want}` 指不到 —— 该文件在仓内与绝对路径两处都不存在"
-                        f"（判据：`ls -la {raw}`）⇒ 死锚点等于没证据"
+                        f":{n} 锚点 `{raw}:{want}` 指不到 —— 绝对路径、仓库根、git 索引三处都查过"
+                        f"（判据：`git ls-files \"*{raw}\"` 无命中）⇒ 死锚点等于没证据"
                     )
                 continue
             total = len(target.read_text(encoding="utf-8", errors="replace").splitlines())
@@ -196,15 +272,18 @@ def check(text: str, repo_root: Path) -> list[str]:
                         f"第 {real[0]}–{real[1]} 轮（判据：`rounds_judged` 取小节标题里的轮号）"
                     )
 
-    # ③ 覆盖性主张：量词与"全…"同现时，必须给命令/指针；标点不算证据
+    # ③ 覆盖性主张：量词与"全…"同现时，必须给**可复跑的命令**；标点、单个 sha 都不算证据
+    # （第 8 轮复核 F9：上一版"有证据即通过"，于是「四处全改成」后面挂一个 sha 就绿 ——
+    #   而 sha 只能证明"有这么一笔提交"，证明不了"是四处"。）
     for n, line in enumerate(lines, 1):
         if not COVERAGE.search(line):
             continue
         m = QUANT.search(line)
-        if m and not EVIDENCE.search(line):
+        if m and not EVIDENCE_CMD.search(line):
             errs.append(
-                f":{n} 覆盖性主张里的量词「{m.group(0).strip()}」既无可复跑命令也无指针"
-                f"（上一版 `c53da6a:27` 的 `CMD_MARK` 里就含「：」「、」⇒ 标点当证据会把这条判据绕过）"
+                f":{n} 覆盖性主张里的量词「{m.group(0).strip()}」没有可复跑命令"
+                f"（sha / `#123` / 指针只能证明「有这个东西」，证明不了「是这个数」；"
+                f"上一版把「：」「、」也算证据 ⇒ 见 `c53da6a:27` 的 `CMD_MARK`）"
             )
 
     # ④ 「X 由脚本产出 / 脚本已断言」必须点名一个仓内存在的脚本
@@ -228,6 +307,15 @@ def check(text: str, repo_root: Path) -> list[str]:
                 f":{n} 声称脚本里有该断言，但没给出证明它的命令（`grep -n … {named.group(1)}`）"
                 f" ⇒ 这句话在脚本里找不到对应的 `errs.append`（空口归属）"
             )
+        else:
+            # 给了命令还不够（第 8 轮复核 F10）：命令得真跑得出命中。
+            for gm in CLAIMED_GREP.finditer(line):
+                hits = grep_hits(repo_root, gm.group(1), gm.group(2))
+                if hits == 0:
+                    errs.append(
+                        f":{n} 拿 `{gm.group(0)}` 当证据，但这条命令跑出来是 0 命中"
+                        f"（BRE / -E / -F 三种都试了，判据在仓库根现跑）⇒ 脚本里没这句话"
+                    )
     return errs
 
 
@@ -268,6 +356,21 @@ CORPUS: list[tuple[str, str, str, bool]] = [
     ("脚本归属·点名且给出证明命令", "④",
      "由脚本 `tool/check_spec_selfscan.py` 产出"
      "（判据：`grep -n \"errs.append\" tool/check_spec_selfscan.py`）\n", False),
+    ("脚本归属·命令跑了但 0 命中（F10 的形状）", "④",
+     "每条读数都由 `tool/check_spec_selfscan.py` 产出"
+     "（判据：`grep -n \"这句话脚本里根本没有\" tool/check_spec_selfscan.py`）\n", True),
+    ("锚点·裸文件名唯一命中（本仓惯例，旧版误判死）", "①",
+     "见 `ok.md:2` 的读数。\n", False),
+    ("锚点·裸文件名越界（解析到了仍要核行数）", "①",
+     "见 `ok.md:9` 的读数。\n", True),
+    ("锚点·裸文件名有歧义（两份同名 ⇒ 该补目录）", "①",
+     "见 `dup.md:1` 的读数。\n", True),
+    ("量词·只挂一个 sha 当证据（F9 的形状）", "③",
+     "四处全改成统计行（见 876c35e）\n", True),
+    ("轮号·写成「都判过」的少报区间（F8 的形状）", "②",
+     "## 第 1 轮\n## 第 2 轮\n## 第 3 轮\n- 第 1–2 轮复核都判过\n", True),
+    ("轮号·写成「都判过」且区间照抄", "②",
+     "## 第 1 轮\n## 第 2 轮\n## 第 3 轮\n- 第 1–3 轮复核都判过\n", False),
 ]
 
 
@@ -283,7 +386,10 @@ def selftest(_unused: Path | None = None) -> int:
         (root / "logs").mkdir()
         (root / "logs" / "gates.log").write_text("h\ni\nj\nk\nl\nm\nn\no\np\n", encoding="utf-8")
         (root / "logs" / "ok.md").write_text("one\ntwo\nthree\n", encoding="utf-8")
+        # 裸文件名判据要有 PRESENT/ABSENT/歧义 三组：dup.md 故意在两个目录下各放一份
         (root / "tool").mkdir()
+        (root / "logs" / "dup.md").write_text("one\ntwo\nthree\n", encoding="utf-8")
+        (root / "tool" / "dup.md").write_text("one\ntwo\nthree\n", encoding="utf-8")
         (root / "tool" / "check_spec_selfscan.py").write_text(
             "def f():\n    errs.append('x')\n", encoding="utf-8")
         # 「分支锚点」这条判据要 PRESENT/ABSENT 成对，就得有个真 git 仓库当基准；
