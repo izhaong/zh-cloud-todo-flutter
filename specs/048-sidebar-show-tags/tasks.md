@@ -360,3 +360,37 @@ git grep -c "valueOrNull" -- lib | head    # ⇒ 含 settings_route.dart:4 等�
   要判就得连读处（`git grep -c "valueOrNull" -- lib`）一起列成一张表，留作单独一轮，不塞进本 PR（不在 !351 里扩面）。
 - 下轮入口：本 PR 的只读复核（第 2 轮，基准 `032cc72`）回来后回写本节；
   以及 FL #366（协作入口零用例，纯补测试）、#362（日历「下拉展开日历全景」）。
+
+### 第 2 轮只读复核（基准 `7d2f5c5` = PR !351 head）⇒ `VERDICT: PASS`，无 NIT 无 BLOCKER
+
+派单原因：上面登记的「不重派第 2 轮」只对**第 1 轮 F-1**（改的是 PR 正文）成立；
+第 98 轮又把 #363 的三态读法**追加进同一条分支**（`032cc72`…`7d2f5c5` 五笔），
+那部分从未被独立审过 ⇒ 必须补审终态字节，不能拿第 1 轮的 PASS 顶。
+
+| 复算命令 | 读数 |
+| --- | --- |
+| `stat -f%z /tmp/r98/review351.jsonl` | 11878775 字节，92 turns 正常收尾（`type=result` 有 `Verdict below` 前言） |
+| `grep -o 'VERDICT: PASS' /tmp/r98/review351.jsonl \| wc -l` | 3（提示词回显 1 + 报告 1 + result 1）——判定看报告末行那条，不是数这条 |
+| `git rev-parse HEAD` vs `git ls-remote origin refs/heads/feat/328-sidebar-show-tags` | 都是 `7d2f5c5d09090d6b8d791e441f22b60a40e55fb1`，`git status --porcelain` = 0 行 ⇒ 审的就是远端 head |
+| `git merge-tree --write-tree origin/develop HEAD` | rc=0，产出 tree `3de77ad6c5a265c2941a735c852a3980156dd3a9` **等于** `git rev-parse HEAD^{tree}` ⇒ develop（`90320057c`）是祖先，合并是快进，零冲突 |
+| 报告全文 | `/tmp/r98/review351-report.md`（12371 字节 / 126 行），A–G 七节各自 PASS |
+
+它独立补上的两处我一直想要的证据：
+
+- **B 可达性**：确认 `sidebar.dart` 的读法与设置面同源可达（这条我原先最没底）。
+- **E 同形排查**：把我上一轮抱怨"没给逐处表"的**17 处**列成表逐处判（正是上面那条要求的交付物）。
+
+### 但 E 节那张表有一处结论被后续实测推翻 —— 以代码为准
+
+E 表把 `habit_page.dart:36`/`:66`、`countdown_page.dart:203` 判成「无保留值语义 ⇒ 骨架」，
+并据此结论「未发现与设置面同形且可达的界面读取」。**这三处正是同一个形**：
+第 102 轮（`specs/045-keep-loaded-on-refresh`）在**有监听者的 widget 里**实测
+`FutureProvider.autoDispose` 被 `invalidate` 后重取失败时给的是
+`AsyncError(hasValue=true, valueOrNull≠null)` ⇒ `.when(error:)` 会把已加载的行换成整页失败。
+证据是反向探针：把那三处退回 develop 字节，`habit_page_test.dart` 4 红 / `countdown_keep_loaded_test.dart` 3 红，
+换回 `valueOrNull` 读法后 8 条全绿。
+
+口径教训：**「有没有保留值」不能靠读代码判，要跑一次「出过值 → 再失败」**。
+复核员当时没有跑测试（提示词明令禁跑 flutter/dart，门禁由我跑），所以它只能静态判 ⇒
+静态判"无此病灶"的条目，后续要用一次动态探针去作废或坐实，不能直接采信也不能直接推翻。
+本 PR 的行为不受影响（那三处不在本 PR 触达文件内），故 PASS 不撤回。
