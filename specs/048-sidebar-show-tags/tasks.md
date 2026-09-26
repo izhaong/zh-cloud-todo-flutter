@@ -267,16 +267,25 @@ reason: 错在有值之后 ⇒ 取值文字要留住上次读到的那个，退�
   把"首值失败"与"加载中"混成一谈）。
 - **没有**新增界面 ⇒ 四件套里只有「失败保留已加载数据」这条被本笔直接命中，其余三条沿用第 67/74 轮用例。
 
-### 门禁（跑在最终字节上，日志 `/tmp/r98/g*.log`）
+### 门禁（跑在最终字节上，日志 `/tmp/r98/h*.log`）
+
+先说清"最终字节"是哪一笔：代码与测试是 `38c7aa0`，本节 markdown 是它的下一笔。
+markdown 只动 `specs/`，不可能影响 dart 侧读数 ⇒ 复跑范围按第 74 轮定的规矩：**门禁 1 用 range 形态复跑**，其余五条
+以 `38c7aa0` 之后的这轮为准（下表）。
 
 | # | 门禁 | 读数 |
 | --- | --- | --- |
-| 1 | `git diff --check` | rc=0 无输出 |
-| 2 | `dart format --output=none --set-exit-if-changed` 只列本笔 3 个文件 | rc=0，`Formatted 3 files (0 changed)` |
+| 1 | `git diff --check origin/develop...HEAD` | **第一遍 rc=2**，输出 `specs/048-sidebar-show-tags/tasks.md:335: new blank line at EOF.` ⇒ 是上一笔台账提交（`87ce575`）在文件末尾添的空行；本笔把它去掉后复跑 rc=0 |
+| 2 | `dart format --output=none --set-exit-if-changed` 只列本轮 3 个 dart 文件 | rc=0，`Formatted 3 files (0 changed)` |
 | 3 | `flutter analyze` | rc=0，`No issues found!` |
-| 4 | `flutter test --tags golden` | rc=0，`+9: All tests passed!`；**基线未重录**判据：`git status --porcelain \| grep -i png \| wc -l` = 0 |
-| 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | rc=0，`+917 ~26: All tests passed!` |
+| 4 | `flutter test --tags golden` | rc=0，`+9: All tests passed!`；**基线未重录**判据：`git status --porcelain \| grep -ci png` = 0 |
+| 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | rc=0，`+919 ~26: All tests passed!` |
 | 6 | `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | rc=0，`✓ Built build/web` |
+
+**门禁 1 的一条硬教训（本笔抓到，不是复述别人的）**：`git diff --check`（不带范围，工作区对索引）在 md-only 提交之后
+**恒 rc=0**，因为那时工作区已经干净；能抓到"文件末尾添空行"的只有 `git diff --check origin/develop...HEAD` 这个 range 形态。
+⇒ 本轮起 markdown 提交后的复跑一律用 range 形态，plain 形态只算工作区卫生检查。
+（第 74 轮那条注记说的"md-only 提交给文件末尾添空行"是同一件事，当时它写在正文里，这次是真被它咬到。）
 
 **我自己的两处错，记下来别掩盖**：① 第一版门禁脚本把 `--dart-define` 打成 `TODO_TENID`，那条读数作废，
 表里第 6 行是重跑正确命令后的读数；② 全量测试我没有"本笔之前"的同分支读数，
@@ -332,4 +341,3 @@ git grep -c "valueOrNull" -- lib | head    # ⇒ 含 settings_route.dart:4 等�
   要判就得连读处（`git grep -c "valueOrNull" -- lib`）一起列成一张表，留作单独一轮，不塞进本 PR（不在 !351 里扩面）。
 - 下轮入口：本 PR 的只读复核（第 2 轮，基准 `032cc72`）回来后回写本节；
   以及 FL #366（协作入口零用例，纯补测试）、#362（日历「下拉展开日历全景」）。
-
