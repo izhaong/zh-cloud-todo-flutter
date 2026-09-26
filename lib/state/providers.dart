@@ -31,6 +31,7 @@ import 'repositories/task_repository.dart';
 import 'repositories/task_section_repository.dart';
 import 'repositories/task_sort_preference_repository.dart';
 import 'repositories/task_view_action_repository.dart';
+import 'repositories/timezone_preference_repository.dart';
 import 'repositories/summary_repository.dart';
 
 /// UI-facing clock. Production reads the current instant on each rebuild;
@@ -310,6 +311,23 @@ final taskSortPreferenceRepositoryProvider =
       if (db == null || queue == null) return null;
       return TaskSortPreferenceRepository(db, queue);
     });
+
+/// 「设置 → 日期与时间 → 时区」总开关的仓储（specs/055 / FL #368）。
+final timezonePreferenceRepositoryProvider =
+    Provider<TimezonePreferenceRepository?>((ref) {
+      final db = ref.watch(appDatabaseProvider);
+      final queue = ref.watch(syncChangeQueueProvider);
+      if (db == null || queue == null) return null;
+      return TimezonePreferenceRepository(db, queue);
+    });
+
+/// 当前时区能力的开关状态。无库（未登录/未就绪）时按「开」处理，
+/// 与仓储自己的"无记录即开"同一口径，避免离线首屏把既有能力藏掉。
+final timezoneEnabledProvider = StreamProvider<bool>((ref) {
+  final repo = ref.watch(timezonePreferenceRepositoryProvider);
+  if (repo == null) return Stream.value(true);
+  return repo.watch();
+});
 
 final activityRepositoryProvider = Provider<ActivityRepository?>((ref) {
   final db = ref.watch(appDatabaseProvider);
