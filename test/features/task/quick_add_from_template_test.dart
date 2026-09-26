@@ -33,7 +33,7 @@ class _BlockingTaskRepository extends TaskRepository {
     bool allDay = false,
     String? timeZone,
     bool fixedTimezone = false,
-    int timeMode = 0,
+    int? timeMode,
     String? parentTaskId,
     bool isPinned = false,
   }) {

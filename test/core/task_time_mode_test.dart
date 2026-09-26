@@ -32,11 +32,11 @@ void main() {
       expect(TaskTimeMode.fromWire(99), TaskTimeMode.floating);
     });
 
-    test('只有「固定时区」算旧的 fixedTimezone 位为 true', () {
+    test('旧位＝"勾过某一档固定"，两档都为 true；存量 true 读成「固定时间」', () {
       expect(TaskTimeMode.legacyFlagOf(TaskTimeMode.fixedTimezone), isTrue);
-      expect(TaskTimeMode.legacyFlagOf(TaskTimeMode.fixedTime), isFalse);
+      expect(TaskTimeMode.legacyFlagOf(TaskTimeMode.fixedTime), isTrue);
       expect(TaskTimeMode.legacyFlagOf(TaskTimeMode.floating), isFalse);
-      expect(TaskTimeMode.fromLegacyFlag(true), TaskTimeMode.fixedTimezone);
+      expect(TaskTimeMode.fromLegacyFlag(true), TaskTimeMode.fixedTime);
       expect(TaskTimeMode.fromLegacyFlag(false), TaskTimeMode.floating);
     });
 

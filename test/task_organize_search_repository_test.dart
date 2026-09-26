@@ -630,7 +630,7 @@ void main() {
         dueAt: Value(DateTime.utc(2026, 7, 21, 2)),
         timeZone: const Value('America/Los_Angeles'),
         fixedTimezone: const Value(true),
-        timeMode: const Value(1),
+        timeMode: const Value(2),
       ),
     );
     await (db.update(
@@ -640,7 +640,7 @@ void main() {
         dueAt: Value(DateTime.utc(2026, 7, 20, 18)),
         timeZone: const Value('UTC'),
         fixedTimezone: const Value(true),
-        timeMode: const Value(1),
+        timeMode: const Value(2),
       ),
     );
 

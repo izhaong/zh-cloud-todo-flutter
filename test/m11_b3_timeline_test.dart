@@ -148,7 +148,7 @@ void main() {
         allDay: false,
         timeZone: 'America/Los_Angeles',
         fixedTimezone: true,
-        timeMode: 1,
+        timeMode: 2,
         updatedAt: now,
         createdAt: now,
       );
@@ -259,7 +259,7 @@ void main() {
       allDay: false,
       timeZone: 'America/Los_Angeles',
       fixedTimezone: true,
-      timeMode: 1,
+      timeMode: 2,
       updatedAt: now,
       createdAt: now,
     );
@@ -276,7 +276,7 @@ void main() {
       allDay: false,
       timeZone: 'UTC',
       fixedTimezone: true,
-      timeMode: 1,
+      timeMode: 2,
       updatedAt: now,
       createdAt: now,
     );

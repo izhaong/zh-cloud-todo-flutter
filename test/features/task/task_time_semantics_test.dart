@@ -138,7 +138,7 @@ void main() {
           dueAt: Value(DateTime.utc(2026, 7, 11, 16, 30)),
           timeZone: const Value('America/Los_Angeles'),
           fixedTimezone: const Value(true),
-          timeMode: const Value(1),
+          timeMode: const Value(2),
         ),
       );
 
@@ -177,7 +177,7 @@ void main() {
           dueAt: Value(originalDueAt),
           timeZone: const Value('America/Los_Angeles'),
           fixedTimezone: const Value(true),
-          timeMode: const Value(1),
+          timeMode: const Value(2),
         ),
       );
 
@@ -246,7 +246,7 @@ void main() {
           allDay: const Value(true),
           timeZone: const Value('America/Los_Angeles'),
           fixedTimezone: const Value(true),
-          timeMode: const Value(1),
+          timeMode: const Value(2),
         ),
       );
 

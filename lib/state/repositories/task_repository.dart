@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../core/db/app_database.dart';
+import '../../core/time/task_time_mode.dart';
 import '../../core/sync/sync_change_queue.dart';
 import '../../core/sync/sync_entities.dart';
 
@@ -82,7 +83,7 @@ class TaskRepository {
     bool allDay = false,
     String? timeZone,
     bool fixedTimezone = false,
-    int timeMode = 0,
+    int? timeMode,
     String? parentTaskId,
     bool isPinned = false,
   }) async {
@@ -119,7 +120,9 @@ class TaskRepository {
               allDay: Value(allDay),
               timeZone: Value(timeZone),
               fixedTimezone: Value(fixedTimezone),
-              timeMode: Value(timeMode),
+              timeMode: Value(
+                timeMode ?? TaskTimeMode.fromLegacyFlag(fixedTimezone).wire,
+              ),
               updatedAt: now,
               createdAt: now,
             ),
@@ -344,9 +347,11 @@ class TaskRepository {
           fixedTimezone: fixedTimezone == null
               ? const Value.absent()
               : Value(fixedTimezone),
-          timeMode: timeMode == null
+          timeMode: timeMode != null
+              ? Value(timeMode)
+              : fixedTimezone == null
               ? const Value.absent()
-              : Value(timeMode),
+              : Value(TaskTimeMode.fromLegacyFlag(fixedTimezone).wire),
           listId: listId == null ? const Value.absent() : Value(listId),
           sectionId: clearSectionId
               ? const Value(null)

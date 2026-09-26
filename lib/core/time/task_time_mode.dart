@@ -31,9 +31,13 @@ enum TaskTimeMode {
   /// 选了档位才需要锚点时区；未选（含从旧数据推出来的浮动）不需要。
   bool get requiresAnchorZone => this != TaskTimeMode.floating;
 
-  /// 与旧的 `fixedTimezone` 布尔对齐：只有「固定时区」算 true。
-  static bool legacyFlagOf(TaskTimeMode mode) => mode == TaskTimeMode.fixedTimezone;
+  /// 旧位是"勾过某一档固定"的派生读值：两档固定都算 true。
+  /// 否则存量 `fixed_timezone=true` 的行（行为是保留墙钟）会突然被老客户端当浮动显示。
+  static bool legacyFlagOf(TaskTimeMode mode) => mode != TaskTimeMode.floating;
 
+  /// 存量 true 回填成「固定时间」而不是字面更像的「固定时区」：
+  /// develop 上这一档的实际行为就是"按配置时区保留墙上钟点"（17 条既有测试钉的全是它），
+  /// 名字挂错了不等于用户当初要的是另一件事 —— 改名修名实，翻行为会改用户已设的显示钟点。
   static TaskTimeMode fromLegacyFlag(bool fixedTimezone) =>
-      fixedTimezone ? TaskTimeMode.fixedTimezone : TaskTimeMode.floating;
+      fixedTimezone ? TaskTimeMode.fixedTime : TaskTimeMode.floating;
 }

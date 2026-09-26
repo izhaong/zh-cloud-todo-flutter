@@ -671,6 +671,11 @@ class AppDatabase extends _$AppDatabase {
       if (from < 23) {
         if (!await _columnExists(m, 'todo_tasks', 'time_mode')) {
           await m.addColumn(todoTasks, todoTasks.timeMode);
+          // 加列默认 0（浮动）会把存量"勾过固定"的行静默降级成不保留墙钟：
+          // 存量 true 的实际行为就是保留配置时区墙钟 ⇒ 回填成「固定时间」。
+          await customStatement(
+            'UPDATE todo_tasks SET time_mode = 2 WHERE fixed_timezone = 1',
+          );
         }
       }
     },

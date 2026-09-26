@@ -147,7 +147,7 @@ void main() {
         endAt: const Value.absent(),
         allDay: const Value(false),
         fixedTimezone: const Value(true),
-        timeMode: const Value(1),
+        timeMode: const Value(2),
         timeZone: const Value('America/Los_Angeles'),
       ),
     );
