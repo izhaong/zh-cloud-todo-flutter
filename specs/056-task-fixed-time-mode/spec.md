@@ -38,7 +38,10 @@
 - R2 出站：任务同步 payload 带 `timeMode`，且服务端字段名一致（`timeMode` / `time_mode` 两种写法都能被解析）。
 - R3 语义：`1` 换算到用户时区显示；`2` 墙钟原样显示且标签用「固定时间」；`0` 与今日行为一致。
 - R4 交互：两个选项互斥、可全不选；选中即写 `timeMode`，全不选写 `0`；
-  只有「固定时区」这一档必须填 IANA（对齐服务端 `1_020_001_064` 的判据）。
+  两档固定都必须填 IANA（`requiresAnchorZone = 非浮动`，与服务端
+  `TodoTaskTimeModeEnum.requiresAnchorZone` 同口径；对齐 `1_020_001_064` 的判据）。
+  本条原写「只有「固定时区」这一档必须填 IANA」——那是"固定时间按设备区存"的旧模型残留，
+  第二次交叉验证后按代码改回：两档固定的存储都要锚点区。
 - R5 四件套（新增界面必过）：320px + 1.3 倍字号在**该 sheet 自己的 context** 上实测不溢出；
   两个选项各有独立读屏语义；保存失败时保留已加载数据；过期响应不覆盖新响应。
 
@@ -90,6 +93,32 @@ B 看起来省事，但它把"标签与行为不一致"这个病根留着了，�
 
 **A 与 B 的差别落到代码只有映射方向一处**，但 service PR !291 现在按 A 落的
 （`true→1`、派生 `==1`），**必须跟着改回**，否则两仓口径相反 —— 已在 #290/!291 留言。
+
+## 第二次交叉验证：存与看各自用哪个时区
+
+`cursor-agent --trust` 的第二意见（输出 2,956 字节，哨兵行 `CROSSCHECK: DONE` 在
+`/tmp/crosscheck-369-picker.out`，提示词 `/tmp/crosscheck-369-picker.md`）判我
+「两档存储都按锚点区」过强，理由是 `:64` 的提醒发生在设备当地 7 点。逐条复验后
+**部分采纳**：
+
+- **采纳**：`:64`「不论你是在洛杉矶出差，还是在巴塞罗那旅游，滴答清单都会在当地时间上午
+  7 点提醒」管的是**提醒发生在设备当地 7 点**，这一点本分支确实没做（见下方缺口）。
+- **驳回**：「所以 `固定时间` 的存储要按设备时区解释」。这条一复算就自相矛盾——
+  存 07:00 按设备区、看又钉锚点区，用户填的 07:00 存完再看就不是 07:00，round-trip
+  当场断。红测读数就是这个断点：`task_time_semantics_repository_test` 的
+  `fixed timezone wall clock converts through the active DST offset` 期望
+  `2026-10-31 16:00Z`（09:00 按 America/Los_Angeles 解释），我改坏后实到
+  `2026-10-31 09:00` 本地钟点。develop 的 `_fixedLocation` 本来就同时服务存与看，
+  两档固定在"存"这一侧同向、只在"看"这一侧分叉，才是自洽模型。
+- **采纳**：控件形状。Material 原生 `RadioListTile.toggleable: true` 就是
+  「再点已选中的那一档 ⇒ onChanged 收到 null」，不必发明第三档名字、也不必加
+  「取消固定」按钮。判据是 SDK 原文
+  `packages/flutter/lib/src/material/radio.dart`「tapping a already selected radio
+  will invoke this callback with `null` as value」。
+
+**本分支留下的缺口（不在本轮修）**：`固定时间` 的提醒时刻应是「锚点区读数 + 按设备区
+解释」，而 `lib/core/notification/` 的 `zonedSchedule` 路径目前直接用存储瞬间 ⇒
+出行人会在北京 7 点的瞬间收到提醒。已立 FL Issue #371 跟踪，属矩阵 #12 的第四面。
 
 ## 未做完的部分（本笔是 WIP，别当成完工）
 

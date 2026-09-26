@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/core/theme/app_theme.dart';
+import 'package:zh_cloud_todo_flutter/core/time/task_time_mode.dart';
 import 'package:zh_cloud_todo_flutter/features/task/task_detail_pane.dart';
 import 'package:zh_cloud_todo_flutter/state/providers.dart';
 
@@ -66,68 +67,64 @@ void main() {
     },
   );
 
-  testWidgets(
-    'detail saves all-day and fixed timezone through task repository',
-    (tester) async {
-      final fixture = await TodoVisualFixture.create();
-      addTearDown(fixture.dispose);
-      final repository = fixture.container.read(taskRepositoryProvider)!;
+  testWidgets('detail saves all-day and fixed time through task repository', (
+    tester,
+  ) async {
+    final fixture = await TodoVisualFixture.create();
+    addTearDown(fixture.dispose);
+    final repository = fixture.container.read(taskRepositoryProvider)!;
 
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: fixture.container,
-          child: MaterialApp(
-            theme: ThemeData.light().copyWith(
-              extensions: const [AppThemeExtension(AppColors.light)],
-            ),
-            home: const Scaffold(
-              body: TaskDetailPane(taskId: _taskId, embedded: true),
-            ),
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: fixture.container,
+        child: MaterialApp(
+          theme: ThemeData.light().copyWith(
+            extensions: const [AppThemeExtension(AppColors.light)],
+          ),
+          home: const Scaffold(
+            body: TaskDetailPane(taskId: _taskId, embedded: true),
           ),
         ),
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      await _openScheduleOptions(tester);
+    await _openScheduleOptions(tester);
 
-      final allDay = find.byKey(const Key('task-all-day'));
-      final fixedTimezone = find.byKey(const Key('task-fixed-timezone'));
-      final detailScroll = find.byType(Scrollable).last;
-      await tester.scrollUntilVisible(allDay, 160, scrollable: detailScroll);
-      await tester.ensureVisible(allDay);
-      await tester.pumpAndSettle();
-      await tester.tap(allDay);
-      await tester.scrollUntilVisible(
-        fixedTimezone,
-        160,
-        scrollable: detailScroll,
-      );
-      await tester.ensureVisible(fixedTimezone);
-      await tester.pumpAndSettle();
-      await tester.tap(fixedTimezone);
-      await _closeScheduleOptions(tester);
-      await tester.drag(detailScroll, const Offset(0, 1000));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('保存'));
-      await tester.pumpAndSettle();
+    final allDay = find.byKey(const Key('task-all-day'));
+    final fixedTime = find.byKey(const Key('task-time-mode-2'));
+    final detailScroll = find.byType(Scrollable).last;
+    await tester.scrollUntilVisible(allDay, 160, scrollable: detailScroll);
+    await tester.ensureVisible(allDay);
+    await tester.pumpAndSettle();
+    await tester.tap(allDay);
+    await tester.scrollUntilVisible(fixedTime, 160, scrollable: detailScroll);
+    await tester.ensureVisible(fixedTime);
+    await tester.pumpAndSettle();
+    await tester.tap(fixedTime);
+    await _closeScheduleOptions(tester);
+    await tester.drag(detailScroll, const Offset(0, 1000));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
 
-      final task = await repository.getById(_taskId);
-      expect(task?.allDay, isTrue);
-      expect(task?.fixedTimezone, isTrue);
-      expect(task?.timeZone, 'Asia/Shanghai');
-      final changes = await fixture.database
-          .select(fixture.database.todoSyncChanges)
-          .get();
-      final payload =
-          jsonDecode(changes.last.payloadJson) as Map<String, dynamic>;
-      expect(payload['allDay'], isTrue);
-      expect(payload['fixedTimezone'], isTrue);
-      expect(payload['timeZone'], 'Asia/Shanghai');
-    },
-  );
+    final task = await repository.getById(_taskId);
+    expect(task?.allDay, isTrue);
+    expect(task?.fixedTimezone, isTrue);
+    expect(task?.timeMode, 2);
+    expect(task?.timeZone, 'Asia/Shanghai');
+    final changes = await fixture.database
+        .select(fixture.database.todoSyncChanges)
+        .get();
+    final payload =
+        jsonDecode(changes.last.payloadJson) as Map<String, dynamic>;
+    expect(payload['allDay'], isTrue);
+    expect(payload['fixedTimezone'], isTrue);
+    expect(payload['timeZone'], 'Asia/Shanghai');
+  });
 
   testWidgets(
-    'detail renders a fixed timezone due time as its configured wall clock',
+    'detail renders a fixed time due time as its configured wall clock',
     (tester) async {
       final fixture = await TodoVisualFixture.create();
       addTearDown(fixture.dispose);
@@ -158,14 +155,14 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.text('2026-07-11 09:30 (America/Los_Angeles 固定时区)'),
+        find.text('2026-07-11 09:30 (America/Los_Angeles 固定时间)'),
         findsOneWidget,
       );
     },
   );
 
   testWidgets(
-    'detail fixed timezone picker round-trips the configured wall clock',
+    'detail fixed time picker round-trips the configured wall clock',
     (tester) async {
       final fixture = await TodoVisualFixture.create();
       addTearDown(fixture.dispose);
@@ -473,6 +470,8 @@ void main() {
         160,
         scrollable: find.byType(Scrollable).last,
       );
+      await tester.ensureVisible(addReminder);
+      await tester.pumpAndSettle();
       await tester.tap(addReminder);
       await tester.pumpAndSettle();
       expect(find.byType(DatePickerDialog), findsOneWidget);
@@ -1453,4 +1452,260 @@ void main() {
       expect(skipEntry.occurrenceDate, occurrenceAt);
     },
   );
+
+  testWidgets('detail clears the selected time mode back to unselected', (
+    tester,
+  ) async {
+    final fixture = await TodoVisualFixture.create();
+    addTearDown(fixture.dispose);
+    final repository = fixture.container.read(taskRepositoryProvider)!;
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: fixture.container,
+        child: MaterialApp(
+          theme: ThemeData.light().copyWith(
+            extensions: const [AppThemeExtension(AppColors.light)],
+          ),
+          home: const Scaffold(
+            body: TaskDetailPane(taskId: _taskId, embedded: true),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _openScheduleOptions(tester);
+
+    final fixedTime = find.byKey(const Key('task-time-mode-2'));
+    final detailScroll = find.byType(Scrollable).last;
+    await tester.scrollUntilVisible(fixedTime, 160, scrollable: detailScroll);
+    await tester.ensureVisible(fixedTime);
+    await tester.pumpAndSettle();
+    await tester.tap(fixedTime);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<RadioGroup<TaskTimeMode>>(
+            find.byType(RadioGroup<TaskTimeMode>),
+          )
+          .groupValue,
+      TaskTimeMode.fixedTime,
+    );
+
+    await tester.tap(fixedTime);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<RadioGroup<TaskTimeMode>>(
+            find.byType(RadioGroup<TaskTimeMode>),
+          )
+          .groupValue,
+      TaskTimeMode.floating,
+    );
+    expect(find.byKey(const Key('task-timezone')), findsNothing);
+
+    await _closeScheduleOptions(tester);
+    await tester.drag(detailScroll, const Offset(0, 1000));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    final task = await repository.getById(_taskId);
+    expect(task?.timeMode, 0);
+    expect(task?.fixedTimezone, isFalse);
+  });
+
+  testWidgets('320px + 1.3 倍字号下两档固定仍可读可点', (tester) async {
+    tester.view.physicalSize = const Size(320, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final semantics = tester.ensureSemantics();
+    final fixture = await TodoVisualFixture.create();
+    addTearDown(fixture.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: fixture.container,
+        child: MaterialApp(
+          theme: ThemeData.light().copyWith(
+            extensions: const [AppThemeExtension(AppColors.light)],
+          ),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(1.3)),
+            child: child!,
+          ),
+          home: const Scaffold(
+            body: TaskDetailPane(taskId: _taskId, embedded: true),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _openScheduleOptions(tester);
+
+    final fixedTimezone = find.byKey(const Key('task-time-mode-1'));
+    await tester.scrollUntilVisible(
+      fixedTimezone,
+      160,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.ensureVisible(fixedTimezone);
+    await tester.pumpAndSettle();
+
+    // 与《note_style_menu_test》同一口径：窄屏 + 大字号只证「两档在树里、语义可读」。
+    // 全局 no-exception 这里判不了：Issue #279（存量）已记「嵌入态详情操作头在
+    // 320px + 1.3 倍字体下溢出 36px」。归因判据：把本控件整块隐藏后重跑本用例，
+    // 仍是同一句 RenderFlex overflowed by 36 pixels on the right ⇒ 溢出源不在两档控件。
+    final layoutError = tester.takeException();
+    expect(
+      layoutError == null ||
+          '$layoutError'.contains('RenderFlex overflowed by 36 pixels'),
+      isTrue,
+    );
+    expect(find.text('固定时区'), findsOneWidget);
+    expect(find.text('固定时间'), findsOneWidget);
+    expect(find.text('任务的时间会随着所在时区的不同而改变'), findsOneWidget);
+    for (final key in ['task-time-mode-1', 'task-time-mode-2']) {
+      final rect = tester.getRect(find.byKey(Key(key)));
+      expect(rect.right, lessThanOrEqualTo(320));
+      expect(rect.left, greaterThanOrEqualTo(0));
+    }
+    expect(find.bySemanticsLabel(RegExp('^固定时间')), findsWidgets);
+    semantics.dispose();
+  });
+
+  testWidgets('detail keeps the chosen time mode when saving fails', (
+    tester,
+  ) async {
+    final fixture = await TodoVisualFixture.create();
+    addTearDown(fixture.dispose);
+    await (fixture.database.update(
+      fixture.database.todoTasks,
+    )..where((task) => task.id.equals(_taskId))).write(
+      TodoTasksCompanion(
+        startAt: Value(DateTime(2026, 7, 11, 10)),
+        endAt: Value(DateTime(2026, 7, 11, 9)),
+      ),
+    );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: fixture.container,
+        child: MaterialApp(
+          theme: ThemeData.light().copyWith(
+            extensions: const [AppThemeExtension(AppColors.light)],
+          ),
+          home: const Scaffold(
+            body: TaskDetailPane(taskId: _taskId, embedded: true),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _openScheduleOptions(tester);
+    final fixedTime = find.byKey(const Key('task-time-mode-2'));
+    final detailScroll = find.byType(Scrollable).last;
+    await tester.scrollUntilVisible(fixedTime, 160, scrollable: detailScroll);
+    await tester.ensureVisible(fixedTime);
+    await tester.pumpAndSettle();
+    await tester.tap(fixedTime);
+    await tester.pumpAndSettle();
+    await _closeScheduleOptions(tester);
+
+    await tester.drag(detailScroll, const Offset(0, 1000));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('结束时间必须晚于开始时间'), findsOneWidget);
+    final stored = await (fixture.database.select(
+      fixture.database.todoTasks,
+    )..where((task) => task.id.equals(_taskId))).getSingle();
+    expect(stored.timeMode, 0);
+
+    // 重新打开时间选项后必须先滚到档位控件再断言：面板是懒建列表，
+    // 探针读数 close:1（面板已开）但 radio:0、label:0 —— 视口外的项根本还没建。
+    final toggle = find.byKey(const Key('task-schedule-options'));
+    await tester.scrollUntilVisible(toggle, 200, scrollable: detailScroll);
+    await tester.ensureVisible(toggle);
+    await tester.pumpAndSettle();
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    final reopenedFixedTime = find.byKey(const Key('task-time-mode-2'));
+    await tester.scrollUntilVisible(
+      reopenedFixedTime,
+      160,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.ensureVisible(reopenedFixedTime);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<RadioGroup<TaskTimeMode>>(
+            find.byType(RadioGroup<TaskTimeMode>),
+          )
+          .groupValue,
+      TaskTimeMode.fixedTime,
+    );
+  });
+
+  testWidgets('detail keeps an unsaved time mode against a newer snapshot', (
+    tester,
+  ) async {
+    final fixture = await TodoVisualFixture.create();
+    addTearDown(fixture.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: fixture.container,
+        child: MaterialApp(
+          theme: ThemeData.light().copyWith(
+            extensions: const [AppThemeExtension(AppColors.light)],
+          ),
+          home: const Scaffold(
+            body: TaskDetailPane(taskId: _taskId, embedded: true),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _openScheduleOptions(tester);
+    final fixedTime = find.byKey(const Key('task-time-mode-2'));
+    await tester.scrollUntilVisible(
+      fixedTime,
+      160,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.ensureVisible(fixedTime);
+    await tester.pumpAndSettle();
+    await tester.tap(fixedTime);
+    await tester.pumpAndSettle();
+
+    await (fixture.database.update(
+      fixture.database.todoTasks,
+    )..where((task) => task.id.equals(_taskId))).write(
+      TodoTasksCompanion(
+        timeMode: const Value(1),
+        timeZone: const Value('Europe/Moscow'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<RadioGroup<TaskTimeMode>>(
+            find.byType(RadioGroup<TaskTimeMode>),
+          )
+          .groupValue,
+      TaskTimeMode.fixedTime,
+    );
+    final stored = await (fixture.database.select(
+      fixture.database.todoTasks,
+    )..where((task) => task.id.equals(_taskId))).getSingle();
+    expect(stored.timeMode, 1);
+  });
 }

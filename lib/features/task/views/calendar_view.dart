@@ -236,7 +236,7 @@ DateTime? resolveTaskDate(TodoTask t) {
       ? d
       : taskDisplayDateTime(
           d,
-          mode: TaskTimeMode.fromWire(t.fixedTimezone),
+          mode: TaskTimeMode.fromWire(t.timeMode),
           timeZone: t.timeZone,
         );
   return DateTime(display.year, display.month, display.day);
@@ -253,7 +253,7 @@ DateTime calendarDueAtForDay(TodoTask task, DateTime day) {
   return taskDateTimeForDisplayDay(
     source,
     day,
-    mode: TaskTimeMode.fromWire(task.fixedTimezone),
+    mode: TaskTimeMode.fromWire(task.timeMode),
     timeZone: task.timeZone,
   );
 }
@@ -958,7 +958,7 @@ class _AgendaView extends StatelessWidget {
   static DateTime _displayTime(TodoTask task, DateTime instant) {
     return taskDisplayDateTime(
       instant,
-      mode: TaskTimeMode.fromWire(task.fixedTimezone),
+      mode: TaskTimeMode.fromWire(task.timeMode),
       timeZone: task.timeZone,
     );
   }

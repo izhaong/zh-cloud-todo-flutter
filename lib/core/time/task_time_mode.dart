@@ -20,10 +20,12 @@ enum TaskTimeMode {
   /// 界面用词：只有 1/2 有（0 在界面上表现为"两个选项都没选中"）。
   final String? label;
 
-  static TaskTimeMode fromWire(Object? value) {
-    final raw = value is int ? value : int.tryParse('$value');
+  /// 只收 `int?`：故意不收 `Object?` —— 上一版收 `Object?` 时，
+  /// 批量替换把 `bool` 传了进来，`int.tryParse('true')` 静默回落成「浮动」，
+  /// analyze 一声不吭、二十条测试才把它暴露出来。类型收严后才不会再犯。
+  static TaskTimeMode fromWire(int? value) {
     return TaskTimeMode.values.firstWhere(
-      (mode) => mode.wire == raw,
+      (mode) => mode.wire == value,
       orElse: () => TaskTimeMode.floating,
     );
   }

@@ -20,11 +20,7 @@ String formatTaskDateTime(
 }) {
   final display = allDay
       ? instant
-      : taskDisplayDateTime(
-          instant,
-          mode: mode,
-          timeZone: timeZone,
-        );
+      : taskDisplayDateTime(instant, mode: mode, timeZone: timeZone);
   final date =
       '${display.year.toString().padLeft(4, '0')}-'
       '${display.month.toString().padLeft(2, '0')}-'
@@ -60,11 +56,7 @@ DateTime taskWallClockDateTime(
 }) {
   final display = allDay
       ? instant
-      : taskDisplayDateTime(
-          instant,
-          mode: mode,
-          timeZone: timeZone,
-        );
+      : taskDisplayDateTime(instant, mode: mode, timeZone: timeZone);
   return DateTime(
     display.year,
     display.month,
@@ -113,28 +105,31 @@ DateTime taskDateTimeFromWallClock(
   );
 }
 
-/// Moves an instant to [day] while preserving its presented wall-clock time.
+/// Moves an instant to [day], preserving the wall clock in the zone that
+/// storage uses for the task's mode.
+///
+/// 「固定时区」的钟点取锚点区（北京 11:00 挪到今天仍是北京 11:00），不是设备时区里
+/// 看到的那个换算值；「固定时间」与浮动沿用各自原本的方向，与 develop 行为一致。
 DateTime taskDateTimeForDisplayDay(
   DateTime instant,
   DateTime day, {
   required TaskTimeMode mode,
   required String? timeZone,
 }) {
-  final display = taskDisplayDateTime(
-    instant,
-    mode: mode,
-    timeZone: timeZone,
-  );
+  final location = _storageLocation(mode, timeZone);
+  final base = location == null
+      ? instant.toLocal()
+      : timezone.TZDateTime.from(instant.toUtc(), location);
   return taskDateTimeFromWallClock(
     DateTime(
       day.year,
       day.month,
       day.day,
-      display.hour,
-      display.minute,
-      display.second,
-      display.millisecond,
-      display.microsecond,
+      base.hour,
+      base.minute,
+      base.second,
+      base.millisecond,
+      base.microsecond,
     ),
     mode: mode,
     timeZone: timeZone,
@@ -142,14 +137,21 @@ DateTime taskDateTimeForDisplayDay(
 }
 
 /// 看：只有「固定时间」要把钟点钉在锚点区；「固定时区」与未选都跟设备时区走。
+///
+/// 判据是 `:64`「不论你是在洛杉矶出差，还是在巴塞罗那旅游，滴答清单都会在当地时间上午 7 点提醒」
+/// ——「固定时间」的钟点跟着人走，所以看到的必须始终是那个墙上钟点本身。
 timezone.Location? _displayLocation(TaskTimeMode mode, String? timeZone) {
   if (mode != TaskTimeMode.fixedTime) return null;
   return _resolveLocation(timeZone);
 }
 
-/// 存：「固定时区」把用户填的钟点按锚点区解释；「固定时间」按设备时区解释，锚点区只服务"看"。
+/// 存：两档固定都要把用户填的钟点按锚点区解释成瞬间，区别只在"看"的方向。
+///
+/// 反向证据是同一页的两条原文：「固定时区」`:50` 北京 11:00 → 莫斯科显示 6 点（瞬间钉住、
+/// 钟点随设备时区变）；「固定时间」`:64` 到洛杉矶也在当地 7 点（钟点钉住）。两者都要先把
+/// 用户填的钟点落到某个时区才能存成瞬间，那个时区就是锚点区。
 timezone.Location? _storageLocation(TaskTimeMode mode, String? timeZone) {
-  if (mode != TaskTimeMode.fixedTimezone) return null;
+  if (!mode.requiresAnchorZone) return null;
   return _resolveLocation(timeZone);
 }
 

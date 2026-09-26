@@ -96,6 +96,9 @@ class TaskRepository {
     }
     final now = DateTime.now();
     final id = _uuid.v4();
+    final effectiveMode = timeMode != null
+        ? TaskTimeMode.fromWire(timeMode)
+        : TaskTimeMode.fromLegacyFlag(fixedTimezone);
     late TodoTask row;
     await _db.transaction(() async {
       await _ensureInboxList(listId, now);
@@ -119,10 +122,8 @@ class TaskRepository {
               dueAt: Value(dueAt),
               allDay: Value(allDay),
               timeZone: Value(timeZone),
-              fixedTimezone: Value(fixedTimezone),
-              timeMode: Value(
-                timeMode ?? TaskTimeMode.fromLegacyFlag(fixedTimezone).wire,
-              ),
+              fixedTimezone: Value(TaskTimeMode.legacyFlagOf(effectiveMode)),
+              timeMode: Value(effectiveMode.wire),
               updatedAt: now,
               createdAt: now,
             ),
@@ -344,7 +345,11 @@ class TaskRepository {
               : Value(dueAt),
           allDay: allDay == null ? const Value.absent() : Value(allDay),
           timeZone: timeZone == null ? const Value.absent() : Value(timeZone),
-          fixedTimezone: fixedTimezone == null
+          fixedTimezone: timeMode != null
+              ? Value(
+                  TaskTimeMode.legacyFlagOf(TaskTimeMode.fromWire(timeMode)),
+                )
+              : fixedTimezone == null
               ? const Value.absent()
               : Value(fixedTimezone),
           timeMode: timeMode != null

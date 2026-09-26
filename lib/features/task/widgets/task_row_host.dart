@@ -122,7 +122,7 @@ class _TaskRowHostState extends ConsumerState<TaskRowHost> {
                       : taskWallClockDateTime(
                           widget.task.dueAt!,
                           allDay: widget.task.allDay,
-                          mode: TaskTimeMode.fromWire(widget.task.fixedTimezone),
+                          mode: TaskTimeMode.fromWire(widget.task.timeMode),
                           timeZone: widget.task.timeZone,
                         ),
                   subtaskCount: childSnapshot.data?.length ?? 0,

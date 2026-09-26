@@ -472,7 +472,7 @@ class TaskStats {
           : taskWallClockDateTime(
               dueAt,
               allDay: t.allDay,
-              mode: TaskTimeMode.fromWire(t.fixedTimezone),
+              mode: TaskTimeMode.fromWire(t.timeMode),
               timeZone: t.timeZone,
             );
       if (due != null) {

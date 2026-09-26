@@ -692,13 +692,13 @@ TimelineTaskSpan? calculateTimelineTaskSpan(
   final displayStart = taskWallClockDateTime(
     startAt,
     allDay: task.allDay,
-    mode: TaskTimeMode.fromWire(task.fixedTimezone),
+    mode: TaskTimeMode.fromWire(task.timeMode),
     timeZone: task.timeZone,
   );
   final displayEnd = taskWallClockDateTime(
     endAt,
     allDay: task.allDay,
-    mode: TaskTimeMode.fromWire(task.fixedTimezone),
+    mode: TaskTimeMode.fromWire(task.timeMode),
     timeZone: task.timeZone,
   );
   if (!displayEnd.isAfter(rangeStart) || !displayStart.isBefore(rangeEnd)) {
@@ -1207,12 +1207,12 @@ _timelineTaskChangeByUnits(
       final display = taskWallClockDateTime(
         instant,
         allDay: false,
-        mode: TaskTimeMode.fromWire(task.fixedTimezone),
+        mode: TaskTimeMode.fromWire(task.timeMode),
         timeZone: task.timeZone,
       );
       return taskDateTimeFromWallClock(
         display.add(Duration(hours: units)),
-        mode: TaskTimeMode.fromWire(task.fixedTimezone),
+        mode: TaskTimeMode.fromWire(task.timeMode),
         timeZone: task.timeZone,
       );
     }
@@ -1220,7 +1220,7 @@ _timelineTaskChangeByUnits(
     final display = taskWallClockDateTime(
       instant,
       allDay: false,
-      mode: TaskTimeMode.fromWire(task.fixedTimezone),
+      mode: TaskTimeMode.fromWire(task.timeMode),
       timeZone: task.timeZone,
     );
     final targetDay = DateTime(
@@ -1231,7 +1231,7 @@ _timelineTaskChangeByUnits(
     return taskDateTimeForDisplayDay(
       instant,
       targetDay,
-      mode: TaskTimeMode.fromWire(task.fixedTimezone),
+      mode: TaskTimeMode.fromWire(task.timeMode),
       timeZone: task.timeZone,
     );
   }
@@ -1250,7 +1250,7 @@ DateTime? _timelineDueDisplay(TodoTask task) {
   return taskWallClockDateTime(
     due,
     allDay: task.allDay,
-    mode: TaskTimeMode.fromWire(task.fixedTimezone),
+    mode: TaskTimeMode.fromWire(task.timeMode),
     timeZone: task.timeZone,
   );
 }
@@ -1476,14 +1476,14 @@ class _TimelineTaskTileState extends State<_TimelineTaskTile> {
     final display = taskWallClockDateTime(
       instant,
       allDay: false,
-      mode: TaskTimeMode.fromWire(widget.task.fixedTimezone),
+      mode: TaskTimeMode.fromWire(widget.task.timeMode),
       timeZone: widget.task.timeZone,
     );
     final targetDay = DateTime(display.year, display.month, display.day + days);
     return taskDateTimeForDisplayDay(
       instant,
       targetDay,
-      mode: TaskTimeMode.fromWire(widget.task.fixedTimezone),
+      mode: TaskTimeMode.fromWire(widget.task.timeMode),
       timeZone: widget.task.timeZone,
     );
   }
@@ -1514,12 +1514,12 @@ class _TimelineTaskTileState extends State<_TimelineTaskTile> {
       final display = taskWallClockDateTime(
         instant,
         allDay: false,
-        mode: TaskTimeMode.fromWire(widget.task.fixedTimezone),
+        mode: TaskTimeMode.fromWire(widget.task.timeMode),
         timeZone: widget.task.timeZone,
       );
       return taskDateTimeFromWallClock(
         display.add(Duration(hours: hours)),
-        mode: TaskTimeMode.fromWire(widget.task.fixedTimezone),
+        mode: TaskTimeMode.fromWire(widget.task.timeMode),
         timeZone: widget.task.timeZone,
       );
     }

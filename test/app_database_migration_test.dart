@@ -19,9 +19,7 @@ void main() {
       }
     });
 
-    final beforeUpgrade = AppDatabase.forTesting(
-      NativeDatabase(databaseFile),
-    );
+    final beforeUpgrade = AppDatabase.forTesting(NativeDatabase(databaseFile));
     final now = DateTime.utc(2026, 7, 30, 16);
     await beforeUpgrade.batch((batch) {
       batch.insert(
@@ -66,10 +64,7 @@ void main() {
     expect(version.data['user_version'], 23);
     expect(task.title, '迁移前任务');
     expect(sectionTable.data['name'], 'todo_task_sections');
-    expect(
-      taskColumns.map((row) => row.data['name']),
-      contains('section_id'),
-    );
+    expect(taskColumns.map((row) => row.data['name']), contains('section_id'));
   });
 
   test(
@@ -526,6 +521,7 @@ void main() {
               allDay: const Value(true),
               timeZone: const Value('America/Los_Angeles'),
               fixedTimezone: const Value(true),
+              timeMode: const Value(2),
               updatedAt: createdAt,
               createdAt: createdAt,
             ),

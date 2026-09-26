@@ -539,7 +539,7 @@ class _KanbanCard extends StatelessWidget {
                     taskWallClockDateTime(
                       task.dueAt!,
                       allDay: task.allDay,
-                      mode: TaskTimeMode.fromWire(task.fixedTimezone),
+                      mode: TaskTimeMode.fromWire(task.timeMode),
                       timeZone: task.timeZone,
                     ),
                   ),

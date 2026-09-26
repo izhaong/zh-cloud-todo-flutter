@@ -27,7 +27,10 @@ void main() {
       expect(TaskTimeMode.fixedTimezone.wire, 1);
       expect(TaskTimeMode.fixedTime.wire, 2);
       expect(TaskTimeMode.fromWire(2), TaskTimeMode.fixedTime);
-      expect(TaskTimeMode.fromWire('1'), TaskTimeMode.fixedTimezone);
+      expect(
+        TaskTimeMode.fromWire(TaskTimeMode.fixedTimezone.wire),
+        TaskTimeMode.fixedTimezone,
+      );
       expect(TaskTimeMode.fromWire(null), TaskTimeMode.floating);
       expect(TaskTimeMode.fromWire(99), TaskTimeMode.floating);
     });

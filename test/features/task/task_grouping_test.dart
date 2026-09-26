@@ -83,6 +83,7 @@ void main() {
             allDay: const Value(false),
             timeZone: const Value('America/Los_Angeles'),
             fixedTimezone: const Value(true),
+            timeMode: const Value(2),
             dueAt: Value(DateTime.utc(2026, 7, 12, 2)),
             updatedAt: now,
             createdAt: now,

@@ -93,6 +93,7 @@ void main() {
             title: '伦敦时间上午 10 点开会',
             timeZone: const Value('Europe/London'),
             fixedTimezone: const Value(true),
+            timeMode: const Value(2),
             updatedAt: now,
             createdAt: now,
           ),

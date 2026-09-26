@@ -145,7 +145,7 @@ class _TaskReminderTile extends ConsumerWidget {
             formatTaskDateTime(
               reminder.remindAt,
               allDay: false,
-              mode: TaskTimeMode.fromWire(reminder.fixedTimezone),
+              mode: TaskTimeMode.fromLegacyFlag(reminder.fixedTimezone),
               timeZone: reminder.timeZone,
             ),
           ),
@@ -385,7 +385,7 @@ class _TaskReminderTile extends ConsumerWidget {
                       Text(
                         anchorAt == null
                             ? '当前任务尚未设置所选时间'
-                            : '所选锚点：${formatTaskDateTime(anchorAt, allDay: false, mode: TaskTimeMode.fromWire(task.fixedTimezone), timeZone: task.timeZone)}',
+                            : '所选锚点：${formatTaskDateTime(anchorAt, allDay: false, mode: TaskTimeMode.fromWire(task.timeMode), timeZone: task.timeZone)}',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
@@ -769,7 +769,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     final dueDirty = previous != null && _dueAt != previous.dueAt;
     final allDayDirty = previous != null && _allDay != previous.allDay;
     final timeZoneDirty = previous != null && _timeZone != previous.timeZone;
-    final fixedTimezoneDirty =
+    final timeModeDirty =
         previous != null && _timeMode.wire != previous.timeMode;
     final listDirty = previous != null && _selectedListId != previous.listId;
     setState(() {
@@ -782,7 +782,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       if (!dueDirty) _dueAt = latest.dueAt;
       if (!allDayDirty) _allDay = latest.allDay;
       if (!timeZoneDirty) _timeZone = latest.timeZone;
-      if (!fixedTimezoneDirty) _timeMode = TaskTimeMode.fromWire(latest.timeMode);
+      if (!timeModeDirty) _timeMode = TaskTimeMode.fromWire(latest.timeMode);
       if (!listDirty) {
         _selectedListId = latest.listId;
         _listName = listName;
@@ -1051,7 +1051,9 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
         dueAt: _dueAt,
         clearDueAt: _dueAt == null && t.dueAt != null,
         allDay: _allDay,
-        timeZone: _timeMode.requiresAnchorZone ? (_timeZone ?? 'Asia/Shanghai') : _timeZone,
+        timeZone: _timeMode.requiresAnchorZone
+            ? (_timeZone ?? 'Asia/Shanghai')
+            : _timeZone,
         timeMode: _timeMode.wire,
         listId: _selectedListId == t.listId ? null : _selectedListId,
       );
@@ -1161,7 +1163,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       t.title,
       if ((t.description ?? '').trim().isNotEmpty) t.description!.trim(),
       if (t.dueAt != null)
-        '截止：${formatTaskDateTime(t.dueAt!, allDay: t.allDay, mode: TaskTimeMode.fromWire(t.fixedTimezone), timeZone: t.timeZone)}',
+        '截止：${formatTaskDateTime(t.dueAt!, allDay: t.allDay, mode: TaskTimeMode.fromWire(t.timeMode), timeZone: t.timeZone)}',
     ].join('\n');
     final shared = await NativeIntents.shareText(body, subject: t.title);
     if (!mounted) return;
@@ -1556,6 +1558,10 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                                   key: Key('task-time-mode-${option.wire}'),
                                   contentPadding: EdgeInsets.zero,
                                   value: option,
+                                  // Material 的 toggleable：再点已选中的那一档时 onChanged 收到
+                                  // null ⇒ 回到"两档都不选"。嘀嗒原文只命名两档、没给默认态取名，
+                                  // 所以既不发明第三档名字也不加"取消固定"按钮（spec 056 决定 1）。
+                                  toggleable: true,
                                   title: Text(option.label!),
                                   subtitle: Text(_timeModeSubtitle(option)),
                                 ),

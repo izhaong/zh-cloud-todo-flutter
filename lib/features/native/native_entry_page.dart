@@ -90,7 +90,7 @@ class NativeTaskProjection {
     return taskWallClockDateTime(
       instant,
       allDay: task.allDay,
-      mode: TaskTimeMode.fromWire(task.fixedTimezone),
+      mode: TaskTimeMode.fromWire(task.timeMode),
       timeZone: task.timeZone,
     );
   }

@@ -302,6 +302,7 @@ void main() {
       dueAt: DateTime.utc(2026, 7, 13, 18),
       timeZone: 'America/Los_Angeles',
       fixedTimezone: true,
+      timeMode: 2,
     );
     final payload =
         jsonDecode(

@@ -619,6 +619,7 @@ void main() {
           allDay: false,
           timeZone: 'Asia/Shanghai',
           fixedTimezone: true,
+          timeMode: 2,
         );
         taskId = task.id;
 
@@ -715,6 +716,7 @@ void main() {
           dueAt: endAt,
           timeZone: 'Asia/Shanghai',
           fixedTimezone: true,
+          timeMode: 2,
         );
         taskId = task.id;
         stage = 'push task';
@@ -1039,6 +1041,7 @@ void main() {
           dueAt: DateTime.now().toUtc(),
           timeZone: 'Asia/Shanghai',
           fixedTimezone: true,
+          timeMode: 2,
         );
         taskId = task.id;
         stage = 'push template task';
@@ -1151,6 +1154,7 @@ void main() {
             dueAt: now,
             timeZone: 'Asia/Shanghai',
             fixedTimezone: true,
+            timeMode: 2,
           );
           taskIds[frequency] = task.id;
         }
@@ -1275,6 +1279,7 @@ void main() {
             dueAt: startAt,
             timeZone: 'Asia/Shanghai',
             fixedTimezone: true,
+            timeMode: 2,
           );
           taskIds[limit] = task.id;
         }

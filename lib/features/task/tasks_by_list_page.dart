@@ -854,8 +854,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           if ((selectedTasks[index].description ?? '').trim().isNotEmpty)
             selectedTasks[index].description!.trim(),
           if (selectedTasks[index].dueAt != null)
-            '截止：${formatTaskDateTime(selectedTasks[index].dueAt!, allDay: selectedTasks[index].allDay,
-                mode: TaskTimeMode.fromWire(selectedTasks[index].timeMode), timeZone: selectedTasks[index].timeZone)}',
+            '截止：${formatTaskDateTime(selectedTasks[index].dueAt!, allDay: selectedTasks[index].allDay, mode: TaskTimeMode.fromWire(selectedTasks[index].timeMode), timeZone: selectedTasks[index].timeZone)}',
         ].join('\n'),
     ].join('\n\n');
     setState(() => _batchApplying = true);
@@ -1928,7 +1927,7 @@ DateTime? _taskDueWallClock(TodoTask task) {
   return taskWallClockDateTime(
     due,
     allDay: task.allDay,
-    mode: TaskTimeMode.fromWire(task.fixedTimezone),
+    mode: TaskTimeMode.fromWire(task.timeMode),
     timeZone: task.timeZone,
   );
 }

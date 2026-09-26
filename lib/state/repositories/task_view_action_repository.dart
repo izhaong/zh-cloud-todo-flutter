@@ -385,7 +385,7 @@ class TaskViewActionRepository {
           : taskWallClockDateTime(
               task.dueAt!,
               allDay: task.allDay,
-              mode: TaskTimeMode.fromWire(task.fixedTimezone),
+              mode: TaskTimeMode.fromWire(task.timeMode),
               timeZone: task.timeZone,
             );
       if (currentDisplay != null &&
@@ -401,7 +401,7 @@ class TaskViewActionRepository {
           : taskDateTimeForDisplayDay(
               task.dueAt!,
               targetDay,
-              mode: TaskTimeMode.fromWire(task.fixedTimezone),
+              mode: TaskTimeMode.fromWire(task.timeMode),
               timeZone: task.timeZone,
             );
       await (_db.update(

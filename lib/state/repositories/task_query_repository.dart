@@ -8,7 +8,7 @@ DateTime? _taskDueWallClock(TodoTask task) {
   return taskWallClockDateTime(
     due,
     allDay: task.allDay,
-    mode: TaskTimeMode.fromWire(task.fixedTimezone),
+    mode: TaskTimeMode.fromWire(task.timeMode),
     timeZone: task.timeZone,
   );
 }
