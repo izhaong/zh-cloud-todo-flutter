@@ -408,7 +408,7 @@ $ grep -noE "[0-9]+ ?(条|笔|份|个|处|格)" $F
 | ②b 区间 | 认「都判过 / 均已判」等写法，不只「都已判过」 | 语料里 F-8 形状那条按期望红 |
 | ③ 量词 | 指针与 sha **不再算证据**，只认可复跑命令（补进 `ls -`） | 本台账 ③ 从 6 条降到 0 条 |
 | ④ 归属 | 台账写的 `grep -n "X" tool/….py` 真跑一遍（BRE / `-E` / `-F` 三把都试，本机是 BSD grep，只按一种方言会把真证据误判成假） | 语料「命令跑了但 0 命中」按期望红 |
-| 语料 | 18 → **25 条 = 14 该红 / 11 该绿** | `python3 tool/check_spec_selfscan.py --selftest specs/052-calendar-list-timeline/tasks.md` ⇒ 与期望不符 = 0 条 |
+| 语料 | 18 → **25 条 = 14 该红 / 11 该绿**（这两个数是 `38295c2` 上的读数，本笔之后又加了，现读见下节命令） | `python3 tool/check_spec_selfscan.py --selftest specs/052-calendar-list-timeline/tasks.md` ⇒ 与期望不符 = 0 条 |
 
 **F-1 ~ F-6 是台账里的活错，逐条已改**：自锚 `:255` 漂到 259（改成"节题存在 + 不写行号"）；
 「现命中 5 行」实为 24（改成只给命令）；`= **12**` 被写它这一笔作废成 13（改成"故意不写数"）；
@@ -422,3 +422,29 @@ $ grep -noE "[0-9]+ ?(条|笔|份|个|处|格)" $F
 ⚠️ 遗留（不粉饰）：③ 现在**没有引号豁免**，所以叙述旧错时不能照抄带量词的旧原句（本笔就为这句改写过两次）；
 Flutter SDK 里的文件（例如 `material/ink_well.dart` 的第 1401 行那种）仍会被判死锚 —— 要指仓外文件就得写全绝对路径。
 门禁：本轮只动 `specs/052/**` 与 `tool/**.py`，不碰 `lib`、`test` ⇒ 六道门禁日志继续有效。
+
+### 补：换环境跑出来的新缺陷（第 8 轮复核没抓到，我自己 clone 出来的）
+
+派复核前我为这轮字节建了个干净克隆（`git clone /tmp/wt-fl-361 /tmp/r83rev`），
+在**完全相同的字节**上自扫，克隆里读出 `失项 3 条`、工作树里读出 `失项 0 条`。
+差的都是分支锚点：`git clone` 只把源仓分支落成 `origin/<分支>`，和本地同名的那根 ref 要有人真
+`git checkout` 过才存在 ⇒ `feat/320-sort-direction:specs/045-sort-direction/tasks.md:120`
+这类写法在别人那份新克隆里 `cat-file` 必然失败。别人复现不出的读数不算证据
+（与「矩阵翻转只引已合并 SHA」是同一条规矩的两个方向）。
+
+**修法**：`branch_blob_lines` 走 `ref_candidates` —— 裸名与 `origin/` 前缀依次试，两边都指不到才报死锚，
+报错文案把 `git cat-file -e <裸名>:<文件>` 与 `git cat-file -e origin/<裸名>:<文件>` 两条判据都写出来。
+语料成对补一条绿的（夹具里在 `add -A` 之后起裸仓当 origin、把基线推成 `feat/remote-only`、`fetch` 回来，
+于是那根分支**只有** `origin/` 形态）；前置条件建不起来时 `_run_corpus` 明打打印「跳过」且不计数，
+不再像上一版那样只在注释里承诺"不计入"却照样判 —— 那句是假话，已改。
+现读：`python3 tool/check_spec_selfscan.py --selftest specs/052-calendar-list-timeline/tasks.md`
+的 `grep -c "^  ok"` = 26、末行「与期望不符的判据 = 0 条」。
+
+**两向都验（命令 + 读数）**：
+
+- 该红的仍红：在干净克隆里把本台账复制成 `specs/probe/tasks.md`，并追加 `--selftest` 语料里
+  那条"分支上没有文件"的假锚点原句（判据：`grep -n "分支上没有这份文件" tool/check_spec_selfscan.py`）⇒
+  `python3 tool/check_spec_selfscan.py specs/probe/tasks.md` 读出 `失项 1 条`，
+  文案含"既不在本地…也不在 origin…"；
+- 假阳性清掉：`cd /tmp/r83rev && python3 tool/check_spec_selfscan.py specs/052-calendar-list-timeline/tasks.md`
+  读出 `失项 0 条`（那 3 条纯属工作树有本地分支缓存）。

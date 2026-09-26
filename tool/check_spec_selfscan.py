@@ -140,6 +140,18 @@ def bare_matches(raw: str, repo_root: Path) -> list[str]:
 _BRANCH_LINES: dict[tuple[str, str], int | None] = {}
 
 
+def ref_candidates(ref: str) -> list[str]:
+    """`分支:文件` 里的"分支"在一份干净的克隆里长成什么。
+
+    `git clone` 只把源仓的分支落成 `origin/<分支>`；和本地同名的那根 ref 要有人
+    真 `git checkout` 过才存在 ⇒ 只按裸名查会让**同一份字节**在"我这块工作树"
+    和"别人那份新克隆"里给出两个数（实测差 3 条）。判据不该看谁的机器上有缓存。
+    """
+    if ref.startswith("origin/") or ref == "origin":
+        return [ref]
+    return [ref, f"origin/{ref}"]
+
+
 def branch_blob_lines(repo_root: Path, ref: str, path: str) -> int | None:
     """`分支:文件` 形态锚点的真身校验：文件系统上没有这条路径，但 git 里有。
 
@@ -149,18 +161,21 @@ def branch_blob_lines(repo_root: Path, ref: str, path: str) -> int | None:
     """
     key = (ref, path)
     if key not in _BRANCH_LINES:
-        probe = subprocess.run(
-            ["git", "cat-file", "-e", f"{ref}:{path}"],
-            cwd=repo_root, capture_output=True,
-        )
-        if probe.returncode != 0:
-            _BRANCH_LINES[key] = None
-        else:
+        total: int | None = None
+        for cand in ref_candidates(ref):
+            probe = subprocess.run(
+                ["git", "cat-file", "-e", f"{cand}:{path}"],
+                cwd=repo_root, capture_output=True,
+            )
+            if probe.returncode != 0:
+                continue
             shown = subprocess.run(
-                ["git", "show", f"{ref}:{path}"],
+                ["git", "show", f"{cand}:{path}"],
                 cwd=repo_root, capture_output=True, text=True,
             )
-            _BRANCH_LINES[key] = len(shown.stdout.splitlines())
+            total = len(shown.stdout.splitlines())
+            break
+        _BRANCH_LINES[key] = total
     return _BRANCH_LINES[key]
 
 
@@ -199,8 +214,10 @@ def check(text: str, repo_root: Path) -> list[str]:
             total = branch_blob_lines(repo_root, ref, bpath)
             if total is None:
                 errs.append(
-                    f":{n} 分支锚点 `{ref}:{bpath}:{want}` 指不到 —— 该分支上没有这份文件"
-                    f"（判据：`git cat-file -e {ref}:{bpath}`）⇒ 死锚点等于没证据"
+                    f":{n} 分支锚点 `{ref}:{bpath}:{want}` 指不到 —— 这份文件既不在"
+                    f"本地 `{ref}` 上，也不在 `origin/{ref}` 上"
+                    f"（判据：`git cat-file -e {ref}:{bpath}`、"
+                    f"`git cat-file -e origin/{ref}:{bpath}`）⇒ 死锚点等于没证据"
                 )
             elif want > total:
                 errs.append(
@@ -353,6 +370,8 @@ CORPUS: list[tuple[str, str, str, bool]] = [
      "见 `feat/nope-branch:specs/x/tasks.md:12` 的同款写法。\n", True),
     ("分支锚点·分支与 blob 都在（走 git 不走文件系统）", "①",
      "见 `feat/corpus-branch:specs/x/tasks.md:2` 的同款写法。\n", False),
+    ("分支锚点·分支只在 origin 上（干净克隆的形状）", "①",
+     "见 `feat/remote-only:specs/x/tasks.md:2` 的同款写法。\n", False),
     ("脚本归属·点名且给出证明命令", "④",
      "由脚本 `tool/check_spec_selfscan.py` 产出"
      "（判据：`grep -n \"errs.append\" tool/check_spec_selfscan.py`）\n", False),
@@ -395,6 +414,7 @@ def selftest(_unused: Path | None = None) -> int:
         # 「分支锚点」这条判据要 PRESENT/ABSENT 成对，就得有个真 git 仓库当基准；
         # 建在同一个临时目录里，收尾随目录一起消失。git 不可用时**显式说明跳过**，
         # 不许静默把该红的放过（那等于把判据降级成摆设）。
+        skipped: set[str] = set()
         git = subprocess.run(
             ["git", "init", "-q", str(root)], capture_output=True, text=True)
         if git.returncode == 0:
@@ -413,15 +433,43 @@ def selftest(_unused: Path | None = None) -> int:
                 ["git", "-C", str(root), "branch", "feat/corpus-branch"],
             ]:
                 subprocess.run(cmd, capture_output=True)
+            # 「干净克隆」的形状：分支只有 `origin/<分支>`、本地同名 ref 不存在。
+            # 造法 = 起一个裸仓当 origin、把基线推成另一根分支名、fetch 回来。
+            # 裸仓建在 root 里面、且**必须排在 `add -A` 之后**，否则会被扫进索引。
+            bare = root / "origin.git"
+            for cmd in [
+                ["git", "init", "-q", "--bare", str(bare)],
+                ["git", "-C", str(root), "remote", "add", "origin", str(bare)],
+                ["git", "-C", str(root), "push", "-q", "origin",
+                 "HEAD:refs/heads/feat/remote-only"],
+                ["git", "-C", str(root), "fetch", "-q", "origin"],
+            ]:
+                subprocess.run(cmd, capture_output=True)
+            has_remote_only = subprocess.run(
+                ["git", "-C", str(root), "rev-parse", "--verify", "--quiet",
+                 "refs/remotes/origin/feat/remote-only"],
+                capture_output=True).returncode == 0
+            if not has_remote_only:
+                skipped.add("分支锚点·分支只在 origin 上（干净克隆的形状）")
+                print("  ⚠️ origin 上的 `feat/remote-only` 没建起来 ⇒ "
+                      "「只在 origin 上有」这条不计入（明说，不静默）")
         else:
-            print("  ⚠️ 临时 git 仓库建不起来 ⇒ 分支锚点的 PRESENT 一条不计入（"
-                  "ABSENT 一条仍会判，且它只依赖 `cat-file` 失败）")
-        return _run_corpus(root)
+            skipped.update({
+                "分支锚点·分支与 blob 都在（走 git 不走文件系统）",
+                "分支锚点·分支只在 origin 上（干净克隆的形状）",
+            })
+            print("  ⚠️ 临时 git 仓库建不起来 ⇒ 分支锚点的 PRESENT 两条不计入"
+                  "（ABSENT 一条仍会判，且它只依赖 `cat-file` 失败）")
+        return _run_corpus(root, skipped)
 
 
-def _run_corpus(root: Path) -> int:
+def _run_corpus(root: Path, skip: set[str] | None = None) -> int:
     bad = 0
+    skip = skip or set()
     for name, tag, text, expect_red in CORPUS:
+        if name in skip:
+            print(f"  跳过 [{tag}] {name}（夹具的前置条件没搭起来）")
+            continue
         errs = check(text, root)
         red = bool(errs)
         ok = red == expect_red
