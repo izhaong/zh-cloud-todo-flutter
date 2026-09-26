@@ -1,6 +1,6 @@
 # 045 执行台账
 
-## 状态：本轮完工，门禁全绿，待只读复核 `VERDICT`（分支 `feat/335-filter-preview-mode`，基线 `origin/develop@9032005`）
+## 状态：本轮完工，只读复核 `VERDICT: PASS`（唯一失项 F-1 已修，六门禁在终态字节重跑全绿）
 
 矩阵 #22 **不动**：本分支未合并 ⇒ 只能写「已实现待合并」，不翻状态（下轮入口第 1 条）。
 
@@ -47,7 +47,50 @@
 
 `git status --porcelain pubspec.lock` ⇒ 空（`g1-publock.log`）⇒ 门禁的 `pub get` 没把本机镜像扫进这笔。
 
-## 五、本轮改了什么
+### 重跑（复核 F-1 之后动了实现 ⇒ 上表那套读数作废，整套六门禁重跑两遍）
+
+**第一次重跑（`g2-*`）门禁 2 是红的**：`format_rc=1` —— 新加的 `Semantics` 块没按 `dart format` 的排法。
+这不是噪音，是门禁 2 真的在拦；原地格式化（只喂本轮 2 个 .dart，非全仓）后才有下面这份。
+
+**第二次重跑（终态字节，日志 `/tmp/gates-335/g3-*.log`）六项 rc 全 0**：
+
+| 门禁 | 读数 |
+| --- | --- |
+| 1 `git diff --check` | `diffcheck_rc=0` |
+| 2 `dart format --output=none --set-exit-if-changed`（3 个 .dart） | `Formatted 3 files (0 changed)`，`format_rc=0` |
+| 3 `flutter analyze` | `No issues found!`，`analyze_rc=0` |
+| 4 `flutter test --tags golden` | `00:04 +9: All tests passed!`，`golden_rc=0`；png/gold 脏项计数 `0` ⇒ 9 张基线仍未重录 |
+| 5 全量非 golden（`--concurrency=1`） | `02:21 +901 ~26: All tests passed!`，`test_rc=0`（与改动前同为 901；本轮未增删用例，实现侧只加了开关外层那层 `Semantics` 包装，判据：`grep -c "task-filter-advanced-preview-semantics" lib/features/filter/filter_bar.dart` ⇒ `1`） |
+| 6 `flutter build web --release` | `✓ Built build/web`，`build_rc=0` |
+
+`git status --porcelain pubspec.lock` 字节数 `0`（`g3-publock.log` 为空）⇒ 门禁的 `pub get` 没把本机镜像扫进来。
+
+## 五、第 90 轮只读复核（PR !374，审的字节 = `0210412`，报告 `/tmp/verdict-374-r1.log`）：`VERDICT: PASS`
+
+复核通道 `claude -p`，只读；被审树 `git status --short` 为空、HEAD = `0210412`。
+判据源那一面要说清楚：镜像页在 `zh-cloud-docs`，在复核员允许目录之外 ⇒
+它是对着 `spec.md` 逐字引的 `:47/:57/:61/:65` 判的，没直接读镜像页。
+六问（口径同源 / 只算不套 / 日期不可解析 / 测试是否有牙 / 台账诚实 / 术语）均通过，无 BLOCKER。
+
+**F-1（唯一失项，已修）**：原用例第 6 问被点名为**恒真断言** ——
+`find.bySemanticsLabel(RegExp('预览模式'))` 会被对话框里那句字面 `Text('预览模式')` 无条件满足，
+所以 R6 里"开关自身念得出「预览模式」"这一条其实没夹住。
+回源复验后确认它不只是测试问题：**裸 `Switch` 旁边放一句 `Text`，开关自己的语义节点确实没有名字**
+（读屏只会念"开关，未命名"）⇒ 四件套的"独立读屏语义"在实现层就没满足。
+
+修法：开关外面包一层带 key 的 `Semantics(label: '预览模式')`（`Key('task-filter-advanced-preview-semantics')`），
+断言改成"按 key 精确取那个语义节点，再看它自己的 `label`"，不再拿全树命中当证据。
+
+**PD 探针（证明这条现在有牙）**：把 `label: '预览模式',` 摘成 `label: '',` ⇒
+`grep -c` 现读命中处数从 `1` 变 `0`（确认改到了真代码），跑该文件 ⇒ `+2 -1`，
+红的正是这条，报错原文 `Expected: contains '预览模式' / Actual: ''`。
+还原后 `grep -c` 回到 `1` 且与改动前字节一致，同一条命令 ⇒ `+3: All tests passed!`。
+（脚本 `/tmp/probe374-PD.sh`。还原的证据有两条，各自独立：`grep -c` 回到 `1`（内容断言）与
+`cmp` 对上**改动前**那份快照（`cp` 发生在 `perl` 之前，所以它是真实的改动前基线，不是"副本和自己比"的恒等式）。
+顺带纠正一处口径：PA/PB/PC 用的 `probes335.sh` 同样是"改前抓快照 → 还原 → 与快照比"，那条判据是有效的，
+别把它说成恒等式。）
+
+## 六、本轮改了什么
 
 | 文件 | 改动 |
 | --- | --- |
@@ -56,7 +99,7 @@
 | `test/features/filter/filter_advanced_preview_test.dart` | 新增 3 条用例（见二、三节） |
 | `specs/045-filter-preview-mode/{spec,plan,tasks}.md` | 本台账 |
 
-## 六、下一轮入口
+## 七、下一轮入口
 
 1. **矩阵 #22 的回写**（docs 仓）：本 PR 合并后，《05-过滤器》`:65`「预览模式」那一面从「缺」变成
    "有（FL）"，且要在同一行里把它与 `:61/:71` 的「或/且」布尔组合（FL #334，仍缺）分开写清楚。

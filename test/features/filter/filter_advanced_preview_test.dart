@@ -10,6 +10,9 @@ import '../../support/todo_visual_fixture.dart';
 /// 嘀嗒《05-过滤器》`:65`「如果不确定自己的筛选条件设置的是否合理，也可以点击「预览模式」
 /// 查看显示效果哦」——本面挂在既有的「高级筛选」对话框里（`:57` 起的小节）。
 const _previewToggleKey = Key('task-filter-advanced-preview');
+const _previewToggleSemanticsKey = Key(
+  'task-filter-advanced-preview-semantics',
+);
 const _previewPanelKey = Key('task-filter-advanced-preview-panel');
 
 Future<void> _openAdvancedDialog(WidgetTester tester) async {
@@ -125,11 +128,16 @@ void main() {
       reason: '预览不产生任何同步 outbox 写入',
     );
 
-    // R6：开关自身有读屏语义。
+    // R6：钉的是**开关自身**那个语义节点的读屏名。
+    // 旁边那句 `Text('预览模式')` 是另一个节点，`find.bySemanticsLabel` 拿它也能命中 ⇒
+    // 拿全树找会恒真，所以这里按 key 精确取节点，再看节点自己的 label。
+    final toggleSemantics = tester.getSemantics(
+      find.byKey(_previewToggleSemanticsKey),
+    );
     expect(
-      find.bySemanticsLabel(RegExp('预览模式')),
-      findsWidgets,
-      reason: '开关要念得出「预览模式」',
+      toggleSemantics.label,
+      contains('预览模式'),
+      reason: '读屏念到的是"预览模式，开关"，不是没名的开关',
     );
     semantics.dispose();
   });

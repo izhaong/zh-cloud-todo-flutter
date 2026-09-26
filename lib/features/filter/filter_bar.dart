@@ -423,13 +423,21 @@ class FilterBar extends ConsumerWidget {
                   Row(
                     children: [
                       const Expanded(child: Text('预览模式')),
-                      Switch(
-                        key: const Key('task-filter-advanced-preview'),
-                        value: previewEnabled,
-                        onChanged: previewResolver == null
-                            ? null
-                            : (next) =>
-                                  setDialogState(() => previewEnabled = next),
+                      // 旁边那句 Text 不会自动变成开关的读屏名：裸 Switch 的节点是"未命名开关"。
+                      // 包一层带 key 的 Semantics，测试才钉得住"开关自身念得出「预览模式」"。
+                      Semantics(
+                        key: const Key(
+                          'task-filter-advanced-preview-semantics',
+                        ),
+                        label: '预览模式',
+                        child: Switch(
+                          key: const Key('task-filter-advanced-preview'),
+                          value: previewEnabled,
+                          onChanged: previewResolver == null
+                              ? null
+                              : (next) =>
+                                    setDialogState(() => previewEnabled = next),
+                        ),
                       ),
                     ],
                   ),
