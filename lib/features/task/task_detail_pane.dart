@@ -281,7 +281,9 @@ class _TaskReminderTile extends ConsumerWidget {
     // 只显隐，**不动** fixedTimezone 初值（关掉开关不得把已设的时区改掉，FR-3）。
     var timezoneCapabilityEnabled = true;
     try {
-      timezoneCapabilityEnabled = await ref.read(timezoneEnabledProvider.future);
+      timezoneCapabilityEnabled = await ref.read(
+        timezoneEnabledProvider.future,
+      );
     } on Object {
       // 偏好读不到时按「开」：不因偏好子系统抖动而把既有能力藏掉（与仓储"无记录即开"同口径）。
     }

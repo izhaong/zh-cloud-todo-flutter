@@ -121,9 +121,7 @@ void main() {
     );
   });
 
-  testWidgets('W1 设置页有「日期与时间 → 时区」：显示取流值，点一下走仓储写一次', (
-    tester,
-  ) async {
+  testWidgets('W1 设置页有「日期与时间 → 时区」：显示取流值，点一下走仓储写一次', (tester) async {
     final repository = _FakeTimezoneRepository(true);
     await _pumpSettings(tester, repository: repository);
 
@@ -142,11 +140,7 @@ void main() {
     await tester.tap(find.byKey(_settingsKey));
     await tester.pumpAndSettle();
 
-    expect(
-      repository.writes,
-      [false],
-      reason: '开关是"扳一下写一次"：这里 0 次就是只改内存的假开关',
-    );
+    expect(repository.writes, [false], reason: '开关是"扳一下写一次"：这里 0 次就是只改内存的假开关');
     expect(
       tester.widget<Switch>(switcher).value,
       isFalse,
@@ -215,12 +209,17 @@ void main() {
   testWidgets('W4 没有仓储（未就绪）：点一下明确告知不可用，不静默', (tester) async {
     await _pumpSettings(tester, repository: null);
 
-    expect(tester.widget<Switch>(
-      find.descendant(
-        of: find.byKey(_settingsKey),
-        matching: find.byType(Switch),
-      ),
-    ).value, isTrue);
+    expect(
+      tester
+          .widget<Switch>(
+            find.descendant(
+              of: find.byKey(_settingsKey),
+              matching: find.byType(Switch),
+            ),
+          )
+          .value,
+      isTrue,
+    );
 
     await tester.tap(find.byKey(_settingsKey));
     await tester.pumpAndSettle();
@@ -228,9 +227,7 @@ void main() {
     expect(find.text('时区设置暂不可用'), findsOneWidget);
   });
 
-  testWidgets('W5 写失败：给反馈且开关停在原值（四件套-3 不假装成功）', (
-    tester,
-  ) async {
+  testWidgets('W5 写失败：给反馈且开关停在原值（四件套-3 不假装成功）', (tester) async {
     final repository = _FakeTimezoneRepository(true)..failNextWrite = true;
     await _pumpSettings(tester, repository: repository);
 
@@ -239,20 +236,18 @@ void main() {
 
     expect(find.text('时区设置未保存'), findsOneWidget);
     expect(
-      tester.widget<Switch>(
-        find.descendant(
-          of: find.byKey(_settingsKey),
-          matching: find.byType(Switch),
-        ),
-      ).value,
+      tester
+          .widget<Switch>(
+            find.descendant(
+              of: find.byKey(_settingsKey),
+              matching: find.byType(Switch),
+            ),
+          )
+          .value,
       isTrue,
       reason: '非乐观更新：写失败就不该把用户的开关拨过去（拨过去就是谎报已保存）',
     );
-    expect(
-      repository.current,
-      isTrue,
-      reason: '失败路径不许改内存态，否则下一次重建就顺着假状态显示了',
-    );
+    expect(repository.current, isTrue, reason: '失败路径不许改内存态，否则下一次重建就顺着假状态显示了');
   });
 }
 

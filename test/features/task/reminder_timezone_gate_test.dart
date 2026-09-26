@@ -21,9 +21,7 @@ const _fixedTimezoneRow = Key('task-reminder-fixed-timezone');
 const _ianaField = Key('task-reminder-timezone');
 
 void main() {
-  testWidgets('开着时「固定时区」这一档在，标签按未固定态写「创建时区（IANA）」', (
-    tester,
-  ) async {
+  testWidgets('开着时「固定时区」这一档在，标签按未固定态写「创建时区（IANA）」', (tester) async {
     await _pumpReminderEditor(tester, timezoneEnabled: true);
 
     expect(find.byKey(_fixedTimezoneRow), findsOneWidget);
@@ -37,9 +35,7 @@ void main() {
     );
   });
 
-  testWidgets('关掉时「固定时区」消失，但 IANA 输入框仍在（FR-2 后半）', (
-    tester,
-  ) async {
+  testWidgets('关掉时「固定时区」消失，但 IANA 输入框仍在（FR-2 后半）', (tester) async {
     await _pumpReminderEditor(tester, timezoneEnabled: false);
 
     expect(
@@ -109,15 +105,13 @@ Future<void> _pumpReminderEditor(
     160,
     scrollable: find.byType(Scrollable).last,
   );
-  final editReminder = find.byKey(ValueKey('task-reminder-edit-${reminder.id}'));
+  final editReminder = find.byKey(
+    ValueKey('task-reminder-edit-${reminder.id}'),
+  );
   await tester.ensureVisible(editReminder);
   await tester.pumpAndSettle();
   await tester.tap(editReminder);
   await tester.pumpAndSettle();
 
-  expect(
-    find.text('编辑提醒'),
-    findsOneWidget,
-    reason: '编辑器没打开的话，下面两条显隐断言全是恒真的',
-  );
+  expect(find.text('编辑提醒'), findsOneWidget, reason: '编辑器没打开的话，下面两条显隐断言全是恒真的');
 }
