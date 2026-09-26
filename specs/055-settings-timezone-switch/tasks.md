@@ -44,11 +44,17 @@
    `SemanticsNode`，该合并节点 `isChecked=none`、`isToggled=none`、`isButton=false`、`isEnabled=true`、
    label=「时区\n开启后可为任务选择「固定时区」」⇒ `Switch` 自带的状态位到不了读屏（merge 只合并 label）。
    修法（当时的）：状态写进 `title` 的 `semanticsLabel`。**这条修法被三-3 撤回** —— 红是真红，结论是假的。
-3. **复核 F-1 驳回「到不了读屏」这句，本仓复算接受**（三方一致：复核探针、本仓
-   `/tmp/r82/probe-pre-fix-bad0933.log`、cursor-agent 交叉验证 `/tmp/xcheck/q1.out`）：
+3. **复核 F-1 驳回「到不了读屏」这句，本仓复算接受**（两方独立 + 一条仓内断言：复核自己的探针、
+   cursor-agent 交叉验证 `/tmp/xcheck/q1.out`；正反向读数钉在仓内 ——
+   `test/features/settings/timezone_preference_test.dart` 里 W2 那两条 `_toggled(tester)` 断言，
+   现读 `grep -n "_toggled(tester)," test/features/settings/timezone_preference_test.dart` = 2 命中，
+   第 2 轮复核分别把基线改成 `false`、断开假仓储写入流 ⇒ 两条各自红，不存在恒真）：
    我读的是 `SemanticsNode.flagsCollection`（节点**自有**位；子节点被 merge 时 flags 不回写，所以恒 `none`），
    而 `SemanticsNode._addToUpdate` 导出给平台的是 `getSemanticsData()` 那份 —— 同一条数据里
    `Switch` 的 `isToggled` 开 = `Tristate.isTrue`、关 = `isFalse`。
+   ⚠️ 原先这一条把正反读数记在本仓 `/tmp/r82/probe-pre-fix-bad0933.log` 名下，**挂错了工件**（第 2 轮复核 3 号缺陷）：
+   那份日志第 4 行与第 7 行的 `NODE.label` 都是「时区，已开启」⇒ 探针在"关"那一档根本没扳动开关，
+   而且它只打印 label、压根没打印 `isToggled`。结论不变，引证作废。
    ⇒ 自创的 `semanticsLabel` 已删（屏幕与播报都回到嘀嗒的「时区」+ 系统开关态），判据改钉 `getSemanticsData()`。
    **教训：判「某个能力不存在」之前，先确认读的是导出给平台的那份数据；名字读不到 ≠ 能力不存在。**
 4. **复核 F-2 驳回「并发不可达」这句**：修前实测（同一份探针）
@@ -177,3 +183,28 @@ M7b 真溢出 ⇒ 红 W3 并打出 `RenderFlex overflowed by 638 pixels`）；
 | F-6 | 「缺项 ⑤/⑥」矩阵读者无从解析；FL #369 存在性它没法核（会话里无 Gitea 凭据，匿名 404） | **半对半驳回**：`origin/develop` 的 #12 只有「字段有；缺跨时区展示闭环」⇒ 它对 develop 成立；但清单在未合并的 docs 分支 `:79` 里就有（`grep -c ⑤`：develop 3 vs 分支 21）⇒ 不是写错，是 docs 没合。#369 我用 API 现读 `state=open`，标题带「缺项 ⑤」 | 矩阵侧本轮已改写成文字缺口 + Issue 号（docs `27525b4`，!102）；编号来源在 spec 七 写清是哪个 ref |
 
 **本笔动了实现** ⇒ 上面「四」节 `b571ef1` 那套门禁作废，终态另跑一份新日志（见「四」末尾的「重跑」）。
+
+## 九、第 2 轮只读复核（报告 `/tmp/r84rev370/report.md`，审的字节 = `fa94cfa`）：`VERDICT: PASS`
+
+两条真缺陷被复验为**真修好**，不是只变绿：
+
+- F-2（事务）：摘掉 `_db.transaction` 只留内层语句 ⇒ R3 红 `+7 -1`，红因正是 `SqliteException(2067)`，
+  抛点 `timezone_preference_repository.dart:61`（异步间隙来自 `:46`）。又在临界区注入 40 ms 等待做**串行性陷阱**：
+  带事务 `elapsed≈147 ms`（顺序）、同一陷阱摘事务 `101 ms` 且 `get()=false`（最后意图丢失）；
+  另做 40 路并发与 30 轮 `Future.wait` 各一组 ⇒ drift 确实互斥整段临界区。R3 三条断言各自翻错各自红 ⇒ 无牙排除。
+- F-1（读屏）：`semanticsLabel` 在 `lib/`、`test/` 命中 **0**（8 处全在 specs 的撤回记录里），
+  并用 `git grep … ac51c0b` 做正向对照排除"搜索基是过期 clone"；W2 正反两条各自红（断假仓储写入流 ⇒ 第二条；
+  基线改 `false` ⇒ 第一条）⇒ 不是恒真判据。
+- 范围与字节：`lib`、`test` 两棵 **tree hash 在 `876c35e` 与 `fa94cfa` 相同**（比"只改 md"更强），
+  `pubspec.lock` 四处 blob 同为 `7ef8030b`；门禁 1–5 在副本复跑，`+908 ~26`、`+9`、
+  `Formatted 6 files (0 changed)`、`No issues found` 全对上；F-6 的驳回被独立复现。
+
+三条**本轮新写的**台账缺陷（纯 md，复核未判 FAIL，本笔全改；改法就地见 spec 六-1 与「三-3」）：
+
+| 条目 | 复核指的问题 | 本仓复验（命令与读数） | 处置 |
+| --- | --- | --- | --- |
+| 九-1 | spec 六-1 的「命令见 `tasks.md` 二」是悬空指针 | `grep -n 默认 specs/055-settings-timezone-switch/tasks.md` 只命中 FR-4 那格与 M6 一行，二节没有那条命令 | 命令写进 spec 就地可跑，并注明 `grep` 零命中时退出码 1 属正常 |
+| 九-2 | 引了一个不存在的复核编号 F-1′ | `grep -c "F-1′" /tmp/r83rev370/report.md` = 0；默认值那条在正文「四-1」（`:85` 判"站得住但前提不成立"、`:94` 明写不判失项） | 换成真实小节与行号，并留一句"原编号不存在" |
+| 九-3 | 三-3 把「关 = isFalse」记到 `/tmp/r82/probe-pre-fix-bad0933.log` 名下 | 那份日志 `:4` 与 `:7` 的 `NODE.label` 都是「时区，已开启」⇒ 探针在"关"那档没扳动，且它只打印 label、没打印 `isToggled` | 正反读数改钉仓内 W2（`grep -c "_toggled(tester)," test/features/settings/timezone_preference_test.dart` = 2），旧引证在「三-3」记为作废 |
+
+`PASS` 只说明字节与台账一致、两处缺陷确已修 ⇒ **不构成合并依据**，合并仍等单独授权。
