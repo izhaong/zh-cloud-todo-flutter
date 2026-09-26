@@ -1,6 +1,6 @@
 # 056 执行台账
 
-## 状态：本轮完工待复核（分支 `feat/369-fixed-time-mode-picker`，尚未开 PR）
+## 状态：本轮完工，只读复核 `VERDICT: PASS`（分支 `feat/369-fixed-time-mode-picker`，PR !372）
 
 矩阵 #12 不动：契约 PR（service !291）与本分支都未合并 ⇒ 只写「已实现待合并」，不翻状态。
 
@@ -44,7 +44,7 @@ flutter test --exclude-tags 'golden || performance' --concurrency=1   # 读数�
 
 | 面 | 用例 | 结论 |
 | -- | ---- | ---- |
-| 320px + 1.3 倍字号（该 sheet 自己的 context） | `320px + 1.3 倍字号下两档固定仍可读可点` | 部分：两档控件 rect 全在 320 视口内、标题与嘀嗒原句副标题都在、读屏标签命中。**全局 no-exception 判不了** —— 撞出 `RenderFlex overflowed by 36 pixels on the right`，两次反向探针（把 `RadioGroup` 整块隐藏、把副标题换成短串）读数不变 ⇒ 溢出源是 Issue #279 已登记的存量缺陷，不是本控件；用例注释已指回 #279。 |
+| 320px + 1.3 倍字号（该 sheet 自己的 context） | `320px + 1.3 倍字号下两档固定仍完整可见` | 部分：两档控件 rect 全在 320 视口内、标题与嘀嗒原句副标题都在、读屏标签命中。**全局 no-exception 判不了** —— 撞出 `RenderFlex overflowed by 36 pixels on the right`，两次反向探针（把 `RadioGroup` 整块隐藏、把副标题换成短串）读数不变 ⇒ 溢出源是 Issue #279 已登记的存量缺陷，不是本控件；用例注释已指回 #279。 |
 | 独立读屏语义 | 同上（`find.bySemanticsLabel(RegExp('^固定时间'))`） | 已验 |
 | 失败保留已加载数据 | `detail keeps the chosen time mode when saving fails` | 已验：保存失败后库里的 `time_mode` 仍是 0，重开面板档位仍是用户选的「固定时间」 |
 | 过期响应不覆盖新响应 | `detail keeps an unsaved time mode against a newer snapshot` | 已验：`watchById` 推来 `time_mode=1` 的新快照后，面板仍是未保存的「固定时间」，且没被写回库 |
@@ -87,12 +87,13 @@ git status --short pubspec.lock                     # 期望空
 
 ## 六、下一轮入口
 
-1. 只读复核（`claude -p` 门禁）拿 `VERDICT`，通过后 commit → push → 开 PR 指向 `develop`，
+1. （已完成，见第七节）只读复核（`claude -p` 门禁）拿 `VERDICT`，通过后 commit → push → 开 PR 指向 `develop`，
    正文 `Refs #369`，并声明它 stack 在未合并的 !370（`7126f01`）之上。
-2. 台账自扫判据：本分支不含 `tool/check_spec_selfscan.py`（它在 FL PR !364 的分支上），
+2. （已完成）台账自扫判据：本分支不含 `tool/check_spec_selfscan.py`（它在 FL PR !364 的分支上），
    复核前先从 !364 取该脚本，跑
    `python3 <该脚本路径> specs/056-task-fixed-time-mode/tasks.md`，
    现读到「失项 0 条」才算改完；!364 合并后改用仓内路径 `tool/check_spec_selfscan.py`。
+   取法与读数记在第七节末尾；`--selftest` 也跑过，判据不符 `0` 条。
 3. service #292 提醒侧接 `time_mode`（队列第⑤项）与 FL Issue #371 同一口径，两端一起定。
 4. 增量 SQL 两条回填 `UPDATE` 仍未在任何环境执行 —— 要人过目后才跑。
 5. 本分支合并后，docs 矩阵 #12 主表行（`zh-cloud-docs` 的 `dida-parity-matrix.md` 第 79 行）
@@ -100,3 +101,34 @@ git status --short pubspec.lock                     # 期望空
    `task_time_formatter.dart:167` 都是 develop 上「一个布尔开关」时代的行号，
    三态落地后位置已变（现按符号名引：`_timeMode`、`_timeModeSubtitle`、`RadioGroup`、`_timeZoneLabel`）。
    矩阵行翻状态的前提仍是 service !291 已合并 —— 未合并前只写「已实现待合并」。
+
+## 七、第 10 轮只读复核（PR !372，审的字节 = `5c5a901`，报告 `/tmp/verdict-372-r1.log`）：`VERDICT: PASS`
+
+复核通道是 `claude -p` 的只读门禁，工作树 `git status --short` 干净、HEAD = `5c5a901`。
+无 BLOCKER。判据源那一面要说清楚：帮助页在 `zh-cloud-docs` 仓，在复核员的允许目录之外，
+所以它是对着**本仓 spec 里逐字引的原句**（`spec.md` 引 `:48/:50/:60/:64`）判的，不是直接读镜像页。
+
+`grep -c "^\*\*NIT" /tmp/verdict-372-r1.log` ⇒ `3`（三条非阻断，逐条处置如下）。
+
+| NIT | 复核员的主张 | 处置 |
+| --- | --- | --- |
+| 1 | `test/features/task/task_time_semantics_test.dart` 的窄屏用例把「恰好 36px 的 RenderFlex 溢出」写进 `isTrue` 的豁免里 ⇒ 若两档控件自己引入**同数值**的溢出，这条判不出来；归因靠的是台账里的反向探针，不是用例内自动执行的判据 | **不改**（复核员自己也判为可接受的文档化取舍）。书面理由：豁免串钉死在 `36` 这个数上是存量 Issue #279 的代价，收紧它要么给 Sheet 加与本需求无关的布局约束，要么等 #279 自己修掉那 36px（PR !322 车道）。用例注释与第三节表格都指回 #279，不假装这条断言覆盖了溢出归因 |
+| 2 | `spec.md` 里「实测后果」的 `+901 ~26 -17` 与「未做完的部分（本笔是 WIP）」两块仍是 WIP 台账态，与本 commit 的终态自相矛盾（方向是"已做写成未做"，不是假账） | **已修**：「实测后果」行标为 WIP 轮历史读数并指向本节；「未做完的部分」改写成逐条终态（17 条已转绿、四件套已覆盖、`tasks.md` 已建、format 与 build 已在终态字节跑过），并把「矩阵 #12 不动」与「提醒时刻按存储瞬间（#371）」两条仍成立的留在原位 |
+| 3 | 用例名写「仍可读可**点**」，但断言只有 rect 在 320 视口内 + 文本 + 语义标签，没有任何 `tap` ⇒ 名字里"点"这一面恰恰是没测的 | **已修**：用例改名为 `320px + 1.3 倍字号下两档固定仍完整可见`，与它真正断言的东西对齐；第三节表格的用例名同步改。不补 `tap`：那需要给两档控件加命中测试断言，属新增覆盖面而非把话说准，且"可点"从来不是四件套的判据（判据是"在该 sheet 自己的 context 实测不溢出"＋独立读屏语义） |
+
+### 复核后动了字节 ⇒ 六门禁在终态字节上整套重跑（日志 `/tmp/gates-372/`）
+
+改动清单 `git diff --name-only HEAD`（重跑前）= `specs/056-task-fixed-time-mode/{spec,tasks}.md`
++ `test/features/task/task_time_semantics_test.dart`，其中 .dart 那一笔**只换用例标题字符串**，
+未增删断言。计数不变这一点由门禁 5 的读数自证。
+
+| 门禁 | 读数（现读，日志内行尾的 `rc=` 是这道门的退出码） |
+| --- | --- |
+| 1 `git diff --check` | 无输出，`diffcheck_rc=0`（`g5-diffcheck.log`） |
+| 2 `dart format --output=none --set-exit-if-changed`（`/tmp/fmt-final.txt` 的 20 个文件，未做全仓原地格式化） | `Formatted 20 files (0 changed)`，`format_rc=0` |
+| 3 `flutter analyze` | `No issues found!`，`analyze_rc=0` |
+| 4 `flutter test --tags golden` | `00:04 +9: All tests passed!`，`golden_rc=0`；跑完 `git status --porcelain` 里 png/gold 计数 `0`（`g5-golden-png-count.txt`）⇒ 9 张基线一张未重录。**这条判据不是恒绿的**：9 张基线本身是受版本管理的文件（`git ls-files 'test/*' \| grep -cE '\.(png\|gold)$'` ⇒ `9`），被重录就会以 ` M test/goldens/…png` 出现在同一条 `git status` 里 |
+| 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:24 +922 ~26: All tests passed!`，`test_rc=0`（与 `5c5a901` 那轮同一数，改名不改变用例数） |
+| 6 `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web`，`build_rc=0` |
+
+跑完门禁 `git status --porcelain pubspec.lock` 计数 `0` ⇒ 本机镜像没被扫进这笔。

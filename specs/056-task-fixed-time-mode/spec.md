@@ -50,6 +50,8 @@
 门禁读数：`flutter analyze` ⇒ `No issues found!`；`flutter test --tags golden` ⇒ `+9 All tests passed`（
 **没碰 9 张基线**，spec 决定 3 的假设成立）；
 `flutter test --exclude-tags 'golden || performance' --concurrency=1` ⇒ `+901 ~26 -17`。
+**本行是 WIP 轮的历史读数**：同一分支收口后重跑为 `+922 ~26: All tests passed!`（失败 0），
+六道门禁逐条读数与日志路径见 `tasks.md` 第四节，不要再引用本行的 `-17`。
 
 那 17 条红的**全部**叫得出名字：`固定时区…墙钟…`（日历落格、看板截止、时间线分桶、侧栏计数、
 今日投影、详情渲染与回环、推荐任务入队…）。清单见 `tasks.md`。
@@ -120,9 +122,13 @@ B 看起来省事，但它把"标签与行为不一致"这个病根留着了，�
 解释」，而 `lib/core/notification/` 的 `zonedSchedule` 路径目前直接用存储瞬间 ⇒
 出行人会在北京 7 点的瞬间收到提醒。已立 FL Issue #371 跟踪，属矩阵 #12 的第四面。
 
-## 未做完的部分（本笔是 WIP，别当成完工）
+## 未做完的部分（收口后修订：下面四条只有第 1、2 条仍然成立）
 
-- 17 条测试尚未按 A 改写；
-- 四件套里 320px + 1.3 倍字号的实测、读屏语义、失败保留、过期响应四条**还没写测试**（R5 未验）；
-- `specs/056/tasks.md` 尚未建；矩阵 #12 不动（契约 PR 未合并，本来也不许翻）；
-- 六道门禁里 `dart format --set-exit-if-changed` 与 `flutter build web` 尚未在最终字节上跑。
+- **仍成立**：矩阵 #12 不动。契约 PR service !291/!294 未合并 ⇒ 只写「已实现待合并」，不许翻状态。
+- **仍成立（另一面）**：`固定时间` 的提醒时刻仍按存储瞬间调度，属 Issue #371，不在本 PR。
+- 已完成：17 条钉旧语义的测试按「行为不变、标签改对」的口径改写后转绿。
+- 已完成：R5 四件套由三条用例覆盖（窄屏可见性与读屏语义在同一条、保存失败保留、过期响应不覆盖），
+  逐条断言与两处存量豁免见 `tasks.md` 第三节表格。
+- 已完成：`specs/056/tasks.md` 已建。
+- 已完成：`dart format --output=none --set-exit-if-changed`（本轮 20 个 .dart，未做全仓原地格式化）
+  与 `flutter build web --release` 已在最终字节上跑，读数在 `tasks.md` 第四节。

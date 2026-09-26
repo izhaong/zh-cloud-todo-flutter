@@ -1515,7 +1515,7 @@ void main() {
     expect(task?.fixedTimezone, isFalse);
   });
 
-  testWidgets('320px + 1.3 倍字号下两档固定仍可读可点', (tester) async {
+  testWidgets('320px + 1.3 倍字号下两档固定仍完整可见', (tester) async {
     tester.view.physicalSize = const Size(320, 900);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
