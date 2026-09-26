@@ -78,9 +78,10 @@ rc=1（我手写换行不合 formatter），所以那一份日志不作证据；
 ⚠️ 本来还想引 `specs/045-sort-direction/tasks.md:120` 作第二处佐证，落笔前 `ls` 过：**这个目录不在本分支**
 （`specs/045-sort-direction/` No such file or directory，它在未合并的分支上）⇒ 不引，
 免得又写成一个指不到的指针（第 77 轮复核 F1 的原罪就是这个）。
-新增 6 条这一侧的前提也可验：`git diff --name-status origin/develop..HEAD -- test` 只有一个 `A`（本表日志收尾 `工作树脏项数=0`），
+新增 6 条这一侧的前提也可验：`git diff --name-status 9032005..HEAD -- test` 只有一个 `A`（**基准显式写成 sha**：第 5 轮复核 3C 量出写 `origin/develop` 会随远端漂移，今天那条串已是 21 A + 8 M；本表日志收尾 `工作树脏项数=0`），
 `grep -c "  testWidgets(" test/features/list/list_share_entry_test.dart` = 6。
-`~26` 与既有各轮一致（未新增 skip）。收尾 `工作树脏项数=0`、`pubspec.lock` 未进提交。
+`~26` 与既有各轮一致（未新增 skip）。
+⚠️ 第 5 轮复核 3C 还抓到一处**留痕缺口**：测试注释 `:204-206` 里的「`SizedBox.shrink` 47→42」数值是真（复核员自己跑出来 `Expected: <47> / Actual: <42>`，见 `/tmp/r81rev5/report.md`），但**我自己没留日志**。本笔不动代码（那会作废已跑的门禁），把它记成下一笔要补的留痕：跑一次 `trailing: const SizedBox.shrink()` 探针并留 `/tmp/r79h/s9-shrink.log`。收尾 `工作树脏项数=0`、`pubspec.lock` 未进提交。
 
 ## 反向探针（六条 X1–X6 + 四条反例 CX1–CX4）
 
@@ -130,8 +131,9 @@ CX2/CX3 只有 `textContaining` 能咬、CX4 只有 `byIcon` 能咬，脚本对 
 | CX5 | 对话框里文案带后缀 `共享协作 · 邀请成员` | `+5 -1` | ① `ModalBarrier`（reason「都自带屏障」） |
 | CX6 | 长按弹 `SnackBar(Text('去共享协作'))` | `+5 -1` | ② `SnackBar` 那条（不在 ①，屏障数不变） |
 | CX7 | 复核点名的四种图标/语义形状 + 下拉菜单：`IconButton(Icons.share)`、裸 `RichText`、`Icons.people_outline`、`Semantics(label:)`、`PopupMenuItem(Icons.share_outlined)` | 各 `+5 -1` | ① 一条全包 —— 这正是"按结果判"要买的东西：不认文案、不认 codepoint |
-| CX8 | 不起浮层，直接往那一行的 `trailing:` 里加一层 `Row(徽章, Icon)` | `+5 -1`，计数 47 → **54** | ③ 行子树组件数（reason「那一行的子树比 develop 形态多了组件」） |
-| 反向对照 A | `trailing:` 整个换成一个 `Icon`（**等量**替换，组件数不变） | `+6` **仍绿** ⇒ 判据按预期看不见 | 不由 ③ 负责；同一补丁在 `flutter test --tags golden` 下红 **5/9** 张（逐张 diff：wide-populated / wide-selected / wide-long-content 各 0.16%、wide-empty 0.09%、compact-selected 0.20%，日志 `/tmp/r79h/golden-A.log` 的 `:66`、`:99`、`:132`、`:164`、`:197`）⇒ 计数网与像素网互补，各自的洞都写明 |
+| CX8 | 不起浮层，直接往那一行的 `trailing:` 里加一层 `Row(徽章, Icon)` | `+5 -1`，计数 47 → **54** | ④ 行子树组件数（reason「那一行的子树组件数不再是 develop 基线 47」）
+<!-- 第 5 轮复核 3A/3B：旧格里的 reason 串在 a398a35 之后交付字节 0 命中（`git grep -c` 只在台账自身命中 1 次），且同一张表里 `③` 被同时用来指"行子树数"与"整棵树数"两张网 —— 现按 spec/测试的编号：③=整棵树、④=行子树 --> |
+| 反向对照 A | `trailing:` 整个换成一个 `Icon`（**等量**替换，组件数不变） | `+6` **仍绿** ⇒ 判据按预期看不见 | 不由 ④ 负责；同一补丁在 `flutter test --tags golden` 下红 **5/9** 张（逐张配行号，**按日志顺序**读才不会错位：`wide-populated` `:66` 0.16%、`wide-selected` `:99` 0.16%、`wide-empty` `:132` 0.09%、`wide-long-content` `:164` 0.16%、`compact-selected` `:197` 0.20%）⇒ 计数网与像素网互补，各自的洞都写明 |
 | S10（第 4 轮新增） | **不起路由也不带屏障**：`Overlay.insert` 一个手写面板，文案还故意不写"共享协作" | `+5 -1` | ③ 整棵树元素数（reason「整棵树的元素数变了」）—— ①② 实测都躲过了，这条就是复核 F1 抓到的那个洞 |
 
 
