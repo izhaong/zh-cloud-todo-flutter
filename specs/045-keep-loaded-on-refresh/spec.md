@@ -21,7 +21,7 @@ kind=AsyncError  isLoading=false  hasValue=true  valueOrNull≠null  hasError=tr
 
 ⇒ **框架没丢数据，丢数据的是 `.when` 的分支判别**：它按 `error:` 分支渲染，不再回看 `value`。
 所以修法不需要局部缓存、不需要 `keepPreviousData`，只需要把读法换成「先取 `valueOrNull`」。
-该形状由 `test/features/habit/habit_page_test.dart` 第 1 条用例（连带反向探针 PA）钉住。
+边界要说准：`habit_page_test.dart` 第 1 条用例钉的是**渲染结果**（失败后行与统计卡仍在、提示可见），不是上面这行字段值本身；字段值这一形状另有两条支撑——`pubspec.lock` 锁定的 riverpod 2.6.1 源码（`AsyncError.copyWithPrevious` 把 `hasValue` 带过去），以及反向探针 PA 把实现退回 develop 后该用例必红。第 1 轮复核也按这个口径判过（不算夸大）。
 
 ## 需求
 

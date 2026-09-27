@@ -42,6 +42,9 @@
 | PB | `lib/features/countdown/countdown_page.dart` 退回 develop 字节 | **3 红**（该文件全部 3 条）；`PB_RESTORE_IDENTICAL` |
 | 还原 | 两文件合跑 | `+9 All tests passed!`（`restored.log`） |
 
+上表的红测点名、`+1 -5` 与 `+0 -3` 两条计数、以及 `PA_RESTORE_IDENTICAL`/`PB_RESTORE_IDENTICAL` 两个标记，**都落在同一份留档 `r2/probes.out`**（PA/PB 明细各自在 `r2/PA.log`、`r2/PB.log`）。
+⚠️ 这里第一次跑漏了一次留档：探针脚本把两个标记 `echo` 到 stdout，而我当时是前台直接执行、没重定向 ⇒ 标记只出现在终端、任何日志里都 grep 不到，被第 1 轮复核抓为「台账引用了查无实据的标记」。**认**。处置：`probes.sh` 改成用 `git show origin/develop:<path> > <path>` 取旧字节（顺带根除上一格那条"污染索引"的坑）、还原断言加 `git diff --quiet HEAD` 核验，并**重跑一次落档 `probes.out`**（本表读数即来自重跑后的留档）。
+
 PA 下**唯一不红的**是「两次连发刷新：过期的旧响应不得覆盖新响应」⇒ 它是**参考面**不是判据面：
 那条测的是框架自身的行为（被顶替的 future 的结果不会覆盖新值），与本面的 `valueOrNull` 改法无关，
 它在 develop 字节上也该绿。绿 = 不覆盖，**不等于**本面机制无病灶（这条判据由 PA 的其余 5 红承担）。
@@ -85,7 +88,12 @@ FL Issue **#375** 已用留言订正两点（前提坐实、`calSubscription` �
 
 ## 七、只读复核 VERDICT 与下轮入口
 
-- [ ] 只读复核（`claude -p`，被审 head `f24f122`）——回来后把轮次、被审 SHA、失项逐条处置写回本节。
+
+- [x] 只读复核**第 1 轮已完成**（`claude -p`，被审 head `665cc13b6` = PR !376 head；提示词 `/tmp/gates-375/review-prompt.txt`；日志 `/tmp/verdict-376-r1.log` 9776 字节，哨兵 `grep -c "VERDICT:"` = 1）⇒ **`VERDICT: PASS`**（A–H 无 FAIL 级）。三条观察逐条回源复验，不整体接受也不整体驳回：
+      ① 两个 `RESTORE_IDENTICAL` 当时确实查无实据 ⇒ **认**，处置见 §三 末段（改脚本 + 重跑落档）。
+      ② 「spec 的前提不该说成被用例逐字段钉住」 ⇒ **认**，`spec.md` 同段已改成"用例钉渲染结果、字段值另由 riverpod 源码与探针行为支撑"的分工表述。
+      ③ 它报"基线读到 `+899`" ⇒ **不认**：`grep -oE "\+[0-9]+ ~[0-9]+: All tests passed!" /tmp/gates-375/baseline.log | tail -1` 现读数是 **`+898 ~26`**；`907 − 898 = 9`，与两个新文件的 `testWidgets` 计数（现跑 `grep -c` = 6 与 3）吻合。
+      它另外独立确认：无恒真断言（没有判据位置直接填 `true`）、PB 三条全落在 `TodoSyncOutboundTimeModePayloadTest` 一个类、countdown 页不写"过期响应"用例属**刻意**（plan 取舍 3：该行为由框架承担）而非漏覆盖。
 - [x] 合并前置的机械项已齐：六道门禁 rc=0（§二）+ 反向探针（§三）+ 真实合并试算。
       试算命令 `git merge-tree --write-tree origin/develop f24f122` ⇒ rc=0，
       产出 tree `da64de837f8407ffe6599a11c9ac2df962f3a4ef`，与 `git rev-parse f24f122^{tree}` 逐字节相等
