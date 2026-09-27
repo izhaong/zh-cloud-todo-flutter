@@ -78,7 +78,44 @@ class NlpDateParser {
       );
     }
 
+    return _parseBareTime(lower, input, now);
+  }
+
+  /// 裸时间点：嘀嗒《03-特色功能/05-智能识别.md》:13 的例子「9点提醒我」不带日期词。
+  ///
+  /// 同一条原文给的是「统一识别成**最近有效**的日期和时间」，所以不猜上午下午：
+  /// 把 {h, h+12}（h<12 时）× {今天, 明天} 都当候选，取**严格晚于当前时刻**的最早一个。
+  /// 钟点提示只从**原文输入**里读——上面的预处理会把「上午 / 早上 / 晚上 」整段删掉。
+  ResolvedDate? _parseBareTime(String lowered, String raw, DateTime now) {
+    final bare = RegExp(r'(\d{1,2})\s*[点时](?:(\d{1,2})分?)?').firstMatch(lowered);
+    if (bare == null) return null;
+    final hour = int.parse(bare.group(1)!);
+    final minute = int.tryParse(bare.group(2) ?? '') ?? 0;
+    if (hour > 23 || minute > 59) return null;
+    final midnight = _todayAtMidnight(now);
+    final candidates = <DateTime>[];
+    for (final h in _hourReadings(hour, raw)) {
+      for (final offset in const [0, 1]) {
+        final base = midnight.add(Duration(days: offset));
+        candidates.add(DateTime(base.year, base.month, base.day, h, minute));
+      }
+    }
+    candidates.sort();
+    for (final dt in candidates) {
+      if (dt.isAfter(now)) return ResolvedDate(dt, bare.group(0)!);
+    }
     return null;
+  }
+
+  /// 中文 12 小时制提示：有提示就只留对应读法，没提示就两种都留给「最近有效」去挑。
+  List<int> _hourReadings(int hour, String raw) {
+    final pm = RegExp(r'下午|晚上|傍晚|夜里|半夜').hasMatch(raw);
+    final am = RegExp(r'早上|上午|中午|凌晨').hasMatch(raw);
+    if (pm && hour < 12) return [hour + 12];
+    if (am && hour == 12) return [0, 12];
+    if (am || pm) return [hour];
+    if (hour == 0 || hour > 12) return [hour];
+    return hour == 12 ? [12] : [hour, hour + 12];
   }
 
   DateTime _todayAtMidnight(DateTime now) =>
