@@ -87,6 +87,19 @@ void main() {
       expect(r, isNotNull);
       expect(r!.date, DateTime(2026, 9, 28, 9, 30));
     });
+
+    // 拒识必须**只针对命中处紧跟的「半」**。早先的实现是全文扫 `\d\s*[点时]\s*半`，
+    // 于是这一条会连带把本来能识别的前半句一起毙掉（过度拒识）。
+    test('后半句的「半」不牵连前半句：「明天9点开会，下午3点半」→ 次日 09:00', () {
+      final r = at(DateTime(2026, 9, 28, 8, 0)).parse('明天9点开会，下午3点半');
+      expect(r, isNotNull);
+      expect(r!.date, DateTime(2026, 9, 29, 9, 0));
+      expect(r.matchedText, '明天9点');
+    });
+
+    test('「半」与「点」之间有空格也算紧跟：「9点 半」→ null', () {
+      expect(at(DateTime(2026, 9, 28, 8, 0)).parse('9点 半'), isNull);
+    });
   });
 
   // AM 与 PM 提示词同时出现时原文没有任何规则 ⇒ 行为**未定义**。
