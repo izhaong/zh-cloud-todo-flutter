@@ -105,6 +105,9 @@ Gitea Issue #381；矩阵 #28 缺口「无按日热力」。**PR 尚未合并 �
 
 快进性判据（现跑）：`git merge-tree --write-tree origin/develop HEAD` = `d9c7752ae62a076396f41bbdc92fe07080615392`，
 与 `git rev-parse HEAD^{tree}` 逐字相等 ⇒ 与 develop 无冲突、可直接快进。
+**审的是代码字节 `cff9e13`，PR head 在它之后还多两笔 markdown**（`c06bbbc` 本台账、`d0b3bd4` 补 plan.md）。
+差异判据（现跑）：`git diff --name-only cff9e13 d0b3bd4` 只列 `specs/058-year-view-heatmap/*.md`；
+若复核按 `HEAD` 数列触达文件而多出一个 `plan.md`，那是它读到了 markdown 增量，不是代码变了。
 
 ## 八、本轮踩到与下轮入口
 
