@@ -67,6 +67,79 @@ void main() {
     expect(taskColumns.map((row) => row.data['name']), contains('section_id'));
   });
 
+  test('v22→v23 升级把勾过固定的存量任务回填成「固定时间」，没勾的仍是浮动', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'zh_cloud_todo_time_mode_backfill_',
+    );
+    final databaseFile = File('${directory.path}/todo.sqlite');
+    addTearDown(() async {
+      if (await directory.exists()) {
+        await directory.delete(recursive: true);
+      }
+    });
+
+    final seeded = AppDatabase.forTesting(NativeDatabase(databaseFile));
+    final now = DateTime.utc(2026, 9, 20, 8);
+    await seeded.batch((batch) {
+      batch.insert(
+        seeded.todoLists,
+        TodoListsCompanion.insert(
+          id: 'list-time-mode',
+          name: '工作',
+          updatedAt: now,
+          createdAt: now,
+        ),
+      );
+      batch.insert(
+        seeded.todoTasks,
+        TodoTasksCompanion.insert(
+          id: 'task-fixed',
+          listId: 'list-time-mode',
+          title: '勾过固定的老任务',
+          fixedTimezone: const Value(true),
+          updatedAt: now,
+          createdAt: now,
+        ),
+      );
+      batch.insert(
+        seeded.todoTasks,
+        TodoTasksCompanion.insert(
+          id: 'task-plain',
+          listId: 'list-time-mode',
+          title: '没勾固定的老任务',
+          updatedAt: now,
+          createdAt: now,
+        ),
+      );
+    });
+    await seeded.close();
+
+    // 退回"表上还没有 time_mode 这一列"的 v22 形状：新列由 onUpgrade 自己加回来，
+    // 这样测到的才是"加列 + 回填"这一整条路，而不是直接建好的 v23 库。
+    final legacy = sqlite.sqlite3.open(databaseFile.path);
+    try {
+      legacy.execute('ALTER TABLE todo_tasks DROP COLUMN time_mode');
+      legacy.execute('PRAGMA user_version = 22');
+    } finally {
+      legacy.dispose();
+    }
+
+    final upgraded = AppDatabase.forTesting(NativeDatabase(databaseFile));
+    addTearDown(upgraded.close);
+    final version = await upgraded
+        .customSelect('PRAGMA user_version')
+        .getSingle();
+    final rows = await upgraded
+        .customSelect('SELECT id, time_mode FROM todo_tasks ORDER BY id')
+        .get();
+
+    expect(version.data['user_version'], 23);
+    expect(
+      rows.map((row) => '${row.data['id']}=${row.data['time_mode']}'),
+      containsAll(<String>['task-fixed=2', 'task-plain=0']),
+    );
+  });
+
   test(
     'upgrades schema 20 by localizing persisted filter references',
     () async {
