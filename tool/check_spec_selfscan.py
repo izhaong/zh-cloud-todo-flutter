@@ -79,9 +79,31 @@ CLAIMED_GREP = re.compile(r"grep\s+(?:-\w+\s+)*\"([^\"]+)\"\s+((?:tool|scripts)/
 #      这种句子的"闭引号"会被当成开引号 ⇒ 正向主张被误免（第 11 轮实测踩过，语料已钉）。
 #   边界：开引号必须在「末行」**之前** ⇒「`+907` 就是末行」仍然红。
 NEGATION = re.compile(
-    r"[不未]叫|才是|^.*\|\s*不是\s*$|「末行」|\"末行\""
+    r"[不未]叫|才是|^.*\|\s*不是\s*$|「末行」"
     r"|不是[^，。；\n]{0,6}末行|「[^」\n]{0,12}末行"
 )
+# ①b 的"就近"尺度：锚必须出现在「末行」之前这么多个字符里，否则不算这条主张的证据。
+# 第 11 轮复核实测两个缴获形状：`…就是"末行"`（ASCII 引用紧贴主张）与
+# `A（锚）+ B 那行就是末行`（同行别处的锚盖住本条无锚主张）⇒ 行级 `REF in line` 太宽。
+NEAR_ANCHOR = 30
+
+
+def near(pos: int, line: str) -> tuple:
+    """返回（前窗, 环绕窗, 后窗截断）。
+
+    - 锚**前后都算**，但后窗要在遇到句号或下一个「末行」之前截断 ⇒
+      `…就是末行（`x.log:9`）` 这种"锚紧跟其后"合法，而
+      `A（锚）+ B 那行就是末行` 里 A 的锚既在 30 字之外、又隔着另一个主张，不算。
+    - 否定/引号提及看环绕窗：`「末行」` 的闭引号在词后面，只往前看就认不出来。
+    """
+    prev = line[max(0, pos - NEAR_ANCHOR):pos]
+    around = line[max(0, pos - NEAR_ANCHOR):pos + 6]
+    tail = line[pos + 2:pos + 2 + NEAR_ANCHOR]
+    for stop in ("。", "；", "末行"):
+        i = tail.find(stop)
+        if i >= 0:
+            tail = tail[:i]
+    return prev, around, tail
 # 只盯「末行」这一种主张：把统计行叫末行才是历次判我的那条罪（`r77c6/review_r77_round6_report.md:108`）。
 # 触发词就这一个字面，不多扩：扩到「统计行」会把散文里正常写「统计行在 `x.log:2`、全文 9 行」的句子
 # 判成失项 ⇒ 语料「统计行在中间·句里不称末行」把这条边界钉住（期望不红）。
@@ -288,19 +310,22 @@ def check(text: str, repo_root: Path) -> list[str]:
                         f"「`+N` 统计行在 :{want}、全文 {total} 行、:N 不是末行」"
                     )
 
-    # ①b 正向「末行」主张必须带锚（第 8 轮 F-7 的修法，第 10 轮复核复判仍空转：
-    #     上面那段只在"这行有锚"时才检查末行 ⇒「统计行的 +907 就是末行」整条漏网）
+    # ①b 正向「末行」主张必须**就近**带锚（第 8 轮 F-7 的修法；第 10 轮补"整行有锚也放行"太宽；
+    #     第 11 轮复核实测两个缴获形状 ⇒ 改成逐次出现、只看前 NEAR_ANCHOR 字的窗口）
     for n, line in enumerate(lines, 1):
-        if not any(w in line for w in LASTLINE_WORDS):
-            continue
-        if NEGATION.search(line) or not LASTLINE_CLAIM.search(line):
-            continue
-        if REF.search(line) or BRANCH_REF.search(line):
-            continue
-        errs.append(
-            f":{n} 把某个读数称作「末行」却没给 `文件:行号` 锚 ⇒ 无从核对"
-            f"（判据：补锚，或按本仓口径改写成「`+N` 统计行在 :行号、全文 X 行」）"
-        )
+        for m in re.finditer("末行", line):
+            prev, around, tail = near(m.start(), line)
+            if not LASTLINE_CLAIM.search(around):
+                continue                    # 环绕窗里没有"在报读数"的形状 ⇒ 不归本尺
+            if NEGATION.search(around):
+                continue                    # 就近的显式否定 / 直角引号提及 ⇒ 在谈这个词
+            if REF.search(prev) or BRANCH_REF.search(prev) or REF.search(tail) or BRANCH_REF.search(tail):
+                continue
+            errs.append(
+                f":{n} 把某个读数称作「末行」但就近（前 {NEAR_ANCHOR} 字）没有 `文件:行号` 锚"
+                f" ⇒ 无从核对（判据：补锚，或按本仓口径改写成「`+N` 统计行在 :行号、全文 X 行」）"
+            )
+            break                           # 一行只报一次，别把同一条病刷成一排
 
     # ② 已判过的轮不许再写"未回/未派"
     done = rounds_judged(text)
@@ -452,6 +477,11 @@ CORPUS: list[tuple[str, str, str, bool]] = [
      "统计行的 `+907` 就是末行。\n", True),
     ("末行·正向读数主张带真锚（①b 的绿对照）", "①b",
      "统计行 `+9` 是末行（`logs/gates.log:9`，全文 9 行）\n", False),
+    # 第 11 轮复核缴获的两个形状，从此各钉一条语料：
+    ("末行·ASCII 引用紧贴主张不算提及（①b 须红）", "①b",
+     '旧措辞指的 `+907` 就是"末行"。\n', True),
+    ("末行·同行别处的锚不豁免后一个主张（①b 须红）", "①b",
+     "统计行 `+9` 是末行（`logs/a.log:9`）+ `+18 All tests passed!` 那行就是末行。\n", True),
     ("末行·谈这个写法本身的元语言（①b 豁免）", "①b",
      "本条只谈「末行」这个写法，`+907` 不是末行。\n", False),
     ("末行·显式否定（第 11 轮：纠正句曾被判成假失项）", "①b",

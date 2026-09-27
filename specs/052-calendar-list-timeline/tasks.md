@@ -123,7 +123,7 @@ $ flutter test test/features/task/calendar_list_timeline_test.dart
      `/tmp/r77b/pn.log:26`、`/tmp/r77b/pp.log:11`、`/tmp/r77/red1.log:143`（判据：逐份 `wc -l < 文件` 现算，不是"日志都长一样"）。
      前五份的末行是脚本自打的 `rc=` 或收尾行；`/tmp/r77/red1.log:143` 这份的末行是失败明细，统计行在 `:140`、全文 143 行
      （第 7 轮 F5 判我上一版"每份日志都是…"那句全称正是被它反驳的）。）
-`~26` 与既有各轮一致（未新增 skip）。`pubspec.lock` 未进提交：`git log --stat origin/develop..HEAD -- pubspec.lock` 为空。
+`~26` 与既有各轮一致（未新增 skip）。`pubspec.lock` 未进入**本次 PR 的提交**：`git log --oneline origin/develop..HEAD -- pubspec.lock` 读数 0 笔。⚠️ 上一版这里写的是"未进提交"，第 11 轮复核判它字面不成立 —— 该文件在 `origin/develop` 上**本就被追踪**（`git ls-files pubspec.lock` 有输出），所以准确说法是"本 PR 没碰它"，不是"它没被追踪"。
 
 ## 反向探针（九条；**表内读数是 `324f23d` 上的重跑**，日志 `/tmp/r77/probes-r2.log`，
 结论行「异常计数 = 0」在**该文件 :104**（`:105` 是收尾行「收尾 lib/ 工作树：干净」、全文共 105 行
@@ -498,7 +498,7 @@ python3 tool/check_spec_selfscan.py "$f"; done`）⇒ 复核读数是别家台�
 - ① 的 URL 豁免做完后，反引号里的 `//host/path:12` 不再被当死锚点；配一条绿语料钉住形状。
 - ⑤ 一上线又红一批，分两类。**真账**一处：「第 77 轮只读复核（第 2 轮）」节里写"六条一起做了"，
   紧跟的括号里只枚举三项 ⇒ 数与项对不上，已改成六项实枚举（复算：
-  `grep -oE "\*\*N[1-6]\*\*" specs/052-calendar-list-timeline/tasks.md | sort | uniq -c` 每个恰好 1 次）。
+  `grep -oE "\*\*N[1-6]\*\*" specs/052-calendar-list-timeline/tasks.md | sort | uniq -c` ⇒ 本轮现读 N1 到 N4 各 2 次、N5 与 N6 各 1 次，因为除这次修法清单外还有一处段落也点名了它们。**上一版这里写的是"每个恰好 1 次"，第 11 轮复核判它「台账主张与最终字节不符」**（那六个标记分布在两个小节共 9 处提及里）⇒ 改成实测读数；这一句本身不再新增 `**N…**` 形态的标记，所以数不会因本笔而漂）。
   **句式**另三处：计数词后面紧贴的括号装的其实是证据而非枚举，读的人同样会误读成枚举
   ⇒ 把括号挪到主句之后或另起一句，**没有为此放宽判据**。
 - `grep -c "^  ok"` = 26 这一处是我自己抄的语料条数：本笔加语料后它必然漂 ⇒ 改成只留
@@ -507,7 +507,7 @@ python3 tool/check_spec_selfscan.py "$f"; done`）⇒ 复核读数是别家台�
 **豁免类补两类，同时把它们能免到什么钉死**（第 10 轮 F-7 修法要判"正向无锚"，那"否定/提及"必须能豁免，否则台账连谈这条规则都不许）：
 
 - 显式否定 `不是…末行`：**中间不许跨标点**（`不是靠猜的，…就是末行` 仍红，语料已钉）；
-- 直角引号内提及 `「…末行」`：只认 `「`，**不认 ASCII 双引号** —— 我第一版写了 ASCII 版，结果 `"^  ok"` 的**闭引号**被当成开引号，把台账里那条真违规（`grep -c "^  ok"` = 26、末行「…」）洗成绿 ⇒ 收窄并补两条红语料（ASCII 闭引号形状、引号开在词后形状）。
+- 直角引号内提及 `「…末行」`：只认 `「`，**不认 ASCII 双引号** —— 我第一版写了 ASCII 版，结果 `"^  ok"` 的**闭引号**被当成开引号，把台账里那条真违规（原句写作 `grep -c "^  ok"` = 26 + 「末行」两字）洗成绿 ⇒ 收窄并补两条红语料（ASCII 闭引号形状、引号开在词后形状）。
 
 门禁与自扫（跑在最终字节上）：`python3 tool/check_spec_selfscan.py --selftest specs/052-calendar-list-timeline/tasks.md` ⇒ `与期望不符的判据 = 0 条`；
 `python3 tool/check_spec_selfscan.py specs/052-calendar-list-timeline/tasks.md` 与 `.../spec.md` ⇒ 各 `失项 0 条`。
@@ -521,3 +521,25 @@ python3 tool/check_spec_selfscan.py "$f"; done`）⇒ 复核读数是别家台�
 它要重算的是：①b/⑤ 是真有牙还是被我按语料喂成摆设（自造变异，别抄 CORPUS）、豁免收窄后 ASCII 引号那条形状是否仍红、
 「第 77 轮只读复核（第 2 轮）」节里那句"六条一起做了"的六项是否对得上 N1–N6（复算：
 `grep -oE "\*\*N[1-6]\*\*" specs/052-calendar-list-timeline/tasks.md | sort | uniq -c`）。
+
+## 十二、第 11 轮只读复核（审 `f17cd2a`，报告 `/tmp/r118/review.md`，结论流 `/tmp/r118/review.jsonl`）：`VERDICT: FAIL` 与逐条处置
+
+派单方式改了：上一轮夭折在超时（`grep -c VERDICT /tmp/r11rev364/out.log` = 0），这一轮把范围**收窄成"只判第 10 轮的三条修法 + 判据有没有牙 + 门禁是否实跑"**，
+并写了工具调用上限与"第 10 次之后停止取证直接写结论"（报告字节数复算：`wc -c < /tmp/r118/review.md`）。
+它自报读到的 ref 是 `f17cd2a7c`，与被审 head 一致。四条 findings 逐条回源：
+
+| # | 复核的说法 | 复验结论 | 处置 |
+| --- | --- | --- | --- |
+| F1 | 台账写「`**N[1-6]**` 每个恰好 1 次」，实测 `2 2 2 2 1 1` | **成立**（我自己跑 `git show f17cd2a:specs/052-calendar-list-timeline/tasks.md \| grep -oE "\*\*N[1-6]\*\*" \| sort \| uniq -c` ⇒ N1 至 N4 各 2、N5 与 N6 各 1） | 「十一」节那句改成实测读数 + 为什么各 2 次（另有一个小节也点名了它们）；这一笔只写不带 `**` 包裹的 N1–N6，所以数不再因本笔漂 |
+| F2 | ①b 能被两个形状缴获：`…"末行"`（ASCII 引用紧贴主张）、`A（锚）+ B 那行就是末行`（同行别处的锚盖住后一个主张） | **成立**（两条我都按报告原话造过一遍，改前实跑得绿） | `NEGATION` 里删掉 `\"末行\"` 这条豁免；①b 从"整行有没有锚"改成**逐次出现、就近 ±30 字**（后窗遇到 `。`/`；`/下一个「末行」即截断 ⇒ 别处的锚盖不过来），并按报告建议各钉一条红语料 ⇒ 复算 `python3 tool/check_spec_selfscan.py --selftest specs/052-calendar-list-timeline/tasks.md \| tail -1` ⇒ `与期望不符的判据 = 0 条` |
+| F3 | 「`pubspec.lock` 未进提交」字面不成立：它在 `origin/develop` 上本就被追踪 | **成立**（`git ls-files pubspec.lock` 有输出、`git log --oneline origin/develop..HEAD -- pubspec.lock` 为空 ⇒ 真话是"本 PR 没碰它"） | 那句话改成「未进入本次 PR 的提交」并显式声明既有追踪状态，别再把"没提交过"和"没被追踪"混着写 |
+| F4 | 复核员说「门禁读数、tree hash 全等、lock 未进提交」这三条它在盘上无法回话（PR 正文不在仓内） | **部分成立**：它读不到 Gitea 正文是事实，但"无法回话"不该成为结论——是我把该写在台账里的读数只写进了 PR 描述 | 本节起把门禁日志路径与复算命令一并落在仓内（下一轮复核不必再依赖 PR 正文） |
+
+**代码字节未动**：本轮只改 `specs/052-calendar-list-timeline/tasks.md` 与 `tool/check_spec_selfscan.py`。
+复算 `git diff --name-only f17cd2a..HEAD` ⇒ 不含 `lib/` 与 `test/`，所以第 11 轮跑在 `f17cd2a` 上的四道 flutter 门禁
+（`/tmp/r118/format.log`、`analyze.log`、`golden.log`、`full.log`、`buildweb.log`，读数依次 `rc=0`、
+`No issues found!`、`+9 All tests passed!`、`+916 ~26 All tests passed!`、`✓ Built build/web`）对终态继续有效。
+
+**下一轮入口**：欠第 12 轮只读复核的 `VERDICT`（审"按 F1–F3 改完之后的最终字节"）。
+它要重算的是：F2 的 ±30 字窗口是否又开出新旁路（请自造第三种形状，别只跑我这两条语料）、
+F1 的实测读数是否仍与字节一致、以及"报告建议的两条红语料"是否真在 `CORPUS` 里并真的期望红。
