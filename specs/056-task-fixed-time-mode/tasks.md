@@ -191,3 +191,58 @@ git status --short pubspec.lock                     # 期望空
 第 11 轮 PASS 审的是 `41c360365`，其后多了一笔测试代码 ⇒ **PASS 不再覆盖要合的字节**，
 需要第 12 轮（范围可以收窄到：这条新用例是不是真能咬住回填、它有没有把 develop 既有行为误钉成期望）。
 在它回来前本单不具备合并前置；矩阵 #12 仍不翻。
+
+## 九、第 12 轮只读复核（审 `170b029b4`，报告 `/private/tmp/r123/verdict-372-r12.jsonl`）：`VERDICT: FAIL`
+
+复核员把第 1 至第 5 项判通过（迁移用例真断言了升级前后、撤掉回填语句会红、门禁 head 与日志相符、
+台账数字复算得出、FL 与后端两档映射是同一套），失项只有判据项 6：
+`spec.md` 里 `:50` 与 `:64` 两条引文在数字两侧插了空格，不是嘀嗒原文的逐字父串。
+
+### 回源复验（这条我认，原因比"手滑"更值得记）
+镜像页 `zh-cloud-docs` `origin/develop` 的 `…/01-任务/07-固定时间与固定时区.md` 自身排版就不一致 ——
+复算 `git -c core.quotePath=false -C ../zh-cloud-docs show 'origin/develop:todo/99_参考资料/dida365-help-center/02-功能指南/01-任务/07-固定时间与固定时区.md' | sed -n '50p;64p'`
+读到的 `:50` 是同一行里「上午 11 点」带空格、句尾「上午6点」不带，`:64` 是「上午7点」。
+⇒ 订正引文既不能统一加空格也不能统一去空格，只能逐处照抄。
+第 11 轮记的那笔引文订正只对了行号与词序、没对空格，所以 PASS 过了一次却在第 12 轮被判红。
+
+### 处置（笔次 `a602da8894`，只动 `specs/`）
+四处改成逐字：`:50` 的引文、`:64` 的引文、第 105 行跨行断开的那条 `:64` 引文、以及转述里同样的数字空格。
+新尺子 `/private/tmp/r123/quote_check.py`（只做 `git show`，不写盘），**两端都跑过**：
+- 坏基线 `python3 /private/tmp/r123/quote_check.py . 170b029b4` ⇒ `带行号引文 9 条，非逐字 3 条`、`rc=1`
+- 修完 `python3 /private/tmp/r123/quote_check.py . a602da8894` ⇒ `非逐字 0 条`、`rc=0`
+
+第一版尺子在坏基线上只报得出 3 条里的 2 条（`:N` 与引号之间隔着"示例 1"就没匹配上），
+把识别语法放宽成允许 14 字内的说明后才对齐 —— 只看绿的那端会把自己骗过去。
+
+### 同一类错误是否还在别处（换 develop 的 specs 用同一把尺扫）
+复算 `python3 /private/tmp/r123/sweep.py`（读数已存 `/private/tmp/r123/sweep.txt`）⇒
+`develop specs 带行号引文 55 条；语料里找不到 18 条；数字空格型 0 条`。
+这 18 条是台账自用的短语句（自造的流程名之类），不是声称来自原文某行的引文，本尺不判它们；
+本轮这型的复发数读出来是 0。
+
+### 六道门禁（跑在 `a602da8894` 上，日志 `/private/tmp/r123/gates-372d/`）
+
+| 门 | 读数 |
+| --- | --- |
+| 1 `git diff --check` 与 `git diff --check origin/develop HEAD` | 两条都无输出、`rc=0`（`g1_diffcheck.log`）；写完本节后的终头再各跑一次，同样无输出、`rc=0` |
+| 2 `dart format --output=none --set-exit-if-changed <本 PR 的 .dart 文件>` | `Formatted 40 files (0 changed)`、`rc=0`；清单条数复算 `sed 's/^files: //' /private/tmp/r123/gates-372d/g2_files.txt \| wc -w` ⇒ 40 |
+| 3 `flutter analyze` | `No issues found! (ran in 1.5s)`、`rc=0` |
+| 4 `flutter test --tags golden` | `00:04 +9: All tests passed!`、`rc=0`；`cat /private/tmp/r123/gates-372d/g8_baseline_count.txt` ⇒ `9` ⇒ 黄金基线没被重录 |
+| 5 全量非 golden 非性能 | `02:40 +923 ~26: All tests passed!`、`rc=0` |
+| 6 `flutter build web --release --dart-define=…` | `Built build/web`、`rc=0` |
+
+门 7 的工作树自报（`g7_status.log`）除末行 `--- rc=0 ---` 外没有别的行 ⇒ 跑门禁期间没有把本机镜像扫进提交的东西；
+`git log --oneline origin/develop..HEAD -- pubspec.lock` 复算条数 ⇒ `0`。
+
+### 台账自扫（判据工具的出处要写清）
+`tool/check_spec_selfscan.py` **在 `origin/develop` 上还不存在** —— 目前只在未合并的 `origin/feat/361-calendar-list-timeline`（PR !364）上。
+本节写完后这样跑：`git -C ../zh-cloud-todo-flutter show origin/feat/361-calendar-list-timeline:tool/check_spec_selfscan.py > /tmp/r123/check_spec_selfscan.py`
+再 `python3 /private/tmp/r123/check_spec_selfscan.py specs/056-task-fixed-time-mode/tasks.md` 跑在写完本节的终态上，读数为 `specs/056-task-fixed-time-mode/tasks.md: 失项 0 条（仓库根按 wt-fl-369 解析）`。
+
+### 合并前置现状（下一轮的入口）
+第 12 轮 FAIL 已在 `a602da8894` 改掉，六道门禁也重跑在该头上；
+写完本节又多一笔 markdown（`lib` 与 `test` 两棵树号不变，复算
+`git rev-parse HEAD:lib HEAD:test a602da8894:lib a602da8894:test` ⇒ 四号两两相同）。
+⇒ 需要第 13 轮覆盖终头（提示词已写 `/private/tmp/r123/prompt-372-r13.md`，范围收窄到
+"那条 FAIL 是否真改到位、新尺子有没有判别力、同类错误在别处、门禁是否仍代表要合的字节"）。
+在它回来并给出 PASS 之前本单不具备合并前置；矩阵 #12 仍不翻。
