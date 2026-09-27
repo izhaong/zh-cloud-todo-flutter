@@ -71,13 +71,34 @@ DONE_RANGE = re.compile(r"第\s*([0-9]+)\s*[–\-~]\s*([0-9]+)\s*轮[^。\n]{0,1
 # 上一版只检查"有没有给命令"，不回查命令跑不跑得出东西 ⇒ 「脚本里有这条断言」照样能空口写）
 CLAIMED_GREP = re.compile(r"grep\s+(?:-\w+\s+)*\"([^\"]+)\"\s+((?:tool|scripts)/[A-Za-z0-9_./-]+\.py)")
 # 元语言豁免只认"紧贴"：`不是末行` / `才是末行` / `不叫末行` 这种说法就在锚点旁边
-NEGATION = re.compile(r"[不未]叫|才是|^.*\|\s*不是\s*$|「末行」|\"末行\"")
+# 第 11 轮补两类（同一判据在台账里会把"谈这个写法"的句子判成假失项，判据一响就没人信它）：
+#   ① 显式否定：`不是物理末行` ⇒ 这句正在纠正旧措辞，不是重复犯错。中间**不许跨标点**
+#      （`不是靠猜的，末行是 :9` 这种"否定 + 正向主张"必须仍红，语料钉住）；
+#   ② 提及而非使用（用/引）：`「末行异常计数」`、``「`:140` 是该末行」`` ⇒ 词被引号包着 = 在谈这个词。
+#      只认**直角引号**：ASCII 双引号在 markdown 里成对出现，`grep -c "^  ok"` = 26、末行「…」
+#      这种句子的"闭引号"会被当成开引号 ⇒ 正向主张被误免（第 11 轮实测踩过，语料已钉）。
+#   边界：开引号必须在「末行」**之前** ⇒「`+907` 就是末行」仍然红。
+NEGATION = re.compile(
+    r"[不未]叫|才是|^.*\|\s*不是\s*$|「末行」|\"末行\""
+    r"|不是[^，。；\n]{0,6}末行|「[^」\n]{0,12}末行"
+)
 # 只盯「末行」这一种主张：把统计行叫末行才是历次判我的那条罪（`r77c6/review_r77_round6_report.md:108`）。
 # 触发词就这一个字面，不多扩：扩到「统计行」会把散文里正常写「统计行在 `x.log:2`、全文 9 行」的句子
 # 判成失项 ⇒ 语料「统计行在中间·句里不称末行」把这条边界钉住（期望不红）。
 # 上一版同样只认「末行」（`c53da6a:tool/check_spec_selfscan.py:54`）⇒ 这条不是修过的地方，别当卖点。
 # 统计行的真假另有判据：锚点行号必须落在真存在的那一行上。
 LASTLINE_WORDS = ("末行",)
+
+# ⑤「N 处 / N 个 / N 条…」紧跟一个括号枚举 ⇒ 项数必须等于 N（第 8 轮 F-9 提的修法，
+#    第 10 轮复核复判仍空转：只查"有没有命令"，不查"命令给不了的项数"）
+COUNT_ENUM = re.compile(
+    r"([0-9]+|[一二两三四五六七八九十])\s*(处|个|条|格|笔|面|项)[^（）\n]{0,16}"
+    r"[（(]([^（）\n]*[、；;][^（）\n]*)[）)]"
+)
+CN_NUM = {"一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5,
+          "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
+# 「末行」这一主张里，什么样的句子算"在报一个读数"（而不是在讨论这条规则本身）
+LASTLINE_CLAIM = re.compile(r"\+\d|\d+\s*行|=|读数|通过|All tests|统计行")
 
 
 def rounds_judged(text: str) -> set[int]:
@@ -229,6 +250,11 @@ def check(text: str, repo_root: Path) -> list[str]:
             raw, want = m.group(1), int(m.group(2))
             if raw.startswith("http") or not raw.strip():
                 continue
+            # 第 10 轮复核 F-12：REF 的捕获组会把 `https:` 那段吃掉，于是
+            # `https://host/logs/a.md:12` 传下来的 raw 是 `//host/logs/a.md`，
+            # 上面那道 startswith("http") 挡不住 ⇒ 在"去掉反引号的原文"上判前缀。
+            if "://" in scan[:m.start(1)][-9:] or raw.startswith("//"):
+                continue
             target = resolve(raw, repo_root)
             if target is None:
                 hits = bare_matches(raw, repo_root)
@@ -261,6 +287,20 @@ def check(text: str, repo_root: Path) -> list[str]:
                         f"（判据：`wc -l < {raw}`）⇒ 要么改指真末行，要么把这行改写成"
                         f"「`+N` 统计行在 :{want}、全文 {total} 行、:N 不是末行」"
                     )
+
+    # ①b 正向「末行」主张必须带锚（第 8 轮 F-7 的修法，第 10 轮复核复判仍空转：
+    #     上面那段只在"这行有锚"时才检查末行 ⇒「统计行的 +907 就是末行」整条漏网）
+    for n, line in enumerate(lines, 1):
+        if not any(w in line for w in LASTLINE_WORDS):
+            continue
+        if NEGATION.search(line) or not LASTLINE_CLAIM.search(line):
+            continue
+        if REF.search(line) or BRANCH_REF.search(line):
+            continue
+        errs.append(
+            f":{n} 把某个读数称作「末行」却没给 `文件:行号` 锚 ⇒ 无从核对"
+            f"（判据：补锚，或按本仓口径改写成「`+N` 统计行在 :行号、全文 X 行」）"
+        )
 
     # ② 已判过的轮不许再写"未回/未派"
     done = rounds_judged(text)
@@ -333,6 +373,22 @@ def check(text: str, repo_root: Path) -> list[str]:
                         f":{n} 拿 `{gm.group(0)}` 当证据，但这条命令跑出来是 0 命中"
                         f"（BRE / -E / -F 三种都试了，判据在仓库根现跑）⇒ 脚本里没这句话"
                     )
+    # ⑤「N 处/N 个/N 条…」紧跟括号枚举 ⇒ 项数必须等于 N
+    #    （第 8 轮 F-9 的修法，第 10 轮复核复判仍空转。③ 只问"有没有可复跑命令"，
+    #     于是「四处…（`grep …` = 4）：A、B、C」带着命令也照绿 —— 命令给不了"项数"这件事）
+    for n, line in enumerate(lines, 1):
+        for cm in COUNT_ENUM.finditer(line):
+            num = cm.group(1)
+            want = int(num) if num.isdigit() else CN_NUM.get(num)
+            if want is None:
+                continue
+            items = [x for x in re.split(r"[、；;]", cm.group(3).strip()) if x.strip()]
+            if len(items) < 2 or len(items) == want:
+                continue
+            errs.append(
+                f":{n} 写「{num}{cm.group(2)}」，紧跟的括号里却枚举了 {len(items)} 项"
+                f"（{cm.group(0).strip()[:60]}…）⇒ 数与项对不上：改数或补齐项"
+            )
     return errs
 
 
@@ -390,6 +446,35 @@ CORPUS: list[tuple[str, str, str, bool]] = [
      "## 第 1 轮\n## 第 2 轮\n## 第 3 轮\n- 第 1–2 轮复核都判过\n", True),
     ("轮号·写成「都判过」且区间照抄", "②",
      "## 第 1 轮\n## 第 2 轮\n## 第 3 轮\n- 第 1–3 轮复核都判过\n", False),
+    # ①b：正向「末行」主张没锚（第 10 轮复核 F-7：① 只在"这行有锚"时才查，
+    #      于是「统计行的 +907 就是末行」整条漏网 ⇒ 判据当时是死的）
+    ("末行·正向读数主张没有任何锚（F-7 的形状）", "①b",
+     "统计行的 `+907` 就是末行。\n", True),
+    ("末行·正向读数主张带真锚（①b 的绿对照）", "①b",
+     "统计行 `+9` 是末行（`logs/gates.log:9`，全文 9 行）\n", False),
+    ("末行·谈这个写法本身的元语言（①b 豁免）", "①b",
+     "本条只谈「末行」这个写法，`+907` 不是末行。\n", False),
+    ("末行·显式否定（第 11 轮：纠正句曾被判成假失项）", "①b",
+     "旧措辞指的 `+9` 那一行不是物理末行。\n", False),
+    ("末行·引号开在词前 = 提及而非使用", "①b",
+     "本条只谈「末行的写法」这一条规则，`+907` 是统计行。\n", False),
+    ("末行·ASCII 闭引号不算开引号（台账 447 行的形状）", "①b",
+     "的 `grep -c \"^  ok\"` = 26、末行「与期望不符的判据 = 0 条」。\n", True),
+    ("末行·否定与主张之间隔着逗号不算否定", "①b",
+     "这个数不是靠猜的，`+907` 就是末行。\n", True),
+    ("末行·引号开在词后不算提及（444 行的形状仍须红）", "①b",
+     "统计行 `+907` 就是末行「与期望不符的判据 = 0 条」。\n", True),
+    # ⑤：计数词紧跟括号枚举 ⇒ 项数比对（第 10 轮复核 F-9：③ 只问"有没有可复跑命令"，
+    #    带着命令的「四处…（A、B、C）」仍然绿 —— 命令证不了项数）
+    ("计数词·带可复跑命令但括号只枚举三项（F-9 的形状）", "⑤",
+     "四处全改成统计行（A、B、C）（`grep -c \"^+9\" logs/gates.log` = 4）\n", True),
+    ("计数词·括号枚举项数与数一致", "⑤",
+     "四处全改成统计行（A、B、C、D）（`grep -c \"^+9\" logs/gates.log` = 4）\n", False),
+    ("计数词·括号里不是枚举（无顿号）⇒ 不比项数", "⑤",
+     "四处全改成统计行（`grep -c \"^+9\" logs/gates.log` = 4）\n", False),
+    # ① 的 URL 假阳性（第 10 轮复核 F-12：反引号里的 http 链接被切成 `//example.com/…:12` 死锚点）
+    ("锚点·整串是 URL 不当死锚点查", "①",
+     "见 `https://example.com/logs/a.md:12` 的原文。\n", False),
 ]
 
 
