@@ -160,8 +160,11 @@ git status --short pubspec.lock                     # 期望空
 `PRAGMA user_version = 22` 把库退回"表上还没有这一列"的形状，重开触发 `onUpgrade`，断言升级后
 `task-fixed=2`、`task-plain=0`。红绿两头都跑过：
 
-- 撤掉 `customStatement('UPDATE …')` 那一笔语句 ⇒ `00:00 +0 -1: Some tests failed.`（红的正是这条用例）；
-- 还原 ⇒ `cmp -s` 判 RESTORE-OK，再跑 ⇒ `00:00 +1: All tests passed!`。
+- 撤掉 `customStatement('UPDATE …')` 那一笔语句 ⇒ `00:00 +0 -1: Some tests failed.`，
+  失败用例名就是这条新用例（日志已落盘：`/tmp/r125/probe-372B-red.log`，
+  复算 `grep -c "Failing tests" /tmp/r125/probe-372B-red.log` ⇒ 1、`grep -c "回填成「固定时间」" 同文件` ⇒ 1，即失败名单里只有这一条）；
+- 还原 ⇒ 同一份日志末段有 `RESTORE-OK 字节一致`（`cmp -s` 判的），再跑 ⇒
+  `00:00 +1: All tests passed!`、`--- rc=0 ---`（`/tmp/r125/probe-372B-green.log`）。
 
 ### 六道门禁（跑在 `36e550bb3` 上，日志 `/tmp/r125/gates-372b/`）
 
