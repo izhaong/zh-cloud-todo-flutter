@@ -40,11 +40,14 @@
    - ⚠️ **第 1 轮复核抓到这条的判据是假的**（结论没错，账错）：上一版把 13 绑在
      `grep -c "label: "` 上，而该命令如实跑 ⇒ **22**
      （复算 `git show origin/develop:lib/features/shell/sidebar.dart | grep -c "label: "`）。
-     多出的 9 处不是行标签，是别处同名的 `label:` 参数
-     （`:276`「新建清单」那颗 `TextButton.icon` 的 `label: Text(`、`:472`、`:503`、`:595`、`:622`、
-     `:766`、`:775`、`:784`、`:824` 是 `Semantics` 与子项的 label）。
+     多出的 9 处不是行标签，是别的 widget 的 `label:` 构造参数
+     （`:276`「新建清单」那颗 `TextButton.icon` 的 `label: Text(`、`:472`、`:503` 是 `_SmartRow`/`_NavRow`
+     的 `build` 把形参转交给 `_SidebarRow` 的 `label: label`、`:595`、`:622` 是 `_TagRow`/`_ListRow` 的
+     数据行 label、`:766`、`:775`、`:784` 是效率工具按钮、`:824` 是 `Semantics(label: widget.tooltip)`）。
      ⇒ 已换成上面按构造函数收口的命令；「13 行、模块只有日历」在新判据下仍成立。
      行号基准 = `origin/develop`。
+     （`:472`/`:503` 的归类是第 2 轮复核帮我改准的：上一版把这两行写成「`Semantics` 与子项的 label」，
+     实际是构造参数转发 ⇒ 只错在归类，"22 与 13 差 9 处非行标签"这件事本身成立。）
 
 
 ## 三、决定

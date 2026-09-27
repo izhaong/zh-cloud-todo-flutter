@@ -150,10 +150,32 @@ Gitea：Issue #379 · 判据源见 `spec.md` §一
 | **G** §三.6 偏离的理由（「并列会把习惯/我的遮住」）与实现里的 `pairEligible` 矛盾，且存在更贴源页的写法 | **成立**：`home_shell.dart` 的 `pairEligible` 已把副栏限在 `Section.tasks`/`Section.calendar`，切去习惯/我的不会被盖住 ⇒ 那句理由是假的，而代码照它写了一遍 | 已按它的建议改成**只闸不写**：删掉 `_selectSection` 里那段 `apply(WorkspaceCompanion.off)`，补一条用例钉「切去习惯再切回任务，并列按记忆恢复、切模块不改写偏好」。这段代码改前**零覆盖**：`git show HEAD:test/features/home/workspace_companion_test.dart \| grep -c habit` ⇒ 0。用例改前红在写盘次数（`/tmp/r114/red-habit-restore.log:83` 给 Expected 1、`/tmp/r114/red-habit-restore.log:84` 给 Actual 2，统计行 `/tmp/r114/red-habit-restore.log:114`），删掉那段后同一文件绿（`/tmp/r114/green-file.log:84` ⇒ `+18: All tests passed!`） |
 | **A/B/C/D/F/H** 判「成立」但实跑读数无法复验 | 不采信为 PASS 依据，也不当作缺陷 | 第 113 轮在最终字节上整表重跑六道门禁（§二），把它的「无法验证」在我这边变成有日志的读数 |
 
-### 第 2 轮（被审 ref = 本轮修复后的 head）
+### 第 2 轮（被审 ref = `8f40cb67`）⇒ `VERDICT: PASS`
 
-- 状态：**待派**。修复提交推上去之后再派，判据只看结论正文的 `VERDICT` 行；
-  两轮无新结论就停下请示，不刷循环求绿。
+- 派单：提示词 `/tmp/r114/verdict-379-r2-prompt.md`，结论 `/tmp/r114/verdict-379-r2.log`
+  （`wc -c` ⇒ 8078 字节，`VERDICT` 在该文件第 56 行）。
+  这一轮我给它的工具面放宽到 `git` 读 + `flutter analyze/test` + `python3` ⇒
+  **第 1 轮那一片"无法验证"这次是它自己实跑补上的**：`--tags golden` ⇒ `+9`、
+  全量 ⇒ `+916 ~26`、本文件 ⇒ `+18`、`analyze` ⇒ `No issues found!`，
+  它自陈每条 flutter 跑完 `git status --porcelain` 回到 0 行。
+- 三条的复算结论：
+  - **E-1 成立**：13 / 22 / 14 三条读数与各自命令逐一对上；
+    它把 22 处 `label:` 逐行归位后**接受了我的驳回**——差的是 9 处别的 widget 的 `label:` 参数，不是 off-by-one。
+  - **E-2 成立**：它自己跑了 selfscan（tasks.md、spec.md 各 0 失项），并读到 `selfscan-final.log` 那条真实红；
+    但"拿修复前那版复扫同样 0 失项"它标 **无法独立复现、仅被审方自证** ⇒ 我不替它升格，这条留在 §六 当自证。
+  - **G 成立**：`_selectSection` 里已只剩注释，`home_shell.dart` 里
+    `grep -c workspaceCompanionProvider lib/features/home/home_shell.dart` ⇒ **4**
+    （`:327` 读态、`:348`/`:360` 右键开与关、`:634` build watch）⇒ 没有任何"切模块写 off"的残余路径；
+    新用例那两条断言（写盘次数 + 存储里的值）互相独立，装回旧守卫必红。
+- **它纠正了我一处归类**：spec §二.4 把 `sidebar.dart:472`、`:503` 写成「`Semantics` 与子项的 label」，
+  实为 `_SmartRow`/`_NavRow` 的 `build` 把形参转交给 `_SidebarRow` ⇒ 已按它给的读数改（只错归类，差 9 处的数不动）。
+- 它还关掉了我要它查的那个怪态：偏好开着时停在「习惯」，右键任务/日历图标仍出现「关闭同时显示」⇒
+  **不存在"偏好留着却没有 UI 出口关掉"**。
+- 快进复算（它跑的 + 我这侧重跑一致）：`git merge-tree --write-tree origin/develop 8f40cb67` ⇒
+  `9c8253499ecce5f16f0ac44c87375caede22d563` = `8f40cb67^{tree}` ⇒ 合必胜快进。
+- 状态：**两条 VERDICT 齐了（第 1 轮 FAIL → 第 2 轮 PASS）**。合并仍等用户明说"合并"，
+  在那之前矩阵 #32 保持「无 / 已实现、未合并」。
+
 
 
 ## 八、下一轮入口
