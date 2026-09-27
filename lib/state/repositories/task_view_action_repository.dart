@@ -15,6 +15,7 @@ class TaskWorkspacePreference {
     this.timelineScale = 'week',
     this.collapsedTimelineGroupIds = const {},
     this.showCompletedTasks,
+    this.showHeatmap,
   });
 
   final String? viewType;
@@ -22,6 +23,10 @@ class TaskWorkspacePreference {
   final String timelineScale;
   final Set<String> collapsedTimelineGroupIds;
   final bool? showCompletedTasks;
+
+  /// 年视图热力图（嘀嗒《03-年视图》:76「默认情况下，热力图为关闭状态」）。
+  /// `null` 表示这条偏好从没写过，读取侧按「关闭」处理。
+  final bool? showHeatmap;
 }
 
 /// B4 任务视图共享写操作。
@@ -131,12 +136,16 @@ class TaskViewActionRepository {
   Future<void> saveCalendarDisplay({
     required String viewMode,
     required bool showCompletedTasks,
+    required bool showHeatmap,
   }) {
     return _saveViewPreference(
       sourceType: 'calendar_view',
       sourceKey: 'task_calendar',
       viewType: viewMode,
-      preferencePatch: {'showCompletedTasks': showCompletedTasks},
+      preferencePatch: {
+        'showCompletedTasks': showCompletedTasks,
+        'showHeatmap': showHeatmap,
+      },
     );
   }
 
@@ -241,6 +250,9 @@ class TaskViewActionRepository {
       collapsedTimelineGroupIds: collapsed,
       showCompletedTasks: value['showCompletedTasks'] is bool
           ? value['showCompletedTasks'] as bool
+          : null,
+      showHeatmap: value['showHeatmap'] is bool
+          ? value['showHeatmap'] as bool
           : null,
     );
   }
