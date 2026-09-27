@@ -1004,7 +1004,7 @@ class _MonthHeatmap extends StatelessWidget {
           padding: const EdgeInsets.only(right: _cellGap, bottom: _cellGap),
           child: Semantics(
             key: Key('calendar-year-day-${_isoDay(date)}'),
-            label: '${month} 月 ${day} 日 完成 $count 项',
+            label: '$month 月 $day 日 完成 $count 项',
             child: Container(
               width: _cellSize,
               height: _cellSize,

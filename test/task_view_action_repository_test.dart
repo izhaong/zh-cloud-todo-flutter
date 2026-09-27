@@ -520,6 +520,7 @@ void main() {
       equals(null),
     );
     expect((await repository.getCalendarDisplay()).showCompletedTasks, isNull);
+    expect((await repository.getCalendarDisplay()).showHeatmap, isNull);
 
     await repository.saveTaskWorkspaceViewMode(
       sourceKey: 'list:inbox',
@@ -532,6 +533,7 @@ void main() {
     await repository.saveCalendarDisplay(
       viewMode: 'agenda',
       showCompletedTasks: true,
+      showHeatmap: true,
     );
 
     expect(

@@ -130,7 +130,7 @@ double? _cellFill(WidgetTester tester, DateTime day) {
   final cell = find.descendant(of: found, matching: find.byType(Container));
   final decoration =
       tester.widget<Container>(cell).decoration as BoxDecoration?;
-  return decoration?.color?.opacity;
+  return decoration?.color?.a;
 }
 
 void main() {
