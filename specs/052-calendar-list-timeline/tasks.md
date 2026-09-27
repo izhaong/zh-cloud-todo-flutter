@@ -513,5 +513,11 @@ python3 tool/check_spec_selfscan.py "$f"; done`）⇒ 复核读数是别家台�
 `python3 tool/check_spec_selfscan.py specs/052-calendar-list-timeline/tasks.md` 与 `.../spec.md` ⇒ 各 `失项 0 条`。
 `lib`、`test` 两棵 tree hash 仍与 `5e81146` 相同（本轮只动 md 与 `tool/`）⇒ 门 2–6 的旧日志继续有效；`git diff --check` 干净；`pubspec.lock` 未进提交。
 
+**第 11 轮派单的实况（如实记，不粉饰）**：首次派单已**夭折** —— 日志 `/tmp/r11rev364/out.log` 现读只有一个
+`Request timed out`（复算：`wc -c < /tmp/r11rev364/out.log` 与 `grep -c VERDICT /tmp/r11rev364/out.log` ⇒ 后者为 0）
+⇒ 这属复核通道故障，**不记成 PASS 也不记成 FAIL**；同一晚 service !283 第 5 轮也在同一位置超时一次（`/tmp/verdict-283-r5.log`）。
+
 **下一轮入口**：本轮三条修法 + 判据三条全部落字节，欠第 11 轮只读复核（审"加完判据之后的最终字节"）——
-它要重算的是：①b/⑤ 是真有牙还是被我按语料喂成摆设（自造变异，别抄 CORPUS）、豁免收窄后 ASCII 引号那条形状是否仍红、`:222` 的六项是否对得上 N1–N6。
+它要重算的是：①b/⑤ 是真有牙还是被我按语料喂成摆设（自造变异，别抄 CORPUS）、豁免收窄后 ASCII 引号那条形状是否仍红、
+「第 77 轮只读复核（第 2 轮）」节里那句"六条一起做了"的六项是否对得上 N1–N6（复算：
+`grep -oE "\*\*N[1-6]\*\*" specs/052-calendar-list-timeline/tasks.md | sort | uniq -c`）。
