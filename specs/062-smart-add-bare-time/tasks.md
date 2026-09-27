@@ -21,7 +21,7 @@
 | 1 `git diff --check` | `git diff --check origin/develop HEAD` | 无输出 | 0（`/tmp/r119b/diffcheck.log`） |
 | 2 format | `dart format --output=none --set-exit-if-changed lib/state/nlp_date.dart test/nlp_date_bare_time_test.dart` | `Formatted 2 files (0 changed)` | 0（`/tmp/r119b/format.log`） |
 | 3 analyze | `flutter analyze` | `No issues found!` | 0（`/tmp/r119b/analyze.log`） |
-| 4 golden | `flutter test --tags golden` | `00:03 +9: All tests passed!`（基线 9 张未重录） | 0（`/tmp/r119b/golden.log`） |
+| 4 golden | `flutter test --tags golden` | `00:04 +9: All tests passed!`（基线 9 张未重录） | 0（`/tmp/r119b/golden.log`） |
 | 5 全量非 golden | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:22 +907 ~26: All tests passed!` | 0（`/tmp/r119b/full.log`） |
 | 6 build web | `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web` | 0（`/tmp/r119b/buildweb.log`） |
 
@@ -85,7 +85,10 @@
 ## 七、台账自扫（**跑的是副本**）
 
 `python3 /tmp/r119b/check_spec_selfscan.py specs/062-smart-add-bare-time/tasks.md` ⇒ 失项 0 条；
-`... spec.md` ⇒ 失项 0 条；`--selftest` ⇒ 与期望不符的判据 0 条。
+`python3 /tmp/r119b/check_spec_selfscan.py specs/062-smart-add-bare-time/spec.md` ⇒ 失项 0 条；
+`python3 /tmp/r119b/check_spec_selfscan.py --selftest specs/062-smart-add-bare-time/tasks.md` ⇒ 与期望不符的判据 0 条。
+（第三句原先只写成裸 `--selftest`，第 1 轮复核抓到它**不可复跑**：该脚本 usage 是 `[--selftest] target`，
+少 target 会 `error: the following arguments are required: target` ⇒ 已把参数补全。）
 副本来源声明：该脚本在本分支与 `origin/develop` 上都不存在（复算 `git cat-file -e HEAD:tool/check_spec_selfscan.py`
 ⇒ `fatal: path 'tool/check_spec_selfscan.py' does not exist in 'HEAD'`），它只在未合并的
 `feat/361-calendar-list-timeline`（PR !364）里 ⇒ 本轮把它的当前版本复制到 `/tmp` 跑，**没有**为了跑自检而

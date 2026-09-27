@@ -66,4 +66,36 @@ void main() {
       expect(r!.date, DateTime(2026, 9, 28, 15, 0));
     });
   });
+
+  // 判据源《05-智能识别》只给了「最近有效的日期和时间」那一条规则，全页没有「半」这个写法。
+  // 静默把「9点半」读成 9:00 是**自信错值**（比"没识别"更坏）⇒ 宁可整串拒识，也不给半个时间。
+  group('原文未定义的「半」→ 拒识，不给静默错值', () {
+    test('裸钟点「9点半」→ null', () {
+      expect(at(DateTime(2026, 9, 28, 9, 0)).parse('9点半'), isNull);
+    });
+
+    test('「明天9点半」→ null（旧「明天」分支同样只吃「9点」，一并拒识而不是留不一致）', () {
+      expect(at(DateTime(2026, 9, 28, 9, 0)).parse('明天9点半'), isNull);
+    });
+
+    test('「今天9点半」→ null', () {
+      expect(at(DateTime(2026, 9, 28, 9, 0)).parse('今天9点半'), isNull);
+    });
+
+    test('带分钟的正常写法不受影响：「9点30分」仍解析为 09:30', () {
+      final r = at(DateTime(2026, 9, 28, 8, 0)).parse('9点30分');
+      expect(r, isNotNull);
+      expect(r!.date, DateTime(2026, 9, 28, 9, 30));
+    });
+  });
+
+  // AM 与 PM 提示词同时出现时原文没有任何规则 ⇒ 行为**未定义**。
+  // 这条用例不是认领语义，是把现状钉住：现在 `_hourReadings` 的 PM 分支在前，先命中即返回。
+  group('AM/PM 提示词同现（未定义，仅钉现状）', () {
+    test('「早上晚上9点」按现状走 PM ⇒ 当天 21:00', () {
+      final r = at(DateTime(2026, 9, 28, 9, 0)).parse('早上晚上9点');
+      expect(r, isNotNull);
+      expect(r!.date, DateTime(2026, 9, 28, 21, 0));
+    });
+  });
 }

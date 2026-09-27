@@ -26,6 +26,11 @@ class NlpDateParser {
     final lower = working.toLowerCase();
     final now = _nowProvider();
 
+    // 「N点半」在判据源《05-智能识别》里没有任何规则，而三条分支的正则都只吃到「N点」，
+    // 会把「半」静默丢掉、给出 9:00 这种**自信的错值**。原文没写就不认领：整串拒识，
+    // 让快速添加不显示「已识别截止时间」，用户自己把时间填对。
+    if (RegExp(r'\d\s*[点时]\s*半').hasMatch(lower)) return null;
+
     // 显式绝对日期：YYYY-M-D / YYYY/M/D / YYYY.M.D
     final absolute = RegExp(r'(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})');
     final m = absolute.firstMatch(lower);
