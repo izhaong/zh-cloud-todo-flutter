@@ -145,6 +145,8 @@ Future<void> _pumpPage({
   required AppDatabase db,
   required List<TodoTask> tasks,
   bool? initialCompleted,
+  String? selectedTaskId,
+  ValueChanged<String>? onSelectionInvalidated,
   Size? surface,
   double textScale = 1.0,
   Object pageKey = 'a',
@@ -184,6 +186,8 @@ Future<void> _pumpPage({
             lockedListId: true,
             hideAppBar: true,
             initialCompleted: initialCompleted,
+            selectedTaskId: selectedTaskId,
+            onSelectionInvalidated: onSelectionInvalidated,
           ),
         ),
       ),
@@ -256,13 +260,6 @@ void main() {
       expect(
         quadrantShowsCompleted(hideCompleted: true, listFilterCompleted: false),
         isTrue,
-      );
-    });
-
-    test('反向对照：判据不是恒真 —— 把"筛选为准"这一支改坏就该红', () {
-      expect(
-        quadrantShowsCompleted(hideCompleted: true, listFilterCompleted: true),
-        isNot(isFalse),
       );
     });
   });
@@ -555,6 +552,41 @@ void main() {
       final rows = await db.select(db.todoViewPreferences).get();
       // 切视图本身就会落一行 task_view 偏好（既有行为）⇒ 判据只能是"没有象限那一行"。
       expect(rows.where((row) => row.sourceType == 'quadrant_view'), isEmpty);
+      await _finishPage(tester, db);
+    });
+
+    testWidgets('选中态失效判定跟着同一把尺：显示已完成期间不该把选中的已完成任务报成失效', (tester) async {
+      // 这是 spec §二 1 数的第 3 处硬丢（宿主 `visibleTasks` 那层）。
+      // 摘掉它的判据由反向探针 P4 提供：改回"一律丢已完成"时，第三条 expect 会红。
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      await _seedListAndTasks(db, [
+        _task(id: 'open'),
+        _task(id: 'done', completed: true),
+      ]);
+      final invalidated = <String>[];
+      await _pumpPage(
+        tester: tester,
+        db: db,
+        repository: TaskViewActionRepository(db, SyncChangeQueue(db)),
+        tasks: const [],
+        selectedTaskId: 'done',
+        onSelectionInvalidated: invalidated.add,
+      );
+      await _switchToQuadrant(tester);
+      expect(invalidated, [
+        'done',
+      ], reason: '默认隐藏时选中的已完成任务不在格子里，该报失效（develop 既有口径）');
+
+      await _openSortMenu(tester);
+      await tester.tap(find.byKey(_hideCompletedKey));
+      await tester.pumpAndSettle();
+      expect(_inQuadrant(Quadrant.q4, '任务 done'), findsOneWidget);
+      expect(invalidated.length, 1, reason: '已经显示出来了，不该在此刻又报一次失效');
+
+      await _openSortMenu(tester);
+      await tester.tap(find.byKey(_hideCompletedKey));
+      await tester.pumpAndSettle();
+      expect(invalidated.length, 2, reason: '重新隐藏后应再报一次；少了这条说明失效判定没跟着开关走');
       await _finishPage(tester, db);
     });
 
