@@ -87,7 +87,9 @@ class NlpDateParser {
   /// 把 {h, h+12}（h<12 时）× {今天, 明天} 都当候选，取**严格晚于当前时刻**的最早一个。
   /// 钟点提示只从**原文输入**里读——上面的预处理会把「上午 / 早上 / 晚上 」整段删掉。
   ResolvedDate? _parseBareTime(String lowered, String raw, DateTime now) {
-    final bare = RegExp(r'(\d{1,2})\s*[点时](?:(\d{1,2})分?)?').firstMatch(lowered);
+    final bare = RegExp(
+      r'(\d{1,2})\s*[点时](?:(\d{1,2})分?)?',
+    ).firstMatch(lowered);
     if (bare == null) return null;
     final hour = int.parse(bare.group(1)!);
     final minute = int.tryParse(bare.group(2) ?? '') ?? 0;
