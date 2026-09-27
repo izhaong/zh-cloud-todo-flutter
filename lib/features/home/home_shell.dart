@@ -289,18 +289,9 @@ class _HomeShellState extends ConsumerState<HomeShell>
   }
 
   void _selectSection(Section section) {
-    // 源页 `:39`「关闭同时显示」之外没有别的路径回单模块；但切到不参与并列的模块
-    // （习惯 / 我的）时把并列关掉，否则并列会把用户刚选的模块整个遮住。
-    final companion = ref.read(workspaceCompanionProvider);
-    if (companion != WorkspaceCompanion.off &&
-        section != Section.tasks &&
-        section != Section.calendar) {
-      unawaited(
-        ref
-            .read(workspaceCompanionProvider.notifier)
-            .apply(WorkspaceCompanion.off),
-      );
-    }
+    // 切模块不改写并列偏好：不参与并列的模块（习惯 / 我的）由 build() 的 `pairEligible`
+    // 闸门当帧不画副栏，切回来按记忆恢复。源页 `:39` 只给「关闭同时显示」一条关闭路径，
+    // 在这里顺手写 off 等于没有用户动作就摧毁用户设置。
     if (section == _section) return;
     final hadTaskSelection = _selectedTaskId != null;
     setState(() {

@@ -314,6 +314,40 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('切去「习惯」再切回「任务」：并列按记忆恢复，切模块不改写偏好', (tester) async {
+    final storage = _InMemoryCompanionStorage();
+    await pumpTodoVisualScenario(
+      tester,
+      viewport: TodoVisualViewports.wide,
+      fixtureSet: TodoVisualFixtureSet.populated,
+      overridesBuilder: (_) => _overrides(storage),
+      child: const HomeShell(),
+    );
+
+    await _rightClick(tester, find.byKey(const Key('todo-rail-item-tasks')));
+    await tester.tap(find.text(_showCalendar));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('todo-companion')), findsOneWidget);
+    expect(storage.writes, 1, reason: '到这里只该写"开启"这一次');
+
+    // 源页 `:39` 只给了「关闭同时显示」这一条回单模块的路径 ⇒ 切到不参与并列的模块
+    // 只该由渲染闸门（`home_shell.dart` 的 `pairEligible`）不画副栏，偏好留着；
+    // 顺手写 off 就是在没有用户动作的情况下摧毁用户设置。
+    await tester.tap(find.byKey(const Key('todo-rail-item-habit')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('todo-companion')), findsNothing);
+    expect(storage.writes, 1, reason: '切模块不该写盘，第 2 次写就是把偏好清掉');
+    expect(storage.value, contains('calendarBesideTasks'));
+
+    await tester.tap(find.byKey(const Key('todo-rail-item-tasks')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('todo-companion')),
+      findsOneWidget,
+      reason: '回来还按记忆里开着，否则"切看一眼习惯"就静默关掉了并列',
+    );
+  });
+
   testWidgets('模块图标有独立读屏语义，且菜单文案不含自创同义词', (tester) async {
     final storage = _InMemoryCompanionStorage();
     await pumpTodoVisualScenario(
