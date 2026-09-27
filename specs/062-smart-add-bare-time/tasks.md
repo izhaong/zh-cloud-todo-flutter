@@ -12,29 +12,33 @@
 {AM, PM} 读法 × {今天, 明天}，取**严格晚于当前时刻**的最早一个；原文写了下午/晚上等提示时只留一种读法，
 提示词从**未被预处理改写的原始输入**里读（预处理会删掉「上午 /早上 /晚上 」这类片段）。
 
-用例文件 `test/nlp_date_bare_time_test.dart`，条数现算：`grep -c "    test(" test/nlp_date_bare_time_test.dart` ⇒ 9。
+用例文件 `test/nlp_date_bare_time_test.dart`，条数现算：`grep -c "    test(" test/nlp_date_bare_time_test.dart` ⇒ 16。
+（其中「半」那组与 AM/PM 那组是复核回来后补的，见第九、十节。）
 
-## 二、六道门禁（跑在**代码**最终字节 `9361307` 上，日志目录 `/tmp/r119b/`）
+## 二、六道门禁（跑在**代码**最终字节 `d580ac5` 上，日志目录 `/tmp/r122/`）
 
 | 门 | 命令 | 读数 | rc |
 | --- | --- | --- | --- |
-| 1 `git diff --check` | `git diff --check origin/develop HEAD` | 无输出 | 0（`/tmp/r119b/diffcheck.log`） |
-| 2 format | `dart format --output=none --set-exit-if-changed lib/state/nlp_date.dart test/nlp_date_bare_time_test.dart` | `Formatted 2 files (0 changed)` | 0（`/tmp/r119b/format.log`） |
-| 3 analyze | `flutter analyze` | `No issues found!` | 0（`/tmp/r119b/analyze.log`） |
-| 4 golden | `flutter test --tags golden` | `00:04 +9: All tests passed!`（基线 9 张未重录） | 0（`/tmp/r119b/golden.log`） |
-| 5 全量非 golden | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:22 +907 ~26: All tests passed!` | 0（`/tmp/r119b/full.log`） |
-| 6 build web | `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web` | 0（`/tmp/r119b/buildweb.log`） |
+| 1 `git diff --check` | `git diff --check` 与 `git diff --check origin/develop HEAD` 各跑一次 | 两条都无输出 | 0、0（`/tmp/r122/g1_diffcheck.log`） |
+| 2 format | `dart format --output=none --set-exit-if-changed lib/state/nlp_date.dart test/nlp_date_bare_time_test.dart` | `Formatted 2 files (0 changed) in 0.01 seconds.` | 0（`/tmp/r122/g2_format.log`） |
+| 3 analyze | `flutter analyze` | `No issues found! (ran in 1.5s)` | 0（`/tmp/r122/g3_analyze.log`） |
+| 4 golden | `flutter test --tags golden` | `00:04 +9: All tests passed!`（基线 9 张未重录） | 0（`/tmp/r122/g4_golden.log`） |
+| 5 全量非 golden | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:20 +915 ~26: All tests passed!` | 0（`/tmp/r122/g5_full.log`） |
+| 6 build web | `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web` | 0（`/tmp/r122/g6_buildweb.log`） |
 
-每份日志的 `--- rc=` 行是真退出码（复算：`grep -H "rc=" /tmp/r119b/*.log`）。
+`/tmp/r122/head.txt` ＝ `d580ac5a63d7550d80ef082d138bc01ada514779`；六条 rc 的汇总是
+`/tmp/r122/summary.txt`（复算 `cat /tmp/r122/summary.txt`）。
 
-`9361307` 之后本分支只有动 `specs/` 的提交 ⇒ 门 2–6 的日志对终态继续有效，判据是两棵代码树没变：
-`git rev-parse HEAD:lib HEAD:test` 与 `git rev-parse 9361307:lib 9361307:test` 相同
-（现算 `git rev-parse HEAD:lib HEAD:test` ⇒ `76a96be2…`、`5066eaa0…`）；门 1 在终态重跑
-`git diff --check origin/develop HEAD` ⇒ 无输出。
+`d580ac5` 之后本分支只有动 `specs/` 的提交 ⇒ 门 2–6 的日志对终态继续有效，判据是两棵代码树没变：
+`git rev-parse HEAD:lib HEAD:test` 与 `git rev-parse d580ac5:lib d580ac5:test` 相同
+（现算 `git rev-parse HEAD:lib HEAD:test` ⇒ `2225d88a…`、`3df608c7…`；
+`git rev-parse d580ac5:lib d580ac5:test` ⇒ 同两个值）；门 1 在终态重跑 ⇒ 同上表第一行。
 
-**跑过一遍又重跑的原因**：第一遍（`/tmp/r119/`）在 `8957739` 上判红——`dart format` 报
-`Changed lib/state/nlp_date.dart`（一行 `RegExp(...)` 超 80 列）。复算：`head -6 /tmp/r119/format.log`。
-按 `--output=none` 的语义它没改文件，只报判红；改完折行成 `9361307` 后六道全重跑，本表读数即重跑结果。
+**这一段之前跑过四轮、读数各在 `/tmp/r119/`（`8957739`，判红）、`/tmp/r119b/`（`9361307`）、
+`/tmp/r120/`（`e2954ab`）、`/tmp/r121/`（`f748e86`）**：代码每改一笔就得重跑，旧目录留着是因为
+第 1 轮复核是按 `/tmp/r119b/` 对的数（它的 NIT-1 就是那张表的 elapsed 读数和日志不一致）。
+第一遍判红的那次：`dart format` 报 `Changed lib/state/nlp_date.dart`（一行 `RegExp(...)` 超 80 列），
+复算 `head -6 /tmp/r119/format.log`；按 `--output=none` 的语义它没改文件，只报判红，折行成 `9361307` 后六道全重跑。
 折行那一笔不含行为改动（`git show 9361307 --stat` ⇒ 只 `lib/state/nlp_date.dart`，`3 insertions, 1 deletion`）。
 
 ## 三、越界与卫生
@@ -49,13 +53,15 @@
 
 ## 四、只读复核
 
-**现欠第 1 轮 `VERDICT`**（审 `9361307` 及其后的 md 提交）。要它判的是：
+**第 1 轮已回 `VERDICT: PASS`**（审 `18133d778`，即 `9361307` 及其后的 md 提交），留 5 条 NIT。
+全文在 `/tmp/r119c/review-r1.md`（复算 `tail -1 /tmp/r119c/review-r1.md` ⇒ `VERDICT: PASS`），
+逐条处置见第九节。第 1 轮没改出一处 FAIL，但它的 NIT-4（「9点半」被静默读成整点）
+和 NIT-5（它自己没读判据源原文）都变成了本轮的实质工作，见第九、十节。
 
-1. 第二节六道读数是否与在盘日志逐字一致，且日志时间戳晚于被审提交；
-2. 「最近有效」的实现是否真按原文 `:13` 那条规则，而不是按我的用例反推——特别要它自造第三种钟点形状
-   （例：跨午夜、当前正好整点、只写「点」不写数字）投给 `_parseBareTime`，并给对照组绿样本；
-3. 第三节两条「未进入本次 PR 的提交」「四件套不适用」是否成立；
-4. `spec.md` 第五节两处订正是否已经和代码对齐（不要照信我的陈述，自己跑 `git grep` 对码）。
+**现欠第 2 轮 `VERDICT`**（审代码字节 `d580ac5` 及其后的 md 提交，门禁日志 `/tmp/r122/`）。
+要它判的重点写在提示词里：新守卫的两个方向（过度拒识 / 拒识漏网）、
+第 1 轮 NIT 有没有被假装改掉、反向探针的红名单能不能支撑台账的说法、
+以及它本轮必须自己去读判据源原文而不是抄简报。
 
 拿到 FAIL 就逐条回源复验再改；两轮无新结论停下请示，不刷循环求绿。
 
@@ -80,7 +86,15 @@
 ## 六、矩阵回写
 
 矩阵 #83 状态**不翻**：PR 未合并，按口径只能写「已实现、未合并」；且提醒那半（Issue #388）仍缺。
-本轮对 #83 的改动只有两处（在 docs 分支，同轮提交）：说明格里被第五节否掉的两句措辞。
+本轮（第 119 轮）对 #83 的改动只有两处（在 docs 分支，同轮提交）：说明格里被第五节否掉的两句措辞。
+
+**新查出的缺口 #390 这轮不进矩阵**，理由写在账上而不是暗地里跳过：
+矩阵 #83 行在 docs 收口线 `!102`（分支 `docs/parity-replay-combined`，提交 `41626e3`）上已经被改过，
+而那条 PR 现在处于"六道绿 + VERDICT PASS + merge-tree 无冲突、只等『合并』二字"的状态。
+为一条 Issue 编号去追加提交，会把一条 ready 的收口 PR 重新推回复核队列——代价落在用户身上，收益只是一个指针。
+⇒ 处置：#83 的「说明/缺口」格里引 #390 这件事，等 `!102` 合并后作为下一条 docs 轮次做；
+本轮先由本台账与 FL Issue #390 自身承载证据。
+
 
 ## 七、台账自扫（**跑的是副本**）
 
@@ -97,7 +111,55 @@
 自检判过红的是「覆盖性主张没带命令」这一类（被点名的句型是「数量词 + 都已 / 每个」却不带命令）。
 改法是去掉那种量词、把结论落回它自己的复算命令 ⇒ 上一段那几条命令现跑都读到 0。
 
+本轮补写第九、十节后，这把尺又咬了一次真错：把「落进 `spec.md` 验收**第 8 条（**明写…」照写进台账，
+被 ⑤ 判「数与项对不上」（复算 `python3 /tmp/r119b/check_spec_selfscan.py specs/062-smart-add-bare-time/tasks.md`
+⇒ 改前 1 条失项、改后 0 条）。⇒ 不是判据错，是"数字 + 量词 + 紧跟括号"这个形状本身有歧义，写成「（编号 8）」就两清。
+
+
 ## 八、下一轮入口
 
-- 本规格：第 1 轮只读复核的 `VERDICT` → 回填第四节；合并授权另说。
+- 本规格：第 2 轮只读复核的 `VERDICT` → 回填第四节；合并授权另说。
 - 矩阵 #83 的下一面：提醒那半（FL Issue #388）——把已识别的时间同时写成任务提醒。
+- FL Issue #390（带日期词的「N点M分」丢分钟）是既有缺口，与 #388 同属 #83 这一行，可同轮做也可分开做。
+
+## 九、第 1 轮 5 条 NIT 的处置
+
+| NIT（复核员原话要点） | 处置 | 现在能复跑的判据 |
+| --- | --- | --- |
+| 1 golden 台账 elapsed `00:03` 与日志末行 `00:04` 不一致 | 订正为在盘读数 | `grep "All tests passed" /tmp/r122/g4_golden.log \| tail -1` ⇒ `00:04 +9: All tests passed!` |
+| 2 `--selftest` 那句没带 target、不可独立复跑 | 命令补全（见第七节） | `python3 /tmp/r119b/check_spec_selfscan.py --selftest specs/062-smart-add-bare-time/tasks.md` |
+| 3 AM/PM 提示词同现没有规则、代码按分支顺序取 PM | 写进 `spec.md` 的验收段（编号 8），明写"未定义、不认领语义"；另加一条钉现状的用例 | `grep -c "AM 与 PM 提示词同现" specs/062-smart-add-bare-time/spec.md` ⇒ 1；`grep -c "早上晚上9点" test/nlp_date_bare_time_test.dart` ⇒ 2，用例名与用例体各一处 |
+| 4 「9点半」会被静默解析成 9:00 | 改成拒识（`e2954ab`），再收窄到"只看命中处"（`f748e86`）；用例与探针见第十节 | `grep -c "→ null" test/nlp_date_bare_time_test.dart` ⇒ 4（四条拒识用例的标题都带这个箭头） |
+| 5 它自己没读判据源原文、矩阵行与 PR 正文（工具上限 + `gh` 不在本机） | 第 2 轮提示词把"必须自己读原文页"写成显式条目 | 见 `/tmp/r122/prompt-r2.md` 第 1 条 NIT-5 |
+
+NIT-5 里还有一句要紧的：`gh` 不在本机，所以第 1 轮无法直读 !389 正文。这条不是我的判据，
+但它说明**任何"PR 正文写了什么"的主张都不该由复核员背书**；台账里对 PR 正文只写可由 `git` 复算的部分。
+
+门 1 的带范围读数（写本表时现跑）：`git diff --check origin/develop HEAD` ⇒ 无输出、rc=0。
+
+## 十、第 1 轮之后我自己查出的两件事（都改了代码，不是只改文档）
+
+**(甲) 我第一版的「半」守卫过度拒识。** `e2954ab` 把守卫放在 `parse` 入口做全文扫
+`\d\s*[点时]\s*半` ⇒ 「明天9点开会，下午3点半」这种前半句本来能识别的输入被后半句牵连、整条返回 `null`。
+`f748e86` 改成只看命中位置之后的紧跟（`_halfFollows`，尾锚 `^\s*[点时]?\s*半`），
+并补两条用例：「不牵连前半句」与「空格也算紧跟」。
+
+红名单只有前者：反向探针在同一份用例、只把 `lib/state/nlp_date.dart` 换回 `e2954ab` 的字节上跑，
+读数 `+15 -1`，`[E]` 落在「后半句的「半」不牵连前半句」这一条（复算 `grep "\[E\]" /tmp/r121/probe.log`）；
+「9点 半」那条在旧实现下**也是绿的**（全文扫当然也能抓它）⇒ 不能把它算作"本轮修好"，
+它钉的是新写法仍然覆盖得住。还原后再跑同一文件 ⇒ `+16: All tests passed!`。
+
+**(乙) 交叉验证通道抓到本分支自己造的自信错值。** 第二意见来自只读通道
+`cd /private/tmp/wt-fl-83 && cursor-agent --trust -p "$(/bin/cat /tmp/r121/crosscheck.md)"`，
+输出 `/tmp/r121/crosscheck.out`（哨兵行 `CROSSCHECK: DONE` 在，字节数现量 `wc -c /tmp/r121/crosscheck.out` ⇒ 2514）。
+它给的形状里有一条「9点 30分」会被读成 9:00。我不接受"记为相邻缺口"就完事，
+先把同一批输入分别投给**本分支**与 `origin/develop` 的解析器对读
+（两份输出留在 `/tmp/r121/cases_branch.txt` 与 `/tmp/r121/cases_develop.txt`，同一批 18 条输入），
+读到的是：develop 上这条是 `null`，本分支给出 09:00 ⇒ **是本轮新带进来的错值，必须本面修**，
+于是先写用例跑红（`+16 -1`，`[E]` 那条正是它），再在分钟段前补 `\s*`（`d580ac5`），
+同一文件 `+17: All tests passed!`。
+
+同一次对读里另外两条的形状与归属，按证据分开记：
+「明天9点30分」丢分钟在 develop 上**就错** ⇒ 既有缺口，立 FL Issue #390，不在本 PR 顺手改；
+「9点、半」（夹标点）本分支给 9:00 ⇒ 记录不修，理由是守卫跨标点就会把正常输入误毙，写进 `spec.md` 的顺带效果段。
+
