@@ -98,13 +98,21 @@ Gitea Issue #381；矩阵 #28 缺口「无按日热力」。**PR 尚未合并 �
 
 | 轮 | 被审 head | 日志 | 结论 |
 | --- | --- | --- | --- |
-| 第 1 轮 | `cff9e13` | `/tmp/r110/verdict-381-r1.log` | **尚未拿到 VERDICT**（复核进行中，提示词 `/tmp/r110/verdict-381-r1-prompt.md`，10 项待判，其中第 5/6 项是我点名请它专项判的：计数口径与分母下限算不算发明规则） |
+| 第 1 轮 | `cff9e13`（代码笔）| `/tmp/r110/verdict-381-r1.log`（10744 字节，哨兵 `grep -c "^VERDICT:" /tmp/r110/verdict-381-r1.log` ⇒ 1）| **`VERDICT: PASS`**（提示词 `/tmp/r110/verdict-381-r1-prompt.md`，10 项：9 项成立、第 6 项判"不构成越界"） |
 
-**这一格没绿就是没绿**：合并前置条件（六项门禁全绿 + `VERDICT: PASS` + 真实合并试算）里，
-门禁已达成、合并试算已达成（下一条），**VERDICT 未达成**。
+**PASS 按复核方原文记，不替它扩权**：第 5/6 项（我点名请它专项判的"计数口径""分母下限算不算发明规则"）
+它的原话是第 6 项**不成立** —— 即"我发明了源页没有的规则"这条指控不成立（理由：`:98` 只给方向性，
+归一参数属留白处的实现自由；第 5 项另判「不跟『显示已完成』过滤」是 `:74` 的唯一自洽读法）。
+⚠️ 它自己写了自限声明：沙箱读不到 `/tmp/r110/gates-cff9e13.log`、也跑不了 `flutter analyze`/`flutter test`/
+自扫脚本 ⇒ **第 3 项"门禁日志内容"与第 4 项"运行号 898"它标为无法验证**。
+这两处由我本地日志承担（见 §二 的锚），我没把它没看到的部分记成"它已核过"。
+另：它第 9 项纠正了提示词里"2 个 specs md"的说法 —— 现跑 `git diff --name-only origin/develop...HEAD`
+⇒ 2 lib + 3 test + 3 specs，共 **8 个文件**（触达清单以命令为准，不以我提示词里的预期为准）。
 
-快进性判据（现跑）：`git merge-tree --write-tree origin/develop HEAD` = `d9c7752ae62a076396f41bbdc92fe07080615392`，
-与 `git rev-parse HEAD^{tree}` 逐字相等 ⇒ 与 develop 无冲突、可直接快进。
+快进性判据（现跑，钉**当前 head `fbde488`**）：`git merge-tree --write-tree origin/develop HEAD` =
+`248de9d5f5b67689ab2182bdc4e1b1fb99363967` = `git rev-parse HEAD^{tree}` ⇒ 无冲突、可直接快进。
+（复核给的构造性证明同向：`git merge-base origin/develop HEAD` = `origin/develop`；
+审代码笔 `cff9e13` 时那一对 tree 值是 `d9c7752ae62a076396f41bbdc92fe07080615392`，markdown 两笔之后 tree 会变 ⇒ 引用要现跑。）
 **审的是代码字节 `cff9e13`，PR head 在它之后还多两笔 markdown**（`c06bbbc` 本台账、`d0b3bd4` 补 plan.md）。
 差异判据（现跑）：`git diff --name-only cff9e13 d0b3bd4` 只列 `specs/058-year-view-heatmap/*.md`；
 若复核按 `HEAD` 数列触达文件而多出一个 `plan.md`，那是它读到了 markdown 增量，不是代码变了。
@@ -118,7 +126,7 @@ Gitea Issue #381；矩阵 #28 缺口「无按日热力」。**PR 尚未合并 �
 2. `saveCalendarDisplay` 加必传参数时漏了第三个调用点（§二），让门禁 3/4 首轮红。
 
 **下轮入口**：
-- 等 `/tmp/r110/verdict-381-r1.log` 出 `VERDICT:` 行 ⇒ FAIL 就逐条回源复验后修，PASS 就回填本表第七节并开 PR。
+- ~~等 `verdict-381-r1.log` 出 `VERDICT:` 行~~ 已达成：`VERDICT: PASS` 已回写 §七；合并前置条件已齐（门禁读数见 §二、复核 `VERDICT` 见 §七 表、快进试算见上面那条现跑命令），**只等用户「合并」二字**。
 - 矩阵 #28 的说明列要按**本轮终态代码**重测锚点：本轮改动使 `calendar_view.dart` 长了约 190 行，
   docs !102 上那版 #28 行引的 `:106/:807/:819/:828` 已漂；
   现值判据 `grep -nE "class _YearView|class _MonthHeatmap|int calendarHeatmapLevel" lib/features/task/views/calendar_view.dart`
@@ -126,4 +134,4 @@ Gitea Issue #381；矩阵 #28 缺口「无按日热力」。**PR 尚未合并 �
   状态仍写「部分」，缺口从「无按日热力」改记为「:64 点击日期→周视图并高亮」这一面。
 - 顺带欠账（不属于本轮，别混进这个 PR）：FL !364/!365/!367/!372/!380 与 docs !102 的 `VERDICT` 回填，
   其中 !379 的第 1 轮复核因 `claude` CLI 报 `unrecognized_model` 直接退出（stderr 1036 字节那一档），
-  已按判活方法重派，落在 `/tmp/verdict-379-r2-dedd329.log`。
+  已按判活方法重派，落在 `/tmp/verdict-379-r2-dedd329.log`（11557 字节，已于 00:37 结束）—— **该轮结论是 `VERDICT: FAIL`**，三条失项都在台账可复算性与记录诚实度上（E-1 两处侧栏计数复算为 22/14、E-2 自扫读数承诺了没回填、G 的偏离理由与实现里的 `pairEligible` 守卫矛盾）⇒ 归第 109 轮修，不混进本 PR。
