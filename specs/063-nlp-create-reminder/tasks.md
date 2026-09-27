@@ -127,9 +127,10 @@
 
 - `cat /tmp/r124/head.txt` ⇒ `c977dc6c1b6e9de18e0764ddb1667a22e88d007b`，与 `git rev-parse c977dc6` 逐字相同；
   `cat /tmp/r124/summary.txt` ⇒ 六行 `rc=0`。
-- 门 3/4/5 的读数逐字对第三节表格：`tail -2 /tmp/r124/g3_analyze.log` ⇒ `No issues found! (ran in 3.1s)`、
-  `tail -2 /tmp/r124/g4_golden.log` ⇒ `00:03 +9: All tests passed!`、
-  `tail -2 /tmp/r124/g5_full.log` ⇒ `02:20 +902 ~26: All tests passed!`。
+- 门 3/4/5 的读数逐字对第三节表格（`tail -2` 会把日志末尾那行 `rc=0` 一起带出来，故取 `grep` 形）：
+  `grep -m1 "No issues found" /tmp/r124/g3_analyze.log` ⇒ `No issues found! (ran in 3.1s)`、
+  `grep "All tests passed" /tmp/r124/g4_golden.log | tail -1` ⇒ `00:03 +9: All tests passed!`、
+  同形命令跑 `g5_full.log` ⇒ `02:20 +902 ~26: All tests passed!`。
 - 红测探针：`grep -c "\[E\]$" /tmp/r124/red1.log` ⇒ 3、`grep -oE "\+[0-9]+ -[0-9]+: Some tests failed\." /tmp/r124/red1.log`
   ⇒ `+1 -3: Some tests failed.`，同文件 `--- 还原校验 ---` 段有 `RESTORE-OK`、末段 `00:00 +4: All tests passed!`
   ⇒ 与第一节"红的是三条、绿的那条本该在旧代码上过"自洽。
