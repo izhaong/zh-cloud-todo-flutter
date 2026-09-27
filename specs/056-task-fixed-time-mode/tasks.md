@@ -1,6 +1,6 @@
 # 056 执行台账
 
-## 状态：本轮完工，只读复核 `VERDICT: PASS`（分支 `feat/369-fixed-time-mode-picker`，PR !372）
+## 状态：实现完工；`VERDICT: PASS` 只覆盖到 `41c360365`，其后补的测试笔次待第 12 轮（分支 `feat/369-fixed-time-mode-picker`，PR !372）
 
 矩阵 #12 不动：契约 PR（service !291）与本分支都未合并 ⇒ 只写「已实现待合并」，不翻状态。
 
@@ -18,7 +18,7 @@ flutter test --exclude-tags 'golden || performance' --concurrency=1   # 读数�
 1. **把 bool 塞进 int 位**（最大一条）：批量改签名时写出 `TaskTimeMode.fromWire(task.fixedTimezone)`，
    而当时 `fromWire` 收 `Object?` ⇒ `int.tryParse('true')` 失败后**静默回落「浮动」**，
    `flutter analyze` 一声不吭。修：26 处调用点改 `.timeMode`，并把 `fromWire` 收严成 `int?`
-   ——收严后立刻又暴露 3 处真错（提醒行没有 `timeMode` 字段、两处夹具插错位置）。
+   ——收严后立刻又暴露真错：提醒行没有 `timeMode` 字段，另有两处夹具插错了位置。
 2. **存/看两侧时区取错**：`_storageLocation` 只对「固定时区」按锚点区解释墙上钟点，
    「固定时间」按设备区 ⇒ 与「显示钉锚点区读数」不自洽，round-trip 断裂。
    读数：`task_time_semantics_repository_test :: fixed timezone wall clock converts through the
@@ -132,3 +132,59 @@ git status --short pubspec.lock                     # 期望空
 | 6 `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web`，`build_rc=0` |
 
 跑完门禁 `git status --porcelain pubspec.lock` 计数 `0` ⇒ 本机镜像没被扫进这笔。
+
+## 八、第 11 轮只读复核（审 `41c360365`，报告 `/tmp/r125/review-372-r11.jsonl`）：`VERDICT: PASS`
+
+派单通道已带 `--add-dir /private/tmp` ⇒ 这一轮复核员**自己读到了**判据源镜像页与在盘门禁日志
+（复算 `python3 /tmp/r125/review_tmp_access.py /tmp/r125/review-372-r11.jsonl` ⇒ 调用 14 次、成功 12、被拦 2，
+被拦的两处是 `merge-tree` 需批准与连 Gitea 核 Issue 真身，它都标了"未核"）。
+判定仍只认 result 块里的 `VERDICT:` 行（复算 `python3 /tmp/r125/verdict_from_result.py /tmp/r125/review-372-r11.jsonl`）。
+
+它自己现跑核出并被记进账的三件事：`origin/develop` 基线 `90320057c`；FL 与 service 两侧的三档映射逐条对得上
+（`fromLegacyFlag(true) → 2`、派生位＝非浮动即 true、两档固定都要锚点时区，且它点名 service 注释里
+"别拿派生位顶替锚点判据"那条坑 FL 侧没踩）；`git diff --name-only 5c5a901 41c360365` 里 `.dart` 只有一行、
+是**用例标题字符串**，改名后的名字与它真正断言的东西一致（旧名里的"可点"确实没被测）。
+
+### 它抓到的两条 NIT 与处置
+
+- **NIT-A（引文口径）**：`spec.md` 有一处把 `:48` 缩写成"时间会随所在时区改变"，那不是原文子串。
+  已改成逐字引 `:48` 与 `:60` 两句、示例单引 `:50`，并现跑确认两句都仍是原文子串：
+  `python3 -c "src=open('/tmp/wt-docs/todo/99_参考资料/dida365-help-center/02-功能指南/01-任务/07-固定时间与固定时区.md').read().splitlines();spec=open('specs/056-task-fixed-time-mode/spec.md').read();print(all(x in src[i-1] and x in spec for x,i in [('选择「固定时区」，即意味着任务的时间会随着所在时区的不同而改变。',48),('选择「固定时间」，即意味着不论所处时区如何变化，任务的时间都会保持一致。',60)]))"` ⇒ `True`
+- **NIT-B（真空白，不是措辞）**：v22→v23 那条 `UPDATE todo_tasks SET time_mode = 2 WHERE fixed_timezone = 1`
+  **没有升级用例**（复算 `grep -c "time_mode" test/app_database_migration_test.dart` ⇒ 0，它说"像是只测了直接建好的 v23 库"属实）。
+  这正是 !291 那单立下的「加列必须同时回填」硬要求在本面的测试缺口 ⇒ 本面补，不推给后续。
+
+### 补的那条用例（代码笔次 `36e550bb3`，只动 `test/`）
+
+新建库灌两行（一行 `fixedTimezone=true`、一行不带），再用 `ALTER TABLE ... DROP COLUMN time_mode` +
+`PRAGMA user_version = 22` 把库退回"表上还没有这一列"的形状，重开触发 `onUpgrade`，断言升级后
+`task-fixed=2`、`task-plain=0`。红绿两头都跑过：
+
+- 撤掉 `customStatement('UPDATE …')` 那一笔语句 ⇒ `00:00 +0 -1: Some tests failed.`（红的正是这条用例）；
+- 还原 ⇒ `cmp -s` 判 RESTORE-OK，再跑 ⇒ `00:00 +1: All tests passed!`。
+
+### 六道门禁（跑在 `36e550bb3` 上，日志 `/tmp/r125/gates-372b/`）
+
+| 门 | 读数 |
+| --- | --- |
+| 1 `git diff --check` 与 `git diff --check origin/develop HEAD` | 两条都无输出、`rc=0`（`g1_diffcheck.log`） |
+| 2 `dart format --output=none --set-exit-if-changed <本 PR 的 .dart 文件>` | `Formatted 40 files (0 changed)`、`rc=0`（文件清单复算 `sed 's/^files: //' /tmp/r125/gates-372b/g2_files.txt \| wc -w` ⇒ 40） |
+| 3 `flutter analyze` | `No issues found! (ran in 1.2s)`、`rc=0` |
+| 4 `flutter test --tags golden` | `00:04 +9: All tests passed!`、`rc=0`；`git ls-files 'test/*' \| grep -cE '\.(png\|gold)$'` ⇒ `9` ⇒ 基线一张未重录 |
+| 5 全量非 golden | `02:24 +923 ~26: All tests passed!`（比上一轮 `+922` 多出的正是新补那条用例） |
+| 6 `flutter build web --release --dart-define=…` | `✓ Built build/web`、`rc=0` |
+
+⚠️ 一处口径如实记下：门禁跑的过程中我把 NIT-A 的 `spec.md` 改动留在工作树里没先提交
+（`g7_status.log` 第一行就是 ` M specs/056-task-fixed-time-mode/spec.md`）⇒ 门 1 的那份日志没见到这笔 markdown。
+它只动 `specs/`，`lib`/`test` 两棵树号与 `36e550bb3` 相同（复算
+`git rev-parse HEAD:lib HEAD:test 36e550bb3:lib 36e550bb3:test` ⇒ 四行两两相同），
+但门 1 按规矩要在终态重跑一次，跑完的读数与命令写在下面那两行，不进上面那张表。
+`git log --oneline origin/develop..HEAD -- pubspec.lock` 条数复算 ⇒ `0`。
+门 1 终态重跑：`git diff --check` 与 `git diff --check origin/develop HEAD` ⇒ 两条都无输出、`rc=0`
+（复算 `tail -1 /tmp/r125/g1-final.log`，这份日志是本次新写的，没覆掉 `/tmp/r125/gates-372b/` 里的证据）。
+
+### 合并前置现状（下一轮的入口）
+
+第 11 轮 PASS 审的是 `41c360365`，其后多了一笔测试代码 ⇒ **PASS 不再覆盖要合的字节**，
+需要第 12 轮（范围可以收窄到：这条新用例是不是真能咬住回填、它有没有把 develop 既有行为误钉成期望）。
+在它回来前本单不具备合并前置；矩阵 #12 仍不翻。
