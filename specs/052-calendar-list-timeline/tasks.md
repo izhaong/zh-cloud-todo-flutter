@@ -498,7 +498,7 @@ python3 tool/check_spec_selfscan.py "$f"; done`）⇒ 复核读数是别家台�
 - ① 的 URL 豁免做完后，反引号里的 `//host/path:12` 不再被当死锚点；配一条绿语料钉住形状。
 - ⑤ 一上线又红一批，分两类。**真账**一处：「第 77 轮只读复核（第 2 轮）」节里写"六条一起做了"，
   紧跟的括号里只枚举三项 ⇒ 数与项对不上，已改成六项实枚举（复算：
-  `grep -oE "\*\*N[1-6]\*\*" specs/052-calendar-list-timeline/tasks.md | sort | uniq -c` ⇒ 本轮现读 N1 到 N4 各 2 次、N5 与 N6 各 1 次，因为除这次修法清单外还有一处段落也点名了它们。**上一版这里写的是"每个恰好 1 次"，第 11 轮复核判它「台账主张与最终字节不符」**（那六个标记分布在两个小节共 9 处提及里）⇒ 改成实测读数；这一句本身不再新增 `**N…**` 形态的标记，所以数不会因本笔而漂）。
+  `grep -oE "\*\*N[1-6]\*\*" specs/052-calendar-list-timeline/tasks.md | sort | uniq -c` ⇒ 本轮现读 N1 到 N4 各 2 次、N5 与 N6 各 1 次，因为除这次修法清单外还有一处段落也点名了它们。**上一版这里写的是"每个恰好 1 次"，第 11 轮复核判它「台账主张与最终字节不符」**（那六个标记分布在小节「十」与「十一」，个数只认钉 ref 的现算：`git show 495dff4:specs/052-calendar-list-timeline/tasks.md | grep -oE "\*\*N[1-6]\*\*" | wc -l` ⇒ 10）⇒ 改成实测读数；这一句本身不再新增 `**N…**` 形态的标记，所以数不会因本笔而漂）。
   **句式**另三处：计数词后面紧贴的括号装的其实是证据而非枚举，读的人同样会误读成枚举
   ⇒ 把括号挪到主句之后或另起一句，**没有为此放宽判据**。
 - `grep -c "^  ok"` = 26 这一处是我自己抄的语料条数：本笔加语料后它必然漂 ⇒ 改成只留
@@ -511,7 +511,7 @@ python3 tool/check_spec_selfscan.py "$f"; done`）⇒ 复核读数是别家台�
 
 门禁与自扫（跑在最终字节上）：`python3 tool/check_spec_selfscan.py --selftest specs/052-calendar-list-timeline/tasks.md` ⇒ `与期望不符的判据 = 0 条`；
 `python3 tool/check_spec_selfscan.py specs/052-calendar-list-timeline/tasks.md` 与 `.../spec.md` ⇒ 各 `失项 0 条`。
-`lib`、`test` 两棵 tree hash 仍与 `5e81146` 相同（本轮只动 md 与 `tool/`）⇒ 门 2–6 的旧日志继续有效；`git diff --check` 干净；`pubspec.lock` 未进提交。
+`lib`、`test` 两棵 tree hash 仍与 `5e81146` 相同（本轮只动 md 与 `tool/`）⇒ 门 2–6 的旧日志继续有效；`git diff --check` 干净；`pubspec.lock` 未进入本次 PR 的提交。
 
 **第 11 轮派单的实况（如实记，不粉饰）**：首次派单已**夭折** —— 日志 `/tmp/r11rev364/out.log` 现读只有一个
 `Request timed out`（复算：`wc -c < /tmp/r11rev364/out.log` 与 `grep -c VERDICT /tmp/r11rev364/out.log` ⇒ 后者为 0）
@@ -543,3 +543,37 @@ python3 tool/check_spec_selfscan.py "$f"; done`）⇒ 复核读数是别家台�
 **下一轮入口**：欠第 12 轮只读复核的 `VERDICT`（审"按 F1–F3 改完之后的最终字节"）。
 它要重算的是：F2 的 ±30 字窗口是否又开出新旁路（请自造第三种形状，别只跑我这两条语料）、
 F1 的实测读数是否仍与字节一致、以及"报告建议的两条红语料"是否真在 `CORPUS` 里并真的期望红。
+
+
+## 十三、第 12 轮只读复核（审 `495dff4`）：`VERDICT: PASS` 与三条 NIT 的处置
+
+结论流 `/tmp/r118/review-r12.jsonl` 里**只取 `type=="result"` 那块**（3909 字符），块内以 `VERDICT:` 开头的行是
+`VERDICT: PASS`；复核员自报 `git rev-parse --short=9 HEAD` = `495dff420`，与本分支 HEAD 全等。
+（判法记在这里是因为整本 jsonl `grep` 会被提示词原文里那句「必须是 `VERDICT: PASS` 或 `VERDICT: FAIL`」命中，造出假 PASS。）
+
+我自己按最终字节复算的读数（都现跑，日志在 `/tmp/r118/`）：
+
+| 复算 | 命令 | 读数 |
+| --- | --- | --- |
+| 活计数 | `git show 495dff4:specs/052-calendar-list-timeline/tasks.md \| grep -oE "\*\*N[1-6]\*\*" \| sort \| uniq -c` | `2 2 2 2 1 1`（N1–N4 各 2、N5 与 N6 各 1） |
+| 代码字节没动 | `git rev-parse HEAD:lib HEAD:test 495dff4:lib 495dff4:test` | `39823e59…`、`0a85ff1e…` 两组全等 |
+| 门禁在盘 | `grep -H "rc=" /tmp/r118/*.log` | `analyze`、`buildweb`、`format`、`full`、`golden` 各 `rc=0`，读数依次 `No issues found!`、`✓ Built build/web`、`0 changed`、`+916 ~26: All tests passed!`、`+9: All tests passed!` |
+| 台账自扫 | `python3 tool/check_spec_selfscan.py specs/052-calendar-list-timeline/tasks.md` | 失项 0 条 |
+| 自扫自己 | `python3 tool/check_spec_selfscan.py --selftest specs/052-calendar-list-timeline/tasks.md` | 与期望不符的判据 0 条 |
+| 合并试算 | `git merge-tree --write-tree origin/develop HEAD`（基准 `origin/develop@90320057c`，2026-09-28 现抓） | rc=0、产物树 `f1c35c1f…`、`<<<<<<<` 计数 0 |
+
+复核给的三条 NIT 逐条处置：
+
+| NIT | 它说什么 | 处置 |
+| --- | --- | --- |
+| NIT-1 | 「`pubspec.lock` 未进提交」这种短写在「十一」节还残留一处，与第 11 轮判过的措辞同形 | **已改**（本节上方那句补成「未进入本次 PR 的提交」，与「十二」节 F3 行同一把尺） |
+| NIT-2 | 它说那句「提及个数」是转述第 11 轮报告的数，而标记实测比它多 | **已改**：改成钉在 `495dff4` 上的现算命令与读数（见「十一」节那句括注），不再引旧报告的数（引旧数正是前几轮反复被判的那条） |
+| NIT-3 | 那句括注太长（一句 130+ 字），读起来累 | **不动**：拆开只是排版，而这段记的是"为什么这句不再写死数"的理由链；它属 NIT、不是失项，写在这里而不是假装改过 |
+
+**合并前置的账**：六道门禁全绿（门 1 每笔现跑，门 2–6 由「`lib`/`test` 两棵树号未变 + 在盘日志」承接）已达成、
+`VERDICT: PASS` 已拿到、真实合并试算 rc=0 无冲突 ⇒ 三项齐。
+**但合并本身要等用户给「合并」二字，本轮不自动合。**
+
+**下一轮入口**：本 PR 只欠合并指令。若等指令期间 `origin/develop` 又动了，`git merge-tree` 要重跑，
+门 1 要按最终字节重跑，门 2–6 能否继续沿用旧日志只由 `lib`/`test` 两棵树号是否仍相同决定；
+若develop 上 `#29` 那一行的锚点漂了，矩阵按「以代码为准」立刻回改。
