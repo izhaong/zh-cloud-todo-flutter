@@ -99,7 +99,7 @@ class NlpDateParser {
   /// 钟点提示只从**原文输入**里读——上面的预处理会把「上午 / 早上 / 晚上 」整段删掉。
   ResolvedDate? _parseBareTime(String lowered, String raw, DateTime now) {
     final bare = RegExp(
-      r'(\d{1,2})\s*[点时](?:(\d{1,2})分?)?',
+      r'(\d{1,2})\s*[点时](?:\s*(\d{1,2})分?)?',
     ).firstMatch(lowered);
     if (bare == null) return null;
     if (_halfFollows(lowered, bare.end)) return null;
