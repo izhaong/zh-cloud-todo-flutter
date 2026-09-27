@@ -97,13 +97,52 @@ P1 的名单**故意不含**「组合1 拖到 Q2」：那条看板已加载，�
 
 ## 七、只读复核（VERDICT）
 
-- 状态：**未达成**。派单在 PR 开出来之后，审的是 `git diff origin/develop..HEAD` 的最终 ref；
-  结论回来前，本节与矩阵行的"复核"格都算欠账。
+**第 1 轮（只读，审 `git diff origin/develop..HEAD` = `c174691` + `92d3c6c`）⇒ `VERDICT: PASS`，无 BLOCKER。**
+
+- 日志 `/tmp/r111/review-383.jsonl`（流式 jsonl）。判据只认 result 块里以 `VERDICT:` 开头的行：
+  `python3 - <<'PY'` 扫 `type=="result"` 后取 `result` 文本首列 `VERDICT:` ⇒ 命中一条 `VERDICT: PASS`。
+  ⚠️ 整份日志 `grep "VERDICT"` 会命中我自己写进提示词的那句"最后一行必须是 VERDICT:" ⇒ 按 whole-file grep 就是假 PASS，这条尺子在 service !291 第 3 轮真的差点踩中。
+- 它独立成立的部分（不是照抄我的说法，逐项给了命令与行号）：
+  A 忠实度 —— `:25`/`:44` 的差别只在要不要动时间，组合1 恒不交回 `dueAt`；
+  组合1 的四档来自 `_ruleKeys` 的 `['P3','P2','P1','P0']` 按 Q1..Q4 落位，不是我定的数；
+  **自定义规则不给拖**它判为"忠实不越界"而非砍功能（`:48`–`:58` 没写拖动脉络，任何回写式都是编的）；
+  B 六道门禁 + 三条探针的读数逐字对上台账；
+  E 排队按任务 id 键控（跨任务不串行）、本地写与 outbox 同事务、`Value.absent()` 与 `Value(dueAt)` 两档语义分明；
+  F 无夸大陈述（没引用未合并的 !382 SHA、没把 `zh-cloud-client` 当证据）。
+- 四件套它单独判过：320px + 1.3 倍字号确实量在四象限自己的 `MediaQuery` 上（不是宿主页）；
+  读屏语义是独立一层 `Semantics(label:)`；写失败只弹 SnackBar 不动状态 ⇒ 已加载数据保留；
+  W6 那条 `expect(repository.calls.length, 1)` 在 `gate.complete()` **之前**检查 ⇒ 去掉排队就红（P2 探针实证），不是恒真。
+
+### 它给的一条 NIT 与我怎么驳回（跑了两把探针，不是嘴上说）
+
+它把「未配置仓储时拖动不崩，也不动任何数据」判成"第 7 类假绿（当前实现下恒绿）"，理由是同文件
+`_queueDrop` 开头 `if (repository == null) return;`（`eisenhower_view.dart:56`）让异常没有路径可抛。
+"当前实现下这条断言不会红"这句我认；但"因此它没有防护价值"我不认，跑了两把改**实现**的探针：
+
+| 探针 | 改法 | 结果 | 日志 |
+| --- | --- | --- | --- |
+| PR1 摘掉守卫 | 删 `if (repository == null) return;` | **编译红**（`Method 'moveQuadrantTask' cannot be called on 'TaskViewActionRepository?'`）⇒ 这一档由类型系统兜住，测试轮不到 | `/tmp/r113/probe-null-guard.log`，`probe rc=1` |
+| PR2 守卫改成强制解包 | `ref.read(...)!` 且去掉早退 | **该用例真红**：`Expected: null / Actual: _TypeError:<Null check operator used on a null value>`，且红名就是 `未配置仓储时拖动不崩，也不动任何数据 [E]` | `/tmp/r113/probe-force-unwrap.log`，`probe rc=1` |
+
+⇒ 结论：这条用例防的是"后来人把早退换成 `!`（或 `?.` 静默）"这一类真实改动，PR2 证明它会红 ⇒ **不判假绿，用例原样保留**。
+两把探针都只动 `lib/` 且跑完 `cp` 还原：`cmp -s` 与备份一致、`git status --porcelain | wc -l` ⇒ 0 ⇒
+最终字节与 §二 六道门禁所测的字节同字节，**故门禁不重跑**（这条推理要连着那个 0 行一起读，别单独当结论用）。
+⚠️ 它把"摘守卫"这一种变异当成判据、没试 `!` 变异 ⇒ 这是复核方的取证面窄，我按它的尺（NIT 不判 FAIL）不升级、也不接受结论。
+
+### 合并前置条件现状（现跑）
+
+- 六道门禁全绿见 §二（跑在 `92d3c6c` 的最终字节上）+ 本节复核 PASS ⇒ 两格齐了。
+- 真实合并试算（现跑，钉 head `92d3c6c`）：`git merge-tree --write-tree origin/develop HEAD` ⇒ rc=0，
+  tree `cb8cfac1ae123797400c9ac6ab69ffc83d689e41` = `git rev-parse HEAD^{tree}`，
+  且 `git merge-base --is-ancestor origin/develop HEAD` 成立 ⇒ develop（`9032005`）是祖先，快进零冲突。
+- ⚠️ 本笔（回写 §七 的 markdown）之后 head 会变、tree 也随之漂 ⇒ 引用时要现跑。
+- **状态仍写「已实现、未合并」**：矩阵 #36 那一格要等 PR !383 真合进 develop 才按已合并 SHA 翻。
+  合并动作等用户明说"合并"。
 
 ## 八、下轮入口
 
-1. 本轮 PR 的 VERDICT 回来后回写 §七，并把矩阵 #36 的证据列换成已合并 SHA（未合并前只写"已实现、未合并"）。
+1. ~~本轮 PR 的 VERDICT 回来后回写 §七~~ 已达成（见 §七）；矩阵 #36 的证据列等 !383 合并后换成已合并 SHA。
 2. 年视图「点击日期 → 周视图并高亮」是矩阵 #28 剩的那一格（第 110 轮登记，判据 `:64`），
-   与四象限无关 ⇒ 开 specs/060，不要塞进 059。
+   与四象限无关 ⇒ 开 **specs/061**（060 已被第 112 轮的「四象限隐藏已完成」占用，本条原先写的 060 是登记撞号）。
 3. 队列里 FL 已有 21 条 open PR（`GET /repos/izhaong/zh-cloud-todo-flutter/pulls?state=open&limit=50` ⇒ 21 条），
    含本轮 ⇒ 合并动作仍等用户明说"合并"。
