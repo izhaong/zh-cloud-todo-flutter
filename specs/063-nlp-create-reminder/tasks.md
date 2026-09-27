@@ -57,9 +57,13 @@
   复算 `grep -c "568 - 260" test/features/task/quick_add_nlp_reminder_test.dart` ⇒ 1。
 - 失败保留数据：正例与失败例都直接查库（任务行在、提醒行数符合预期），不看控件文案。
 - 过期响应不覆盖新响应：**这条我没有满足，也不假装满足**。`_save()` 从来没有防重入的闸门
-  （模板那条路径倒是有 `_applyingTemplate`，复算 `grep -n "_applyingTemplate" lib/features/task/task_quick_add_sheet.dart`），
-  连点两次「保存」会建两遍任务；这是 develop 上就有的形状，但本面把一次 `await` 变成两次，
-  **把这条窗口拉长了** ⇒ 不能写成"不适用"。已立 FL Issue 跟踪（见第十节），不在本 PR 顺手加标志位：
+  （模板那条路径倒是有 `_applyingTemplate`，复算 `grep -n "_applyingTemplate" lib/features/task/task_quick_add_sheet.dart`）；
+  这是 develop 上就有的形状，但本面把它切成两种后果不同的重叠：
+  **建成功之后再点**已被 `_savedTaskId` 兜住（只补提醒，不建第二遍任务，复算
+  `grep -c "_savedTaskId" lib/features/task/task_quick_add_sheet.dart` ⇒ 4），
+  真正仍然没防的是**首次 `create` 还在飞行中就连点两次** ⇒ 那时 `_savedTaskId` 还没写进状态，会建两遍任务。
+  本面把一次 `await` 变成两次、又把弹窗留在失败态，等于把"可连点"的时间窗整体拉长 ⇒ 不能写成"不适用"。
+  已立 FL Issue #391 跟踪（第十节），核心形状按上一句写；不在本 PR 顺手加标志位：
   加不加、加在哪（按钮 disabled 还是 in-flight 标志）该由那条单独的红测决定。
 - 读屏语义：提示走的是既有 `todo-quick-add-feedback` 那一行（同一路由里已有的、被上一条测试钉住的可见节点），
   本轮没引入新的图标-only 按钮或裸 `Semantics` 包裹。
@@ -102,16 +106,53 @@
 
 ## 九、只读复核
 
-现欠第 1 轮 `VERDICT`。要它判的重点：
-① 第二节的三条语义裁定是不是**有原文依据**还是我在认领没有规则的东西；
-② 「部分成功不关弹窗 + 再点只补提醒」这条状态机有没有把 #289/#292 的成果反向破坏（比如让第二次点击静默）；
-③ 四件套里"过期响应不适用"这句是不是说过头；
-④ 第三节六道读数与在盘日志是否逐字一致；
-⑤ 第六节两条复算是否真能复算。
+**第 1 轮（只读，被审代码字节 `c977dc6`，其后只有一笔动 `specs/` 的台账笔 `f33ba74`）⇒ `VERDICT: PASS`，两条 NIT。**
+判定只认 result 块里以 `VERDICT:` 开头的行（复算 `python3 /tmp/r125/verdict_from_result.py /tmp/r124/review-r1.jsonl`
+⇒ 恰好一行 `VERDICT: PASS`）；整份日志 `grep -c "VERDICT: PASS"` 会把提示词里"最后一行必须是 VERDICT:"
+那句要求一起数进来 ⇒ 不算判定（同一形状的坑记在 specs/019 第 3 轮）。
+
+⚠️ **这一轮的取证面被削掉大半，这件事必须进账，不能只抄它的 PASS。**
+`claude -p` 的文件访问只放行会话工作目录（本轮是 `/private/tmp/wt-fl-88`），所以它读 `/tmp/r124/*`
+的门禁日志和 `/tmp/wt-docs/…/05-智能识别.md` 原文全被权限层拦下。拦了多少：
+复算 `python3 /tmp/r125/review_tmp_access.py /tmp/r124/review-r1.jsonl` ⇒ 调用 31 次、成功 2、被拦 29。
+它没有把没读到的说成读过（报告里逐节标了"沙箱拦截，未复算"），这一点属实。
+
+**它自己现跑核过的**（这些不依赖 `/tmp`，每条在它报告里都带着命令）：语义裁定的代码依据、
+`_nlpResolvedDueAt` 赋值点唯一（复算 `git grep -n "_nlpResolvedDueAt =" HEAD -- lib` ⇒ 1 行，落在 `_maybeResolveDate` 内）、部分成功状态机把失败路径都留在可见区、#289/#292 未被反向破坏、
+四件套该项"未满足"属实、用例断言查的是库（复算 `grep -c "remindersOf(fixture.database)" test/features/task/quick_add_nlp_reminder_test.dart` ⇒ 3），
+`git rev-parse HEAD:lib HEAD:test` 与 `c977dc6:lib c977dc6:test` 两两相同、
+触达文件（复算 `git diff --name-only origin/develop..HEAD`）、`pubspec.lock` 未进本 PR、门 1 现跑 rc=0。
+
+**它取不到、由我在同一台机器上补核的**（我有 `/tmp` 读权，它没有）：
+
+- `cat /tmp/r124/head.txt` ⇒ `c977dc6c1b6e9de18e0764ddb1667a22e88d007b`，与 `git rev-parse c977dc6` 逐字相同；
+  `cat /tmp/r124/summary.txt` ⇒ 六行 `rc=0`。
+- 门 3/4/5 的读数逐字对第三节表格：`tail -2 /tmp/r124/g3_analyze.log` ⇒ `No issues found! (ran in 3.1s)`、
+  `tail -2 /tmp/r124/g4_golden.log` ⇒ `00:03 +9: All tests passed!`、
+  `tail -2 /tmp/r124/g5_full.log` ⇒ `02:20 +902 ~26: All tests passed!`。
+- 红测探针：`grep -c "\[E\]$" /tmp/r124/red1.log` ⇒ 3、`grep -oE "\+[0-9]+ -[0-9]+: Some tests failed\." /tmp/r124/red1.log`
+  ⇒ `+1 -3: Some tests failed.`，同文件 `--- 还原校验 ---` 段有 `RESTORE-OK`、末段 `00:00 +4: All tests passed!`
+  ⇒ 与第一节"红的是三条、绿的那条本该在旧代码上过"自洽。
+- 判据源原文：`grep -c '!\[' /tmp/wt-docs/todo/99_参考资料/dida365-help-center/03-特色功能/05-智能识别.md` ⇒ 4、
+  `grep -c "分钟" 同一文件` ⇒ 0；`sed -n '5p;13p' 该文件` 与 spec.md 引的 `:5`/`:13` 逐字相同
+  （`:13` 末尾那个孤立「)」是原文自带的，不是我抄错）。
+- 合并试算（它被拦）：`git merge-tree --write-tree origin/develop HEAD` ⇒ rc=0、输出仅 1 行（无冲突段）。
+
+### NIT 处置
+
+| 复核员留的 | 处置 | 判据 |
+| --- | --- | --- |
+| NIT-1 判据源的 `!\[`/`分钟` 计数与在盘日志它未能独立复算，建议在有权读 `/tmp` 的环境补核 | 已按上一节逐条补核，读数与台账一致，无一项对不上 | 上一节那批命令现跑都在同一台机器上出数 |
+| NIT-2 「窗口被拉长」写得不够精确：`_savedTaskId` 其实已把"建成功后再点"从建两遍降成只补提醒，真正没防的是**首次 `create` 飞行期内的双击** | 采纳。第四节那条已按它的口径改写：拉长的不是"再点会建两遍"，而是"弹窗存续期变长 + 飞行期双击仍会建两遍"；FL #391 的核心形状也改成后者 | 复算 `grep -c "_savedTaskId" lib/features/task/task_quick_add_sheet.dart` ⇒ 4（声明、写入、两处读取） |
 
 ## 十、下一轮入口
 
-- 本规格：第 1 轮 `VERDICT` 回填第九节。
+- 本规格：第 1 轮 `VERDICT: PASS` 已回填第九节，两条 NIT 也已处置 ⇒ 合并前置三格（门禁 rc 全 0 + 本 PASS +
+  `git merge-tree --write-tree origin/develop HEAD` rc=0 无冲突段）齐了，**只等「合并」二字**。
+  合并后要做的是把 `tool/check_spec_selfscan.py` 从 !364 挪进 develop 的那一轮里复跑一遍第八节三条读数
+  （现在跑的是 `/tmp` 副本）。
+- 复核通道 itself 的欠账（不属本面，但记在这儿免得忘）：`claude -p` 的会话工作目录只放行被审仓，
+  下一轮起派单要带 `--add-dir /private/tmp`，否则第九节那种"复核员读不到在盘日志"的缺口每轮都要由我自己补核。
 - 矩阵 #83 还欠的两处：specs/062 与 specs/063 合并后翻状态；FL Issue #390（带日期词丢分钟，develop 上就错）。
 - **本面自己留下的那条**：FL Issue **#391**「快速添加『保存』无重入闸门，连点两次会建两遍任务」——
   第四节把它记成**未满足**而不是"不适用"，因为本面把一次 `await` 变成两次、窗口被拉长；
