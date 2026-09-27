@@ -27,6 +27,7 @@ class EisenhowerView extends ConsumerWidget {
     super.key,
     required this.tasks,
     DateTime? now,
+    this.showCompletedTasks = false,
     this.onTaskSelected,
   }) : _now = now;
 
@@ -35,6 +36,10 @@ class EisenhowerView extends ConsumerWidget {
 
   /// 已应用 list/filter 的任务集合。
   final List<TodoTask> tasks;
+
+  /// 已完成任务要不要进象限格子。缺省 `false` 就是 develop 现状的行为
+  /// （嘀嗒《02-功能指南/03-四象限/02-如何编辑四象限规则.md》`:132`「隐藏已完成」默认隐藏）。
+  final bool showCompletedTasks;
   final ValueChanged<String>? onTaskSelected;
 
   DateTime get _effectiveNow => _now ?? DateTime.now();
@@ -42,7 +47,11 @@ class EisenhowerView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final now = _effectiveNow;
-    final localQuadrants = _buildQuadrants(tasks, now);
+    final localQuadrants = _buildQuadrants(
+      tasks,
+      now,
+      showCompletedTasks: showCompletedTasks,
+    );
     final session = ref.watch(sessionProvider);
     final rules = session == null
         ? const <QuadrantRuleDto>[]
@@ -53,7 +62,13 @@ class EisenhowerView extends ConsumerWidget {
         : ref.watch(quadrantBoardProvider(activeRule.id)).valueOrNull;
     final quadrants = activeRule == null || remoteBoard == null
         ? localQuadrants
-        : _buildRemoteQuadrants(tasks, now, activeRule, remoteBoard);
+        : _buildRemoteQuadrants(
+            tasks,
+            now,
+            activeRule,
+            remoteBoard,
+            showCompletedTasks: showCompletedTasks,
+          );
     final brightness = Theme.of(context).brightness;
     final q1Palette = _quadrantPalette(Quadrant.q1, brightness);
     final q2Palette = _quadrantPalette(Quadrant.q2, brightness);
@@ -148,8 +163,9 @@ class EisenhowerView extends ConsumerWidget {
   /// 把任务分到 4 个象限；返回按 Q1/Q2/Q3/Q4 key 的 map。
   static Map<Quadrant, _QuadrantData> _buildQuadrants(
     List<TodoTask> tasks,
-    DateTime now,
-  ) {
+    DateTime now, {
+    required bool showCompletedTasks,
+  }) {
     final map = <Quadrant, List<TodoTask>>{
       Quadrant.q1: [],
       Quadrant.q2: [],
@@ -157,7 +173,7 @@ class EisenhowerView extends ConsumerWidget {
       Quadrant.q4: [],
     };
     for (final t in tasks) {
-      if (t.completed) continue;
+      if (t.completed && !showCompletedTasks) continue;
       map[classifyEisenhower(t, now)]!.add(t);
     }
     return {
@@ -183,8 +199,9 @@ class EisenhowerView extends ConsumerWidget {
     List<TodoTask> tasks,
     DateTime now,
     QuadrantRuleDto rule,
-    Map<String, Set<int>> board,
-  ) {
+    Map<String, Set<int>> board, {
+    required bool showCompletedTasks,
+  }) {
     final keys = _ruleKeys(rule);
     final keyToQuadrant = <String, Quadrant>{};
     for (final entry in keys.take(4).indexed) {
@@ -204,7 +221,7 @@ class EisenhowerView extends ConsumerWidget {
       for (final quadrant in Quadrant.values) quadrant: [],
     };
     for (final task in tasks) {
-      if (task.completed) continue;
+      if (task.completed && !showCompletedTasks) continue;
       final serverKey = task.serverId == null
           ? null
           : serverKeyByTaskId[task.serverId];
@@ -372,6 +389,15 @@ _QuadrantPalette _quadrantPalette(Quadrant quadrant, Brightness brightness) {
 /// 重要（important）：priority >= 2
 /// 紧急（urgent）：dueAt 在 24h 内或已过期
 ///
+/// 四象限这一面到底显不显示已完成。
+///
+/// 清单筛选已经钉过完成态（`listFilterCompleted != null`）时**以筛选为准**，
+/// 四象限不再叠第二道闸：叠上去就是"筛了已完成、板子却全空"，用户只会认为筛选坏了。
+bool quadrantShowsCompleted({
+  required bool hideCompleted,
+  bool? listFilterCompleted,
+}) => listFilterCompleted != null || !hideCompleted;
+
 /// 已完成任务应在上层被过滤；本函数对 completed 任务会归到 Q4（不紧急不重要），
 /// 调用方选择是否排除。
 Quadrant classifyEisenhower(TodoTask task, DateTime now) {

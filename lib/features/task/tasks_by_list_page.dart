@@ -92,6 +92,12 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   final Set<String> _batchSelectedTaskIds = <String>{};
   int _viewRestoreRevision = 0;
 
+  /// 嘀嗒《02-功能指南/03-四象限/02-如何编辑四象限规则.md》`:132`「隐藏已完成」，默认隐藏。
+  bool _hideCompletedInQuadrant = true;
+
+  /// 四象限完成态显隐的版本号：用户的手动切换要压过任何在途的偏好读取。
+  int _quadrantPreferenceRevision = 0;
+
   @override
   void initState() {
     super.initState();
@@ -104,6 +110,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         );
     Future<void>.microtask(_restoreSortPreference);
     Future<void>.microtask(_restoreViewPreference);
+    Future<void>.microtask(_restoreQuadrantHideCompleted);
   }
 
   @override
@@ -145,6 +152,52 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       Future<void>.microtask(_restoreViewPreference);
     }
   }
+
+  /// 读四象限的「隐藏已完成」偏好；读失败**不静默回到默认**，要给可见提示。
+  Future<void> _restoreQuadrantHideCompleted() async {
+    final revision = ++_quadrantPreferenceRevision;
+    final repository = ref.read(taskViewActionRepositoryProvider);
+    if (repository == null) return;
+    try {
+      final preference = await repository.getQuadrantDisplay();
+      if (!mounted || revision != _quadrantPreferenceRevision) return;
+      setState(() {
+        _hideCompletedInQuadrant = preference.showCompletedTasks != true;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(content: Text('四象限：读取「隐藏已完成」设置失败，按默认隐藏显示')),
+      );
+    }
+  }
+
+  void _toggleQuadrantHideCompleted() {
+    final repository = ref.read(taskViewActionRepositoryProvider);
+    final previous = _hideCompletedInQuadrant;
+    final next = !previous;
+    // 先占版本再落写：偏好读取若在这之后才回来，不能把这次切换盖掉。
+    _quadrantPreferenceRevision++;
+    setState(() => _hideCompletedInQuadrant = next);
+    if (repository == null) return;
+    repository.saveQuadrantDisplay(showCompletedTasks: !next).catchError((_) {
+      if (!mounted) return;
+      setState(() => _hideCompletedInQuadrant = previous);
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(const SnackBar(content: Text('四象限：「隐藏已完成」保存失败，已回退')));
+    });
+  }
+
+  /// 两道闸的取数规则在 `quadrantShowsCompleted`（视图文件里），这里只把当前状态接上。
+  bool get _quadrantShowCompleted => quadrantShowsCompleted(
+    hideCompleted: _hideCompletedInQuadrant,
+    listFilterCompleted: _filter.completed,
+  );
+
+  /// 清单筛选已经钉过完成态 ⇒ 这一项置灰，并把原因显示出来（读屏同句）。
+  String? get _quadrantHideCompletedHint =>
+      _filter.completed == null ? null : '清单筛选已指定完成态，象限不再叠一层';
 
   @override
   Widget build(BuildContext context) {
@@ -215,6 +268,13 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 onEditQuadrantRules: _mode == TaskViewMode.eisenhower
                     ? _openQuadrantRules
                     : null,
+                hideCompleted: _mode == TaskViewMode.eisenhower
+                    ? _hideCompletedInQuadrant
+                    : null,
+                hideCompletedHint: _mode == TaskViewMode.eisenhower
+                    ? _quadrantHideCompletedHint
+                    : null,
+                onToggleHideCompleted: _toggleQuadrantHideCompleted,
               ),
             if (showQuickAdd && !_batchSelectionActive)
               QuickAddBar(onSubmit: _submitQuickAdd, tagOptions: tagOptions),
@@ -460,6 +520,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       case TaskViewMode.eisenhower:
         return EisenhowerView(
           tasks: items,
+          showCompletedTasks: _quadrantShowCompleted,
           onTaskSelected: widget.onTaskSelected,
         );
       case TaskViewMode.calendar:
@@ -1319,8 +1380,12 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     final revision = ++_visibilityRevision;
     final tasksById = {for (final task in visibleTasks) task.id: task};
     final actualVisibleTasks = switch (_mode) {
-      TaskViewMode.timeline ||
-      TaskViewMode.eisenhower => visibleTasks.where((task) => !task.completed),
+      TaskViewMode.timeline => visibleTasks.where((task) => !task.completed),
+      // 「显示已完成」时已完成任务就在格子里，不能按旧的"一律不可选"判它失效。
+      TaskViewMode.eisenhower =>
+        _quadrantShowCompleted
+            ? visibleTasks
+            : visibleTasks.where((task) => !task.completed),
       _ => visibleTasks,
     };
     _latestVisibleTaskIds = actualVisibleTasks.map((task) => task.id).toSet();

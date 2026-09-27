@@ -140,6 +140,27 @@ class TaskViewActionRepository {
     );
   }
 
+  /// 四象限的完成态显隐读取（嘀嗒《02-功能指南/03-四象限/02-如何编辑四象限规则.md》
+  /// `:132`「在四象限页面，点击右上角「...」- 隐藏已完成。」）。
+  ///
+  /// 没有这条偏好行时 `showCompletedTasks` 是 null ⇒ 由视图按"隐藏"处理，与嘀嗒默认一致。
+  Future<TaskWorkspacePreference> getQuadrantDisplay() {
+    return _getTaskWorkspacePreference(
+      sourceType: 'quadrant_view',
+      sourceKey: 'task_quadrant',
+    );
+  }
+
+  /// 四象限这一面只有开关、没有并行的视图模式，所以不交 `viewType`
+  /// （`calendar_view` 那侧必须同行交，是因为它有个模式要一起落）。
+  Future<void> saveQuadrantDisplay({required bool showCompletedTasks}) {
+    return _saveViewPreference(
+      sourceType: 'quadrant_view',
+      sourceKey: 'task_quadrant',
+      preferencePatch: {'showCompletedTasks': showCompletedTasks},
+    );
+  }
+
   Future<void> _saveViewPreference({
     required String sourceType,
     required String sourceKey,
