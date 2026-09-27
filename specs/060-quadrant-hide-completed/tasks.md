@@ -24,7 +24,7 @@
 | 3 | `flutter analyze --no-pub` | `No issues found!` rc=0 | `/tmp/r112/g3-analyze-final.log:3-4` |
 | 4 | `flutter test --tags golden` | `+9: All tests passed!`；基线 png `9` 张、`git status --short test/goldens` 0 行 ⇒ 没重录 | `/tmp/r112/g4-golden-final.log:76-79` |
 | 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `+914 ~26: All tests passed!` rc=0 | `/tmp/r112/g5-full-final.log:1173-1174` |
-| 6 | `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web` rc=0，跑完 `git status --short pubspec.lock` 空行 ⇒ 没把本机镜像扫进 PR | `/tmp/r112/g6-build-final.log:80-81`、`:83` |
+| 6 | `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web` rc=0，跑完 `git status --short pubspec.lock` 空行 ⇒ 没把本机镜像扫进 PR | `/tmp/r112/g6-build-final.log:80-82`（全文 82 行；`:82` 是 `-- pubspec.lock --` 那行，其后无输出） |
 
 ⚠️ 门禁跑了两遍这件事要按事实记：第一遍（`g3-analyze.log` / `g4-golden.log` / `g5-full.log` / `g6-build.log`）
 跑在"删掉那条冗余用例但还没 `dart format`"的字节上，格式化确实改了字节（`cmp` 判不等），
@@ -89,13 +89,41 @@
 
 ## 七、只读复核（VERDICT）
 
-- 状态：**未达成**。派单在 PR 开出来之后，审的是 `git diff origin/develop..HEAD` 的最终 ref；
-  判据只认结果块里以 `VERDICT:` 开头的行（不整份 grep，避免命中提示词回显造出假 PASS）。
-  结论回来前，本节与矩阵行的"复核"格都算欠账。
+### 第 1 轮（被审 head = `221c68b`）⇒ `VERDICT: PASS`
+
+- 派单：`claude -p`，提示词 `/tmp/r112/review-384-prompt.md`，原始流 `/tmp/r112/verdict-385-r1.jsonl`
+  （19329164 字节、92367 行事件），结论已从结果块导出到 `/tmp/r112/verdict-385-report.md`。
+- **判据只认结果块里的 `VERDICT` 行**：`/tmp/r112/verdict-385-report.md:138` ⇒ `VERDICT: PASS`。
+  不做整份 grep：第 108 轮 service !291 那次就是整份 grep 命中 6 处，全是提示词回显造出的假 PASS。
+- 它逐节的结论（判据细节在报告里）：A 忠实度成立（`置灰 + 原因` 是本 spec 自己的决定，不是发明交互）；
+  B「三道硬丢是否同尺」成立且**没有第 4 处漏网**；C 置灰死角的可见文案 + 读屏同句兜底已缓解；
+  D 假绿排查 ⇒ 16 条逐条有可失败路径，点名三条全为真判据；E 同步链路成立
+  （`quadrant_view` 走 develop 上已有的 `calendar_view` 通用路径，`task_view` 的两处特例既不漏也不误伤）；
+  F 四件套四件各有真实失败路径；G 台账数字与日志逐字一致。**被审 head 它是自己 `git rev-parse` 复算的**
+  （报告「字节基准」节），不是我告诉它的。
+- **它自报的边界，照抄不遮**：全程只读日志与 git 对象，该节自陈「**未运行任何 flutter/dart 命令**」
+  ⇒ 六道门禁"跑过"这件事，它靠日志字节 + 时间戳先后序背书（`67d077c` 01:01:36 早于 g3-final 01:02:30、
+  探针 00:52:35 早于最终字节门禁），不是独立重跑的证据。独立重跑的证据在我这边的 `/tmp/r112/*.log`。
+- **它抓到一条 NIT，已就地改**：门禁表第 6 行原写 `/tmp/r112/g6-build-final.log:80-81`、`:83`，
+  而该日志实长 82 行（复算 `wc -l < /tmp/r112/g6-build-final.log` ⇒ 82）⇒ `:83` 是死锚，
+  读数本身（`✓ Built build/web`、rc=0、pubspec.lock 未改）没错。已改成 `:80-82` 并写明 `:82` 是那行
+  `-- pubspec.lock --`。顺带一条账给判据器：这种"跟在路径后面的裸 `:N`"它照不到
+  （specs/057 第 113 轮已实测它**能**抓带完整路径的越界锚）⇒ 这条是复核员抓的，不是自扫抓的。
+- **它自报的边界，照抄不遮**：全程只读日志与 git 对象，**没有重跑任何 flutter/dart 命令**
+  （报告"字节基准"节最后一行自陈"未运行任何 flutter/dart 命令"）⇒ 六道门禁"跑过"这件事，
+  它靠的是日志字节 + 时间戳先后序（`67d077c` 01:01:36 早于 g3-final 01:02:30、探针 00:52:35 早于最终字节门禁）
+  背书，不是独立重跑的证据。独立重跑的证据在我这边的 `/tmp/r112/*.log`。
+- 合并前置的快进试算（我这侧现跑，非复核员跑）：`git merge-tree --write-tree origin/develop HEAD`
+  的结果树 = `HEAD^{tree}` = `1915b717616f428566834817b65a2e97b127bd27`（跑在 `221c68b` 上）⇒ 快进零冲突；
+  `git merge-base --is-ancestor origin/develop HEAD` 退出 0，`origin/develop` 本轮 fetch 后仍是 `90320057`。
+  本节这条 markdown 提交会换掉 tree，但快进性质只取决于 develop 是不是祖先 ⇒ 该判据在回写后复跑仍成立。
+- 状态：**达成**。矩阵 #36 ⑩ 在合进 develop 前仍只写「已实现、未合并」（校验器拒「待合并」字样）。
 
 ## 八、下轮入口
 
-1. 本轮 PR 的 VERDICT 回来后回写 §七；矩阵 #36 ⑩ 在合并前只写"已实现、未合并"。
+1. ✅ 本轮 PR 的 VERDICT 已回写 §七（`VERDICT: PASS`；它点名的那条死锚已就地改，见 §七 的 NIT bullet）；
+   矩阵 #36 ⑩ 合并前保持"已实现、未合并"。
+
 2. 合并顺序：!383（拖动）在前，本单在后 —— 同文件，`git merge-tree` 的试算结果要在 !383 落地后重跑。
 3. specs/061：年视图「点击日期 → 周视图并高亮」（矩阵 #28 剩的一格，判据 `:64`）。
 4. 队列项 ①（service !291）本轮已把第 3 轮续的 `VERDICT: PASS` 与两条 NIT 回写台账并推上去，
