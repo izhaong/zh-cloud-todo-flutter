@@ -13,10 +13,22 @@
 
 ## 现状与缺口（基准 `origin/develop@90320057c`）
 
-`lib/state/nlp_date.dart` 的 `NlpDateParser.parse` 只有三条正则：`:30` 绝对日期、`:44` 明天/后天 + 钟点、
-`:68` 今天 + 冒号钟点。⇒ 原文那个例子 `9点提醒我` 返回 `null`，快速添加不显示
-「已识别截止时间：…」（接线在 `lib/features/task/task_quick_add_sheet.dart:47-49` 与
-`lib/features/shell/quick_add_bar.dart:280`，两处都只在 `parse` 非 null 时反馈）。
+`lib/state/nlp_date.dart` 的 `NlpDateParser.parse` 只有三条正则（锚点取 `RegExp(` 声明行，与矩阵 #83 同一把尺）：
+`:30` 绝对日期、`:43` 明天/后天 + 钟点（正则体在 `:44`）、`:67` 今天 + 冒号钟点（正则体在 `:68`）。
+⇒ 原文那个例子 `9点提醒我` 返回 `null`，快速添加不显示「已识别截止时间：… 」。
+
+解析调用点共**三处**（复算 `git grep -n "NlpDateParser().parse" origin/develop -- lib` ⇒ 3 行）：
+`lib/features/task/task_quick_add_sheet.dart:47`（单条：非 null 时 `:49` 存入 `_nlpResolvedDueAt`，
+`:191` 起显示「已识别截止时间：… 」（文案在 `:195`），保存时 `:75` 写进 `dueAt`）、
+`lib/features/home/home_shell.dart:523` 与 `lib/features/task/tasks_by_list_page.dart:1393`
+（多行批量：`dueAtResolver` 取 `request.useNlpDate` 决定的逐行回调）。
+`lib/features/shell/quick_add_bar.dart` 自己**不解析**，它只带 `useNlpDate` 开关（字段声明、初值、
+传给请求共三处，复算 `git grep -n "useNlpDate" origin/develop -- lib` ⇒ 9）；
+矩阵 #83 原句把这个开关说成解析接线，本轮按代码纠正到上面三处调用点。
+
+原文 `:5` 是「创建日期**和提醒**」两半：日期这半已接（`:75`），提醒那半在 sheet 里零命中
+（`git grep -in "remind" origin/develop -- lib/features/task/task_quick_add_sheet.dart` ⇒ 0）
+⇒ 本轮仍不做，另立 Issue 跟踪（本规格只补 `:13` 的「最近有效的日期和时间」规则）。
 
 复算：`git grep -c "点" origin/develop -- lib/state/nlp_date.dart` ⇒ 5（行 `:1`、`:42`、`:44`、`:66`、`:92`），
 其中正则体只有 `:44` 一处带「点」，且它要求前面有「明天/后天」。
