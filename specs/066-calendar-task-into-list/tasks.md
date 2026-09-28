@@ -43,7 +43,7 @@ Issue：zh-cloud-todo-flutter #398　矩阵：zh-cloud-docs `todo/01_需求阶�
 | 2 | `dart format --output=none --set-exit-if-changed lib/features/task/list_drop_target.dart lib/features/task/tasks_by_list_page.dart test/features/task/calendar_task_into_list_test.dart` | rc=0、`Formatted 3 files (0 changed) in 0.03 seconds.` |
 | 3 | `flutter analyze` | rc=0、`No issues found! (ran in 1.2s)` |
 | 4 | `flutter test --tags golden` | rc=0、`00:04 +9: All tests passed!` |
-| 4b | `git status --porcelain -- test/goldens \| wc -l` 与 `git ls-files test/goldens \| grep -c '\.png$'` | 0 行 / 9 ⇒ 基线一张都没重录，无需请示 |
+| 4b | `git status --porcelain -- test/goldens \| wc -l`；`git ls-files test/goldens \| grep -c '\.png$'` | 前者 0 行（改动 0 张）、后者 9（基线共 9 张）⇒ 基线一张都没重录，无需请示 |
 | 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | rc=0、`03:24 +1140 ~26: All tests passed!` |
 | 6 | `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | rc=0、`✓ Built build/web` |
 
