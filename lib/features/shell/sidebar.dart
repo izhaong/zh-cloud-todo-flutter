@@ -12,6 +12,7 @@ import '../list/list_actions.dart';
 import '../list/list_editor_sheet.dart';
 import 'section.dart';
 import 'sidebar_hierarchy.dart';
+import 'sidebar_task_drop.dart';
 
 /// Compact Todo navigation for smart lists, browsing, user lists, and settings.
 class Sidebar extends ConsumerWidget {
@@ -602,7 +603,7 @@ class _FolderGroup extends StatelessWidget {
   }
 }
 
-class _TagRow extends StatelessWidget {
+class _TagRow extends ConsumerWidget {
   const _TagRow({
     required this.tag,
     required this.depth,
@@ -616,15 +617,28 @@ class _TagRow extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
-    return _SidebarRow(
-      rowKey: ValueKey('todo-sidebar-tag-${tag.id}'),
-      icon: Icons.label_outline,
-      label: tag.name,
-      selected: false,
-      colors: colors,
-      contentIndent: depth * TodoLayoutTokens.sidebarIconGap,
-      onTap: onTap,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.watch(sidebarTaskDropControllerProvider);
+    return SidebarDropZone(
+      key: ValueKey('todo-sidebar-drop-tag-${tag.id}'),
+      hoverLabel: '打上标签「${tag.name}」',
+      accept: (_) => true,
+      onDrop: (task) async {
+        final outcome = await controller.addTagToTask(task, tag.id);
+        if (outcome != SidebarDropOutcome.failed || !context.mounted) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text('打上「${tag.name}」失败')));
+      },
+      child: _SidebarRow(
+        rowKey: ValueKey('todo-sidebar-tag-${tag.id}'),
+        icon: Icons.label_outline,
+        label: tag.name,
+        selected: false,
+        colors: colors,
+        contentIndent: depth * TodoLayoutTokens.sidebarIconGap,
+        onTap: onTap,
+      ),
     );
   }
 }
@@ -644,14 +658,27 @@ class _ListRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return _SidebarRow(
-      rowKey: ValueKey('todo-sidebar-list-${list.id}'),
-      icon: Icons.list_alt_outlined,
-      label: list.name,
-      selected: selected,
-      colors: colors,
-      onTap: onTap,
-      onLongPress: () => showListActions(context, ref, list),
+    final controller = ref.watch(sidebarTaskDropControllerProvider);
+    return SidebarDropZone(
+      key: ValueKey('todo-sidebar-drop-list-${list.id}'),
+      hoverLabel: '移入清单「${list.name}」',
+      accept: (task) => controller.acceptsList(task, list.id),
+      onDrop: (task) async {
+        final outcome = await controller.moveToList(task, list.id);
+        if (outcome != SidebarDropOutcome.failed || !context.mounted) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text('移到「${list.name}」失败')));
+      },
+      child: _SidebarRow(
+        rowKey: ValueKey('todo-sidebar-list-${list.id}'),
+        icon: Icons.list_alt_outlined,
+        label: list.name,
+        selected: selected,
+        colors: colors,
+        onTap: onTap,
+        onLongPress: () => showListActions(context, ref, list),
+      ),
     );
   }
 }
