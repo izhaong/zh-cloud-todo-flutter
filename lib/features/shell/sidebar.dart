@@ -7,6 +7,7 @@ import '../../core/theme/brand_colors.dart';
 import '../../core/theme/todo_layout_tokens.dart';
 import '../../state/providers.dart';
 import '../../state/repositories/sidebar_visibility_repository.dart';
+import '../folder/folder_actions.dart';
 import '../list/list_actions.dart';
 import '../list/list_editor_sheet.dart';
 import 'section.dart';
@@ -547,48 +548,55 @@ class _FolderGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Theme(
-      data: Theme.of(context).copyWith(
-        dividerColor: Colors.transparent,
-        splashColor: Colors.transparent,
-        highlightColor: Colors.transparent,
-      ),
-      child: ExpansionTile(
-        key: ValueKey('todo-sidebar-folder-${folder.id}'),
-        dense: true,
-        visualDensity: VisualDensity.compact,
-        minTileHeight: TodoLayoutTokens.sidebarRowHeight,
-        tilePadding:
-            const EdgeInsets.symmetric(
-              horizontal: TodoLayoutTokens.sidebarRowContentInset,
-            ).copyWith(
-              left:
-                  TodoLayoutTokens.sidebarRowContentInset +
-                  depth * TodoLayoutTokens.sidebarIconGap,
-            ),
-        childrenPadding: const EdgeInsets.symmetric(
-          horizontal: TodoLayoutTokens.sidebarOuterInset,
+    // 嘀嗒 :30「在移动端可通过左滑、长按的方式，解散文件夹」。
+    // deferToChild：其下清单行自己有长按动作（specs/026），命中区归子节点 ⇒
+    // 只有落在文件夹行自身（图标/标题/箭头/留白）上才走解散。
+    return GestureDetector(
+      onLongPress: () => confirmAndDisbandFolder(context, folder),
+      behavior: HitTestBehavior.deferToChild,
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          dividerColor: Colors.transparent,
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
         ),
-        leading: Icon(
-          Icons.folder_open_outlined,
-          size: TodoLayoutTokens.sidebarIconSize,
-          color: colors.mutedForeground,
+        child: ExpansionTile(
+          key: ValueKey('todo-sidebar-folder-${folder.id}'),
+          dense: true,
+          visualDensity: VisualDensity.compact,
+          minTileHeight: TodoLayoutTokens.sidebarRowHeight,
+          tilePadding:
+              const EdgeInsets.symmetric(
+                horizontal: TodoLayoutTokens.sidebarRowContentInset,
+              ).copyWith(
+                left:
+                    TodoLayoutTokens.sidebarRowContentInset +
+                    depth * TodoLayoutTokens.sidebarIconGap,
+              ),
+          childrenPadding: const EdgeInsets.symmetric(
+            horizontal: TodoLayoutTokens.sidebarOuterInset,
+          ),
+          leading: Icon(
+            Icons.folder_open_outlined,
+            size: TodoLayoutTokens.sidebarIconSize,
+            color: colors.mutedForeground,
+          ),
+          title: Text(
+            folder.name,
+            style: TextStyle(fontSize: 13, color: colors.foreground),
+          ),
+          iconColor: colors.mutedForeground,
+          collapsedIconColor: colors.mutedForeground,
+          children: [
+            for (final list in lists)
+              _ListRow(
+                list: list,
+                selected: selectedListId == list.id,
+                colors: colors,
+                onTap: () => onSelect(list.id),
+              ),
+          ],
         ),
-        title: Text(
-          folder.name,
-          style: TextStyle(fontSize: 13, color: colors.foreground),
-        ),
-        iconColor: colors.mutedForeground,
-        collapsedIconColor: colors.mutedForeground,
-        children: [
-          for (final list in lists)
-            _ListRow(
-              list: list,
-              selected: selectedListId == list.id,
-              colors: colors,
-              onTap: () => onSelect(list.id),
-            ),
-        ],
       ),
     );
   }
