@@ -56,7 +56,7 @@ void main() {
           dbB,
           SyncChangeQueue(dbB),
         );
-        expect(await preferencesB.get(listKey), TaskSort.dueDate);
+        expect((await preferencesB.get(listKey)).sort, TaskSort.dueDate);
         expect((await _sortPreference(dbB, listKey)).serverId, serverId);
       } finally {
         if (serverId != null && localId != null) {

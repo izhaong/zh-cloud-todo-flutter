@@ -74,6 +74,8 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   TaskFilter _filter = TaskFilter();
   TaskViewMode _mode = TaskViewMode.list;
   TaskSort _sort = TaskSort.smart;
+  // 默认值 = 本轮之前写死的降序；不传偏好的清单行为不变。
+  TaskSortDirection _sortDirection = TaskSortDirection.newestFirst;
   double _timelineZoom = 1;
   TimelineScale _timelineScale = TimelineScale.week;
   Set<String> _collapsedTimelineGroupIds = const {};
@@ -179,6 +181,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           items,
           sections: taskSections,
           sort: _sort,
+          sortDirection: _sortDirection,
           now: now,
         );
         if (snapshot.hasData) {
@@ -203,9 +206,11 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 taskCount: items.length,
                 mode: _mode,
                 sort: _sort,
+                sortDirection: _sortDirection,
                 filterActive: !_filter.isEmpty,
                 onModeChanged: _changeMode,
                 onSortChanged: _changeSort,
+                onSortDirectionChanged: _changeSortDirection,
                 onFilterPressed: () => _openFilterPanel(raw),
                 batchSelectionActive: _batchSelectionActive,
                 onBatchPressed: _toggleBatchSelection,
@@ -317,6 +322,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           items: items,
           sections: taskSections,
           sort: _sort,
+          sortDirection: _sortDirection,
           desktopMode: desktopMode,
           now: now,
           selectedTaskId: widget.selectedTaskId,
@@ -480,8 +486,13 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
 
   Future<void> _restoreSortPreference() async {
     final repository = ref.read(taskSortPreferenceRepositoryProvider);
-    final sort = await repository?.get(_selectedListId);
-    if (mounted && sort != null) setState(() => _sort = sort);
+    final preference = await repository?.get(_selectedListId);
+    if (!mounted || preference == null) return;
+    // 档位与方向一起回读：只回读档位会让上一轮存的方向在重进清单时静默变回降序。
+    setState(() {
+      _sort = preference.sort;
+      _sortDirection = preference.direction;
+    });
   }
 
   Future<void> _restoreViewPreference() async {
@@ -517,7 +528,23 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     try {
       await ref
           .read(taskSortPreferenceRepositoryProvider)
-          ?.save(_selectedListId, sort);
+          ?.save(_selectedListId, sort, _sortDirection);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('排序偏好保存失败，请稍后重试')));
+    }
+  }
+
+  /// 嘀嗒《03-用分组和排序管理任务》:173-176/:192-193：两档时间轴各有方向，
+  /// 且方向与档位一样是"每个清单一份"的偏好 ⇒ 存法与 `_changeSort` 同一条路。
+  Future<void> _changeSortDirection(TaskSortDirection direction) async {
+    setState(() => _sortDirection = direction);
+    try {
+      await ref
+          .read(taskSortPreferenceRepositoryProvider)
+          ?.save(_selectedListId, _sort, direction);
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -1580,6 +1607,7 @@ class _ListBody extends StatefulWidget {
     required this.items,
     required this.sections,
     required this.sort,
+    required this.sortDirection,
     required this.desktopMode,
     required this.now,
     required this.selectedTaskId,
@@ -1594,6 +1622,7 @@ class _ListBody extends StatefulWidget {
   final List<TodoTask> items;
   final List<TodoTaskSection> sections;
   final TaskSort sort;
+  final TaskSortDirection sortDirection;
   final bool desktopMode;
   final DateTime now;
   final String? selectedTaskId;
@@ -1786,7 +1815,10 @@ class _ListBodyState extends State<_ListBody> {
 
   List<TodoTask> _sortedItems(List<TodoTask> items) {
     final sorted = [...items];
-    sorted.sort((a, b) => compareTodoTasks(a, b, widget.sort));
+    sorted.sort(
+      (a, b) =>
+          compareTodoTasks(a, b, widget.sort, direction: widget.sortDirection),
+    );
     return sorted;
   }
 
@@ -2012,9 +2044,11 @@ List<TodoTask> _visibleTasksInListOrder(
   List<TodoTask> tasks, {
   required List<TodoTaskSection> sections,
   required TaskSort sort,
+  required TaskSortDirection sortDirection,
   required DateTime now,
 }) {
-  final sorted = [...tasks]..sort((a, b) => compareTodoTasks(a, b, sort));
+  final sorted = [...tasks]
+    ..sort((a, b) => compareTodoTasks(a, b, sort, direction: sortDirection));
   final groups = sections.isEmpty
       ? _groupTasks(sorted, now)
       : _groupTasksBySection(sorted, sections);

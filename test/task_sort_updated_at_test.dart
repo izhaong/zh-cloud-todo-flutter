@@ -101,7 +101,7 @@ void main() {
     await repository.save('inbox', sortByName('updatedAt'));
 
     expect(
-      await repository.get('inbox'),
+      (await repository.get('inbox')).sort,
       sortByName('updatedAt'),
       reason: '偏好按 TaskSort.name 编解码；新档存进去读回来必须还是它',
     );
@@ -132,14 +132,14 @@ void main() {
       'valueJson': jsonEncode({'sort': 'updatedAt'}),
     });
     expect(
-      await repository.get('from-sync'),
+      (await repository.get('from-sync')).sort,
       sortByName('updatedAt'),
       reason: 'sync pull 的包装形状读不出 updatedAt，就等于跨端不生效',
     );
 
     await seed('other-list', {'sort': 'updatedAtDesc'});
     expect(
-      await repository.get('other-list'),
+      (await repository.get('other-list')).sort,
       TaskSort.smart,
       reason: '未知档位名必须退回 smart（本仓既有断言只覆盖「无行」那一支，未覆盖这一支）',
     );
