@@ -18,7 +18,7 @@ import '../task_view_mutation_feedback.dart';
 /// - 周模式：7 列横排（Mon..Sun），每个列内是该周内的任务列表
 /// - 年模式：12 月聚合（每月任务计数 + 切换月份）
 /// - 列表模式：所有任务按日期排序的扁平列表
-/// - 日程模式：单日任务按时间顺序展示
+/// - 日程模式：所有有时间的任务按日期升序排成一条跨日时间轴（日内按时间）
 ///
 /// 纯函数：
 ///   - [resolveTaskDate] 取单个任务落点日期
@@ -117,6 +117,7 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
             ),
             CalendarMode.agenda => _AgendaView(
               anchor: _anchor,
+              today: widget._now ?? DateTime.now(),
               tasks: _visibleTasks,
               onTaskTap: (t) => _openDetail(context, t),
             ),
@@ -868,65 +869,188 @@ class _YearView extends StatelessWidget {
   }
 }
 
-class _AgendaView extends StatelessWidget {
+class _AgendaView extends StatefulWidget {
   const _AgendaView({
     required this.anchor,
+    required this.today,
     required this.tasks,
     required this.onTaskTap,
   });
 
   final DateTime anchor;
+  final DateTime today;
   final List<TodoTask> tasks;
   final ValueChanged<TodoTask> onTaskTap;
 
   @override
+  State<_AgendaView> createState() => _AgendaViewState();
+}
+
+/// 日程视图 = 一条**跨日**的时间轴。
+///
+/// 源页 `:5`「你所有安排好时间的任务会显示在一个时间轴中以线性的方式展示」、
+/// `:7`「同时看到过去已完成的任务、当前的进度和未来的计划」；
+/// 上一版按 anchor 单日过滤，两句话都不成立 ⇒ 这里改成按日期升序分组。
+/// 原文没有给窗口上下界，所以**不设「最近 N 天」之类的截断**。
+class _AgendaViewState extends State<_AgendaView> {
+  /// 统一行高：锚点偏移于是可以算出来（`行号 × 行高`），不用等布局再校正。
+  static const double _rowExtent = 88;
+
+  ScrollController? _controller;
+  DateTime? _seededAnchor;
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final dayTasks = tasks.where((task) {
-      final date = resolveTaskDate(task);
-      return date != null &&
-          date.year == anchor.year &&
-          date.month == anchor.month &&
-          date.day == anchor.day;
-    }).toList()..sort(_compareByTime);
-    if (dayTasks.isEmpty) {
+    final rows = _timelineRows(widget.tasks);
+    if (rows.isEmpty) {
       return const AppEmptyState(
-        title: '当日暂无日程',
-        subtitle: '切换日期，或为任务设置开始和截止时间。',
+        title: '暂无日程',
+        subtitle: '为任务设置开始和截止时间，它们会按日期排进这条时间轴。',
       );
     }
 
-    return ListView.separated(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: dayTasks.length,
-      separatorBuilder: (_, _) => const Divider(height: 1, indent: 72),
-      itemBuilder: (context, index) {
-        final task = dayTasks[index];
-        final timeLabel = _formatTime(task);
-        return ListTile(
-          leading: SizedBox(
-            width: 48,
-            child: Text(
-              task.allDay
-                  ? '全天'
-                  : _formatClock(
-                      task,
-                      task.startAt ?? task.dueAt ?? task.endAt!,
-                    ),
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.labelMedium,
-            ),
-          ),
-          title: Text(task.title),
-          subtitle: Text(timeLabel),
-          trailing: isExternalCalendarTask(task)
-              ? const Icon(Icons.lock_outline, size: 18)
-              : null,
-          onTap: () => onTaskTap(task),
+    final anchorIndex = _anchorRowIndex(rows, widget.anchor);
+    final controller = _controller ??= ScrollController(
+      initialScrollOffset: anchorIndex * _rowExtent,
+    );
+    if (_seededAnchor != widget.anchor) {
+      _seededAnchor = widget.anchor;
+      if (controller.hasClients) {
+        final offset = (anchorIndex * _rowExtent).clamp(
+          0.0,
+          controller.position.maxScrollExtent,
         );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) controller.jumpTo(offset);
+        });
+      }
+    }
+
+    return ListView.builder(
+      key: const Key('calendar-agenda-timeline'),
+      controller: controller,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemExtent: _rowExtent,
+      itemCount: rows.length,
+      itemBuilder: (context, index) {
+        final row = rows[index];
+        return row.task == null
+            ? _dayHeader(context, row.day)
+            : _taskRow(context, row.task!, row.day);
       },
     );
   }
 
+  Widget _dayHeader(BuildContext context, DateTime day) {
+    final colors = brandColors(context);
+    final isToday = _isSameDay(day, widget.today);
+    return Semantics(
+      header: true,
+      child: Container(
+        key: ValueKey(
+          'calendar-agenda-day-${day.year}-${day.month}-${day.day}',
+        ),
+        color: colors.background,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        alignment: Alignment.centerLeft,
+        child: DefaultTextStyle(
+          style:
+              Theme.of(context).textTheme.labelLarge ??
+              const TextStyle(fontSize: 13),
+          child: Row(
+            children: [
+              Text('${day.month}月${day.day}日'),
+              if (isToday) ...[const SizedBox(width: 6), const Text('今天')],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _taskRow(BuildContext context, TodoTask task, DateTime day) {
+    final clock = task.allDay
+        ? '全天'
+        : _AgendaViewFormat._formatClock(
+            task,
+            task.startAt ?? task.dueAt ?? task.endAt!,
+          );
+    return ListTile(
+      key: ValueKey('calendar-agenda-task-${task.id}'),
+      dense: true,
+      visualDensity: VisualDensity.compact,
+      leading: SizedBox(
+        width: 48,
+        child: Text(
+          clock,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.labelMedium,
+        ),
+      ),
+      title: Text(task.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text(
+        _AgendaViewFormat._formatTime(task),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: isExternalCalendarTask(task)
+          ? const Icon(Icons.lock_outline, size: 18)
+          : null,
+      onTap: () => widget.onTaskTap(task),
+    );
+  }
+}
+
+bool _isSameDay(DateTime left, DateTime right) =>
+    left.year == right.year &&
+    left.month == right.month &&
+    left.day == right.day;
+
+/// 把任务摊成「日头 + 该日任务」的行序列，日期升序；日内沿用原有的时间排序。
+List<_AgendaRow> _timelineRows(List<TodoTask> tasks) {
+  final byDay = <DateTime, List<TodoTask>>{};
+  for (final task in tasks) {
+    final date = resolveTaskDate(task);
+    if (date == null) continue;
+    byDay.putIfAbsent(date, () => <TodoTask>[]).add(task);
+  }
+  final days = byDay.keys.toList()..sort();
+  return [
+    for (final day in days) ...[
+      _AgendaRow(day: day),
+      for (final task in (byDay[day]!..sort(_AgendaViewFormat._compareByTime)))
+        _AgendaRow(day: day, task: task),
+    ],
+  ];
+}
+
+/// 锚点那天必须在视口里：该日有任务就从它的日头开始；没有就从下一个日头开始。
+int _anchorRowIndex(List<_AgendaRow> rows, DateTime anchor) {
+  for (var index = 0; index < rows.length; index++) {
+    final row = rows[index];
+    if (row.task != null) continue;
+    if (!row.day.isBefore(anchor)) return index;
+  }
+  return rows.length - 1;
+}
+
+class _AgendaRow {
+  const _AgendaRow({required this.day, this.task});
+
+  final DateTime day;
+  final TodoTask? task;
+}
+
+/// 日程行共用的时间格式化与排序（原先挂在 `_AgendaView` 的静态方法上）。
+abstract final class _AgendaViewFormat {
   static int _compareByTime(TodoTask left, TodoTask right) {
     if (left.allDay != right.allDay) return left.allDay ? -1 : 1;
     final leftTime = left.startAt ?? left.dueAt ?? left.endAt;
