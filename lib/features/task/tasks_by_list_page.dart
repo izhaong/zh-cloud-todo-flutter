@@ -1762,18 +1762,22 @@ class _ListBodyState extends State<_ListBody> {
           final task = entry as TodoTask;
           return KeyedSubtree(
             key: ValueKey(task.id),
-            child: TaskRowHost(
+            child: _CalendarDragSource(
               task: task,
-              taskSections: widget.sections,
-              desktopMode: true,
-              enableSwipeGestures: false,
-              reorderIndex: widget.batchSelectionActive ? null : index,
-              selected: widget.selectedTaskId == task.id,
-              onTap: (taskId) => _handleTaskActivation(taskId, visibleTaskIds),
-              batchSelectionActive: widget.batchSelectionActive,
-              batchSelected: widget.batchSelectedTaskIds.contains(task.id),
-              onBatchSelectionChanged: (selected) =>
-                  widget.onBatchSelectionChanged(task.id, selected),
+              child: TaskRowHost(
+                task: task,
+                taskSections: widget.sections,
+                desktopMode: true,
+                enableSwipeGestures: false,
+                reorderIndex: widget.batchSelectionActive ? null : index,
+                selected: widget.selectedTaskId == task.id,
+                onTap: (taskId) =>
+                    _handleTaskActivation(taskId, visibleTaskIds),
+                batchSelectionActive: widget.batchSelectionActive,
+                batchSelected: widget.batchSelectedTaskIds.contains(task.id),
+                onBatchSelectionChanged: (selected) =>
+                    widget.onBatchSelectionChanged(task.id, selected),
+              ),
             ),
           );
         },
@@ -1796,18 +1800,21 @@ class _ListBodyState extends State<_ListBody> {
           );
         }
         final task = entry as TodoTask;
-        return TaskRowHost(
+        return _CalendarDragSource(
           task: task,
-          taskSections: widget.sections,
-          desktopMode: widget.desktopMode,
-          enableSwipeGestures:
-              !widget.desktopMode && !widget.batchSelectionActive,
-          selected: widget.selectedTaskId == task.id,
-          onTap: (taskId) => _handleTaskActivation(taskId, visibleTaskIds),
-          batchSelectionActive: widget.batchSelectionActive,
-          batchSelected: widget.batchSelectedTaskIds.contains(task.id),
-          onBatchSelectionChanged: (selected) =>
-              widget.onBatchSelectionChanged(task.id, selected),
+          child: TaskRowHost(
+            task: task,
+            taskSections: widget.sections,
+            desktopMode: widget.desktopMode,
+            enableSwipeGestures:
+                !widget.desktopMode && !widget.batchSelectionActive,
+            selected: widget.selectedTaskId == task.id,
+            onTap: (taskId) => _handleTaskActivation(taskId, visibleTaskIds),
+            batchSelectionActive: widget.batchSelectionActive,
+            batchSelected: widget.batchSelectedTaskIds.contains(task.id),
+            onBatchSelectionChanged: (selected) =>
+                widget.onBatchSelectionChanged(task.id, selected),
+          ),
         );
       },
     );
@@ -2144,4 +2151,30 @@ List<String> _normalizeTaskIds(
     if (!kept.contains(id)) kept.add(id);
   }
   return kept;
+}
+
+/// 嘀嗒《02-功能指南/02-日历/07-任务与日历同时显示.md》`:49`「将清单中的任务拖入日历」：
+/// 清单行需要一个拖出源，落点是并列日历的 `DragTarget<TodoTask>`（`calendar_view.dart:616`）。
+/// 只做手势容器、不改行外观；拖动中的行与反馈都沿用 `calendar_view.dart:753` 日历内拖拽的同款做法
+/// （反馈用同一个 widget，`childWhenDragging` 压到 35% 透明）。
+class _CalendarDragSource extends StatelessWidget {
+  const _CalendarDragSource({required this.task, required this.child});
+
+  final TodoTask task;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return LongPressDraggable<TodoTask>(
+      key: ValueKey('todo-list-task-drag-${task.id}'),
+      data: task,
+      delay: const Duration(milliseconds: 300),
+      feedback: Material(
+        color: Colors.transparent,
+        child: SizedBox(width: 320, child: child),
+      ),
+      childWhenDragging: Opacity(opacity: 0.35, child: child),
+      child: child,
+    );
+  }
 }
