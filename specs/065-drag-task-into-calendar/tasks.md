@@ -28,11 +28,11 @@ Issue #397 正文「前置（四面共用）」写着本单不得排在 PR !380�
 
 | 门禁 | 命令 | 读数 | 日志 |
 | ---- | ---- | ---- | ---- |
-| g1 | `git diff --cached --check`（三个 Dart 文件 + 本轮 specs 全部 `git add` 之后跑） | rc=0、stdout 0 字节 | `/tmp/r136/gates-397/g1.log` |
+| g1 | 提交前：`git diff --cached --check`（三个 Dart 文件 + 本轮 specs 全部 `git add` 之后跑）；复核后可复算的等价命令：`git diff origin/develop...HEAD --check` | rc=0；**日志 `g1.log` 里只有生成脚本写的 `g1_rc=0` 一行，不是原始 stdout** ⇒ 「stdout 0 字节」这半边改由下面 §七 NIT-2 那条现跑命令证明：`git diff origin/develop...HEAD --check \| wc -c` = 0 | `/tmp/r136/gates-397/g1.log` |
 | g2 | `dart format --output=none --set-exit-if-changed` + 本轮显式 3 个文件 | `Formatted 3 files (0 changed)` 在 `/tmp/r136/gates-397/g2.log:1` | 同上 |
 | g3 | `flutter analyze` | `No issues found!` 在 `/tmp/r136/gates-397/g3.log:66` | 同上 |
 | g4 | `flutter test --tags golden` | `+9: All tests passed!` 在 `/tmp/r136/gates-397/g4.log:75` | 同上 |
-| g5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `+1063 ~26: All tests passed!` 在 `/tmp/r136/gates-397/g5.log:1337`（全文 1338 行） | 同上 |
+| g5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `+1063 ~26: All tests passed!` 在 `/tmp/r136/gates-397/g5.log:1337`，全文 1337 行（复算 `wc -l /tmp/r136/gates-397/g5.log` ⇒ 1337；先前写的「全文 1338 行」是首跑读数，复核 NIT-1 已按现测改准） | 同上 |
 | g6 | `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web` 在 `/tmp/r136/gates-397/g6.log:81` | 同上 |
 
 **g2 差点是假绿**：第一次跑成 `dart format --output=none --set-exit-if-changed $FILES`（zsh 对 `$FILES`
@@ -112,8 +112,46 @@ Issue #397 正文「前置（四面共用）」写着本单不得排在 PR !380�
    面 ④ = #400（`:61`/`:63`）。四面都吃 `:47` 的并列视图前提。
 3. FL 队列里 `!402`（specs/064）仍 open（head `c613fc39`），本轮基线是 `2d0aa127`，
    合并次序与冲突面见父仓 task #145。
+4. **复核 NIT-3 未消化**：用例⑥「包一层拖出源不吞掉清单行的读屏语义」用的是全树
+   `find.bySemanticsLabel(RegExp(前 6 字))` + `findsWidgets`，旁侧 `Text`（日历 chip 同题文案）
+   就能满足它 ⇒ 判据打不到「包层吞语义」的要害。收口做法：把 matcher 限定成
+   `find.descendant(of: _row, matching: …)`，或直接对 `_row` 子树走 `SemanticsHandle` 遍历断言
+   该节点没有 `ExcludeSemantics`。**这条改的是测试代码**，会解除本轮 PASS 的绑定，
+   所以下一轮单独开 PR 做，做完必须让「把包层换成 `ExcludeSemantics(child: …)`」这条探针变红。
+5. **复核 NIT-4 未消化**：用例⑤是**前提守卫**（钉 `:47` 并列关闭时无处可放），不是行为守卫。
+   升级为行为守卫的做法（交叉验证给过、复核员同向）：在那条用例里**真做一次长按拖拽**，
+   判据换成结构判据 `find.byType(DragTarget<TodoTask>)` ⇒ `findsNothing`，
+   并在并列开启的用例里补同一条 finder 的 `findsWidgets` 正对照（防它恒 0）。
+   同样改测试代码 ⇒ 与 NIT-3 并到下一轮。
 
 ## 七、只读复核
 
-（本轮 PR 开出后派 `claude -p` 只读复核，`VERDICT` 原文与逐条判定回写本节；
-在此之前本节不得出现任何"已通过"的措辞。）
+### 第 1 轮 ⇒ `VERDICT: PASS`（0 条 FAIL、4 条 NIT）
+
+- 通道：`claude -p --permission-mode plan`，被审 ref = `d6fbacb`（= 当时的 PR head，`git ls-remote` 核对过），
+  结论流 `/tmp/r136/review-405-r1.jsonl`（82 次工具调用，1 个 `type=result` 事件，其 `result` 文本里
+  `VERDICT: PASS` 出现 1 次）。工作树在此期间未被改动。
+  复算命令（**别用 `grep -c "^VERDICT:"` 去数这份 jsonl ⇒ 实测 0**，因为结论在 JSON 字符串内部，
+  不在行首；本仓既有那种「末行哨兵」口径只适用于纯文本日志）：
+  `python3 -c "import json,sys; print(sum((json.loads(l).get('result') or '').count('VERDICT: PASS') for l in open(sys.argv[1], errors='replace') if l.strip().startswith('{')))" /tmp/r136/review-405-r1.jsonl` ⇒ 1
+- 复核员逐项独立复算并判成立的：① 面 ① 三处接线（`home_shell.dart:870` 的 `now:`/`onTaskDateChanged`、
+  两条分支各包 `_CalendarDragSource`、类型/载荷/key 对齐）；② 7 条用例无「永远绿」假判据
+  （`findsNothing` 都有正向镜像、`_sortOrderById` 因 fixture 的 sortOrder 互异而有鉴别力）；
+  ③ §四 覆盖缺口的处置（保留两条分支包层 + 登记待办）成立，且**没有**宣称「两侧都覆盖」；
+  ④ 门禁六个数字在 `/tmp/r136/gates-397/` 逐行命中，基线 `+1056 ~26` 来自独立 detached 工作树
+  `/tmp/r136-base` 的实跑（不是减法推演）；⑤ 四件套三面有字节证据（含 feedback 的
+  `SizedBox(width: 320)`）；⑥ spec/plan/tasks 引用的 12 处 `file:line` 锚点与源页 `:45`–`:63`
+  逐字命中；⑦ 无夹带改动（6 个文件、single-parent、无 `pubspec.lock`、黄金 png 仍 9 张）。
+- **逐条 NIT 的处置**：
+  - NIT-1（`g5.log` 行数写错）⇒ **本轮已改**：本节 §二 g5 行按现测改成 1337。
+    复算：`wc -l /tmp/r136/gates-397/g5.log` = 1337、`sed -n '1337p'` = `03:12 +1063 ~26: All tests passed!`。
+  - NIT-2（g1 的原始 stdout 不可复现）⇒ **本轮已改**：§二 g1 行改列可复算命令，
+    复算：`git diff origin/develop...HEAD --check` 的 rc=0 且 `… \| wc -c` = 0。
+  - NIT-3（读屏用例判定力偏弱）⇒ **不本轮改**，登记 §六 第 4 条。理由：改的是断言本身，
+    会让本轮 PASS 绑定的字节作废，需重跑门禁 + 补探针 + 二轮复核，收益不足以在本轮做。
+  - NIT-4（用例⑤是前提守卫）⇒ **不本轮改**，登记 §六 第 5 条，与 NIT-3 同一轮收口。
+    ⚠️ 交叉验证（`/tmp/r136/xcheck-405.out`）在本轮之前就把这条判为「假判据」（从不触发拖拽、
+    删拖出源也绿），复核员判的是「措辞可更准」⇒ 两边方向一致（都要升级成行为守卫），
+    按更强的那个说法办：不写「已验证并列关闭时无处可放」这种行为习惯，只写「前提没满足」。
+- 覆盖面绑定（本轮改的是 markdown，代码树号必须不动）：
+  `git diff d6fbacb..HEAD -- lib test` 输出 0 行 ⇒ `VERDICT: PASS` 仍绑定最终代码字节。
