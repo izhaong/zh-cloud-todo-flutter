@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/app_database.dart';
 import '../../state/providers.dart';
+import 'folder_actions.dart';
 import '../shell/sidebar_hierarchy.dart';
 
 /// M11-B2 文件夹管理页（独立页面）。
@@ -117,31 +118,9 @@ class FolderPage extends ConsumerWidget {
     WidgetRef ref,
     TodoFolder folder,
   ) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('删除文件夹'),
-        content: Text(
-          '确认删除"${folder.name}"？\n'
-          '其下清单将移至"未分组"，直接子文件夹将提升为顶层。',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
-    );
-    if (ok == true) {
-      final repo = ref.read(folderRepositoryProvider);
-      if (repo == null) return;
-      await repo.delete(folder.id);
-    }
+    // 口径收进 folder_actions.dart：侧栏长按与这里走同一个确认框、同一个词
+    // （嘀嗒 :28「解散文件夹」）。`ref` 保留在签名里，弹层自己按 provider 取仓库。
+    await confirmAndDisbandFolder(context, folder);
   }
 
   Future<(String, String?)?> _promptFolder(

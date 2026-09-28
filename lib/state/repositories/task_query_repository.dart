@@ -22,9 +22,23 @@ DateTime _dateOnly(DateTime value) =>
 /// Drift 查询与 Widget 渲染在同值场景也拥有相同的确定性顺序。
 enum TaskSort { smart, priorityDesc, dueDate, title, createdAt, updatedAt }
 
-int compareTodoTasks(TodoTask left, TodoTask right, TaskSort sort) {
+/// 时间轴方向的档位。
+///
+/// 嘀嗒《03-用分组和排序管理任务》只在「按创建时间排序」(:169-176) 与
+/// 「按修改时间排序」(:186，方向条目在 :192-193) 两节下列出「从旧到新 / 从新到旧」，
+/// 其余档位没有方向 ⇒ [compareTodoTasks] 只在这两档读取本参数。
+/// [newestFirst] 排第一是因为它是默认值，也是本参数出现之前唯一的行为。
+enum TaskSortDirection { newestFirst, oldestFirst }
+
+int compareTodoTasks(
+  TodoTask left,
+  TodoTask right,
+  TaskSort sort, {
+  TaskSortDirection direction = TaskSortDirection.newestFirst,
+}) {
   if (left.isPinned != right.isPinned) return left.isPinned ? -1 : 1;
 
+  final reversed = direction == TaskSortDirection.oldestFirst ? -1 : 1;
   final bySelectedField = switch (sort) {
     TaskSort.smart => 0,
     TaskSort.priorityDesc => right.priority.compareTo(left.priority),
@@ -34,8 +48,8 @@ int compareTodoTasks(TodoTask left, TodoTask right, TaskSort sort) {
     TaskSort.title => left.title.toLowerCase().compareTo(
       right.title.toLowerCase(),
     ),
-    TaskSort.createdAt => right.createdAt.compareTo(left.createdAt),
-    TaskSort.updatedAt => right.updatedAt.compareTo(left.updatedAt),
+    TaskSort.createdAt => reversed * right.createdAt.compareTo(left.createdAt),
+    TaskSort.updatedAt => reversed * right.updatedAt.compareTo(left.updatedAt),
   };
   if (bySelectedField != 0) return bySelectedField;
 
@@ -103,6 +117,7 @@ class TaskQueryFilter {
     this.dueAtFrom,
     this.dueAtTo,
     this.sort = TaskSort.smart,
+    this.sortDirection = TaskSortDirection.newestFirst,
   });
 
   final String? listId;
@@ -114,6 +129,7 @@ class TaskQueryFilter {
   final DateTime? dueAtFrom;
   final DateTime? dueAtTo;
   final TaskSort sort;
+  final TaskSortDirection sortDirection;
 }
 
 class TaskQueryRepository {
@@ -230,7 +246,14 @@ class TaskQueryRepository {
         (tagId) => tagIdsByTask[task.id]?.contains(tagId) ?? false,
       );
     }).toList();
-    results.sort((left, right) => compareTodoTasks(left, right, filter.sort));
+    results.sort(
+      (left, right) => compareTodoTasks(
+        left,
+        right,
+        filter.sort,
+        direction: filter.sortDirection,
+      ),
+    );
     return results;
   }
 }

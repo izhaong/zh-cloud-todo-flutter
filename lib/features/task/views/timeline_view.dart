@@ -9,6 +9,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/brand_colors.dart';
 import '../../../core/time/task_time_formatter.dart';
 import '../../../core/time/task_time_mode.dart';
+import '../../../core/time/week_start.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../task_detail_page.dart';
 import '../task_view_mutation_feedback.dart';
@@ -44,6 +45,7 @@ class TimelineView extends ConsumerWidget {
     this.onTaskSchedule,
     this.onCreateTask,
     this.zoom = 1,
+    this.firstDay = WeekStart.defaultFirstDay,
     this.scale = TimelineScale.week,
     this.collapsedGroupIds = const {},
     this.onZoomChanged,
@@ -55,6 +57,10 @@ class TimelineView extends ConsumerWidget {
   final List<TodoTask> tasks;
   final ValueChanged<String>? onTaskSelected;
   final double zoom;
+
+  /// 嘀嗒「设置-日期与时间-星期开始于」。默认周一 = develop 改造前行为。
+  /// 由调用方注入（本仓既有 `now`/`zoom` 也是注入的），这样裸 pump 的既有用例不受影响。
+  final int firstDay;
   final TimelineScale scale;
   final Set<String> collapsedGroupIds;
   final Future<void> Function(double zoom)? onZoomChanged;
@@ -83,13 +89,14 @@ class TimelineView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final now = _effectiveNow;
-    final groups = _buildGroups(tasks, now);
+    final groups = _buildGroups(tasks, now, firstDay: firstDay);
     final empty = groups.every((g) => g.items.isEmpty);
     final normalizedZoom = zoom.clamp(0.75, 1.5).toDouble();
     return Column(
       children: [
         _TimelineWindow(
           now: now,
+          firstDay: firstDay,
           tasks: tasks,
           zoom: normalizedZoom,
           scale: scale,
@@ -238,12 +245,14 @@ class TimelineView extends ConsumerWidget {
   }
 
   /// 把任务分配到 6 个时间桶；返回按显示顺序排好的桶列表。
-  static List<_TimelineGroup> _buildGroups(List<TodoTask> tasks, DateTime now) {
+  static List<_TimelineGroup> _buildGroups(
+    List<TodoTask> tasks,
+    DateTime now, {
+    int firstDay = WeekStart.defaultFirstDay,
+  }) {
     final todayStart = DateTime(now.year, now.month, now.day);
-    // 本周范围：今天 所在的"自然周"周一 ~ 周日
-    final weekStart = todayStart.subtract(
-      Duration(days: todayStart.weekday - 1),
-    );
+    // 本周范围：今天 所在的"自然周"，周首由「星期开始于」决定（默认周一）
+    final weekStart = WeekStart.startOf(todayStart, firstDay: firstDay);
     final weekEnd = weekStart.add(const Duration(days: 7));
     final nextWeekEnd = weekEnd.add(const Duration(days: 7));
 
@@ -369,13 +378,17 @@ DateTime shiftTimelineWindowAnchor(
   }
 }
 
-String timelineWindowLabel(DateTime anchor, TimelineScale scale) {
+String timelineWindowLabel(
+  DateTime anchor,
+  TimelineScale scale, {
+  int firstDay = WeekStart.defaultFirstDay,
+}) {
   final day = DateTime(anchor.year, anchor.month, anchor.day);
   switch (scale) {
     case TimelineScale.day:
       return '${day.month}月${day.day}日';
     case TimelineScale.week:
-      final start = day.subtract(Duration(days: day.weekday - 1));
+      final start = WeekStart.startOf(day, firstDay: firstDay);
       final end = start.add(const Duration(days: 6));
       return '${start.month}/${start.day}–${end.month}/${end.day}';
     case TimelineScale.month:
@@ -386,6 +399,7 @@ String timelineWindowLabel(DateTime anchor, TimelineScale scale) {
 class _TimelineWindow extends StatefulWidget {
   const _TimelineWindow({
     required this.now,
+    required this.firstDay,
     required this.tasks,
     required this.zoom,
     required this.scale,
@@ -398,6 +412,7 @@ class _TimelineWindow extends StatefulWidget {
   });
 
   final DateTime now;
+  final int firstDay;
   final List<TodoTask> tasks;
   final double zoom;
   final TimelineScale scale;
@@ -460,6 +475,7 @@ class _TimelineWindowState extends State<_TimelineWindow> {
           zoom: widget.zoom,
           scale: widget.scale,
           anchor: _anchor,
+          firstDay: widget.firstDay,
           onPrevious: () => _move(-1),
           onNext: () => _move(1),
           onToday: _returnToToday,
@@ -474,6 +490,7 @@ class _TimelineWindowState extends State<_TimelineWindow> {
           },
           child: _TimelineContinuousCanvas(
             now: _anchor,
+            firstDay: widget.firstDay,
             scale: widget.scale,
             zoom: widget.zoom,
             tasks: widget.tasks,
@@ -493,6 +510,7 @@ class _TimelineZoomToolbar extends StatelessWidget {
     required this.zoom,
     required this.scale,
     required this.anchor,
+    required this.firstDay,
     required this.onPrevious,
     required this.onNext,
     required this.onToday,
@@ -505,6 +523,7 @@ class _TimelineZoomToolbar extends StatelessWidget {
   final double zoom;
   final TimelineScale scale;
   final DateTime anchor;
+  final int firstDay;
   final VoidCallback onPrevious;
   final VoidCallback onNext;
   final VoidCallback onToday;
@@ -553,9 +572,10 @@ class _TimelineZoomToolbar extends StatelessWidget {
                 ),
                 Semantics(
                   liveRegion: true,
-                  label: '当前时间线窗口 ${timelineWindowLabel(anchor, scale)}',
+                  label:
+                      '当前时间线窗口 ${timelineWindowLabel(anchor, scale, firstDay: firstDay)}',
                   child: Text(
-                    timelineWindowLabel(anchor, scale),
+                    timelineWindowLabel(anchor, scale, firstDay: firstDay),
                     style: TextStyle(
                       color: colors.foreground,
                       fontWeight: FontWeight.w600,
@@ -659,8 +679,9 @@ class TimelineTaskSpan {
 TimelineTaskSpan? calculateTimelineTaskSpan(
   TodoTask task,
   DateTime now,
-  TimelineScale scale,
-) {
+  TimelineScale scale, {
+  int firstDay = WeekStart.defaultFirstDay,
+}) {
   final startAt = task.startAt;
   final endAt = task.endAt;
   if (task.completed ||
@@ -680,7 +701,7 @@ TimelineTaskSpan? calculateTimelineTaskSpan(
       rangeEnd = today.add(const Duration(days: 1));
       unit = const Duration(hours: 1);
     case TimelineScale.week:
-      rangeStart = today.subtract(Duration(days: today.weekday - 1));
+      rangeStart = WeekStart.startOf(today, firstDay: firstDay);
       rangeEnd = rangeStart.add(const Duration(days: 7));
       unit = const Duration(days: 1);
     case TimelineScale.month:
@@ -759,6 +780,7 @@ double? timelineWheelZoomTarget(
 class _TimelineContinuousCanvas extends StatelessWidget {
   const _TimelineContinuousCanvas({
     required this.now,
+    required this.firstDay,
     required this.scale,
     required this.zoom,
     required this.tasks,
@@ -769,6 +791,7 @@ class _TimelineContinuousCanvas extends StatelessWidget {
   });
 
   final DateTime now;
+  final int firstDay;
   final TimelineScale scale;
   final double zoom;
   final List<TodoTask> tasks;
@@ -790,7 +813,8 @@ class _TimelineContinuousCanvas extends StatelessWidget {
     final unitWidth = (scale == TimelineScale.day ? 58.0 : 72.0) * zoom;
     final scheduled = [
       for (final task in tasks)
-        if (calculateTimelineTaskSpan(task, now, scale) case final span?)
+        if (calculateTimelineTaskSpan(task, now, scale, firstDay: firstDay)
+            case final span?)
           (task: task, span: span),
     ];
     final contentHeight = 42.0 + scheduled.length * 44.0;
@@ -914,7 +938,7 @@ class _TimelineContinuousCanvas extends StatelessWidget {
             ),
         ];
       case TimelineScale.week:
-        final weekStart = today.subtract(Duration(days: today.weekday - 1));
+        final weekStart = WeekStart.startOf(today, firstDay: firstDay);
         return [
           for (var offset = 0; offset < 7; offset++)
             _allDaySlot(
@@ -1277,8 +1301,7 @@ TimelineBucket classifyTimelineBucket(
   if (due == null) return TimelineBucket.later;
   final todayStart = DateTime(now.year, now.month, now.day);
   final tomorrowStart = todayStart.add(const Duration(days: 1));
-  final weekStartLocal =
-      weekStart ?? todayStart.subtract(Duration(days: todayStart.weekday - 1));
+  final weekStartLocal = weekStart ?? WeekStart.startOf(todayStart);
   final weekEndLocal = weekEnd ?? weekStartLocal.add(const Duration(days: 7));
   final nextWeekEndLocal =
       nextWeekEnd ?? weekEndLocal.add(const Duration(days: 7));

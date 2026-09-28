@@ -74,9 +74,9 @@ void main() {
       SyncChangeQueue(reopened),
     );
 
-    expect(await restored.get('list-a'), TaskSort.dueDate);
-    expect(await restored.get('list-b'), TaskSort.title);
-    expect(await restored.get(null), TaskSort.smart);
+    expect((await restored.get('list-a')).sort, TaskSort.dueDate);
+    expect((await restored.get('list-b')).sort, TaskSort.title);
+    expect((await restored.get(null)).sort, TaskSort.smart);
 
     final rows = await reopened.select(reopened.todoViewPreferences).get();
     expect(rows.map((row) => row.sourceKey), ['list-a', 'list-b']);

@@ -7,6 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/brand_colors.dart';
 import '../../../core/time/task_time_formatter.dart';
 import '../../../core/time/task_time_mode.dart';
+import '../../../core/time/week_start.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../state/providers.dart';
 import '../task_detail_page.dart';
@@ -15,11 +16,12 @@ import '../task_view_mutation_feedback.dart';
 /// M11-B3 日历视图：周 / 月 / 年 / 列表 / 日程 5 模式。
 ///
 /// 任务落点优先级：dueAt > endAt > startAt。
-/// - 月模式：7x6 网格，列 = 周一~周日；行 = 自然周；点日期格进入日程模式
-/// - 周模式：7 列横排（Mon..Sun），每个列内是该周内的任务列表
+/// - 月模式：7x6 网格，列顺序与行起点由「设置-日期与时间-星期开始于」决定
+///   （默认周一）；行 = 自然周；点日期格进入日程模式
+/// - 周模式：7 列横排，取哪 7 天同样由该偏好决定；每列内是该天的任务列表
 /// - 年模式：12 月聚合（每月任务计数 + 切换月份）
 /// - 列表模式：所有任务按日期排序的扁平列表
-/// - 日程模式：单日任务按时间顺序展示
+/// - 日程模式：所有有时间的任务按日期升序排成一条跨日时间轴（日内按时间）
 ///
 /// 纯函数：
 ///   - [resolveTaskDate] 取单个任务落点日期
@@ -53,6 +55,10 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
   CalendarMode _mode = CalendarMode.month;
   bool _showCompleted = false;
 
+  /// 列表档「显示时间轴」（嘀嗒《04-列表视图：按天查看任务》:16/:18/:23）。
+  /// 会话内状态、默认关，理由见 specs/052 FR-4/FR-5。
+  bool _showListTimeline = false;
+
   /// 用户是否已经动过显示设置。恢复偏好是异步的，若期间用户已切了视图或拨了开关，
   /// 迟到的旧值必须作废 —— 否则表现为「刚点的档位被弹回上一次的选择」。
   bool _displayTouched = false;
@@ -77,6 +83,9 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
 
   @override
   Widget build(BuildContext context) {
+    // FR-7：首值未到达或读失败都退回默认档（周一 = develop 既有行为）。
+    // 这里不能用 when(error:)，那条分支会丢掉 AsyncError 里留存的旧值。
+    final firstDay = resolveWeekStartFirstDay(ref.watch(weekStartProvider));
     return Column(
       children: [
         _Toolbar(
@@ -86,12 +95,17 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
           onPrev: () => setState(() => _shift(-1)),
           onNext: () => setState(() => _shift(1)),
           onOpenSettings: widget.filterCompleted ? _showDisplaySettings : null,
+          showTimelineToggle: _mode == CalendarMode.list,
+          timelineOn: _showListTimeline,
+          onToggleTimeline: () =>
+              setState(() => _showListTimeline = !_showListTimeline),
         ),
         const Divider(height: 1),
         Expanded(
           child: switch (_mode) {
             CalendarMode.month => _MonthGrid(
               anchor: _anchor,
+              firstDay: firstDay,
               tasks: _visibleTasks,
               onTaskDateChanged: widget.onTaskDateChanged,
               onDayTap: (day) {
@@ -101,6 +115,7 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
             ),
             CalendarMode.week => _WeekView(
               anchor: _anchor,
+              firstDay: firstDay,
               tasks: _visibleTasks,
               onTaskTap: (t) => _openDetail(context, t),
             ),
@@ -112,12 +127,19 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
                 _changeMode(CalendarMode.month);
               },
             ),
-            CalendarMode.list => _ListView(
-              tasks: _visibleTasks,
-              onTaskTap: (t) => _openDetail(context, t),
-            ),
+            CalendarMode.list =>
+              _showListTimeline
+                  ? _DayTimeline(
+                      tasks: tasksOnDayByTime(_visibleTasks, _anchor),
+                      onTaskTap: (t) => _openDetail(context, t),
+                    )
+                  : _ListView(
+                      tasks: _visibleTasks,
+                      onTaskTap: (t) => _openDetail(context, t),
+                    ),
             CalendarMode.agenda => _AgendaView(
               anchor: _anchor,
+              today: widget._now ?? DateTime.now(),
               tasks: _visibleTasks,
               onTaskTap: (t) => _openDetail(context, t),
             ),
@@ -139,7 +161,11 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
         _anchor = DateTime(_anchor.year + direction, _anchor.month, 1);
         break;
       case CalendarMode.list:
-        // 列表模式不切换锚点
+        // 未开启时间轴时列表档不看锚点（现状）；开启后内容按选中日取数，
+        // 不按天移动就把用户钉在进入列表档那一刻的那一天。
+        if (_showListTimeline) {
+          _anchor = _anchor.add(Duration(days: direction));
+        }
         break;
       case CalendarMode.agenda:
         _anchor = _anchor.add(Duration(days: direction));
@@ -327,11 +353,18 @@ class _DisplaySettingsSheet extends StatelessWidget {
   }
 }
 
-/// 月模式网格：6 行 × 7 列（周一起），包含 anchor 月的所有日期及上下月填充。
-List<List<DateTime>> buildMonthGrid(DateTime anchor) {
+/// 月模式网格：6 行 × 7 列，列顺序与起点由 [firstDay] 决定（默认周一，
+/// 即 develop 改造前的行为）；包含 anchor 月的所有日期及上下月填充。
+List<List<DateTime>> buildMonthGrid(
+  DateTime anchor, {
+  int firstDay = WeekStart.defaultFirstDay,
+}) {
   final firstOfMonth = DateTime(anchor.year, anchor.month, 1);
   // weekDay: 1(Mon)..7(Sun)
-  final leadingBlanks = firstOfMonth.weekday - 1;
+  final leadingBlanks = WeekStart.offsetOf(
+    firstOfMonth.weekday,
+    firstDay: firstDay,
+  );
   final start = firstOfMonth.subtract(Duration(days: leadingBlanks));
   final rows = <List<DateTime>>[];
   for (var r = 0; r < 6; r++) {
@@ -352,6 +385,9 @@ class _Toolbar extends StatelessWidget {
     required this.onPrev,
     required this.onNext,
     required this.onOpenSettings,
+    required this.showTimelineToggle,
+    required this.timelineOn,
+    required this.onToggleTimeline,
   });
 
   final CalendarMode mode;
@@ -361,6 +397,11 @@ class _Toolbar extends StatelessWidget {
   final VoidCallback onNext;
   final VoidCallback? onOpenSettings;
 
+  /// 「显示时间轴」只在列表档出现（嘀嗒 :23 的打开方式就是列表档里的一个图标）。
+  final bool showTimelineToggle;
+  final bool timelineOn;
+  final VoidCallback onToggleTimeline;
+
   @override
   Widget build(BuildContext context) {
     final ym = DateFormat('yyyy 年 M 月').format(anchor);
@@ -369,7 +410,8 @@ class _Toolbar extends StatelessWidget {
       CalendarMode.month => ym,
       CalendarMode.week => ym,
       CalendarMode.year => y,
-      CalendarMode.list => '全部任务',
+      CalendarMode.list =>
+        timelineOn ? DateFormat('yyyy 年 M 月 d 日').format(anchor) : '全部任务',
       CalendarMode.agenda => DateFormat('yyyy 年 M 月 d 日').format(anchor),
     };
     return LayoutBuilder(
@@ -411,6 +453,26 @@ class _Toolbar extends StatelessWidget {
                   ),
                 ),
               );
+        final timelineButton = !showTimelineToggle
+            ? const SizedBox.shrink()
+            : Semantics(
+                key: const Key('calendar-list-timeline'),
+                container: true,
+                button: true,
+                enabled: true,
+                selected: timelineOn,
+                label: '显示时间轴',
+                onTap: onToggleTimeline,
+                child: ExcludeSemantics(
+                  child: IconButton(
+                    tooltip: '显示时间轴',
+                    icon: Icon(
+                      timelineOn ? Icons.timeline : Icons.timeline_outlined,
+                    ),
+                    onPressed: onToggleTimeline,
+                  ),
+                ),
+              );
         final labelText = Text(
           label,
           maxLines: 1,
@@ -436,6 +498,7 @@ class _Toolbar extends StatelessWidget {
                         Expanded(child: labelText),
                         nextButton,
                         settingsButton,
+                        timelineButton,
                       ],
                     ),
                   ],
@@ -448,6 +511,7 @@ class _Toolbar extends StatelessWidget {
                     labelText,
                     nextButton,
                     settingsButton,
+                    timelineButton,
                   ],
                 ),
         );
@@ -456,22 +520,29 @@ class _Toolbar extends StatelessWidget {
   }
 }
 
+/// 月视图表头的单字（一…日）。嘀嗒表头用单字，档位名用「周X」，
+/// 两者同源：去掉"周"前缀即表头字形，避免出现第二份星期表。
+String weekdayGlyph(int weekday) =>
+    WeekStart.labelOf(weekday).replaceFirst('周', '');
+
 class _MonthGrid extends StatelessWidget {
   const _MonthGrid({
     required this.anchor,
+    required this.firstDay,
     required this.tasks,
     required this.onDayTap,
     this.onTaskDateChanged,
   });
 
   final DateTime anchor;
+  final int firstDay;
   final List<TodoTask> tasks;
   final ValueChanged<DateTime> onDayTap;
   final Future<void> Function(TodoTask task, DateTime dueAt)? onTaskDateChanged;
 
   @override
   Widget build(BuildContext context) {
-    final grid = buildMonthGrid(anchor);
+    final grid = buildMonthGrid(anchor, firstDay: firstDay);
     final tasksByDay = <String, List<TodoTask>>{};
     for (final t in tasks) {
       final d = resolveTaskDate(t);
@@ -484,14 +555,11 @@ class _MonthGrid extends StatelessWidget {
       child: Column(
         children: [
           Row(
-            children: const [
-              _DayHeader('一'),
-              _DayHeader('二'),
-              _DayHeader('三'),
-              _DayHeader('四'),
-              _DayHeader('五'),
-              _DayHeader('六'),
-              _DayHeader('日'),
+            // 表头与网格必须读同一个 firstDay，否则「格子里是周六、
+            // 头上写着周一」这类错位没有任何测试能替你发现。
+            children: [
+              for (final weekday in WeekStart.columnOrder(firstDay: firstDay))
+                _DayHeader(weekdayGlyph(weekday)),
             ],
           ),
           for (final row in grid)
@@ -721,16 +789,18 @@ class _CalendarTaskChip extends StatelessWidget {
 class _WeekView extends StatelessWidget {
   const _WeekView({
     required this.anchor,
+    required this.firstDay,
     required this.tasks,
     required this.onTaskTap,
   });
   final DateTime anchor;
+  final int firstDay;
   final List<TodoTask> tasks;
   final ValueChanged<TodoTask> onTaskTap;
 
   @override
   Widget build(BuildContext context) {
-    final weekStart = anchor.subtract(Duration(days: anchor.weekday - 1));
+    final weekStart = WeekStart.startOf(anchor, firstDay: firstDay);
     final days = List<DateTime>.generate(
       7,
       (i) => weekStart.add(Duration(days: i)),
@@ -869,113 +939,251 @@ class _YearView extends StatelessWidget {
   }
 }
 
-class _AgendaView extends StatelessWidget {
+class _AgendaView extends StatefulWidget {
   const _AgendaView({
     required this.anchor,
+    required this.today,
     required this.tasks,
     required this.onTaskTap,
   });
 
   final DateTime anchor;
+  final DateTime today;
   final List<TodoTask> tasks;
   final ValueChanged<TodoTask> onTaskTap;
 
   @override
+  State<_AgendaView> createState() => _AgendaViewState();
+}
+
+/// 日程视图 = 一条**跨日**的时间轴。
+///
+/// 源页 `:5`「你所有安排好时间的任务会显示在一个时间轴中以线性的方式展示」、
+/// `:7`「同时看到过去已完成的任务、当前的进度和未来的计划」；
+/// 上一版按 anchor 单日过滤，两句话都不成立 ⇒ 这里改成按日期升序分组。
+/// 原文没有给窗口上下界，所以**不设「最近 N 天」之类的截断**。
+class _AgendaViewState extends State<_AgendaView> {
+  /// 统一行高：锚点偏移于是可以算出来（`行号 × 行高`），不用等布局再校正。
+  static const double _rowExtent = 88;
+
+  ScrollController? _controller;
+  DateTime? _seededAnchor;
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final dayTasks = tasks.where((task) {
-      final date = resolveTaskDate(task);
-      return date != null &&
-          date.year == anchor.year &&
-          date.month == anchor.month &&
-          date.day == anchor.day;
-    }).toList()..sort(_compareByTime);
-    if (dayTasks.isEmpty) {
+    final rows = _timelineRows(widget.tasks);
+    if (rows.isEmpty) {
       return const AppEmptyState(
-        title: '当日暂无日程',
-        subtitle: '切换日期，或为任务设置开始和截止时间。',
+        title: '暂无日程',
+        subtitle: '为任务设置开始和截止时间，它们会按日期排进这条时间轴。',
       );
     }
 
-    return ListView.separated(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: dayTasks.length,
-      separatorBuilder: (_, _) => const Divider(height: 1, indent: 72),
-      itemBuilder: (context, index) {
-        final task = dayTasks[index];
-        final timeLabel = _formatTime(task);
-        return ListTile(
-          leading: SizedBox(
-            width: 48,
-            child: Text(
-              task.allDay
-                  ? '全天'
-                  : _formatClock(
-                      task,
-                      task.startAt ?? task.dueAt ?? task.endAt!,
-                    ),
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.labelMedium,
-            ),
-          ),
-          title: Text(task.title),
-          subtitle: Text(timeLabel),
-          trailing: isExternalCalendarTask(task)
-              ? const Icon(Icons.lock_outline, size: 18)
-              : null,
-          onTap: () => onTaskTap(task),
+    final anchorIndex = _anchorRowIndex(rows, widget.anchor);
+    final controller = _controller ??= ScrollController(
+      initialScrollOffset: anchorIndex * _rowExtent,
+    );
+    if (_seededAnchor != widget.anchor) {
+      _seededAnchor = widget.anchor;
+      if (controller.hasClients) {
+        final offset = (anchorIndex * _rowExtent).clamp(
+          0.0,
+          controller.position.maxScrollExtent,
         );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) controller.jumpTo(offset);
+        });
+      }
+    }
+
+    return ListView.builder(
+      key: const Key('calendar-agenda-timeline'),
+      controller: controller,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemExtent: _rowExtent,
+      itemCount: rows.length,
+      itemBuilder: (context, index) {
+        final row = rows[index];
+        return row.task == null
+            ? _dayHeader(context, row.day)
+            : _taskRow(context, row.task!, row.day);
       },
     );
   }
 
-  static int _compareByTime(TodoTask left, TodoTask right) {
-    if (left.allDay != right.allDay) return left.allDay ? -1 : 1;
-    final leftTime = left.startAt ?? left.dueAt ?? left.endAt;
-    final rightTime = right.startAt ?? right.dueAt ?? right.endAt;
-    if (leftTime == null && rightTime == null) return 0;
-    if (leftTime == null) return 1;
-    if (rightTime == null) return -1;
-    return _compareWallClock(
-      _displayTime(left, leftTime),
-      _displayTime(right, rightTime),
+  Widget _dayHeader(BuildContext context, DateTime day) {
+    final colors = brandColors(context);
+    final isToday = _isSameDay(day, widget.today);
+    return Semantics(
+      header: true,
+      child: Container(
+        key: ValueKey(
+          'calendar-agenda-day-${day.year}-${day.month}-${day.day}',
+        ),
+        color: colors.background,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        alignment: Alignment.centerLeft,
+        child: DefaultTextStyle(
+          style:
+              Theme.of(context).textTheme.labelLarge ??
+              const TextStyle(fontSize: 13),
+          child: Row(
+            children: [
+              Text('${day.month}月${day.day}日'),
+              if (isToday) ...[const SizedBox(width: 6), const Text('今天')],
+            ],
+          ),
+        ),
+      ),
     );
   }
 
-  static String _formatTime(TodoTask task) {
-    if (task.allDay) return '全天';
-    final start = task.startAt ?? task.dueAt ?? task.endAt;
-    if (start == null) return '未设置时间';
-    final startLabel = _formatClock(task, start);
-    final end = task.endAt;
-    if (end == null || !end.isAfter(start)) return startLabel;
-    return '$startLabel–${_formatClock(task, end)}';
-  }
-
-  static String _formatClock(TodoTask task, DateTime instant) {
-    return DateFormat('HH:mm').format(_displayTime(task, instant));
-  }
-
-  static DateTime _displayTime(TodoTask task, DateTime instant) {
-    return taskDisplayDateTime(
-      instant,
-      mode: TaskTimeMode.fromWire(task.timeMode),
-      timeZone: task.timeZone,
+  Widget _taskRow(BuildContext context, TodoTask task, DateTime day) {
+    final clock = task.allDay
+        ? '全天'
+        : _formatClock(task, task.startAt ?? task.dueAt ?? task.endAt!);
+    return ListTile(
+      key: ValueKey('calendar-agenda-task-${task.id}'),
+      dense: true,
+      visualDensity: VisualDensity.compact,
+      leading: SizedBox(
+        width: 48,
+        child: Text(
+          clock,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.labelMedium,
+        ),
+      ),
+      title: Text(task.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text(
+        _formatTime(task),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: isExternalCalendarTask(task)
+          ? const Icon(Icons.lock_outline, size: 18)
+          : null,
+      onTap: () => widget.onTaskTap(task),
     );
   }
+}
 
-  static int _compareWallClock(DateTime left, DateTime right) {
-    for (final pair in [
-      (left.hour, right.hour),
-      (left.minute, right.minute),
-      (left.second, right.second),
-      (left.millisecond, right.millisecond),
-      (left.microsecond, right.microsecond),
-    ]) {
-      final compared = pair.$1.compareTo(pair.$2);
-      if (compared != 0) return compared;
-    }
-    return 0;
+bool _isSameDay(DateTime left, DateTime right) =>
+    left.year == right.year &&
+    left.month == right.month &&
+    left.day == right.day;
+
+/// 把任务摊成「日头 + 该日任务」的行序列，日期升序；日内沿用原有的时间排序。
+List<_AgendaRow> _timelineRows(List<TodoTask> tasks) {
+  final byDay = <DateTime, List<TodoTask>>{};
+  for (final task in tasks) {
+    final date = resolveTaskDate(task);
+    if (date == null) continue;
+    byDay.putIfAbsent(date, () => <TodoTask>[]).add(task);
   }
+  final days = byDay.keys.toList()..sort();
+  return [
+    for (final day in days) ...[
+      _AgendaRow(day: day),
+      for (final task in (byDay[day]!..sort(_compareByTime)))
+        _AgendaRow(day: day, task: task),
+    ],
+  ];
+}
+
+/// 锚点那天必须在视口里：该日有任务就从它的日头开始；没有就从下一个日头开始。
+int _anchorRowIndex(List<_AgendaRow> rows, DateTime anchor) {
+  for (var index = 0; index < rows.length; index++) {
+    final row = rows[index];
+    if (row.task != null) continue;
+    if (!row.day.isBefore(anchor)) return index;
+  }
+  return rows.length - 1;
+}
+
+class _AgendaRow {
+  const _AgendaRow({required this.day, this.task});
+
+  final DateTime day;
+  final TodoTask? task;
+}
+
+/// 日程行的时间区间：全天在前，未定时点有专门文案。
+String _formatTime(TodoTask task) {
+  if (task.allDay) return '全天';
+  final start = task.startAt ?? task.dueAt ?? task.endAt;
+  if (start == null) return '未设置时间';
+  final startLabel = _formatClock(task, start);
+  final end = task.endAt;
+  if (end == null || !end.isAfter(start)) return startLabel;
+  return '$startLabel–${_formatClock(task, end)}';
+}
+
+/// 选中日当天的任务，全天在前、有时点的按墙钟时刻升序。
+///
+/// 议程档与列表档「显示时间轴」共用这一个取数口：嘀嗒的「日程」与
+/// 「列表视图-显示时间轴」渲染的是同一批"按天 + 按时间"的内容，
+/// 各自抄一份就会长出两个事实源（specs/051 第 76 轮 PH 探针就是这么抓出来的）。
+List<TodoTask> tasksOnDayByTime(List<TodoTask> tasks, DateTime day) {
+  return [
+    for (final task in tasks)
+      if (_isOnDay(task, day)) task,
+  ]..sort(_compareByTime);
+}
+
+bool _isOnDay(TodoTask task, DateTime day) {
+  final date = resolveTaskDate(task);
+  return date != null &&
+      date.year == day.year &&
+      date.month == day.month &&
+      date.day == day.day;
+}
+
+int _compareByTime(TodoTask left, TodoTask right) {
+  if (left.allDay != right.allDay) return left.allDay ? -1 : 1;
+  final leftTime = left.startAt ?? left.dueAt ?? left.endAt;
+  final rightTime = right.startAt ?? right.dueAt ?? right.endAt;
+  if (leftTime == null && rightTime == null) return 0;
+  if (leftTime == null) return 1;
+  if (rightTime == null) return -1;
+  return _compareWallClock(
+    _displayTime(left, leftTime),
+    _displayTime(right, rightTime),
+  );
+}
+
+String _formatClock(TodoTask task, DateTime instant) {
+  return DateFormat('HH:mm').format(_displayTime(task, instant));
+}
+
+DateTime _displayTime(TodoTask task, DateTime instant) {
+  return taskDisplayDateTime(
+    instant,
+    mode: TaskTimeMode.fromWire(task.timeMode),
+    timeZone: task.timeZone,
+  );
+}
+
+int _compareWallClock(DateTime left, DateTime right) {
+  for (final pair in [
+    (left.hour, right.hour),
+    (left.minute, right.minute),
+    (left.second, right.second),
+    (left.millisecond, right.millisecond),
+    (left.microsecond, right.microsecond),
+  ]) {
+    final compared = pair.$1.compareTo(pair.$2);
+    if (compared != 0) return compared;
+  }
+  return 0;
 }
 
 class _ListView extends StatelessWidget {
@@ -1011,6 +1219,124 @@ class _ListView extends StatelessWidget {
           onTap: () => onTaskTap(t),
         );
       },
+    );
+  }
+}
+
+/// 列表档「显示时间轴」：以时间为线，串起选中日一天的日程（嘀嗒《04-列表视图》:18）。
+///
+/// 全天任务落在轴**之外**的上方「全天」栏，有时点的任务落在轴上并在左侧标出 HH:mm：
+/// 《08-常见问题》:32 原文是「将全天任务栏里的任务拖拽至时间轴上的对应时间点」——
+/// 拖拽的两个端点是**两个区域**，所以 `:32` 只证嘀嗒另有一根「全天任务栏」，
+/// 不证它是这条轴的一部分（第 77 轮复核 F2）。全天行因此不画轴线。
+/// 拖拽改时间、隐藏时段、长按落点建任务都不在本面（specs/052「明确不做」）。
+class _DayTimeline extends StatelessWidget {
+  const _DayTimeline({required this.tasks, required this.onTaskTap});
+
+  static const double _gutterWidth = 46;
+
+  final List<TodoTask> tasks;
+  final ValueChanged<TodoTask> onTaskTap;
+
+  @override
+  Widget build(BuildContext context) {
+    if (tasks.isEmpty) {
+      return const AppEmptyState(title: '该日无任务', subtitle: '切换日期，或为任务设置时间。');
+    }
+    final allDay = [
+      for (final t in tasks)
+        if (t.allDay) t,
+    ];
+    final timed = [
+      for (final t in tasks)
+        if (!t.allDay) t,
+    ];
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      children: [
+        if (allDay.isNotEmpty)
+          Column(
+            key: const Key('calendar-timeline-allday'),
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Semantics(
+                header: true,
+                child: Text(
+                  '全天',
+                  style: Theme.of(context).textTheme.labelSmall,
+                ),
+              ),
+              for (final t in allDay) _row(context, t, null),
+            ],
+          ),
+        if (timed.isNotEmpty)
+          Padding(
+            padding: EdgeInsets.only(top: allDay.isEmpty ? 0 : 8),
+            child: Column(
+              key: const Key('calendar-timeline-timed'),
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final t in timed)
+                  _row(
+                    context,
+                    t,
+                    _formatClock(t, t.startAt ?? t.dueAt ?? t.endAt!),
+                  ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _row(BuildContext context, TodoTask task, String? clock) {
+    final colors = brandColors(context);
+    return Semantics(
+      key: ValueKey('calendar-timeline-row-${task.id}'),
+      container: true,
+      button: true,
+      enabled: true,
+      label: '${clock ?? '全天'} ${task.title}',
+      onTap: () => onTaskTap(task),
+      child: ExcludeSemantics(
+        child: InkWell(
+          onTap: () => onTaskTap(task),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: _gutterWidth,
+                  child: Text(
+                    clock ?? '',
+                    textAlign: TextAlign.end,
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                ),
+                // 轴：每行自己画一段左边线，相邻行拼成一条连续的线。
+                Container(
+                  width: 16,
+                  decoration: clock == null
+                      ? null
+                      : BoxDecoration(
+                          border: Border(
+                            left: BorderSide(width: 2, color: colors.border),
+                          ),
+                        ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    task.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
