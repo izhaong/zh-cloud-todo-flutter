@@ -16,7 +16,7 @@
 
 ## 二、develop 现状（基线 `9032005`，逐条现跑）
 
-1. **已完成被无条件丢掉，共 3 处**（只改视图不够）：
+1. **已完成被无条件丢掉，共 3 处**，只改视图不够。复算 `git grep -n "completed" 90320057c -- lib/features/task/views/eisenhower_view.dart lib/features/task/tasks_by_list_page.dart | grep -cE "continue|!task.completed"` ⇒ 3，下面逐条列出：
    - `lib/features/task/views/eisenhower_view.dart` 本机分档 `if (t.completed) continue;`、
      远程分档 `if (task.completed) continue;`
    - `lib/features/task/tasks_by_list_page.dart` 的
