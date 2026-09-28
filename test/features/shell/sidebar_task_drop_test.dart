@@ -50,6 +50,11 @@ Future<List<String>> _readTagIds(AppDatabase db, String taskId) async {
   return rows.map((r) => r.tagId).toList()..sort();
 }
 
+/// 种进库里的起止时间：`DateTime` 不是 const，所以只能当顶栏 final 常量用。
+/// 有真值，「换清单不动起止时间」才是能咬住变异实现的断言（第 1 轮复核 FAIL-1）。
+final DateTime _seedStartAt = DateTime(2026, 6, 20, 10);
+final DateTime _seedEndAt = DateTime(2026, 6, 20, 11);
+
 /// 落点只用到载荷的 `id` 与 `listId`（前者写库、后者判「换没换清单」），
 /// 所以替身载荷按夹具的真实值构造即可，不必把整行抄一遍。
 TodoTask _payload({required String id, required String listId}) => TodoTask(
@@ -169,12 +174,21 @@ void main() {
         ),
       );
       final db = fixture.database;
-      // 先把「原清单的分组」造出来：不写 sectionId，「清掉分组」这条就无从证伪。
+      // 先把「原清单的分组」与「起止时间」都造出来：不写这几列，「换清单不该动它们」就是
+      // 两个 null 比两个 null 的恒真断言（第 1 轮只读复核 FAIL-1 抓到的正是这个）。
       await (db.update(db.todoTasks)
             ..where((t) => t.id.equals(TodoVisualFixture.metadataTaskId)))
-          .write(const TodoTasksCompanion(sectionId: Value('sec-of-inbox')));
+          .write(
+            TodoTasksCompanion(
+              sectionId: const Value('sec-of-inbox'),
+              startAt: Value(_seedStartAt),
+              endAt: Value(_seedEndAt),
+            ),
+          );
       final before = await _readTask(db, TodoVisualFixture.metadataTaskId);
       expect(before.sectionId, 'sec-of-inbox', reason: '种子没写进去，后面全是空断言');
+      expect(before.startAt, _seedStartAt, reason: 'startAt 种子没写进去 ⇒ 不变断言会退化成 null==null');
+      expect(before.endAt, _seedEndAt, reason: 'endAt 种子没写进去 ⇒ 不变断言会退化成 null==null');
       expect(before.listId, TodoVisualFixture.inboxListId);
 
       await _dragTo(tester, _listZone(TodoVisualFixture.personalListId));
