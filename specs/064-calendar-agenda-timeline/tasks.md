@@ -34,7 +34,10 @@ Gitea：zh-cloud-todo-flutter Issue #401 · 分支 `feat/401-calendar-agenda-tim
 - 任务行 key `calendar-agenda-task-<id>`，标题与副标题各 `maxLines: 1` + 省略号（配合 320px 那条用例）。
 - 文件头注释第 21 行那句「日程模式：单日任务按时间顺序展示」按 `:5` 改正；空态文案「当日暂无日程 / 切换日期…」换成跨日轴上成立的说法。
 
-## 三、六道门禁（跑在最终字节上）
+## 三、六道门禁（首轮 head `9ac7d59`，合并 develop 之前）
+
+§九 是本轮最终字节 `3543c25` 的重跑读数。这张表留着是因为它记录了基线比对的做法，
+但**别拿它当合并后 head 的门禁证据** —— head 已前进，门禁必须重跑。
 
 | 门禁 | 读数 | 日志 |
 | --- | --- | --- |
@@ -74,8 +77,58 @@ Gitea：zh-cloud-todo-flutter Issue #401 · 分支 `feat/401-calendar-agenda-tim
 
 被审 SHA：本轮提交后填。派单提示词、日志路径与 `VERDICT` 行号在此登记；FAIL 的每条要回源复验，驳回的写书面理由。
 
-## 八、矩阵回写
+## 八、矩阵回写（含死锁解除条件）
 
 zh-cloud-docs 的行 #30 目前在 `docs/parity-replay-combined`（PR !102）上，本仓不动它：
 「已实现待合并 + PR 号」这段文本走 docs 侧留言排队（该分支正被并行会话书写，见记忆「子模块工作区被并行会话共用」）。
 合并进 develop 之前，矩阵状态不得翻转成「有」。
+
+⚠️ 只留言排队有个死锁：若 `docs/parity-replay-combined` 迟迟不合，`develop` 上那行会永久停在「部分」，
+而实现早已落地 ⇒ 第 1 轮复核把这条判成阻塞项（`/tmp/g401/verdict-402-r1.stream.jsonl` ⑨ 段）。
+处置：在 docs 仓立了 **zh-cloud-docs Issue #112**，里面带（a）可机器判的触发命令
+`git -C zh-cloud-todo-flutter merge-base --is-ancestor <MERGE_SHA> origin/develop`、
+（b）现状行逐字（按行首 `| 30 ` 定位，不按行号）、（c）翻转后的整行文本（合并 SHA 留空由执行人回填）、
+（d）改完要跑的校验器 `python3 scripts/todo/check_parity_matrix.py`。
+⇒ 本仓合并 !402 之后，矩阵翻转不再依赖 !102 的合并时机，只需在 #112 上执行一次。
+
+## 九、合并 develop 的收尾与最终字节门禁（head `3543c25`）
+
+### 撞在哪、为什么
+
+`origin/develop@cdba014` 已含 !364（列表视图「显示时间轴」），它把日程档定义成「选中日单日过滤」，并用
+`test/features/task/calendar_list_timeline_test.dart:415`「议程档顺序 = tasksOnDayByTime 的顺序」把这件事钉成防副本判据。
+本轮把日程档改成跨日时间轴 ⇒ 同一条断言的**范围那一半**正是矩阵 #30 要推翻的现状。
+
+### 三笔提交（别把这段当成干净合并）
+
+| 提交 | 内容 |
+| --- | --- |
+| `aa2d8ba` | `git merge origin/develop`。**这一笔里混进了冲突标记与一份重复的 `_compareByTime`** —— 清理脚本的断言索引用错（冲突块是 7 行不是 8 行），断言先抛但同一条命令链已经 `git add` + `git commit`。记在这里是因为它说明「有合并提交的 PR 必须重跑全部门禁」不是套话 |
+| `d528bf2` | 清标记：删掉 `_AgendaViewFormat`（develop 已把 `_compareByTime`/`_formatClock`/`_displayTime`/`_compareWallClock` 提成库级函数，留两份就是两个事实源），三处限定名调用改成库级调用，`_formatTime` 提为库级函数（逐字搬，未改逻辑） |
+| `7034396` + `3543c25` | 防副本断言改按跨日口径 + `dart format` 折行 |
+
+### 防副本判据没有因为改口径而变弱
+
+`titles` 现在等于「10/1 与 10/2 各自的 `tasksOnDayByTime` 按日升序拼接」。反向探针（日志
+`/tmp/g402-r2-probe-sortcopy.log`）：把 `_timelineRows` 的日内排序换成自抄副本 `..sort((a, b) => a.title.compareTo(b.title))`
+⇒ 这条用例红（`00:00 +0 -1`），还原后 `cmp` 与 HEAD 逐字节相同。
+
+### 六道门禁在最终字节上的读数（head `3543c25`）
+
+| 门禁 | 读数 | 日志 |
+| --- | --- | --- |
+| 1 `git diff --check`（另对合并提交跑 `git show --check`） | `rc=0`、无输出 | `/tmp/g402-r2-g1.log` |
+| 2 `dart format --output=none --set-exit-if-changed` 只带本轮三个文件 | `Formatted 3 files (0 changed)`、`rc=0` | `/tmp/g402-r2-g23b.log` |
+| 3 `flutter analyze` | `No issues found!` | 同上 |
+| 4 `flutter test --tags golden` | `00:04 +9: All tests passed!`；`git status --short test/goldens` 空 ⇒ 一张没重录 | `/tmp/g402-r2-g4b.log` |
+| 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `03:01 +1028 ~26: All tests passed!` | `/tmp/g402-r2-g5b.log` |
+| 6 `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web` | `/tmp/g402-r2-g6b.log` |
+
+合并前置的试算这一步不需要 `merge-tree`：`git merge-base --is-ancestor origin/develop HEAD` 为真
+（`origin/develop = cdba014` 已是本分支祖先）⇒ 合并必然干净，冲突已在 `aa2d8ba`/`d528bf2` 里手工解掉。
+`pubspec.lock` 跑完六道门禁后仍无改动（`git status --short` 为空）。
+
+门禁 5 的基线这次**重新量过**（head 变了，§三 那个 898 已过期）：在 `origin/develop@cdba014` 的一次性
+detached 工作树上跑同一条命令 ⇒ `03:03 +1023 ~26: All tests passed!`（日志 `/tmp/g402-r2-base.log`）。
+`1028 - 1023 = 5` = 本轮新增用例数（`grep -c "testWidgets(" test/features/task/calendar_agenda_timeline_test.dart` ⇒ `5`），
+跳过数 26 前后一致。
