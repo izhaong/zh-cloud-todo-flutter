@@ -6,6 +6,7 @@ import '../../core/theme/brand_colors.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../state/providers.dart';
 import '../../state/repositories/task_capture_defaults_repository.dart';
+import '../../state/repositories/sidebar_visibility_repository.dart';
 import '../../state/session_state.dart';
 import '../achievement/achievement_page.dart';
 import '../account/account_security_page.dart';
@@ -134,6 +135,33 @@ class SettingsRoute extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 16),
+          _Section(title: '智能清单'),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                _Tile(
+                  icon: Icons.sell_outlined,
+                  title: '标签',
+                  key: const Key('todo-settings-show-tags'),
+                  subtitle: '控制标签条目是否出现在侧栏的清单下面',
+                  trailingText: _showTagsLabel(
+                    ref.watch(sidebarShowTagsProvider),
+                  ),
+                  colors: colors,
+                  onTap: () => _pickShowTags(context, ref),
+                ),
+                if (_showTagsStale(ref.watch(sidebarShowTagsProvider)))
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: Text(
+                      '读取偏好失败，显示的是上次读到的值',
+                      style: TextStyle(color: colors.mutedForeground),
+                    ),
+                  ),
+              ],
+            ),
+          ),
           _Section(title: '主题'),
           AppCard(
             padding: EdgeInsets.zero,
@@ -177,6 +205,55 @@ class SettingsRoute extends ConsumerWidget {
     await ref.read(sessionProvider.notifier).signOut();
     if (context.mounted) {
       Navigator.of(context).popUntil((route) => route.isFirst);
+    }
+  }
+
+  /// 嘀嗒《…04-用标签管理任务.md》:16/:27 的取值是「显示」/「隐藏」二选一，
+  /// 所以这里照抄成选项弹层，而不是自创一个 Switch。
+  ///
+  /// 写入的是"点中的那个字面值"，不是从当前值取反 ⇒ 读到的当前值过期也只会
+  /// 让勾选标记画错一帧，不可能把更新的值盖回去（spec.md 四件套 ④）。
+  Future<void> _pickShowTags(BuildContext context, WidgetRef ref) async {
+    final repo = ref.read(sidebarVisibilityRepositoryProvider);
+    if (repo == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('本地数据库尚未就绪，暂时无法修改显示标签')));
+      return;
+    }
+    final current =
+        ref.read(sidebarShowTagsProvider).valueOrNull ??
+        SidebarVisibilityRepository.defaultShowTags;
+    final picked = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final (value, label) in const [(true, '显示'), (false, '隐藏')])
+              ListTile(
+                key: Key('todo-settings-show-tags-option-$value'),
+                title: Text(label),
+                trailing: value == current
+                    ? Icon(
+                        Icons.check,
+                        color: brandColors(context).mutedForeground,
+                      )
+                    : null,
+                onTap: () => Navigator.of(sheetContext).pop(value),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return;
+    try {
+      await repo.save(showTags: picked);
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('保存失败，显示标签仍为当前设置')));
     }
   }
 }
@@ -289,6 +366,20 @@ class _TaskCaptureDefaultsPageState
   }
 }
 
+/// 侧栏「显示标签」取值的三态读法，与 `lib/features/shell/sidebar.dart` 同一口径：
+/// 有值就用值 —— 包括"出过一次值之后流才失败"（四件套 ③ 失败保留已加载数据）；
+/// 没值且失败才显示「读取失败」；没值且未失败是加载中，显示「…」。
+/// 写成 `.when(error: …)` 会把第一态折进第三态（FL Issue #363）。
+String _showTagsLabel(AsyncValue<bool> state) {
+  final value = state.valueOrNull;
+  if (value != null) return value ? '显示' : '隐藏';
+  return state.hasError ? '读取失败' : '…';
+}
+
+/// 只在"留住旧值 + 流已失败"时出现：留住旧值不等于把失败藏起来。
+bool _showTagsStale(AsyncValue<bool> state) =>
+    state.valueOrNull != null && state.hasError;
+
 class _Section extends StatelessWidget {
   const _Section({required this.title});
   final String title;
@@ -313,11 +404,13 @@ class _Section extends StatelessWidget {
 
 class _Tile extends StatelessWidget {
   const _Tile({
+    super.key,
     required this.icon,
     required this.title,
     required this.colors,
     this.subtitle,
     this.trailing,
+    this.trailingText,
     this.onTap,
     this.destructive = false,
   });
@@ -326,6 +419,9 @@ class _Tile extends StatelessWidget {
   final String title;
   final String? subtitle;
   final IconData? trailing;
+
+  /// 偏好当前值用文字而不是勾：读屏念到的是「标签 显示」，与嘀嗒设置页的取值同源。
+  final String? trailingText;
   final AppColors colors;
   final VoidCallback? onTap;
   final bool destructive;
@@ -341,7 +437,15 @@ class _Tile extends StatelessWidget {
         subtitle: subtitle == null
             ? null
             : Text(subtitle!, style: TextStyle(color: colors.mutedForeground)),
-        trailing: trailing == null
+        trailing: trailingText != null
+            ? Text(
+                trailingText!,
+                style: TextStyle(
+                  color: colors.mutedForeground,
+                  fontWeight: FontWeight.w600,
+                ),
+              )
+            : trailing == null
             ? null
             : Icon(trailing, color: colors.mutedForeground),
         onTap: onTap,

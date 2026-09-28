@@ -57,6 +57,8 @@ class TodoWorkspace extends StatelessWidget {
     this.scaffoldKey,
     this.onDetailDrawerChanged,
     this.syncStatus = '同步尚未执行',
+    this.companion,
+    this.onSectionContextMenu,
   });
 
   final double width;
@@ -82,6 +84,16 @@ class TodoWorkspace extends StatelessWidget {
   final GlobalKey<ScaffoldState>? scaffoldKey;
   final TodoDetailDrawerChanged? onDetailDrawerChanged;
   final String syncStatus;
+
+  /// 与主区并列的第二模块；`null` 表示单模块视图。
+  ///
+  /// 只有 `_desktopWide` / `_desktopCompact` 会画它 —— 源页 `:5` 限定「桌面端」，
+  /// `tablet` 的侧栏是抽屉、`mobile` 是底部导航，放不下两块内容，
+  /// 于是拿到非空 companion 时也静默按单模块渲染（偏好仍保留）。
+  final Widget? companion;
+
+  /// 右键模块图标的回调，坐标用于弹菜单。`null` ⇒ 该形态不提供并列入口。
+  final void Function(Section section, Offset position)? onSectionContextMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -144,6 +156,7 @@ class TodoWorkspace extends StatelessWidget {
             onSelect: onSelectSection,
             onSync: onSync,
             onOpenReminders: onOpenReminders,
+            onSectionContextMenu: onSectionContextMenu,
           ),
           _WorkspaceDivider(color: colors.border),
           Sidebar(
@@ -165,7 +178,7 @@ class TodoWorkspace extends StatelessWidget {
             onOpenNotes: onOpenNotes,
           ),
           _WorkspaceDivider(color: colors.border),
-          Expanded(child: _contentRegion(colors)),
+          Expanded(child: _contentWithCompanion(colors)),
           _WorkspaceDivider(color: colors.border),
           SizedBox(
             key: const Key('todo-detail'),
@@ -192,6 +205,7 @@ class TodoWorkspace extends StatelessWidget {
             onSelect: onSelectSection,
             onSync: onSync,
             onOpenReminders: onOpenReminders,
+            onSectionContextMenu: onSectionContextMenu,
           ),
           _WorkspaceDivider(color: colors.border),
           Sidebar(
@@ -213,9 +227,33 @@ class TodoWorkspace extends StatelessWidget {
             onOpenNotes: onOpenNotes,
           ),
           _WorkspaceDivider(color: colors.border),
-          Expanded(child: _contentRegion(colors)),
+          Expanded(child: _contentWithCompanion(colors)),
         ],
       ),
+    );
+  }
+
+  /// 主区 + 可选的并列副栏。
+  ///
+  /// `companion == null` 时字节上等价于改造前的 `_contentRegion(...)` 单独一格，
+  /// 这是"默认态不变"的可判伪承诺：golden 9 张基线不重录必须仍然绿。
+  Widget _contentWithCompanion(AppColors colors) {
+    final second = companion;
+    if (second == null) return _contentRegion(colors);
+    return Row(
+      children: [
+        Expanded(child: _contentRegion(colors)),
+        _WorkspaceDivider(color: colors.border),
+        Expanded(
+          child: ColoredBox(
+            color: colors.surface,
+            child: KeyedSubtree(
+              key: const Key('todo-companion'),
+              child: second,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -354,12 +392,16 @@ class TodoRail extends StatelessWidget {
     required this.onSelect,
     required this.onSync,
     required this.onOpenReminders,
+    this.onSectionContextMenu,
   });
 
   final Section section;
   final ValueChanged<Section> onSelect;
   final VoidCallback onSync;
   final VoidCallback onOpenReminders;
+
+  /// 右键模块图标。为 `null` 时（tablet / mobile）模块图标不响应右键。
+  final void Function(Section section, Offset position)? onSectionContextMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -396,10 +438,18 @@ class TodoRail extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 3),
                   child: _RailButton(
+                    key: Key('todo-rail-item-${item.name}'),
                     tooltip: item.label,
                     icon: item.icon,
                     selected: item == section,
                     onTap: () => onSelect(item),
+                    // 源页 #32 的锚点是「任务模块图标」与「日历模块图标」；
+                    // 习惯 / 我的不参与并列，所以不给右键。
+                    onSecondaryTapDown:
+                        (item == Section.tasks || item == Section.calendar) &&
+                            onSectionContextMenu != null
+                        ? (position) => onSectionContextMenu!(item, position)
+                        : null,
                   ),
                 ),
               const Spacer(),
@@ -442,6 +492,7 @@ class _RailButton extends StatefulWidget {
     required this.selected,
     required this.onTap,
     this.identifier,
+    this.onSecondaryTapDown,
   });
 
   final String tooltip;
@@ -449,6 +500,7 @@ class _RailButton extends StatefulWidget {
   final bool selected;
   final VoidCallback onTap;
   final String? identifier;
+  final ValueChanged<Offset>? onSecondaryTapDown;
 
   @override
   State<_RailButton> createState() => _RailButtonState();
@@ -469,6 +521,9 @@ class _RailButtonState extends State<_RailButton> {
         message: widget.tooltip,
         child: InkResponse(
           onTap: widget.onTap,
+          onSecondaryTapDown: widget.onSecondaryTapDown == null
+              ? null
+              : (details) => widget.onSecondaryTapDown!(details.globalPosition),
           onFocusChange: (focused) => setState(() => _focused = focused),
           radius: 20,
           child: AnimatedContainer(

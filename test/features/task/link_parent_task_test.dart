@@ -264,18 +264,10 @@ void main() {
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       await tester.pumpAndSettle();
 
-      // 存量欠债（本轮不动、另开 Issue）：嵌入态详情操作头 `_buildEmbedded` 的
-      // Row 在 320px + 1.3 倍下已溢出 36px。先吃掉这条既有异常，
-      // 才能把「弹层自身零溢出」与它分开证明。
-      // takeException 的字符串只带消息，不带出处；这里用「像素数 + 弹层尚未打开」
-      // 两个条件把它钉成 Issue #279 记录的那一条（FlutterError.onError 里
-      // 的调用栈是 Row ← Padding ← Column-<'todo-task-detail-pane'>）。
-      final preExisting = '${tester.takeException()}';
-      expect(
-        preExisting,
-        contains('RenderFlex overflowed by 36 pixels'),
-        reason: '既有溢出要留在账上，不能被本轮当成自己的通过',
-      );
+      // 操作头自身的零溢出由 `embedded_detail_header_narrow_test.dart` 钉住
+      // （Issue #279 已修：7 枚 48dp 图标要 356dp，现在嵌入态只留 5 枚 +「...」）。
+      // 这里再吃一次 takeException，是为了证明**打开弹层之前**这条路上没有遗留异常。
+      expect(tester.takeException(), isNull, reason: '操作头溢出（Issue #279）应已修掉');
       expect(find.byKey(const Key('todo-task-detail-pane')), findsOneWidget);
 
       await openParentSheet(tester);

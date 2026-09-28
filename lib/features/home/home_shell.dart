@@ -29,6 +29,7 @@ import '../task/task_detail_page.dart';
 import '../task/task_detail_pane.dart';
 import '../task/tasks_by_list_page.dart';
 import '../task/views/calendar_view.dart';
+import 'workspace_companion.dart';
 import '../tag/tag_page.dart';
 import 'sync_recovery_banner.dart';
 import 'recommendation_panel.dart';
@@ -288,6 +289,9 @@ class _HomeShellState extends ConsumerState<HomeShell>
   }
 
   void _selectSection(Section section) {
+    // 切模块不改写并列偏好：不参与并列的模块（习惯 / 我的）由 build() 的 `pairEligible`
+    // 闸门当帧不画副栏，切回来按记忆恢复。源页 `:39` 只给「关闭同时显示」一条关闭路径，
+    // 在这里顺手写 off 等于没有用户动作就摧毁用户设置。
     if (section == _section) return;
     final hadTaskSelection = _selectedTaskId != null;
     setState(() {
@@ -296,6 +300,65 @@ class _HomeShellState extends ConsumerState<HomeShell>
       _appliedFilter = null;
     });
     if (hadTaskSelection) _dismissDetailPresentation();
+  }
+
+  /// 并列方向 ⇒ 主区模块。
+  ///
+  /// `calendarBesideTasks` 是「从任务图标开启」⇒ 主区任务、副栏日历（源页 `:21`）；
+  /// `tasksBesideCalendar` 反过来（源页 `:31`）。
+  Section? _companionPrimary(WorkspaceCompanion companion) =>
+      switch (companion) {
+        WorkspaceCompanion.off => null,
+        WorkspaceCompanion.calendarBesideTasks => Section.tasks,
+        WorkspaceCompanion.tasksBesideCalendar => Section.calendar,
+      };
+
+  /// 并列方向 ⇒ 副栏模块。
+  Section? _companionSecondary(WorkspaceCompanion companion) =>
+      switch (companion) {
+        WorkspaceCompanion.off => null,
+        WorkspaceCompanion.calendarBesideTasks => Section.calendar,
+        WorkspaceCompanion.tasksBesideCalendar => Section.tasks,
+      };
+
+  /// 右键模块图标（源页 `:17` / `:27` / `:39`）。
+  Future<void> _showSectionContextMenu(Section section, Offset position) async {
+    final opened =
+        ref.read(workspaceCompanionProvider) != WorkspaceCompanion.off;
+    final label = !opened
+        ? (section == Section.tasks
+              ? WorkspaceCompanionLabels.showCalendar
+              : WorkspaceCompanionLabels.showTasks)
+        : WorkspaceCompanionLabels.close;
+    final action = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        position.dx + 1,
+        position.dy + 1,
+      ),
+      items: [
+        PopupMenuItem<String>(value: 'toggle-companion', child: Text(label)),
+      ],
+    );
+    if (action != 'toggle-companion' || !mounted) return;
+    if (!opened) {
+      await ref
+          .read(workspaceCompanionProvider.notifier)
+          .apply(
+            section == Section.tasks
+                ? WorkspaceCompanion.calendarBesideTasks
+                : WorkspaceCompanion.tasksBesideCalendar,
+          );
+      if (!mounted) return;
+      // 主区 = 被右键的那个图标，副栏 = 另一个。
+      _selectSection(section);
+      return;
+    }
+    await ref
+        .read(workspaceCompanionProvider.notifier)
+        .apply(WorkspaceCompanion.off);
   }
 
   void _selectSmart(SmartList smart) {
@@ -566,14 +629,28 @@ class _HomeShellState extends ConsumerState<HomeShell>
         final width = constraints.maxWidth;
         final profile = todoWorkspaceProfileForWidth(width);
         _syncLayoutProfile(profile);
+        // 源页 :5「在桌面端」⇒ 只有 wide / compact 提供并列；
+        // 窄屏拿到已开启的偏好时静默按单模块渲染，偏好仍保留（回到宽屏自动恢复）。
+        final companion = ref.watch(workspaceCompanionProvider);
+        final companionAvailable =
+            profile == TodoWorkspaceProfile.wide ||
+            profile == TodoWorkspaceProfile.compact;
+        // 并列只在"当前就在任务或日历模块"时生效：否则它会盖掉用户刚选的习惯 / 我的。
+        final pairEligible =
+            companionAvailable &&
+            (_section == Section.tasks || _section == Section.calendar);
+        final secondary = pairEligible ? _companionSecondary(companion) : null;
+        final layoutSection = pairEligible
+            ? (_companionPrimary(companion) ?? _section)
+            : _section;
         return TodoWorkspace(
           width: width,
-          section: _section,
+          section: layoutSection,
           smart: _smart,
           listId: _listId,
           content: Stack(
             children: [
-              _buildContent(),
+              _buildPane(layoutSection),
               if (failedChanges.isNotEmpty)
                 Positioned(
                   top: 12,
@@ -616,6 +693,10 @@ class _HomeShellState extends ConsumerState<HomeShell>
           onSearchResultSelected: _handleSearchResult,
           scaffoldKey: _workspaceScaffoldKey,
           onDetailDrawerChanged: _handleDetailDrawerChanged,
+          companion: secondary == null ? null : _buildPane(secondary),
+          onSectionContextMenu: companionAvailable
+              ? _showSectionContextMenu
+              : null,
         );
       },
     );
@@ -649,8 +730,9 @@ class _HomeShellState extends ConsumerState<HomeShell>
     }
   }
 
-  Widget _buildContent() {
-    switch (_section) {
+  /// 单个模块的面。并列时主区与副栏都走这里，避免两份渲染分叉。
+  Widget _buildPane(Section section) {
+    switch (section) {
       case Section.tasks:
         return _buildTaskPane();
       case Section.calendar:
