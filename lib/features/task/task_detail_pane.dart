@@ -21,7 +21,7 @@ import '../shell/app_dialog.dart';
 import 'task_detail_page.dart';
 import 'task_quick_add_sheet.dart';
 import '../collaboration/task_comments_page.dart';
-import '../collaboration/task_assign_page.dart';
+import 'task_assign_action.dart';
 import '../list/list_actions.dart';
 import '../note/note_page.dart';
 import '../pomodoro/pomodoro_page.dart';
@@ -1286,36 +1286,11 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     if (choice == null || !mounted || widget.taskId != t.id) return;
     final taskServerId = t.serverId;
     if (choice == 'assign') {
-      if (taskServerId == null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('任务尚未同步，无法指派')));
-        return;
-      }
-      final db = ref.read(appDatabaseProvider);
-      if (db == null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('请先登录')));
-        return;
-      }
-      final list = await _resolveList(db, t.listId);
-      if (!mounted || widget.taskId != t.id) return;
-      final listServerId = list?.serverId;
-      if (listServerId == null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('清单尚未同步，无法选择执行人')));
-        return;
-      }
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => TaskAssignPage(
-            taskServerId: taskServerId,
-            listServerId: listServerId,
-            taskTitle: t.title,
-          ),
-        ),
+      await openTaskAssignAction(
+        context,
+        ref,
+        t,
+        stillCurrent: () => mounted && widget.taskId == t.id,
       );
       return;
     }
