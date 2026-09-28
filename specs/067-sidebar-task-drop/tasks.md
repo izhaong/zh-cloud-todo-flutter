@@ -71,3 +71,16 @@
 ## 七、只读复核
 
 第 1 轮已派单：`claude -p --permission-mode plan --add-dir /private/tmp`，提示词 `/tmp/r136/review-407-r1-prompt.md`，被审字节 = 分支最终 head（本文件所在提交；其代码字节与 §二 的 `aee25a9ba08b` 相同，本笔只改 markdown）。输出流 `/tmp/r136/review-407-r1.jsonl`，判据只看末行 `VERDICT`。等结论回来再回填 PASS/FAIL 与逐条读数——**没拿到 VERDICT 前本单不满足合并前置**。
+
+## 八、第 1 轮只读复核 `VERDICT: FAIL` 的处置与并主干后的门禁重跑（2026-09-28）
+
+被审字节：head `3bcfc36`、代码字节 `aee25a9ba08b`。FAIL 只有一条（B 段），三条 NIT 见下。
+
+- **FAIL-1 成立并已修**：`test/features/shell/sidebar_task_drop_test.dart` 的「时间安排一毫秒不动」里 `after.startAt == before.startAt`、`after.endAt == before.endAt` 在旧种子下两侧恒为 `null` ⇒ 恒真。修法：该用例先把 `sectionId` + `startAt` + `endAt` 一起种进库（`DateTime` 非常量，故两个种子值做成顶层 `final`），并加三条「种子没写进去就是空断言」的前置断言。
+  反向探针 `/tmp/r136/p399c/probe.txt`：给 provider 的 `update` 加 `clearStartAt: true, clearEndAt: true` ⇒ 该用例转红（`probe rc=1`，期望非 0），还原后 `RESTORED-OK` 且 `git status --porcelain` 对该文件计数 0 ⇒ 断言现在真能咬住实现被误清空。
+- **NIT-1/2/3（未修，登记为下轮入口）**：探针跑在 15:30 快照而非 `aee25a9` 定格之后（6 处 needle 在 `aee25a9` 均 `count=1`，结论不受影响）；`/tmp/r136/g67c/merge.txt` 当时没记调用时刻的 `origin/develop` SHA；320px/1.3 字号用例没有专属变异探针。
+- **并主干**：分支原基 `b0649a4`，develop 已到 `af62a8bfa2da`（specs/047 与 specs/064 进线）⇒ merge 冲突 0 处（`git status --short | grep -c "^UU"` = 0），代码字节定为 `f4d7e78`。
+
+六道门禁重跑在 `f4d7e78` 上（日志 `/tmp/r136/g67e/`）：
+`g1 rc=0`（`git diff --check $(git merge-base origin/develop HEAD) HEAD`）、`g2 rc=0` + `Formatted 3 files (0 changed)`、`g3 rc=0` + `No issues found! (ran in 1.7s)`、`g4 rc=0` + `goldens_dirty=0 png=9`（9 张基线未重录）、`g5 rc=0` + `03:30 +1180 ~26: All tests passed!`、`g6 rc=0` + `✓ Built build/web` 且收尾 `status=0`。
+真实合并试算：`git merge-tree --write-tree origin/develop HEAD` ⇒ rc=0、干净树 `37ca4c53e5fc8f9f7d2d73e5b2ef03cf4c46a15a`，调用时刻 `develop_at_call=af62a8bfa2da`。
