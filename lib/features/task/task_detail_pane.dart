@@ -22,7 +22,7 @@ import 'task_detail_page.dart';
 import 'task_quick_add_sheet.dart';
 import '../collaboration/task_comments_page.dart';
 import '../collaboration/task_assign_page.dart';
-import '../collaboration/list_member_page.dart';
+import '../list/list_actions.dart';
 import '../note/note_page.dart';
 import '../pomodoro/pomodoro_page.dart';
 import 'task_view_mutation_feedback.dart';
@@ -1363,21 +1363,14 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       }
       final list = await _resolveList(db, t.listId);
       if (!mounted || widget.taskId != t.id) return;
-      final listServerId = list?.serverId;
-      if (listServerId == null) {
+      if (list == null) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('清单尚未同步，无法打开协作成员')));
+        ).showSnackBar(const SnackBar(content: Text('清单尚未同步，无法打开共享协作')));
         return;
       }
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => ListMemberPage(
-            listServerId: listServerId,
-            title: list?.name ?? t.title,
-          ),
-        ),
-      );
+      // 与侧栏清单动作表走同一个函数：serverId 前置校验、提示语、成员页开法只留一份。
+      await openListCollaboration(context, ref, list);
     }
   }
 
