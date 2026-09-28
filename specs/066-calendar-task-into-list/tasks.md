@@ -53,7 +53,33 @@ Issue：zh-cloud-todo-flutter #398　矩阵：zh-cloud-docs `todo/01_需求阶�
 
 台账自扫：`python3 tool/check_spec_selfscan.py specs/066-calendar-task-into-list/tasks.md` ⇒ rc=0、`失项 0 条`。
 
+## 五-bis、并入 develop 之后在合并字节上重跑（2026-09-28，merge 提交 `5f580d4`，日志 `/tmp/r136/g66d/`）
+
+develop 在 `b0649a4` 之后进了 specs/047（# 建标签，`af62a8bfa2da`）与 specs/064（日程跨日时间轴，`6f889ea0f8`），
+本分支因此必须先并主干。冲突面复算：`git diff --name-only --diff-filter=U HEAD MERGE_HEAD` 只输出 `lib/features/task/tasks_by_list_page.dart`（1 个文件）⇒ 争的是 import 段两边各自新增的一条 import，两边都留、按 `../` 组与同目录组排序。
+
+| 门 | 命令 | 读数 |
+| -- | ---- | ---- |
+| 1 | `git diff --check HEAD^2 HEAD`（`HEAD^2` = `origin/develop`，量的是本分支落到主干上的字节） | rc=0；`grep -c . /tmp/r136/g66d/g1.log` = 2（标题行 + `rc=0`），除标题外无任何输出 ⇒ 没有空白错误 |
+| 2 | `dart format --output=none --set-exit-if-changed lib/features/task/list_drop_target.dart lib/features/task/tasks_by_list_page.dart test/features/task/calendar_task_into_list_test.dart` | rc=0、`Formatted 3 files (0 changed) in 0.04 seconds.` |
+| 3 | `flutter analyze` | rc=0、`No issues found! (ran in 3.9s)` |
+| 4 | `flutter test --tags golden` | rc=0；`goldens_dirty=0 png=9` ⇒ 9 张基线一张都没重录 |
+| 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | rc=0、`03:28 +1177 ~26: All tests passed!`（+1177 而非旧的 +1140：主干带进 specs/047 与 specs/064 的用例） |
+| 6 | `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | rc=0、`✓ Built build/web`、收尾 `status=0`（工作树干净，`pubspec.lock` 未动） |
+
+真实合并试算：`git merge-tree --write-tree origin/develop HEAD` ⇒ rc=0、干净树 `cda543a9b444`（不再依赖 mergeable 字段）。
+台账自扫：`python3 tool/check_spec_selfscan.py specs/066-calendar-task-into-list/tasks.md` ⇒ rc=0。
+
 ## 六、只读复核
+### 第 1 轮只读复核：`VERDICT: FAIL`（1 条阻塞 + 1 条台账账外问题），已按逐条回源处置
+
+被审字节：分支 head `3768985`（门禁目录 `/tmp/r136/g66/`）。
+
+- **判据 1–5 全过**：可达性（`tasks_by_list_page.dart:236-250` 只在列表模式挂落点，与看板/时间线/日历日格各自的 `DragTarget` 同帧互斥）、语义（只写 `listId` + `clearSectionId`，时间字段一律不传 ⇒ Drift `Value.absent()` 保字节）、四件套、两条反向探针（删 `clearSectionId` 红 2 条、删过期守卫红 1 条）复核员都独立复算过。
+- **阻塞项 ⑧「PR 把已合并的 specs/064 反向删除」** ⇒ **回源复验后驳回**，书面理由：复核员看的是两点差 `git diff origin/develop feat/398-...`（分支落后主干时必然把主干新增的行显示成删除）。三点差与真合并都不删东西：`git diff --name-only origin/develop...3768985` 只有 6 个文件、不含 `lib/features/task/views/calendar_view.dart`；`git diff --stat 6f889ea ed28c3d83efe`（develop → 当时的合并树）为 `6 files changed, 663 insertions(+), 8 deletions(-)`，且 `git diff 6f889ea ed28c3d83efe -- '*calendar_view.dart'` 输出为空。⇒ 该主张不成立；但它指出的**分支落后**是真的，已用 §五-bis 的并主干 + 重跑解决。
+- **账外问题 ⑥「§五 4b 的读数与复算命令不同行」** ⇒ 已改：4b 现在写「前者 0 行（改动 0 张）、后者 9（基线共 9 张）」，两条命令与两个读数在同一格同一行。
+
+
 
 - 第 1 轮：待派单（被审 head 以 §五 复跑后的 head 为准）。
 
