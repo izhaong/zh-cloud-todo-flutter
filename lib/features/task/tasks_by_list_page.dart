@@ -20,6 +20,7 @@ import '../filter/filter_bar.dart';
 import '../quadrant/quadrant_rules_page.dart';
 import '../shell/app_dialog.dart';
 import '../shell/quick_add_bar.dart';
+import 'list_drop_target.dart';
 import 'task_view_mutation_feedback.dart';
 import 'view_mode.dart';
 import 'views/calendar_view.dart';
@@ -232,15 +233,21 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 onMove: _moveTaskSection,
               ),
             Expanded(
-              child: Padding(
-                padding: EdgeInsets.only(
-                  bottom: showBatchActionBar
-                      ? 88
-                      : mobileMode
-                      ? 72
-                      : 0,
+              child: TaskListDropTarget(
+                // 嘀嗒《07-任务与日历同时显示.md》`:53`：落点是「清单详情区域」，
+                // 所以只在选中具体清单的列表视图承接；看板/时间线自己有各自的 `TodoTask` 落点，不抢它们的手势。
+                currentListId: _mode == TaskViewMode.list ? listId : null,
+                onAccept: _dropTaskIntoList,
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    bottom: showBatchActionBar
+                        ? 88
+                        : mobileMode
+                        ? 72
+                        : 0,
+                  ),
+                  child: modeBody,
                 ),
-                child: modeBody,
               ),
             ),
           ],
@@ -637,6 +644,29 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         context,
       ).showSnackBar(const SnackBar(content: Text('时间线尺度保存失败，请重试')));
     }
+  }
+
+  /// 嘀嗒《02-功能指南/02-日历/07-任务与日历同时显示.md》`:53`「将日历中的任务拖入清单详情区域」：
+  /// 落点只把任务换到当前查看的清单（`:55`「并保留其原有的时间安排」），
+  /// 失败与过期抑制的判定都在 [TaskListMoveController] 里，页这边只负责给可见反馈。
+  TaskListMoveController? _listMoveController;
+
+  TaskListMoveController get _listMove =>
+      _listMoveController ??= TaskListMoveController(
+        repositoryOf: () => ref.read(taskRepositoryProvider),
+        currentListIdOf: () => _selectedListId,
+        onFailure: _showListMoveFailure,
+      );
+
+  void _dropTaskIntoList(TodoTask task) {
+    unawaited(_listMove.handleDrop(task));
+  }
+
+  void _showListMoveFailure(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _saveBoardLayout({
