@@ -3,9 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/app_database.dart';
 import '../../state/providers.dart';
+import '../collaboration/list_member_page.dart';
 import 'list_editor_sheet.dart';
 
-/// 清单的「编辑 / 删除」动作。
+/// 清单的「编辑 / 共享协作 / 删除」动作（条目命名照抄嘀嗒《01-如何共享清单》）。
 ///
 /// 删除语义（未完成任务拦截 + 二次确认）历史上在 `ListPage` 与 `ListEditorSheet`
 /// 各写了一份，后者在「无未完成任务」时甚至不确认就删；侧栏、清单管理页与编辑器
@@ -61,7 +62,31 @@ List<Widget> _dialogActions(BuildContext ctx) => [
   ),
 ];
 
-/// 侧栏长按清单行给出的动作表，条目命名跟随嘀嗒（「编辑」「删除」）。
+/// 打开该清单的成员页（嘀嗒《01-如何共享清单》:8「共享协作」这一步）。
+///
+/// 侧栏清单行与任务详情里的「协作」入口共用本函数：成员页、`serverId` 前置校验、
+/// 未同步时的提示语只留一份口径。
+Future<void> openListCollaboration(
+  BuildContext context,
+  WidgetRef ref,
+  TodoList list,
+) async {
+  final listServerId = list.serverId;
+  if (listServerId == null) {
+    ScaffoldMessenger.maybeOf(
+      context,
+    )?.showSnackBar(const SnackBar(content: Text('清单尚未同步，无法打开共享协作')));
+    return;
+  }
+  await Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) =>
+          ListMemberPage(listServerId: listServerId, title: list.name),
+    ),
+  );
+}
+
+/// 侧栏长按清单行给出的动作表，条目命名跟随嘀嗒（「编辑」「共享协作」「删除」）。
 Future<void> showListActions(
   BuildContext context,
   WidgetRef ref,
@@ -78,6 +103,12 @@ Future<void> showListActions(
             leading: const Icon(Icons.edit_outlined),
             title: const Text('编辑'),
             onTap: () => Navigator.pop(sheetContext, _ListAction.edit),
+          ),
+          ListTile(
+            key: const Key('sidebar-list-action-share'),
+            leading: const Icon(Icons.people_outline),
+            title: const Text('共享协作'),
+            onTap: () => Navigator.pop(sheetContext, _ListAction.share),
           ),
           ListTile(
             key: const Key('sidebar-list-action-delete'),
@@ -97,9 +128,11 @@ Future<void> showListActions(
         isScrollControlled: true,
         builder: (_) => ListEditorSheet(existing: list),
       );
+    case _ListAction.share:
+      await openListCollaboration(context, ref, list);
     case _ListAction.delete:
       await confirmAndDeleteList(context, ref, list);
   }
 }
 
-enum _ListAction { edit, delete }
+enum _ListAction { edit, share, delete }
