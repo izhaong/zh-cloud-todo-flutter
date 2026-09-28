@@ -81,6 +81,7 @@
 1. **`!383` 未合并**：两单都改 `eisenhower_view.dart`（!383 在 `_QuadrantTile` 外层包 `DragTarget`/`LongPressDraggable`，
    本单改同文件的分类函数与构造参数）。本轮测试跑在未含 !383 的 develop 基线上，
    合并 !383 之后本单的字节需要在它之上重跑一遍门禁。
+   2026-09-28 收口：!383 已合并（`GET /repos/izhaong/zh-cloud-todo-flutter/pulls/383` 读到 `merged=true`、`merge_commit_sha=6b4771c292`），本单分支也已把它合进来（`db8896b`，第二父 `b4604c3fe1`）；重跑读数见 §九·补。这一格是**本轮补的注记**，不是原文。
 2. 四象限的完成态显隐**只有这一条路径**（菜单项）：源页本节没写键盘/右键的替代入口，
    与 !383 那条"只有拖动"的可达性缺口是同一族问题，留给下一个 Issue，不在本轮偷偷补。
 3. 偏好行的 `viewType` 兜底值 `'list'`（§四 E 附注）：四象限没有模式轴，这列对本面无语义。
@@ -125,6 +126,63 @@
    矩阵 #36 ⑩ 合并前保持"已实现、未合并"。
 
 2. 合并顺序：!383（拖动）在前，本单在后 —— 同文件，`git merge-tree` 的试算结果要在 !383 落地后重跑。
+   2026-09-28：!383 已在前（`6b4771c292`），本单分支已合入 develop；本轮现量 `git merge-tree --write-tree --name-only origin/develop b599309` 的 rc 记在下面「下轮入口」段。
 3. specs/061：年视图「点击日期 → 周视图并高亮」（矩阵 #28 剩的一格，判据 `:64`）。
 4. 队列项 ①（service !291）本轮已把第 3 轮续的 `VERDICT: PASS` 与两条 NIT 回写台账并推上去，
    剩下的仍是等「合并」二字。
+
+## 九、第 2 轮只读复核（被审 SHA = PR head `b599309`）⇒ `VERDICT: FAIL`，唯一失项 ③ 已在本节闭环
+
+派单：`claude -p --permission-mode plan --add-dir /private/tmp`，提示词 `/tmp/fl385-r2-prompt.md`，
+原始结论流 `/tmp/fl385-r2-verdict.stream.jsonl`（结果块自报 `num_turns=55`、`duration_ms=3398747`、
+`subtype=success`）。判据仍只认结果块 `type=="result"` 里以 `VERDICT` 开头的行，不整份 grep
+（第 108 轮 service !291 那次整份 grep 命中 6 处，全是提示词回显造出的假 PASS）。
+
+它给的六项：**① 解冲突没丢 !383 的拖动逻辑、② 显隐判定没有第二份事实源、④ 合并没改本单语义、
+⑤ spec 里那条复算命令可原样跑通、⑥ 合并前置 —— 均判成立**；
+**③ 门禁是否覆盖被审 SHA —— 判不成立**，理由我复算过：
+`26deaa9 docs(specs/060): 回写第 1 轮只读复核 VERDICT: PASS，并改掉它抓到的死锚` 是 tasks.md 的末次提交，`b599309` 只动 `spec.md` ⇒ 合并 !383 之后本单字节
+从没被 §二 那套读数覆盖。这是**真失项**，不是复核员误判：§二 写的是 `67d077c`，
+而 `67d077c` 不含 !383（`git merge-base --is-ancestor b4604c3fe1 67d077c` 退出码非 0 就说明这点）。
+
+复核员自报的现场污染也照抄不遮：它跑 `flutter analyze` / `flutter test` 时 pub get 把
+`pubspec.lock` 的镜像源 url 重写了，属它自己引入、不属本 PR ——
+`git diff-tree -r b599309 --name-only` 里 pubspec 出现 `0` 次（本单没带 lock 进 PR），
+我这侧 `git checkout -- pubspec.lock` 后 `git status --short pubspec.lock` 得 0 行。
+
+### 九·补 六道门禁重跑在被审字节 `b599309` 上（日志目录 `/tmp/r133/gates-b599309/`）
+
+| # | 命令 | 读数 | 日志锚（绝对路径:行号） |
+| --- | --- | --- | --- |
+| 1 | `git diff --check` | 无输出 | `/tmp/r133/gates-b599309/g1-check.log:2` 是 `rc=0` |
+| 2 | `dart format --output=none --set-exit-if-changed` 本单 5 个 .dart 显式文件 | `Formatted 5 files (0 changed)` | `/tmp/r133/gates-b599309/g2-format.log:2`，`:3` 是 `rc=0` |
+| 3 | `flutter analyze --no-pub` | `No issues found! (ran in 3.7s)` | `/tmp/r133/gates-b599309/g3-analyze.log:3`，`:4` 是 `rc=0` |
+| 4 | `flutter test --tags golden` | 摘要行 `00:04 +9: All tests passed!` | `/tmp/r133/gates-b599309/g4-golden.log:12`，`:13` 是 `rc=0` |
+| 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | 摘要行 `03:07 +1058 ~26: All tests passed!` | `/tmp/r133/gates-b599309/g5-full.log:1267`，`:1268` 是 `rc=0` |
+| 6 | `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web` | `/tmp/r133/gates-b599309/g6-build.log:18`，`:19` 是 `rc=0` |
+
+下面几条把上面这些数钉住（每条自带命令，不靠本节别处的表）：
+
+- 基线分解：`/tmp/r133/base-b4604c3-full.log` 摘要行 `03:09 +1042 ~26: All tests passed!` ⇒
+  **1042 + 16 = 1058**，右边等于门禁 5 的 `+1058`；本面用例数取
+  `flutter test test/features/task/eisenhower_hide_completed_test.dart` 的末行（**实跑 16 条**，
+  不是 `grep -c testWidgets` 的声明数）。跳过数 `26` 与 §二 的 `~26` 同值。
+- golden 没重录：`git status --short test/goldens` 得 0 行；
+  `git ls-files test/goldens` 数到 9 个受版本控制的基线文件。
+  ⚠️ 我第一版探针写的是 `ls test/goldens | wc -l` ⇒ 得 **1**，那数的是子目录条目不是 png
+  （真实目录是 `test/goldens/todo_workspace/*.png`）⇒ **取错字段的 1 不能当证据**，本行改按 `git ls-files` 数。
+- 门禁 1 单独跑过（它吃台账自己的空白，不在"md-only 可承接"的范围里）：
+  `git diff --check` 在 `b599309` 上无输出，见 `/tmp/r133/gates-b599309/g1-check.log:2`。
+
+### 九·状态
+
+- **达成**：第 2 轮唯一失项 ③ 已用"在 `b599309` 上重跑六道门禁并把读数写进本节"闭环；
+  §二 那份 `67d077c` 的读数**保留原文不改**，它是第 1 轮 PASS 绑定的字节，重写等于伪造历史。
+- **仍欠**：第 3 轮只读复核（本节提交后 head 会变；变的是 markdown，
+  `git rev-parse` 出来的 `lib`/`test` 两棵树号不变 ⇒ 覆盖面靠"三棵树号逐字节相等"承接，
+  这条口令与第 133 轮合并 !347/!367 用的是同一条）。矩阵 #36 ⑩ 在合进 develop 之前仍写「已实现、未合并」。
+
+## 十、下轮入口（第 134 轮）
+
+1. 派第 3 轮只读复核，审的字节 = 本次 §九 提交后的新 head；覆盖面用 `git rev-parse <head>:lib` 与 `:test` 两个树号对 `b599309` 逐字节比下来承接六门，门禁 1 另跑（`git diff --check` 吃的就是台账自己的空白）。
+2. 三条前置都过才谈合并：六道门禁全绿（§九·补）、`VERDICT: PASS`（待第 3 轮）、真实合并试算 rc=0（不加 `--quiet`——它会把冲突也报成 rc=0，第 133 轮实测）。与 !370/!372 同撞 `settings_route.dart` 的那批排在 !360 合并之后。
