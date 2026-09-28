@@ -12,7 +12,7 @@
       另有两条分支（`_buildPage` 窄屏 `Text('协作')`、宽屏 `tooltip: '协作'`）也调用同一个 hub，**但无用例** ⇒ spec 里没写成"三个分支都测过"。
 - [x] `:198` 任务动态 = **部分**（第 1 轮复核把"可达"否掉后下调并补测）：
       第 6 条 = 未同步那一支（给「任务同步后可查看动态」）；第 7 条 = `serverId` 到位那一支（按 `_ActivitySection` 的 key `task-activities-…` 认，未同步那句改判 findsNothing）。
-- [x] 详情页「指派执行人」与看板右键共用一个函数，且**原实现的陈旧响应守卫已补回**：
+- [x] 详情页「指派执行人」与看板右键共用同一份实现（复算：`git grep -c openTaskAssignAction <head> -- lib` = 3 个文件命中 ⇒ 定义 1 处、调用 2 处），且**原实现的陈旧响应守卫已补回**：
       `openTaskAssignAction(..., stillCurrent: () => mounted && widget.taskId == t.id)`（抽函数时我抄漏了这一句，见下面处置表 B3）。
 - [x] `onAssignCard` 改必填，两处不可达判空删掉（复核 NIT：与 specs/044 撤证同形的"死防御分支"）。
 - [x] #318 已**撤销关闭**：`sync_coordinator.dart:119-134` 缺行时插入 `id='inbox'`、`:145-158` 专门把它 upsert 进 outbox、
@@ -68,15 +68,14 @@
 | N1 | spec 里的用例编号与实际顺序不符 | 成立（我拆分成 8 条后没回头改编号） | spec 改引编号 + 用例名，并显式标"行号以本分支为基准" |
 | N2 | `onAssignCard` 的可空 + 两处判空是不可达的死形状 | 成立：`_KanbanColumn` 私有、全仓仅一处构造且传无条件闭包 | 改必填、删判空（正是我在 specs/044 批评过的形状） |
 | N3 | 日志说 5 个文件而 PR 现在 6 个 | 成立（门禁跑在 `05d62fe`，其后 docs 提交加了 `tasks.md`） | 本轮门禁重跑到 `37a06b0`，`pr_files` 6 项自证 |
-| N4 | 「一个字节都没改」强于断言（只比 3 个字段、没看发件箱） | 成立；另「请先登录」那一支确实无用例 | 升级为整行 `toJson()` 比对 + 发件箱行数不涨；「请先登录」把"造不出这个状态"的原因写进 spec 当作结构缺口，不假装测过 |
+| N4 | 「字节级未变」这句强于它自己的断言（只比 3 个字段、没看发件箱） | 成立；另「请先登录」那一支确实无用例 | 升级为整行 `toJson()` 比对 + 发件箱行数不涨；「请先登录」把"造不出这个状态"的原因写进 spec 当作结构缺口，不假装测过 |
 | N5 | `find.text('任务动态')` 用 `findsWidgets` 偏松 | 成立：全 lib 只有两处该字样，另一处是「暂无任务动态」 | 改 `findsOneWidget`（并靠配对的未同步说明 findsOneWidget 保证不是恒真） |
 | 驳回 | 我的自疑点 2（`:188` 被 fixture 特殊化） | **复核驳回我，我复验后接受**：长 tooltip 全文件只有 1 处（内嵌态），但 `_buildPage` 窄屏/宽屏各有一个入口（`Text('协作')` / `tooltip: '协作'`），三条分支都到得了 hub | 不改变判定；按复核的残留 NIT 在 spec 写明"用例只钉住内嵌态那串字，独立页标签是「协作」" |
 
 ### 第 2 轮复核（`VERDICT: PASS`，无 BLOCKING，7 项 NIT）逐条处置
 
 复核确认了第 1 轮四处 BLOCKING 的修复到位：B3 守卫回原位（并逐行比对 develop `_resolveList` 就是同一句 SQL）、
-B4 的第 7 条用例是真证据（`task-activities` key 全仓唯一且落在 `serverId != null` 那支）、
-B1 的探针表已与五份日志逐一对齐（`md5 p4.txt == md5 p1.txt`、`md5 p3.txt == md5 green5.txt` 复算一致）、
+B4 用例组里那条 `task-activities` 用例（组内序号 7）是真证据，组内条数复算：`git grep -c "testWidgets(" <head> -- test/features/task/kanban_card_assign_menu_test.dart` = 8；该 key 全仓唯一且落在 `serverId != null` 那支、B1 的探针表已与五份日志逐一对齐（`md5 p4.txt == md5 p1.txt`、`md5 p3.txt == md5 green5.txt` 复算一致）、
 用例数可加减核 `898 + 8 = 906` 与 `pr_files=6` 都对得上。以下 NIT 的处置：
 
 | # | finding | 处置 |
@@ -119,3 +118,28 @@ B1 的探针表已与五份日志逐一对齐（`md5 p4.txt == md5 p1.txt`、`md
 3. 详情页那条指派路补一条用例（点开 `指派执行人` 并验证 `stillCurrent` 在切任务时不 push）—— 现缺口见「仍缺」。
 4. `:217`-`:219` 的「排序 → 分组改自定义」前提：判「做 / 不做 / 不可达」，再谈 #15 能否升「有」。
 5. specs/044 撤证里那条「端到端『确认删除后列真的消失』红因未定位」仍待补。
+
+## 与 develop 收口（本轮终头 `8062b0d7e`）
+
+**为什么有这一节**：前几轮 PASS 绑 `37a06b0`，其 `37a06b0:lib = f831c69f8`，
+本轮 head 的 `:lib = 5799c2132` ⇒ 代码字节变了，覆盖面必须重绑。
+
+**冲突与解法**：冲突只在 import 段：本单把详情页「指派执行人」那整段抽成 `openTaskAssignAction`（内部仍推 develop 已有的 `TaskAssignPage`，不是第二份实现），develop 同期把 `ListMemberPage` 搬进了 `../list/list_actions.dart`。⇒ 取 `task_assign_action` + `list_actions` 两条，撤掉两条已不直用的 import（`task_assign_page` 改由 helper 引、`list_member_page` 已被挪走）。另核过 develop 的 `_resolveList` 本体就是 `db.listByLocalId` 的一行转发（`git show origin/develop:lib/features/task/task_detail_pane.dart | grep -A3 '_resolveList(AppDatabase'`），helper 用同一口径，没有分叉。
+本轮触达 `6` 个文件，其中 `.dart` `4` 个：`lib/features/task/task_assign_action.dart`、`lib/features/task/task_detail_pane.dart`、`lib/features/task/views/kanban_view.dart`、`test/features/task/kanban_card_assign_menu_test.dart`。
+合并提交 = `d91b3e9ac`（HEAD 的第一父）。
+
+**六道门禁跑在终头 `8062b0d7e` 上**（门禁日志在仓外 `/tmp/gates-360-319.log`；下面每个读数旁给了复算命令）：
+
+| 门禁 | 读数 |
+| ---- | ---- |
+| 1 `git diff --check origin/develop...HEAD` | rc=0、输出 0 行 |
+| 2 `dart format --output=none --set-exit-if-changed`（全部 4 个 `.dart` 触达文件） | rc=0 |
+| 3 `flutter analyze` | No issues found! |
+| 4 `flutter test --tags golden` | +9: All tests passed!（基线 9 张未重录） |
+| 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | 03:07 +1050 ~26: All tests passed! |
+| 6 `flutter build web --release --dart-define=…` | ✓ Built build/web |
+
+门禁脚本在两个仓之间串跑时记录的 `pubspec.lock` 脏行数 = 0（本机镜像不随 PR 走）。
+
+**矩阵行**：本 PR 未合并 ⇒ docs 矩阵对应行仍写「已实现待合并 + PR 号」，不翻状态；
+合进 develop 后由 docs 侧换成合并 SHA。
