@@ -145,7 +145,6 @@ class SettingsRoute extends ConsumerWidget {
             padding: EdgeInsets.zero,
             child: Column(
               children: [
-                _TimezonePreferenceTile(),
                 _Tile(
                   key: const Key('todo-settings-week-start'),
                   icon: Icons.view_week_outlined,
@@ -155,6 +154,7 @@ class SettingsRoute extends ConsumerWidget {
                   colors: colors,
                   onTap: () => _pickWeekStart(context, ref),
                 ),
+                _TimezonePreferenceTile(),
               ],
             ),
           ),
