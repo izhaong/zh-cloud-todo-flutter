@@ -956,13 +956,8 @@ class _AgendaViewState extends State<_AgendaView> {
 
   @override
   Widget build(BuildContext context) {
-<<<<<<< HEAD
     final rows = _timelineRows(widget.tasks);
     if (rows.isEmpty) {
-=======
-    final dayTasks = tasksOnDayByTime(tasks, anchor);
-    if (dayTasks.isEmpty) {
->>>>>>> origin/develop
       return const AppEmptyState(
         title: '暂无日程',
         subtitle: '为任务设置开始和截止时间，它们会按日期排进这条时间轴。',
@@ -1001,7 +996,6 @@ class _AgendaViewState extends State<_AgendaView> {
     );
   }
 
-<<<<<<< HEAD
   Widget _dayHeader(BuildContext context, DateTime day) {
     final colors = brandColors(context);
     final isToday = _isSameDay(day, widget.today);
@@ -1032,10 +1026,7 @@ class _AgendaViewState extends State<_AgendaView> {
   Widget _taskRow(BuildContext context, TodoTask task, DateTime day) {
     final clock = task.allDay
         ? '全天'
-        : _AgendaViewFormat._formatClock(
-            task,
-            task.startAt ?? task.dueAt ?? task.endAt!,
-          );
+        : _formatClock(task, task.startAt ?? task.dueAt ?? task.endAt!);
     return ListTile(
       key: ValueKey('calendar-agenda-task-${task.id}'),
       dense: true,
@@ -1052,7 +1043,7 @@ class _AgendaViewState extends State<_AgendaView> {
       ),
       title: Text(task.title, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(
-        _AgendaViewFormat._formatTime(task),
+        _formatTime(task),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
@@ -1081,7 +1072,7 @@ List<_AgendaRow> _timelineRows(List<TodoTask> tasks) {
   return [
     for (final day in days) ...[
       _AgendaRow(day: day),
-      for (final task in (byDay[day]!..sort(_AgendaViewFormat._compareByTime)))
+      for (final task in (byDay[day]!..sort(_compareByTime)))
         _AgendaRow(day: day, task: task),
     ],
   ];
@@ -1104,32 +1095,15 @@ class _AgendaRow {
   final TodoTask? task;
 }
 
-/// 日程行共用的时间格式化与排序（原先挂在 `_AgendaView` 的静态方法上）。
-abstract final class _AgendaViewFormat {
-  static int _compareByTime(TodoTask left, TodoTask right) {
-    if (left.allDay != right.allDay) return left.allDay ? -1 : 1;
-    final leftTime = left.startAt ?? left.dueAt ?? left.endAt;
-    final rightTime = right.startAt ?? right.dueAt ?? right.endAt;
-    if (leftTime == null && rightTime == null) return 0;
-    if (leftTime == null) return 1;
-    if (rightTime == null) return -1;
-    return _compareWallClock(
-      _displayTime(left, leftTime),
-      _displayTime(right, rightTime),
-    );
-  }
-
-=======
->>>>>>> origin/develop
-  static String _formatTime(TodoTask task) {
-    if (task.allDay) return '全天';
-    final start = task.startAt ?? task.dueAt ?? task.endAt;
-    if (start == null) return '未设置时间';
-    final startLabel = _formatClock(task, start);
-    final end = task.endAt;
-    if (end == null || !end.isAfter(start)) return startLabel;
-    return '$startLabel–${_formatClock(task, end)}';
-  }
+/// 日程行的时间区间：全天在前，未定时点有专门文案。
+String _formatTime(TodoTask task) {
+  if (task.allDay) return '全天';
+  final start = task.startAt ?? task.dueAt ?? task.endAt;
+  if (start == null) return '未设置时间';
+  final startLabel = _formatClock(task, start);
+  final end = task.endAt;
+  if (end == null || !end.isAfter(start)) return startLabel;
+  return '$startLabel–${_formatClock(task, end)}';
 }
 
 /// 选中日当天的任务，全天在前、有时点的按墙钟时刻升序。
