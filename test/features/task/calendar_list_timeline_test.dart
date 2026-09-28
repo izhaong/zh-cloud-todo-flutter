@@ -434,7 +434,8 @@ void main() {
           for (final day in [DateTime(2026, 10, 1), DateTime(2026, 10, 2)])
             ...tasksOnDayByTime(tasks, day).map((t) => t.title),
         ],
-        reason: '议程档若自己抄一份排序，这条会红（同一口径不得有两个事实源）；'
+        reason:
+            '议程档若自己抄一份排序，这条会红（同一口径不得有两个事实源）；'
             '跨日按日期升序是矩阵 #30 的口径，日内顺序仍走同一个取数口',
       );
     });
