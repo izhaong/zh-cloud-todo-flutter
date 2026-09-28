@@ -49,6 +49,7 @@ void main() {
       dueAt: dueAt,
       allDay: allDay,
       fixedTimezone: false,
+      timeMode: 0,
       updatedAt: anchor,
       createdAt: anchor,
     );
