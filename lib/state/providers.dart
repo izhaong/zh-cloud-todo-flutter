@@ -30,6 +30,7 @@ import 'repositories/task_capture_defaults_repository.dart';
 import 'repositories/task_repository.dart';
 import 'repositories/task_section_repository.dart';
 import 'repositories/task_sort_preference_repository.dart';
+import 'repositories/sidebar_visibility_repository.dart';
 import 'repositories/task_view_action_repository.dart';
 import 'repositories/summary_repository.dart';
 
@@ -141,6 +142,27 @@ final folderRepositoryProvider = Provider<FolderRepository?>((ref) {
   final queue = ref.watch(syncChangeQueueProvider);
   if (db == null || queue == null) return null;
   return FolderRepository(db, queue);
+});
+
+final sidebarVisibilityRepositoryProvider =
+    Provider<SidebarVisibilityRepository?>((ref) {
+      final db = ref.watch(appDatabaseProvider);
+      final queue = ref.watch(syncChangeQueueProvider);
+      if (db == null || queue == null) return null;
+      return SidebarVisibilityRepository(db, queue);
+    });
+
+/// 侧栏「显示标签」偏好流（嘀嗒《…04-用标签管理任务.md》:10/:16/:23/:27）。
+///
+/// 没有仓库（未登录/库未就绪）时按默认「显示」走。消费侧的三态口径（侧栏与设置页同一套读法）：
+/// **首值就失败**才回兜底默认；**出过一次值之后失败**要留住那次读到的值（四件套 ③）；
+/// **加载中且从未有值**不回兜底 —— 侧栏不画标签区，设置页显示「…」。
+final sidebarShowTagsProvider = StreamProvider<bool>((ref) {
+  final repo = ref.watch(sidebarVisibilityRepositoryProvider);
+  if (repo == null) {
+    return Stream.value(SidebarVisibilityRepository.defaultShowTags);
+  }
+  return repo.watch();
 });
 
 final tagRepositoryProvider = Provider<TagRepository?>((ref) {
