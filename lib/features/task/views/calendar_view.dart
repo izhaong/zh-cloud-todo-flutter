@@ -6,6 +6,7 @@ import '../../../core/db/app_database.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/brand_colors.dart';
 import '../../../core/time/task_time_formatter.dart';
+import '../../../core/time/week_start.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../state/providers.dart';
 import '../task_detail_page.dart';
@@ -14,8 +15,9 @@ import '../task_view_mutation_feedback.dart';
 /// M11-B3 日历视图：周 / 月 / 年 / 列表 / 日程 5 模式。
 ///
 /// 任务落点优先级：dueAt > endAt > startAt。
-/// - 月模式：7x6 网格，列 = 周一~周日；行 = 自然周；点日期格进入日程模式
-/// - 周模式：7 列横排（Mon..Sun），每个列内是该周内的任务列表
+/// - 月模式：7x6 网格，列顺序与行起点由「设置-日期与时间-星期开始于」决定
+///   （默认周一）；行 = 自然周；点日期格进入日程模式
+/// - 周模式：7 列横排，取哪 7 天同样由该偏好决定；每列内是该天的任务列表
 /// - 年模式：12 月聚合（每月任务计数 + 切换月份）
 /// - 列表模式：所有任务按日期排序的扁平列表
 /// - 日程模式：单日任务按时间顺序展示
@@ -80,6 +82,9 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
 
   @override
   Widget build(BuildContext context) {
+    // FR-7：首值未到达或读失败都退回默认档（周一 = develop 既有行为）。
+    // 这里不能用 when(error:)，那条分支会丢掉 AsyncError 里留存的旧值。
+    final firstDay = resolveWeekStartFirstDay(ref.watch(weekStartProvider));
     return Column(
       children: [
         _Toolbar(
@@ -99,6 +104,7 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
           child: switch (_mode) {
             CalendarMode.month => _MonthGrid(
               anchor: _anchor,
+              firstDay: firstDay,
               tasks: _visibleTasks,
               onTaskDateChanged: widget.onTaskDateChanged,
               onDayTap: (day) {
@@ -108,6 +114,7 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
             ),
             CalendarMode.week => _WeekView(
               anchor: _anchor,
+              firstDay: firstDay,
               tasks: _visibleTasks,
               onTaskTap: (t) => _openDetail(context, t),
             ),
@@ -344,11 +351,18 @@ class _DisplaySettingsSheet extends StatelessWidget {
   }
 }
 
-/// 月模式网格：6 行 × 7 列（周一起），包含 anchor 月的所有日期及上下月填充。
-List<List<DateTime>> buildMonthGrid(DateTime anchor) {
+/// 月模式网格：6 行 × 7 列，列顺序与起点由 [firstDay] 决定（默认周一，
+/// 即 develop 改造前的行为）；包含 anchor 月的所有日期及上下月填充。
+List<List<DateTime>> buildMonthGrid(
+  DateTime anchor, {
+  int firstDay = WeekStart.defaultFirstDay,
+}) {
   final firstOfMonth = DateTime(anchor.year, anchor.month, 1);
   // weekDay: 1(Mon)..7(Sun)
-  final leadingBlanks = firstOfMonth.weekday - 1;
+  final leadingBlanks = WeekStart.offsetOf(
+    firstOfMonth.weekday,
+    firstDay: firstDay,
+  );
   final start = firstOfMonth.subtract(Duration(days: leadingBlanks));
   final rows = <List<DateTime>>[];
   for (var r = 0; r < 6; r++) {
@@ -504,22 +518,29 @@ class _Toolbar extends StatelessWidget {
   }
 }
 
+/// 月视图表头的单字（一…日）。嘀嗒表头用单字，档位名用「周X」，
+/// 两者同源：去掉"周"前缀即表头字形，避免出现第二份星期表。
+String weekdayGlyph(int weekday) =>
+    WeekStart.labelOf(weekday).replaceFirst('周', '');
+
 class _MonthGrid extends StatelessWidget {
   const _MonthGrid({
     required this.anchor,
+    required this.firstDay,
     required this.tasks,
     required this.onDayTap,
     this.onTaskDateChanged,
   });
 
   final DateTime anchor;
+  final int firstDay;
   final List<TodoTask> tasks;
   final ValueChanged<DateTime> onDayTap;
   final Future<void> Function(TodoTask task, DateTime dueAt)? onTaskDateChanged;
 
   @override
   Widget build(BuildContext context) {
-    final grid = buildMonthGrid(anchor);
+    final grid = buildMonthGrid(anchor, firstDay: firstDay);
     final tasksByDay = <String, List<TodoTask>>{};
     for (final t in tasks) {
       final d = resolveTaskDate(t);
@@ -532,14 +553,11 @@ class _MonthGrid extends StatelessWidget {
       child: Column(
         children: [
           Row(
-            children: const [
-              _DayHeader('一'),
-              _DayHeader('二'),
-              _DayHeader('三'),
-              _DayHeader('四'),
-              _DayHeader('五'),
-              _DayHeader('六'),
-              _DayHeader('日'),
+            // 表头与网格必须读同一个 firstDay，否则「格子里是周六、
+            // 头上写着周一」这类错位没有任何测试能替你发现。
+            children: [
+              for (final weekday in WeekStart.columnOrder(firstDay: firstDay))
+                _DayHeader(weekdayGlyph(weekday)),
             ],
           ),
           for (final row in grid)
@@ -769,16 +787,18 @@ class _CalendarTaskChip extends StatelessWidget {
 class _WeekView extends StatelessWidget {
   const _WeekView({
     required this.anchor,
+    required this.firstDay,
     required this.tasks,
     required this.onTaskTap,
   });
   final DateTime anchor;
+  final int firstDay;
   final List<TodoTask> tasks;
   final ValueChanged<TodoTask> onTaskTap;
 
   @override
   Widget build(BuildContext context) {
-    final weekStart = anchor.subtract(Duration(days: anchor.weekday - 1));
+    final weekStart = WeekStart.startOf(anchor, firstDay: firstDay);
     final days = List<DateTime>.generate(
       7,
       (i) => weekStart.add(Duration(days: i)),

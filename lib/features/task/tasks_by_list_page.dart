@@ -414,6 +414,8 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       case TaskViewMode.timeline:
         return TimelineView(
           tasks: items,
+          now: now,
+          firstDay: resolveWeekStartFirstDay(ref.watch(weekStartProvider)),
           zoom: _timelineZoom,
           scale: _timelineScale,
           collapsedGroupIds: _collapsedTimelineGroupIds,
