@@ -20,6 +20,7 @@ import '../filter/filter_bar.dart';
 import '../quadrant/quadrant_rules_page.dart';
 import '../shell/app_dialog.dart';
 import '../shell/quick_add_bar.dart';
+import '../tag/hash_tag_input.dart';
 import 'task_view_mutation_feedback.dart';
 import 'view_mode.dart';
 import 'views/calendar_view.dart';
@@ -222,7 +223,11 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                     : null,
               ),
             if (showQuickAdd && !_batchSelectionActive)
-              QuickAddBar(onSubmit: _submitQuickAdd, tagOptions: tagOptions),
+              QuickAddBar(
+                onSubmit: _submitQuickAdd,
+                tagOptions: tagOptions,
+                ensureTagIds: _ensureTagIdsByName,
+              ),
             if (_mode == TaskViewMode.list && taskSections.isNotEmpty)
               _TaskSectionManagerBar(
                 sections: taskSections,
@@ -282,6 +287,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 child: MobileQuickAddButton(
                   onSubmit: _submitQuickAdd,
                   tagOptions: tagOptions,
+                  ensureTagIds: _ensureTagIdsByName,
                 ),
               ),
           ],
@@ -1400,6 +1406,13 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       }
       widget.onSelectionInvalidated?.call(selectedTaskId);
     });
+  }
+
+  /// 「#标签」的落地：已有同名就用它，没有就建（嘀嗒《…04-用标签管理任务.md》:48/:61）。
+  Future<List<String>> _ensureTagIdsByName(List<String> names) async {
+    final repo = ref.read(tagRepositoryProvider);
+    if (repo == null) throw StateError('请先登录后再添加标签');
+    return resolveTagIdsByName(repo: repo, names: names);
   }
 
   Future<void> _submitQuickAdd(QuickAddRequest request) async {
