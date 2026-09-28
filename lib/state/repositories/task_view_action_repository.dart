@@ -479,6 +479,44 @@ class TaskViewActionRepository {
     });
   }
 
+  /// 四象限拖动换象限的回写（嘀嗒《02-如何编辑四象限规则》:25/:44）。
+  ///
+  /// `dueAt == null` 表示「这一档不改时间」——组合1 只回写优先级，
+  /// 不是把截止时间清空，所以不能用 `Value(null)` 走同一条路。
+  Future<void> moveQuadrantTask(
+    String taskId, {
+    required int priority,
+    DateTime? dueAt,
+  }) async {
+    if (priority < 0 || priority > 3) {
+      throw ArgumentError.value(priority, 'priority', '必须介于 0 和 3');
+    }
+
+    await _db.transaction(() async {
+      await _requireWritableTask(taskId);
+      await (_db.update(
+        _db.todoTasks,
+      )..where((row) => row.id.equals(taskId))).write(
+        TodoTasksCompanion(
+          priority: Value(priority),
+          dueAt: dueAt == null ? const Value.absent() : Value(dueAt),
+          allDay: dueAt == null ? const Value.absent() : const Value(false),
+          updatedAt: Value(DateTime.now()),
+        ),
+      );
+      final task = await (_db.select(
+        _db.todoTasks,
+      )..where((row) => row.id.equals(taskId))).getSingle();
+      await _queue.enqueue(
+        entity: SyncEntities.task,
+        op: SyncOps.upsert,
+        localId: task.id,
+        serverId: task.serverId,
+        payload: task.toJson(),
+      );
+    });
+  }
+
   Future<void> reorderListTasks(List<String> taskIds) async {
     if (taskIds.toSet().length != taskIds.length) {
       throw ArgumentError.value(taskIds, 'taskIds', '不能包含重复任务');

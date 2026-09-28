@@ -308,3 +308,49 @@ class AppEmptyState extends StatelessWidget {
     );
   }
 }
+
+/// 刷新失败但页面仍持有上一次数据时的可见提示（#375）。
+/// 用 `liveRegion` 让读屏在数据保留、界面其余部分未变的情况下也能播报这条新增提示。
+class AppRefreshFailedHint extends StatelessWidget {
+  const AppRefreshFailedHint({super.key, required this.message, this.onRetry});
+
+  final String message;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = brandColors(context);
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        key: const Key('app-refresh-failed-hint'),
+        color: colors.muted,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.sm,
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.wifi_tethering_error,
+              size: 16,
+              color: Theme.of(context).colorScheme.error,
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                message,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ),
+            if (onRetry != null)
+              TextButton(onPressed: onRetry, child: const Text('重试')),
+          ],
+        ),
+      ),
+    );
+  }
+}
