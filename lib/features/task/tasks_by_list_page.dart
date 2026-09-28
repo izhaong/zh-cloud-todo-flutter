@@ -1589,6 +1589,14 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 FilterBar(
                   filter: draft,
                   assigneeOptions: assigneeOptions,
+                  // 预览与列表渲染同源：同一份原始列表、同一个 applyTaskFilter、
+                  // 同一个清单口径 ⇒ 「命中 N 项」不会和套出来看到的数不一样。
+                  previewResolver: (next) => applyTaskFilter(
+                    tasks,
+                    next,
+                    _selectedListId,
+                    ref.read(currentDateTimeProvider)(),
+                  ),
                   onChanged: (next) {
                     draft = next;
                     setState(() => _filter = next);
