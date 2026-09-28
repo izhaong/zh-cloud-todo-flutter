@@ -64,7 +64,7 @@
 
 | 发现 | 我的复验 | 处置 |
 | ---- | -------- | ---- |
-| **F1 (P2)** `plan.md` 要点 3 说 `_busy` 的代价是"第二次多打一条 outbox"；复核用 X5（`Future.wait` 同帧并发两次 `delete`）量到 outbox 仍是 2 条 ⇒ 说法不成立 | 读 `folder_repository.dart:87-149`：第二次进 `delete` 时 `row == null` ⇒ `serverId = null` ⇒ 走"从未到过服务端"的早退分支（清空待重试 create、不 enqueue）⇒ 复核对 | **采纳**（`ea9d024`）。`plan.md` 与 `folder_actions.dart` 的注释都改成"闸门钉的是『只发一次』这条判据，不是防数据损坏" |
+| **F1 (P2)** `plan.md` 要点 3 说 `_busy` 的代价是"第二次会多出一条 outbox 记录"；复核用 X5（`Future.wait` 同帧并发两次 `delete`）量到 outbox 仍是 2 条 ⇒ 说法不成立 | 读 `folder_repository.dart:87-149`：第二次进 `delete` 时 `row == null` ⇒ `serverId = null` ⇒ 走"从未到过服务端"的早退分支（清空待重试 create、不 enqueue）⇒ 复核对 | **采纳**（`ea9d024`）。`plan.md` 与 `folder_actions.dart` 的注释都改成"闸门钉的是『只发一次』这条判据，不是防数据损坏" |
 | **F2 (P2)** `spec.md` FR-1 与 `tasks.md` 勾选都写"两条都留 outbox"，而用例只断 `syncRows > before` ⇒ 判据弱于文档，1 条也能过 | 对。且顺着这句回源读出**更大的问题**：`delete` 里被移出的清单**根本没有** outbox 记录（只改 `todoLists` 表），而服务端 `TodoFolderServiceImpl.deleteFolder:89-92` 见 `countByFolderId > 0` 就抛 `TODO_FOLDER_HAS_LISTS`（`1_020_001_020`）⇒ 解散非空文件夹时那条 `folder/delete` 永远被拒，`sync_coordinator.dart:105/:140` 会把 `failed` 重新拾取 ⇒ **不收敛**。这不是本轮引入的（develop 的 `FolderPage` 早就在调同一个 `delete`），但它是"解散"这面的真缺口 | **两条都采纳**。① 用例改成逐条对上（PRESENT）+ 成对 ABSENT，新探针 PL/PM/PN 证明它会咬；② 契约缺口立 **zh-cloud-service Issue #285**（推荐服务端把 DELETE 做成嘀嗒语义的"解散"：清空清单归属 + 提升子文件夹 + 删夹，一个事务），`spec.md` FR-1 写明边界，**矩阵 #18 不翻「有」** |
 | **F3 (nit)** `tasks.md` 四件套 (a) 行没有任何探针证明"几何"会咬（PE 下那条红是因为文案没了） | 对，我的探针表证不到这一半 | **采纳**。表格改成显式写"这条牙齿来自复核员的 X2（1.3⇒3.4，红在 `Multiple exceptions (4)`，creator 链 `Column ← IntrinsicWidth`）"，不冒充自证 |
 | **F4 (nit)** `folder_actions.dart:85`「移至"未分组"」不是嘀嗒的词（帮助中心全文 0 命中） | 对，但它是从 develop 的 `folder_page.dart` 原样搬来的，本轮没新造 | **记债不改**（改它要连带改 develop 的文案口径，超出本轮范围）。写进下一轮入口 |
@@ -109,7 +109,7 @@
 3. `FolderPage` 与它的宿主 `ListPage` 在 develop 上仍**不可达**（`ListPage` 全仓无人 push）：
    新建/重命名这两件事还没有入口。`spec.md` 取舍 1 已记，本轮不顺手删；单独立项。
 4. **矩阵 #18 主表行是过期的**：docs 分支 `docs/104-repeat-rule-parity`（PR !105）上
-   `dida-parity-matrix.md:79` 仍写「有 / BE/WEB/FL」+「FL 文件夹 UI 待 B2」，
+   `dida-parity-matrix.md` 的 **#18 行**（按矩阵行号引，不引文件行号；跨仓文件行号本仓自扫器判死锚，见 FL Issue #394）仍写「有 / BE/WEB/FL」+「FL 文件夹 UI 待 B2」，
    而同一文件 `:295`（第 0 轮表）早就判「有 → 部分 / 管理 UI 不可达」。行号基准是 !105 的 head，
    不是 develop（那边同一文件行号不同）。下一轮 docs 按代码现况把**主表行**
    重判为「部分 / BE/FL」，注记：解散入口 = 本 PR !354、所属文件夹 = !352（两条都还没合并 ⇒ 只写「已实现待合并」），
@@ -123,3 +123,28 @@
 7. 复核 F6：「解散」入口只有手势、没有语义动作 ⇒ 读屏用户到不了。与 specs/026 的侧栏读屏债并一条。
 8. 复核 F4：`folder_actions.dart:85`「移至"未分组"」不是嘀嗒的词（帮助中心全文 0 命中），
    是从 develop `folder_page.dart` 原样搬来的 ⇒ 要改就连 develop 的口径一起改，单独一轮。
+
+## 与 develop 收口（本轮终头 `7c14392ab`）
+
+**为什么有这一节**：前几轮 PASS 绑 `544934c8`，其 `544934c8:lib = 5e577f44c`，
+本轮 head 的 `:lib = 617d3df7a` ⇒ 代码字节变了，覆盖面必须重绑。
+
+**冲突与解法**：冲突只在 import 段：本单要 `../folder/folder_actions.dart`（文件夹行长按走 `confirmAndDisbandFolder`），develop 同期要 `state/repositories/sidebar_visibility_repository.dart`（侧栏显隐偏好）。两条在 head 上都各有真用（`git grep -c confirmAndDisbandFolder <head> -- lib` 与 `git grep -c sidebarShowTagsProvider <head> -- lib`），⇒ 取并集并按 directives_ordering 排（`../../` 在 `../` 之前），没删任何一侧。
+本轮触达 `7` 个文件，其中 `.dart` `4` 个：`lib/features/folder/folder_actions.dart`、`lib/features/folder/folder_page.dart`、`lib/features/shell/sidebar.dart`、`test/features/folder/folder_disband_entry_test.dart`。
+合并提交 = `544934c80`（HEAD 的第一父）。
+
+**六道门禁跑在终头 `7c14392ab` 上**（门禁日志在仓外 `/tmp/gates-354.log`；下面每个读数旁给了复算命令）：
+
+| 门禁 | 读数 |
+| ---- | ---- |
+| 1 `git diff --check origin/develop...HEAD` | rc=0、输出 0 行 |
+| 2 `dart format --output=none --set-exit-if-changed`（全部 4 个 `.dart` 触达文件） | rc=0 |
+| 3 `flutter analyze` | No issues found! |
+| 4 `flutter test --tags golden` | +9: All tests passed!（基线 9 张未重录） |
+| 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | 03:08 +1054 ~26: All tests passed! |
+| 6 `flutter build web --release --dart-define=…` | ✓ Built build/web |
+
+门禁脚本在两个仓之间串跑时记录的 `pubspec.lock` 脏行数 = 0（本机镜像不随 PR 走）。
+
+**矩阵行**：本 PR 未合并 ⇒ docs 矩阵对应行仍写「已实现待合并 + PR 号」，不翻状态；
+合进 develop 后由 docs 侧换成合并 SHA。
