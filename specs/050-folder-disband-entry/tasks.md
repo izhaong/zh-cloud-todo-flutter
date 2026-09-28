@@ -64,7 +64,7 @@
 
 | 发现 | 我的复验 | 处置 |
 | ---- | -------- | ---- |
-| **F1 (P2)** `plan.md` 要点 3 说 `_busy` 的代价是"第二次会多出一条 outbox 记录"；复核用 X5（`Future.wait` 同帧并发两次 `delete`）量到 outbox 仍是 2 条 ⇒ 说法不成立 | 读 `folder_repository.dart:87-149`：第二次进 `delete` 时 `row == null` ⇒ `serverId = null` ⇒ 走"从未到过服务端"的早退分支（清空待重试 create、不 enqueue）⇒ 复核对 | **采纳**（`ea9d024`）。`plan.md` 与 `folder_actions.dart` 的注释都改成"闸门钉的是『只发一次』这条判据，不是防数据损坏" |
+| **F1 (P2)** `plan.md` 要点 3 说 `_busy` 的代价是"第二次会多出 outbox 记录"；复核用 X5（`Future.wait` 同帧并发两次 `delete`）量到 outbox 行数与单发一次相同（未新增） ⇒ 说法不成立 | 读 `folder_repository.dart:87-149`：第二次进 `delete` 时 `row == null` ⇒ `serverId = null` ⇒ 走"从未到过服务端"的早退分支（清空待重试 create、不 enqueue）⇒ 复核对 | **采纳**（`ea9d024`）。`plan.md` 与 `folder_actions.dart` 的注释都改成"闸门钉的是『只发一次』这条判据，不是防数据损坏" |
 | **F2 (P2)** `spec.md` FR-1 与 `tasks.md` 勾选都写"两条都留 outbox"，而用例只断 `syncRows > before` ⇒ 判据弱于文档，1 条也能过 | 对。且顺着这句回源读出**更大的问题**：`delete` 里被移出的清单**根本没有** outbox 记录（只改 `todoLists` 表），而服务端 `TodoFolderServiceImpl.deleteFolder:89-92` 见 `countByFolderId > 0` 就抛 `TODO_FOLDER_HAS_LISTS`（`1_020_001_020`）⇒ 解散非空文件夹时那条 `folder/delete` 永远被拒，`sync_coordinator.dart:105/:140` 会把 `failed` 重新拾取 ⇒ **不收敛**。这不是本轮引入的（develop 的 `FolderPage` 早就在调同一个 `delete`），但它是"解散"这面的真缺口 | **两条都采纳**。① 用例改成逐条对上（PRESENT）+ 成对 ABSENT，新探针 PL/PM/PN 证明它会咬；② 契约缺口立 **zh-cloud-service Issue #285**（推荐服务端把 DELETE 做成嘀嗒语义的"解散"：清空清单归属 + 提升子文件夹 + 删夹，一个事务），`spec.md` FR-1 写明边界，**矩阵 #18 不翻「有」** |
 | **F3 (nit)** `tasks.md` 四件套 (a) 行没有任何探针证明"几何"会咬（PE 下那条红是因为文案没了） | 对，我的探针表证不到这一半 | **采纳**。表格改成显式写"这条牙齿来自复核员的 X2（1.3⇒3.4，红在 `Multiple exceptions (4)`，creator 链 `Column ← IntrinsicWidth`）"，不冒充自证 |
 | **F4 (nit)** `folder_actions.dart:85`「移至"未分组"」不是嘀嗒的词（帮助中心全文 0 命中） | 对，但它是从 develop 的 `folder_page.dart` 原样搬来的，本轮没新造 | **记债不改**（改它要连带改 develop 的文案口径，超出本轮范围）。写进下一轮入口 |
