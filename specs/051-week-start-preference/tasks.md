@@ -2,10 +2,10 @@
 
 ## 完成情况
 
-- [x] `spec.md` 来源表：4 个锚点逐字引用（`01-欢迎/03-常见问题.md:125/:134/:143/:159`、`02-功能指南/02-日历/08-常见问题.md:145/:149/:155`）；移动端「星期开始于」/ 桌面「每周开始于」的措辞差异如实登记，本仓采移动端措辞
+- [x] `spec.md` 来源表的锚点逐字引用分两批（`01-欢迎/03-常见问题.md:125/:134/:143/:159`；`02-功能指南/02-日历/08-常见问题.md:145/:149/:155`），合计 7 处；移动端「星期开始于」/ 桌面「每周开始于」的措辞差异如实登记，本仓采移动端措辞
 - [x] 红测（步骤 2）
 - [x] `WeekStart` 纯函数 + 偏好仓储 + provider（步骤 3–5）
-- [x] 日历/时间线 8 处周一硬编码接线（步骤 6；判据见 `spec.md` 现状表两条 `git grep`）
+- [x] 周一硬编码接线已改（步骤 6；复算：`git grep -c -e "weekday == 1" -e "DateTime.tuesday" -e "firstDayOfWeek" HEAD -- lib` 现读 = 95caab0933400a273039a848ef4fd8979730925b:lib/core/time/week_start.dart:1 命中，逐处判据见 `spec.md` 现状表的两条 `git grep`）
 - [x] 设置「日期与时间」-「星期开始于」三档入口 + 四件套（步骤 7）
 - [x] 六道门禁：**终态 head 见下方门禁表**（复核第 1 轮修复后曾跑在 `1f50929`；F-1 修完后在最终 head 整体重跑一次，不沿用旧读数）
 - [x] 只读复核：第 1 轮 `VERDICT: FAIL`（3 条测试判据问题，已采纳并修）；第 2 轮 `VERDICT: FAIL`
@@ -42,11 +42,11 @@ $ flutter test test/core/time/week_start_test.dart test/week_start_preference_re
 | **F-1**：新增的两条生产接线用例**绑在真实墙钟上**——本机走到 9/27、9/28 就会静默变红，而红的原因与档位无关 | 我只补了 `firstDay:` 注入线，**漏了同处该喂的 `now:`**；`TimelineView._effectiveNow` 有 `?? DateTime.now()` 兜底，所以漏喂不会报错、只会悄悄换时钟。而我选的断言日期（9/25）恰好和真实今天在同一周里 ⇒ **当天看不出耦合** | `c360379`：调用点补 `now: now`（provider 默认就是 `DateTime.now` ⇒ 生产行为不变）；用例改用 `_pageNow = 2026-10-01`，它**落在真实今天那一周之外**，于是"漏注入 now"第一次有可红的判据，并新增探针 **PM** 专门摘这句（实测 `+18 -2`，两条生产用例全红）。教训：**日期敏感的用例要让注入值和真实时钟落在不同的桶里**，否则"今天绿"不含信息 |
 | **F-2**：探针表里 PF/PH 的失败数**抄错了**（记 `+13 -5`、`+12 -6`，实际 `+14 -6`、`+12 -8`） | 脚本按 `[E]` 行归因时只打印前 6 条（`hits[:6]`），我照那份截断清单数了数，而**摘要行 `+N -M` 才是计数来源** | 脚本改为全列 `[E]` 并显式打印"失败用例共 N 条"；上表所有数按 `c360379` 的整轮重跑重写。教训同「数字要能复算」：**从摘要行取数，不从被截断的明细里数** |
 | PK 的重跑第一次被判"归因未证实" | 我给 PK 写的预期用例名列表（`有值用值`/`周日档`/`周六档`）没有覆盖设置页侧那条真红的用例名 `点「周日」立刻生效：出箱写库…（FR-8）`——**红是对的红，是我给的名单太窄** | 预期名单补 `立刻生效`，单独重跑 PK ⇒ `异常计数 = 0`。不改判据、不改测试，只改归因名单（改的是探针配置，不是被测行为） |
-| 门禁 1 在 `7ffcdf0` 那一次**跑晚了**：我先 `git commit` 才跑 `git diff --check`，它报 `tasks.md:176: new blank line at EOF` ⇒ rc=2 | 我用 Edit 换掉了文件末尾整节，新内容自带一个尾随空行；而"提交前跑门禁 1"这条纪律那一小步没走（不是 `--no-verify`，是压根没跑就提交了） | `1fad90c` 单独把尾随空行去掉并复跑 `git diff --check` ⇒ rc=0；**不改历史、不 amend**。终态 head 的门禁 1 已重跑为 rc=0，这一条如实记在门禁表第 1 行，不当没发生。教训：门禁 1 要在 `commit` **之前**跑，否则红的是已入库的历史 |
+| 门禁 1 在 `7ffcdf0` 那一次**跑晚了**：我先 `git commit` 才跑 `git diff --check`，它报 `specs/051-week-start-preference/tasks.md:176` 报 `new blank line at EOF` ⇒ rc=2 | 我用 Edit 换掉了文件末尾整节，新内容自带一个尾随空行；而"提交前跑门禁 1"这条纪律那一小步没走（不是 `--no-verify`，是压根没跑就提交了） | `1fad90c` 单独把尾随空行去掉并复跑 `git diff --check` ⇒ rc=0；**不改历史、不 amend**。终态 head 的门禁 1 已重跑为 rc=0，这一条如实记在门禁表第 1 行，不当没发生。教训：门禁 1 要在 `commit` **之前**跑，否则红的是已入库的历史 |
 
 ## 复核第 1 轮（`VERDICT: FAIL`）→ 逐条回源复验 → 三条全部采纳
 
-只读复核员审七项，行为侧（数学、8 处接线、消副本、探针复跑、六道门禁读数）它自己跑命令后认了；
+只读复核员逐项复审；行为侧（数学、8 处接线、消副本、探针复跑、六道门禁读数）它自己跑命令后认了；
 FAIL 全落在**测试判据**上。三条我逐条回源码复验，都成立，没有一条需要驳回：
 
 | # | 复核的发现 | 我的复验 | 处置 |
@@ -85,7 +85,7 @@ FAIL 全落在**测试判据**上。三条我逐条回源码复验，都成立�
 
 - 三个测试文件现跑：`consumers +20`、`settings +8`、`week_start +13 & repository +7`（= 用例账 48 对得上）；
 - 8 条探针的**表格数字 vs 日志摘要行**逐条对（PF/PG/PH/PI/PK/PL/PM/PJ 全指得到，无截断计数错）；
-- 六道门禁读数与首末行（`dirty_files_before=0`、末行工作树空）、`+944 → +946` 的进账对账；
+- 六道门禁读数与 `git status --porcelain` 的行数（跑门禁前 `dirty_files_before=0`、跑完后该命令输出 0 行 ⇒ 工作树空）、`+944 → +946` 的进账对账；
 - `origin/develop` 上 8 处周一硬编码（A=6 / B=1 / C=1），并在 HEAD 上确认 `weekday - 1` 注释外 0 残留；
 - 嘀嗒三档与「设置-日期与时间-星期开始于」逐字对齐（读的是 docs `origin/develop`，不是工作区分支）；
 - `be58c97` / `151b878` 用 `branch --contains develop` 证明**确实不在 develop** ⇒ 主表不翻转的口径成立。
@@ -112,13 +112,13 @@ KanbanView 根本没有时间参数；CalendarView 的 `firstDay` 由自己 `wat
 > **勘误两次**：本表上一版把仓储文件写成 8 条、把 consumers 写成 13 条 —— 13 是补 FR-7 三态组之前的数，
 > 8 是照着"我以为写了几个"数的。加/删用例后不重数就会漂，而这类错**不会让测试变红**，只会让证据与状态脱节。
 > 现在四个数（13 / 7 / 20 / 8 = **48**）每个都对应一次实际运行的 `+N` 读数，
-> 全量门禁 5 的 `+946` 也与上一 head 的 `+944` 相差 2（正是本轮新增的两条生产接线用例）。
+> 全量门禁 5 的 `+946` 与上一 head 的 `+944` 相差 2，对得上本轮新增的生产接线用例数（复算：`git show <本轮 head>:test/features/settings/settings_week_start_test.dart | grep -c "testWidgets("` 比上一 head 同命令多 2）。
 
 ## 六道门禁（终态 head `1fad90c`，日志 `/tmp/r77/gates-c360379.log`；上一终态 `1f50929` 的读数见脚注）
 
 | # | 门禁 | 跑在哪 | 读数 |
 | --- | --- | --- | --- |
-| 1 | `git diff --check` | 每次提交前 | 终态 head `1fad90c`：**rc=0**，`origin/develop..HEAD` 同样 rc=0，首行 `dirty_files_before=0`、末行工作树干净。⚠️ 但 `7ffcdf0` 那一次我是**提交后**才跑门禁 1，它报了 `tasks.md:176: new blank line at EOF` ⇒ **rc=2**，我随后用 `1fad90c` 单独修回（见缺陷表纪律行） |
+| 1 | `git diff --check` | 每次提交前 | 终态 head `1fad90c`：**rc=0**，`origin/develop..HEAD` 同样 rc=0，`dirty_files_before=0`，且 `git status --porcelain` 输出 0 行 ⇒ 工作树干净。⚠️ 但 `7ffcdf0` 那一次我是**提交后**才跑门禁 1，它报在 `specs/051-week-start-preference/tasks.md` 的第 176 行（`new blank line at EOF`；该文件现已 246 行，:176 **不是末行**，是当时那一次 EOF 空行所在的位置） ⇒ **rc=2**，我随后用 `1fad90c` 单独修回（见缺陷表纪律行） |
 | 2 | `dart format --output=none --set-exit-if-changed <11 个显式文件>` | head `1fad90c`；11 = 7 个 `lib/`（含 `tasks_by_list_page.dart`）+ 4 个测试 | `Formatted 11 files (0 changed)`、`G2 rc=0` |
 | 3 | `flutter analyze` | head `1fad90c` | `No issues found! (ran in 1.8s)`、`G3 rc=0` |
 | 4 | `flutter test --tags golden` | head `1fad90c` | `00:10 +9: All tests passed!`、`G4 rc=0`，且紧随的 `git status --porcelain -- test` **输出为空** ⇒ 9 张基线一张没重录 |
@@ -141,7 +141,7 @@ KanbanView 根本没有时间参数；CalendarView 的 `firstDay` 由自己 `wat
   但**证据链断了** ⇒ 这句降级为「方法成立、读数丢失」，不当已证。
 
 > 日志分工（**别拿旧 head 的读数当终态证据**）：`/tmp/r77/gates-c360379.log` = **终态**，首行
-> `head=1fad90c dirty_files_before=0`，末行工作树为空。
+> `head=1fad90c dirty_files_before=0`，且 `git status --porcelain` 输出 0 行 ⇒ 工作树为空。
 > `/tmp/r76/gates-1f50929.log` = 第 1 轮复核修复后的那一次终态（G4 `00:09 +9`、G5 `02:49 +946 ~26`）
 > ——留着是为了对账「F-1 只换判据、不增删用例」：`+946 → +946` 不变，正是应有结果。
 > `gates-5fb1d30.log`（G5 `+944`）= 更早一次，其 `+944 → +946` 差额 = 第 1 轮补的两条生产接线用例；
@@ -208,3 +208,39 @@ KanbanView 根本没有时间参数；CalendarView 的 `firstDay` 由自己 `wat
 - **#29 的第三格同批查出**：《08-常见问题》`:167`(标题行)-`:168`(原句行)「在列表视图，手指按住第一排日历，向下拉，即可展开一个小的日历全景」⇒ 另立 **FL #362**，与 #361 分两个 PR 交付。
 - 另两个候选：#28 年视图缺"按日热力图"、#50 倒数纪念日缺"四类自动分组/置顶/归档"（归档卡在未合并的
   service `!276`）。
+
+## 九、第 132 轮：与 develop 的分块冲突收口（本轮终头 `95caab093`）
+
+上一轮 PASS 绑的是 `bf779769e` ⇒ **不覆盖本轮字节**：`bf779769e:lib = b7d284bb1`、
+`95caab093:lib = de8e5af48`，两个树号不等 ⇒ 覆盖面必须重绑，第 4 轮只判"这次合并解得对不对 +
+合并后的字节是否仍被门禁证明"。
+
+**冲突性质**：`lib/features/settings/settings_route.dart` 里两侧在**同一个槽位**各插了一个分组
+（本单「日期与时间」/ develop 的「智能清单」）。解法 = **两段都保**，
+没把两个特性串成一条 if，也没为过编译删对方的行：该文件现在 `_Section(title:` 命中 95caab093:lib/features/settings/settings_route.dart:6 处，
+其中「日期与时间」与「智能清单」两个标题字面共现（`git grep -c` = 95caab093:lib/features/settings/settings_route.dart:2）。
+
+**顺带修掉一处 develop 的测试缺陷**（不是本单功能问题，是门禁 5 首跑 4 红才暴露的）：
+`test/features/settings/sidebar_show_tags_settings_test.dart` 的 `_revealTile` 用
+`top > 0 && top < tester.view.physicalSize.height` 判"要不要滚"——
+**判的是顶边，而 `tap` 打的是中心点**，且 `view.physicalSize` 是物理像素（测试窗口 dpr=3 ⇒ 1800）。
+新分组把「标签」那行挤下去 11px 后，真错是
+`Offset(500.0, 911.5) ... outside the bounds of the root of the render tree, Size(1000.0, 900.0)`：
+顶边 867 落在"看起来可见"里所以没滚。⇒ 可见性整个交给 `ensureVisible`（其语义就是"把这个盒子带进视口"），
+只在懒建未构建时先 `scrollUntilVisible`。**没有靠调整分组顺序把这一行藏回视口**（那只是让同一个缺陷继续潜伏）。
+
+**六道门禁跑在终头 `95caab093` 上**（门禁日志在仓外 `/tmp/gates-360-319.log`；本节每个读数由 `git` 与 `tool/check_spec_selfscan.py` 的同类命令现取，复算命令逐行附在下面）：
+
+| 门禁 | 读数 |
+| ---- | ---- |
+| 1 `git diff --check origin/develop...HEAD` | rc=0（0 行输出） |
+| 2 `dart format --output=none --set-exit-if-changed`（本轮两个显式文件） | rc=0 |
+| 3 `flutter analyze` | No issues found! |
+| 4 `flutter test --tags golden` | +9: All tests passed!（基线 9 张未重录） |
+| 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | 03:08 +1090 ~26: All tests passed! |
+| 6 `flutter build web --release --dart-define=TODO_API_BASE_URL=… --dart-define=TODO_TENANT_ID=1` | ✓ Built build/web |
+
+`pubspec.lock` 改动行数 = 0（本机镜像不随 PR 走）。
+
+**留下轮**：本轮只是把 develop 合进来，未新增功能面 ⇒ 矩阵 #31 的行文本仍按
+「已实现待合并 + PR !360」记，等本 PR 合进 develop 后再由 docs 侧翻状态并换成合并 SHA。
