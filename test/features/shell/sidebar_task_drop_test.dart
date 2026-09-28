@@ -176,19 +176,27 @@ void main() {
       final db = fixture.database;
       // 先把「原清单的分组」与「起止时间」都造出来：不写这几列，「换清单不该动它们」就是
       // 两个 null 比两个 null 的恒真断言（第 1 轮只读复核 FAIL-1 抓到的正是这个）。
-      await (db.update(db.todoTasks)
-            ..where((t) => t.id.equals(TodoVisualFixture.metadataTaskId)))
-          .write(
-            TodoTasksCompanion(
-              sectionId: const Value('sec-of-inbox'),
-              startAt: Value(_seedStartAt),
-              endAt: Value(_seedEndAt),
-            ),
-          );
+      await (db.update(
+        db.todoTasks,
+      )..where((t) => t.id.equals(TodoVisualFixture.metadataTaskId))).write(
+        TodoTasksCompanion(
+          sectionId: const Value('sec-of-inbox'),
+          startAt: Value(_seedStartAt),
+          endAt: Value(_seedEndAt),
+        ),
+      );
       final before = await _readTask(db, TodoVisualFixture.metadataTaskId);
       expect(before.sectionId, 'sec-of-inbox', reason: '种子没写进去，后面全是空断言');
-      expect(before.startAt, _seedStartAt, reason: 'startAt 种子没写进去 ⇒ 不变断言会退化成 null==null');
-      expect(before.endAt, _seedEndAt, reason: 'endAt 种子没写进去 ⇒ 不变断言会退化成 null==null');
+      expect(
+        before.startAt,
+        _seedStartAt,
+        reason: 'startAt 种子没写进去 ⇒ 不变断言会退化成 null==null',
+      );
+      expect(
+        before.endAt,
+        _seedEndAt,
+        reason: 'endAt 种子没写进去 ⇒ 不变断言会退化成 null==null',
+      );
       expect(before.listId, TodoVisualFixture.inboxListId);
 
       await _dragTo(tester, _listZone(TodoVisualFixture.personalListId));
