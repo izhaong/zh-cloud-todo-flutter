@@ -89,8 +89,9 @@ class SidebarTaskDropController {
   bool acceptsList(TodoTask task, String listId) => task.listId != listId;
 
   Future<SidebarDropOutcome> moveToList(TodoTask task, String listId) {
-    if (!acceptsList(task, listId))
+    if (!acceptsList(task, listId)) {
       return Future.value(SidebarDropOutcome.skipped);
+    }
     // :59「移动到目标清单」只提清单，没提时间 ⇒ 时间安排一毫秒都不动。
     return _serialize(task.id, () => moveTask(task.id, listId));
   }
