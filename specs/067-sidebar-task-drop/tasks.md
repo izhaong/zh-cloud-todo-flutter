@@ -14,14 +14,14 @@
 
 | 门 | 命令 | 读数 |
 | -- | ---- | ---- |
-| 1 | `git diff --check` | 待回填 |
-| 2 | `dart format --output=none --set-exit-if-changed lib/features/shell/sidebar_task_drop.dart lib/features/shell/sidebar.dart test/features/shell/sidebar_task_drop_test.dart` | 待回填 |
-| 3 | `flutter analyze` | 待回填 |
-| 4 | `flutter test --tags golden` | 待回填 |
-| 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | 待回填 |
-| 6 | `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | 待回填 |
+| 1 | `git diff --check HEAD~1 HEAD`（本轮提交进来的字节） | rc=0 |
+| 2 | `dart format --output=none --set-exit-if-changed lib/features/shell/sidebar_task_drop.dart lib/features/shell/sidebar.dart test/features/shell/sidebar_task_drop_test.dart` | rc=0，`Formatted 3 files (0 changed)` |
+| 3 | `flutter analyze` | rc=0，`No issues found!` |
+| 4 | `flutter test --tags golden` | rc=0，`+9 All tests passed!`，`goldens_dirty=0`（基线未重录） |
+| 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | rc=0，`03:30 +1143 ~26: All tests passed!` |
+| 6 | `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | rc=0，`✓ Built build/web` |
 
-日志目录 `/tmp/r136/g67/`。
+日志目录 `/tmp/r136/g67c/`（六门跑在代码字节 `aee25a9ba08b` 上，六门之后本文件只追加 markdown 提交）。真实合并试算 `git merge-tree --write-tree --name-only origin/develop HEAD` ⇒ 干净，结果树 `01f7722f5e1e`，rc=0。⚠️ 自曝一处流程错：前两遍门禁我把日志写进了同一个 `/tmp/r136/g67/` 且第二遍启动时第一遍的 `flutter build web` 还没结束，两遍互相 `rm` 掉对方的文件 ⇒ 那批日志不可信，本表只取第三遍（新目录 `g67c`、单进程、无并发）。另一处顺序错：我曾在 `flutter analyze` 之后又跑原地 `dart format`，长单行 `if` 被折行触发 `curly_braces_in_flow_control_structures`，门 3 直到门禁才红 ⇒ 修在 `aee25a9` 的前一笔 `14ac8c9`→`aee25a9` 里，教训是**门禁必须跑在最终字节上**。
 
 ## 三、用例与变异探针（`python3 /tmp/r136/probe399b.py`，逐个摘实现后只跑本文件）
 
@@ -70,4 +70,4 @@
 
 ## 七、只读复核
 
-待回填（`claude -p` 只读复核，绑 head）。
+第 1 轮已派单：`claude -p --permission-mode plan --add-dir /private/tmp`，提示词 `/tmp/r136/review-407-r1-prompt.md`，被审字节 = 分支最终 head（本文件所在提交；其代码字节与 §二 的 `aee25a9ba08b` 相同，本笔只改 markdown）。输出流 `/tmp/r136/review-407-r1.jsonl`，判据只看末行 `VERDICT`。等结论回来再回填 PASS/FAIL 与逐条读数——**没拿到 VERDICT 前本单不满足合并前置**。
