@@ -290,19 +290,22 @@ Future<TodoVisualFixture> _pumpSettings(
 }
 
 /// `ListView` 是懒建的：窄屏 + 大字号时「智能清单」分组还没被构建过，
-/// 直接 `ensureVisible` 会 "No element"。先滚到被构建，再滚进可视区。
+/// 直接 `ensureVisible` 会 "No element"。所以先滚到被构建，再交给 `ensureVisible` 滚进可视区。
+///
+/// 这里**不要自己写"可见"阈值**：`tap` 打的是中心点，而按 top 边判会把
+/// "中心还掉在视口外 11px"（实测 900 高视口里 tile top≈867、center=911.5）读成"已可见"
+/// 而不滚，随后的 `tap` 就报 outside the bounds of the root of the render tree。
+/// `ensureVisible` 的语义就是"把这个盒子整个带进视口"，不需要再判一遍。
 Future<void> _revealTile(WidgetTester tester) async {
   final finder = find.byKey(tileKey);
-  if (finder.evaluate().isNotEmpty) {
-    final top = tester.getRect(finder).top;
-    if (top > 0 && top < tester.view.physicalSize.height) return;
+  if (finder.evaluate().isEmpty) {
+    await tester.scrollUntilVisible(
+      finder,
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
   }
-  await tester.scrollUntilVisible(
-    finder,
-    120,
-    scrollable: find.byType(Scrollable).first,
-  );
-  await tester.pumpAndSettle();
   await tester.ensureVisible(finder);
   await tester.pumpAndSettle();
 }
