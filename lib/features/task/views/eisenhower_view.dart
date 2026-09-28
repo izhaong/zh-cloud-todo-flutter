@@ -6,6 +6,7 @@ import '../../../core/db/app_database.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/brand_colors.dart';
 import '../../../state/efficiency_providers.dart';
+import '../../../state/providers.dart';
 import '../../../state/session_state.dart';
 import '../task_detail_page.dart';
 
@@ -22,7 +23,7 @@ import '../task_detail_page.dart';
 ///   Q4 不紧急不重要（eliminate）
 ///
 /// 分类纯函数 [classifyEisenhower] 独立可测，无 UI 依赖。
-class EisenhowerView extends ConsumerWidget {
+class EisenhowerView extends ConsumerStatefulWidget {
   const EisenhowerView({
     super.key,
     required this.tasks,
@@ -37,12 +38,43 @@ class EisenhowerView extends ConsumerWidget {
   final List<TodoTask> tasks;
   final ValueChanged<String>? onTaskSelected;
 
-  DateTime get _effectiveNow => _now ?? DateTime.now();
+  @override
+  ConsumerState<EisenhowerView> createState() => _EisenhowerViewState();
+}
+
+class _EisenhowerViewState extends ConsumerState<EisenhowerView> {
+  /// 同一任务的拖动写操作按起拖顺序排队。
+  ///
+  /// 不排队会出现"先拖的那次请求后落地"，把后一次的结果盖掉
+  /// （四件套里的「过期响应不覆盖新响应」）。
+  final Map<String, Future<void>> _writeChain = {};
+
+  DateTime get _effectiveNow => widget._now ?? DateTime.now();
+
+  void _queueDrop(QuadrantDragMove move, QuadrantDropPatch patch) {
+    final repository = ref.read(taskViewActionRepositoryProvider);
+    if (repository == null) return;
+    final previous = _writeChain[move.task.id] ?? Future<void>.value();
+    _writeChain[move.task.id] = previous.then((_) async {
+      try {
+        await repository.moveQuadrantTask(
+          move.task.id,
+          priority: patch.priority,
+          dueAt: patch.dueAt,
+        );
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.maybeOf(
+          context,
+        )?.showSnackBar(const SnackBar(content: Text('四象限：任务换象限保存失败，未改动')));
+      }
+    });
+  }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final now = _effectiveNow;
-    final localQuadrants = _buildQuadrants(tasks, now);
+    final localQuadrants = _buildQuadrants(widget.tasks, now);
     final session = ref.watch(sessionProvider);
     final rules = session == null
         ? const <QuadrantRuleDto>[]
@@ -53,12 +85,36 @@ class EisenhowerView extends ConsumerWidget {
         : ref.watch(quadrantBoardProvider(activeRule.id)).valueOrNull;
     final quadrants = activeRule == null || remoteBoard == null
         ? localQuadrants
-        : _buildRemoteQuadrants(tasks, now, activeRule, remoteBoard);
+        : _buildRemoteQuadrants(widget.tasks, now, activeRule, remoteBoard);
+    // 回写式只由**生效规则**决定（`:25` 与 `:44` 讲的是规则，不是"看板数据到没到"）：
+    // 组合1 的规则即使在看板未加载的降级态下也不该动 dueAt。
+    // 自定义规则源页本节没给拖动脉络（specs/059 §三 4），该档一律不给拖。
+    final effectiveRuleType = activeRule?.type;
+    final canDrag =
+        quadrantDropPatch(
+          target: Quadrant.q1,
+          ruleType: effectiveRuleType,
+          now: now,
+        ) !=
+        null;
     final brightness = Theme.of(context).brightness;
     final q1Palette = _quadrantPalette(Quadrant.q1, brightness);
     final q2Palette = _quadrantPalette(Quadrant.q2, brightness);
     final q3Palette = _quadrantPalette(Quadrant.q3, brightness);
     final q4Palette = _quadrantPalette(Quadrant.q4, brightness);
+
+    Widget tile(Quadrant quadrant, _QuadrantPalette palette) {
+      return _QuadrantTile(
+        data: quadrants[quadrant]!,
+        color: palette.background,
+        accent: palette.foreground,
+        onTaskTap: (t) => _openDetail(context, t),
+        draggable: canDrag,
+        now: now,
+        ruleType: effectiveRuleType,
+        onDrop: _queueDrop,
+      );
+    }
 
     return Padding(
       padding: const EdgeInsets.all(8),
@@ -86,23 +142,9 @@ class EisenhowerView extends ConsumerWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: _QuadrantTile(
-                    data: quadrants[Quadrant.q1]!,
-                    color: q1Palette.background,
-                    accent: q1Palette.foreground,
-                    onTaskTap: (t) => _openDetail(context, t),
-                  ),
-                ),
+                Expanded(child: tile(Quadrant.q1, q1Palette)),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: _QuadrantTile(
-                    data: quadrants[Quadrant.q2]!,
-                    color: q2Palette.background,
-                    accent: q2Palette.foreground,
-                    onTaskTap: (t) => _openDetail(context, t),
-                  ),
-                ),
+                Expanded(child: tile(Quadrant.q2, q2Palette)),
               ],
             ),
           ),
@@ -111,23 +153,9 @@ class EisenhowerView extends ConsumerWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: _QuadrantTile(
-                    data: quadrants[Quadrant.q3]!,
-                    color: q3Palette.background,
-                    accent: q3Palette.foreground,
-                    onTaskTap: (t) => _openDetail(context, t),
-                  ),
-                ),
+                Expanded(child: tile(Quadrant.q3, q3Palette)),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: _QuadrantTile(
-                    data: quadrants[Quadrant.q4]!,
-                    color: q4Palette.background,
-                    accent: q4Palette.foreground,
-                    onTaskTap: (t) => _openDetail(context, t),
-                  ),
-                ),
+                Expanded(child: tile(Quadrant.q4, q4Palette)),
               ],
             ),
           ),
@@ -137,7 +165,7 @@ class EisenhowerView extends ConsumerWidget {
   }
 
   void _openDetail(BuildContext context, TodoTask t) {
-    final callback = onTaskSelected;
+    final callback = widget.onTaskSelected;
     if (callback != null) {
       callback(t.id);
       return;
@@ -411,17 +439,25 @@ class _QuadrantTile extends StatelessWidget {
     required this.color,
     required this.accent,
     required this.onTaskTap,
+    required this.draggable,
+    required this.now,
+    required this.ruleType,
+    required this.onDrop,
   });
 
   final _QuadrantData data;
   final Color color;
   final Color accent;
   final ValueChanged<TodoTask> onTaskTap;
+  final bool draggable;
+  final DateTime now;
+  final QuadrantRuleType? ruleType;
+  final void Function(QuadrantDragMove move, QuadrantDropPatch patch) onDrop;
 
   @override
   Widget build(BuildContext context) {
     final colors = brandColors(context);
-    return Material(
+    final tile = Material(
       key: ValueKey('quadrant-${data.quadrant.name}'),
       color: color,
       borderRadius: BorderRadius.circular(AppRadius.lg),
@@ -485,7 +521,7 @@ class _QuadrantTile extends StatelessWidget {
                       separatorBuilder: (_, _) => const Divider(height: 1),
                       itemBuilder: (_, i) {
                         final t = data.tasks[i];
-                        return ListTile(
+                        final card = ListTile(
                           dense: true,
                           title: Text(
                             t.title,
@@ -498,6 +534,32 @@ class _QuadrantTile extends StatelessWidget {
                           ),
                           onTap: () => onTaskTap(t),
                         );
+                        if (!draggable) return card;
+                        return Semantics(
+                          label: '拖动调整象限',
+                          child: LongPressDraggable<QuadrantDragMove>(
+                            data: QuadrantDragMove(
+                              task: t,
+                              from: data.quadrant,
+                            ),
+                            dragAnchorStrategy: pointerDragAnchorStrategy,
+                            feedback: Material(
+                              elevation: 3,
+                              color: color,
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 240,
+                                ),
+                                child: card,
+                              ),
+                            ),
+                            childWhenDragging: Opacity(
+                              opacity: 0.4,
+                              child: card,
+                            ),
+                            child: card,
+                          ),
+                        );
                       },
                     ),
             ),
@@ -505,5 +567,81 @@ class _QuadrantTile extends StatelessWidget {
         ),
       ),
     );
+    if (!draggable) return tile;
+    return DragTarget<QuadrantDragMove>(
+      onWillAcceptWithDetails: (details) =>
+          details.data.from != data.quadrant &&
+          quadrantDropPatch(
+                target: data.quadrant,
+                ruleType: ruleType,
+                now: now,
+              ) !=
+              null,
+      onAcceptWithDetails: (details) {
+        final patch = quadrantDropPatch(
+          target: data.quadrant,
+          ruleType: ruleType,
+          now: now,
+        );
+        if (patch == null || details.data.from == data.quadrant) return;
+        onDrop(details.data, patch);
+      },
+      builder: (context, candidate, rejected) => tile,
+    );
   }
+}
+
+/// 拖起来的卡片要连着"从哪个象限起拖"一起带：
+/// 任务对象自己不知道自己落在哪个象限，不带 `from` 就没法判「拖回原象限不该发写请求」。
+class QuadrantDragMove {
+  const QuadrantDragMove({required this.task, required this.from});
+
+  final TodoTask task;
+  final Quadrant from;
+}
+
+/// 拖到某个象限要回写的两栏。`dueAt == null` = 这一档不改截止时间（组合1）。
+typedef QuadrantDropPatch = ({int priority, DateTime? dueAt});
+
+/// 拖动落档式：嘀嗒《02-如何编辑四象限规则》
+/// `:25`（组合1 只改优先级）/`:44`（组合2 优先级与时间一起改），
+/// 取值抄 `:39`「“今天”、“高优先级”」与 `:40`「“1个月后”、“低优先级”」这两条例子。
+/// `ruleType == null` 是本机分档（`classifyEisenhower` 本身就是优先级 + 时间两轴）；
+/// `custom` 返回 null：源页本节没给自定义规则下的拖动脉络。
+QuadrantDropPatch? quadrantDropPatch({
+  required Quadrant target,
+  required QuadrantRuleType? ruleType,
+  required DateTime now,
+}) {
+  if (ruleType == QuadrantRuleType.custom) return null;
+  if (ruleType == QuadrantRuleType.priorityOnly) {
+    // 组合1 的目标优先级直接取规则自己的键序（_ruleKeys 里就是 P3/P2/P1/P0）。
+    return (priority: 3 - target.index, dueAt: null);
+  }
+  final important = target == Quadrant.q1 || target == Quadrant.q2;
+  final urgent = target == Quadrant.q1 || target == Quadrant.q3;
+  // 高优先级=3、低优先级=1（词表见 quick_add_bar 的下拉）；
+  // 紧急档写"当天 23:59"，恒在 classifyEisenhower 的 24 小时窗口内。
+  return (
+    priority: important ? 3 : 1,
+    dueAt: urgent
+        ? DateTime(now.year, now.month, now.day, 23, 59)
+        : _oneMonthLater(now),
+  );
+}
+
+/// 「1 个月后」。Dart 的 `DateTime(y, m+1, 31)` 会按日进位（2026-01-31 ⇒ 2026-03-03），
+/// 也就是月末会溢出到下个月初——这是"约一个月后"，不是精确到日的一个月。
+/// 保留这道兜底是因为极端日期下必须仍在 24 小时窗口之外，否则不紧急档会被判回紧急。
+DateTime _oneMonthLater(DateTime now) {
+  final candidate = DateTime(
+    now.year,
+    now.month + 1,
+    now.day,
+    now.hour,
+    now.minute,
+  );
+  return candidate.isAfter(now.add(const Duration(days: 2)))
+      ? candidate
+      : now.add(const Duration(days: 31));
 }

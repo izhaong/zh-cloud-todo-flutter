@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/efficiency_api.dart';
+import '../../core/widgets/app_widgets.dart';
 import '../../state/efficiency_providers.dart';
 
 /// 嘀嗒的三档样式；取值与服务端 `AppTodoCountdownBaseVO.style` 注释一致。
@@ -190,6 +191,8 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(countdownsProvider);
+    // 同 #375：重取失败时 AsyncError 仍带上一次的 value，`.when` 会把它丢掉 ⇒ 先读 valueOrNull。
+    final items = async.valueOrNull;
     return Scaffold(
       appBar: AppBar(
         title: const Text('倒数日'),
@@ -200,28 +203,41 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
           ),
         ],
       ),
-      body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('加载失败: $e')),
-        data: (items) {
-          if (items.isEmpty) {
-            return const Center(child: Text('暂无倒数日'));
-          }
-          return ListView.separated(
-            itemCount: items.length,
-            separatorBuilder: (_, _) => const Divider(height: 1),
-            itemBuilder: (_, i) {
-              final c = items[i];
-              return _CountdownTile(
-                item: c,
-                writePending: _writePending,
-                onEdit: () => _showEditor(existing: c),
-                onDelete: () => _confirmDelete(c),
-              );
-            },
-          );
-        },
-      ),
+      body: items == null
+          ? (async.hasError
+                ? Center(child: Text('加载失败: ${async.error}'))
+                : const Center(child: CircularProgressIndicator()))
+          : (async.hasError
+                ? Column(
+                    children: [
+                      AppRefreshFailedHint(
+                        message: '列表刷新失败，仍显示上一次的数据',
+                        onRetry: () => ref.invalidate(countdownsProvider),
+                      ),
+                      Expanded(child: _countdownList(items)),
+                    ],
+                  )
+                : _countdownList(items)),
+    );
+  }
+
+  /// 首值就没读到不走这里：上面已按 `items == null` 分流。
+  Widget _countdownList(List<CountdownDto> items) {
+    if (items.isEmpty) {
+      return const Center(child: Text('暂无倒数日'));
+    }
+    return ListView.separated(
+      itemCount: items.length,
+      separatorBuilder: (_, _) => const Divider(height: 1),
+      itemBuilder: (_, i) {
+        final c = items[i];
+        return _CountdownTile(
+          item: c,
+          writePending: _writePending,
+          onEdit: () => _showEditor(existing: c),
+          onDelete: () => _confirmDelete(c),
+        );
+      },
     );
   }
 

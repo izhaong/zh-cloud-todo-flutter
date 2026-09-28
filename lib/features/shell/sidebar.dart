@@ -6,6 +6,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/theme/brand_colors.dart';
 import '../../core/theme/todo_layout_tokens.dart';
 import '../../state/providers.dart';
+import '../../state/repositories/sidebar_visibility_repository.dart';
 import '../list/list_actions.dart';
 import '../list/list_editor_sheet.dart';
 import 'section.dart';
@@ -66,11 +67,30 @@ class Sidebar extends ConsumerWidget {
       idOf: (folder) => folder.id,
       parentIdOf: (folder) => folder.parentId,
     );
-    final tagEntries = flattenSidebarHierarchy(
-      tags,
-      idOf: (tag) => tag.id,
-      parentIdOf: (tag) => tag.parentId,
-    );
+    // 嘀嗒《…04-用标签管理任务.md》:10/:23「开启后，标签将显示在清单下面」⇒ 关掉就不显示条目。
+    // 「标签」那一行入口不跟着收（spec.md 取舍 1）：本 App 没有嘀嗒的"清单管理页"，
+    // 收掉它等于没有回头路。
+    //
+    // 三态要分开，两两都不能合并（Issue #353）：
+    // - 有值就用值 —— 包括"出过一次值之后流才报错"，那是四件套 ③ 的"失败保留已加载数据"。
+    //   （写成 `.when(error: …)` 会把这条丢掉：带旧值的 AsyncError 走的也是 error 分支，
+    //   存了「隐藏」的账号会在流失败那一刻把标签条目闪回来。用例钉着。）
+    // - 加载中且从没读到过值 ⇒ 不画（与同文件 lists/tags 的"没值就画空"一致）。
+    //   写成 `valueOrNull ?? 默认` 就是把这一态误当成"读到了、值是显示" ⇒ 冷启动闪一下。
+    // - 真读不到（首值就失败）⇒ 才回兜底默认；默认「显示」本身由仓库 `_decode(null)` 兑现。
+    final showTagsAsync = ref.watch(sidebarShowTagsProvider);
+    final showTags =
+        showTagsAsync.valueOrNull ??
+        (showTagsAsync.hasError
+            ? SidebarVisibilityRepository.defaultShowTags
+            : false);
+    final tagEntries = !showTags
+        ? const <SidebarHierarchyEntry<TodoTag>>[]
+        : flattenSidebarHierarchy(
+            tags,
+            idOf: (tag) => tag.id,
+            parentIdOf: (tag) => tag.parentId,
+          );
 
     return SizedBox(
       width: width,
