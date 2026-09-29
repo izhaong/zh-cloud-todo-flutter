@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../core/db/app_database.dart' show TodoTask;
+import '../../core/db/app_database.dart' show TodoTag, TodoTask;
 import '../../state/providers.dart';
 import 'saved_filter_mapping.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -123,6 +123,7 @@ class FilterBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final dueRange = filter.dueRange;
     final completed = filter.completed;
+    final tagsAsync = ref.watch(tagsStreamProvider);
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
@@ -167,6 +168,8 @@ class FilterBar extends ConsumerWidget {
                 context,
                 filter,
                 assigneeOptions,
+                tagsAsync.valueOrNull ?? const <TodoTag>[],
+                tagsAsync.hasError,
                 previewResolver,
               );
               if (next == null) return;
@@ -177,6 +180,7 @@ class FilterBar extends ConsumerWidget {
                   dueAtFrom: next.dueAtFrom,
                   dueAtTo: next.dueAtTo,
                   assigneeUserId: next.assigneeUserId,
+                  tagIds: next.tagIds,
                 ),
               );
             },
@@ -303,6 +307,7 @@ class FilterBar extends ConsumerWidget {
     required DateTime? dueAtFrom,
     required DateTime? dueAtTo,
     required int? assigneeUserId,
+    required List<String> tagIds,
   }) {
     return base.copyWith(
       keyword: keyword.isEmpty ? null : keyword,
@@ -313,6 +318,8 @@ class FilterBar extends ConsumerWidget {
       clearDueAtTo: dueAtTo == null,
       assigneeUserId: assigneeUserId,
       clearAssigneeUserId: assigneeUserId == null,
+      // 空列表 = 清空标签条件：copyWith 的 `tagIds ?? this.tagIds` 里 [] 是非 null，会覆盖旧值。
+      tagIds: tagIds,
     );
   }
 
@@ -320,12 +327,15 @@ class FilterBar extends ConsumerWidget {
     BuildContext context,
     TaskFilter current,
     List<TaskAssigneeOption> assigneeOptions,
+    List<TodoTag> tags,
+    bool tagsUnavailable,
     List<TodoTask> Function(TaskFilter draft)? previewResolver,
   ) async {
     final keywordController = TextEditingController(
       text: current.keyword ?? '',
     );
     int? selectedAssigneeUserId = current.assigneeUserId;
+    final selectedTagIds = current.tagIds.toSet();
     final dueAtFromController = TextEditingController(
       text: _formatDate(current.dueAtFrom),
     );
@@ -354,6 +364,7 @@ class FilterBar extends ConsumerWidget {
                     dueAtFrom: draftDueAtFrom,
                     dueAtTo: draftDueAtTo,
                     assigneeUserId: selectedAssigneeUserId,
+                    tagIds: selectedTagIds.toList(),
                   ),
                 )
               : null;
@@ -420,6 +431,21 @@ class FilterBar extends ConsumerWidget {
                       errorText: validationMessage,
                     ),
                   ),
+                  _TagConditionSection(
+                    tags: tags,
+                    unavailable: tagsUnavailable,
+                    selected: selectedTagIds,
+                    onToggle: (tagId, selected) {
+                      setDialogState(() {
+                        if (selected) {
+                          selectedTagIds.add(tagId);
+                        } else {
+                          selectedTagIds.remove(tagId);
+                        }
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       const Expanded(child: Text('预览模式')),
@@ -506,6 +532,7 @@ class FilterBar extends ConsumerWidget {
                       dueAtFrom: dueAtFrom,
                       dueAtTo: dueAtTo,
                       assigneeUserId: selectedAssigneeUserId,
+                      tagIds: (selectedTagIds.toList()..sort()),
                     ),
                   );
                 },
@@ -591,21 +618,25 @@ class _AdvancedFilter {
     required this.dueAtFrom,
     required this.dueAtTo,
     required this.assigneeUserId,
+    this.tagIds = const [],
   });
 
   final String? keyword;
   final DateTime? dueAtFrom;
   final DateTime? dueAtTo;
   final int? assigneeUserId;
+  final List<String> tagIds;
 }
 
 bool _hasAdvancedFilter(TaskFilter filter) =>
     filter.keyword?.trim().isNotEmpty == true ||
     filter.dueAtFrom != null ||
     filter.dueAtTo != null ||
-    filter.assigneeUserId != null;
+    filter.assigneeUserId != null ||
+    filter.tagIds.isNotEmpty;
 
 String _advancedFilterLabel(TaskFilter filter) {
+  if (filter.tagIds.isNotEmpty) return '标签';
   if (filter.assigneeUserId != null) return '负责人';
   if (filter.keyword?.trim().isNotEmpty == true) return '关键词';
   if (filter.dueAtFrom != null || filter.dueAtTo != null) return '日期';
@@ -682,6 +713,60 @@ class _Choice extends StatelessWidget {
         selected: selected,
         onSelected: (_) => onTap(),
       ),
+    );
+  }
+}
+
+/// 「标签」这一条筛选条件：多选，缺省按「且」（与 `applyTaskFilter` 的 `containsAll` 同口径）。
+/// 读不出标签时不静默退化成"没有标签条件"，要给可见提示（四件套③）。
+class _TagConditionSection extends StatelessWidget {
+  const _TagConditionSection({
+    required this.tags,
+    required this.unavailable,
+    required this.selected,
+    required this.onToggle,
+  });
+
+  final List<TodoTag> tags;
+  final bool unavailable;
+  final Set<String> selected;
+  final void Function(String tagId, bool selected) onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      key: const Key('task-filter-tag-section'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('标签', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        if (unavailable)
+          const Text('标签暂不可用，其余条件仍可继续筛选')
+        else if (tags.isEmpty)
+          const Text('暂无可选择的标签')
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final tag in tags)
+                Semantics(
+                  key: Key('task-filter-tag-semantics-${tag.id}'),
+                  label:
+                      '标签 ${tag.name}，${selected.contains(tag.id) ? '已选中' : '未选中'}',
+                  selected: selected.contains(tag.id),
+                  button: true,
+                  excludeSemantics: true,
+                  child: FilterChip(
+                    key: Key('task-filter-tag-${tag.id}'),
+                    label: Text(tag.name),
+                    selected: selected.contains(tag.id),
+                    onSelected: (next) => onToggle(tag.id, next),
+                  ),
+                ),
+            ],
+          ),
+      ],
     );
   }
 }
