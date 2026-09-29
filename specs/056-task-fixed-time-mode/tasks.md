@@ -386,3 +386,35 @@ FL !370 于 `2026-09-29T14:36:39Z` 合并发 `f361be4726`，Issue #368 随之 `s
 远端分支也还在（`git ls-remote origin refs/heads/feat/369-fixed-time-mode-picker`）。
 判据与两条出路已写在 PR !372 的留言里；本节这笔只动 `specs/`，
 推送后 `git diff 5ccd186 HEAD -- lib test` 仍应为空 ⇒ 上面那份 PASS 继续覆盖代码字节。
+
+## 十三、第 14 轮 VERDICT 回收（2026-09-30 第 146 轮收尾）
+
+报告 `/tmp/r136/review-372-r14-report.md`（由 `/tmp/r136/review-372-r14.jsonl` 的最后一个 `type=result` 块导出）。
+终态：`terminal_reason=completed`、`is_error=false`、`num_turns=116`、正文 8530 字符。
+
+### 逐项结论（A–F 共六项，逐条抄自报告小标题）
+
+| 项 | 报告判定 |
+| --- | --- |
+| A 并主干有没有丢东西 | PASS |
+| B 三态与 `TaskTimeMode` 的接线 | PASS |
+| C 测试是否真钉住（含 `Key('task-time-mode-0')` 的形状） | PASS |
+| D 术语与判据源逐字 | PASS |
+| E 门禁覆盖面与卫生 | PASS |
+| F 台账诚实性 | PASS |
+
+报告第 79 行原文：`**FAIL：0 条。**`
+
+### 一处要如实记下的形状问题
+
+哨兵行回报成 `VERDICT: PAS`，最后一个字符在 stream-json 组装时掉了。按「VERDICT 只认最后 result 块」的口径，这块的 `terminal_reason` 是 `completed` 而非截断，正文六项全标 PASS、且明写 FAIL 0 条，所以本条按 PASS 入账；但**不接受**用整文件 grep 出来的 `VERDICT:` 当判据——本轮同一次扫描里，`review-314-r1`、`review-311-r3`、`review-docs113-r2` 三份都从整文件 grep 读出过结论，实际它们当时还没有 result 块（进程仍在跑），是假信号。
+
+### 这份 PASS 覆盖到哪几个字节
+
+r14 审的是 `5ccd186`。当前分支头 `18cc090` 相对它的差集只有本节所在的 `specs/056-task-fixed-time-mode/tasks.md`（复算：`git diff --name-only 5ccd186a92 HEAD`，非 `\.md$` 的行数为 0 个），所以代码字节未变 ⇒ 上面这份 PASS 与六门读数继续覆盖 PR !413 的头。
+
+### 合并端点的堵点（承接 §十二，仍未解）
+
+`POST /pulls/413/merge` 与更早的 `POST /pulls/372/merge` 都回 HTTP 405 `Please try again later`；
+本地真跑 `git merge-tree --write-tree origin/develop 18cc09027` 回 rc=0、CONFLICT 0 处（基准 `origin/develop=f361be4`）。
+差在 Gitea 侧那条异步 `testpullrequest`，不在本分支内容上。
