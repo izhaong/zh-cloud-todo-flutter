@@ -10,6 +10,7 @@ import '../core/notification/reminder_notification_poller.dart';
 import '../core/sync/sync_change_queue.dart';
 import '../core/sync/sync_coordinator.dart';
 import '../core/time/task_time_formatter.dart';
+import '../core/time/week_start.dart';
 import '../state/session_state.dart';
 import 'repositories/board_preference_repository.dart';
 import 'repositories/filter_repository.dart';
@@ -32,6 +33,8 @@ import 'repositories/task_section_repository.dart';
 import 'repositories/task_sort_preference_repository.dart';
 import 'repositories/sidebar_visibility_repository.dart';
 import 'repositories/task_view_action_repository.dart';
+import 'repositories/timezone_preference_repository.dart';
+import 'repositories/week_start_preference_repository.dart';
 import 'repositories/summary_repository.dart';
 
 /// UI-facing clock. Production reads the current instant on each rebuild;
@@ -332,6 +335,53 @@ final taskSortPreferenceRepositoryProvider =
       if (db == null || queue == null) return null;
       return TaskSortPreferenceRepository(db, queue);
     });
+
+/// 「设置 → 日期与时间 → 时区」总开关的仓储（specs/055 / FL #368）。
+final timezonePreferenceRepositoryProvider =
+    Provider<TimezonePreferenceRepository?>((ref) {
+      final db = ref.watch(appDatabaseProvider);
+      final queue = ref.watch(syncChangeQueueProvider);
+      if (db == null || queue == null) return null;
+      return TimezonePreferenceRepository(db, queue);
+    });
+
+/// 当前时区能力的开关状态。无库（未登录/未就绪）时按「开」处理，
+/// 与仓储自己的"无记录即开"同一口径，避免离线首屏把既有能力藏掉。
+final timezoneEnabledProvider = StreamProvider<bool>((ref) {
+  final repo = ref.watch(timezonePreferenceRepositoryProvider);
+  if (repo == null) return Stream.value(true);
+  return repo.watch();
+});
+
+final weekStartPreferenceRepositoryProvider =
+    Provider<WeekStartPreferenceRepository?>((ref) {
+      final db = ref.watch(appDatabaseProvider);
+      final queue = ref.watch(syncChangeQueueProvider);
+      if (db == null || queue == null) return null;
+      return WeekStartPreferenceRepository(db, queue);
+    });
+
+/// 「星期开始于」当前档位。
+///
+/// FR-7：库未就绪时直接给默认档（Stream.value 立刻进 data），
+/// 这样日历/时间线的读法统一是 `valueOrNull ?? default`。首值未到达或
+/// 读取报错时 `valueOrNull` 为 null，退回周一，与 develop 既有行为一致；
+/// AsyncError 仍带旧值时 `valueOrNull` 保留旧值，不会被兜底盖掉。
+/// 「星期开始于」三态读法（FR-7）：有值用值；首值未到或读失败退回默认档（周一）。
+///
+/// 只用 `valueOrNull`，不用 `when(error:)` —— 后者会把"带旧值的 AsyncError"里的
+/// 旧值丢掉（第 74 轮实测）。单独抽出来是因为消费面有两类：一类在 build 里能 watch
+/// （日历），一类是纯参数注入（时间线，既有 17 条用例裸 pump 无 ProviderScope）。
+int resolveWeekStartFirstDay(AsyncValue<int> value) =>
+    value.valueOrNull ?? WeekStart.defaultFirstDay;
+
+final weekStartProvider = StreamProvider<int>((ref) {
+  final repository = ref.watch(weekStartPreferenceRepositoryProvider);
+  if (repository == null) {
+    return Stream.value(WeekStart.defaultFirstDay);
+  }
+  return repository.watch();
+});
 
 final activityRepositoryProvider = Provider<ActivityRepository?>((ref) {
   final db = ref.watch(appDatabaseProvider);

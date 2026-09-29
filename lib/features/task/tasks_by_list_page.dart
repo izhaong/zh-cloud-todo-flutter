@@ -20,6 +20,8 @@ import '../filter/filter_bar.dart';
 import '../quadrant/quadrant_rules_page.dart';
 import '../shell/app_dialog.dart';
 import '../shell/quick_add_bar.dart';
+import '../tag/hash_tag_input.dart';
+import 'list_drop_target.dart';
 import 'task_view_mutation_feedback.dart';
 import 'view_mode.dart';
 import 'views/calendar_view.dart';
@@ -74,6 +76,8 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   TaskFilter _filter = TaskFilter();
   TaskViewMode _mode = TaskViewMode.list;
   TaskSort _sort = TaskSort.smart;
+  // 默认值 = 本轮之前写死的降序；不传偏好的清单行为不变。
+  TaskSortDirection _sortDirection = TaskSortDirection.newestFirst;
   double _timelineZoom = 1;
   TimelineScale _timelineScale = TimelineScale.week;
   Set<String> _collapsedTimelineGroupIds = const {};
@@ -232,6 +236,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           items,
           sections: taskSections,
           sort: _sort,
+          sortDirection: _sortDirection,
           now: now,
         );
         if (snapshot.hasData) {
@@ -256,9 +261,11 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 taskCount: items.length,
                 mode: _mode,
                 sort: _sort,
+                sortDirection: _sortDirection,
                 filterActive: !_filter.isEmpty,
                 onModeChanged: _changeMode,
                 onSortChanged: _changeSort,
+                onSortDirectionChanged: _changeSortDirection,
                 onFilterPressed: () => _openFilterPanel(raw),
                 batchSelectionActive: _batchSelectionActive,
                 onBatchPressed: _toggleBatchSelection,
@@ -277,7 +284,11 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 onToggleHideCompleted: _toggleQuadrantHideCompleted,
               ),
             if (showQuickAdd && !_batchSelectionActive)
-              QuickAddBar(onSubmit: _submitQuickAdd, tagOptions: tagOptions),
+              QuickAddBar(
+                onSubmit: _submitQuickAdd,
+                tagOptions: tagOptions,
+                ensureTagIds: _ensureTagIdsByName,
+              ),
             if (_mode == TaskViewMode.list && taskSections.isNotEmpty)
               _TaskSectionManagerBar(
                 sections: taskSections,
@@ -287,15 +298,21 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 onMove: _moveTaskSection,
               ),
             Expanded(
-              child: Padding(
-                padding: EdgeInsets.only(
-                  bottom: showBatchActionBar
-                      ? 88
-                      : mobileMode
-                      ? 72
-                      : 0,
+              child: TaskListDropTarget(
+                // 嘀嗒《07-任务与日历同时显示.md》`:53`：落点是「清单详情区域」，
+                // 所以只在选中具体清单的列表视图承接；看板/时间线自己有各自的 `TodoTask` 落点，不抢它们的手势。
+                currentListId: _mode == TaskViewMode.list ? listId : null,
+                onAccept: _dropTaskIntoList,
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    bottom: showBatchActionBar
+                        ? 88
+                        : mobileMode
+                        ? 72
+                        : 0,
+                  ),
+                  child: modeBody,
                 ),
-                child: modeBody,
               ),
             ),
           ],
@@ -337,6 +354,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 child: MobileQuickAddButton(
                   onSubmit: _submitQuickAdd,
                   tagOptions: tagOptions,
+                  ensureTagIds: _ensureTagIdsByName,
                 ),
               ),
           ],
@@ -377,6 +395,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           items: items,
           sections: taskSections,
           sort: _sort,
+          sortDirection: _sortDirection,
           desktopMode: desktopMode,
           now: now,
           selectedTaskId: widget.selectedTaskId,
@@ -468,6 +487,8 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       case TaskViewMode.timeline:
         return TimelineView(
           tasks: items,
+          now: now,
+          firstDay: resolveWeekStartFirstDay(ref.watch(weekStartProvider)),
           zoom: _timelineZoom,
           scale: _timelineScale,
           collapsedGroupIds: _collapsedTimelineGroupIds,
@@ -541,8 +562,13 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
 
   Future<void> _restoreSortPreference() async {
     final repository = ref.read(taskSortPreferenceRepositoryProvider);
-    final sort = await repository?.get(_selectedListId);
-    if (mounted && sort != null) setState(() => _sort = sort);
+    final preference = await repository?.get(_selectedListId);
+    if (!mounted || preference == null) return;
+    // 档位与方向一起回读：只回读档位会让上一轮存的方向在重进清单时静默变回降序。
+    setState(() {
+      _sort = preference.sort;
+      _sortDirection = preference.direction;
+    });
   }
 
   Future<void> _restoreViewPreference() async {
@@ -578,7 +604,23 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     try {
       await ref
           .read(taskSortPreferenceRepositoryProvider)
-          ?.save(_selectedListId, sort);
+          ?.save(_selectedListId, sort, _sortDirection);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('排序偏好保存失败，请稍后重试')));
+    }
+  }
+
+  /// 嘀嗒《03-用分组和排序管理任务》:173-176/:192-193：两档时间轴各有方向，
+  /// 且方向与档位一样是"每个清单一份"的偏好 ⇒ 存法与 `_changeSort` 同一条路。
+  Future<void> _changeSortDirection(TaskSortDirection direction) async {
+    setState(() => _sortDirection = direction);
+    try {
+      await ref
+          .read(taskSortPreferenceRepositoryProvider)
+          ?.save(_selectedListId, _sort, direction);
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -669,6 +711,29 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         context,
       ).showSnackBar(const SnackBar(content: Text('时间线尺度保存失败，请重试')));
     }
+  }
+
+  /// 嘀嗒《02-功能指南/02-日历/07-任务与日历同时显示.md》`:53`「将日历中的任务拖入清单详情区域」：
+  /// 落点只把任务换到当前查看的清单（`:55`「并保留其原有的时间安排」），
+  /// 失败与过期抑制的判定都在 [TaskListMoveController] 里，页这边只负责给可见反馈。
+  TaskListMoveController? _listMoveController;
+
+  TaskListMoveController get _listMove =>
+      _listMoveController ??= TaskListMoveController(
+        repositoryOf: () => ref.read(taskRepositoryProvider),
+        currentListIdOf: () => _selectedListId,
+        onFailure: _showListMoveFailure,
+      );
+
+  void _dropTaskIntoList(TodoTask task) {
+    unawaited(_listMove.handleDrop(task));
+  }
+
+  void _showListMoveFailure(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _saveBoardLayout({
@@ -1438,6 +1503,13 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     });
   }
 
+  /// 「#标签」的落地：已有同名就用它，没有就建（嘀嗒《…04-用标签管理任务.md》:48/:61）。
+  Future<List<String>> _ensureTagIdsByName(List<String> names) async {
+    final repo = ref.read(tagRepositoryProvider);
+    if (repo == null) throw StateError('请先登录后再添加标签');
+    return resolveTagIdsByName(repo: repo, names: names);
+  }
+
   Future<void> _submitQuickAdd(QuickAddRequest request) async {
     final callback = widget.onQuickAdd;
     if (callback != null) {
@@ -1625,6 +1697,14 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 FilterBar(
                   filter: draft,
                   assigneeOptions: assigneeOptions,
+                  // 预览与列表渲染同源：同一份原始列表、同一个 applyTaskFilter、
+                  // 同一个清单口径 ⇒ 「命中 N 项」不会和套出来看到的数不一样。
+                  previewResolver: (next) => applyTaskFilter(
+                    tasks,
+                    next,
+                    _selectedListId,
+                    ref.read(currentDateTimeProvider)(),
+                  ),
                   onChanged: (next) {
                     draft = next;
                     setState(() => _filter = next);
@@ -1645,6 +1725,7 @@ class _ListBody extends StatefulWidget {
     required this.items,
     required this.sections,
     required this.sort,
+    required this.sortDirection,
     required this.desktopMode,
     required this.now,
     required this.selectedTaskId,
@@ -1659,6 +1740,7 @@ class _ListBody extends StatefulWidget {
   final List<TodoTask> items;
   final List<TodoTaskSection> sections;
   final TaskSort sort;
+  final TaskSortDirection sortDirection;
   final bool desktopMode;
   final DateTime now;
   final String? selectedTaskId;
@@ -1798,18 +1880,22 @@ class _ListBodyState extends State<_ListBody> {
           final task = entry as TodoTask;
           return KeyedSubtree(
             key: ValueKey(task.id),
-            child: TaskRowHost(
+            child: _CalendarDragSource(
               task: task,
-              taskSections: widget.sections,
-              desktopMode: true,
-              enableSwipeGestures: false,
-              reorderIndex: widget.batchSelectionActive ? null : index,
-              selected: widget.selectedTaskId == task.id,
-              onTap: (taskId) => _handleTaskActivation(taskId, visibleTaskIds),
-              batchSelectionActive: widget.batchSelectionActive,
-              batchSelected: widget.batchSelectedTaskIds.contains(task.id),
-              onBatchSelectionChanged: (selected) =>
-                  widget.onBatchSelectionChanged(task.id, selected),
+              child: TaskRowHost(
+                task: task,
+                taskSections: widget.sections,
+                desktopMode: true,
+                enableSwipeGestures: false,
+                reorderIndex: widget.batchSelectionActive ? null : index,
+                selected: widget.selectedTaskId == task.id,
+                onTap: (taskId) =>
+                    _handleTaskActivation(taskId, visibleTaskIds),
+                batchSelectionActive: widget.batchSelectionActive,
+                batchSelected: widget.batchSelectedTaskIds.contains(task.id),
+                onBatchSelectionChanged: (selected) =>
+                    widget.onBatchSelectionChanged(task.id, selected),
+              ),
             ),
           );
         },
@@ -1832,18 +1918,21 @@ class _ListBodyState extends State<_ListBody> {
           );
         }
         final task = entry as TodoTask;
-        return TaskRowHost(
+        return _CalendarDragSource(
           task: task,
-          taskSections: widget.sections,
-          desktopMode: widget.desktopMode,
-          enableSwipeGestures:
-              !widget.desktopMode && !widget.batchSelectionActive,
-          selected: widget.selectedTaskId == task.id,
-          onTap: (taskId) => _handleTaskActivation(taskId, visibleTaskIds),
-          batchSelectionActive: widget.batchSelectionActive,
-          batchSelected: widget.batchSelectedTaskIds.contains(task.id),
-          onBatchSelectionChanged: (selected) =>
-              widget.onBatchSelectionChanged(task.id, selected),
+          child: TaskRowHost(
+            task: task,
+            taskSections: widget.sections,
+            desktopMode: widget.desktopMode,
+            enableSwipeGestures:
+                !widget.desktopMode && !widget.batchSelectionActive,
+            selected: widget.selectedTaskId == task.id,
+            onTap: (taskId) => _handleTaskActivation(taskId, visibleTaskIds),
+            batchSelectionActive: widget.batchSelectionActive,
+            batchSelected: widget.batchSelectedTaskIds.contains(task.id),
+            onBatchSelectionChanged: (selected) =>
+                widget.onBatchSelectionChanged(task.id, selected),
+          ),
         );
       },
     );
@@ -1851,7 +1940,10 @@ class _ListBodyState extends State<_ListBody> {
 
   List<TodoTask> _sortedItems(List<TodoTask> items) {
     final sorted = [...items];
-    sorted.sort((a, b) => compareTodoTasks(a, b, widget.sort));
+    sorted.sort(
+      (a, b) =>
+          compareTodoTasks(a, b, widget.sort, direction: widget.sortDirection),
+    );
     return sorted;
   }
 
@@ -2077,9 +2169,11 @@ List<TodoTask> _visibleTasksInListOrder(
   List<TodoTask> tasks, {
   required List<TodoTaskSection> sections,
   required TaskSort sort,
+  required TaskSortDirection sortDirection,
   required DateTime now,
 }) {
-  final sorted = [...tasks]..sort((a, b) => compareTodoTasks(a, b, sort));
+  final sorted = [...tasks]
+    ..sort((a, b) => compareTodoTasks(a, b, sort, direction: sortDirection));
   final groups = sections.isEmpty
       ? _groupTasks(sorted, now)
       : _groupTasksBySection(sorted, sections);
@@ -2175,4 +2269,30 @@ List<String> _normalizeTaskIds(
     if (!kept.contains(id)) kept.add(id);
   }
   return kept;
+}
+
+/// 嘀嗒《02-功能指南/02-日历/07-任务与日历同时显示.md》`:49`「将清单中的任务拖入日历」：
+/// 清单行需要一个拖出源，落点是并列日历的 `DragTarget<TodoTask>`（`calendar_view.dart:616`）。
+/// 只做手势容器、不改行外观；拖动中的行与反馈都沿用 `calendar_view.dart:753` 日历内拖拽的同款做法
+/// （反馈用同一个 widget，`childWhenDragging` 压到 35% 透明）。
+class _CalendarDragSource extends StatelessWidget {
+  const _CalendarDragSource({required this.task, required this.child});
+
+  final TodoTask task;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return LongPressDraggable<TodoTask>(
+      key: ValueKey('todo-list-task-drag-${task.id}'),
+      data: task,
+      delay: const Duration(milliseconds: 300),
+      feedback: Material(
+        color: Colors.transparent,
+        child: SizedBox(width: 320, child: child),
+      ),
+      childWhenDragging: Opacity(opacity: 0.35, child: child),
+      child: child,
+    );
+  }
 }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/brand_colors.dart';
+import '../../core/time/week_start.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../state/providers.dart';
 import '../../state/repositories/task_capture_defaults_repository.dart';
@@ -16,7 +17,7 @@ import '../home/keyboard_shortcuts_dialog.dart';
 import '../native/native_entry_page.dart';
 import '../shell/app_theme_controller.dart';
 
-/// 设置页：分组列表（账户/任务/主题/关于）+ 账户安全与成就入口。
+/// 设置页：分组列表（账号/任务/日期与时间/主题/关于）+ 账户安全与成就入口。
 class SettingsRoute extends ConsumerWidget {
   const SettingsRoute({super.key, this.signedInMobile});
 
@@ -25,6 +26,10 @@ class SettingsRoute extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = brandColors(context);
+    // 读不到偏好时按默认档显示，不让设置页出现空副标题。
+    final weekStartLabel = WeekStart.labelOf(
+      resolveWeekStartFirstDay(ref.watch(weekStartProvider)),
+    );
     return Scaffold(
       appBar: AppBar(title: const Text('设置')),
       body: ListView(
@@ -135,6 +140,25 @@ class SettingsRoute extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 16),
+          _Section(title: '日期与时间'),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                _Tile(
+                  key: const Key('todo-settings-week-start'),
+                  icon: Icons.view_week_outlined,
+                  title: '星期开始于',
+                  subtitle: weekStartLabel,
+                  trailing: Icons.chevron_right,
+                  colors: colors,
+                  onTap: () => _pickWeekStart(context, ref),
+                ),
+                _TimezonePreferenceTile(),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
           _Section(title: '智能清单'),
           AppCard(
             padding: EdgeInsets.zero,
@@ -199,6 +223,55 @@ class SettingsRoute extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  /// 嘀嗒《01-欢迎/03-常见问题.md:134》「点击「设置」-「日期与时间」-「星期开始于」，
+  /// 你可以选择“周日”、“周一”、或”周六“任意一天为一周的开始。」三档照抄，
+  /// 不自创「跟随系统」或第四档。
+  ///
+  /// 写入的是"点中的那个字面值"，不是从当前值取反 ⇒ 读到的当前值过期也只会
+  /// 让勾选标记画错一帧，不可能把更新的值盖回去（spec.md 四件套 ④）。
+  Future<void> _pickWeekStart(BuildContext context, WidgetRef ref) async {
+    final repo = ref.read(weekStartPreferenceRepositoryProvider);
+    if (repo == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('本地数据库尚未就绪，暂时无法修改星期开始于')));
+      return;
+    }
+    final current = resolveWeekStartFirstDay(ref.read(weekStartProvider));
+    final picked = await showModalBottomSheet<int>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final firstDay in WeekStart.allowedFirstDays)
+              ListTile(
+                key: Key('todo-settings-week-start-option-$firstDay'),
+                title: Text(WeekStart.labelOf(firstDay)),
+                trailing: firstDay == current
+                    ? Icon(
+                        Icons.check,
+                        color: brandColors(context).mutedForeground,
+                      )
+                    : null,
+                onTap: () => Navigator.of(sheetContext).pop(firstDay),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return;
+    try {
+      await repo.save(picked);
+    } catch (_) {
+      // 四件套 ③：保存失败只提示，不改当前生效的档位
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('保存失败，星期开始于仍为当前设置')));
+    }
   }
 
   Future<void> _signOut(BuildContext context, WidgetRef ref) async {
@@ -363,6 +436,48 @@ class _TaskCaptureDefaultsPageState
               ],
             ),
     );
+  }
+}
+
+/// 「设置 → 日期与时间 → 时区」总开关（specs/055 / FL Issue #368）。
+///
+/// 值直接读仓储流的现值、不做乐观更新：写失败时本地状态没变，
+/// 开关因此**自动留在切换前**，这就是四件套里"失败保留已加载数据"的落法。
+class _TimezonePreferenceTile extends ConsumerWidget {
+  const _TimezonePreferenceTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = brandColors(context);
+    final enabled = ref.watch(timezoneEnabledProvider).valueOrNull ?? true;
+    return Material(
+      type: MaterialType.transparency,
+      child: SwitchListTile(
+        key: const ValueKey('settings-timezone-enabled'),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        title: Text('时区', style: TextStyle(color: colors.foreground)),
+        subtitle: Text(
+          '开启后可为任务选择「固定时区」',
+          style: TextStyle(color: colors.mutedForeground),
+        ),
+        value: enabled,
+        onChanged: (value) => _save(context, ref, value),
+      ),
+    );
+  }
+
+  Future<void> _save(BuildContext context, WidgetRef ref, bool value) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final repo = ref.read(timezonePreferenceRepositoryProvider);
+    if (repo == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('时区设置暂不可用')));
+      return;
+    }
+    try {
+      await repo.setEnabled(value);
+    } catch (_) {
+      messenger.showSnackBar(const SnackBar(content: Text('时区设置未保存')));
+    }
   }
 }
 

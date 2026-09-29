@@ -21,7 +21,7 @@ import '../shell/app_dialog.dart';
 import 'task_detail_page.dart';
 import 'task_quick_add_sheet.dart';
 import '../collaboration/task_comments_page.dart';
-import '../collaboration/task_assign_page.dart';
+import 'task_assign_action.dart';
 import '../list/list_actions.dart';
 import '../note/note_page.dart';
 import '../pomodoro/pomodoro_page.dart';
@@ -249,7 +249,7 @@ class _TaskReminderTile extends ConsumerWidget {
       return;
     }
 
-    final draft = await _showReminderEditor(context, task);
+    final draft = await _showReminderEditor(context, ref, task);
     if (draft == null || !context.mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     try {
@@ -277,6 +277,7 @@ class _TaskReminderTile extends ConsumerWidget {
 
   Future<_ReminderDraft?> _showReminderEditor(
     BuildContext context,
+    WidgetRef ref,
     TodoTask task,
   ) async {
     const supportedAnchors = {'ABSOLUTE', 'START', 'DUE', 'END'};
@@ -290,6 +291,20 @@ class _TaskReminderTile extends ConsumerWidget {
     var intervalText = reminder.intervalMinutes?.toString() ?? '30';
     var timeZoneText = reminder.timeZone ?? '';
     String? validationMessage;
+    // 嘀嗒《01-任务/07-固定时间与固定时区》:11「开启后…即可选择「固定时区」或「固定时间」」
+    // ⇒ 「设置 → 日期与时间 → 时区」关掉时这一档不出现。取的是**打开这一刻**的持久值：
+    // `ref.read(...).valueOrNull` 在 provider 首帧还没收到流数据时恒为 null，会退成「开」，
+    // 于是"关掉到底有没有效"取决于用户手速 —— 红测（specs/055 的 FR-2 那条）就是先红在这里。
+    // 只显隐，**不动** fixedTimezone 初值（关掉开关不得把已设的时区改掉，FR-3）。
+    var timezoneCapabilityEnabled = true;
+    try {
+      timezoneCapabilityEnabled = await ref.read(
+        timezoneEnabledProvider.future,
+      );
+    } on Object {
+      // 偏好读不到时按「开」：不因偏好子系统抖动而把既有能力藏掉（与仓储"无记录即开"同口径）。
+    }
+    if (!context.mounted) return null;
     return showDialog<_ReminderDraft>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -417,16 +432,17 @@ class _TaskReminderTile extends ConsumerWidget {
                         }),
                       ),
                     const SizedBox(height: 8),
-                    SwitchListTile(
-                      key: const Key('task-reminder-fixed-timezone'),
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('固定时区'),
-                      value: fixedTimezone,
-                      onChanged: (value) => setDialogState(() {
-                        fixedTimezone = value;
-                        validationMessage = null;
-                      }),
-                    ),
+                    if (timezoneCapabilityEnabled)
+                      SwitchListTile(
+                        key: const Key('task-reminder-fixed-timezone'),
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('固定时区'),
+                        value: fixedTimezone,
+                        onChanged: (value) => setDialogState(() {
+                          fixedTimezone = value;
+                          validationMessage = null;
+                        }),
+                      ),
                     TextFormField(
                       key: const Key('task-reminder-timezone'),
                       initialValue: timeZoneText,
@@ -1286,36 +1302,11 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     if (choice == null || !mounted || widget.taskId != t.id) return;
     final taskServerId = t.serverId;
     if (choice == 'assign') {
-      if (taskServerId == null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('任务尚未同步，无法指派')));
-        return;
-      }
-      final db = ref.read(appDatabaseProvider);
-      if (db == null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('请先登录')));
-        return;
-      }
-      final list = await _resolveList(db, t.listId);
-      if (!mounted || widget.taskId != t.id) return;
-      final listServerId = list?.serverId;
-      if (listServerId == null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('清单尚未同步，无法选择执行人')));
-        return;
-      }
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => TaskAssignPage(
-            taskServerId: taskServerId,
-            listServerId: listServerId,
-            taskTitle: t.title,
-          ),
-        ),
+      await openTaskAssignAction(
+        context,
+        ref,
+        t,
+        stillCurrent: () => mounted && widget.taskId == t.id,
       );
       return;
     }

@@ -864,7 +864,15 @@ class _CalendarHost extends ConsumerWidget {
           ...externalEvents.valueOrNull?.map(_externalEventAsTask) ??
               const <TodoTask>[],
         ];
-        return CalendarView(tasks: tasks);
+        return CalendarView(
+          tasks: tasks,
+          now: ref.watch(currentDateTimeProvider)(),
+          onTaskDateChanged: (task, dueAt) async {
+            final repository = ref.read(taskViewActionRepositoryProvider);
+            if (repository == null) return;
+            await repository.moveCalendarTask(task.id, dueAt: dueAt);
+          },
+        );
       },
     );
   }
