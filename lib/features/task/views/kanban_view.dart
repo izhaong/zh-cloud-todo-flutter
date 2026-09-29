@@ -12,31 +12,30 @@ import '../task_detail_page.dart';
 import '../task_quick_add_sheet.dart';
 import '../task_view_mutation_feedback.dart';
 
-/// M11-B3 看板视图：4 列横向滚动。
+/// M11-B3 看板视图：横向滚动的多列看板。
 ///
-/// 列定义（按 priority 分组）：
-///   0 = 未开始 / 1 = 进行中 / 2 = 紧急 / 3 = 归档（priority=3 + completed）
+/// 两种分组方式（源：嘀嗒《01-任务/07-不同的视图查看任务/02-看板视图：分类管理任务.md》）：
+///   - 传了 `sections`（该清单里有分组）⇒ 一列一个 `TodoTaskSection`，列名取分组名，
+///     末尾再补一列「未分组」兜住 `sectionId` 为空、或指向已删除分组的任务；
+///     跨列拖拽写 `sectionId`（[onTaskSectionMove]），左右移列写分组顺序
+///     （[onSectionOrderChanged]）。对应同页 `:99`-`:101`「- 按主题：英语、政治、专业课…」、
+///     `:129`「都能点击「分组」或者「任务」自由地拖动到相应位置」、
+///     `:141`「点击「分组」右上角的「+」，你可以在分组中添加任务」。
+///   - `sections` 为空 ⇒ 仍是按 priority 的固定四列
+///     （0=未开始 / 1=进行中 / 2=紧急 / 3=归档含已完成），跨列拖拽改 priority
+///     （[onTaskMove]），对应同页 `:64`「你可以点击任务直接拖动到其他分组中」。
 ///
 /// 卡片：title + due 摘要 + priority 标签 + 子任务进度
 /// 点击进 TaskDetailPage；右键走「分配给」（同页 `:175`，动作见 `task_assign_action.dart`）。
 ///
-/// 跨列拖拽**已实现**（`LongPressDraggable` + `DragTarget`，写操作走 `onTaskMove`，
-/// 由 `tasks_by_list_page.dart:380` 落到共享任务 mutation），
-/// 对应嘀嗒《01-任务/07-不同的视图查看任务/02-看板视图：分类管理任务.md》`:64`
-/// 「你可以点击任务直接拖动到其他分组中」。
-///
-/// 与本文件曾有的一处矛盾已纠正：旧注释写着「拖拽改 priority 暂不实现」，与上面的代码相反。
-/// 仍然缺的是**列定义该绑到清单分组**：同页 `:99`-`:101` 说分组可按主题/按进度自定义、
-/// `:115` 说入口在清单的「...」-「管理分组」，而 develop 上「管理分组」的重命名/新建/
-/// 删除/重排已经存在（`tasks_by_list_page.dart:1829`-`:1862`：`todo-section-create` 这个
-/// Key 下的 rename/up/down/delete 分支，操作对象就是 `TodoTaskSection`）——
-/// 只是本视图的列集合不读 `TodoTaskSection`，只认构造参数 `orderedColumnIds` 那一套固定列 id。
-/// 默认值 `['todo','doing','urgent','archive']` 语义是 priority 0/1/2/3；调用方
-/// `tasks_by_list_page.dart:338` 传的是 `boardPreference.orderedColumnIds`，
-/// 用户能重排这四列的顺序，但 `board_preference_repository.dart:58`/`:226` 用
-/// `BoardViewPreference.defaultColumnIds.contains` 把 id 词汇锁死在这四个 ⇒ 建不出新列。
-/// ⇒ 这是纯客户端接线缺口，不需要改契约。
-/// 逐面判定与证据见 `specs/044-kanban-groups/`。
+/// 仍然缺的（逐面判定与证据见 `specs/044-kanban-groups/`）：
+///   - 团队看板三面还没判：同页 `:175` 右键任务「分配给」、`:188` 任务评论、`:198` 任务动态 ——
+///     从看板入口能不能走到，本文件没给结论（列头「···」→ 重命名/新建分组/删除 已在 Issue #315 那轮补上）。
+///   - 分组模式没有「归档」列，也不提供列折叠：折叠状态存不进偏好
+///     （`board_preference_repository.dart` 用 `defaultColumnIds.contains` 把列 id 词汇锁在固定四列）
+///     ⇒ 这一模式不给 `onColumnCollapsedChanged`，菜单里的「折叠<列名>」与 develop 一样灰显。
+///     代价是**已完成任务不再被聚合**，而是留在自己的分组列里；
+///     "拖进/拖出归档来改完成状态"只属于 priority 那四列，分组模式的拖拽只写 `sectionId`。
 class KanbanView extends ConsumerWidget {
   const KanbanView({
     super.key,
@@ -51,6 +50,12 @@ class KanbanView extends ConsumerWidget {
     this.onColumnOrderChanged,
     this.onColumnCollapsedChanged,
     this.onColumnTasksReordered,
+    this.sections = const [],
+    this.onTaskSectionMove,
+    this.onSectionOrderChanged,
+    this.onSectionRename,
+    this.onSectionCreate,
+    this.onSectionDelete,
   });
 
   /// 渲染用的任务列表（已应用 list/filter 的客户端过滤结果）。
@@ -69,51 +74,31 @@ class KanbanView extends ConsumerWidget {
   onColumnCollapsedChanged;
   final Future<void> Function(List<String> taskIds)? onColumnTasksReordered;
 
+  /// 该清单的分组（按 `sortOrder` 升序）。非空即进入「按分组开列」模式。
+  final List<TodoTaskSection> sections;
+  final Future<void> Function(TodoTask task, String? sectionId)?
+  onTaskSectionMove;
+  final Future<void> Function(List<String> orderedSectionIds)?
+  onSectionOrderChanged;
+
+  /// 列头「···」里的「重命名 / 新建分组 / 删除」（嘀嗒同页 `:108`
+  /// 「点击「分组」右上角的「···」，你可以对分组进行重命名、新建和删除等操作。」）。
+  /// 三项都只把**这一列对应的分组**交给调用方，对话框与写库都在调用方那边；
+  /// 「新建分组」是清单级动作，所以「未分组」哨兵列也给它，改名/删除不给。
+  final void Function(TodoTaskSection section)? onSectionRename;
+  final VoidCallback? onSectionCreate;
+  final void Function(TodoTaskSection section)? onSectionDelete;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final columns = <_KanbanColumnData>[
-      _KanbanColumnData(
-        id: 'todo',
-        key: const ValueKey('col-todo'),
-        title: '未开始',
-        color: Colors.blueGrey,
-        priority: 0,
-        completed: false,
-        tasks: tasks.where((t) => t.priority == 0 && !t.completed).toList(),
-      ),
-      _KanbanColumnData(
-        id: 'doing',
-        key: const ValueKey('col-doing'),
-        title: '进行中',
-        color: Colors.blue,
-        priority: 1,
-        completed: false,
-        tasks: tasks.where((t) => t.priority == 1 && !t.completed).toList(),
-      ),
-      _KanbanColumnData(
-        id: 'urgent',
-        key: const ValueKey('col-urgent'),
-        title: '紧急',
-        color: Colors.deepOrange,
-        priority: 2,
-        completed: false,
-        tasks: tasks.where((t) => t.priority == 2 && !t.completed).toList(),
-      ),
-      _KanbanColumnData(
-        id: 'archive',
-        key: const ValueKey('col-archive'),
-        title: '归档',
-        color: Colors.grey,
-        priority: 3,
-        completed: true,
-        tasks: tasks.where((t) => t.completed || t.priority >= 3).toList(),
-      ),
-    ];
-    final byId = {for (final column in columns) column.id: column};
-    final ordered = <_KanbanColumnData>[
-      for (final id in orderedColumnIds) ?byId.remove(id),
-      ...byId.values,
-    ];
+    final sectionMode = sections.isNotEmpty;
+    final sectionById = {for (final section in sections) section.id: section};
+    final columns = sectionMode
+        ? _sectionColumns(sections, tasks)
+        : _priorityColumns(tasks);
+    final ordered = sectionMode
+        ? columns
+        : _applyPreferredOrder(columns, orderedColumnIds);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
@@ -139,38 +124,83 @@ class KanbanView extends ConsumerWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: _KanbanColumn(
                       data: ordered[index],
-                      collapsed: collapsedColumnIds.contains(ordered[index].id),
-                      onCollapsedChanged: onColumnCollapsedChanged == null
+                      collapsed:
+                          !sectionMode &&
+                          collapsedColumnIds.contains(ordered[index].id),
+                      onCollapsedChanged:
+                          sectionMode || onColumnCollapsedChanged == null
                           ? null
                           : (collapsed) => onColumnCollapsedChanged!(
                               ordered[index].id,
                               collapsed,
                             ),
-                      onMoveLeft: onColumnOrderChanged == null || index == 0
-                          ? null
-                          : () => _moveColumn(ordered, index, -1),
+                      onMoveLeft:
+                          _canMoveColumn(
+                            sectionMode: sectionMode,
+                            ordered: ordered,
+                            index: index,
+                            delta: -1,
+                          )
+                          ? () => _moveColumn(ordered, index, -1)
+                          : null,
                       onMoveRight:
-                          onColumnOrderChanged == null ||
-                              index == ordered.length - 1
-                          ? null
-                          : () => _moveColumn(ordered, index, 1),
+                          _canMoveColumn(
+                            sectionMode: sectionMode,
+                            ordered: ordered,
+                            index: index,
+                            delta: 1,
+                          )
+                          ? () => _moveColumn(ordered, index, 1)
+                          : null,
+                      sectionsManaged: sectionMode,
+                      onRenameSection: _sectionCallback(
+                        sectionById[ordered[index].sectionId],
+                        onSectionRename,
+                      ),
+                      onCreateSection: sectionMode ? onSectionCreate : null,
+                      onDeleteSection: _sectionCallback(
+                        sectionById[ordered[index].sectionId],
+                        onSectionDelete,
+                      ),
                       onCardTap: (t) => _openDetail(context, t),
-                      onCardMove: onTaskMove == null
-                          ? null
-                          : (task) => _moveTask(
-                              context,
-                              task,
-                              priority: ordered[index].priority,
-                              completed: ordered[index].completed,
-                            ),
+                      onCardMove: !sectionMode
+                          ? (onTaskMove == null
+                                ? null
+                                : (task) => _moveTask(
+                                    context,
+                                    task,
+                                    write: () => onTaskMove!(
+                                      task,
+                                      ordered[index].priority,
+                                      ordered[index].completed,
+                                    ),
+                                  ))
+                          : (onTaskSectionMove == null
+                                ? null
+                                : (task) => _moveTask(
+                                    context,
+                                    task,
+                                    write: () => onTaskSectionMove!(
+                                      task,
+                                      ordered[index].sectionId,
+                                    ),
+                                  )),
                       onTasksReordered: onColumnTasksReordered == null
                           ? null
                           : (taskIds) => _reorderTasks(context, taskIds),
-                      onAdd:
-                          ordered[index].key == const ValueKey('col-todo') &&
-                              listId != null
-                          ? () => _quickAdd(context, ref, listId!)
-                          : null,
+                      onAdd: !sectionMode
+                          ? (ordered[index].key == const ValueKey('col-todo') &&
+                                    listId != null
+                                ? () => _quickAdd(context, ref, listId!)
+                                : null)
+                          : (listId == null
+                                ? null
+                                : () => _quickAdd(
+                                    context,
+                                    ref,
+                                    listId!,
+                                    sectionId: ordered[index].sectionId,
+                                  )),
                       onAssignCard: (task) =>
                           openTaskAssignAction(context, ref, task),
                     ),
@@ -183,11 +213,141 @@ class KanbanView extends ConsumerWidget {
     );
   }
 
+  /// 「未分组」列的列 id：`TodoTaskSection.id` 是本地 UUID，不会与这个字面量相撞。
+  static const unsectionedColumnId = 'unsectioned';
+
+  /// 按 priority 分组的固定四列（清单没有分组时的默认分组方式）。
+  static List<_KanbanColumnData> _priorityColumns(List<TodoTask> tasks) => [
+    _KanbanColumnData(
+      id: 'todo',
+      key: const ValueKey('col-todo'),
+      title: '未开始',
+      color: Colors.blueGrey,
+      priority: 0,
+      completed: false,
+      tasks: tasks.where((t) => t.priority == 0 && !t.completed).toList(),
+    ),
+    _KanbanColumnData(
+      id: 'doing',
+      key: const ValueKey('col-doing'),
+      title: '进行中',
+      color: Colors.blue,
+      priority: 1,
+      completed: false,
+      tasks: tasks.where((t) => t.priority == 1 && !t.completed).toList(),
+    ),
+    _KanbanColumnData(
+      id: 'urgent',
+      key: const ValueKey('col-urgent'),
+      title: '紧急',
+      color: Colors.deepOrange,
+      priority: 2,
+      completed: false,
+      tasks: tasks.where((t) => t.priority == 2 && !t.completed).toList(),
+    ),
+    _KanbanColumnData(
+      id: 'archive',
+      key: const ValueKey('col-archive'),
+      title: '归档',
+      color: Colors.grey,
+      priority: 3,
+      completed: true,
+      tasks: tasks.where((t) => t.completed || t.priority >= 3).toList(),
+    ),
+  ];
+
+  /// 按清单分组开列：一列一个 `TodoTaskSection`，末尾补一列「未分组」。
+  ///
+  /// `sectionId` 指向已被删除（或属于别的清单）的分组的任务也落在「未分组」列，
+  /// 不会因为列不存在而从看板上消失。
+  static List<_KanbanColumnData> _sectionColumns(
+    List<TodoTaskSection> sections,
+    List<TodoTask> tasks,
+  ) {
+    final knownIds = {for (final section in sections) section.id};
+    String columnIdOf(TodoTask task) => knownIds.contains(task.sectionId)
+        ? task.sectionId!
+        : unsectionedColumnId;
+    List<TodoTask> inColumn(String columnId) => [
+      for (final task in tasks)
+        if (columnIdOf(task) == columnId) task,
+    ];
+    return [
+      for (final section in sections)
+        _KanbanColumnData(
+          id: section.id,
+          key: ValueKey('col-${section.id}'),
+          title: section.name,
+          color: Colors.blueGrey,
+          priority: 0,
+          completed: false,
+          tasks: inColumn(section.id),
+          sectionId: section.id,
+        ),
+      _KanbanColumnData(
+        id: unsectionedColumnId,
+        key: const ValueKey('col-unsectioned'),
+        title: '未分组',
+        color: Colors.grey,
+        priority: 0,
+        completed: false,
+        tasks: inColumn(unsectionedColumnId),
+      ),
+    ];
+  }
+
+  static List<_KanbanColumnData> _applyPreferredOrder(
+    List<_KanbanColumnData> columns,
+    List<String> orderedColumnIds,
+  ) {
+    final byId = {for (final column in columns) column.id: column};
+    return <_KanbanColumnData>[
+      for (final id in orderedColumnIds) ?byId.remove(id),
+      ...byId.values,
+    ];
+  }
+
+  /// 该列能不能往 `delta` 方向移。分组模式下「未分组」是哨兵列，
+  /// 既自己不可移动（它不在 `TodoTaskSection` 里），也不能被换进分组序列。
+  bool _canMoveColumn({
+    required bool sectionMode,
+    required List<_KanbanColumnData> ordered,
+    required int index,
+    required int delta,
+  }) {
+    final target = index + delta;
+    if (target < 0 || target >= ordered.length) return false;
+    if (!sectionMode) return onColumnOrderChanged != null;
+    if (onSectionOrderChanged == null) return false;
+    return ordered[index].sectionId != null &&
+        ordered[target].sectionId != null;
+  }
+
+  /// 「未分组」哨兵列在 `sectionById` 里查不到 ⇒ 返回 null，菜单里那一项就灰显。
+  static VoidCallback? _sectionCallback<T>(
+    T? section,
+    void Function(T)? callback,
+  ) {
+    if (section == null || callback == null) return null;
+    return () => callback(section);
+  }
+
   Future<void> _moveColumn(
     List<_KanbanColumnData> columns,
     int index,
     int delta,
   ) {
+    final sectionId = columns[index].sectionId;
+    if (sectionId != null) {
+      final ordered = [
+        for (final column in columns)
+          if (column.sectionId != null) column.sectionId!,
+      ];
+      final from = ordered.indexOf(sectionId);
+      ordered.removeAt(from);
+      ordered.insert(from + delta, sectionId);
+      return onSectionOrderChanged!(ordered);
+    }
     final next = columns.map((column) => column.id).toList();
     final target = index + delta;
     final moved = next.removeAt(index);
@@ -212,14 +372,14 @@ class KanbanView extends ConsumerWidget {
     showTaskDetailSheet(context, t.id);
   }
 
+  /// 跨列拖拽的唯一出口：失败反馈与「重试」都走这一条，改 priority 与改分组共用。
   Future<void> _moveTask(
     BuildContext context,
     TodoTask task, {
-    required int priority,
-    required bool completed,
+    required Future<void> Function() write,
   }) async {
     try {
-      await onTaskMove!(task, priority, completed);
+      await write();
     } catch (error) {
       if (context.mounted) {
         final readOnly = isTaskViewReadOnlyError(error);
@@ -230,14 +390,7 @@ class KanbanView extends ConsumerWidget {
                 ? null
                 : SnackBarAction(
                     label: '重试',
-                    onPressed: () {
-                      _moveTask(
-                        context,
-                        task,
-                        priority: priority,
-                        completed: completed,
-                      );
-                    },
+                    onPressed: () => _moveTask(context, task, write: write),
                   ),
           ),
         );
@@ -261,12 +414,13 @@ class KanbanView extends ConsumerWidget {
   static Future<void> _quickAdd(
     BuildContext context,
     WidgetRef ref,
-    String listId,
-  ) async {
+    String listId, {
+    String? sectionId,
+  }) async {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => TaskQuickAddSheet(listId: listId),
+      builder: (_) => TaskQuickAddSheet(listId: listId, sectionId: sectionId),
     );
   }
 }
@@ -280,6 +434,7 @@ class _KanbanColumnData {
     required this.priority,
     required this.completed,
     required this.tasks,
+    this.sectionId,
   });
   final String id;
   final Key key;
@@ -288,6 +443,9 @@ class _KanbanColumnData {
   final int priority;
   final bool completed;
   final List<TodoTask> tasks;
+
+  /// 非空表示这一列就是清单分组 `TodoTaskSection`；「未分组」哨兵列为 null。
+  final String? sectionId;
 }
 
 class _KanbanColumn extends StatelessWidget {
@@ -301,6 +459,10 @@ class _KanbanColumn extends StatelessWidget {
     this.onTasksReordered,
     this.onCardMove,
     this.onAdd,
+    this.sectionsManaged = false,
+    this.onRenameSection,
+    this.onCreateSection,
+    this.onDeleteSection,
     required this.onAssignCard,
   });
 
@@ -313,6 +475,12 @@ class _KanbanColumn extends StatelessWidget {
   final Future<void> Function(List<String> taskIds)? onTasksReordered;
   final Future<void> Function(TodoTask task)? onCardMove;
   final VoidCallback? onAdd;
+
+  /// 这一列是不是「按分组开列」那套分组方式；决定列头「···」要不要列分组管理三项。
+  final bool sectionsManaged;
+  final VoidCallback? onRenameSection;
+  final VoidCallback? onCreateSection;
+  final VoidCallback? onDeleteSection;
 
   /// 嘀嗒《02-看板视图：分类管理任务》`:175`「在看板视图右键任务，选择「分配给」即可。」
   /// 必填：这一列只要有卡片就得能指派，留成可空就会多出一道永远走不到的判空。
@@ -398,18 +566,29 @@ class _KanbanColumn extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
-                data.title,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: colors.foreground,
+              // 分组名由用户输入（长度不设视觉上限），列宽固定 260：
+              // 不给它 flex，长名字在 320px 面 + 1.3 倍字号下实测溢出过（短名字不溢出），
+              // 所以只能省略号截断。
+              Expanded(
+                child: Text(
+                  data.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: colors.foreground,
+                  ),
                 ),
               ),
-              const Spacer(),
               _ColumnCount(count: data.tasks.length, color: data.color),
               PopupMenuButton<String>(
-                tooltip: '调整${data.title}列',
+                // 分组模式下这一枚「···」管的是分组本身，tooltip 照抄清单分组条那枚
+                // （`todo-section-menu-*` 的 `管理分组 <名称>`）。「未分组」不是分组、
+                // 改名与删除对它都不成立 ⇒ 仍叫 `调整未分组列`；固定四列也一样。
+                tooltip: sectionsManaged && data.sectionId != null
+                    ? '管理分组 ${data.title}'
+                    : '调整${data.title}列',
                 itemBuilder: (_) => [
                   PopupMenuItem(
                     value: 'left',
@@ -426,16 +605,43 @@ class _KanbanColumn extends StatelessWidget {
                     enabled: onCollapsedChanged != null,
                     child: Text('折叠${data.title}'),
                   ),
+                  // 文案照抄清单侧既有说法：`重命名`/`删除` 取自分组条那枚
+                  // `todo-section-menu-*` 的两个 PopupMenuItem，`新建分组` 取自 appbar 那枚
+                  // IconButton 的 tooltip（`todo-section-create` 那枚 chip 只写「分组」，没有 tooltip）。
+                  if (sectionsManaged)
+                    PopupMenuItem(
+                      value: 'rename-section',
+                      enabled: onRenameSection != null,
+                      child: const Text('重命名'),
+                    ),
+                  if (sectionsManaged)
+                    PopupMenuItem(
+                      value: 'create-section',
+                      enabled: onCreateSection != null,
+                      child: const Text('新建分组'),
+                    ),
+                  if (sectionsManaged)
+                    PopupMenuItem(
+                      value: 'delete-section',
+                      enabled: onDeleteSection != null,
+                      child: Text(
+                        '删除',
+                        style: TextStyle(color: colors.destructive),
+                      ),
+                    ),
                 ],
                 onSelected: (value) {
                   if (value == 'left') onMoveLeft?.call();
                   if (value == 'right') onMoveRight?.call();
                   if (value == 'collapse') onCollapsedChanged?.call(true);
+                  if (value == 'rename-section') onRenameSection?.call();
+                  if (value == 'create-section') onCreateSection?.call();
+                  if (value == 'delete-section') onDeleteSection?.call();
                 },
               ),
               if (onAdd != null)
                 IconButton(
-                  tooltip: '新建任务',
+                  tooltip: '在${data.title}新建任务',
                   icon: const Icon(Icons.add, size: 18),
                   onPressed: onAdd,
                 ),

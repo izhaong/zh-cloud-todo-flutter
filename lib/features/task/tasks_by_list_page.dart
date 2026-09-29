@@ -367,6 +367,35 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         return KanbanView(
           tasks: items,
           listId: listId,
+          sections: taskSections,
+          onTaskSectionMove: (task, sectionId) async {
+            final repository = ref.read(taskViewActionRepositoryProvider);
+            if (repository == null) return;
+            await repository.moveKanbanTaskToSection(
+              task.id,
+              sectionId: sectionId,
+            );
+          },
+          onSectionRename: _renameTaskSection,
+          onSectionCreate: _createTaskSection,
+          onSectionDelete: _deleteTaskSection,
+          onSectionOrderChanged: listId == null
+              ? null
+              : (ordered) async {
+                  final repository = ref.read(taskSectionRepositoryProvider);
+                  if (repository == null) return;
+                  try {
+                    await repository.reorder(
+                      listId: listId,
+                      orderedSectionIds: ordered,
+                    );
+                  } catch (_) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: Text('分组排序失败，请重试')));
+                  }
+                },
           orderedColumnIds: boardPreference.orderedColumnIds,
           collapsedColumnIds: boardPreference.collapsedColumnIds,
           onColumnOrderChanged: listId == null

@@ -9,10 +9,18 @@ import '../tag/tag_color.dart';
 
 /// M11-B2 任务快速添加 bottom sheet。
 class TaskQuickAddSheet extends ConsumerStatefulWidget {
-  const TaskQuickAddSheet({super.key, required this.listId, this.parentTaskId});
+  const TaskQuickAddSheet({
+    super.key,
+    required this.listId,
+    this.parentTaskId,
+    this.sectionId,
+  });
 
   final String listId;
   final String? parentTaskId;
+
+  /// 非空时新建的任务直接落在该清单分组里（看板分组列的「+」）。
+  final String? sectionId;
 
   @override
   ConsumerState<TaskQuickAddSheet> createState() => _TaskQuickAddSheetState();
@@ -78,6 +86,7 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
         final task = await repo.create(
           listId: widget.listId,
           parentTaskId: widget.parentTaskId,
+          sectionId: widget.sectionId,
           title: text,
           priority: _priorityOverride ?? defaults?.defaultPriority ?? 0,
           dueAt: dueAt,
@@ -144,6 +153,7 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
             await repo.create(
               listId: widget.listId,
               parentTaskId: widget.parentTaskId,
+              sectionId: widget.sectionId,
               title: seed.title,
               description: seed.description,
               priority: seed.priority,

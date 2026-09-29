@@ -458,6 +458,47 @@ class TaskViewActionRepository {
     });
   }
 
+  /// 看板跨列写入「清单分组」：只改 `sectionId`，不动 priority / completed。
+  /// 嘀嗒看板的列是清单内的分组（《02-看板视图：分类管理任务.md》`:99`-`:101`
+  /// 「- 按主题：英语、政治、专业课…」），与 [moveKanbanTask] 的 priority 列是两种分组方式。
+  Future<void> moveKanbanTaskToSection(
+    String taskId, {
+    required String? sectionId,
+  }) async {
+    await _db.transaction(() async {
+      await _requireWritableTask(taskId);
+      if (sectionId != null) {
+        final task = await (_db.select(
+          _db.todoTasks,
+        )..where((row) => row.id.equals(taskId))).getSingle();
+        final section = await (_db.select(
+          _db.todoTaskSections,
+        )..where((row) => row.id.equals(sectionId))).getSingleOrNull();
+        if (section == null || section.listId != task.listId) {
+          throw ArgumentError.value(sectionId, 'sectionId', '分组必须属于任务所在清单');
+        }
+      }
+      await (_db.update(
+        _db.todoTasks,
+      )..where((row) => row.id.equals(taskId))).write(
+        TodoTasksCompanion(
+          sectionId: Value(sectionId),
+          updatedAt: Value(DateTime.now()),
+        ),
+      );
+      final task = await (_db.select(
+        _db.todoTasks,
+      )..where((row) => row.id.equals(taskId))).getSingle();
+      await _queue.enqueue(
+        entity: SyncEntities.task,
+        op: SyncOps.upsert,
+        localId: task.id,
+        serverId: task.serverId,
+        payload: task.toJson(),
+      );
+    });
+  }
+
   /// 四象限拖动换象限的回写（嘀嗒《02-如何编辑四象限规则》:25/:44）。
   ///
   /// `dueAt == null` 表示「这一档不改时间」——组合1 只回写优先级，
