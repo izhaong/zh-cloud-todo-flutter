@@ -154,6 +154,7 @@ class SettingsRoute extends ConsumerWidget {
                   colors: colors,
                   onTap: () => _pickWeekStart(context, ref),
                 ),
+                _TimezonePreferenceTile(),
               ],
             ),
           ),
@@ -435,6 +436,48 @@ class _TaskCaptureDefaultsPageState
               ],
             ),
     );
+  }
+}
+
+/// 「设置 → 日期与时间 → 时区」总开关（specs/055 / FL Issue #368）。
+///
+/// 值直接读仓储流的现值、不做乐观更新：写失败时本地状态没变，
+/// 开关因此**自动留在切换前**，这就是四件套里"失败保留已加载数据"的落法。
+class _TimezonePreferenceTile extends ConsumerWidget {
+  const _TimezonePreferenceTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = brandColors(context);
+    final enabled = ref.watch(timezoneEnabledProvider).valueOrNull ?? true;
+    return Material(
+      type: MaterialType.transparency,
+      child: SwitchListTile(
+        key: const ValueKey('settings-timezone-enabled'),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        title: Text('时区', style: TextStyle(color: colors.foreground)),
+        subtitle: Text(
+          '开启后可为任务选择「固定时区」',
+          style: TextStyle(color: colors.mutedForeground),
+        ),
+        value: enabled,
+        onChanged: (value) => _save(context, ref, value),
+      ),
+    );
+  }
+
+  Future<void> _save(BuildContext context, WidgetRef ref, bool value) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final repo = ref.read(timezonePreferenceRepositoryProvider);
+    if (repo == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('时区设置暂不可用')));
+      return;
+    }
+    try {
+      await repo.setEnabled(value);
+    } catch (_) {
+      messenger.showSnackBar(const SnackBar(content: Text('时区设置未保存')));
+    }
   }
 }
 
