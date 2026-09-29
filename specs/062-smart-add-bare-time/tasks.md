@@ -236,12 +236,12 @@ NIT-5 里还有一句要紧的：`gh` 不在本机，所以第 1 轮无法直读
 
 | 门禁 | 读数（各附 `日志文件:行号`，全文行数即该锚点） | rc |
 | --- | --- | --- |
-| 1 `git diff --check origin/develop...HEAD` | 空输出（`/tmp/r136/g411/g1-check.log` 全文 0 行） | rc=0 |
-| 2 `dart format --output=none --set-exit-if-changed`（本 PR 两个显式 dart 文件） | `Formatted 2 files (0 changed) in 0.01 seconds.`（`g2-format.log:1`，全文 1 行） | rc=0 |
-| 3 `flutter analyze` | `No issues found! (ran in 3.6s)`（`g3-analyze.log:66`，全文 66 行） | rc=0 |
-| 4 `flutter test --tags golden` | `00:05 +9: All tests passed!`（`g4-golden.log:75`，全文 75 行；基线 9 张，**未重录**） | rc=0 |
-| 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `03:06 +1207 ~26: All tests passed!`（`g5-full.log:1496`，全文 1496 行） | rc=0 |
-| 6 `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web`（`g6-build.log:81`，全文 81 行） | rc=0 |
+| 1 `git diff --check origin/develop...HEAD` | 空输出（`/tmp/r136/g411/g1-check.log:0`，全文 0 行） | rc=0 |
+| 2 `dart format --output=none --set-exit-if-changed`（本 PR 两个显式 dart 文件） | `Formatted 2 files (0 changed) in 0.01 seconds.`（`/tmp/r136/g411/g2-format.log:1`，全文 1 行） | rc=0 |
+| 3 `flutter analyze` | `No issues found! (ran in 3.6s)`（`/tmp/r136/g411/g3-analyze.log:66`，全文 66 行） | rc=0 |
+| 4 `flutter test --tags golden` | `00:05 +9: All tests passed!`（`/tmp/r136/g411/g4-golden.log:75`，全文 75 行；基线 9 张，**未重录**） | rc=0 |
+| 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `03:06 +1207 ~26: All tests passed!`（`/tmp/r136/g411/g5-full.log:1496`，全文 1496 行） | rc=0 |
+| 6 `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web`（`/tmp/r136/g411/g6-build.log:81`，全文 81 行） | rc=0 |
 
 `+1207` 比第四节记的 `+898` 多 309 条（`echo $((1207-898))`）。差值不是本 PR 新增：本 PR 在 test 侧只带一个文件
 （复算 `git diff --name-only origin/develop...HEAD | grep test/` ⇒ 仅 `test/nlp_date_dated_word_minute_test.dart`），
