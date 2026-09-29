@@ -10,12 +10,13 @@
       绿 = `flutter test test/features/countdown/countdown_unit_toggle_test.dart` ⇒ `00:00 +5: All tests passed!`
 - [x] 反向探针：上面那次「摘实现」即探针（4 条切换用例红），`cp` 还原后 `cmp -s` 判 **byte-identical OK**
 - [x] 换算由用例钉死：1095 天 → 3 年 / 156 周；2000 天 → 5 年 / 285 周（年 = 天 ~/ 365、周 = 天 ~/ 7）
-- [x] 行级 Key 的写法有仓内先例，不是本轮发明的：`origin/develop` 上已有
-      `note_page.dart:188` `ValueKey('todo-note-${note.id}')`、`tasks_by_list_page.dart:1710` `Key('todo-task-group-${entry.id}')` 等
+- [x] 行级 Key 的写法有仓内先例，不是本轮发明的。锚点基准 FL `origin/develop` = `5a831a19e`，复验：
+      `git show origin/develop:lib/features/note/note_page.dart | grep -n todo-note-` ⇒ `note_page.dart:189` `ValueKey('todo-note-${note.id}')`；
+      `git show origin/develop:lib/features/task/tasks_by_list_page.dart | grep -n todo-task-group-` ⇒ `:1839` 与 `:1879` 两处 `Key('todo-task-group-${entry.id}')`
 - [x] 复核手段替换：`claude` CLI 本机不可用（`unrecognized_model`），改由本会话**只读子代理**审 FR-001..FR-006，
       要求逐条给 VERIFIED / FALSIFIED / UNPROVEN 并给命令与决定性输出行，末尾必须落 `VERDICT`
 
-## 门禁（最终状态 `9d1de85` 一次跑完，日志 `/tmp/r41_gates3.log`）
+## 门禁（最终状态 `9d1de85` 一次跑完；当时的 `/tmp/r41_gates*.log` 已随 /tmp 清理丢失 ⇒ 下表数值是那一次运行的原样记录，**不能照路径复验**）
 | 门禁 | 结果 |
 | --- | --- |
 | 1 `git diff --check` | `gate1 rc=0`（区间 `origin/develop...HEAD`） |
@@ -26,7 +27,7 @@
 - 同一次构建输出里另有一句 wasm 提示（`Consider addressing these issues to enable wasm builds`）—— **那是未开启 wasm 目标时的提示，不是失败**：`✓ Built build/web` 且 `gate6 rc=0`。
 
 
-run #1 日志 `/tmp/r41_gates.log`（`gate3 rc=1` 那遍）、run #2 `/tmp/r41_gates2.log`、**run #3 `/tmp/r41_gates3.log` 才是最终状态 `9d1de85` 的六项一次性记录**。
+run #1（`gate3 rc=1` 那遍）、run #2、run #3 三份日志都写在 `/tmp` 下，**现已全部丢失**；run #3 才是最终状态 `9d1de85` 的六项一次性记录 ⇒ 这些数值目前只剩「文档自述」这一种载体，属真实的可复验性欠债，已列入「仍缺」。
 
 ## 复核（第 1 轮：VERDICT: FAIL → 逐条复验后修复）
 只读子代理审 FR-001..FR-006，结论 **FAIL**。5 条发现逐条对照源码复验：
@@ -51,7 +52,9 @@ run #1 日志 `/tmp/r41_gates.log`（`gate3 rc=1` 那遍）、run #2 `/tmp/r41_g
       但如果产品要求持久化，需要新增契约列（另开 `zh-cloud-service` Issue）。
 - [ ] 同页其余四面（①样式入口与样式列表、②自定义颜色、③自定义图片、⑤备注）未动：
       ① ③ 的契约列已有（`style`、`backgroundImage`）只是 UI 没接；② ⑤ 缺列 ⇒ 已开 `zh-cloud-service` Issue **#280**。
-- [ ] 矩阵第 49 行：合并后把 ④ 的「已实现待合并 !303」换成合并 SHA，并复校本 PR 改过的 `countdown_page.dart` 行号。
+- [x] 矩阵第 49 行：合并后把 ④ 的「已实现待合并 !303」换成合并 SHA —— 已完成，docs `origin/develop` 该行现引 `90320057c`（`!303`）；
+      「复校本 PR 改过的 `countdown_page.dart` 行号」也已完成：`spec.md` 逐面判定表已按 FL `origin/develop` = `5a831a19e` 重新量过（见「设置样式入口 + 超多样式」行）。
+- [ ] 门禁读数的**唯一载体是本文档**：`ls -l /tmp/r41_gates.log /tmp/r41_gates2.log /tmp/r41_gates3.log` 现跑 ⇒ 三个路径都报 `No such file or directory` ⇒ run #1/#2/#3 的日志已随 /tmp 清理丢失；`+714 ~26`、`+898 ~26`、`Formatted 2 files (0 changed)` 等数值因此都无法照日志复验，只能在当前 develop 上重跑一遍才能重新取证。下一轮若再动这一页，应连带把六项重跑到最终字节并留日志。
 
 ## 合并轮写回（!303 → develop `90320057c`，2026-09-24）
 冲突形态：`countdown_page.dart` 同一组件被两侧重写（本分支按 117 行的旧行体写，develop 已把整行搬进
@@ -63,7 +66,7 @@ run #1 日志 `/tmp/r41_gates.log`（`gate3 rc=1` 那遍）、run #2 `/tmp/r41_g
 
 | 门禁 | 读数 |
 | --- | --- |
-| 树等价 | `git rev-parse origin/develop^{tree}` == `9032005^{tree}` == `ed53c8c^{tree}` == `d6c5504d50d5be3b9f4d941400d25f148ded9184` |
+| 树等价（**历史快照**，只对 `90320057c` 那次合并成立） | `git rev-parse 9032005^{tree} ed53c8c^{tree}` 现跑同为 `d6c5504d50d5be3b9f4d941400d25f148ded9184`（commit 不可变 ⇒ 恒成立）；合并那一刻 `origin/develop^{tree}` 亦为此值，但 develop 此后又前移，现 `5a831a19e` 的 tree 是 `1722c200842f7b625d3ca0fd43b4b9d8af77a54c`（不等） |
 | 1 `git diff --check` | rc=0 |
 | 2 `dart format --output=none --set-exit-if-changed`（本轮 2 个显式 dart 文件） | `Formatted 2 files (0 changed)`、rc=0 |
 | 3 `flutter analyze` | `No issues found!`、rc=0 |
@@ -78,7 +81,9 @@ run #1 日志 `/tmp/r41_gates.log`（`gate3 rc=1` 那遍）、run #2 `/tmp/r41_g
       `_CountdownTile` 的语义归属与 develop 行体的复用。该缺口不得当成已通过，下一轮若再动这一页应连带补审。
 - [ ] `spec.md` 与代码的三处不一致（前缀「已」→「已过」、`showAge` 门控、读屏 label 措辞）本轮按「代码为准」修订了文档；
       反过来说：**修订前那三处文档误导过任何人**，改动记录只写在文档里，没有回查其它引用点。
-      回查命令（已跑，**除本文件那两处刻意保留的旧读数外 0 命中**；正对照 `已过` 在 specs 命中 9 处，证明搜索路径有效）：
-      `rg -n '已 [0-9]+ 天|已 [0-9]+ 年|点卡片即切换' specs/`（todo-flutter）与
-      `git grep -n -E '已 [0-9]+ 天|已 [0-9]+ 年|点卡片即切换' origin/develop -- todo`（docs，0 命中；
-      正对照 `已过` 在矩阵命中 3 处）。
+      回查命令与现跑读数（2026-09-30 在 FL 工作树跑）：
+      `rg -n '已 [0-9]+ 天|已 [0-9]+ 年|点卡片即切换' specs/` ⇒ **4 行**：本文件「已证实」首条刻意保留的旧读数 2 行 + 下面两条命令自身各 1 行（模式串写进了正文 ⇒ 自匹配）。扣掉这 4 行后 **0 命中** ⇒ 旧措辞没有残留到其它 spec。
+      正对照 `git grep -c 已过 -- specs/ | wc -l` = **7 个文件**（证明搜索路径有效）。刻意不记「`已过` 命中 N 处」这种出现数：
+      本段自己的命令里就含该词，抄进去的数会被本次写入顶掉（上一版记的「9 处」在任何口径下都复现不出，已作废）。
+      docs 侧 `git grep -n -E '已 [0-9]+ 天|已 [0-9]+ 年|点卡片即切换' origin/develop -- todo` = **0 命中**；
+      正对照 `git -c core.quotePath=false show 'origin/develop:todo/01_需求阶段/对照矩阵/dida-parity-matrix.md' | grep -o 已过 | wc -l` = **3**。
