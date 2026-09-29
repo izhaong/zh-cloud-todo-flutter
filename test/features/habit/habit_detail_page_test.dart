@@ -14,6 +14,7 @@ import 'package:zh_cloud_todo_flutter/state/efficiency_providers.dart';
 /// 「点击习惯进入详情页，点击右上角「...」，可进行编辑、开始专注、分享、归档或删除等操作。」
 /// 本文件钉的就是这条主路的「编辑」「删除」两半。
 const _pagePath = '/todo/habit/page';
+const _createPath = '/todo/habit/create';
 const _updatePath = '/todo/habit/update';
 const _deletePath = '/todo/habit/delete';
 const _checkInPath = '/todo/habit/check-in';
@@ -32,6 +33,7 @@ class FakeHabitServer {
   List<RequestOptions> get writeRequests => requests
       .where(
         (r) =>
+            r.path.endsWith(_createPath) ||
             r.path.endsWith(_updatePath) ||
             r.path.endsWith(_deletePath) ||
             r.path.endsWith(_checkInPath),
@@ -58,6 +60,12 @@ class FakeHabitServer {
                 'total': _deleted ? 0 : 1,
               }),
             );
+          }
+          if (path.endsWith(_createPath)) {
+            // 新建也要被"真的接住"：以前这里落到 handler.next() ⇒ 请求发不出去、
+            // 走的是 catch 分支，于是「FR-5 新建带齐 7 个字段」其实是在一次失败里读的请求体。
+            if (failWrites) return handler.resolve(_err(options));
+            return handler.resolve(_ok(options, true));
           }
           if (path.endsWith(_updatePath)) {
             if (failWrites) return handler.resolve(_err(options));
@@ -159,6 +167,31 @@ Future<void> openEditorFromDetail(WidgetTester tester) async {
   await tester.tap(find.text('编辑'));
   await tester.pumpAndSettle();
 }
+
+/// Issue #308 那 6 条负路径都发生在**新建**这张表单上，统一从这里进弹层。
+/// 返回假服务，让每条用例都能查「到底发没发写请求」——不这么判就成了只看界面的空断言。
+Future<FakeHabitServer> pumpNewHabitSheet(
+  WidgetTester tester, {
+  bool failWrites = false,
+}) async {
+  final server = FakeHabitServer(failWrites: failWrites);
+  await pumpHabits(tester, server: server);
+  await tester.tap(find.byIcon(Icons.add));
+  await tester.pumpAndSettle();
+  expect(
+    find.byKey(const Key('habit-editor-sheet')),
+    findsOneWidget,
+    reason: '前提不成立：新建表单没打开，后面每条断言都是在空转',
+  );
+  return server;
+}
+
+/// 弹层里的东西一律按 surface 限定后再找（`inSurface` 的既有口径）。
+Finder sheetChild(Finder child) =>
+    inSurface(const Key('habit-editor-sheet'), child);
+
+Finder sheetField(String keyName) =>
+    sheetChild(find.byKey(Key('habit-editor-$keyName')));
 
 void main() {
   test('HabitDto 解析契约已有的 icon / reminderAt / sortOrder（epoch 毫秒）', () {
@@ -591,6 +624,20 @@ void main() {
         'sortOrder': 0,
       },
     );
+    // 请求体对不等于"这一面走得通"：还得看得见成功。基线（`9032005`，本文件 18 条）上
+    // 把 `/habit/create` 的接住抽掉照样全绿 —— create 落进 catch 分支也会留下同样的请求体，
+    // 而旧用例只断言请求体。补上下面两条后，同一处抽掉（探针 P0）就变红：
+    // `Actual: Found 1 widget with key <'habit-editor-sheet'>`。
+    expect(
+      find.byKey(const Key('habit-editor-sheet')),
+      findsNothing,
+      reason: '创建成功却不收弹层 ⇒ 用户以为没保存上，会再点一次写两条习惯',
+    );
+    expect(
+      find.textContaining('保存失败'),
+      findsNothing,
+      reason: '假服务已回 200，仍显示失败说明这条用例分不出成功与失败',
+    );
   });
 
   testWidgets('名称留空：错误落在字段上，且不发任何写请求', (tester) async {
@@ -662,6 +709,184 @@ void main() {
       closeTo(13, 0.001),
     );
     expect(tester.takeException(), isNull, reason: '删除确认框在 320px + 1.3 下溢出');
+  });
+
+  // ===== Issue #308：从关掉的 !295 转出来的 6 条负路径，逐条在 develop 上补回 =====
+  // 已有正路径与「名称留空」两条在上方，这里不重复写。
+
+  for (final input in const ['0', '-3', '', 'abc']) {
+    testWidgets('目标填「$input」：原因落在字段上并在弹层里可见，且一条写请求都不发', (tester) async {
+      final server = await pumpNewHabitSheet(tester);
+      await tester.enterText(sheetField('name'), '晨跑');
+      await tester.enterText(sheetField('target'), input);
+      await tester.tap(sheetChild(find.text('保存')));
+      await tester.pumpAndSettle();
+
+      final field = tester.widget<TextField>(sheetField('target'));
+      expect(field.decoration?.errorText, '目标至少为 1');
+      expect(
+        sheetChild(find.text('目标至少为 1')),
+        findsOneWidget,
+        reason: '提示必须在弹层自己的子树里：根 ScaffoldMessenger 会被模态路由盖住',
+      );
+      expect(server.writeRequests, isEmpty, reason: '校验没过就不该写库（create 也算写请求）');
+      expect(
+        find.byKey(const Key('habit-editor-sheet')),
+        findsOneWidget,
+        reason: '校验没过不该把用户正在填的表单关掉',
+      );
+    });
+  }
+
+  testWidgets('新建失败：名称、频率、目标全都留着，不用重填', (tester) async {
+    final server = await pumpNewHabitSheet(tester, failWrites: true);
+    await tester.enterText(sheetField('name'), '晨跑');
+    await tester.tap(find.byKey(const Key('habit-editor-period-2')));
+    await tester.enterText(sheetField('target'), '5');
+    await tester.pumpAndSettle();
+    await tester.tap(sheetChild(find.text('保存')));
+    await tester.pumpAndSettle();
+
+    expect(
+      server.writeRequests.where((r) => r.path.endsWith(_createPath)),
+      hasLength(1),
+      reason: '前提：这一次真的把 create 发出去了（否则"失败后保留输入"是空断言）',
+    );
+    expect(
+      sheetChild(find.textContaining('保存失败')),
+      findsOneWidget,
+      reason: '失败必须在弹层内可见，不能悄悄回到列表',
+    );
+    expect(
+      tester.widget<TextField>(sheetField('name')).controller!.text,
+      '晨跑',
+      reason: '失败后清空输入等于要用户重填一遍',
+    );
+    expect(
+      tester.widget<TextField>(sheetField('target')).controller!.text,
+      '5',
+    );
+    expect(
+      tester
+          .widget<ChoiceChip>(find.byKey(const Key('habit-editor-period-2')))
+          .selected,
+      isTrue,
+      reason: '频率档位的回显要用 selected 判，ChoiceChip 的文案本来就常驻',
+    );
+    expect(
+      find.byKey(const Key('habit-editor-sheet')),
+      findsOneWidget,
+      reason: '失败不该关闭表单',
+    );
+  });
+
+  testWidgets('读屏：「频率」组名与「目标」字段各自念得出来（不是只有图标/色块有标签）', (tester) async {
+    final handle = tester.ensureSemantics();
+    try {
+      await pumpNewHabitSheet(tester);
+      expect(
+        sheetChild(find.bySemanticsLabel('频率')),
+        findsOneWidget,
+        reason: '三档 chip 只有文案，组名念不出来就不知道这一组在选什么',
+      );
+      expect(
+        sheetChild(find.bySemanticsLabel('目标')),
+        findsOneWidget,
+        reason: '数字输入框没有可读标签时，读屏只会念"编辑框"',
+      );
+    } finally {
+      handle.dispose();
+    }
+  });
+
+  testWidgets('新建默认值是「每天 / 1 次」，且不带上一条习惯的回填', (tester) async {
+    await pumpNewHabitSheet(tester);
+    for (final period in const [1, 2, 3]) {
+      expect(
+        tester
+            .widget<ChoiceChip>(find.byKey(Key('habit-editor-period-$period')))
+            .selected,
+        period == 1,
+        reason: '只有「每天」该选中；按 selected 判才不会被常驻文案蒙过去',
+      );
+    }
+    expect(
+      tester.widget<TextField>(sheetField('target')).controller!.text,
+      '1',
+    );
+    expect(tester.widget<TextField>(sheetField('name')).controller!.text, '');
+  });
+
+  testWidgets('320px + 1.3 倍字体：新建表单（含字数计数器）排得下且用自己的档位', (tester) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    tester.view.physicalSize = const Size(320, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await pumpNewHabitSheet(tester);
+    expect(
+      MediaQuery.textScalerOf(
+        tester.element(find.byKey(const Key('habit-editor-sheet'))),
+      ).scale(10),
+      closeTo(13, 0.001),
+      reason: '弹层是新表面，档位必须在它自己的 context 上复检（上方那条编辑用例不覆盖新建态）',
+    );
+    // 这一档下实测 maxScrollExtent=0（内容 559.6 视口 / 「保存」底 692 ≤ 弹层底 704）
+    // ⇒ 表单本来就排得下，不需要滚；drag 与下面那条条件断言留着，是为了让"哪天加高到
+    // 需要滚"时这条用例仍然在检验可达性，而不是悄悄退化成只读一屏。
+    // drag 的目标只能是那张 sheet 自己：`habit-editor-sheet` 这个 key 就打在
+    // `SingleChildScrollView`（`habit_editor.dart:158`）上，而
+    // `find.descendant(of: <该 key>, matching: SingleChildScrollView)` 永远 findsNothing
+    // —— descendant 不含起点自身，第一次跑就是这样红的。
+    final sheet = find.byKey(const Key('habit-editor-sheet'));
+    final save = sheetChild(find.text('保存'));
+    // 取"这一张 sheet 自己的"滚动位置：不能按类型在 sheet 子树里找 Scrollable ——
+    // 每个 TextField 内部也各有一个，`find.descendant` 会 "Too many elements"。
+    // 从「保存」往上取最近祖先，恰好是 sheet 那张。
+    final position = Scrollable.of(tester.element(save)).position;
+    final maxScrollExtent = position.maxScrollExtent;
+    final saveHitBefore = tester.any(save.hitTestable());
+    await tester.drag(sheet, const Offset(0, -400));
+    await tester.pumpAndSettle();
+
+    final saveHitAfter = tester.any(save.hitTestable());
+    debugPrint(
+      'NEW_SHEET_320_1_3 maxScrollExtent=$maxScrollExtent '
+      'pixels=${position.pixels} viewport=${position.viewportDimension} '
+      'hitTestable(保存): $saveHitBefore→$saveHitAfter '
+      'bottom=${tester.getRect(save).bottom} sheetBottom=${tester.getRect(sheet).bottom}',
+    );
+    // 两条分支都要能证伪：内容超出视口时「滚一格都没发生」= drag 打空了，
+    // 后面那条可达断言就成了假的绿灯。
+    if (maxScrollExtent > 0) {
+      expect(
+        position.pixels,
+        greaterThan(0),
+        reason: 'maxScrollExtent=$maxScrollExtent 却没滚动 ⇒ 这一档下的可达性没被真正检验',
+      );
+    }
+    expect(
+      saveHitAfter,
+      isTrue,
+      reason: '「保存」点不到就建不出习惯（320px + 1.3 下这条路径必须走得通）',
+    );
+    expect(tester.takeException(), isNull, reason: '新建表单在 320px + 1.3 下溢出');
+    // 用例名承诺了「含字数计数器」，就得把计数器钉住。探针 PJ 实测：去掉 `maxLength: 64`
+    // 会让计数器整行消失（视口 559.6→534.6），而补这两句之前本条用例仍然全绿。
+    // 原先这里写的对照组是 `find.text('目标至少为 1')` findsNothing —— 本条用例根本不点
+    // 「保存」，校验错误不可能出现，那句永远为真，已删。
+    expect(
+      tester.widget<TextField>(sheetField('name')).maxLength,
+      64,
+      reason: 'maxLength 是计数器的来源，不钉住等于没测这一档下的计数器',
+    );
+    expect(
+      sheetChild(find.textContaining('/64')),
+      findsOneWidget,
+      reason: '计数器必须真的画在弹层里，才算"这一档下含字数计数器"那一格',
+    );
   });
 
   test('ApiConfig.todoPrefix 仍指向 /app-api/todo（本文件的断言按该前缀写死）', () {

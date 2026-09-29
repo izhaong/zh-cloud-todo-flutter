@@ -8,6 +8,20 @@ import '../../core/sync/sync_change_queue.dart';
 import '../../core/sync/sync_entities.dart';
 import 'task_query_repository.dart';
 
+class TaskSortPreference {
+  const TaskSortPreference({
+    required this.sort,
+    this.direction = TaskSortDirection.newestFirst,
+  });
+
+  /// 未存过偏好、旧行缺 `direction` 键、或方向取值不认识时的共同回退值：
+  /// 必须等于本参数存在之前唯一的行为（降序），否则升级即静默换序。
+  static const fallback = TaskSortPreference(sort: TaskSort.smart);
+
+  final TaskSort sort;
+  final TaskSortDirection direction;
+}
+
 /// 每个清单独立的任务排序偏好。
 ///
 /// 用户库已按 tenant/user 隔离；在库内再以 `TASK_SORT + listId` 唯一，
@@ -23,7 +37,7 @@ class TaskSortPreferenceRepository {
   final SyncChangeQueue _queue;
   final Uuid _uuid;
 
-  Future<TaskSort> get(String? listId) async {
+  Future<TaskSortPreference> get(String? listId) async {
     final row =
         await (_db.select(_db.todoViewPreferences)..where(
               (preference) =>
@@ -34,7 +48,7 @@ class TaskSortPreferenceRepository {
     return _decode(row?.valueJson);
   }
 
-  Stream<TaskSort> watch(String? listId) {
+  Stream<TaskSortPreference> watch(String? listId) {
     return (_db.select(_db.todoViewPreferences)..where(
           (preference) =>
               preference.sourceType.equals(_sourceType) &
@@ -44,10 +58,17 @@ class TaskSortPreferenceRepository {
         .map((row) => _decode(row?.valueJson));
   }
 
-  Future<void> save(String? listId, TaskSort sort) async {
+  Future<void> save(
+    String? listId,
+    TaskSort sort, [
+    TaskSortDirection direction = TaskSortDirection.newestFirst,
+  ]) async {
     final sourceKey = _sourceKey(listId);
     final now = DateTime.now();
-    final valueJson = jsonEncode({'sort': sort.name});
+    final valueJson = jsonEncode({
+      'sort': sort.name,
+      'direction': direction.name,
+    });
     await _db.transaction(() async {
       final existing =
           await (_db.select(_db.todoViewPreferences)..where(
@@ -93,12 +114,12 @@ class TaskSortPreferenceRepository {
   String _sourceKey(String? listId) =>
       listId == null || listId.isEmpty ? _inboxSourceKey : listId;
 
-  TaskSort _decode(String? valueJson) {
-    if (valueJson == null) return TaskSort.smart;
+  TaskSortPreference _decode(String? valueJson) {
+    if (valueJson == null) return TaskSortPreference.fallback;
     try {
       final raw = jsonDecode(valueJson);
-      if (raw is! Map<String, dynamic>) return TaskSort.smart;
-      // 本地 save 直接存储 `{sort}`；sync pull 则保留服务端实体包装，
+      if (raw is! Map<String, dynamic>) return TaskSortPreference.fallback;
+      // 本地 save 直接存储 `{sort, direction}`；sync pull 则保留服务端实体包装，
       // 排序实际位于其字符串化的 `valueJson` 字段内。两种格式必须同样可读，
       // 否则第二设备会静默退回智能排序。
       final nested = raw['valueJson'];
@@ -106,12 +127,22 @@ class TaskSortPreferenceRepository {
       final value = nestedValue is Map<String, dynamic>
           ? nestedValue['sort']
           : raw['sort'];
-      return TaskSort.values.firstWhere(
+      // 方向单独取：嵌套包装里也要能取到，且**取值认不出来时只回退方向**，
+      // 不能连档位一起退回智能排序（两条判据在上面的用例里分开钉着）。
+      final directionSource = nestedValue is Map<String, dynamic>
+          ? nestedValue
+          : raw;
+      final sort = TaskSort.values.firstWhere(
         (candidate) => candidate.name == value,
         orElse: () => TaskSort.smart,
       );
+      final direction = TaskSortDirection.values.firstWhere(
+        (candidate) => candidate.name == directionSource['direction'],
+        orElse: () => TaskSortDirection.newestFirst,
+      );
+      return TaskSortPreference(sort: sort, direction: direction);
     } on FormatException {
-      return TaskSort.smart;
+      return TaskSortPreference.fallback;
     }
   }
 }

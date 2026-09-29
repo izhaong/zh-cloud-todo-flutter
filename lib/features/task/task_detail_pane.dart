@@ -21,14 +21,31 @@ import '../shell/app_dialog.dart';
 import 'task_detail_page.dart';
 import 'task_quick_add_sheet.dart';
 import '../collaboration/task_comments_page.dart';
-import '../collaboration/task_assign_page.dart';
-import '../collaboration/list_member_page.dart';
+import 'task_assign_action.dart';
+import '../list/list_actions.dart';
 import '../note/note_page.dart';
 import '../pomodoro/pomodoro_page.dart';
 import 'task_view_mutation_feedback.dart';
 
 /// 收集箱的本地清单 id（synthetic inbox）：listId 为该值的任务视为"未归清单"。
 const String kInboxListId = 'inbox';
+
+/// 嵌入态操作头放得下 7 枚图标所需的**内容宽度**（不含包裹层左右各 8 的内边距）：7×48 + 4 间距 = 340。
+///
+/// 48 = `kMinInteractiveDimension`。**这个数不跟随主题密度**：本仓主题是
+/// `useMaterial3: true`（`lib/app.dart:109`、`:150`），而 M3 的 `IconButton` 把样式里的
+/// `visualDensity` 硬编成 `VisualDensity.standard`（SDK `material/icon_button.dart:1152`
+/// 等四处 getter），所以 `ThemeData.visualDensity` 改不动这几枚图标的占位。
+/// 实测两条读数（都不折叠时的溢出量）：`VisualDensity.compact` 下面板 320dp（内容 304）溢 **36px**、
+/// 面板 300dp（内容 284）溢 **56px**（= 340 − 284）—— 两个数都指向"图标仍是 48dp"，
+/// 即主题密度改不动这几枚按钮。随 PR 提交的那条 compact 用例钉的是 320dp 那一档
+/// （`headerIconExtent('关闭详情') == 48.0`）；56px 那档是我按复核建议把阈值改成"随密度算"时
+/// 拿到的读数，留在这里当"为什么不跟密度"的证据，用例里没有它。
+///
+/// 调用点比的是 `LayoutBuilder` 给的 `constraints.maxWidth`，那个值已经扣掉了左右各 8 的内边距，
+/// 所以 340 对应面板 356：实测面板 355 溢 1px、356 刚好（再加一次 16 就是把同一份 padding 数两遍，
+/// 会把折叠线错推到面板 372）。
+const double _embeddedActionRowContentMinWidth = 340;
 
 enum _TaskDetailAction {
   startPomodoro,
@@ -232,7 +249,7 @@ class _TaskReminderTile extends ConsumerWidget {
       return;
     }
 
-    final draft = await _showReminderEditor(context, task);
+    final draft = await _showReminderEditor(context, ref, task);
     if (draft == null || !context.mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     try {
@@ -260,6 +277,7 @@ class _TaskReminderTile extends ConsumerWidget {
 
   Future<_ReminderDraft?> _showReminderEditor(
     BuildContext context,
+    WidgetRef ref,
     TodoTask task,
   ) async {
     const supportedAnchors = {'ABSOLUTE', 'START', 'DUE', 'END'};
@@ -273,6 +291,20 @@ class _TaskReminderTile extends ConsumerWidget {
     var intervalText = reminder.intervalMinutes?.toString() ?? '30';
     var timeZoneText = reminder.timeZone ?? '';
     String? validationMessage;
+    // 嘀嗒《01-任务/07-固定时间与固定时区》:11「开启后…即可选择「固定时区」或「固定时间」」
+    // ⇒ 「设置 → 日期与时间 → 时区」关掉时这一档不出现。取的是**打开这一刻**的持久值：
+    // `ref.read(...).valueOrNull` 在 provider 首帧还没收到流数据时恒为 null，会退成「开」，
+    // 于是"关掉到底有没有效"取决于用户手速 —— 红测（specs/055 的 FR-2 那条）就是先红在这里。
+    // 只显隐，**不动** fixedTimezone 初值（关掉开关不得把已设的时区改掉，FR-3）。
+    var timezoneCapabilityEnabled = true;
+    try {
+      timezoneCapabilityEnabled = await ref.read(
+        timezoneEnabledProvider.future,
+      );
+    } on Object {
+      // 偏好读不到时按「开」：不因偏好子系统抖动而把既有能力藏掉（与仓储"无记录即开"同口径）。
+    }
+    if (!context.mounted) return null;
     return showDialog<_ReminderDraft>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -400,16 +432,17 @@ class _TaskReminderTile extends ConsumerWidget {
                         }),
                       ),
                     const SizedBox(height: 8),
-                    SwitchListTile(
-                      key: const Key('task-reminder-fixed-timezone'),
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('固定时区'),
-                      value: fixedTimezone,
-                      onChanged: (value) => setDialogState(() {
-                        fixedTimezone = value;
-                        validationMessage = null;
-                      }),
-                    ),
+                    if (timezoneCapabilityEnabled)
+                      SwitchListTile(
+                        key: const Key('task-reminder-fixed-timezone'),
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('固定时区'),
+                        value: fixedTimezone,
+                        onChanged: (value) => setDialogState(() {
+                          fixedTimezone = value;
+                          validationMessage = null;
+                        }),
+                      ),
                     TextFormField(
                       key: const Key('task-reminder-timezone'),
                       initialValue: timeZoneText,
@@ -834,6 +867,26 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     ];
   }
 
+  /// 窄面板（内容宽放不下 7 枚图标，即面板 < 356dp）才折进「...」：
+  /// 7 枚固定 48dp 图标 + 4dp 间距 + 左右 8dp 内边距要 356dp，320px 屏上实测溢出 36px
+  /// （Issue #279；与字号无关，1.0 与 1.3 溢出量相同）。宽面板保持原样，
+  /// 免得折叠把已有的图标形状改掉。
+  List<PopupMenuEntry<_TaskDetailAction>> _embeddedMoreActions(
+    TodoTask task, {
+    required bool foldedActions,
+  }) {
+    return [
+      ..._compactMoreActions(task),
+      if (foldedActions)
+        const PopupMenuItem(
+          value: _TaskDetailAction.moveToInbox,
+          child: Text('移至收集箱'),
+        ),
+      if (foldedActions)
+        const PopupMenuItem(value: _TaskDetailAction.delete, child: Text('删除')),
+    ];
+  }
+
   void _onCompactMoreAction(TodoTask task, _TaskDetailAction action) {
     switch (action) {
       case _TaskDetailAction.startPomodoro:
@@ -844,6 +897,12 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
         return;
       case _TaskDetailAction.linkParent:
         unawaited(_linkParentTask(task));
+        return;
+      case _TaskDetailAction.moveToInbox:
+        unawaited(_moveToInboxAndClose(task));
+        return;
+      case _TaskDetailAction.delete:
+        unawaited(_delete(task));
         return;
       default:
         return;
@@ -1243,36 +1302,11 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     if (choice == null || !mounted || widget.taskId != t.id) return;
     final taskServerId = t.serverId;
     if (choice == 'assign') {
-      if (taskServerId == null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('任务尚未同步，无法指派')));
-        return;
-      }
-      final db = ref.read(appDatabaseProvider);
-      if (db == null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('请先登录')));
-        return;
-      }
-      final list = await _resolveList(db, t.listId);
-      if (!mounted || widget.taskId != t.id) return;
-      final listServerId = list?.serverId;
-      if (listServerId == null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('清单尚未同步，无法选择执行人')));
-        return;
-      }
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => TaskAssignPage(
-            taskServerId: taskServerId,
-            listServerId: listServerId,
-            taskTitle: t.title,
-          ),
-        ),
+      await openTaskAssignAction(
+        context,
+        ref,
+        t,
+        stillCurrent: () => mounted && widget.taskId == t.id,
       );
       return;
     }
@@ -1320,21 +1354,14 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       }
       final list = await _resolveList(db, t.listId);
       if (!mounted || widget.taskId != t.id) return;
-      final listServerId = list?.serverId;
-      if (listServerId == null) {
+      if (list == null) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('清单尚未同步，无法打开协作成员')));
+        ).showSnackBar(const SnackBar(content: Text('清单尚未同步，无法打开共享协作')));
         return;
       }
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => ListMemberPage(
-            listServerId: listServerId,
-            title: list?.name ?? t.title,
-          ),
-        ),
-      );
+      // 与侧栏清单动作表走同一个函数：serverId 前置校验、提示语、成员页开法只留一份。
+      await openListCollaboration(context, ref, list);
     }
   }
 
@@ -2595,57 +2622,66 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Row(
-            children: [
-              IconButton(
-                tooltip: '关闭详情',
-                onPressed: _close,
-                icon: const Icon(Icons.close),
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  '任务详情',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-              IconButton(
-                tooltip: t.isPinned ? '取消置顶' : '置顶',
-                onPressed: () => _togglePin(t),
-                icon: Icon(
-                  t.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-                ),
-              ),
-              IconButton(
-                tooltip: t.completed ? '取消勾选' : '勾选完成',
-                onPressed: () => _toggleComplete(t),
-                icon: Icon(
-                  t.completed
-                      ? Icons.check_circle
-                      : Icons.radio_button_unchecked,
-                ),
-              ),
-              IconButton(
-                tooltip: '移至收集箱',
-                onPressed: () => _moveToInboxAndClose(t),
-                icon: const Icon(Icons.move_to_inbox_outlined),
-              ),
-              IconButton(
-                tooltip: '协作（指派/评论/成员）',
-                onPressed: () => _openCollaborationHub(t),
-                icon: const Icon(Icons.people_outline),
-              ),
-              PopupMenuButton<_TaskDetailAction>(
-                tooltip: '更多任务操作',
-                onSelected: (action) => _onCompactMoreAction(t, action),
-                itemBuilder: (context) => _compactMoreActions(t),
-              ),
-              IconButton(
-                tooltip: '删除',
-                onPressed: () => _delete(t),
-                icon: const Icon(Icons.delete_outline),
-              ),
-            ],
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final folded =
+                  constraints.maxWidth < _embeddedActionRowContentMinWidth;
+              return Row(
+                children: [
+                  IconButton(
+                    tooltip: '关闭详情',
+                    onPressed: _close,
+                    icon: const Icon(Icons.close),
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      '任务详情',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: t.isPinned ? '取消置顶' : '置顶',
+                    onPressed: () => _togglePin(t),
+                    icon: Icon(
+                      t.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: t.completed ? '取消勾选' : '勾选完成',
+                    onPressed: () => _toggleComplete(t),
+                    icon: Icon(
+                      t.completed
+                          ? Icons.check_circle
+                          : Icons.radio_button_unchecked,
+                    ),
+                  ),
+                  if (!folded)
+                    IconButton(
+                      tooltip: '移至收集箱',
+                      onPressed: () => _moveToInboxAndClose(t),
+                      icon: const Icon(Icons.move_to_inbox_outlined),
+                    ),
+                  IconButton(
+                    tooltip: '协作（指派/评论/成员）',
+                    onPressed: () => _openCollaborationHub(t),
+                    icon: const Icon(Icons.people_outline),
+                  ),
+                  PopupMenuButton<_TaskDetailAction>(
+                    tooltip: '更多任务操作',
+                    onSelected: (action) => _onCompactMoreAction(t, action),
+                    itemBuilder: (context) =>
+                        _embeddedMoreActions(t, foldedActions: folded),
+                  ),
+                  if (!folded)
+                    IconButton(
+                      tooltip: '删除',
+                      onPressed: () => _delete(t),
+                      icon: const Icon(Icons.delete_outline),
+                    ),
+                ],
+              );
+            },
           ),
         ),
         const Divider(height: 1),
