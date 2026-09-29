@@ -418,3 +418,48 @@ r14 审的是 `5ccd186`。当前分支头 `18cc090` 相对它的差集只有本�
 `POST /pulls/413/merge` 与更早的 `POST /pulls/372/merge` 都回 HTTP 405 `Please try again later`；
 本地真跑 `git merge-tree --write-tree origin/develop 18cc09027` 回 rc=0、CONFLICT 0 处（基准 `origin/develop=f361be4`）。
 差在 Gitea 侧那条异步 `testpullrequest`，不在本分支内容上。
+
+## 十四、第 15 轮：并主干到 `9ed4c62`，修掉「合并产物」上的 5 处编译错（第 152 轮，2026-09-30）
+
+**为什么做**：第十三节收回的第 14 轮 `VERDICT: PASS` 绑 head `b32834a53`，覆盖面当时成立。但「能不能合」要判**合并产物**，
+`merge-tree` 的 rc 只说明文本层合得上。本轮把 FL 全部 open PR 逐个试合到 `origin/develop@4f203b8` 后现跑 `flutter analyze`
+（脚本 `/tmp/r152/semcheck.sh`，同一棵一次性工作树 `/private/tmp/wt-merge413`，逐个 `git reset --hard 4f203b8` 再 `git merge --no-ff <head>`）：
+
+| 试合对象 | 合并 rc | analyze rc |
+| --- | --- | --- |
+| !421 `1b39f2643`、!419 `3d826f2e4`、!414 `6fed55eaf`、!412 `f33ca0ad9`、!411 `807bda36d`、!382 `39c957d22`、!356 `789832b6f`、!311 `8fa9cdef5` | 0 | 0 |
+| **!413 `b32834a53`（本分支）** | 0 | **1（5 处 error）** |
+
+对照组（证明这条判据不是恒绿）：`git reset --hard 4f203b8` 后单独跑 `flutter analyze` ⇒ rc=0、`No issues found!`
+（`/tmp/r152/base-analyze.log`，全文 66 行）⇒ develop 自己绿，5 处 error 只在「develop + 本分支」同时在场时才出现。
+复算：`grep -cE 'error •' /tmp/r152/m413/g3.log` ⇒ 5。
+
+**病灶**：本分支把 `timeMode` 定成 `TodoTask` 的必填具名参数，而 develop 在本分支之后落地的三个测试文件构造 `TodoTask` 时
+没带这个参数，`test/features/task/kanban_section_columns_test.dart:700` 的 `_CapturingTaskRepository.create` 也没有这个形参
+⇒ 文本层三方合并自动合上、编译层崩（`missing_required_argument` 4 处 + `invalid_override` 1 处）。
+
+**修法**（只动 test，三个文件）：`test/features/filter/task_filter_tag_logic_test.dart`、
+`test/features/task/eisenhower_hide_completed_test.dart` 各补 `timeMode: 0,`；
+`test/features/task/kanban_section_columns_test.dart` 补两处 `timeMode: 0,` / `timeMode: timeMode ?? 0,` 与形参 `int? timeMode,`。
+缺省取 `0`（浮动）与仓内既有用例同形（复算 `grep -n 'timeMode: 0,' test/m11_b3_calendar_test.dart | head -1`）。
+口径：这三个文件里 `timeMode` 的行数 develop 侧 `0` ⇒ 本笔 `1 / 1 / 3`（复算
+`git show 4f203b8:<file> | grep -c timeMode` 与 `git show 9ed4c62:<file> | grep -c timeMode` 各跑一遍）。
+
+**六道门禁跑在合并产物 `9ed4c62` 上**（日志目录 `/tmp/r152/g413m/`；工作树 `/private/tmp/wt-fl-413m`，
+`git status --short` 空 ⇒ `pubspec.lock` 未被本机镜像改动）：
+
+| 门 | 读数 | rc |
+| --- | --- | --- |
+| 1 `git diff --check origin/develop...HEAD` | 空输出（`/tmp/r152/g413m/g1.log`，全文 0 行） | 0 |
+| 2 `dart format --output=none --set-exit-if-changed` 本轮 3 个显式文件 | 逐份 `Formatted 1 file (0 changed)`（`/tmp/r152/g413m/g2.log`，全文 3 行） | 3 份全 0 |
+| 3 `flutter analyze` | `No issues found! (ran in 2.9s)`（`/tmp/r152/an413.log`，全文 66 行） | 0 |
+| 4 `flutter test --tags golden` | `00:05 +9: All tests passed!`（`/tmp/r152/g413m/g4.log:75`，全文 75 行；`png=9`、`dirty=0` ⇒ 基线未重录） | 0 |
+| 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `03:14 +1262 ~26: All tests passed!`（`/tmp/r152/g413m/g5.log:1558`，全文 1558 行） | 0 |
+| 6 `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web`（`/tmp/r152/g413m/g6.log:81`，全文 81 行） | 0 |
+
+**覆盖面必须重绑**：合并提交 `9ed4c62` 的 `lib`/`test` 两棵树与第 14 轮被审的 `b32834a53` 都不再相等
+（复算 `git rev-parse b32834a:test 9ed4c62:test b32834a:lib 9ed4c62:lib` ⇒ `ebcd3f05…` vs `ea54a36e…`、`0000a7ab…` vs `ad7946fd…`）
+⇒ **第 14 轮的 PASS 不覆盖要合的字节**，要第 15 轮复核。合并的 combined diff 列 7 个文件，其中 4 个 `lib/` 文件是
+git 三方合并自动产出（`Auto-merging lib/state/providers.dart` 等，我没手碰），我手写的只有上面 3 个 test 文件。
+
+矩阵 #12 在本笔合进 develop 之前继续保持「已实现待合并」。
