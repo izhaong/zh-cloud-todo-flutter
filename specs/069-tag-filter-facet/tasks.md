@@ -53,7 +53,7 @@ lib/features/task/tasks_by_list_page.dart:2147:16: Context: Found this candidate
 ## 六、没做与下一步
 
 - `:71` 的「或」与跨条件布尔组合、多语句查询 = FL Issue #334（`TaskFilter` 需 `tagLogic`；写契约时值用小写 `and`/`or`）。
-- 高级筛选 sheet 里没有「且/或」控件；加控件会碰 golden（9 张基线）⇒ 触碰前先要重录基线的授权。
+- 高级筛选 sheet 里没有「且/或」控件。**上一轮我写的「加控件会碰 golden ⇒ 要先拿重录基线授权」是错的，本轮更正**：基线渲染的是 workspace 面，不含这张 sheet（判据 `grep -rn "_openFilterPanel\|AdvancedFilter" test | wc -l` = 0、`git ls-files test/goldens/todo_workspace | wc -l` = 9 张、用例只有 `test/visual/todo_workspace_golden_test.dart` 一份）。⇒ 「标签内 且/或」这一档不需要重录基线的授权就能做。仍缺的是帮助页 `:61` 的跨条件多语句查询，那是另立范围的一格。
 - 矩阵 `#21/#22` 的 FL 面本轮只推进"标签维度生效"一格。PR !418 已于 2026-09-30 合进 develop（`git rev-parse origin/develop` 现读
   `0c7bce9c4d74ec44fe3a94423e656f76bf5af198`），本节第六道那条「未合并」的约束从此解除；但矩阵翻转要落在 docs 仓的
   对照表 PR 里、且要等 docs !113 那轮先落地（同一张表并行开分支会互相覆盖），本轮只登记不翻。
