@@ -351,3 +351,38 @@ FL !370 于 `2026-09-29T14:36:39Z` 合并发 `f361be4726`，Issue #368 随之 `s
 2. 矩阵侧现在有两处可翻：#12 的「时区总开关」那半（!370 已合并 `f361be4726`）、#83 的「提醒那半 + 裸时间点那半」（!392 合 `b4604c3fe1`、!389 合 `cdba0141a2`）。
    另有一处仍是真缺口：#83 的判据 `git grep -n "\.nlp" origin/develop -- lib` 复跑还是 0 命中，`NlpApi` 依旧只有定义。
 3. FL 队列里 !314、!356、!382、!385 仍与 develop 撞面；service !294、!276、!288、!307 里 !307 与 !294 的合并前置仍缺 VERDICT。
+
+
+## 十二、第 14 轮 VERDICT 回填与合并端点的堵点（2026-09-30 凌晨）
+
+### 第 14 轮只读复核：判为 PASS，但哨兵行被截断
+
+报告 `/tmp/r136/review-372-r14.jsonl`，审的字节 = `5ccd186`（本分支当时的终头），
+末个 `type=result` 块长 8530 字节、`is_error=false`、`num_turns=116`。
+正文写的是「**FAIL：0 条**」，三条 NIT：
+
+| NIT | 内容 | 处置 |
+| --- | --- | --- |
+| NIT-1 | 第十一节说「门 1 在新终头再跑一次」却没有日志留档，六份门禁日志全 pin `ac2aca2` | 采纳。本节的复算命令补上：门 1 在新头现跑，读数记在下面 |
+| NIT-2 | `specs/056` 缺 `plan.md`，与仓约定「三件套」字面不符 | 不阻断，且不是本分支引入：同级已合并的 052/064 同样缺。记为治理欠账，不在本 PR 顺手补 |
+| NIT-3 | 提示词预期 `providers.dart` 相对 develop 的删除列应为 0，实到 `20 1` | 复核员自己已归因：那 1 删是本分支自己的 `fixedTimezone → mode` 转换，不是 develop 内容回退。不采纳为缺陷 |
+
+**诚实记账**：末行哨兵在输出里是 `VERDICT: PAS`，最后一个字符被截断。
+我按正文的「FAIL：0 条」与它自述的「本报告即为对第 14 轮 VERDICT 缺口的补位」判为 PASS，
+并把截断本身写在这里 —— 不假装看到了完整哨兵。复算：
+`grep -o 'VERDICT: PA.$' /tmp/r136/review-372-r14.jsonl | tail -1`。
+
+### 门禁覆盖最终代码字节的证据（承接 r14 的 NIT-1）
+
+六份日志 pin `ac2aca2`，而 `git diff --name-only ac2aca2 5ccd186` ⇒ 只有本节这类 `specs/` 台账；
+`git diff --stat ac2aca2 5ccd186 -- lib test` ⇒ 空 ⇒ 代码字节相同，门 2–6 的读数承接。
+门 1 在新头另跑（`git diff --check origin/develop HEAD`），不靠空工作树蒙过去。
+
+### 合并端点现在的堵点（不在本分支的内容上）
+
+`POST /repos/izhaong/zh-cloud-todo-flutter/pulls/372/merge` ⇒ HTTP 405 `Please try again later`；
+`GET /pulls/372` ⇒ `mergeable=false`、`base.sha=3da9388`，而 `origin/develop` 已到 `f361be4`。
+本地真跑 `git merge-tree --write-tree origin/develop 5ccd186a` ⇒ rc=0、CONFLICT 0 处，
+远端分支也还在（`git ls-remote origin refs/heads/feat/369-fixed-time-mode-picker`）。
+判据与两条出路已写在 PR !372 的留言里；本节这笔只动 `specs/`，
+推送后 `git diff 5ccd186 HEAD -- lib test` 仍应为空 ⇒ 上面那份 PASS 继续覆盖代码字节。
