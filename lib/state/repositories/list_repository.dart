@@ -160,17 +160,39 @@ class ListRepository {
     return folder;
   }
 
+  /// 按 [orderedIds] 的先后重写各清单的 `sortOrder`。
+  ///
+  /// 每条改动都要登记一行 `list/upsert`：清单是同步白名单实体，只写本地等于
+  /// "这台设备排好了、另一台 pull 回来还是旧顺序"。整批放在一个事务里
+  /// （先例 `moveToFolder`），半途失败时位次与登记行一起回滚。
+  /// 传入但已不存在的 id 跳过，位次按**实际写成的那批**连续排，不留空洞。
   Future<void> reorder(List<String> orderedIds) async {
-    for (var i = 0; i < orderedIds.length; i++) {
-      await (_db.update(
-        _db.todoLists,
-      )..where((t) => t.id.equals(orderedIds[i]))).write(
-        TodoListsCompanion(
-          sortOrder: Value(i),
-          updatedAt: Value(DateTime.now()),
-        ),
-      );
-    }
+    return _db.transaction(() async {
+      var position = 0;
+      for (final id in orderedIds) {
+        final exists = await (_db.select(
+          _db.todoLists,
+        )..where((t) => t.id.equals(id))).getSingleOrNull();
+        if (exists == null) continue;
+        await (_db.update(_db.todoLists)..where((t) => t.id.equals(id))).write(
+          TodoListsCompanion(
+            sortOrder: Value(position),
+            updatedAt: Value(DateTime.now()),
+          ),
+        );
+        final moved = await (_db.select(
+          _db.todoLists,
+        )..where((t) => t.id.equals(id))).getSingle();
+        await _queue.enqueue(
+          entity: SyncEntities.list,
+          op: SyncOps.upsert,
+          localId: id,
+          serverId: moved.serverId,
+          payload: moved.toJson(),
+        );
+        position++;
+      }
+    });
   }
 
   Future<void> delete(String listId) async {

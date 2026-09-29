@@ -16,6 +16,10 @@ class HabitPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(myHabitsProvider);
     final stats = ref.watch(habitStatsProvider);
+    // 重取失败时 AsyncError 仍带着上一次的 value（由 test/features/habit/habit_page_test.dart 量出），
+    // 但 `.when` 按分支判别，会把已加载的数据整块丢掉 ⇒ 判据走 valueOrNull：有值就先渲染值。
+    final habits = async.valueOrNull;
+    final statsData = stats.valueOrNull;
     return Scaffold(
       appBar: AppBar(
         title: const Text('习惯'),
@@ -33,10 +37,13 @@ class HabitPage extends ConsumerWidget {
       ),
       body: Column(
         children: [
-          stats.when(
-            loading: () => const SizedBox.shrink(),
-            error: (_, _) => const SizedBox.shrink(),
-            data: (s) => Padding(
+          if (stats.hasError && statsData != null)
+            AppRefreshFailedHint(
+              message: '统计刷新失败，显示的是上一次数据',
+              onRetry: () => ref.invalidate(habitStatsProvider),
+            ),
+          if (statsData != null)
+            Padding(
               padding: const EdgeInsets.all(12),
               child: AppCard(
                 child: Row(
@@ -44,43 +51,83 @@ class HabitPage extends ConsumerWidget {
                   children: [
                     _Stat(
                       label: '连续打卡',
-                      value: '${s['currentStreak'] ?? 0}',
+                      value: '${statsData['currentStreak'] ?? 0}',
                       color: brandColors(context).warning,
                     ),
                     _Stat(
                       label: '本周完成',
-                      value: '${s['weeklyDone'] ?? 0}',
+                      value: '${statsData['weeklyDone'] ?? 0}',
                       color: brandColors(context).today,
                     ),
                     _Stat(
                       label: '总打卡',
-                      value: '${s['totalCheckIns'] ?? 0}',
+                      value: '${statsData['totalCheckIns'] ?? 0}',
                       color: brandColors(context).success,
                     ),
                   ],
                 ),
               ),
             ),
-          ),
           Expanded(
-            child: async.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('加载失败: $e')),
-              data: (habits) {
-                if (habits.isEmpty) {
-                  return AppEmptyState(
-                    title: '暂无习惯',
-                    subtitle: '开启第一个习惯，培养专注力与自律。',
-                  );
-                }
-                return ListView.separated(
-                  itemCount: habits.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
-                  itemBuilder: (_, i) => _HabitTile(habit: habits[i]),
-                );
-              },
-            ),
+            child: habits == null
+                ? (async.hasError
+                      ? _ListLoadFailed(
+                          message: '加载失败: ${async.error}',
+                          onRetry: () => ref.invalidate(myHabitsProvider),
+                        )
+                      : const Center(child: CircularProgressIndicator()))
+                : (async.hasError
+                      ? Column(
+                          children: [
+                            AppRefreshFailedHint(
+                              message: '列表刷新失败，仍显示上一次的数据',
+                              onRetry: () => ref.invalidate(myHabitsProvider),
+                            ),
+                            Expanded(child: _HabitList(habits: habits)),
+                          ],
+                        )
+                      : _HabitList(habits: habits)),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HabitList extends StatelessWidget {
+  const _HabitList({required this.habits});
+
+  final List<HabitDto> habits;
+
+  @override
+  Widget build(BuildContext context) {
+    if (habits.isEmpty) {
+      return const AppEmptyState(title: '暂无习惯', subtitle: '开启第一个习惯，培养专注力与自律。');
+    }
+    return ListView.separated(
+      itemCount: habits.length,
+      separatorBuilder: (_, _) => const Divider(height: 1),
+      itemBuilder: (_, i) => _HabitTile(habit: habits[i]),
+    );
+  }
+}
+
+/// 首值就没读到才走这里。
+class _ListLoadFailed extends StatelessWidget {
+  const _ListLoadFailed({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(message),
+          const SizedBox(height: 8),
+          FilledButton(onPressed: onRetry, child: const Text('重试')),
         ],
       ),
     );
