@@ -201,11 +201,6 @@ class KanbanView extends ConsumerWidget {
                                     listId!,
                                     sectionId: ordered[index].sectionId,
                                   )),
-                      onAdd:
-                          ordered[index].key == const ValueKey('col-todo') &&
-                              listId != null
-                          ? () => _quickAdd(context, ref, listId!)
-                          : null,
                       onAssignCard: (task) =>
                           openTaskAssignAction(context, ref, task),
                     ),
@@ -486,6 +481,7 @@ class _KanbanColumn extends StatelessWidget {
   final VoidCallback? onRenameSection;
   final VoidCallback? onCreateSection;
   final VoidCallback? onDeleteSection;
+
   /// 嘀嗒《02-看板视图：分类管理任务》`:175`「在看板视图右键任务，选择「分配给」即可。」
   /// 必填：这一列只要有卡片就得能指派，留成可空就会多出一道永远走不到的判空。
   final ValueChanged<TodoTask> onAssignCard;
