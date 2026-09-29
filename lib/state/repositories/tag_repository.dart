@@ -150,6 +150,18 @@ class TagRepository {
     );
   }
 
+  /// 整表「任务 id → 标签 id 集合」索引。筛选要对整页任务求值，逐条 `tagIdsOf`
+  /// 会打成 N 次查询；列表渲染与高级筛选预览都同源用这一份。
+  Stream<Map<String, Set<String>>> watchTagIndex() {
+    return _db.select(_db.todoTaskTags).watch().map((rows) {
+      final out = <String, Set<String>>{};
+      for (final row in rows) {
+        out.putIfAbsent(row.taskId, () => <String>{}).add(row.tagId);
+      }
+      return out;
+    });
+  }
+
   Future<List<String>> tagIdsOf(String taskId) async {
     final rows = await (_db.select(
       _db.todoTaskTags,

@@ -208,3 +208,28 @@ M7b 真溢出 ⇒ 红 W3 并打出 `RenderFlex overflowed by 638 pixels`）；
 | 九-3 | 三-3 把「关 = isFalse」记到 `/tmp/r82/probe-pre-fix-bad0933.log` 名下 | 那份日志 `:4` 与 `:7` 的 `NODE.label` 都是「时区，已开启」⇒ 探针在"关"那档没扳动，且它只打印 label、没打印 `isToggled` | 正反读数改钉仓内 W2（`grep -c "_toggled(tester)," test/features/settings/timezone_preference_test.dart` = 2），旧引证在「三-3」记为作废 |
 
 `PASS` 只说明字节与台账一致、两处缺陷确已修 ⇒ **不构成合并依据**，合并仍等单独授权。
+
+## 十、并入 develop 之后在合并字节上重跑（2026-09-28，merge 提交 `db39cd9` + 修复提交 `4b0e24f`，日志 `/tmp/r136/g370b/`）
+
+develop 从本分支基线前进到 `af62a8bfa2da`（specs/047「#」建标签、specs/064 日程跨日时间轴、specs/066/067 侧栏落点已进线）⇒ 必须先并主干。冲突 2 处，都是"两边在同一位置各加自己的东西"：
+- `lib/state/providers.dart` 的 import 段与时区/周首两组成员混在一个冲突块里 ⇒ 两边全留，且被共享的 `});` 只会闭合最后一个 `StreamProvider`，所以把时区那一组补上自己的 `});` 再拼周首那一组。
+- `lib/features/settings/settings_route.dart` 的「日期与时间」卡：develop 侧往 `children` 里加了「星期开始于」行，本分支整张卡只有时区开关 ⇒ 以 develop 的结构为底，把 `_TimezonePreferenceTile()` 追加进去。
+
+**并主干量出一个真缺陷并已修**（修复提交 `4b0e24f`）：时区开关最初插到 `children` **首位**，把已上线的「星期开始于」行推到 y=1306，而 develop 那条《320px + 1.3 倍字号：设置行与档位弹层都不溢出》用例的视口高 1200 ⇒ `tap` 打不到、档位弹层找不到，g5 转红。改法是把时区开关排到它**后面**：已上线那一行的位置不动，两个开关都保留。这不是把测试调宽——红的是被移动的既有控件，修的是布局顺序。
+
+六道门禁重跑在 `4b0e24f`（`/tmp/r136/g370b/`）：
+- `g1 rc=0`：`git diff --check $(git merge-base origin/develop HEAD) HEAD`，除标题行外 0 输出。
+- `g2 rc=0`：`Formatted 3 files (0 changed) in 0.08 seconds.`
+- `g3 rc=0`：`No issues found! (ran in 1.5s)`（`flutter analyze` 全仓）。
+- `g4 rc=0`：`goldens_dirty=0 png=9` ⇒ 9 张基线一张都没重录。
+- `g5 rc=0`：`+1181 ~26: All tests passed!`（`/tmp/r136/g370b/g5.log` 末行）（比并主干前的 +1140 多，是主干带进来的 specs/047/064/066/067 用例）。
+- `g6 rc=0`：`✓ Built build/web`，收尾 `status=0`（工作树干净，`pubspec.lock` 未进任何提交）。
+真实合并试算：`git merge-tree --write-tree origin/develop HEAD` ⇒ rc=0、干净树 `c350a6cb5f77`。
+台账自扫：`python3 tool/check_spec_selfscan.py specs/055-settings-timezone-switch/tasks.md`（本仓 = 仓库根解析）。
+
+### 十-1、本仓自扫判据的**存量**失项（不掩盖：本轮没把它们清到 0）
+
+`python3 tool/check_spec_selfscan.py specs/055-settings-timezone-switch/tasks.md` 现读 **失项 6 条**，6 条的报出行号全部小于第 212 行 ⇒ 都是第 8/9 轮写下的存量；本轮新加的「十」段自身 0 失项（这段被复扫过，日志 `/tmp/r136/selfscan370.txt`）。
+6 条的缺陷类型只有三种：覆盖性主张缺可复跑命令、枚举项数与句首数目不符、指向 `/tmp` 的门禁日志行号已成死锚点。逐条修法是就地补命令或改数，纯 markdown，**不需要重跑六道门禁**。
+
+治理单：**FL Issue #409**（本单不排进功能轮次，与 PR !370 分开收口）。本段只登记不修，故**本轮合并前置中「台账自扫 0 失项」这一条对本文件不成立**——写成不成立而不是略过；六道门禁与只读复核不受影响，因为门禁量的是代码字节（见上一节六格）。
