@@ -274,3 +274,80 @@ git status --short pubspec.lock                     # 期望空
 （复算 `git rev-parse HEAD:lib HEAD:test f6e89fc4:lib f6e89fc4:test` ⇒ 四号两两相同），门 1 在新终头再跑一次。
 ⇒ **本单只等用户「合并」二字**；未合并前矩阵 #12 仍写「已实现待合并」，不翻状态。
 队列注意：本 PR 栈在未合并的 !370 之上，并与未合并的 !351、!360、!364 在 `settings_route.dart` 与 `calendar_view.dart` 有已知冲突 ⇒ 合并轮要按队列顺序解，不是快进。
+
+## 十一、第 14 轮：并主干到 `b25fdd7489`，并适配 develop 在本分支之后落地的测试
+
+§十 把基线钉在 `9032005`；本轮把 develop 现头 `b25fdd7489` 合进来（这笔是 !406 的合并提交，
+`git log -1 --format=%s b25fdd7489` 读到「Merge pull request 'feat(task): 日历中的任务可拖入清单详情区域换清单（矩阵 #32 面 ②，Issue #398）' (#406) from feat/398-calendar-task-into-list into develop」）。
+四处文件八个 hunk 的冲突没有随手挑一侧，两处各有一条可复算依据。
+
+### 取哪一侧，以及凭什么
+
+- `lib/state/providers.dart` 与 `lib/features/settings/settings_route.dart` 取 !370 终头 `3da9388` 的字节。
+  依据是这两笔相对**当前** develop 只有加法：`git diff --numstat origin/develop 3da9388 -- lib/features/settings/settings_route.dart lib/state/providers.dart`
+  ⇒ `43 0` 与 `18 0`（删除列都是 0，所以照搬不会把 develop 后来的改动带回退）。
+  本分支对这两个文件自己的增量只有 providers 的一处调用点转换与一行 import
+  （`git diff --stat 7126f01 25ec14f -- lib/state/providers.dart lib/features/settings/settings_route.dart` ⇒ `1 file changed, 2 insertions(+), 1 deletion(-)`，
+  列出来的那一个文件是 `providers.dart`，`settings_route.dart` 在 !370 之后本分支没再动）。
+  同一处时区/周起始的冲突在 !370 已经解过并过了第 3 轮复核，这里取其已审字节，避免同一处冲突解出两个版本。
+- `lib/features/task/views/calendar_view.dart` 与 `lib/features/task/views/timeline_view.dart` 取 develop 的字节，再把本分支的机械转换重放上去。
+  依据是本分支在这两个文件上的差集只有转换一类：
+  `git diff 90320057 25ec14f -- <这两个文件> | grep -E '^[+-]' | grep -vE '^(\+\+\+|---)' | grep -vE 'fixedTimezone|TaskTimeMode\.fromWire|task_time_mode'`
+  ⇒ 空输出（两个文件各跑一次，都是空）。
+  以 develop 为底才保得住它新加的 `_taskRow`、`_DayTimeline` 与那条跨日时间轴，
+  并且它新写出来的展示调用点也一起转过来 —— 例如 develop 把 `_displayTime` 从 `_AgendaView` 的静态方法提到了文件顶层，
+  这一处的旧入参在 git 的三方对齐里会被当成"本分支没改过"而漏掉。
+  转换数按现读：`calendar_view.dart` 三处、`timeline_view.dart` 十一处、`providers.dart` 一处（复算 `grep -c 'mode: TaskTimeMode.fromWire(' `）。
+  重放后这三个文件里 `fixedTimezone: <表达式>.fixedTimezone,` 这种旧入参形状为 0 命中
+  （判据 `grep -rn -E 'fixedTimezone: [A-Za-z_][A-Za-z0-9_.]*\.fixedTimezone,' lib | grep -v app_database.g.dart`，
+  剩的三行是 `task_detail_pane.dart`/`reminder_repository.dart`/`task_repository.dart` 里的 companion 写入，不是展示入参，本分支原本就保留）。
+
+### 并主干后 analyze 现读到的错与处置
+
+第一遍门禁跑在未适配的 `661c404`，`/tmp/r136/g372/g3.log` 读到 `6 issues found`，全部落在 develop 本分支之后落地的测试里：
+五条 `missing_required_argument`（`sidebar_task_drop_test.dart`、`calendar_agenda_timeline_test.dart`、`calendar_list_timeline_test.dart`、
+`eisenhower_quadrant_drag_test.dart`、`week_start_consumers_test.dart` 的 `TodoTask(...)` 夹具）与
+一条 `invalid_override`（`calendar_task_into_list_test.dart` 的 `_ScriptedRepository.update` 少了 `timeMode` 形参）。
+补值按本仓既有派生口径：这些夹具的 `fixedTimezone` 都是 `false`，对应 `timeMode: 0`（浮动），与 `TaskTimeMode.fromLegacyFlag` 的映射一致；
+替身签名补 `int? timeMode,` 放在 `bool? fixedTimezone,` 之后，与 `task_repository.dart:282-301` 的真实形参顺序对齐。
+六处都只补入参，没动任何断言，也没动期望值。这笔是 `ac2aca2`。
+
+### 六道门禁读数（跑在最终字节 `ac2aca2`，日志目录 `/tmp/r136/g372b`）
+
+| 门 | 命令 | 现读 |
+| --- | --- | --- |
+| 1 | `git diff --check $(git merge-base origin/develop HEAD) HEAD` | `rc=0` |
+| 2 | `dart format --output=none --set-exit-if-changed` 本轮显式十个文件 | `rc=0` |
+| 3 | `flutter analyze` | `No issues found!` 与 `rc=0` |
+| 4 | `flutter test --tags golden` | `+9: All tests passed!`，`goldens_dirty=0 png=9`（基线没重录） |
+| 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `+1211 ~26: All tests passed!` 与 `rc=0` |
+| 6 | `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web` 与 `rc=0` |
+
+门 2 的十个文件 = 本轮显式动过的四个 lib 文件加六个 test 文件（清单在 `/tmp/r136/gates372b.sh` 的 `FMT_FILES`）；
+跑完全部门禁后 `git status --porcelain | wc -l` ⇒ `0`，`pubspec.lock` 没被顺手带进来。
+本节这笔台账只动 markdown，`lib` 与 `test` 两棵树号与 `ac2aca2` 相同
+（复算 `git rev-parse HEAD:lib HEAD:test ac2aca2:lib ac2aca2:test` ⇒ 四个号两两相同），门 1 在新终头再跑一次。
+
+### 复核通道当前不可用，本轮没有 VERDICT
+
+`claude -p --permission-mode plan` 这两次派单都以 `is_error=true` 收尾：
+`/tmp/r136/review-docs113-r1.jsonl` 最后一段正文是 `Request timed out`；
+`/tmp/r136/review-311-r2.err` 记 `[claude-code:unrecognized_model] {"model":"Top1","query_source":"sdk"}`。
+本机 `~/.claude/settings.json` 把 `model` 与 `ANTHROPIC_MODEL` 都设成了同一个别名（凭据与网关地址不落本文），别名解析在网关那一侧，
+所以这不是提示词或参数写法的问题 —— 同一套参数在 !370 第 3 轮拿到了 `VERDICT: PASS`。
+⇒ 本 PR 的合并前置缺第 14 轮 VERDICT（六门绿 + 真实合并试算齐了也不能合），矩阵 #12 与 #83 里「已实现待合并」的措辞这轮不动。
+
+### 队列变化（按 merged_at 现读）
+
+FL !370 于 `2026-09-29T14:36:39Z` 合并发 `f361be4726`，Issue #368 随之 `state=closed`
+（复算 `GET /repos/izhaong/zh-cloud-todo-flutter/pulls/370` 读 `merged_at` 与 `merge_commit_sha`，再读 `issues/368` 的 `state`）。
+合并前置是六门绿（跑在 `3da9388`）+ 第 3 轮 `VERDICT: PASS` + `git merge-tree --write-tree origin/develop 3da9388` ⇒ `rc=0` 且 CONFLICT 行 0 条。
+本 PR 的上游因此落到 develop：栈关系从「压在未合并的 !370 上」变成「develop 已含 !370」，
+§十 末尾那条「要与未合并的 !351、!360、!364 在 `settings_route.dart` 与 `calendar_view.dart` 撞面」的队列注意，对仍未合并的分支继续成立。
+
+### 下轮入口
+
+1. 复核通道恢复后给 `ac2aca2`（或含本节这笔的终头）补第 14 轮 VERDICT，三格齐了再谈合并。
+2. 矩阵侧现在有两处可翻：#12 的「时区总开关」那半（!370 已合并 `f361be4726`）、#83 的「提醒那半 + 裸时间点那半」（!392 合 `b4604c3fe1`、!389 合 `cdba0141a2`）。
+   另有一处仍是真缺口：#83 的判据 `git grep -n "\.nlp" origin/develop -- lib` 复跑还是 0 命中，`NlpApi` 依旧只有定义。
+3. FL 队列里 !314、!356、!382、!385 仍与 develop 撞面；service !294、!276、!288、!307 里 !307 与 !294 的合并前置仍缺 VERDICT。
