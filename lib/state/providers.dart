@@ -168,6 +168,17 @@ final sidebarShowTagsProvider = StreamProvider<bool>((ref) {
   return repo.watch();
 });
 
+/// 侧栏「显示过滤器」偏好流（嘀嗒《…05-过滤器：随心所欲筛选你想看的任务.md》:29/:33）。
+///
+/// 三态口径与上面那条完全一致，差别只在这一档读的是 `showFilters` 键。
+final sidebarShowFiltersProvider = StreamProvider<bool>((ref) {
+  final repo = ref.watch(sidebarVisibilityRepositoryProvider);
+  if (repo == null) {
+    return Stream.value(SidebarVisibilityRepository.defaultShowFilters);
+  }
+  return repo.watchFilters();
+});
+
 final tagRepositoryProvider = Provider<TagRepository?>((ref) {
   final db = ref.watch(appDatabaseProvider);
   final queue = ref.watch(syncChangeQueueProvider);

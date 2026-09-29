@@ -186,6 +186,32 @@ class SettingsRoute extends ConsumerWidget {
               ],
             ),
           ),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                _Tile(
+                  icon: Icons.filter_alt_outlined,
+                  title: '过滤器',
+                  key: const Key('todo-settings-show-filters'),
+                  subtitle: '控制过滤器条目是否出现在侧栏',
+                  trailingText: _visibilityLabel(
+                    ref.watch(sidebarShowFiltersProvider),
+                  ),
+                  colors: colors,
+                  onTap: () => _pickShowFilters(context, ref),
+                ),
+                if (_visibilityStale(ref.watch(sidebarShowFiltersProvider)))
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: Text(
+                      '读取偏好失败，显示的是上次读到的值',
+                      style: TextStyle(color: colors.mutedForeground),
+                    ),
+                  ),
+              ],
+            ),
+          ),
           _Section(title: '主题'),
           AppCard(
             padding: EdgeInsets.zero,
@@ -327,6 +353,52 @@ class SettingsRoute extends ConsumerWidget {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('保存失败，显示标签仍为当前设置')));
+    }
+  }
+
+  /// 嘀嗒《…05-过滤器…》:29/:33「确认侧边栏中是否已经开启显示过滤器」⇒ 同一份「显示/隐藏」形状。
+  /// 与 [_pickShowTags] 一样写"点中的那个字面值"，不从当前值取反（四件套 ④）。
+  Future<void> _pickShowFilters(BuildContext context, WidgetRef ref) async {
+    final repo = ref.read(sidebarVisibilityRepositoryProvider);
+    if (repo == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('本地数据库尚未就绪，暂时无法修改过滤器')));
+      return;
+    }
+    final current =
+        ref.read(sidebarShowFiltersProvider).valueOrNull ??
+        SidebarVisibilityRepository.defaultShowFilters;
+    final picked = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final (value, label) in const [(true, '显示'), (false, '隐藏')])
+              ListTile(
+                key: Key('todo-settings-show-filters-option-$value'),
+                title: Text(label),
+                trailing: value == current
+                    ? Icon(
+                        Icons.check,
+                        color: brandColors(context).mutedForeground,
+                      )
+                    : null,
+                onTap: () => Navigator.of(sheetContext).pop(value),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return;
+    try {
+      await repo.saveFilters(showFilters: picked);
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('保存失败，过滤器仍为当前设置')));
     }
   }
 }
@@ -481,19 +553,23 @@ class _TimezonePreferenceTile extends ConsumerWidget {
   }
 }
 
-/// 侧栏「显示标签」取值的三态读法，与 `lib/features/shell/sidebar.dart` 同一口径：
+/// 侧栏可见性偏好的三态读法，「显示标签」与「过滤器」共用一份口径：
 /// 有值就用值 —— 包括"出过一次值之后流才失败"（四件套 ③ 失败保留已加载数据）；
 /// 没值且失败才显示「读取失败」；没值且未失败是加载中，显示「…」。
 /// 写成 `.when(error: …)` 会把第一态折进第三态（FL Issue #363）。
-String _showTagsLabel(AsyncValue<bool> state) {
+String _visibilityLabel(AsyncValue<bool> state) {
   final value = state.valueOrNull;
   if (value != null) return value ? '显示' : '隐藏';
   return state.hasError ? '读取失败' : '…';
 }
 
 /// 只在"留住旧值 + 流已失败"时出现：留住旧值不等于把失败藏起来。
-bool _showTagsStale(AsyncValue<bool> state) =>
+bool _visibilityStale(AsyncValue<bool> state) =>
     state.valueOrNull != null && state.hasError;
+
+String _showTagsLabel(AsyncValue<bool> state) => _visibilityLabel(state);
+
+bool _showTagsStale(AsyncValue<bool> state) => _visibilityStale(state);
 
 class _Section extends StatelessWidget {
   const _Section({required this.title});

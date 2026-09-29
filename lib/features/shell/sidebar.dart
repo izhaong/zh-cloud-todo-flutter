@@ -86,6 +86,14 @@ class Sidebar extends ConsumerWidget {
         (showTagsAsync.hasError
             ? SidebarVisibilityRepository.defaultShowTags
             : false);
+    // 「过滤器」那一档用同一套三态口径（Issue #336）：加载中不先画出来，
+    // 免得存了「隐藏」的账号冷启动闪一下筛选器行。
+    final showFiltersAsync = ref.watch(sidebarShowFiltersProvider);
+    final showFilters =
+        showFiltersAsync.valueOrNull ??
+        (showFiltersAsync.hasError
+            ? SidebarVisibilityRepository.defaultShowFilters
+            : false);
     final tagEntries = !showTags
         ? const <SidebarHierarchyEntry<TodoTag>>[]
         : flattenSidebarHierarchy(
@@ -257,17 +265,18 @@ class Sidebar extends ConsumerWidget {
                         },
                       ),
                     ),
-                    _NavRow(
-                      rowKey: const Key('todo-sidebar-row-filters'),
-                      icon: Icons.filter_alt_outlined,
-                      label: '筛选器',
-                      selected: false,
-                      colors: colors,
-                      onTap: () {
-                        onNavigationCommitted?.call();
-                        onOpenFilters();
-                      },
-                    ),
+                    if (showFilters)
+                      _NavRow(
+                        rowKey: const Key('todo-sidebar-row-filters'),
+                        icon: Icons.filter_alt_outlined,
+                        label: '筛选器',
+                        selected: false,
+                        colors: colors,
+                        onTap: () {
+                          onNavigationCommitted?.call();
+                          onOpenFilters();
+                        },
+                      ),
                     if (onOpenNotes != null)
                       _NavRow(
                         rowKey: const Key('todo-sidebar-row-notes'),
