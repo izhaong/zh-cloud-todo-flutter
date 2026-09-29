@@ -296,7 +296,12 @@ void main() {
         'sourceType': 'TASK_SORT',
         'sourceKey': 'list-a',
         'viewType': 'LIST',
-        'valueJson': jsonEncode({'sort': 'dueDate'}),
+        // 上行形状：本轮多带一个 direction 键。B 端是从这同一条 feed 恢复的，
+        // 所以这条断言同时也是"方向会跟着同步到另一台设备"的判据。
+        'valueJson': jsonEncode({
+          'sort': 'dueDate',
+          'direction': 'newestFirst',
+        }),
       });
       final preferenceA = await dbA.select(dbA.todoViewPreferences).getSingle();
       expect(preferenceA.serverId, 88);
@@ -344,13 +349,14 @@ void main() {
       );
 
       expect(await coordinatorB.pull(), 1);
-      expect(
-        await TaskSortPreferenceRepository(
-          dbB,
-          SyncChangeQueue(dbB),
-        ).get('list-a'),
-        TaskSort.dueDate,
-      );
+      // B 端从同一条 feed 恢复：档位与**方向**都要跟着过来，
+      // 否则第二台设备会静默退回降序。
+      final restoredB = await TaskSortPreferenceRepository(
+        dbB,
+        SyncChangeQueue(dbB),
+      ).get('list-a');
+      expect(restoredB.sort, TaskSort.dueDate);
+      expect(restoredB.direction, TaskSortDirection.newestFirst);
       final preferenceB = await dbB.select(dbB.todoViewPreferences).getSingle();
       expect(preferenceB.serverId, 88);
     },

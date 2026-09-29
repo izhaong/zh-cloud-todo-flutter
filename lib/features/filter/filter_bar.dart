@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/db/app_database.dart' show TodoTask;
 import '../../state/providers.dart';
 import 'saved_filter_mapping.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -107,11 +108,16 @@ class FilterBar extends ConsumerWidget {
     required this.filter,
     required this.onChanged,
     this.assigneeOptions = const [],
+    this.previewResolver,
   });
 
   final TaskFilter filter;
   final ValueChanged<TaskFilter> onChanged;
   final List<TaskAssigneeOption> assigneeOptions;
+
+  /// 「预览模式」的算法入口：给一套草稿条件，返回命中的任务。
+  /// 由持有原始列表的页面注入（页面已经 import 本文件，反向 import 会成环）。
+  final List<TodoTask> Function(TaskFilter draft)? previewResolver;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -161,18 +167,16 @@ class FilterBar extends ConsumerWidget {
                 context,
                 filter,
                 assigneeOptions,
+                previewResolver,
               );
               if (next == null) return;
               onChanged(
-                filter.copyWith(
-                  keyword: next.keyword,
-                  clearKeyword: next.keyword == null,
+                _draftFilter(
+                  base: filter,
+                  keyword: next.keyword ?? '',
                   dueAtFrom: next.dueAtFrom,
-                  clearDueAtFrom: next.dueAtFrom == null,
                   dueAtTo: next.dueAtTo,
-                  clearDueAtTo: next.dueAtTo == null,
                   assigneeUserId: next.assigneeUserId,
-                  clearAssigneeUserId: next.assigneeUserId == null,
                 ),
               );
             },
@@ -290,10 +294,33 @@ class FilterBar extends ConsumerWidget {
     ).then((v) => v == -1 ? null : v);
   }
 
+  /// 高级筛选对话框里的草稿 → 完整生效条件。
+  /// 预览与「应用高级筛选」共用这一份：两处各写一遍 copyWith，
+  /// 迟早会变成"预览说的是一套、套出来是另一套"。
+  static TaskFilter _draftFilter({
+    required TaskFilter base,
+    required String keyword,
+    required DateTime? dueAtFrom,
+    required DateTime? dueAtTo,
+    required int? assigneeUserId,
+  }) {
+    return base.copyWith(
+      keyword: keyword.isEmpty ? null : keyword,
+      clearKeyword: keyword.isEmpty,
+      dueAtFrom: dueAtFrom,
+      clearDueAtFrom: dueAtFrom == null,
+      dueAtTo: dueAtTo,
+      clearDueAtTo: dueAtTo == null,
+      assigneeUserId: assigneeUserId,
+      clearAssigneeUserId: assigneeUserId == null,
+    );
+  }
+
   static Future<_AdvancedFilter?> _pickAdvancedFilter(
     BuildContext context,
     TaskFilter current,
     List<TaskAssigneeOption> assigneeOptions,
+    List<TodoTask> Function(TaskFilter draft)? previewResolver,
   ) async {
     final keywordController = TextEditingController(
       text: current.keyword ?? '',
@@ -305,114 +332,188 @@ class FilterBar extends ConsumerWidget {
     final dueAtToController = TextEditingController(
       text: _formatDate(current.dueAtTo),
     );
+    var previewEnabled = false;
     String? validationMessage;
     return showDialog<_AdvancedFilter?>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('高级筛选'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  key: const Key('task-filter-keyword'),
-                  controller: keywordController,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: '关键词（标题或正文）',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<int?>(
-                  key: const Key('task-filter-assignee'),
-                  initialValue: selectedAssigneeUserId,
-                  decoration: const InputDecoration(
-                    labelText: '负责人',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: [
-                    const DropdownMenuItem<int?>(
-                      value: null,
-                      child: Text('全部负责人'),
-                    ),
-                    for (final option in assigneeOptions)
-                      DropdownMenuItem<int?>(
-                        value: option.userId,
-                        child: Text(option.name),
-                      ),
-                  ],
-                  onChanged: (value) {
-                    setDialogState(() => selectedAssigneeUserId = value);
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  key: const Key('task-filter-due-at-from'),
-                  controller: dueAtFromController,
-                  keyboardType: TextInputType.datetime,
-                  decoration: const InputDecoration(
-                    labelText: '截止日期起（YYYY-MM-DD）',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  key: const Key('task-filter-due-at-to'),
-                  controller: dueAtToController,
-                  keyboardType: TextInputType.datetime,
-                  decoration: InputDecoration(
-                    labelText: '截止日期止（YYYY-MM-DD）',
-                    border: const OutlineInputBorder(),
-                    errorText: validationMessage,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final dueAtFrom = _parseLocalDate(dueAtFromController.text);
-                final dueAtTo = _parseLocalDate(dueAtToController.text);
-                final fromInvalid =
-                    dueAtFromController.text.trim().isNotEmpty &&
-                    dueAtFrom == null;
-                final toInvalid =
-                    dueAtToController.text.trim().isNotEmpty && dueAtTo == null;
-                if (fromInvalid || toInvalid) {
-                  setDialogState(
-                    () => validationMessage = '请输入有效日期，例如 2026-07-12',
-                  );
-                  return;
-                }
-                if (dueAtFrom != null &&
-                    dueAtTo != null &&
-                    dueAtFrom.isAfter(dueAtTo)) {
-                  setDialogState(() => validationMessage = '截止日期起不能晚于截止日期止');
-                  return;
-                }
-                Navigator.pop(
-                  ctx,
-                  _AdvancedFilter(
-                    keyword: keywordController.text.trim().isEmpty
-                        ? null
-                        : keywordController.text.trim(),
-                    dueAtFrom: dueAtFrom,
-                    dueAtTo: dueAtTo,
+        builder: (ctx, setDialogState) {
+          final draftKeyword = keywordController.text.trim();
+          final draftDueAtFrom = _parseLocalDate(dueAtFromController.text);
+          final draftDueAtTo = _parseLocalDate(dueAtToController.text);
+          final draftDatesUsable =
+              (dueAtFromController.text.trim().isEmpty ||
+                  draftDueAtFrom != null) &&
+              (dueAtToController.text.trim().isEmpty || draftDueAtTo != null);
+          final previewMatches =
+              previewEnabled && previewResolver != null && draftDatesUsable
+              ? previewResolver(
+                  _draftFilter(
+                    base: current,
+                    keyword: draftKeyword,
+                    dueAtFrom: draftDueAtFrom,
+                    dueAtTo: draftDueAtTo,
                     assigneeUserId: selectedAssigneeUserId,
                   ),
-                );
-              },
-              child: const Text('应用高级筛选'),
+                )
+              : null;
+          return AlertDialog(
+            title: const Text('高级筛选'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextField(
+                    key: const Key('task-filter-keyword'),
+                    controller: keywordController,
+                    autofocus: true,
+                    onChanged: (_) => setDialogState(() {}),
+                    decoration: const InputDecoration(
+                      labelText: '关键词（标题或正文）',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int?>(
+                    key: const Key('task-filter-assignee'),
+                    initialValue: selectedAssigneeUserId,
+                    decoration: const InputDecoration(
+                      labelText: '负责人',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      const DropdownMenuItem<int?>(
+                        value: null,
+                        child: Text('全部负责人'),
+                      ),
+                      for (final option in assigneeOptions)
+                        DropdownMenuItem<int?>(
+                          value: option.userId,
+                          child: Text(option.name),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      setDialogState(() => selectedAssigneeUserId = value);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    key: const Key('task-filter-due-at-from'),
+                    controller: dueAtFromController,
+                    keyboardType: TextInputType.datetime,
+                    onChanged: (_) => setDialogState(() {}),
+                    decoration: const InputDecoration(
+                      labelText: '截止日期起（YYYY-MM-DD）',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    key: const Key('task-filter-due-at-to'),
+                    controller: dueAtToController,
+                    keyboardType: TextInputType.datetime,
+                    onChanged: (_) => setDialogState(() {}),
+                    decoration: InputDecoration(
+                      labelText: '截止日期止（YYYY-MM-DD）',
+                      border: const OutlineInputBorder(),
+                      errorText: validationMessage,
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      const Expanded(child: Text('预览模式')),
+                      // 旁边那句 Text 不会自动变成开关的读屏名：裸 Switch 的节点是"未命名开关"。
+                      // 包一层带 key 的 Semantics，测试才钉得住"开关自身念得出「预览模式」"。
+                      Semantics(
+                        key: const Key(
+                          'task-filter-advanced-preview-semantics',
+                        ),
+                        label: '预览模式',
+                        child: Switch(
+                          key: const Key('task-filter-advanced-preview'),
+                          value: previewEnabled,
+                          onChanged: previewResolver == null
+                              ? null
+                              : (next) =>
+                                    setDialogState(() => previewEnabled = next),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (previewMatches != null)
+                    Container(
+                      key: const Key('task-filter-advanced-preview-panel'),
+                      margin: const EdgeInsets.only(top: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: const Color(0x33000000)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('命中 ${previewMatches.length} 项'),
+                          if (previewMatches.isEmpty) const Text('无匹配任务'),
+                          for (final task in previewMatches.take(3))
+                            Text(task.title),
+                          if (previewMatches.length > 3)
+                            Text('其余 ${previewMatches.length - 3} 项未列出'),
+                        ],
+                      ),
+                    )
+                  else if (previewEnabled)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: Text('日期无效，未预览'),
+                    ),
+                ],
+              ),
             ),
-          ],
-        ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final dueAtFrom = _parseLocalDate(dueAtFromController.text);
+                  final dueAtTo = _parseLocalDate(dueAtToController.text);
+                  final fromInvalid =
+                      dueAtFromController.text.trim().isNotEmpty &&
+                      dueAtFrom == null;
+                  final toInvalid =
+                      dueAtToController.text.trim().isNotEmpty &&
+                      dueAtTo == null;
+                  if (fromInvalid || toInvalid) {
+                    setDialogState(
+                      () => validationMessage = '请输入有效日期，例如 2026-07-12',
+                    );
+                    return;
+                  }
+                  if (dueAtFrom != null &&
+                      dueAtTo != null &&
+                      dueAtFrom.isAfter(dueAtTo)) {
+                    setDialogState(() => validationMessage = '截止日期起不能晚于截止日期止');
+                    return;
+                  }
+                  Navigator.pop(
+                    ctx,
+                    _AdvancedFilter(
+                      keyword: keywordController.text.trim().isEmpty
+                          ? null
+                          : keywordController.text.trim(),
+                      dueAtFrom: dueAtFrom,
+                      dueAtTo: dueAtTo,
+                      assigneeUserId: selectedAssigneeUserId,
+                    ),
+                  );
+                },
+                child: const Text('应用高级筛选'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

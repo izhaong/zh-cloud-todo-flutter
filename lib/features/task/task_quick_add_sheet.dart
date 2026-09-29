@@ -30,6 +30,9 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
   final _titleCtrl = TextEditingController();
   int? _priorityOverride;
   DateTime? _nlpResolvedDueAt;
+
+  /// 「任务已建、提醒没建成」时记住任务 id：再点一次「保存」只补提醒，不建第二遍任务。
+  String? _savedTaskId;
   bool _applyingTemplate = false;
   String? _feedback;
   String? _titleError;
@@ -66,28 +69,55 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
       _report('请先登录');
       return;
     }
-    final text = _titleCtrl.text.trim();
-    if (text.isEmpty) {
-      setState(() => _titleError = '请输入任务标题');
+    // 判据源《05-智能识别》:5「…自动识别并为您创建日期**和提醒**」。
+    // `_nlpResolvedDueAt` 只由识别路径赋值（模板那条 `_addFromTemplate` 不碰它），
+    // 所以"识别命中"与"有 dueAt"在这文件里是同一件事，不需要再引第二个标志位。
+    final dueAt = _nlpResolvedDueAt;
+    if (_savedTaskId == null) {
+      final text = _titleCtrl.text.trim();
+      if (text.isEmpty) {
+        setState(() => _titleError = '请输入任务标题');
+        return;
+      }
+      try {
+        final defaults = await ref
+            .read(taskCaptureDefaultsRepositoryProvider)
+            ?.get();
+        final task = await repo.create(
+          listId: widget.listId,
+          parentTaskId: widget.parentTaskId,
+          sectionId: widget.sectionId,
+          title: text,
+          priority: _priorityOverride ?? defaults?.defaultPriority ?? 0,
+          dueAt: dueAt,
+        );
+        _savedTaskId = task.id;
+      } on StateError catch (error) {
+        _report(error.message.toString());
+        return;
+      } catch (_) {
+        _report('保存任务失败，请稍后重试');
+        return;
+      }
+    }
+    if (dueAt == null) {
+      if (mounted) Navigator.pop(context);
+      return;
+    }
+    // 提醒那半：任务已经落库，这一步失败不能说成"保存成功"，也不能回滚任务。
+    final reminders = ref.read(reminderRepositoryProvider);
+    if (reminders == null) {
+      // 写成 `?.create(...)` 就是一次静默早退——正是 #289/#292 清掉的那类缺陷。
+      _report('任务已建，但提醒没建成：提醒功能当前不可用');
       return;
     }
     try {
-      final defaults = await ref
-          .read(taskCaptureDefaultsRepositoryProvider)
-          ?.get();
-      await repo.create(
-        listId: widget.listId,
-        parentTaskId: widget.parentTaskId,
-        sectionId: widget.sectionId,
-        title: text,
-        priority: _priorityOverride ?? defaults?.defaultPriority ?? 0,
-        dueAt: _nlpResolvedDueAt,
-      );
+      await reminders.create(taskId: _savedTaskId!, fireAt: dueAt);
       if (mounted) Navigator.pop(context);
     } on StateError catch (error) {
-      _report(error.message.toString());
+      _report('任务已建，但提醒没建成：${error.message}');
     } catch (_) {
-      _report('保存任务失败，请稍后重试');
+      _report('任务已建，但提醒没建成，请稍后在任务里添加提醒');
     }
   }
 
