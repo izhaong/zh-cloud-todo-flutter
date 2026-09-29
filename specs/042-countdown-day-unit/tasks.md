@@ -87,3 +87,16 @@ run #1（`gate3 rc=1` 那遍）、run #2、run #3 三份日志都写在 `/tmp` �
       本段自己的命令里就含该词，抄进去的数会被本次写入顶掉（上一版记的「9 处」在任何口径下都复现不出，已作废）。
       docs 侧 `git grep -n -E '已 [0-9]+ 天|已 [0-9]+ 年|点卡片即切换' origin/develop -- todo` = **0 命中**；
       正对照 `git -c core.quotePath=false show 'origin/develop:todo/01_需求阶段/对照矩阵/dida-parity-matrix.md' | grep -o 已过 | wc -l` = **3**。
+
+## 复核（第 3 轮：VERDICT: FAIL → 逐条回源复验，修复落在 `5386268`）
+被审字节 `fa54e64`，取数基准 FL `origin/develop` = `5a831a19e`（复核员用的是它开跑时的 `b25fdd74`，下表读数全部按当前 develop 重量一遍）。
+
+| 复核发现 | 我的复验（现跑） | 处置 |
+| --- | --- | --- |
+| FAIL A：`spec.md` 逐面判定仍写「`样式` 0 命中 / UI 未接」 | `git grep -o 样式 origin/develop -- lib/features/countdown/countdown_page.dart \| wc -l` = 3；`:401` 渲染「样式」标签、`:406` 是 `ChoiceChip`、`:455` 按 `countdown.style` 切徽章形态；`git merge-base --is-ancestor 24005fc origin/develop` rc=0 ⇒ 三档样式早已在 develop | **采纳**：该行改判「部分」，并把仍缺之处写成「入口位置」与「档位数量」 |
+| FAIL B：锚点 `note_page.dart:188` | `git show origin/develop:lib/features/note/note_page.dart \| sed -n '188p'` = `child: ListTile(`，`ValueKey('todo-note-…')` 实际在 `:189` | **采纳**：改锚为 `:189` |
+| FAIL B：锚点 `tasks_by_list_page.dart:1710` | `sed -n '1710p'` = `final String? selectedTaskId;`；`grep -n todo-task-group-` ⇒ `:1839` 与 `:1879` | **采纳**：改锚并给出现跑命令 |
+| NIT：门禁日志 `/tmp/r41_gates*.log` 读不到 | `ls -l` 那三个路径全报 `No such file or directory` | **采纳**：正文改成「只剩文档自述」，并把重跑登记进「仍缺」 |
+| NIT：树等价属历史快照 | `git rev-parse 9032005^{tree} ed53c8c^{tree}` 仍 = `d6c5504d50d5…`；但 `origin/develop^{tree}` 现为 `1722c200842f…` | **采纳**：等价只引不可变 commit，并写出今天的 develop tree 以示区别 |
+| NIT：「`已过` 在 specs 命中 9 处」复现不出 | 按出现数、按行数都远大于 9；且本轮写入自身就含该词 ⇒ 出现数必然被自己顶掉 | **采纳并换口径**：只记 `git grep -c 已过 -- specs/ \| wc -l` = 7 个文件。顺带查出原文那句「除旧读数外 0 命中」按字面也不成立（实测 4 行，含 2 行命令被自身模式串命中），一并改成实测读数 |
+| NIT：服务端 `type`/`unit` 契约缺口没另立专单 | 镜像《02-打造专属纪念页.md》`:97` 与 `:106` 只要求「点击天数即在三种单位间切换」，没有「记住档位」的主张 | **驳回**：给不存在的即时需求开契约单等于自创要求；`spec.md` 取舍段已写明「持久化需新增契约列 ⇒ 另开 `zh-cloud-service` Issue」，等有产品主张再立 |
