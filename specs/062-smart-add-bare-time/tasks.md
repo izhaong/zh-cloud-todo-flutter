@@ -229,3 +229,22 @@ NIT-5 里还有一句要紧的：`gh` 不在本机，所以第 1 轮无法直读
 | 四件套 | **不适用**：纯解析函数，无新增界面、无异步、无失败路径（快速添加框那一侧的消费没改） | `git diff --name-only origin/develop...HEAD` 里不含 `lib/features/**` |
 
 **行为改变要认账（不是纯加法）**：`明天9:75` 由「滚成 10:15」改成「不识别」。同一条守卫若只管新形、放过冒号形，就会留下「`9点75分` 拒识、`9:75` 吞错值」两套口径 —— 那比统一改成不认领更糟。此处取舍已请 cursor CLI 出第二意见，结论与本单处置的异同记在 PR 正文里，不在此抄结论。
+
+## 十二、在 head `0df3d2ce3` 上重跑六门（第 149 轮，2026-09-30）
+
+**为什么重跑**：第四节那两轮 `VERDICT: PASS` 绑的是旧字节（`18133d778`、`d580ac5`/`dc448fb2a`），而本分支后来重堆到最新 develop 上（tip = `0df3d2c`），**`0df3d2c` 在本台账里当时出现 0 次** ⇒ 覆盖面不成立，不能拿旧读数去合。门禁日志：`/tmp/r136/g411/`（工作树 `/private/tmp/wt-fl-411`，`git worktree add -f --detach … 0df3d2ce3`，跑完 `git status --short` 无输出 ⇒ `pubspec.lock` 未被本机镜像改动）。
+
+| 门禁 | 读数（各附 `日志文件:行号`，全文行数即该锚点） | rc |
+| --- | --- | --- |
+| 1 `git diff --check origin/develop...HEAD` | 空输出（`/tmp/r136/g411/g1-check.log` 全文 0 行） | rc=0 |
+| 2 `dart format --output=none --set-exit-if-changed`（本 PR 两个显式 dart 文件） | `Formatted 2 files (0 changed) in 0.01 seconds.`（`g2-format.log:1`，全文 1 行） | rc=0 |
+| 3 `flutter analyze` | `No issues found! (ran in 3.6s)`（`g3-analyze.log:66`，全文 66 行） | rc=0 |
+| 4 `flutter test --tags golden` | `00:05 +9: All tests passed!`（`g4-golden.log:75`，全文 75 行；基线 9 张，**未重录**） | rc=0 |
+| 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `03:06 +1207 ~26: All tests passed!`（`g5-full.log:1496`，全文 1496 行） | rc=0 |
+| 6 `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web`（`g6-build.log:81`，全文 81 行） | rc=0 |
+
+`+1207` 比第四节记的 `+898` 多 309 条（`echo $((1207-898))`）。差值不是本 PR 新增：本 PR 在 test 侧只带一个文件
+（复算 `git diff --name-only origin/develop...HEAD | grep test/` ⇒ 仅 `test/nlp_date_dated_word_minute_test.dart`），
+其余是分支重堆到最新 develop 时一起带进来的他人用例。
+
+**待办（合并前置三格）**：六道绿 = 已成（本节）；真实合并试算 rc=0 = 已成（`git merge-tree --write-tree --name-only origin/develop 0df3d2ce3` 产出 tree 且无 `CONFLICT` 行）；**`VERDICT` 仍欠** ⇒ 第 3 轮只读复核的字节 = 本节提交之后的新 head，覆盖面按「`lib`/`test` 两棵树号与 `0df3d2ce3` 逐字节相等」承接门 2–6，门 1 在新 head 上另跑。矩阵 #83 在合进 develop 之前保持「已实现待合并」。
