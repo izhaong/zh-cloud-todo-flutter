@@ -41,7 +41,8 @@ class NlpDateParser {
 
     // "明天 8 点" / "明天 8:30" / "tomorrow 8am"
     final tomorrowRe = RegExp(
-      r'(明天|后天|tomorrow)(?:\s*)?(\d{1,2})(?:[:：.](\d{1,2}))?(?:[\s]*([点时])|[\s]*(am|pm))?',
+      r'(明天|后天|tomorrow)(?:\s*)?(\d{1,2})(?:[:：.](\d{1,2}))?'
+      r'(?:[\s]*([点时])(?:\s*(\d{1,2})分?)?|[\s]*(am|pm))?',
     );
     final tm = tomorrowRe.firstMatch(lower);
     if (tm != null) {
@@ -50,14 +51,18 @@ class NlpDateParser {
           ? 2
           : 1;
       final hour = int.parse(tm.group(2)!);
-      final minute = int.tryParse(tm.group(3) ?? '') ?? 0;
+      final minute =
+          int.tryParse(tm.group(3) ?? '') ??
+          int.tryParse(tm.group(5) ?? '') ??
+          0;
+      if (minute > 59) return null;
       final base = _todayAtMidnight(now).add(Duration(days: offset));
       return ResolvedDate(
         DateTime(
           base.year,
           base.month,
           base.day,
-          _adjustHour(hour, tm.group(5) ?? tm.group(4)),
+          _adjustHour(hour, tm.group(6) ?? tm.group(4)),
           minute,
         ),
         tm.group(0)!,
@@ -66,14 +71,19 @@ class NlpDateParser {
 
     // "今天 14:30" / "今天下午 3 点"
     final todayRe = RegExp(
-      r'(今天|今日|today)(?:\s*)?(\d{1,2})(?:[:：.](\d{1,2}))?',
+      r'(今天|今日|today)(?:\s*)?(\d{1,2})(?:[:：.](\d{1,2}))?'
+      r'(?:\s*[点时](?:\s*(\d{1,2})分?)?)?',
     );
     final tdm = todayRe.firstMatch(lower);
     if (tdm != null) {
       if (_halfFollows(lower, tdm.end)) return null;
       final base = _todayAtMidnight(now);
       final hour = int.parse(tdm.group(2)!);
-      final minute = int.tryParse(tdm.group(3) ?? '') ?? 0;
+      final minute =
+          int.tryParse(tdm.group(3) ?? '') ??
+          int.tryParse(tdm.group(4) ?? '') ??
+          0;
+      if (minute > 59) return null;
       return ResolvedDate(
         DateTime(base.year, base.month, base.day, hour, minute),
         tdm.group(0)!,
