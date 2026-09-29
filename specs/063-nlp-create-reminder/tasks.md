@@ -204,7 +204,15 @@
   没有规定重复点击的行为 ⇒ 这条不能拿嘀嗒原文当依据，只是健壮性收口。
   是否换成形状 A（按钮 in-flight 置灰）要先补一条「禁用态仍在可见区」的量法，
   本轮不自行加视觉态；等 FL Issue #391 那条 PR 的第 1 轮只读复核意见再定。
-- 交叉验证通道这轮**没拿到第二意见**：`cursor-agent --trust -p` 那次回 0 字节 ⇒ 按「没执行」记账，
-  不当依据；补跑之后要回填到这一节。
+- 交叉验证通道：第一次派发回 0 字节（按「没执行」记账），补跑那次回了 5334 字节、
+  带 `CROSSCHECK:` 一到四。它的第 3 条主张「提醒段飞行期连点没有对称断言」**判为不成立**，
+  理由是代码形状：闸门的 `if (_saving) return;` 包在 `_save()` 外层，而
+  `await reminders.create(...)` 就在 `_saveOnce` 里（复算
+  `grep -n "await reminders.create" lib/features/task/task_quick_add_sheet.dart`），
+  同一个标志覆盖两段 await ⇒ 行为上没有缺口，它指的只是用例覆盖面。
+  同目录既有用例 `quick_add_nlp_reminder_test.dart` 里那条「提醒没建成 ⇒ 再点保存不建第二遍任务」
+  也钉着这条路径（复算 `grep -n "再点保存不建第二遍任务" test/features/task/quick_add_nlp_reminder_test.dart`）。
+  其余三条（静默无反馈是 B 的代价、`finally` 在 pop/dispose 后写标志安全、`_savedTaskId` 语义未被破坏）
+  与我自己读码的结论一致，采纳为第二意见但不当 VERDICT。
 - 矩阵不翻：本轮 PR 未合并，#7「添加任务」与 #83「智能识别」两行的状态仍等合并后
   由 docs 轮次按已合并 SHA 收口。
