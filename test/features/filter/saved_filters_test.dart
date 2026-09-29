@@ -255,16 +255,27 @@ void main() {
 
     await _repump(tester, fixture, const SavedFiltersPage());
 
-    expect(find.textContaining('本机暂不支持套用'), findsNWidgets(2));
-    for (final id in ['pulled-in-progress', 'pulled-with-tag']) {
-      await tester.tap(find.byKey(ValueKey('saved-filter-$id')));
-      await tester.pumpAndSettle();
-      expect(
-        find.byType(SavedFiltersPage),
-        findsOneWidget,
-        reason: '$id 套不出一样的结果集，必须不可点',
-      );
-    }
+    // 只有「契约里有、本地筛选态没有对应字段」的那条才算不支持。
+    // `tagIds` 从 Issue #417 起真的参与求值（`applyTaskFilter` 有了标签分支），
+    // 所以带标签的行必须恢复可套用 —— 这里反过来钉住它不再被标不支持。
+    expect(find.textContaining('本机暂不支持套用'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('saved-filter-pulled-in-progress')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byType(SavedFiltersPage),
+      findsOneWidget,
+      reason: 'in_progress 套不出一样的结果集，必须不可点',
+    );
+    expect(
+      find.ancestor(
+        of: find.text('带标签的'),
+        matching: find.textContaining('本机暂不支持套用'),
+      ),
+      findsNothing,
+      reason: '标签维度已参与求值 ⇒ 带标签的行不该再被标成不支持',
+    );
   });
 
   testWidgets('条件流失败时给错误态而不是空白页', (tester) async {

@@ -172,13 +172,24 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    final taskTagIds = ref.watch(taskTagIndexProvider).valueOrNull;
     final tasksStream = _resolveTasksStream(taskRepo);
 
     final body = StreamBuilder<List<TodoTask>>(
       stream: tasksStream,
       builder: (context, snapshot) {
         final raw = snapshot.data ?? const <TodoTask>[];
-        final items = applyTaskFilter(raw, _filter, _selectedListId, now);
+        // 标签条件生效但索引还没到位时，宁可转圈，也不画一份「标签没参与筛选」的列表。
+        if (_filter.tagIds.isNotEmpty && taskTagIds == null) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final items = applyTaskFilter(
+          raw,
+          _filter,
+          _selectedListId,
+          now,
+          taskTagIds: taskTagIds,
+        );
         final listOrderedItems = _visibleTasksInListOrder(
           items,
           sections: taskSections,
@@ -1668,6 +1679,10 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                     next,
                     _selectedListId,
                     ref.read(currentDateTimeProvider)(),
+                    // 与列表同源；索引缺失时给空图 ⇒ 预览报 0 项，而不是把全量当命中。
+                    taskTagIds:
+                        ref.read(taskTagIndexProvider).valueOrNull ??
+                        const <String, Set<String>>{},
                   ),
                   onChanged: (next) {
                     draft = next;
@@ -2148,8 +2163,9 @@ List<TodoTask> applyTaskFilter(
   List<TodoTask> source,
   TaskFilter filter,
   String? selectedListId,
-  DateTime now,
-) {
+  DateTime now, {
+  Map<String, Set<String>>? taskTagIds,
+}) {
   if (filter.isEmpty && selectedListId == null) return source;
   final startOfDay = DateTime(now.year, now.month, now.day);
   final todayEnd = startOfDay.add(const Duration(days: 1));
@@ -2158,6 +2174,15 @@ List<TodoTask> applyTaskFilter(
   return source.where((task) {
     if (selectedListId != null && task.listId != selectedListId) return false;
     if (filter.listId != null && task.listId != filter.listId) return false;
+    // 标签维度真正参与求值（Issue #417：此前这里根本没有标签分支，带标签的已存过滤器
+    // 只能被标成「不支持套用」）。缺省按「且」：所选标签要全部命中，口径与服务端
+    // TodoFilterConditionsDO.LOGIC_AND 一致；「或」属 Issue #334，本轮不开这个口子。
+    // `taskTagIds == null` 表示索引还没就位，调用方要么等它，要么传空图（命中 0 项），
+    // 这里不假装「没有标签条件」把全量放行。
+    if (filter.tagIds.isNotEmpty && taskTagIds != null) {
+      final owned = taskTagIds[task.id] ?? const <String>{};
+      if (!owned.containsAll(filter.tagIds)) return false;
+    }
     if (filter.priority != null && task.priority != filter.priority) {
       return false;
     }

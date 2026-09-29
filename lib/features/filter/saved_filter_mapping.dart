@@ -43,9 +43,9 @@ TaskFilter? taskFilterFromSaved(
   if (unsupportedKeys.isNotEmpty) return null;
   if (conditions.listIds.length > 1) return null;
   if (conditions.priorities.length > 1) return null;
-  // 任务列表页不消费 tagIds（`applyTaskFilter` 里没有标签分支）：带标签的行若可点，
-  // 套用结果会与摘要承诺不符 ⇒ 一律标「不支持」而不是套一半。
-  if (conditions.tagIds.isNotEmpty) return null;
+  // tagIds 如今真的参与求值（Issue #417 在 `applyTaskFilter` 里补了标签分支），
+  // 所以带标签的已存过滤器可以套用，不再一律标「不支持」。
+
   // 只认 done/todo；in_progress、cancelled 等契约值在本地筛选态里没有对应字段，
   // 静默还原成「不限状态」等于凭空删掉一个条件。
   if (conditions.statuses.any((s) => s != 'done' && s != 'todo')) return null;
