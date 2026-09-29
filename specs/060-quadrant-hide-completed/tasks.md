@@ -178,7 +178,7 @@
 
 - **达成**：第 2 轮唯一失项 ③ 已用"在 `b599309` 上重跑六道门禁并把读数写进本节"闭环；
   §二 那份 `67d077c` 的读数**保留原文不改**，它是第 1 轮 PASS 绑定的字节，重写等于伪造历史。
-- **仍欠**：第 3 轮只读复核（本节提交后 head 会变；变的是 markdown，
+- **仍欠**（该条写于第 3 轮派发之前，判过之后的账见 §十一，本节保留原文不改）：第 3 轮只读复核（本节提交后 head 会变；变的是 markdown，
   `git rev-parse` 出来的 `lib`/`test` 两棵树号不变 ⇒ 覆盖面靠"三棵树号逐字节相等"承接，
   这条口令与第 133 轮合并 !347/!367 用的是同一条）。矩阵 #36 ⑩ 在合进 develop 之前仍写「已实现、未合并」。
 
@@ -186,3 +186,31 @@
 
 1. 派第 3 轮只读复核，审的字节 = 本次 §九 提交后的新 head；覆盖面用 `git rev-parse <head>:lib` 与 `:test` 两个树号对 `b599309` 逐字节比下来承接六门，门禁 1 另跑（`git diff --check` 吃的就是台账自己的空白）。
 2. 三条前置都过才谈合并：六道门禁全绿（§九·补）、`VERDICT: PASS`（待第 3 轮）、真实合并试算 rc=0（不加 `--quiet`——它会把冲突也报成 rc=0，第 133 轮实测）。与 !370/!372 同撞 `settings_route.dart` 的那批排在 !360 合并之后。
+
+## 十一、第 3 轮只读复核与合并产物门禁（第 151 轮，2026-09-30）
+
+- 复核通道 = `claude -p --permission-mode plan`，输出 `/tmp/r136/review-385-r1.jsonl`，结论 `VERDICT: PASS`。
+  审的字节 = `816a12ab9`（复核自报 `parent1=cbd93c7`、`parent2=f361be4`，与 `git log --format=%P -1 816a12ab9` 一致）。
+- 该轮唯一 NIT：§九·补 的六门跑在 `b599309`，其时 develop 是 `f361be4`；后来 develop 又吃了
+  `5a831a1`（看板列绑分组）与 `0c7bce9`（标签参与筛选求值），而区间 `f361be4..0c7bce9` 里动过本分支同一份
+  `lib/features/task/tasks_by_list_page.dart` 的提交有 5 笔（判据 `git log --oneline f361be4..0c7bce9 -- lib/features/task/tasks_by_list_page.dart | wc -l` = 5）
+  ⇒ 「门禁覆盖的是旧基线」这条成立，**不能用树号承接**。
+- 修法是把真合并结果落成一棵工作树，在产物字节上重跑六门：产物提交 = `git commit-tree` 出的 `f500669337f2`，
+  两个父为 `0c7bce9c4d74` 与 `816a12ab9`，工作树 `/private/tmp/wt-fl-385prod`，日志 `/tmp/r136/prod385.log`。
+
+| # | 命令（跑在产物上） | 读数 |
+| --- | --- | --- |
+| 2 | `dart format --output=none --set-exit-if-changed` 本单 5 个 .dart（清单见日志 `gate2_files=` 行） | `Formatted 5 files (0 changed)` rc=0 |
+| 3 | `flutter analyze` | `No issues found! (ran in 3.8s)` rc=0 |
+| 4 | `flutter test --tags golden` | `00:05 +9: All tests passed!` rc=0，`png=9`、`dirty=0` ⇒ 基线未重录 |
+| 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `03:14 +1247 ~26: All tests passed!` rc=0 |
+| 6 | `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web` rc=0 |
+
+门 1 不在这张表里：它吃的是台账自己的空白，随本节提交单独跑（`git diff --cached --check`），
+产物侧的 `g5` 从 §九·补 的 `+1058` 涨到 `+1247` 不是本分支多写了用例：本面自己仍是 §九·补 实跑的 16 条
+（`flutter test test/features/task/eisenhower_hide_completed_test.dart`），多出来的是 develop 侧带进来的测试提交，
+判据 `git log --oneline f361be4..0c7bce9 -- test | wc -l` = 7。
+
+- **状态**：第 3 轮 PASS + 产物六门绿 + 合并试算 `git merge-tree --write-tree --name-only origin/develop 816a12ab9`
+  rc=0、`CONFLICT` 0 行 ⇒ 三条前置齐，本节提交后合 !385。矩阵 #36 面 ⑩ 的翻转**只引合并后的 SHA**，落在 docs 仓的
+  对照表 PR 里，不在本仓写。
