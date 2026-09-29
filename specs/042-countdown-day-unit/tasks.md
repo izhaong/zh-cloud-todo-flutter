@@ -12,7 +12,7 @@
 - [x] 换算由用例钉死：1095 天 → 3 年 / 156 周；2000 天 → 5 年 / 285 周（年 = 天 ~/ 365、周 = 天 ~/ 7）
 - [x] 行级 Key 的写法有仓内先例，不是本轮发明的。锚点基准 FL `origin/develop` = `5a831a19e`，复验：
       `git show origin/develop:lib/features/note/note_page.dart | grep -n todo-note-` ⇒ `note_page.dart:189` `ValueKey('todo-note-${note.id}')`；
-      `git show origin/develop:lib/features/task/tasks_by_list_page.dart | grep -n todo-task-group-` ⇒ `:1839` 与 `:1879` 两处 `Key('todo-task-group-${entry.id}')`
+      `git show origin/develop:lib/features/task/tasks_by_list_page.dart | grep -n todo-task-group-` ⇒ `:1839` 与 `:1879` 两处 `Key('todo-task-group-${entry.id}')`（这两个行号基准是 `5a831a19e`；在 `4f203b8` 上同一命令 ⇒ `:1919` 与 `:1959`，行号随 develop 前进而漂，主张只钉 Key 本身与两处命中数）
 - [x] 复核手段替换：`claude` CLI 本机不可用（`unrecognized_model`），改由本会话**只读子代理**审 FR-001..FR-006，
       要求逐条给 VERIFIED / FALSIFIED / UNPROVEN 并给命令与决定性输出行，末尾必须落 `VERDICT`
 
@@ -100,3 +100,32 @@ run #1（`gate3 rc=1` 那遍）、run #2、run #3 三份日志都写在 `/tmp` �
 | NIT：树等价属历史快照 | `git rev-parse 9032005^{tree} ed53c8c^{tree}` 仍 = `d6c5504d50d5…`；但 `origin/develop^{tree}` 现为 `1722c200842f…` | **采纳**：等价只引不可变 commit，并写出今天的 develop tree 以示区别 |
 | NIT：「`已过` 在 specs 命中 9 处」复现不出 | 按出现数、按行数都远大于 9；且本轮写入自身就含该词 ⇒ 出现数必然被自己顶掉 | **采纳并换口径**：只记 `git grep -c 已过 -- specs/ \| wc -l` = 7 个文件。顺带查出原文那句「除旧读数外 0 命中」按字面也不成立（实测 4 行，含 2 行命令被自身模式串命中），一并改成实测读数 |
 | NIT：服务端 `type`/`unit` 契约缺口没另立专单 | 镜像《02-打造专属纪念页.md》`:97` 与 `:106` 只要求「点击天数即在三种单位间切换」，没有「记住档位」的主张 | **驳回**：给不存在的即时需求开契约单等于自创要求；`spec.md` 取舍段已写明「持久化需新增契约列 ⇒ 另开 `zh-cloud-service` Issue」，等有产品主张再立 |
+
+## 复核（第 4 轮：`VERDICT: PASS`，审 `8fa9cdef5`，2026-09-30 第 153 轮）
+
+日志 `/tmp/r136/review-311-r4.jsonl`（result 块 1 段；复算 `grep -c '"type":"result"'` ⇒ 1；`num_turns` 135、耗时 146 分钟）。
+提示词把被审 head 钉成 `8fa9cdef5`，而 PR 当前 head 复算 `git -C /private/tmp/wt-fl-311 rev-parse HEAD` ⇒ `8fa9cdef56994e0b4817817ef1fb6561f9ba47d4`
+⇒ **复核覆盖要合的字节**（本 PR 相对 develop 只碰 `specs/042-countdown-day-unit/{spec,tasks}.md` 两个 markdown 文件，复算
+`git -C /private/tmp/wt-fl-311 diff --name-only origin/develop...HEAD`）。A–F 六节全 PASS，一条 FAIL 也没有，三条 NIT 逐条处置：
+
+| NIT | 处置 | 判据 |
+| --- | --- | --- |
+| NIT-1 `specs/042-countdown-day-unit/spec.md:5` 把「样式/颜色/图片/备注」说成「六个字」 | **采纳并改**：该行不再写字数，改为指向本节的切分口径 | 复算 `python3 -c "p=chr(26679)+chr(24335)+chr(47)+chr(39068)+chr(33394)+chr(47)+chr(22270)+chr(29255)+chr(47)+chr(22791)+chr(27880); print(len(p.split(chr(47))), sum(1 for ch in p if ch.isalpha()), len(p))"` ⇒ 依次得到 4、8、11，三个数里没有 6 |
+| NIT-2 `specs/042-countdown-day-unit/tasks.md:15` 与同文件 `:96` 的行号随 develop 前进漂移 | **部分采纳**：`:15` 的 `todo-task-group-` 两处行号补标基准并给出今天现跑的行号；`:96` 那行的「样式」命中数在 `4f203b8` 上复算仍 = 3、`:401` 仍是渲染「样式」的那行 ⇒ 只补基准说明，不动结论 | `git -C /Users/zhonghao/code/zh/zh-cloud/zh-cloud-todo-flutter show origin/develop:lib/features/countdown/countdown_page.dart \| grep -n 样式` ⇒ `401:            Text('样式', …)`；同一命令跑 `tasks_by_list_page.dart` ⇒ `:1919`、`:1959` |
+| NIT-3 `specs/042-countdown-day-unit/tasks.md:100` 的「`origin/develop^{tree}` 措辞」 | **不改**：该行已同时写出「等价只引不可变 commit」与今天的 develop tree，措辞正是为了让后人不把历史快照当现值 | 现跑 `git -C /Users/zhonghao/code/zh/zh-cloud/zh-cloud-todo-flutter rev-parse origin/develop^{tree}` ⇒ `654cff9991973428436254931b6ec60d84ae651f`（复核员当时读到的是另一个值 ⇒ 更说明基准要现取） |
+
+**门禁对这份差集的适用性**（写清，不含糊）：差集只有两个 `.md` ⇒ 门 2（`dart format`）与门 5/6（测试、构建）**不适用**，
+判据是「本轮 0 个 `.dart` 变更」，复算 `git -C /private/tmp/wt-fl-311 diff --name-only origin/develop...HEAD | grep -c '\.dart$'` ⇒ 0；
+适用的是门 1 与门 3，两种形式都跑对：三点式（merge-base 起算，本 PR 侧差集）
+`git -C /private/tmp/wt-fl-311 diff --check origin/develop...HEAD` ⇒ **rc=0、空输出**；
+两点式跑在**合并产物**上（一次性工作树 `/private/tmp/wt-merge413`：`git reset --hard 4f203b8` → `git merge --no-ff 8fa9cdef5` → 合并提交 `2fa7def9`）
+`git -C /private/tmp/wt-merge413 diff --check 4f203b8..2fa7def9` ⇒ **rc=0**；
+门 3 跑在同一合并产物上 ⇒ rc=0、`No issues found! (ran in 2.1s)`（`/tmp/r152/an-311m.log:66`，全文 66 行，统计行在 `:65`）。
+⚠️ 这里踩过一个形式坑：先跑 `git diff --check 4f203b8..8fa9cdef5`（两点式、比较到**分支头**）报了 rc=2 与
+`specs/044-kanban-groups/tasks.md:59: new blank line at EOF.` —— 那是**测量错误**，不是缺陷：本分支落后 develop，
+两点式会把 develop 后来对该文件的改动算成"本 PR 引入"。同一个文件在 develop 与合并产物上都没这处空行
+（复算 `git -C /private/tmp/wt-merge413 diff --check 4f203b8..2fa7def9` ⇒ rc=0）。⇒ 判门 1 只有两种正确形式：三点式对 merge-base，或两点式对**合并产物**。
+
+**合并前置三格**：复核 PASS 且绑 `8fa9cdef5`（= PR 当前 head）= 已成；真实合并试算 = 已成（真 merge 无冲突、合并产物 analyze rc=0）；
+门禁 = 已成（门 1 两种形式 rc=0、门 3 rc=0，门 2/5/6 因差集 0 个 `.dart` 记「不适用」而不是绿）。
+⇒ 本条是 FL 队列里第一条三格齐的 PR，差的只有「合并」二字；矩阵 #49 的翻转只能在合并之后、只引已合并 SHA。矩阵 #49 的状态翻转只能在合并之后、只引已合并 SHA。
