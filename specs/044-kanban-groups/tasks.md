@@ -7,7 +7,7 @@
       （`git diff origin/develop...HEAD -- lib/features/task/views/kanban_view.dart` 全为 `+///`/`-///`）。
       **注意口径**：这一条只说那一个文件；第 1 轮复核抓到整个 commit 还混进了 `pubspec.lock`，见下方处置。
 - [x] 七处源页引文逐字命中（python 扫 `02-看板视图：分类管理任务.md`）：`:14/:64/:99/:100/:101/:108/:115` **全部 OK**，行号与 spec 表一致
-- [x] 六项门禁（**终态日志 `/tmp/r45_gates_final.log`**，首行 `head=37528da`、`status_before_gates=[]` ⇒ 跑在已提交的干净树上；下表数字即该日志原文）
+- [x] 门禁表见下（六道，逐道的命令与数字都在表里；**终态日志 `/tmp/r45_gates_final.log`** 首行 `head=37528da`、`status_before_gates=[]` ⇒ 跑在已提交的干净树上，表中数字即该日志原文）
   | 门禁 | 结果 |
   | --- | --- |
   | 1 `git diff --check` | `rc=0`、无输出 |
@@ -151,7 +151,7 @@
 
 ## 后半轮第 1 轮只读复核处置（`VERDICT: FAIL`，2 BLOCKING + 2 NIT）
 复核手段同第 45 轮：本机 `claude` CLI 的模型别名仍不可用，改由本会话的只读子代理审。
-4 条全部**回源复验成立**，无一条驳回（复验命令与结论逐条如下）：
+findings **逐条回源复验成立**，无驳回（每条的复验命令与结论见下）：
 
 | # | 级别 | 复核员说的 | 我复验到的 | 处置 |
 | --- | --- | --- | --- | --- |
@@ -163,7 +163,7 @@
 ## 后半轮第 2 轮只读复核（`VERDICT: PASS`，5 条 NIT 全部处置）
 4 条修复经复核回验成立（折叠那段与 develop 逐字节相同、门禁数字独立重跑吻合、
 `git diff 7a56a49 HEAD -- lib test` 为空、引文 `:64/:99-:101/:108/:115/:129/:141/:148/:217-:219` 逐字命中）。
-5 条 NIT 我逐条复验，**全部成立，无一条驳回**：
+NIT 我逐条复验，**全部成立，无驳回**：
 
 | # | 复核员说的 | 我复验到的 | 处置 |
 | --- | --- | --- | --- |
@@ -187,7 +187,7 @@
 ## 第 1 轮只读复核处置（`VERDICT: FAIL`，5 条 findings）
 复核手段替换：本机 `claude` CLI 不可用（`unrecognized_model`），改由本会话的只读子代理审本轮 FR。
 5 条 findings 我逐条回源复验（`git diff --name-only`、`git show HEAD:` 配 `grep -n`、`git grep origin/develop`），
-**全部成立并已全部修**，无一条拒绝：
+**全部成立并已全部修**，无拒绝项：
 
 | # | 级别 | 复核员说的 | 我复验到的 | 处置 |
 | --- | --- | --- | --- | --- |
@@ -204,3 +204,25 @@ objective 第 2 条早就点名 `pubspec.lock` 会被本机镜像整树重解析
 ⇒ 正确顺序：**改完 → commit → 在已提交的终态上跑门禁 → 若门禁把 `pubspec.lock` 改脏则 `git checkout HEAD -- pubspec.lock` 还原**。
 本轮按此重跑，日志见 `/tmp/r45_gates_final.log`。
 
+
+
+## 并主干轮（终态字节 `5d1d550`，2026-09-29）
+分支基线落后 develop 一截，本轮**只做并主干**：没有新用例、没有新界面、没有改判定结论。
+`git merge origin/develop`（`f361be4`）报 **4 文件 8 hunk**，合并提交 `7216e5a`，之后一笔 `5d1d550` 修 analyze 报的 `duplicate_named_argument`。
+
+| 冲突处 | 取法 | 判据（现跑） |
+| --- | --- | --- |
+| `lib/features/task/views/kanban_view.dart` | 注释取 develop（含 develop 新加的右键「分配给」），`onAdd`／构造参数／字段与方法两侧都留 | `git diff d56b6a6 5d1d550 -- <该文件>` 里 develop 的 `onAssignCard` 与 `task_assign_action.dart` 的 import 都在 |
+| `lib/features/task/task_quick_add_sheet.dart` | 取 develop 的「落库后顺带建提醒」，再把本分支的 `sectionId: widget.sectionId` 手工补回 `repo.create(` | `_save` 的 create 里同时有 `sectionId:` 与 `dueAt: dueAt`，`reminders.create` 那条与 develop 逐字一致 |
+| `lib/state/repositories/task_view_action_repository.dart` | **两个方法各自完整重建** | `moveKanbanTaskToSection`／`moveQuadrantTask`／`reorderListTasks` 各 1 次；任取一侧都会合成一个跑不通的方法体（两侧共享同一条 `update(...)..write(TodoTasksCompanion(` 尾巴） |
+| `specs/044-kanban-groups/tasks.md` | 取本分支台账 | develop 那四条旧「仍缺」逐条有下文：`列定义未绑定`→上面「后半轮已证实」第 1 条；`拖到未分组落库语义未定`→第 2 条；`四件套不适用`→第 4 条；`看板列头无「···」`**仍挂在「仍缺」第 1 条**，只把含义收窄 |
+
+**被删那枚 `onAdd` 的等价性判据**：develop 写的是 `ordered[index].key == const ValueKey('col-todo') && listId != null ? () => _quickAdd(context, ref, listId!) : null`，与本分支保留那枚的 `!sectionMode` 分支逐字等价 ⇒ 删的是重复实参，不是 develop 的行为。分组模式那侧 develop 没有本分支未覆盖的新语义。
+
+**六道门禁跑在 `5d1d550`**（日志 `/tmp/r136/gates314.log`，首行 `### head=5d1d550 status_before_gates=[]`）：
+g1 `git diff --check origin/develop HEAD` rc=0；g2 逐文件 `dart format --output=none --set-exit-if-changed` **7 个 dart 文件、0 changed**（旧写法 `xargs -a` 在 macOS 不存在，会造出 rc=1 的假红，所以这里一个文件一次）；g3 `No issues found!`；g4 `--tags golden` **`+9`**、`find test -name '*.png' | wc -l` = **9**、`git status --porcelain -- test/goldens | wc -l` = **0**；g5 全量 **`+1227 ~26`**；g6 `✓ Built build/web`。`status_after_gates=[]`，`pubspec.lock` 不在 PR 的 9 个文件里（`git diff --name-only origin/develop...HEAD | grep -c pubspec.lock` = 0）。
+**两条我自己写坏的度量要说清**：日志里 `png=0` 是我把路径写成 `test/goldens/*.png`（少一层 `todo_workspace/`）造成的**空度量**，不是基线被重录，已在同一条日志末尾用现跑命令补正；`lock_pubdev=0 lock_mirror=0` 在本仓恒 0（`pubspec.lock` 里没有 `url: http` 形态的行），这两条**不算证据**，真正管用的是 `status_after_gates=[]`。
+
+**本轮没有 VERDICT**：#313/#315 那几轮 PASS 审的是并主干之前的字节，对 `5d1d550` 只覆盖「本轮没改的部分」，冲突解决那四处由新派的那一轮判（`/tmp/r136/review-314-r1-prompt.md`）。**未拿到 PASS ⇒ 矩阵 #15 的状态不翻、缺口不销。**
+
+**下一轮入口**：① 回收 `5d1d550` 那轮 VERDICT，PASS 才谈合并与矩阵 #15；② `仍缺` 第 1 条（看板上就地新建／改名／删除分组）与第 2 条（「未分组」列排位是推断）仍在；③ develop 侧新出现的 `KanbanColumn.onAssignCard`（右键「分配给」）与本分支的分组列是两条独立通道，`#15` 的 `:175`/`:188`/`:198` 三面判定要在合并后按新 develop 重取锚点。
