@@ -218,7 +218,10 @@ NIT-5 里还有一句要紧的：`gh` 不在本机，所以第 1 轮无法直读
 
 ## 带日期词的分钟（Issue #390，第 144 轮）
 
-红测先行：新增 `test/nlp_date_dated_word_minute_test.dart` 在 `origin/develop@f361be4` 的字节上跑 ⇒ **`+4 -7`**（7 条红就是缺陷本身：三形掉分钟、识别文本只框到「明天9点」、三种非法分钟给了自信错值）。实现后同一文件 **`+11 All tests passed`**。
+红测先行：新增 `test/nlp_date_dated_word_minute_test.dart` 在 `origin/develop@f361be4` 的字节上跑 ⇒ **`+4 -7`**
+（复算 `sed -n '134p' /tmp/r136/red390.log` ⇒ 该行即汇总行，该文件全文 141 行）。7 条红就是缺陷本身：三形掉分钟、识别文本只框到「明天9点」、三种非法分钟给了自信错值。
+实现后这个文件 11 条用例全绿（条数复算 `grep -c '  test(' test/nlp_date_dated_word_minute_test.dart` ⇒ 11；
+绿的那次读数取全量套件 g5 段，`sed -n '15p' /tmp/r136/gates390.log` ⇒ `03:08 +1207 ~26: All tests passed!`，该文件全文 22 行）。
 
 | 面 | 处置 | 判据 |
 | --- | --- | --- |
@@ -243,8 +246,34 @@ NIT-5 里还有一句要紧的：`gh` 不在本机，所以第 1 轮无法直读
 | 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `03:06 +1207 ~26: All tests passed!`（`/tmp/r136/g411/g5-full.log:1496`，全文 1496 行） | rc=0 |
 | 6 `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web`（`/tmp/r136/g411/g6-build.log:81`，全文 81 行） | rc=0 |
 
-`+1207` 比第四节记的 `+898` 多 309 条（`echo $((1207-898))`）。差值不是本 PR 新增：本 PR 在 test 侧只带一个文件
-（复算 `git diff --name-only origin/develop...HEAD | grep test/` ⇒ 仅 `test/nlp_date_dated_word_minute_test.dart`），
-其余是分支重堆到最新 develop 时一起带进来的他人用例。
+`+1207` 比第二节记的 `+915`（`/tmp/r122/g5_full.log:1174`，全文 1175 行）多 292 条（`echo $((1207-915))`）。
+这 292 条不是本 PR 新增：本 PR 在 test 侧只带一个文件、这个文件 11 条用例
+（复算 `git diff --name-only origin/develop...HEAD -- test/` ⇒ 仅 `test/nlp_date_dated_word_minute_test.dart`；
+`grep -c '  test(' test/nlp_date_dated_word_minute_test.dart` ⇒ 11），
+其余 281 条（`echo $((292-11))`）不在这条 PR 的差集里，是分支重堆到最新 develop 时一起带进来的他人用例。
 
 **待办（合并前置三格）**：六道绿 = 已成（本节）；真实合并试算 rc=0 = 已成（`git merge-tree --write-tree --name-only origin/develop 0df3d2ce3` 产出 tree 且无 `CONFLICT` 行）；**`VERDICT` 仍欠** ⇒ 第 3 轮只读复核的字节 = 本节提交之后的新 head，覆盖面按「`lib`/`test` 两棵树号与 `0df3d2ce3` 逐字节相等」承接门 2–6，门 1 在新 head 上另跑。矩阵 #83 在合进 develop 之前保持「已实现待合并」。
+
+## 十三、第 3 轮只读复核 `VERDICT: FAIL` 的处置（第 152 轮，2026-09-30）
+
+日志 `/tmp/r136/review-411-r3.jsonl`（result 块复算 `grep -c '"type":"result"' /tmp/r136/review-411-r3.jsonl` ⇒ 1；
+`num_turns` 102、`duration_ms` 5840247）。被审 head = `4dea36b`。A（功能面）、D（术语与判据源）、E（诚实性）、
+F（台账自扫）它在判词里都写成通过；它开出的 FAIL 与 NIT 都成立、都改了，逐条见下。
+
+- **C（FAIL，采纳）**：第十二节把基线写成 `+898`、差值写成 309，并称这两个数是「第四节记的」。回源：`## 四、只读复核`
+  这一节通篇没有 `+898` 这个读数；门禁表里记基线的是第二节第 5 行 = `+915`
+  （`sed -n '26p' specs/062-smart-add-bare-time/tasks.md` 可见）。所以那句是**指错小节 + 引错数**，
+  `echo $((1207-898))` 只是拿不存在的基线自证。已改按 `+915` 写，差值取 `echo $((1207-915))` ⇒ 292；
+  本 PR 自己在 test 侧的贡献改成带复算命令的口径（见第十二节同一段）。
+  ⚠️ 复核员给的佐证 `git grep -c 898 … ⇒ 0 条` 本身不准 —— 改前那份 `tasks.md` 在第十二节这句引用里就含 `898`。
+  成立的部分是「没有任何一节把 `+898` 当读数记下来」，我按这条改，不照抄它那条 grep。
+- **B（NIT，采纳）**：第 144 轮小节里 `+4 -7` 与「实现后 11 条」只报了数、没给日志。已锚到
+  `/tmp/r136/red390.log:134`（`sed -n '134p'` ⇒ `00:00 +4 -7: Some tests failed.`，全文 141 行）与
+  `/tmp/r136/gates390.log:15`（`sed -n '15p'` ⇒ `03:08 +1207 ~26: All tests passed!`，全文 22 行）。
+
+**覆盖面（本轮只动 `specs/`）**：`git rev-parse HEAD:lib HEAD:test 0df3d2ce3:lib 0df3d2ce3:test` ⇒
+`lib` 两侧都是 `38b6b3b3f769455df926d62c0adce457c84d9465`、`test` 两侧都是 `ce1558e95c875d4a07d7f747bcf6abcd0f6a5cfe`
+⇒ 门 2–6 的读数由第十二节承接；门 1 在新 head 上另跑 `git diff --check origin/develop...HEAD` ⇒ rc=0、空输出。
+
+**下一格欠什么**：第 3 轮判的是 FAIL ⇒ 合并前置的 `VERDICT` 仍欠一个 PASS，要派第 4 轮（审本轮之后的新 head，
+覆盖面按上面两条树号承接）。矩阵 #83 继续保持「已实现待合并」。
