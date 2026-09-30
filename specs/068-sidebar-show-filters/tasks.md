@@ -114,3 +114,22 @@ FAIL 的收回要一轮新复核 ⇒ 第 2 轮已入队。矩阵 #22 仍不翻�
 
 - 本节之后的门禁：`lib/` 未动（探针逐字节还原，`git status` 只列测试与本目录），`test/` 与 `specs/` 动了
   ⇒ 门 3–6 在本节这笔提交的重堆上另跑，读数记在下一节，不承接上文 `ed35632` 那份。
+
+## 六、重堆后的门禁读数（head `4827634`，2026-09-30）
+
+| 门 | 分支头读数（`/tmp/r164/gates414/`） | 累积合并产物读数（`/tmp/r164/cum414/`，产物 `9192cf4` = develop `8b59d7e` + 本 PR） |
+| --- | --- | --- |
+| 1 `git diff --check <merge-base> HEAD` | rc=0（首跑 rc=2 报的是本节上一版在 EOF 多留的空行，摘掉后为 0） | rc=0 |
+| 2 `dart format --set-exit-if-changed` 显式路径 | `Formatted 5 files (0 changed)` rc=0，5 = `git diff --name-only f361be4..HEAD -- '*.dart' \| wc -l` 现跑 | rc=0（7 个路径，含并进来的 !382 那几个） |
+| 3 `flutter analyze` | `No issues found! (ran in 4.2s)` rc=0 | `No issues found! (ran in 3.7s)` rc=0 |
+| 4 `flutter test --tags golden` | `00:04 +9: All tests passed!` rc=0，`find test -name '*.png' \| wc -l` = 9 | `00:06 +9` rc=0，png 仍 9 张 |
+| 5 非 golden 用例集 | `03:45 +1204 ~26: All tests passed!` rc=0 | `03:44 +1306 ~26: All tests passed!` rc=0 |
+| 6 `flutter build web --release` | `✓ Built build/web` rc=0 | `✓ Built build/web` rc=0 |
+
+- 卫生：两轮 `git status --short` 在门禁后均为空 ⇒ `pubspec.lock` 没被本机镜像改写、golden 未脏。
+- 真实合并试算：`git merge-tree --write-tree origin/develop 4827634` rc=0，`^CONFLICT` 计数 0。
+- 覆盖面绑定：第 3 轮复核审的是 `f2cb384`，到现头 `4827634` 的差集只有 `specs/068-sidebar-show-filters/tasks.md`
+  （文档路径）⇒ 报告对现头仍成立。第 3 轮 `claude -p` 进程在写 `review-414-r3.jsonl`（6.3 MB、尚无 result 块）
+  ⇒ 本轮**不合并**，等 VERDICT 落地。
+- 队列连带：!382 已按同一份累积产物合进 develop（合并提交 `8b59d7e`，Issue #381 已带证据关闭）。
+  本 PR 合并时的产物判据就是这张表右列那份，前提是该期间 develop 不再前进；若前进了要重跑右列。
