@@ -29,7 +29,7 @@ lib/features/task/tasks_by_list_page.dart:2147:16: Context: Found this candidate
 `find.ancestor(of: text('带标签的'), matching: textContaining('本机暂不支持套用')) ⇒ findsNothing` 反过来钉住它已恢复可套用。
 真不支持的判据没有丢（`in_progress` 那条保留）。
 
-## 四、六道门禁（跑在最终字节上，日志 `/tmp/r136/gates334b.log`）
+## 四、六道门禁（最终字节 = `git -C /private/tmp/wt-fl-334 rev-parse HEAD` 现读 `7449d94a1`，日志 `/tmp/r136/gates334b.log`）
 
 | # | 命令 | 读数 |
 | --- | --- | --- |
@@ -53,5 +53,33 @@ lib/features/task/tasks_by_list_page.dart:2147:16: Context: Found this candidate
 ## 六、没做与下一步
 
 - `:71` 的「或」与跨条件布尔组合、多语句查询 = FL Issue #334（`TaskFilter` 需 `tagLogic`；写契约时值用小写 `and`/`or`）。
-- 高级筛选 sheet 里没有「且/或」控件；加控件会碰 golden（9 张基线）⇒ 触碰前先要重录基线的授权。
-- 矩阵 `#21/#22` 的 FL 面本轮只推进"标签维度生效"一格；未合并 ⇒ 不翻状态，只在这里记「已实现待合并」。
+本轮实测还缴获一条更前面的缺口：「筛选任务」这张 sheet 里**根本没有「标签」这条筛选条件**（判据 `grep -c 标签 lib/features/filter/filter_bar.dart` 现读 0；`tagIds` 只出现在结构字段与序列化里）⇒ #334 的「或」档在这块面板上没有宿主 UI，已按现跑判据立 FL Issue #420（对照：搜索页那张 sheet 有标签多选，`lib/features/task/task_search_filter_sheet.dart:76`）。矩阵 #22 现在也没逐格列出这一面，翻面那条 docs PR 要把这一格补进去并按 #420 记缺。
+- 高级筛选 sheet 里没有「且/或」控件。**上一轮我写的「加控件会碰 golden ⇒ 要先拿重录基线授权」是错的，本轮更正**：基线渲染的是 workspace 面，不含这张 sheet（判据 `grep -rn "_openFilterPanel\|AdvancedFilter" test | wc -l` = 0、`git ls-files test/goldens/todo_workspace | wc -l` = 9 张、用例只有 `test/visual/todo_workspace_golden_test.dart` 一份）。⇒ 「标签内 且/或」这一档不需要重录基线的授权就能做。仍缺的是帮助页 `:61` 的跨条件多语句查询，那是另立范围的一格。
+- 矩阵 `#21/#22` 的 FL 面本轮只推进"标签维度生效"一格。PR !418 已于 2026-09-30 合进 develop（`git rev-parse origin/develop` 现读
+  `0c7bce9c4d74ec44fe3a94423e656f76bf5af198`），本节第六道那条「未合并」的约束从此解除；但矩阵翻转要落在 docs 仓的
+  对照表 PR 里、且要等 docs !113 那轮先落地（同一张表并行开分支会互相覆盖），本轮只登记不翻。
+
+## 七、第 1 轮只读复核（`claude -p --permission-mode plan`，报告 `/tmp/r136/review-418-r1.report.md`）
+
+结论 `VERDICT: PASS`。复核进程自报的取数基准 = `origin/develop@5a831a19`，被审字节 = `7449d94a1f7b8ca1c3394aab2cd57adea6ca9473`
+（判据 `git -C /private/tmp/wt-fl-334 rev-parse HEAD`，2026-09-30 现读同值）⇒ 审的就是第四节那张表所在的最终字节，不是中途的旧提交。
+
+四条 NIT 逐条给处置：
+
+| NIT | 复核原文摘要 | 处置 |
+| --- | --- | --- |
+| D | `saved_filters_test.dart` 只钉了带标签行「未标不支持」，未在 `TasksByListPage` 上端到端断言点 `pulled-with-tag` 后真筛出标签结果集 | 认，本轮不补：那一跳要钉的是 `TaskFilter.tagLogic` 的语义 = FL Issue #334 的判据面，本轮加 tap 会把两件事塞进一个用例 |
+| C（性能） | `ref.watch(taskTagIndexProvider)` 无条件订阅整表，任一标签写入都重建整 Map | 认，不改：整表索引是 `spec.md` §三 第 3 条写明的取舍，按清单收窄要改 `watchTagIndex()` 的 SQL |
+| B | 索引未就绪时列表转圈、预览报 0 项，两端不对称 | 认，不改：两侧行为各在 `spec.md` §四 的口径内，且预览面板只能在列表渲染后打开 |
+| E | 门禁表未内嵌 head SHA，只以 worktree 路径推断 | 按本条修：第四节标题现直接带 `7449d94a1` 与取数命令（本节开头那句是同一改动的另一处） |
+
+复核员自己的两处锚点错位，回源后按仓内实际字节改指（只改证据位置，不改结论）：
+
+- A 项把「AND 用例」的可复算指针写成 `test/features/filter/ui_tag_logic_test.dart` 加 `:41-44` 两段拼出来的，
+  而这份文件在仓内不存在（判据 `git -C /private/tmp/wt-fl-069wb ls-files test/features/filter` 现读三份文件，无此名）⇒ 真锚点是
+  `test/features/filter/task_filter_tag_logic_test.dart:41`，用例名「标签条件按“且”求值：只含其一的任务不该出现」，
+  同文件 `:57` 钉超集仍命中、`:72` 钉映射缺失、`:84` 钉还原成本机条件。
+- A 项把标签分支区间写成 `:2182-2186`，尾行不对：`:2184` 才是 `if (!owned.containsAll(filter.tagIds)) return false;`，
+  `:2186` 已是优先级分支（判据 `grep -n "filter.tagIds" lib/features/task/tasks_by_list_page.dart` 现读三处命中 183、2182、2184）。
+
+台账自扫：`python3 tool/check_spec_selfscan.py specs/069-tag-filter-facet/tasks.md` ⇒ rc=0、失项 0 条。
