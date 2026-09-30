@@ -94,7 +94,7 @@ FAIL 的收回要一轮新复核 ⇒ 第 2 轮已入队。矩阵 #22 仍不翻�
 它的视口写死 `TodoVisualViewports.wide` ⇒ 「通过」两字当时没有测试撑。
 
 - 补法：设置页的 ①、②、④ 各起一条用例，③ 在既有失败用例里加断言。用例条数判据
-  `grep -c 'testWidgets(' test/features/shell/sidebar_show_filters_test.dart` 现跑 = 8（改动前 5）。
+  `grep -c 'testWidgets(' test/features/shell/sidebar_show_filters_test.dart` 现跑 = 8；「改动前 5」用带 ref 的命令复算 `git show cbe7ee3:test/features/shell/sidebar_show_filters_test.dart | grep -c 'testWidgets('` = 5（现跑已验 = 5；旧字节不在本轮提交里，光写「改动前 5」不可复算）
   `_pumpSettings` 的视口与字号改成入参，并**从被测那一行自己的上下文读回**
   `MediaQuery.textScaler.scale(14)=18.2`、视口逻辑宽 = 320 —— 防的就是这次踩到的「参数没接线也绿」。
 - ④ 的口径降格：这一面只有一条 `watch` 偏好流、界面不缓存副本 ⇒ 「旧响应盖新响应」没有可达路径。
