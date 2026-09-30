@@ -120,7 +120,11 @@ void main() {
     await _enablePreview(tester);
 
     await _tapTag(tester, '专注');
-    expect(_panelTexts(tester), contains('命中 1 项'), reason: '只有 metadata 那条带「专注」');
+    expect(
+      _panelTexts(tester),
+      contains('命中 1 项'),
+      reason: '只有 metadata 那条带「专注」',
+    );
 
     await _tapTag(tester, '评审');
     expect(
@@ -155,16 +159,18 @@ void main() {
     );
   });
 
-  testWidgets('四件套①：320 宽 + 1.3 倍字号在对话框自己的 context 里不溢出', (
-    tester,
-  ) async {
+  testWidgets('四件套①：320 宽 + 1.3 倍字号在对话框自己的 context 里不溢出', (tester) async {
     await _pump(tester, surface: const Size(320, 600), textScale: 1.3);
     await _openAdvancedDialog(tester);
 
     final scaler = MediaQuery.textScalerOf(
       tester.element(find.byKey(_tagSectionKey)),
     );
-    expect(scaler.scale(10), closeTo(13, 0.001), reason: '档位没进到这张对话框自己的 context');
+    expect(
+      scaler.scale(10),
+      closeTo(13, 0.001),
+      reason: '档位没进到这张对话框自己的 context',
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -214,11 +220,7 @@ void main() {
     final field = tester.widget<TextField>(
       find.byKey(const Key('task-filter-keyword')),
     );
-    expect(
-      field.controller!.text,
-      '写进关键词',
-      reason: '标签读失败不该把这张对话框里已填的条件一起清掉',
-    );
+    expect(field.controller!.text, '写进关键词', reason: '标签读失败不该把这张对话框里已填的条件一起清掉');
     expect(tester.takeException(), isNull);
   });
 
@@ -232,14 +234,32 @@ void main() {
       ],
     );
     controller.add([
-      TodoTag(id: 'tag-a', name: '甲', color: '#888888', updatedAt: _t, createdAt: _t),
+      TodoTag(
+        id: 'tag-a',
+        name: '甲',
+        color: '#888888',
+        updatedAt: _t,
+        createdAt: _t,
+      ),
     ]);
     await _openAdvancedDialog(tester);
     await _tapTag(tester, '甲');
 
     controller.add([
-      TodoTag(id: 'tag-a', name: '甲', color: '#888888', updatedAt: _t, createdAt: _t),
-      TodoTag(id: 'tag-b', name: '乙', color: '#999999', updatedAt: _t, createdAt: _t),
+      TodoTag(
+        id: 'tag-a',
+        name: '甲',
+        color: '#888888',
+        updatedAt: _t,
+        createdAt: _t,
+      ),
+      TodoTag(
+        id: 'tag-b',
+        name: '乙',
+        color: '#999999',
+        updatedAt: _t,
+        createdAt: _t,
+      ),
     ]);
     await tester.pumpAndSettle();
 
