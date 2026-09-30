@@ -32,6 +32,7 @@ TodoTask _completedOn(DateTime day, int n, {String tag = 'a'}) {
     listId: '1',
     allDay: false,
     fixedTimezone: false,
+    timeMode: 0,
     title: '任务 $tag-$n',
     completed: true,
     cancelled: false,
