@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/db/app_database.dart';
 import '../../../core/theme/brand_colors.dart';
 import '../../../core/time/task_time_formatter.dart';
+import '../../../core/time/task_time_mode.dart';
 import '../../../state/providers.dart';
 import '../../pomodoro/pomodoro_page.dart';
 import 'task_row.dart';
@@ -121,7 +122,7 @@ class _TaskRowHostState extends ConsumerState<TaskRowHost> {
                       : taskWallClockDateTime(
                           widget.task.dueAt!,
                           allDay: widget.task.allDay,
-                          fixedTimezone: widget.task.fixedTimezone,
+                          mode: TaskTimeMode.fromWire(widget.task.timeMode),
                           timeZone: widget.task.timeZone,
                         ),
                   subtaskCount: childSnapshot.data?.length ?? 0,

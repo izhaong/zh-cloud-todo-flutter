@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../core/db/app_database.dart';
+import '../../core/time/task_time_mode.dart';
 import '../../core/sync/sync_change_queue.dart';
 import '../../core/sync/sync_entities.dart';
 
@@ -82,6 +83,7 @@ class TaskRepository {
     bool allDay = false,
     String? timeZone,
     bool fixedTimezone = false,
+    int? timeMode,
     String? parentTaskId,
     bool isPinned = false,
   }) async {
@@ -94,6 +96,9 @@ class TaskRepository {
     }
     final now = DateTime.now();
     final id = _uuid.v4();
+    final effectiveMode = timeMode != null
+        ? TaskTimeMode.fromWire(timeMode)
+        : TaskTimeMode.fromLegacyFlag(fixedTimezone);
     late TodoTask row;
     await _db.transaction(() async {
       await _ensureInboxList(listId, now);
@@ -117,7 +122,8 @@ class TaskRepository {
               dueAt: Value(dueAt),
               allDay: Value(allDay),
               timeZone: Value(timeZone),
-              fixedTimezone: Value(fixedTimezone),
+              fixedTimezone: Value(TaskTimeMode.legacyFlagOf(effectiveMode)),
+              timeMode: Value(effectiveMode.wire),
               updatedAt: now,
               createdAt: now,
             ),
@@ -203,6 +209,7 @@ class TaskRepository {
       allDay: original.allDay,
       timeZone: original.timeZone,
       fixedTimezone: original.fixedTimezone,
+      timeMode: original.timeMode,
     );
   }
 
@@ -286,6 +293,7 @@ class TaskRepository {
     bool? allDay,
     String? timeZone,
     bool? fixedTimezone,
+    int? timeMode,
     String? listId,
     String? sectionId,
     bool clearSectionId = false,
@@ -337,9 +345,18 @@ class TaskRepository {
               : Value(dueAt),
           allDay: allDay == null ? const Value.absent() : Value(allDay),
           timeZone: timeZone == null ? const Value.absent() : Value(timeZone),
-          fixedTimezone: fixedTimezone == null
+          fixedTimezone: timeMode != null
+              ? Value(
+                  TaskTimeMode.legacyFlagOf(TaskTimeMode.fromWire(timeMode)),
+                )
+              : fixedTimezone == null
               ? const Value.absent()
               : Value(fixedTimezone),
+          timeMode: timeMode != null
+              ? Value(timeMode)
+              : fixedTimezone == null
+              ? const Value.absent()
+              : Value(TaskTimeMode.fromLegacyFlag(fixedTimezone).wire),
           listId: listId == null ? const Value.absent() : Value(listId),
           sectionId: clearSectionId
               ? const Value(null)

@@ -9,10 +9,18 @@ import '../tag/tag_color.dart';
 
 /// M11-B2 任务快速添加 bottom sheet。
 class TaskQuickAddSheet extends ConsumerStatefulWidget {
-  const TaskQuickAddSheet({super.key, required this.listId, this.parentTaskId});
+  const TaskQuickAddSheet({
+    super.key,
+    required this.listId,
+    this.parentTaskId,
+    this.sectionId,
+  });
 
   final String listId;
   final String? parentTaskId;
+
+  /// 非空时新建的任务直接落在该清单分组里（看板分组列的「+」）。
+  final String? sectionId;
 
   @override
   ConsumerState<TaskQuickAddSheet> createState() => _TaskQuickAddSheetState();
@@ -26,6 +34,7 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
   /// 「任务已建、提醒没建成」时记住任务 id：再点一次「保存」只补提醒，不建第二遍任务。
   String? _savedTaskId;
   bool _applyingTemplate = false;
+  bool _saving = false;
   String? _feedback;
   String? _titleError;
 
@@ -53,7 +62,20 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
     }
   }
 
+  /// 「保存」的 in-flight 闸门：`_saveOnce` 有 2–3 个 await，窗口内连点会建出重复任务。
+  /// 模板路径 `_addFromTemplate` 已有 `_applyingTemplate` 同样的守卫，这条漏了。
+  /// 复位放 finally：中途抛错或弹窗已被 pop 掉，都不该把按钮永久锁死。
   Future<void> _save() async {
+    if (_saving) return;
+    _saving = true;
+    try {
+      await _saveOnce();
+    } finally {
+      _saving = false;
+    }
+  }
+
+  Future<void> _saveOnce() async {
     final repo = ref.read(taskRepositoryProvider);
     if (repo == null) {
       // 与 _addFromTemplate 同一措辞：未登录点「保存」不能静默吞掉这一次点击。
@@ -78,6 +100,7 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
         final task = await repo.create(
           listId: widget.listId,
           parentTaskId: widget.parentTaskId,
+          sectionId: widget.sectionId,
           title: text,
           priority: _priorityOverride ?? defaults?.defaultPriority ?? 0,
           dueAt: dueAt,
@@ -144,6 +167,7 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
             await repo.create(
               listId: widget.listId,
               parentTaskId: widget.parentTaskId,
+              sectionId: widget.sectionId,
               title: seed.title,
               description: seed.description,
               priority: seed.priority,

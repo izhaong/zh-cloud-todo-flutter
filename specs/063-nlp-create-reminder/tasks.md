@@ -65,6 +65,7 @@
   本面把一次 `await` 变成两次、又把弹窗留在失败态，等于把"可连点"的时间窗整体拉长 ⇒ 不能写成"不适用"。
   已立 FL Issue #391 跟踪（第十节），核心形状按上一句写；不在本 PR 顺手加标志位：
   加不加、加在哪（按钮 disabled 还是 in-flight 标志）该由那条单独的红测决定。
+  **本条已由 FL Issue #391 的实现轮闭合**（第十一节），上面这段是当时的判定，不改写。
 - 读屏语义：提示走的是既有 `todo-quick-add-feedback` 那一行（同一路由里已有的、被上一条测试钉住的可见节点），
   本轮没引入新的图标-only 按钮或裸 `Semantics` 包裹。
 
@@ -161,3 +162,57 @@
 - docs 侧待办：#83 说明格补「提醒那半已实现待合并」与 #390 的指针；
   另有一条历史快照表（改判聚合表）里的 #83 行仍带着被 specs/062 第五节否掉的旧锚点，
   下一轮 docs 轮次要显式标它是快照、不是当前主张。
+
+## 十一、第 145 轮：FL Issue #391 落地（§四 那条「未满足」的闭合）
+
+分支 `fix/391-quick-add-save-gate`。实现只碰两个文件：
+`lib/features/task/task_quick_add_sheet.dart` 与 `test/features/task/quick_add_save_reentry_test.dart`
+（复算 `git diff --name-only origin/develop HEAD | tr '\n' ' '`）。
+
+- 形状取 Issue #391 列的第二种：`_save()` 入口 `if (_saving) return;`，原实现改名 `_saveOnce()`
+  并包在 `try/finally` 里复位。选它的理由是不动视觉 ⇒ §四 那套量法不必再扩一项；代价写在下面。
+- 红测先红在哪：`flutter test test/features/task/quick_add_save_reentry_test.dart` 在实现前给
+  `Expected: <1>` / `Actual: <2>`，失败点是**第二次点击之后**那条断言；第一次点击后的
+  `createCalls == 1` 先通过，说明飞行窗口是真的，不是在测空气。
+- 反向探针把两条用例分开了：只摘掉 `finally` 里的复位、保留入口早退 ⇒ 第一条仍绿，
+  第二条变 `Expected: <2>` / `Actual: <1>`（第二次点击被吞 = 按钮锁死）。
+  探针字节用 `cp` 备份、`cmp -s` 还原，输出 `restored byte-identical rc=0`。
+- 实现后同一条命令：`00:00 +2: All tests passed!`。
+- 六道门禁跑在已提交字节上（head 写在日志首行），日志 `/tmp/r136/gates391.log`；
+  复算 `grep -E '^gate[1-6] rc=' /tmp/r136/gates391.log` ⇒ 六个 rc 全 0。
+
+| 项 | 读数 |
+| --- | --- |
+| 1 `git diff --check origin/develop HEAD` | rc=0。跑在差集上而不是工作树上：提交后工作树是干净的，空跑不带信息 |
+| 2 `dart format --output=none --set-exit-if-changed` + 两个 .dart 的字面量路径 | `Formatted 2 files (0 changed)`、rc=0。这里的 2 要等于 `git diff --name-only origin/develop HEAD -- '*.dart' \| wc -l` |
+| 3 `flutter analyze` | `No issues found! (ran in 3.5s)`、rc=0 |
+| 4 `flutter test --tags golden` | `00:04 +9: All tests passed!`、rc=0，基线 9 张没重录（`find test -name '*.png' \| wc -l` ⇒ 9） |
+| 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `03:06 +1198 ~26: All tests passed!`、rc=0。1198 里 2 条是本轮新增（单文件跑 ⇒ `+2`），余下 1196 是本分支基线字节上的数，本轮没单独复跑基线，所以这个拆分是从两次读数相减得来的 |
+| 6 `flutter build web --release --dart-define=TODO_API_BASE_URL=… --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web`、rc=0 |
+
+- 卫生：`status_before_gates=[]` 与 `status_after_gates=[]` 都在同一份日志里（第 45 轮复核立的
+  规矩：只记 head 不记工作树，`pubspec.lock` 就会漏进提交）；`### lock_in_pr=0`、`goldens_dirty=0`。
+- 这把尺本身是活的：`python3 tool/check_spec_selfscan.py --selftest specs/063-nlp-create-reminder/tasks.md`
+  ⇒ `与期望不符的判据 = 0 条`，里面既有"期望红→实际红"也有"期望绿→实际绿"的对照。
+  反面记账：我自己手工注入的坏样本这次**没**被判红，因为注入的行不触发任何一条词表判据
+  ⇒ 那种绿不含信息。判"尺是活的"只认上面 `--selftest` 那条读数，不认我手投的样本。
+
+## 十二、本轮仍留的（不谎称完成）
+
+- 飞行期的第二次点击是**静默吞掉**，没有任何可见反馈。判据源《02-功能指南/01-任务/01-添加任务.md》
+  逐字只写「点击随处可见的「+」，输入任务后，点击「完成」图标，即可轻松创建任务」，
+  没有规定重复点击的行为 ⇒ 这条不能拿嘀嗒原文当依据，只是健壮性收口。
+  是否换成形状 A（按钮 in-flight 置灰）要先补一条「禁用态仍在可见区」的量法，
+  本轮不自行加视觉态；等 FL Issue #391 那条 PR 的第 1 轮只读复核意见再定。
+- 交叉验证通道：第一次派发回 0 字节（按「没执行」记账），补跑那次回了 5334 字节、
+  带 `CROSSCHECK:` 一到四。它的第 3 条主张「提醒段飞行期连点没有对称断言」**判为不成立**，
+  理由是代码形状：闸门的 `if (_saving) return;` 包在 `_save()` 外层，而
+  `await reminders.create(...)` 就在 `_saveOnce` 里（复算
+  `grep -n "await reminders.create" lib/features/task/task_quick_add_sheet.dart`），
+  同一个标志覆盖两段 await ⇒ 行为上没有缺口，它指的只是用例覆盖面。
+  同目录既有用例 `quick_add_nlp_reminder_test.dart` 里那条「提醒没建成 ⇒ 再点保存不建第二遍任务」
+  也钉着这条路径（复算 `grep -n "再点保存不建第二遍任务" test/features/task/quick_add_nlp_reminder_test.dart`）。
+  其余三条（静默无反馈是 B 的代价、`finally` 在 pop/dispose 后写标志安全、`_savedTaskId` 语义未被破坏）
+  与我自己读码的结论一致，采纳为第二意见但不当 VERDICT。
+- 矩阵不翻：本轮 PR 未合并，#7「添加任务」与 #83「智能识别」两行的状态仍等合并后
+  由 docs 轮次按已合并 SHA 收口。

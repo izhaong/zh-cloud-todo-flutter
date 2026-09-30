@@ -19,6 +19,7 @@ enum _TaskWorkspaceHeaderCommand {
   editQuadrantRules,
   directionNewestFirst,
   directionOldestFirst,
+  hideCompleted,
 }
 
 extension on _TaskWorkspaceHeaderCommand {
@@ -34,6 +35,7 @@ extension on _TaskWorkspaceHeaderCommand {
     _TaskWorkspaceHeaderCommand.editQuadrantRules => null,
     _TaskWorkspaceHeaderCommand.directionNewestFirst => null,
     _TaskWorkspaceHeaderCommand.directionOldestFirst => null,
+    _TaskWorkspaceHeaderCommand.hideCompleted => null,
   };
 
   TaskSortDirection? get direction => switch (this) {
@@ -87,6 +89,9 @@ class TaskWorkspaceHeader extends StatelessWidget {
     this.onBatchPressed,
     this.onCreateSection,
     this.onEditQuadrantRules,
+    this.hideCompleted,
+    this.hideCompletedHint,
+    this.onToggleHideCompleted,
   });
 
   final String title;
@@ -108,6 +113,15 @@ class TaskWorkspaceHeader extends StatelessWidget {
   final VoidCallback? onBatchPressed;
   final VoidCallback? onCreateSection;
   final VoidCallback? onEditQuadrantRules;
+
+  /// 嘀嗒《02-功能指南/03-四象限/02-如何编辑四象限规则.md》`:132`
+  /// 「在四象限页面，点击右上角「...」- 隐藏已完成。」
+  /// null ⇒ 当前不是四象限，这一项整个不出现。
+  final bool? hideCompleted;
+
+  /// 非 null ⇒ 这一项置灰，并把这句话原样显示在项里（读屏要念得出为什么不能点）。
+  final String? hideCompletedHint;
+  final VoidCallback? onToggleHideCompleted;
 
   @override
   Widget build(BuildContext context) {
@@ -189,6 +203,8 @@ class TaskWorkspaceHeader extends StatelessWidget {
                       onCreateSection?.call();
                     case _TaskWorkspaceHeaderCommand.editQuadrantRules:
                       onEditQuadrantRules?.call();
+                    case _TaskWorkspaceHeaderCommand.hideCompleted:
+                      onToggleHideCompleted?.call();
                     case _TaskWorkspaceHeaderCommand.smart:
                     case _TaskWorkspaceHeaderCommand.priorityDesc:
                     case _TaskWorkspaceHeaderCommand.dueDate:
@@ -254,6 +270,35 @@ class TaskWorkspaceHeader extends StatelessWidget {
                       key: Key('todo-quadrant-rules-entry'),
                       value: _TaskWorkspaceHeaderCommand.editQuadrantRules,
                       child: Text('编辑象限规则'),
+                    ),
+                  if (hideCompleted != null) const PopupMenuDivider(),
+                  if (hideCompleted != null)
+                    PopupMenuItem(
+                      key: const Key('todo-quadrant-hide-completed'),
+                      value: _TaskWorkspaceHeaderCommand.hideCompleted,
+                      enabled: hideCompletedHint == null,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Semantics(
+                            // excludeSemantics 在 Semantics 这一侧：把里面 Text 的节点吞掉，
+                            // 免得读屏念两遍（一遍裸文字、一遍带档位的）。
+                            excludeSemantics: true,
+                            label:
+                                '隐藏已完成，当前${hideCompleted! ? '已隐藏' : '已显示'}'
+                                '${hideCompletedHint == null ? '' : '，$hideCompletedHint'}',
+                            child: const Text('隐藏已完成'),
+                          ),
+                          if (hideCompletedHint != null)
+                            Text(
+                              hideCompletedHint!,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: colors.mutedForeground,
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                 ],
               ),

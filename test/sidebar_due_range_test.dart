@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zh_cloud_todo_flutter/core/time/task_time_mode.dart';
 
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/features/filter/filter_bar.dart';
@@ -108,6 +109,7 @@ TodoTask _task(
     allDay: allDay,
     timeZone: timeZone,
     fixedTimezone: fixedTimezone,
+    timeMode: TaskTimeMode.fromLegacyFlag(fixedTimezone).wire,
     updatedAt: stamp,
     createdAt: stamp,
   );

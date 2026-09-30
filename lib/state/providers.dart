@@ -10,6 +10,7 @@ import '../core/notification/reminder_notification_poller.dart';
 import '../core/sync/sync_change_queue.dart';
 import '../core/sync/sync_coordinator.dart';
 import '../core/time/task_time_formatter.dart';
+import '../core/time/task_time_mode.dart';
 import '../core/time/week_start.dart';
 import '../state/session_state.dart';
 import 'repositories/board_preference_repository.dart';
@@ -173,6 +174,14 @@ final tagRepositoryProvider = Provider<TagRepository?>((ref) {
   final queue = ref.watch(syncChangeQueueProvider);
   if (db == null || queue == null) return null;
   return TagRepository(db, queue);
+});
+
+/// 任务-标签索引。筛选条件带标签时，列表与预览都靠它求值；
+/// 流出错时 `valueOrNull` 仍留着上一份好数据（不因为读失败就把已加载的任务清空）。
+final taskTagIndexProvider = StreamProvider<Map<String, Set<String>>>((ref) {
+  final repo = ref.watch(tagRepositoryProvider);
+  if (repo == null) return Stream.value(const <String, Set<String>>{});
+  return repo.watchTagIndex();
 });
 
 final filterRepositoryProvider = Provider<FilterRepository?>((ref) {
@@ -525,7 +534,7 @@ class TaskStats {
           : taskWallClockDateTime(
               dueAt,
               allDay: t.allDay,
-              fixedTimezone: t.fixedTimezone,
+              mode: TaskTimeMode.fromWire(t.timeMode),
               timeZone: t.timeZone,
             );
       if (due != null) {

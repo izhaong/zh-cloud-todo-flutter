@@ -8,6 +8,7 @@ import '../../core/db/app_database.dart';
 import '../../core/theme/brand_colors.dart';
 import '../../core/theme/todo_layout_tokens.dart';
 import '../../core/time/task_time_formatter.dart';
+import '../../core/time/task_time_mode.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../native/native_intents.dart';
 import '../../state/nlp_date.dart';
@@ -96,6 +97,12 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   final Set<String> _batchSelectedTaskIds = <String>{};
   int _viewRestoreRevision = 0;
 
+  /// 嘀嗒《02-功能指南/03-四象限/02-如何编辑四象限规则.md》`:132`「隐藏已完成」，默认隐藏。
+  bool _hideCompletedInQuadrant = true;
+
+  /// 四象限完成态显隐的版本号：用户的手动切换要压过任何在途的偏好读取。
+  int _quadrantPreferenceRevision = 0;
+
   @override
   void initState() {
     super.initState();
@@ -108,6 +115,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         );
     Future<void>.microtask(_restoreSortPreference);
     Future<void>.microtask(_restoreViewPreference);
+    Future<void>.microtask(_restoreQuadrantHideCompleted);
   }
 
   @override
@@ -150,6 +158,52 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     }
   }
 
+  /// 读四象限的「隐藏已完成」偏好；读失败**不静默回到默认**，要给可见提示。
+  Future<void> _restoreQuadrantHideCompleted() async {
+    final revision = ++_quadrantPreferenceRevision;
+    final repository = ref.read(taskViewActionRepositoryProvider);
+    if (repository == null) return;
+    try {
+      final preference = await repository.getQuadrantDisplay();
+      if (!mounted || revision != _quadrantPreferenceRevision) return;
+      setState(() {
+        _hideCompletedInQuadrant = preference.showCompletedTasks != true;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(content: Text('四象限：读取「隐藏已完成」设置失败，按默认隐藏显示')),
+      );
+    }
+  }
+
+  void _toggleQuadrantHideCompleted() {
+    final repository = ref.read(taskViewActionRepositoryProvider);
+    final previous = _hideCompletedInQuadrant;
+    final next = !previous;
+    // 先占版本再落写：偏好读取若在这之后才回来，不能把这次切换盖掉。
+    _quadrantPreferenceRevision++;
+    setState(() => _hideCompletedInQuadrant = next);
+    if (repository == null) return;
+    repository.saveQuadrantDisplay(showCompletedTasks: !next).catchError((_) {
+      if (!mounted) return;
+      setState(() => _hideCompletedInQuadrant = previous);
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(const SnackBar(content: Text('四象限：「隐藏已完成」保存失败，已回退')));
+    });
+  }
+
+  /// 两道闸的取数规则在 `quadrantShowsCompleted`（视图文件里），这里只把当前状态接上。
+  bool get _quadrantShowCompleted => quadrantShowsCompleted(
+    hideCompleted: _hideCompletedInQuadrant,
+    listFilterCompleted: _filter.completed,
+  );
+
+  /// 清单筛选已经钉过完成态 ⇒ 这一项置灰，并把原因显示出来（读屏同句）。
+  String? get _quadrantHideCompletedHint =>
+      _filter.completed == null ? null : '清单筛选已指定完成态，象限不再叠一层';
+
   @override
   Widget build(BuildContext context) {
     final colors = brandColors(context);
@@ -172,13 +226,24 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    final taskTagIds = ref.watch(taskTagIndexProvider).valueOrNull;
     final tasksStream = _resolveTasksStream(taskRepo);
 
     final body = StreamBuilder<List<TodoTask>>(
       stream: tasksStream,
       builder: (context, snapshot) {
         final raw = snapshot.data ?? const <TodoTask>[];
-        final items = applyTaskFilter(raw, _filter, _selectedListId, now);
+        // 标签条件生效但索引还没到位时，宁可转圈，也不画一份「标签没参与筛选」的列表。
+        if (_filter.tagIds.isNotEmpty && taskTagIds == null) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final items = applyTaskFilter(
+          raw,
+          _filter,
+          _selectedListId,
+          now,
+          taskTagIds: taskTagIds,
+        );
         final listOrderedItems = _visibleTasksInListOrder(
           items,
           sections: taskSections,
@@ -222,6 +287,13 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 onEditQuadrantRules: _mode == TaskViewMode.eisenhower
                     ? _openQuadrantRules
                     : null,
+                hideCompleted: _mode == TaskViewMode.eisenhower
+                    ? _hideCompletedInQuadrant
+                    : null,
+                hideCompletedHint: _mode == TaskViewMode.eisenhower
+                    ? _quadrantHideCompletedHint
+                    : null,
+                onToggleHideCompleted: _toggleQuadrantHideCompleted,
               ),
             if (showQuickAdd && !_batchSelectionActive)
               QuickAddBar(
@@ -367,6 +439,35 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         return KanbanView(
           tasks: items,
           listId: listId,
+          sections: taskSections,
+          onTaskSectionMove: (task, sectionId) async {
+            final repository = ref.read(taskViewActionRepositoryProvider);
+            if (repository == null) return;
+            await repository.moveKanbanTaskToSection(
+              task.id,
+              sectionId: sectionId,
+            );
+          },
+          onSectionRename: _renameTaskSection,
+          onSectionCreate: _createTaskSection,
+          onSectionDelete: _deleteTaskSection,
+          onSectionOrderChanged: listId == null
+              ? null
+              : (ordered) async {
+                  final repository = ref.read(taskSectionRepositoryProvider);
+                  if (repository == null) return;
+                  try {
+                    await repository.reorder(
+                      listId: listId,
+                      orderedSectionIds: ordered,
+                    );
+                  } catch (_) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: Text('分组排序失败，请重试')));
+                  }
+                },
           orderedColumnIds: boardPreference.orderedColumnIds,
           collapsedColumnIds: boardPreference.collapsedColumnIds,
           onColumnOrderChanged: listId == null
@@ -481,6 +582,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       case TaskViewMode.eisenhower:
         return EisenhowerView(
           tasks: items,
+          showCompletedTasks: _quadrantShowCompleted,
           onTaskSelected: widget.onTaskSelected,
         );
       case TaskViewMode.calendar:
@@ -919,7 +1021,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           if ((selectedTasks[index].description ?? '').trim().isNotEmpty)
             selectedTasks[index].description!.trim(),
           if (selectedTasks[index].dueAt != null)
-            '截止：${formatTaskDateTime(selectedTasks[index].dueAt!, allDay: selectedTasks[index].allDay, fixedTimezone: selectedTasks[index].fixedTimezone, timeZone: selectedTasks[index].timeZone)}',
+            '截止：${formatTaskDateTime(selectedTasks[index].dueAt!, allDay: selectedTasks[index].allDay, mode: TaskTimeMode.fromWire(selectedTasks[index].timeMode), timeZone: selectedTasks[index].timeZone)}',
         ].join('\n'),
     ].join('\n\n');
     setState(() => _batchApplying = true);
@@ -1385,8 +1487,12 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     final revision = ++_visibilityRevision;
     final tasksById = {for (final task in visibleTasks) task.id: task};
     final actualVisibleTasks = switch (_mode) {
-      TaskViewMode.timeline ||
-      TaskViewMode.eisenhower => visibleTasks.where((task) => !task.completed),
+      TaskViewMode.timeline => visibleTasks.where((task) => !task.completed),
+      // 「显示已完成」时已完成任务就在格子里，不能按旧的"一律不可选"判它失效。
+      TaskViewMode.eisenhower =>
+        _quadrantShowCompleted
+            ? visibleTasks
+            : visibleTasks.where((task) => !task.completed),
       _ => visibleTasks,
     };
     _latestVisibleTaskIds = actualVisibleTasks.map((task) => task.id).toSet();
@@ -1639,6 +1745,10 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                     next,
                     _selectedListId,
                     ref.read(currentDateTimeProvider)(),
+                    // 与列表同源；索引缺失时给空图 ⇒ 预览报 0 项，而不是把全量当命中。
+                    taskTagIds:
+                        ref.read(taskTagIndexProvider).valueOrNull ??
+                        const <String, Set<String>>{},
                   ),
                   onChanged: (next) {
                     draft = next;
@@ -2019,7 +2129,7 @@ DateTime? _taskDueWallClock(TodoTask task) {
   return taskWallClockDateTime(
     due,
     allDay: task.allDay,
-    fixedTimezone: task.fixedTimezone,
+    mode: TaskTimeMode.fromWire(task.timeMode),
     timeZone: task.timeZone,
   );
 }
@@ -2119,8 +2229,9 @@ List<TodoTask> applyTaskFilter(
   List<TodoTask> source,
   TaskFilter filter,
   String? selectedListId,
-  DateTime now,
-) {
+  DateTime now, {
+  Map<String, Set<String>>? taskTagIds,
+}) {
   if (filter.isEmpty && selectedListId == null) return source;
   final startOfDay = DateTime(now.year, now.month, now.day);
   final todayEnd = startOfDay.add(const Duration(days: 1));
@@ -2129,6 +2240,15 @@ List<TodoTask> applyTaskFilter(
   return source.where((task) {
     if (selectedListId != null && task.listId != selectedListId) return false;
     if (filter.listId != null && task.listId != filter.listId) return false;
+    // 标签维度真正参与求值（Issue #417：此前这里根本没有标签分支，带标签的已存过滤器
+    // 只能被标成「不支持套用」）。缺省按「且」：所选标签要全部命中，口径与服务端
+    // TodoFilterConditionsDO.LOGIC_AND 一致；「或」属 Issue #334，本轮不开这个口子。
+    // `taskTagIds == null` 表示索引还没就位，调用方要么等它，要么传空图（命中 0 项），
+    // 这里不假装「没有标签条件」把全量放行。
+    if (filter.tagIds.isNotEmpty && taskTagIds != null) {
+      final owned = taskTagIds[task.id] ?? const <String>{};
+      if (!owned.containsAll(filter.tagIds)) return false;
+    }
     if (filter.priority != null && task.priority != filter.priority) {
       return false;
     }

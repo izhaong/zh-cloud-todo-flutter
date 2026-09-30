@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/app_database.dart';
 import '../../core/time/task_time_formatter.dart';
+import '../../core/time/task_time_mode.dart';
 import '../../native/native_intents.dart';
 import '../../state/providers.dart';
 
@@ -89,7 +90,7 @@ class NativeTaskProjection {
     return taskWallClockDateTime(
       instant,
       allDay: task.allDay,
-      fixedTimezone: task.fixedTimezone,
+      mode: TaskTimeMode.fromWire(task.timeMode),
       timeZone: task.timeZone,
     );
   }

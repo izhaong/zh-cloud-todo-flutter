@@ -1321,6 +1321,18 @@ class $TodoTasksTable extends TodoTasks
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _timeModeMeta = const VerificationMeta(
+    'timeMode',
+  );
+  @override
+  late final GeneratedColumn<int> timeMode = GeneratedColumn<int>(
+    'time_mode',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _repeatParentTaskIdMeta =
       const VerificationMeta('repeatParentTaskId');
   @override
@@ -1399,6 +1411,7 @@ class $TodoTasksTable extends TodoTasks
     allDay,
     timeZone,
     fixedTimezone,
+    timeMode,
     repeatParentTaskId,
     repeatRuleId,
     repeatOccurrenceAt,
@@ -1564,6 +1577,12 @@ class $TodoTasksTable extends TodoTasks
         ),
       );
     }
+    if (data.containsKey('time_mode')) {
+      context.handle(
+        _timeModeMeta,
+        timeMode.isAcceptableOrUnknown(data['time_mode']!, _timeModeMeta),
+      );
+    }
     if (data.containsKey('repeat_parent_task_id')) {
       context.handle(
         _repeatParentTaskIdMeta,
@@ -1700,6 +1719,10 @@ class $TodoTasksTable extends TodoTasks
         DriftSqlType.bool,
         data['${effectivePrefix}fixed_timezone'],
       )!,
+      timeMode: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}time_mode'],
+      )!,
       repeatParentTaskId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}repeat_parent_task_id'],
@@ -1754,6 +1777,10 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
   final String? timeZone;
   final bool fixedTimezone;
 
+  /// 时间模式（specs/056）：0 浮动、1 「固定时区」、2 「固定时间」。
+  /// 与 `todo_task.time_mode` 同口径；[fixedTimezone] 只是它的派生兼容位。
+  final int timeMode;
+
   /// 本地 UUID，指向服务端物化实例的源任务。
   final String? repeatParentTaskId;
 
@@ -1784,6 +1811,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     required this.allDay,
     this.timeZone,
     required this.fixedTimezone,
+    required this.timeMode,
     this.repeatParentTaskId,
     this.repeatRuleId,
     this.repeatOccurrenceAt,
@@ -1836,6 +1864,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       map['time_zone'] = Variable<String>(timeZone);
     }
     map['fixed_timezone'] = Variable<bool>(fixedTimezone);
+    map['time_mode'] = Variable<int>(timeMode);
     if (!nullToAbsent || repeatParentTaskId != null) {
       map['repeat_parent_task_id'] = Variable<String>(repeatParentTaskId);
     }
@@ -1895,6 +1924,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           ? const Value.absent()
           : Value(timeZone),
       fixedTimezone: Value(fixedTimezone),
+      timeMode: Value(timeMode),
       repeatParentTaskId: repeatParentTaskId == null && nullToAbsent
           ? const Value.absent()
           : Value(repeatParentTaskId),
@@ -1936,6 +1966,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       allDay: serializer.fromJson<bool>(json['allDay']),
       timeZone: serializer.fromJson<String?>(json['timeZone']),
       fixedTimezone: serializer.fromJson<bool>(json['fixedTimezone']),
+      timeMode: serializer.fromJson<int>(json['timeMode']),
       repeatParentTaskId: serializer.fromJson<String?>(
         json['repeatParentTaskId'],
       ),
@@ -1972,6 +2003,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       'allDay': serializer.toJson<bool>(allDay),
       'timeZone': serializer.toJson<String?>(timeZone),
       'fixedTimezone': serializer.toJson<bool>(fixedTimezone),
+      'timeMode': serializer.toJson<int>(timeMode),
       'repeatParentTaskId': serializer.toJson<String?>(repeatParentTaskId),
       'repeatRuleId': serializer.toJson<String?>(repeatRuleId),
       'repeatOccurrenceAt': serializer.toJson<DateTime?>(repeatOccurrenceAt),
@@ -2002,6 +2034,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     bool? allDay,
     Value<String?> timeZone = const Value.absent(),
     bool? fixedTimezone,
+    int? timeMode,
     Value<String?> repeatParentTaskId = const Value.absent(),
     Value<String?> repeatRuleId = const Value.absent(),
     Value<DateTime?> repeatOccurrenceAt = const Value.absent(),
@@ -2033,6 +2066,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     allDay: allDay ?? this.allDay,
     timeZone: timeZone.present ? timeZone.value : this.timeZone,
     fixedTimezone: fixedTimezone ?? this.fixedTimezone,
+    timeMode: timeMode ?? this.timeMode,
     repeatParentTaskId: repeatParentTaskId.present
         ? repeatParentTaskId.value
         : this.repeatParentTaskId,
@@ -2078,6 +2112,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
       fixedTimezone: data.fixedTimezone.present
           ? data.fixedTimezone.value
           : this.fixedTimezone,
+      timeMode: data.timeMode.present ? data.timeMode.value : this.timeMode,
       repeatParentTaskId: data.repeatParentTaskId.present
           ? data.repeatParentTaskId.value
           : this.repeatParentTaskId,
@@ -2116,6 +2151,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           ..write('allDay: $allDay, ')
           ..write('timeZone: $timeZone, ')
           ..write('fixedTimezone: $fixedTimezone, ')
+          ..write('timeMode: $timeMode, ')
           ..write('repeatParentTaskId: $repeatParentTaskId, ')
           ..write('repeatRuleId: $repeatRuleId, ')
           ..write('repeatOccurrenceAt: $repeatOccurrenceAt, ')
@@ -2148,6 +2184,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
     allDay,
     timeZone,
     fixedTimezone,
+    timeMode,
     repeatParentTaskId,
     repeatRuleId,
     repeatOccurrenceAt,
@@ -2179,6 +2216,7 @@ class TodoTask extends DataClass implements Insertable<TodoTask> {
           other.allDay == this.allDay &&
           other.timeZone == this.timeZone &&
           other.fixedTimezone == this.fixedTimezone &&
+          other.timeMode == this.timeMode &&
           other.repeatParentTaskId == this.repeatParentTaskId &&
           other.repeatRuleId == this.repeatRuleId &&
           other.repeatOccurrenceAt == this.repeatOccurrenceAt &&
@@ -2208,6 +2246,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
   final Value<bool> allDay;
   final Value<String?> timeZone;
   final Value<bool> fixedTimezone;
+  final Value<int> timeMode;
   final Value<String?> repeatParentTaskId;
   final Value<String?> repeatRuleId;
   final Value<DateTime?> repeatOccurrenceAt;
@@ -2236,6 +2275,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     this.allDay = const Value.absent(),
     this.timeZone = const Value.absent(),
     this.fixedTimezone = const Value.absent(),
+    this.timeMode = const Value.absent(),
     this.repeatParentTaskId = const Value.absent(),
     this.repeatRuleId = const Value.absent(),
     this.repeatOccurrenceAt = const Value.absent(),
@@ -2265,6 +2305,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     this.allDay = const Value.absent(),
     this.timeZone = const Value.absent(),
     this.fixedTimezone = const Value.absent(),
+    this.timeMode = const Value.absent(),
     this.repeatParentTaskId = const Value.absent(),
     this.repeatRuleId = const Value.absent(),
     this.repeatOccurrenceAt = const Value.absent(),
@@ -2298,6 +2339,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     Expression<bool>? allDay,
     Expression<String>? timeZone,
     Expression<bool>? fixedTimezone,
+    Expression<int>? timeMode,
     Expression<String>? repeatParentTaskId,
     Expression<String>? repeatRuleId,
     Expression<DateTime>? repeatOccurrenceAt,
@@ -2327,6 +2369,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
       if (allDay != null) 'all_day': allDay,
       if (timeZone != null) 'time_zone': timeZone,
       if (fixedTimezone != null) 'fixed_timezone': fixedTimezone,
+      if (timeMode != null) 'time_mode': timeMode,
       if (repeatParentTaskId != null)
         'repeat_parent_task_id': repeatParentTaskId,
       if (repeatRuleId != null) 'repeat_rule_id': repeatRuleId,
@@ -2360,6 +2403,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     Value<bool>? allDay,
     Value<String?>? timeZone,
     Value<bool>? fixedTimezone,
+    Value<int>? timeMode,
     Value<String?>? repeatParentTaskId,
     Value<String?>? repeatRuleId,
     Value<DateTime?>? repeatOccurrenceAt,
@@ -2389,6 +2433,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
       allDay: allDay ?? this.allDay,
       timeZone: timeZone ?? this.timeZone,
       fixedTimezone: fixedTimezone ?? this.fixedTimezone,
+      timeMode: timeMode ?? this.timeMode,
       repeatParentTaskId: repeatParentTaskId ?? this.repeatParentTaskId,
       repeatRuleId: repeatRuleId ?? this.repeatRuleId,
       repeatOccurrenceAt: repeatOccurrenceAt ?? this.repeatOccurrenceAt,
@@ -2464,6 +2509,9 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
     if (fixedTimezone.present) {
       map['fixed_timezone'] = Variable<bool>(fixedTimezone.value);
     }
+    if (timeMode.present) {
+      map['time_mode'] = Variable<int>(timeMode.value);
+    }
     if (repeatParentTaskId.present) {
       map['repeat_parent_task_id'] = Variable<String>(repeatParentTaskId.value);
     }
@@ -2511,6 +2559,7 @@ class TodoTasksCompanion extends UpdateCompanion<TodoTask> {
           ..write('allDay: $allDay, ')
           ..write('timeZone: $timeZone, ')
           ..write('fixedTimezone: $fixedTimezone, ')
+          ..write('timeMode: $timeMode, ')
           ..write('repeatParentTaskId: $repeatParentTaskId, ')
           ..write('repeatRuleId: $repeatRuleId, ')
           ..write('repeatOccurrenceAt: $repeatOccurrenceAt, ')
@@ -12008,6 +12057,7 @@ typedef $$TodoTasksTableCreateCompanionBuilder =
       Value<bool> allDay,
       Value<String?> timeZone,
       Value<bool> fixedTimezone,
+      Value<int> timeMode,
       Value<String?> repeatParentTaskId,
       Value<String?> repeatRuleId,
       Value<DateTime?> repeatOccurrenceAt,
@@ -12038,6 +12088,7 @@ typedef $$TodoTasksTableUpdateCompanionBuilder =
       Value<bool> allDay,
       Value<String?> timeZone,
       Value<bool> fixedTimezone,
+      Value<int> timeMode,
       Value<String?> repeatParentTaskId,
       Value<String?> repeatRuleId,
       Value<DateTime?> repeatOccurrenceAt,
@@ -12157,6 +12208,11 @@ class $$TodoTasksTableFilterComposer
 
   ColumnFilters<bool> get fixedTimezone => $composableBuilder(
     column: $table.fixedTimezone,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get timeMode => $composableBuilder(
+    column: $table.timeMode,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -12300,6 +12356,11 @@ class $$TodoTasksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get timeMode => $composableBuilder(
+    column: $table.timeMode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get repeatParentTaskId => $composableBuilder(
     column: $table.repeatParentTaskId,
     builder: (column) => ColumnOrderings(column),
@@ -12410,6 +12471,9 @@ class $$TodoTasksTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<int> get timeMode =>
+      $composableBuilder(column: $table.timeMode, builder: (column) => column);
+
   GeneratedColumn<String> get repeatParentTaskId => $composableBuilder(
     column: $table.repeatParentTaskId,
     builder: (column) => column,
@@ -12481,6 +12545,7 @@ class $$TodoTasksTableTableManager
                 Value<bool> allDay = const Value.absent(),
                 Value<String?> timeZone = const Value.absent(),
                 Value<bool> fixedTimezone = const Value.absent(),
+                Value<int> timeMode = const Value.absent(),
                 Value<String?> repeatParentTaskId = const Value.absent(),
                 Value<String?> repeatRuleId = const Value.absent(),
                 Value<DateTime?> repeatOccurrenceAt = const Value.absent(),
@@ -12509,6 +12574,7 @@ class $$TodoTasksTableTableManager
                 allDay: allDay,
                 timeZone: timeZone,
                 fixedTimezone: fixedTimezone,
+                timeMode: timeMode,
                 repeatParentTaskId: repeatParentTaskId,
                 repeatRuleId: repeatRuleId,
                 repeatOccurrenceAt: repeatOccurrenceAt,
@@ -12539,6 +12605,7 @@ class $$TodoTasksTableTableManager
                 Value<bool> allDay = const Value.absent(),
                 Value<String?> timeZone = const Value.absent(),
                 Value<bool> fixedTimezone = const Value.absent(),
+                Value<int> timeMode = const Value.absent(),
                 Value<String?> repeatParentTaskId = const Value.absent(),
                 Value<String?> repeatRuleId = const Value.absent(),
                 Value<DateTime?> repeatOccurrenceAt = const Value.absent(),
@@ -12567,6 +12634,7 @@ class $$TodoTasksTableTableManager
                 allDay: allDay,
                 timeZone: timeZone,
                 fixedTimezone: fixedTimezone,
+                timeMode: timeMode,
                 repeatParentTaskId: repeatParentTaskId,
                 repeatRuleId: repeatRuleId,
                 repeatOccurrenceAt: repeatOccurrenceAt,

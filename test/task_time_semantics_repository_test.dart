@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:zh_cloud_todo_flutter/core/time/task_time_mode.dart';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
@@ -17,7 +18,7 @@ void main() {
     expect(
       taskDateTimeFromWallClock(
         DateTime(2026, 10, 31, 9),
-        fixedTimezone: true,
+        mode: TaskTimeMode.fromLegacyFlag(true),
         timeZone: 'America/Los_Angeles',
       ),
       DateTime.utc(2026, 10, 31, 16),
@@ -25,7 +26,7 @@ void main() {
     expect(
       taskDateTimeFromWallClock(
         DateTime(2026, 11, 1, 9),
-        fixedTimezone: true,
+        mode: TaskTimeMode.fromLegacyFlag(true),
         timeZone: 'America/Los_Angeles',
       ),
       DateTime.utc(2026, 11, 1, 17),
@@ -301,6 +302,7 @@ void main() {
       dueAt: DateTime.utc(2026, 7, 13, 18),
       timeZone: 'America/Los_Angeles',
       fixedTimezone: true,
+      timeMode: 2,
     );
     final payload =
         jsonDecode(

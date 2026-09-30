@@ -22,6 +22,7 @@ TodoTask _task({required String id, required bool completed, DateTime? dueAt}) {
     listId: '1',
     allDay: false,
     fixedTimezone: false,
+    timeMode: 0,
     title: '任务 $id',
     completed: completed,
     cancelled: false,
