@@ -89,6 +89,10 @@ class TodoTasks extends Table {
   BoolColumn get fixedTimezone =>
       boolean().withDefault(const Constant(false))();
 
+  /// 时间模式（specs/056）：0 浮动、1 「固定时区」、2 「固定时间」。
+  /// 与 `todo_task.time_mode` 同口径；[fixedTimezone] 只是它的派生兼容位。
+  IntColumn get timeMode => integer().withDefault(const Constant(0))();
+
   /// 本地 UUID，指向服务端物化实例的源任务。
   TextColumn get repeatParentTaskId => text().nullable()();
 
@@ -433,7 +437,7 @@ class AppDatabase extends _$AppDatabase {
   }) : super(_open(_userDatabaseName(tenantId, userId, testNamespace)));
 
   @override
-  int get schemaVersion => 22;
+  int get schemaVersion => 23;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -662,6 +666,16 @@ class AppDatabase extends _$AppDatabase {
         }
         if (!await _columnExists(m, 'todo_tasks', 'section_id')) {
           await m.addColumn(todoTasks, todoTasks.sectionId);
+        }
+      }
+      if (from < 23) {
+        if (!await _columnExists(m, 'todo_tasks', 'time_mode')) {
+          await m.addColumn(todoTasks, todoTasks.timeMode);
+          // 加列默认 0（浮动）会把存量"勾过固定"的行静默降级成不保留墙钟：
+          // 存量 true 的实际行为就是保留配置时区墙钟 ⇒ 回填成「固定时间」。
+          await customStatement(
+            'UPDATE todo_tasks SET time_mode = 2 WHERE fixed_timezone = 1',
+          );
         }
       }
     },

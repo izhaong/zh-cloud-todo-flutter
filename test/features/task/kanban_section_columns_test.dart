@@ -34,6 +34,7 @@ void main() {
       cancelled: false,
       allDay: false,
       fixedTimezone: false,
+      timeMode: 0,
       priority: priority,
       isPinned: false,
       sortOrder: 0,
@@ -709,6 +710,7 @@ class _CapturingTaskRepository extends TaskRepository {
     bool allDay = false,
     String? timeZone,
     bool fixedTimezone = false,
+    int? timeMode,
     String? parentTaskId,
     bool isPinned = false,
   }) async {
@@ -724,6 +726,7 @@ class _CapturingTaskRepository extends TaskRepository {
       cancelled: false,
       allDay: false,
       fixedTimezone: false,
+      timeMode: timeMode ?? 0,
       priority: priority,
       isPinned: false,
       sortOrder: 0,

@@ -63,6 +63,7 @@ TodoTask _payload({required String id, required String listId}) => TodoTask(
   listId: listId,
   allDay: false,
   fixedTimezone: false,
+  timeMode: 0,
   title: '拖拽载荷',
   completed: false,
   cancelled: false,

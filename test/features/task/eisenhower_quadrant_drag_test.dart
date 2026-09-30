@@ -37,6 +37,7 @@ TodoTask _task({
     listId: '1',
     allDay: false,
     fixedTimezone: false,
+    timeMode: 0,
     title: '任务 $id',
     completed: false,
     cancelled: false,

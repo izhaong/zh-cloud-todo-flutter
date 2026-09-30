@@ -21,6 +21,7 @@ void main() {
       allDay: false,
       timeZone: 'America/Los_Angeles',
       fixedTimezone: true,
+      timeMode: 2,
       updatedAt: DateTime.utc(2026, 7, 11),
       createdAt: DateTime.utc(2026, 7, 11),
     );

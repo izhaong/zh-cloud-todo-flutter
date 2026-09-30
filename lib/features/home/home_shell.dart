@@ -893,6 +893,7 @@ class _CalendarHost extends ConsumerWidget {
       dueAt: event.startAt.toLocal(),
       allDay: event.allDay,
       fixedTimezone: false,
+      timeMode: 0,
       updatedAt: event.startAt,
       createdAt: event.startAt,
     );

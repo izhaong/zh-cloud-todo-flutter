@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/todo_api.dart';
 import '../../core/db/app_database.dart';
 import '../../core/time/task_time_formatter.dart';
+import '../../core/time/task_time_mode.dart';
 import '../../core/theme/brand_colors.dart';
 import '../../core/theme/todo_layout_tokens.dart';
 import '../../core/widgets/app_widgets.dart';
@@ -161,7 +162,7 @@ class _TaskReminderTile extends ConsumerWidget {
             formatTaskDateTime(
               reminder.remindAt,
               allDay: false,
-              fixedTimezone: reminder.fixedTimezone,
+              mode: TaskTimeMode.fromLegacyFlag(reminder.fixedTimezone),
               timeZone: reminder.timeZone,
             ),
           ),
@@ -377,7 +378,7 @@ class _TaskReminderTile extends ConsumerWidget {
                           formatTaskDateTime(
                             fireAt,
                             allDay: false,
-                            fixedTimezone: fixedTimezone,
+                            mode: TaskTimeMode.fromLegacyFlag(fixedTimezone),
                             timeZone: timeZoneText.trim(),
                           ),
                         ),
@@ -401,7 +402,7 @@ class _TaskReminderTile extends ConsumerWidget {
                       Text(
                         anchorAt == null
                             ? '当前任务尚未设置所选时间'
-                            : '所选锚点：${formatTaskDateTime(anchorAt, allDay: false, fixedTimezone: task.fixedTimezone, timeZone: task.timeZone)}',
+                            : '所选锚点：${formatTaskDateTime(anchorAt, allDay: false, mode: TaskTimeMode.fromWire(task.timeMode), timeZone: task.timeZone)}',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
@@ -636,12 +637,21 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
   DateTime? _dueAt;
   bool _allDay = false;
   String? _timeZone;
-  bool _fixedTimezone = false;
+  TaskTimeMode _timeMode = TaskTimeMode.floating;
+
+  /// 副标题只用嘀嗒原句（`:48` / `:60`），不改写成交互说明。
+  static String _timeModeSubtitle(TaskTimeMode mode) {
+    return switch (mode) {
+      TaskTimeMode.fixedTimezone => '任务的时间会随着所在时区的不同而改变',
+      TaskTimeMode.fixedTime => '不论所处时区如何变化，任务的时间都会保持一致',
+      TaskTimeMode.floating => '',
+    };
+  }
 
   String _formatScheduleTime(DateTime value) => formatTaskDateTime(
     value,
     allDay: _allDay,
-    fixedTimezone: _fixedTimezone,
+    mode: _timeMode,
     timeZone: _timeZone,
   );
   TodoRepeatRule? _repeatRule;
@@ -690,7 +700,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       _dueAt = null;
       _allDay = false;
       _timeZone = null;
-      _fixedTimezone = false;
+      _timeMode = TaskTimeMode.floating;
       _repeatRule = null;
       _repeatOccurrenceSkipped = false;
       _selectedListId = null;
@@ -731,7 +741,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       _dueAt = t?.dueAt;
       _allDay = t?.allDay ?? false;
       _timeZone = t?.timeZone;
-      _fixedTimezone = t?.fixedTimezone ?? false;
+      _timeMode = TaskTimeMode.fromWire(t?.timeMode ?? 0);
       _repeatRule = repeatRule;
       _repeatOccurrenceSkipped = repeatSkipped;
       _selectedListId = t?.listId;
@@ -776,8 +786,8 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     final dueDirty = previous != null && _dueAt != previous.dueAt;
     final allDayDirty = previous != null && _allDay != previous.allDay;
     final timeZoneDirty = previous != null && _timeZone != previous.timeZone;
-    final fixedTimezoneDirty =
-        previous != null && _fixedTimezone != previous.fixedTimezone;
+    final timeModeDirty =
+        previous != null && _timeMode.wire != previous.timeMode;
     final listDirty = previous != null && _selectedListId != previous.listId;
     setState(() {
       _task = latest;
@@ -789,7 +799,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       if (!dueDirty) _dueAt = latest.dueAt;
       if (!allDayDirty) _allDay = latest.allDay;
       if (!timeZoneDirty) _timeZone = latest.timeZone;
-      if (!fixedTimezoneDirty) _fixedTimezone = latest.fixedTimezone;
+      if (!timeModeDirty) _timeMode = TaskTimeMode.fromWire(latest.timeMode);
       if (!listDirty) {
         _selectedListId = latest.listId;
         _listName = listName;
@@ -1084,8 +1094,10 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
         dueAt: _dueAt,
         clearDueAt: _dueAt == null && t.dueAt != null,
         allDay: _allDay,
-        timeZone: _fixedTimezone ? (_timeZone ?? 'Asia/Shanghai') : _timeZone,
-        fixedTimezone: _fixedTimezone,
+        timeZone: _timeMode.requiresAnchorZone
+            ? (_timeZone ?? 'Asia/Shanghai')
+            : _timeZone,
+        timeMode: _timeMode.wire,
         listId: _selectedListId == t.listId ? null : _selectedListId,
       );
     } on ArgumentError catch (error) {
@@ -1194,7 +1206,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       t.title,
       if ((t.description ?? '').trim().isNotEmpty) t.description!.trim(),
       if (t.dueAt != null)
-        '截止：${formatTaskDateTime(t.dueAt!, allDay: t.allDay, fixedTimezone: t.fixedTimezone, timeZone: t.timeZone)}',
+        '截止：${formatTaskDateTime(t.dueAt!, allDay: t.allDay, mode: TaskTimeMode.fromWire(t.timeMode), timeZone: t.timeZone)}',
     ].join('\n');
     final shared = await NativeIntents.shareText(body, subject: t.title);
     if (!mounted) return;
@@ -1535,18 +1547,39 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                           value: _allDay,
                           onChanged: (value) => update(() => _allDay = value),
                         ),
-                        SwitchListTile(
-                          key: const Key('task-fixed-timezone'),
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('固定时区'),
-                          subtitle: const Text('固定后按所选时区保留墙上时间'),
-                          value: _fixedTimezone,
-                          onChanged: (value) => update(() {
-                            _fixedTimezone = value;
-                            if (value) _timeZone ??= 'Asia/Shanghai';
+                        // 嘀嗒《01-任务/07-固定时间与固定时区》:31「选择「固定时区」或者「固定时间」」
+                        // ⇒ 两档互斥、可以都不选（都不选＝浮动）。用词逐字照抄，
+                        // 不给"未选"这一档发明界面名字（spec 056 决定 1）。
+                        RadioGroup<TaskTimeMode>(
+                          groupValue: _timeMode,
+                          onChanged: (picked) => update(() {
+                            _timeMode = picked ?? TaskTimeMode.floating;
+                            if (_timeMode.requiresAnchorZone) {
+                              _timeZone ??= 'Asia/Shanghai';
+                            }
                           }),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              for (final option in const [
+                                TaskTimeMode.fixedTimezone,
+                                TaskTimeMode.fixedTime,
+                              ])
+                                RadioListTile<TaskTimeMode>(
+                                  key: Key('task-time-mode-${option.wire}'),
+                                  contentPadding: EdgeInsets.zero,
+                                  value: option,
+                                  // Material 的 toggleable：再点已选中的那一档时 onChanged 收到
+                                  // null ⇒ 回到"两档都不选"。嘀嗒原文只命名两档、没给默认态取名，
+                                  // 所以既不发明第三档名字也不加"取消固定"按钮（spec 056 决定 1）。
+                                  toggleable: true,
+                                  title: Text(option.label!),
+                                  subtitle: Text(_timeModeSubtitle(option)),
+                                ),
+                            ],
+                          ),
                         ),
-                        if (_fixedTimezone)
+                        if (_timeMode.requiresAnchorZone)
                           DropdownButtonFormField<String>(
                             key: const Key('task-timezone'),
                             initialValue: _timeZone ?? 'Asia/Shanghai',
@@ -1720,7 +1753,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     final initialWallClock = taskWallClockDateTime(
       now,
       allDay: _allDay,
-      fixedTimezone: _fixedTimezone,
+      mode: _timeMode,
       timeZone: _timeZone,
     );
     final date = await showDatePicker(
@@ -1747,7 +1780,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     );
     return taskDateTimeFromWallClock(
       wallClock,
-      fixedTimezone: _fixedTimezone,
+      mode: _timeMode,
       timeZone: _timeZone,
     );
   }
@@ -1777,7 +1810,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       persistent: persistent,
       intervalMinutes: intervalMinutes,
       timeZone: _timeZone,
-      fixedTimezone: _fixedTimezone,
+      fixedTimezone: TaskTimeMode.legacyFlagOf(_timeMode),
     );
     if (!_isCurrentTask(t.id)) return;
     messenger.showSnackBar(
@@ -1810,7 +1843,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       fireAt: endAt,
       anchorType: 'END',
       timeZone: _timeZone,
-      fixedTimezone: _fixedTimezone,
+      fixedTimezone: TaskTimeMode.legacyFlagOf(_timeMode),
     );
     if (!_isCurrentTask(t.id)) return;
     messenger.showSnackBar(const SnackBar(content: Text('已添加结束时提醒')));
@@ -1832,7 +1865,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       taskId: t.id,
       fireAt: fireAt,
       timeZone: _timeZone,
-      fixedTimezone: _fixedTimezone,
+      fixedTimezone: TaskTimeMode.legacyFlagOf(_timeMode),
     );
     if (!_isCurrentTask(t.id)) return;
     messenger.showSnackBar(const SnackBar(content: Text('已添加指定时间提醒')));

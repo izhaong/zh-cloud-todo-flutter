@@ -233,6 +233,7 @@ TodoTask _task({
     sortOrder: 0,
     allDay: false,
     fixedTimezone: false,
+    timeMode: 0,
     updatedAt: now,
     createdAt: now,
   );

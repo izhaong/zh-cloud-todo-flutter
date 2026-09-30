@@ -7,6 +7,7 @@ import '../../core/db/app_database.dart';
 import '../../core/sync/sync_change_queue.dart';
 import '../../core/sync/sync_entities.dart';
 import '../../core/time/task_time_formatter.dart';
+import '../../core/time/task_time_mode.dart';
 
 class TaskWorkspacePreference {
   const TaskWorkspacePreference({
@@ -405,7 +406,7 @@ class TaskViewActionRepository {
           : taskWallClockDateTime(
               task.dueAt!,
               allDay: task.allDay,
-              fixedTimezone: task.fixedTimezone,
+              mode: TaskTimeMode.fromWire(task.timeMode),
               timeZone: task.timeZone,
             );
       if (currentDisplay != null &&
@@ -421,7 +422,7 @@ class TaskViewActionRepository {
           : taskDateTimeForDisplayDay(
               task.dueAt!,
               targetDay,
-              fixedTimezone: task.fixedTimezone,
+              mode: TaskTimeMode.fromWire(task.timeMode),
               timeZone: task.timeZone,
             );
       await (_db.update(

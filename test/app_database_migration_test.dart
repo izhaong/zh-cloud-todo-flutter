@@ -19,9 +19,7 @@ void main() {
       }
     });
 
-    final beforeUpgrade = AppDatabase.forTesting(
-      NativeDatabase(databaseFile),
-    );
+    final beforeUpgrade = AppDatabase.forTesting(NativeDatabase(databaseFile));
     final now = DateTime.utc(2026, 7, 30, 16);
     await beforeUpgrade.batch((batch) {
       batch.insert(
@@ -63,12 +61,82 @@ void main() {
         .customSelect("PRAGMA table_info('todo_tasks')")
         .get();
 
-    expect(version.data['user_version'], 22);
+    expect(version.data['user_version'], 23);
     expect(task.title, '迁移前任务');
     expect(sectionTable.data['name'], 'todo_task_sections');
+    expect(taskColumns.map((row) => row.data['name']), contains('section_id'));
+  });
+
+  test('v22→v23 升级把勾过固定的存量任务回填成「固定时间」，没勾的仍是浮动', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'zh_cloud_todo_time_mode_backfill_',
+    );
+    final databaseFile = File('${directory.path}/todo.sqlite');
+    addTearDown(() async {
+      if (await directory.exists()) {
+        await directory.delete(recursive: true);
+      }
+    });
+
+    final seeded = AppDatabase.forTesting(NativeDatabase(databaseFile));
+    final now = DateTime.utc(2026, 9, 20, 8);
+    await seeded.batch((batch) {
+      batch.insert(
+        seeded.todoLists,
+        TodoListsCompanion.insert(
+          id: 'list-time-mode',
+          name: '工作',
+          updatedAt: now,
+          createdAt: now,
+        ),
+      );
+      batch.insert(
+        seeded.todoTasks,
+        TodoTasksCompanion.insert(
+          id: 'task-fixed',
+          listId: 'list-time-mode',
+          title: '勾过固定的老任务',
+          fixedTimezone: const Value(true),
+          updatedAt: now,
+          createdAt: now,
+        ),
+      );
+      batch.insert(
+        seeded.todoTasks,
+        TodoTasksCompanion.insert(
+          id: 'task-plain',
+          listId: 'list-time-mode',
+          title: '没勾固定的老任务',
+          updatedAt: now,
+          createdAt: now,
+        ),
+      );
+    });
+    await seeded.close();
+
+    // 退回"表上还没有 time_mode 这一列"的 v22 形状：新列由 onUpgrade 自己加回来，
+    // 这样测到的才是"加列 + 回填"这一整条路，而不是直接建好的 v23 库。
+    final legacy = sqlite.sqlite3.open(databaseFile.path);
+    try {
+      legacy.execute('ALTER TABLE todo_tasks DROP COLUMN time_mode');
+      legacy.execute('PRAGMA user_version = 22');
+    } finally {
+      legacy.dispose();
+    }
+
+    final upgraded = AppDatabase.forTesting(NativeDatabase(databaseFile));
+    addTearDown(upgraded.close);
+    final version = await upgraded
+        .customSelect('PRAGMA user_version')
+        .getSingle();
+    final rows = await upgraded
+        .customSelect('SELECT id, time_mode FROM todo_tasks ORDER BY id')
+        .get();
+
+    expect(version.data['user_version'], 23);
     expect(
-      taskColumns.map((row) => row.data['name']),
-      contains('section_id'),
+      rows.map((row) => '${row.data['id']}=${row.data['time_mode']}'),
+      containsAll(<String>['task-fixed=2', 'task-plain=0']),
     );
   });
 
@@ -131,7 +199,7 @@ void main() {
           .getSingle();
       final filter = await upgraded.select(upgraded.todoFilters).getSingle();
 
-      expect(version.data['user_version'], 22);
+      expect(version.data['user_version'], 23);
       expect(filter.conditionJson, contains('"local-list"'));
       expect(filter.conditionJson, contains('"local-tag"'));
       expect(filter.conditionJson, isNot(contains('[101]')));
@@ -188,7 +256,7 @@ void main() {
           .getSingle();
       final list = await upgraded.listByLocalId('list-before-local-reference');
 
-      expect(version.data['user_version'], 22);
+      expect(version.data['user_version'], 23);
       expect(list?.folderId, 88);
       expect(list?.folderLocalId, 'folder-before-local-reference');
     },
@@ -236,7 +304,7 @@ void main() {
           )
           .getSingle();
 
-      expect(version.data['user_version'], 22);
+      expect(version.data['user_version'], 23);
       expect(access.data['id'], 'list-before-access-role');
       expect(access.data['access_role'], 'owner');
       expect(access.data['writable'], 1);
@@ -279,7 +347,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 22);
+      expect(version.data['user_version'], 23);
       final task = await upgraded.select(upgraded.todoTasks).getSingle();
       expect(task.title, '迁移前任务');
       expect(task.assigneeUserId, isNull);
@@ -307,7 +375,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 22);
+      expect(version.data['user_version'], 23);
 
       final taskColumns = await upgraded
           .customSelect('PRAGMA table_info(todo_tasks)')
@@ -443,7 +511,7 @@ void main() {
           .getSingle();
       final rule = await upgraded.select(upgraded.todoRepeatRules).getSingle();
 
-      expect(version.data['user_version'], 22);
+      expect(version.data['user_version'], 23);
       expect(rule.id, 'repeat-rule-before-b2-b3-merge');
       expect(rule.byDay, '1,3,5');
       expect(rule.selectedDatesJson, isNull);
@@ -488,7 +556,7 @@ void main() {
         .getSingle();
     final rule = await upgraded.select(upgraded.todoRepeatRules).getSingle();
 
-    expect(version.data['user_version'], 22);
+    expect(version.data['user_version'], 23);
     expect(rule.freq, 'CUSTOM');
     expect(rule.byDay, '1,3,5');
     expect(rule.repeatMode, 'ON_DUE');
@@ -526,6 +594,7 @@ void main() {
               allDay: const Value(true),
               timeZone: const Value('America/Los_Angeles'),
               fixedTimezone: const Value(true),
+              timeMode: const Value(2),
               updatedAt: createdAt,
               createdAt: createdAt,
             ),
@@ -575,7 +644,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 22);
+      expect(version.data['user_version'], 23);
       await upgraded.close();
 
       final reopened = AppDatabase.forTesting(NativeDatabase(databaseFile));
@@ -667,7 +736,7 @@ void main() {
           )
           .getSingle();
 
-      expect(version.data['user_version'], 22);
+      expect(version.data['user_version'], 23);
       expect(task.title, '迁移前看板任务');
       expect(boardTable.data['name'], 'todo_board_preferences');
     },
@@ -732,7 +801,7 @@ void main() {
           )
           .getSingle();
 
-      expect(version.data['user_version'], 22);
+      expect(version.data['user_version'], 23);
       expect(task.title, '迁移前可靠性任务');
       expect(change.status, 'queued');
       expect(change.nextAttemptAt, isNull);

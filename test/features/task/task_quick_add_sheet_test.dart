@@ -44,6 +44,7 @@ class _RecordingTaskRepository extends TaskRepository {
     bool allDay = false,
     String? timeZone,
     bool fixedTimezone = false,
+    int? timeMode,
     String? parentTaskId,
     bool isPinned = false,
   }) async {

@@ -35,6 +35,7 @@ void main() {
       dueAt: dueAt,
       allDay: false,
       fixedTimezone: false,
+      timeMode: 0,
       updatedAt: now,
       createdAt: now,
     );

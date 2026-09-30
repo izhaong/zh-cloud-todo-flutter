@@ -6,6 +6,7 @@ import '../../../core/db/app_database.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/brand_colors.dart';
 import '../../../core/time/task_time_formatter.dart';
+import '../../../core/time/task_time_mode.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../task_assign_action.dart';
 import '../task_detail_page.dart';
@@ -788,7 +789,7 @@ class _KanbanCard extends StatelessWidget {
                     taskWallClockDateTime(
                       task.dueAt!,
                       allDay: task.allDay,
-                      fixedTimezone: task.fixedTimezone,
+                      mode: TaskTimeMode.fromWire(task.timeMode),
                       timeZone: task.timeZone,
                     ),
                   ),

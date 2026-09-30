@@ -159,6 +159,7 @@ class _ScriptedRepository extends TaskRepository {
     bool? allDay,
     String? timeZone,
     bool? fixedTimezone,
+    int? timeMode,
     String? listId,
     String? sectionId,
     bool clearSectionId = false,
