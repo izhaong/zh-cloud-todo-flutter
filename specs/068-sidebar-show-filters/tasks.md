@@ -39,7 +39,8 @@
 | 门 | 读数 |
 | --- | --- |
 | 1 `git diff --check origin/develop HEAD` | rc=0，跑在差集上（提交后工作树是空的，只跑工作树等于没跑） |
-| 2 `dart format --output=none --set-exit-if-changed` 加五个字面量路径 | `Formatted 5 files (0 changed)`、rc=0。这里的 5 要等于 `git diff --name-only origin/develop HEAD -- '*.dart' \| wc -l` = 5 |
+| 2 `dart format --output=none --set-exit-if-changed` 加五个字面量路径 | `Formatted 5 files (0 changed)`、rc=0。这里的 5 要等于 `git diff --name-only f361be4 HEAD -- '*.dart' \| wc -l` = 5
+（基准钉在门禁时点 `f361be4`：写成 `origin/develop` 会随上游前进漂成 19 —— 第 1 轮 NIT-3 就是抓到这个。） |
 | 3 `flutter analyze` | `No issues found! (ran in 1.5s)`、rc=0 |
 | 4 `flutter test --tags golden` | `00:04 +9: All tests passed!`、rc=0，9 张基线未重录（`find test -name '*.png' \| wc -l` = 9） |
 | 5 非 golden 用例集 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `03:06 +1201 ~26: All tests passed!`、rc=0 |
