@@ -59,6 +59,9 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
   /// 会话内状态、默认关，理由见 specs/052 FR-4/FR-5。
   bool _showListTimeline = false;
 
+  /// 年视图热力图（嘀嗒《03-年视图》:76 默认关闭）。
+  bool _showHeatmap = false;
+
   /// 用户是否已经动过显示设置。恢复偏好是异步的，若期间用户已切了视图或拨了开关，
   /// 迟到的旧值必须作废 —— 否则表现为「刚点的档位被弹回上一次的选择」。
   bool _displayTouched = false;
@@ -122,6 +125,8 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
             CalendarMode.year => _YearView(
               anchor: _anchor,
               tasks: _visibleTasks,
+              allTasks: widget.tasks,
+              showHeatmap: _showHeatmap,
               onMonthTap: (m) {
                 setState(() => _anchor = DateTime(_anchor.year, m, 1));
                 _changeMode(CalendarMode.month);
@@ -184,6 +189,7 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
         }
       }
       _showCompleted = saved.showCompletedTasks ?? false;
+      _showHeatmap = saved.showHeatmap ?? false;
     });
   }
 
@@ -195,13 +201,18 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
 
   Future<void> _showDisplaySettings() async {
     _displayTouched = true;
-    final next = await showModalBottomSheet<bool>(
+    final next = await showModalBottomSheet<CalendarDisplayFlags>(
       context: context,
-      builder: (sheetContext) =>
-          _DisplaySettingsSheet(showCompleted: _showCompleted),
+      builder: (sheetContext) => _DisplaySettingsSheet(
+        showCompleted: _showCompleted,
+        showHeatmap: _showHeatmap,
+      ),
     );
     if (next == null || !mounted) return;
-    setState(() => _showCompleted = next);
+    setState(() {
+      _showCompleted = next.showCompleted;
+      _showHeatmap = next.showHeatmap;
+    });
     await _persistDisplay();
   }
 
@@ -213,6 +224,7 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
           ?.saveCalendarDisplay(
             viewMode: _mode.name,
             showCompletedTasks: _showCompleted,
+            showHeatmap: _showHeatmap,
           );
     } catch (_) {
       if (!mounted) return;
@@ -323,10 +335,17 @@ Future<void> showExternalCalendarEventDialog(
 }
 
 /// 日历「显示设置」抽屉：对应嘀嗒日历右上角 ··· → 显示设置。
+/// 显示设置一次弹层要交回的成对开关（分开交回会丢掉另一格的当前值）。
+typedef CalendarDisplayFlags = ({bool showCompleted, bool showHeatmap});
+
 class _DisplaySettingsSheet extends StatelessWidget {
-  const _DisplaySettingsSheet({required this.showCompleted});
+  const _DisplaySettingsSheet({
+    required this.showCompleted,
+    required this.showHeatmap,
+  });
 
   final bool showCompleted;
+  final bool showHeatmap;
 
   @override
   Widget build(BuildContext context) {
@@ -345,7 +364,27 @@ class _DisplaySettingsSheet extends StatelessWidget {
             key: const Key('calendar-show-completed'),
             title: const Text('显示已完成'),
             value: showCompleted,
-            onChanged: (value) => Navigator.pop(context, value),
+            onChanged: (value) => Navigator.pop(context, (
+              showCompleted: value,
+              showHeatmap: showHeatmap,
+            )),
+          ),
+          // 嘀嗒《03-年视图》:80/:87「显示设置 → 样式 → 热力图」，分组名照抄。
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text('样式', style: TextStyle(fontSize: 13)),
+            ),
+          ),
+          SwitchListTile(
+            key: const Key('calendar-show-heatmap'),
+            title: const Text('热力图'),
+            value: showHeatmap,
+            onChanged: (value) => Navigator.pop(context, (
+              showCompleted: showCompleted,
+              showHeatmap: value,
+            )),
           ),
         ],
       ),
@@ -879,14 +918,22 @@ class _YearView extends StatelessWidget {
   const _YearView({
     required this.anchor,
     required this.tasks,
+    required this.allTasks,
     required this.onMonthTap,
+    required this.showHeatmap,
   });
   final DateTime anchor;
   final List<TodoTask> tasks;
+
+  /// 热力图数的是「当天完成数」，必须绕过「显示已完成」的过滤 ——
+  /// 否则默认（不显示已完成）下全年都是最浅档，这个功能看着就是坏的。
+  final List<TodoTask> allTasks;
   final ValueChanged<int> onMonthTap;
+  final bool showHeatmap;
 
   @override
   Widget build(BuildContext context) {
+    if (showHeatmap) return _buildHeatmap(context);
     final countByMonth = List<int>.filled(12, 0);
     for (final t in tasks) {
       final d = resolveTaskDate(t);
@@ -937,6 +984,141 @@ class _YearView extends StatelessWidget {
       },
     );
   }
+
+  /// 热力图整年一次构建，不走懒加载 —— 否则滚出视口的月份在语义树/测试里根本不存在。
+  Widget _buildHeatmap(BuildContext context) {
+    final countByDay = <DateTime, int>{};
+    for (final t in allTasks) {
+      if (!t.completed) continue;
+      final completedAt = t.completedAt;
+      if (completedAt == null) continue;
+      final day = DateTime(
+        completedAt.year,
+        completedAt.month,
+        completedAt.day,
+      );
+      if (day.year != anchor.year) continue;
+      countByDay[day] = (countByDay[day] ?? 0) + 1;
+    }
+    var maxPerDay = 0;
+    for (final count in countByDay.values) {
+      if (count > maxPerDay) maxPerDay = count;
+    }
+    final df = DateFormat('M 月');
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var m = 1; m <= 12; m++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  InkWell(
+                    onTap: () => onMonthTap(m),
+                    child: Text(
+                      df.format(DateTime(anchor.year, m, 1)),
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  _MonthHeatmap(
+                    year: anchor.year,
+                    month: m,
+                    countByDay: countByDay,
+                    maxPerDay: maxPerDay,
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 单月热力格：周一起排，日格只着色不放文字（字号放大不该把格子撑破）。
+class _MonthHeatmap extends StatelessWidget {
+  const _MonthHeatmap({
+    required this.year,
+    required this.month,
+    required this.countByDay,
+    required this.maxPerDay,
+  });
+
+  final int year;
+  final int month;
+  final Map<DateTime, int> countByDay;
+  final int maxPerDay;
+
+  static const _cellSize = 14.0;
+  static const _cellGap = 4.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = brandColors(context);
+    final firstDay = DateTime(year, month, 1);
+    final lastDay = DateTime(year, month + 1, 0);
+    final leadingBlanks = firstDay.weekday - 1;
+    final cells = <Widget>[];
+    for (var i = 0; i < leadingBlanks; i++) {
+      cells.add(const SizedBox(width: _cellSize, height: _cellSize));
+    }
+    for (var day = 1; day <= lastDay.day; day++) {
+      final date = DateTime(year, month, day);
+      final count = countByDay[date] ?? 0;
+      final level = calendarHeatmapLevel(count, maxPerDay);
+      cells.add(
+        Padding(
+          padding: const EdgeInsets.only(right: _cellGap, bottom: _cellGap),
+          child: Semantics(
+            key: Key('calendar-year-day-${_isoDay(date)}'),
+            label: '$month 月 $day 日 完成 $count 项',
+            child: Container(
+              width: _cellSize,
+              height: _cellSize,
+              decoration: BoxDecoration(
+                color: colors.accent.withValues(alpha: _heatmapAlpha[level]),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    return Wrap(children: cells);
+  }
+}
+
+/// 日格 key 与语义 label 用的日期串。
+String _isoDay(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-'
+    '${d.month.toString().padLeft(2, '0')}-'
+    '${d.day.toString().padLeft(2, '0')}';
+
+const int _heatmapLevels = 4;
+
+/// 分母下限：全年只完成 1 项时，那一项不该被画成「最忙的一天」。
+const int _heatmapMinDenominator = 4;
+
+/// 档位 0..4 对应的着色浓度；`0` 档只留一点底色，让「没完成」也看得见格子。
+const List<double> _heatmapAlpha = [0.06, 0.26, 0.46, 0.68, 0.9];
+
+/// 年视图热力图档位（嘀嗒《03-年视图》:98「颜色越深，代表当天完成的任务越多」）。
+///
+/// 源页只给了相对口径、没给绝对阈值，所以按当年单日最大值归一成 4 档，
+/// 并给分母垫一个下限，避免稀疏年份把唯一一次完成显示成满格热度；
+/// 数据全在本地库里，最大值就在传进来的列表里算，不需要服务端聚合。
+int calendarHeatmapLevel(int completedOnDay, int maxCompletedPerDay) {
+  if (completedOnDay <= 0) return 0;
+  final denominator = maxCompletedPerDay < _heatmapMinDenominator
+      ? _heatmapMinDenominator
+      : maxCompletedPerDay;
+  final level =
+      (completedOnDay * _heatmapLevels + denominator - 1) ~/ denominator;
+  return level.clamp(1, _heatmapLevels);
 }
 
 class _AgendaView extends StatefulWidget {
