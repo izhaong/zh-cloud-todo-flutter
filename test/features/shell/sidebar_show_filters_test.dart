@@ -101,6 +101,21 @@ void main() {
       findsOneWidget,
       reason: '与同页「显示标签」那条同一措辞：写失败不能静默',
     );
+
+    // 四件套 ③「失败保留已加载数据」：措辞说了不算，界面这一行的取值必须真的没动。
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('todo-settings-show-filters')),
+        matching: find.text('显示'),
+      ),
+      findsOneWidget,
+      reason: '写失败后这一行显示的还得是原取值「显示」，不是点中的「隐藏」也不是「…」',
+    );
+    expect(
+      find.text('读取偏好失败，显示的是上次读到的值'),
+      findsNothing,
+      reason: '写失败不等于读失败：不该冒出「读到的还是上次的值」这条只有读侧才该出现的提示',
+    );
   });
 
   testWidgets('320px + 1.3 倍字号下侧栏两种显隐都不溢出', (tester) async {
@@ -112,6 +127,100 @@ void main() {
     await _saveFilters(tester, fixture, showFilters: false);
     expect(tester.takeException(), isNull);
     expect(filtersRow, findsNothing);
+  });
+
+  testWidgets('设置页 320px + 1.3 倍字号：环境真的落到这一行的 context 上且不溢出', (tester) async {
+    const tileKey = Key('todo-settings-show-filters');
+    await _pumpSettings(tester, textScale: 1.3, width: 320);
+
+    // 这两条是防「参数没接线就白测一遍宽屏」：字号与视口都要从被测节点自己的上下文读回来。
+    expect(
+      MediaQuery.of(tester.element(find.byKey(tileKey))).textScaler.scale(14),
+      closeTo(18.2, 0.001),
+      reason: '「1.3 倍字号」必须真的作用在设置页这一行的 context 上',
+    );
+    expect(
+      tester.view.physicalSize.width / tester.view.devicePixelRatio,
+      320,
+      reason: '「320px」必须真的送到 harness 的视口，否则测的是 1440 宽屏',
+    );
+
+    expect(find.byKey(tileKey), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('「过滤器」这一行的读屏名字带标题和当前取值，改档后要跟着换', (tester) async {
+    const tileKey = Key('todo-settings-show-filters');
+    final handle = tester.ensureSemantics();
+    await _pumpSettings(tester);
+
+    // 同页「显示标签」那一行的取值也是「显示/隐藏」，判据必须切进带 key 的那一行，
+    // 否则会被旁侧那一行满足（同目录 sidebar_show_tags_settings_test.dart:207 的合并 label 口径）。
+    String labelOfValue(String value) => tester
+        .getSemantics(
+          find.descendant(of: find.byKey(tileKey), matching: find.text(value)),
+        )
+        .label;
+
+    var label = labelOfValue('显示');
+    expect(label, contains('过滤器'), reason: '读屏要念得出这一行管的是什么');
+    expect(
+      label,
+      contains('显示'),
+      reason: '偏好当前值用文字放在 trailing：读屏念到的是「过滤器 … 显示」',
+    );
+
+    await _pickFilterOption(tester, showFilters: false);
+
+    label = labelOfValue('隐藏');
+    expect(label, contains('过滤器'));
+    expect(label, contains('隐藏'), reason: '改档后取值要进label，不能停在旧值');
+    expect(
+      label,
+      isNot(contains('显示')),
+      reason: '副标题「控制过滤器条目是否出现在侧栏」不含「显示」，念到它就说明取值没换过来',
+    );
+
+    handle.dispose();
+  });
+
+  testWidgets('存的是点中的那个字面值，不是从当前值取反', (tester) async {
+    const tileKey = Key('todo-settings-show-filters');
+    late _RecordingRepository recorder;
+    final fixture = await _pumpSettings(
+      tester,
+      overridesBuilder: (database) {
+        recorder = _RecordingRepository(database, SyncChangeQueue(database));
+        return [
+          sidebarVisibilityRepositoryProvider.overrideWith((ref) => recorder),
+        ];
+      },
+    );
+
+    // 默认「显示」⇒ 点「显示」这一档。取反实现会写 false，这一条就是它的红测。
+    await tester.tap(find.byKey(tileKey));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('todo-settings-show-filters-option-true')),
+    );
+    await tester.pumpAndSettle();
+    expect(recorder.picked, [true], reason: '点中的是「显示」，写库就必须是 true；取反会写成 false');
+
+    await tester.tap(find.byKey(tileKey));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('todo-settings-show-filters-option-false')),
+    );
+    await tester.pumpAndSettle();
+    expect(recorder.picked, [true, false], reason: '两档各写各的字面值，与当前值无关');
+    expect(
+      await SidebarVisibilityRepository(
+        fixture.database,
+        SyncChangeQueue(fixture.database),
+      ).getFilters(),
+      false,
+      reason: '记录用的仓储照常落库，别把这条用例退化成纯 mock 断言',
+    );
   });
 }
 
@@ -150,13 +259,18 @@ Future<TodoVisualFixture> _pumpSidebar(
 Future<TodoVisualFixture> _pumpSettings(
   WidgetTester tester, {
   List<Override> Function(AppDatabase database)? overridesBuilder,
+  double textScale = 1,
+  double width = 480,
 }) async {
   final fixture = await pumpTodoVisualScenario(
     tester,
-    viewport: TodoVisualViewports.wide,
+    viewport: width >= 400 ? TodoVisualViewports.wide : const Size(320, 900),
     fixtureSet: TodoVisualFixtureSet.populated,
     overridesBuilder: overridesBuilder,
-    child: const SettingsRoute(),
+    child: MediaQuery(
+      data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
+      child: const SettingsRoute(),
+    ),
   );
   await tester.pumpAndSettle();
   // 设置页是 `ListView` 懒建的：不先滚到那一行，`find` 与 `tap` 都拿不到它
@@ -194,4 +308,32 @@ class _SaveFailsRepository extends SidebarVisibilityRepository {
   Future<void> saveFilters({required bool showFilters}) async {
     throw StateError('本地库只读');
   }
+}
+
+/// 记下面向界面发起的每一次 `saveFilters` 的实参，同时照常落库。
+class _RecordingRepository extends SidebarVisibilityRepository {
+  _RecordingRepository(super.db, super.queue);
+
+  final List<bool> picked = <bool>[];
+
+  @override
+  Future<void> saveFilters({required bool showFilters}) async {
+    picked.add(showFilters);
+    await super.saveFilters(showFilters: showFilters);
+  }
+}
+
+/// 走界面的完整链路：点这一行 ⇒ 弹出「显示/隐藏」两档 ⇒ 点其中一档。
+Future<void> _pickFilterOption(
+  WidgetTester tester, {
+  required bool showFilters,
+}) async {
+  await tester.tap(find.byKey(const Key('todo-settings-show-filters')));
+  await tester.pumpAndSettle();
+  await tester.tap(
+    find.byKey(Key('todo-settings-show-filters-option-$showFilters')),
+  );
+  await tester.pumpAndSettle();
+  await tester.pump(const Duration(milliseconds: 250));
+  await tester.pumpAndSettle();
 }
