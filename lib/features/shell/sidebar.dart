@@ -86,6 +86,15 @@ class Sidebar extends ConsumerWidget {
         (showTagsAsync.hasError
             ? SidebarVisibilityRepository.defaultShowTags
             : false);
+    // 「过滤器」这一档与上面那条**故意不同**（Issue #336）：没读到值就按默认「显示」画，
+    // 只有明确读到「隐藏」才收。差别在于这里收的是**导航行本身**：
+    // 标签那档收的是标题下面的一串条目，晚一帧再出现只是空列表；
+    // 导航行晚一帧出现会把整条侧栏往下顶一格（`test/shell_responsive_test.dart`
+    // 用裸 ProviderScope 断言这一行在，实测就是这一格跳变）。
+    // 存了「隐藏」的账号会看到该行闪一下再消失 —— 与跳变相比取这一边，写在台账里。
+    final showFilters =
+        ref.watch(sidebarShowFiltersProvider).valueOrNull ??
+        SidebarVisibilityRepository.defaultShowFilters;
     final tagEntries = !showTags
         ? const <SidebarHierarchyEntry<TodoTag>>[]
         : flattenSidebarHierarchy(
@@ -257,17 +266,18 @@ class Sidebar extends ConsumerWidget {
                         },
                       ),
                     ),
-                    _NavRow(
-                      rowKey: const Key('todo-sidebar-row-filters'),
-                      icon: Icons.filter_alt_outlined,
-                      label: '筛选器',
-                      selected: false,
-                      colors: colors,
-                      onTap: () {
-                        onNavigationCommitted?.call();
-                        onOpenFilters();
-                      },
-                    ),
+                    if (showFilters)
+                      _NavRow(
+                        rowKey: const Key('todo-sidebar-row-filters'),
+                        icon: Icons.filter_alt_outlined,
+                        label: '筛选器',
+                        selected: false,
+                        colors: colors,
+                        onTap: () {
+                          onNavigationCommitted?.call();
+                          onOpenFilters();
+                        },
+                      ),
                     if (onOpenNotes != null)
                       _NavRow(
                         rowKey: const Key('todo-sidebar-row-notes'),
