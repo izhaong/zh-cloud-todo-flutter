@@ -278,3 +278,13 @@ F（台账自扫）它在判词里都写成通过；它开出的 FAIL 与 NIT �
 
 **下一格欠什么**：第 3 轮判的是 FAIL ⇒ 合并前置的 `VERDICT` 仍欠一个 PASS，要派第 4 轮（审本轮之后的新 head，
 覆盖面按上面两条树号承接）。矩阵 #83 继续保持「已实现待合并」。
+
+## 十四、第 4 轮只读复核 `VERDICT: PASS` 与合并事实（第 156 轮，2026-09-30）
+
+被审 head `807bda3`（`807bda36dd`）。复核报告 `/tmp/r136/review-411-r4.result.md`，A–F 六节判 PASS，1 条 NIT：台账 `specs/062-smart-add-bare-time/tasks.md:255` 与同文件 `:280` 写「保持『已实现待合并』」，而矩阵冻结措辞是「已实现、未合并」（复核在 docs 收口分支 `41626e3:200` 上现读到），本账第六节自己也用后者 ⇒ 属措辞转述不一致，本轮按复核口径统一成「已实现、未合并」，不改状态、不改事实。
+
+复核的自扫是它自己现跑的：`python3 tool/check_spec_selfscan.py`（取 `origin/develop:tool/…`，36.5KB）对 `tasks.md` 与 `spec.md` 各报失项 0 条。
+
+合并：本 PR 由 !411 合进 develop，合并提交 `1e2c4f2e90`。合并前置三项各自都在**合并字节**上量过：一次性 worktree `/private/tmp/wt-fl-mp411` 真 merge `origin/develop` 后 `flutter analyze` rc=0（`/tmp/r152/mp411-analyze.log`）、`flutter test --exclude-tags "golden || performance" --concurrency=1` 得 `03:17 +1258 ~26: All tests passed!` rc=0（`/tmp/r152/mp411-test.log`）。这条「合并产物门禁」是本轮新加的规矩：`git merge-tree` 的 rc=0 只证明能自动合并，不证明合完还能编（FL !413 就撞过一次）。
+
+矩阵：#83 已按本合并提交在 docs 侧订正（`zh-cloud-docs` 分支 `docs/matrix-22-rejudge`，提交 `70d202f1`，判据器 `scripts/todo/check_parity_matrix.py` rc=0），该行状态仍「部分」（服务端 NLP 侧按 2026-09-23 范围裁定不做、本地正则覆盖面仍窄）。
