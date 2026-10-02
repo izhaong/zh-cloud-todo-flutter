@@ -13,14 +13,14 @@
   `Found 0 widgets with text "成就与勋章"`（3 条）与
   `Found 0 widgets with a semantics label matching the pattern "成就与勋章"`（读屏那条）。
   复核第二轮按 develop 版 `settings_route.dart` 逐字复现了这个红。
-- 2026-09-23：实现只有 12 行（`lib/features/settings/settings_route.dart:55-66`）+ 1 行 import + 1 行文档注释。
+- 2026-09-23：实现只有 12 行（`lib/`lib/features/settings/settings_route.dart`6`）+ 1 行 import + 1 行文档注释。
   走 `SettingsRoute`「账号」分组而不是 hub：理由与实测代价写在 `spec.md` 的
   「为什么不采用 specs/027 的 hub 接线路线」一节（四个已验收子页各自带 `AppBar` 与动作，
   嵌入态等于同时重写它们，还要让 hub 在沉浸专注时收掉自己的 bar）。
 - 2026-09-23：两轮只读复核（`claude` CLI 坏掉的替代方案：本会话只读子代理，理由见 specs/027 的同类记录）。
   **第一轮 `VERDICT: FAIL`**，三项必须改：① `pubspec.lock` 不得进 PR；② `dart format` 两处真红
   （我的门禁第 2 项当时 `exit=1`，日志留着）；③ 缺分组/顺序断言（把 `_Tile` 搬到「任务」分组四条全绿）。
-  三项都改，另采纳四条登记项。**第二轮 `VERDICT: FAIL`**，必须改是文档层：
+  三项都改；另采纳的登记项逐条列在下面。**第二轮 `VERDICT: FAIL`**，必须改是文档层：
   「已在矩阵侧另行更正」当时是空的、lock 成因归错、门禁日志留的是修格式前那份、缺 `tasks.md`、
   stage 清单数不上 —— 五项逐条改；它顺带指出的既有测试余量问题（800x600 下「原生增强」只剩 9.3px）
   也补了 `ensureVisible`。**没有跑第三轮，也没有 `VERDICT: PASS`**：按本仓「长耗时复核不得循环」的约定，
@@ -32,7 +32,7 @@
   ① 复核说 `ListTile` 的 title/subtitle 是两个独立语义节点 —— 我用锚定正则 `^成就与勋章$` 试出 0 命中，
   dump 出真实 label `'成就与勋章<NL>成就值、等级与勋章墙；成就值每天凌晨更新'`，是**合成一个节点**；
   FR-005 与用例照实测改写。② 复核说 lock 漂移里有 34 个包升了版本 —— 我第一次数成 1 个并回怼，
-  实际是我自写正则把包名锚错层级的假阴性，重测确认 **34 个包**（`dio`、`meta`、`xml 6.6.1→7.0.1` 等）
+  实际是我自写正则把包名锚错层级的假阴性；重测按包名逐个数，样本含 `dio`、`meta`、`xml 6.6.1→7.0.1`
   + 69 行 sha256 + `sdks` 底线抬高。⇒ 反向探针同样适用于「我写的核对方的脚本」。
 - 2026-09-23：门禁在最终状态跑（`/tmp/gate-028-final2.log` —— 这一份才是含 `native_entry_page_test` 加固之后的状态；
   首跑 `/tmp/gate-028.log` 的格式项真红、第二跑 `/tmp/gate-028-final.log` 早于该加固，三份都留着）：

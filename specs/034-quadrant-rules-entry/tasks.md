@@ -2,7 +2,7 @@
 
 ## 已证实（每条都有命令输出或反向探针为凭）
 
-- [x] T001 入口只出现在四象限视图的「...」菜单里，其它视图一项不多（FR-1、FR-3）。
+- [x] T001 入口只出现在四象限视图的「...」菜单里，其它视图不新增入口（FR-1、FR-3 各钉一条）。
   证据：`test/features/task/quadrant_rules_entry_test.dart` 用例 1 —— 列表视图下打开 `todo-sort-menu`
   断 `find.text('编辑象限规则')` `findsNothing`，切到四象限后同一条 finder 断 `findsOneWidget`。
   反向探针 PA（把回调改成四种视图常驻）⇒ 该用例**红**，证明负向半边不是空转。
@@ -15,7 +15,7 @@
   （空态文案 `quadrant_rules_page.dart:371`）不在 ⇒ 报错没被当成「一条规则都没有」。
   **归因经复核更正**：取数必然失败**不是**夹具的 `_NoNetworkApiClient` 拦的 —— 它覆写的是 `ApiClient.get/post`
   （`test/support/todo_visual_fixture.dart:462`），而 `QuadrantApi` 拿的是 `apiClient.raw` 那个 Dio
-  直连（`state/efficiency_providers.dart:21`、`core/api/efficiency_api.dart:496-502`）⇒ 绕过覆写，
+  直连（`lib/state/efficiency_providers.dart`、`lib/core/api/efficiency_api.dart`）⇒ 绕过覆写，
   被 flutter_test 默认掐断真实 socket 才失败。这条更正很重要：
   以后有人「用 provider override 造一个成功态」并不会让这条用例变绿，机制得说对才不误导。
 - [x] T004 320px + 1.3 倍字体不溢出，且档位**在 push 出来的路由自己的 context 上**自检（四件套）。
@@ -46,7 +46,7 @@
   ⇒ `✓ Built build/web`。
   **该版**字节 sha256 前 8：`155bc7ba` tasks_by_list_page.dart、`885f1447` task_workspace_header.dart、
   `13f1c927` quadrant_rules_entry_test.dart（第 1 轮复核后字节又变过，最终值在「最终门禁」表里，别引这一段）。
-  对照口径：同一条全量命令在**独立 worktree 的基线点 `develop@a1d7733`** 上实测
+  对照口径：下面这份全量命令在**独立 worktree 的基线点 `develop@a1d7733`** 上实测
   `02:17 +709 ~26: All tests passed!`（`/tmp/base-034.log`，跑完已 `git worktree remove`），
   该版 `+713 ~26` ⇒ **709 + 当时新增 4 例 = 713，逐一对上、无回归**（用例数后续见最终表）。
   目标里记的「基线 713/26」与该版数字相同纯属巧合 —— 那是在别的分支状态上数的，
@@ -71,7 +71,7 @@
 - [ ] T009 真机/网页端手手感未做（无第二台可登录 test 的设备；`flutter build ios` 卡 SPM）。
 - [ ] T010 远端 CI 未跑（runner `cgroup is not mounted`、Jenkins `zh-cloud-todo-flutter` Job 不可达）；
   本地门禁不替代远端证据。
-- [ ] T011 矩阵 A 段 #34/#35/#36 三行（`dida-parity-matrix.md:105-107`）仍以已废弃的
+- [ ] T011 矩阵 A 段 #34/#35/#36 三行（`zh-cloud-docs` 的 `todo/01_需求阶段/对照矩阵/dida-parity-matrix.md`（跨仓文档，行号按该仓基准，此处不引行号））仍以已废弃的
   `zh-cloud-client` PR #44 作 FL 证据，属"轨道 A 逐行复校"未清理的存量；本轮只改有实测结论的 #36 修订行。
 
 ## 复核手段与结论
@@ -110,9 +110,9 @@
   测试文件里那句「数据态只能在这里造」的理由随之改写为按配置分工，并据此**动了用例结构**：
   数据态列表留在直接泵页的用例 3，编辑器弹窗补进真实入口的用例 4（AppBar 动作无条件 ⇒ 不需要数据）。
 - **NIT 处置**：① 用例编号与文件顺序错位 ⇒ T001/T002/T003/T005/T012 的编号按文件内顺序改正并写明口径；
-  ② `spec.md:14` 的 `:448`、`plan.md:6` 的 `:393` 是 develop 口径却未注明 ⇒ 已标基准；
-  ③ `plan.md:26`「4 例」、`:30`「FR-1..FR-4」未跟上 ⇒ 已更；
-  ④ `spec.md:44` 的 grep 缺 `-E`（管道被当字面量）⇒ 复核员用 `-E` 复跑仍 0 命中，结论不变，命令已补 `-E`。
+  ② `specs/034-quadrant-rules-entry/spec.md` 的 `:448`、`specs/034-quadrant-rules-entry/plan.md` 的 `:393` 是 develop 口径却未注明 ⇒ 已标基准；
+  ③ `specs/034-quadrant-rules-entry/plan.md`「4 例」、`:30`「FR-1..FR-4」未跟上 ⇒ 已更；
+  ④ `specs/034-quadrant-rules-entry/spec.md` 的 grep 缺 `-E`（管道被当字面量）⇒ 复核员用 `-E` 复跑仍 0 命中，结论不变，命令已补 `-E`。
 - **复核员没提出但我自己复验后推翻的**：我在 T012 与矩阵里把这条写成「生产上的真缺陷 + 36 像素」。
   按 PD/PD2 差分实验（见 T012 的表）它只在默认测试字体下可观测，生产主题配置不红
   ⇒ 定性已下调，矩阵相应措辞同步改。**这条值得记着**：判据成立 ≠ 数字是生产口径，
@@ -181,4 +181,4 @@
   留给合并的人判断：BLOCKER 是文档/证据层面的，已按命令逐条复验并改正；
   代码面第 2 轮没有提出新 blocker（其原文：「BLOCKER（均为文档/证据，不涉代码）」）。
 - 第 2 轮之后我又自行复验推翻了自己一处更早写下的结论（`isExpanded` 那条「生产真缺陷」的定性，见 T012）；
-  这一处不在任何一轮复核的 finding 里，是本规格目前**唯一一处主动改判**。
+  这一处不在任何一轮复核的 finding 里，是本规格目前**主动改判的地方**（不在任何一轮复核 findings 里）。

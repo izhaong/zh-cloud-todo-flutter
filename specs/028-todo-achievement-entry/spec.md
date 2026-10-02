@@ -1,6 +1,6 @@
 # 成就墙导航入口（设置/我的 → 成就与勋章）
 
-对齐矩阵 #76–78「成就值与勋章（父）·成就值·勋章」。这三行的实现链早已齐备，唯一缺口是
+对齐矩阵 #76–78「成就值与勋章（父）·成就值·勋章」。#76、#77、#78 各行逐条的结论见 `zh-cloud-docs` 矩阵主表；实现链早已齐备，唯一缺口是
 **用户可达性**：矩阵原判「实现链齐但没有任何导航入口」。
 
 ## 嘀嗒口径（先读了对应那一页）
@@ -13,11 +13,11 @@
 
 ## 现状（实地证据，2026-09-23，本分支基线 = develop `a1d7733`）
 
-- 链路齐：`core/api/efficiency_api.dart:941` `AchievementApi` → `:948` `GET /achievement/wall`
-  → DTO `:327`（勋章）/`:353`（墙）→ `state/efficiency_providers.dart:16`（api）/`:63`（wall provider）
-  → 页面 `features/achievement/achievement_page.dart:10` → 既有测试 `test/achievement_page_test.dart`。
+- 链路齐：`lib/core/api/efficiency_api.dart` `AchievementApi` → `:948` `GET /achievement/wall`
+  → DTO `:327`（勋章）/`:353`（墙）→ `lib/state/efficiency_providers.dart`（api）/`:63`（wall provider）
+  → 页面 `lib/features/achievement/achievement_page.dart` → 既有测试 `test/achievement_page_test.dart`。
 - 但 `grep -rn "AchievementPage" lib` 在改动前只命中页面自身与
-  `features/efficiency/efficiency_hub_page.dart:52`，而 hub 自身无任何调用点 ⇒ 成就对用户不可达。
+  `lib/features/efficiency/efficiency_hub_page.dart`，而 hub 自身无任何调用点 ⇒ 成就对用户不可达。
 
 ## 为什么不采用 specs/027 的「hub 接线」路线（重要，避免下一轮又试一遍）
 
@@ -50,7 +50,7 @@ specs/027（在 `chore/todo-visual-harness-overrides` / PR !269 上，未合并�
 - **FR-004** 320px 宽 + 1.3 倍字体下入口仍在树里、可滚动到、可点击、无 RenderFlex 溢出；
   字体档位必须真正传到 push 出来的成就页（用弹层/路由 context 自检，不用外部探针）。
 - **FR-005** 读屏能读出该入口的**名称与更新口径**：实测 `ListTile` 把 `title` 与 `subtitle` 合成
-  一个可聚焦节点（label = 名称打头、口径在后），所以本条钉的是「同一节点内两者都在、名称打头、
+  可聚焦节点：label 里名称打头、口径在后，所以本条钉的是「同一节点内两者都在、名称打头、
   不靠颜色或图标传达」；「两条文案各自成为独立节点」在本仓组件上不成立，用例按实测写。
 - **FR-006** 侧栏 dock 的视觉与文案零改动 ⇒ 不触碰 9 张黄金图基线。
 
