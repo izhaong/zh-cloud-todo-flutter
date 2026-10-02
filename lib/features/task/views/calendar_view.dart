@@ -119,11 +119,19 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
             CalendarMode.week => _WeekView(
               anchor: _anchor,
               firstDay: firstDay,
+              selectedDay: _yearSelectedDay,
               tasks: _visibleTasks,
               onTaskTap: (t) => _openDetail(context, t),
             ),
             CalendarMode.year => _YearView(
               anchor: _anchor,
+              onDayTap: (d) {
+                setState(() {
+                  _anchor = d;
+                  _yearSelectedDay = d;
+                });
+                _changeMode(CalendarMode.week);
+              },
               tasks: _visibleTasks,
               allTasks: widget.tasks,
               showHeatmap: _showHeatmap,
@@ -192,6 +200,10 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
       _showHeatmap = saved.showHeatmap ?? false;
     });
   }
+
+  /// 年视图日格点出来的那一天；只有它非空时周视图才高亮，其余情况下周视图
+  /// 外观不变（嘀嗒《03-年视图》:64 只说「高亮显示所选日期」）。
+  DateTime? _yearSelectedDay;
 
   Future<void> _changeMode(CalendarMode mode) async {
     _displayTouched = true;
@@ -825,17 +837,57 @@ class _CalendarTaskChip extends StatelessWidget {
   }
 }
 
+/// 周视图列头。嘀嗒《02-功能指南/02-日历/03-年视图：查看年度任务完成情况.md》
+/// `:64`「点击日期 → 跳转至周视图，并高亮显示所选日期」⇒ 高亮与「已选中」读屏
+/// 语义必须挂在同一个带 key 的节点上，点进来的那天既能看见也能被念出来。
+class _WeekDayHeader extends StatelessWidget {
+  const _WeekDayHeader({required this.label, required this.selected});
+
+  final String label;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = brandColors(context);
+    return Semantics(
+      key: selected ? const Key('calendar-week-selected-day') : null,
+      selected: selected,
+      label: selected ? '已选中 $label' : label,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+        decoration: selected
+            ? BoxDecoration(
+                color: colors.accent,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              )
+            : null,
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: selected ? Colors.white : null,
+            fontWeight: selected ? FontWeight.w700 : null,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _WeekView extends StatelessWidget {
   const _WeekView({
     required this.anchor,
     required this.firstDay,
     required this.tasks,
     required this.onTaskTap,
+    this.selectedDay,
   });
   final DateTime anchor;
   final int firstDay;
   final List<TodoTask> tasks;
   final ValueChanged<TodoTask> onTaskTap;
+
+  /// 从年视图点进来的那一天；为空表示不是「所选」，列头不做高亮。
+  final DateTime? selectedDay;
 
   @override
   Widget build(BuildContext context) {
@@ -869,9 +921,10 @@ class _WeekView extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      df.format(d),
-                      style: Theme.of(context).textTheme.labelMedium,
+                    _WeekDayHeader(
+                      label: df.format(d),
+                      selected:
+                          selectedDay != null && _isSameDay(d, selectedDay!),
                     ),
                     const Divider(height: 4),
                     Expanded(
@@ -920,9 +973,14 @@ class _YearView extends StatelessWidget {
     required this.tasks,
     required this.allTasks,
     required this.onMonthTap,
+    required this.onDayTap,
     required this.showHeatmap,
   });
   final DateTime anchor;
+
+  /// 判据源《03-年视图》:64「点击日期 → 跳转至周视图，并高亮显示所选日期」
+  /// ⇒ 日格把选中的那天交给外层：锚点改到那天并切周视图，高亮由 `_WeekView` 负责。
+  final ValueChanged<DateTime> onDayTap;
   final List<TodoTask> tasks;
 
   /// 热力图数的是「当天完成数」，必须绕过「显示已完成」的过滤 ——
@@ -1029,6 +1087,7 @@ class _YearView extends StatelessWidget {
                     month: m,
                     countByDay: countByDay,
                     maxPerDay: maxPerDay,
+                    onDayTap: onDayTap,
                   ),
                 ],
               ),
@@ -1046,12 +1105,14 @@ class _MonthHeatmap extends StatelessWidget {
     required this.month,
     required this.countByDay,
     required this.maxPerDay,
+    required this.onDayTap,
   });
 
   final int year;
   final int month;
   final Map<DateTime, int> countByDay;
   final int maxPerDay;
+  final ValueChanged<DateTime> onDayTap;
 
   static const _cellSize = 14.0;
   static const _cellGap = 4.0;
@@ -1073,15 +1134,23 @@ class _MonthHeatmap extends StatelessWidget {
       cells.add(
         Padding(
           padding: const EdgeInsets.only(right: _cellGap, bottom: _cellGap),
-          child: Semantics(
-            key: Key('calendar-year-day-${_isoDay(date)}'),
-            label: '$month 月 $day 日 完成 $count 项',
-            child: Container(
-              width: _cellSize,
-              height: _cellSize,
-              decoration: BoxDecoration(
-                color: colors.accent.withValues(alpha: _heatmapAlpha[level]),
-                borderRadius: BorderRadius.circular(2),
+          // :64「点击日期 → 跳转至周视图」⇒ 日格必须真的可点；着色与读屏语义
+          // 仍同属一个节点，所以 key 留在 Semantics 上。
+          child: InkWell(
+            onTap: () => onDayTap(date),
+            customBorder: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(2)),
+            ),
+            child: Semantics(
+              key: Key('calendar-year-day-${_isoDay(date)}'),
+              label: '$month 月 $day 日 完成 $count 项',
+              child: Container(
+                width: _cellSize,
+                height: _cellSize,
+                decoration: BoxDecoration(
+                  color: colors.accent.withValues(alpha: _heatmapAlpha[level]),
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
           ),
