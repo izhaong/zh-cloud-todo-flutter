@@ -6,8 +6,8 @@
 
 ## 现状（实地证据，2026-09-23）
 
-- 链路已齐：`core/api/efficiency_api.dart:941/945` `GET /achievement/wall` → DTO `:327-399`
-  → `state/efficiency_providers.dart:16/63` → 页面 `features/achievement/achievement_page.dart:10`
+- 链路已齐：`lib/core/api/efficiency_api.dart:976` 起（`GET /achievement/wall`） `GET /achievement/wall` → DTO `:327-399`
+  → `lib/state/efficiency_providers.dart:16/63` → 页面 `lib/features/achievement/achievement_page.dart:10`
   → 既有测试 `test/achievement_page_test.dart`。
 - `features/efficiency/efficiency_hub_page.dart` 已是一张 4 页签的「效率工具」页
   （番茄专注 / 习惯打卡 / 倒数纪念日 / **成就勋章**），内部承载上述真页面。
