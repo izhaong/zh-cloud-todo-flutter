@@ -2,7 +2,10 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
+import 'dart:ui' show Tristate;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show SemanticsNode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -164,6 +167,40 @@ void main() {
       isTrue,
       reason: '界面选了「固定时区」，写库却按旧布尔位反推成「固定时间」= 档位丢了',
     );
+  });
+
+  testWidgets('选中态要落在带 key 的那个读屏节点上，屏幕阅读器念得出当前档', (tester) async {
+    final fixture = await TodoVisualFixture.create();
+    addTearDown(fixture.dispose);
+    await _openReminderEditor(tester, fixture);
+    final handle = tester.ensureSemantics();
+
+    SemanticsNode node(int wire) =>
+        tester.getSemantics(find.byKey(Key('task-reminder-time-mode-$wire')));
+
+    expect(node(1).flagsCollection.isSelected, Tristate.isFalse);
+    expect(node(2).flagsCollection.isSelected, Tristate.isFalse);
+
+    await _fillTimezone(tester);
+    await tester.tap(find.byKey(const Key('task-reminder-time-mode-2')));
+    await tester.pumpAndSettle();
+
+    expect(
+      node(2).flagsCollection.isSelected,
+      Tristate.isTrue,
+      reason: 'FL Issue #444：点选了「固定时间」但读屏仍说不选中，屏幕阅读器用户看不见自己的选择',
+    );
+    expect(
+      node(1).flagsCollection.isSelected,
+      Tristate.isFalse,
+      reason: '两档同时选中就不是单选',
+    );
+    expect(
+      node(2).label,
+      '固定时间\n不论所处时区如何变化，任务的时间都会保持一致',
+      reason: '选中态必须和这一档自己的标题加嘀嗒副标题在同一个节点上，分家就念不成一句',
+    );
+    handle.dispose();
   });
 
   testWidgets('320px + 1.3 倍字号下两档都在视口内且点得动', (tester) async {
