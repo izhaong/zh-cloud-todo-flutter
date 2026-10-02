@@ -1,4 +1,3 @@
-import 'package:drift/drift.dart' show Variable;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -187,7 +186,11 @@ void main() {
 
     // 已加载的数据不能被失败带走：标题的剥井号结果可以回退，但任务本体必须已保存。
     expect(await titleInDb(db, task.id), isNot(isEmpty));
-    // 标签那次写是第二次异步：库读完之后它才落回 widget 树，必须再 settle 一帧才看得见。
+    // ScaffoldMessenger 是排队播放：先播「已保存」4 秒，失败那条要等它退场才上屏。
+    // 只 pumpAndSettle 不会推进这段假时钟 ⇒ 必须显式 pump 过隐藏时长。
+    await tester.pumpAndSettle();
+    expect(find.byType(SnackBar), findsWidgets, reason: '先确认「已保存」那条确实在播');
+    await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
     expect(
       find.widgetWithText(SnackBar, '标签保存失败，任务已保存'),

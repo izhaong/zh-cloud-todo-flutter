@@ -35,7 +35,7 @@
 
 ## 三、四件套归属
 
-- 「失败保留已加载数据」：用例第四条（标签那次写抛错 ⇒ 任务已落库、失败文案上屏）。
+- 「失败保留已加载数据」：用例第四条量的是标签那次写抛错时任务已落库，并且失败文案上屏。
 - 「320px + 1.3 倍字号」「独立读屏语义」：本单**没有新增界面或控件**，落在既有标题输入框上，
   由 `test/features/task/embedded_detail_header_narrow_test.dart` 与
   `test/features/task/task_detail_pane_test.dart` 量的是同一块表面承接；本单不重复声明这两面为新增。
