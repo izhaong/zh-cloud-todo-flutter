@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | 1 | 读嘀嗒《02-用清单管理任务》`:78`，确认本面只吃"排序可同步"，把「置顶」推到服务端契约 | `spec.md` 一、五、FR-5 引的原文与行号；`git show origin/develop:<路径> \| sed -n '78p'` |
 | 2 | 取证 develop：`reorder` 不登记 outbox、五个写方法都登记、无事务 | `spec.md` 二的四条 grep，逐条可复算 |
-| 3 | 红测：新增 `test/state/list_repository_reorder_sync_test.dart` 5 条 | 读数 `+1 -4`（4 条行为红，非编译红；空列表那条本就该通过） |
+| 3 | 红测：新增 `test/state/list_repository_reorder_sync_test.dart`（复算：`grep -cE "^  test\(" test/state/list_repository_reorder_sync_test.dart` 现读 5）| 读数 `+1 -4`，其中 4 条为行为红而非编译红 |
 | 4 | 最小实现：`reorder` 内 ①每条登记 `list/upsert`（payload 读回行）②整批 `_db.transaction` ③跳缺失 id、位次不留空洞 | 同一套用例转绿 `+5`；`dart format` 显式两文件 0 changed |
 | 5 | 反向探针 Y1–Y4（摘登记 / 摘事务 / 位次改用传入下标 / payload 改用拼装） | `/tmp/r80/probes-all.log`：每条对照组先绿、`cmp -s` 还原一致。⚠️ 这份日志末段其实是
         `PRESENT reorder 内确有 enqueue（localId: id） 命中 3 期望 1 不对 !!` + `结论：异常计数 = 1`

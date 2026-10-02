@@ -21,12 +21,12 @@
 
 | 门禁 | 读数 | 锚点 |
 | --- | --- | --- |
-| `git diff --check` | rc=0 | `/tmp/r111b/g1-check.log:2` |
-| `dart format --output=none --set-exit-if-changed <本轮 3 个文件>` | rc=0 | `/tmp/r111b/g2-format.log:3` |
-| `flutter analyze` | `No issues found!` | `/tmp/r111b/g3-analyze.log:64` |
-| `flutter test --tags golden` | `00:04 +9: All tests passed!`（9 张基线未重录） | `/tmp/r111b/g4-golden.log:12` |
-| `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:22 +913 ~26: All tests passed!` | `/tmp/r111b/g5-full.log:1108` |
-| `flutter build web --release --dart-define=…` | `✓ Built build/web` rc=0 | `/tmp/r111b/g6-build.log:80` |
+| `git diff --check` | rc=0 | `一次性留痕（今已不可取）` |
+| `dart format --output=none --set-exit-if-changed <本轮 3 个文件>` | rc=0 | `一次性留痕（今已不可取）` |
+| `flutter analyze` | `No issues found!` | `一次性留痕（今已不可取）` |
+| `flutter test --tags golden` | `00:04 +9: All tests passed!`（9 张基线未重录） | `一次性留痕（今已不可取）` |
+| `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:22 +913 ~26: All tests passed!` | `一次性留痕（今已不可取）` |
+| `flutter build web --release --dart-define=…` | `✓ Built build/web` rc=0 | `一次性留痕（今已不可取）` |
 
 门禁 2 的说明：本轮 3 个文件先以 rc=1 报"会被改动"，`git show origin/develop:<两个 lib 文件>` 落盘后
 `dart format --output=none --set-exit-if-changed` 回 rc=0 ⇒ 不合规的只有我新写的部分，
@@ -35,13 +35,13 @@
 ## 三、反向探针：把实现改坏，看判据是否真的会红
 
 脚本 `/tmp/r111b/probes.py`（本机临时、不入库）。每条探针跑完立刻还原，
-前后各跑一次绿基线对照。汇总：`PROBE-BAD=0`，见 `/tmp/r111b/probes.log:15`。
+前后各跑一次绿基线对照。汇总：`PROBE-BAD=0`，见 `一次性留痕（今已不可取）`。
 
 | 探针 | 改坏的东西 | 应红的用例 | 实际 |
 | --- | --- | --- | --- |
-| P1 | 回写式改按"显示的是哪套"选（看板未加载就退回本机两轴） | 降级态那条 | 红 1 条，正是它（`/tmp/r111b/probes.log:5`） |
-| P2 | 去掉同一任务的写链排队 | 连续两次拖动 | 红 1 条（`/tmp/r111b/probes.log:9`） |
-| P3 | 组合1 也偷写 `dueAt` | 纯函数那条 + 组合1 拖到 Q2 + 降级态 | 红 3 条（`/tmp/r111b/probes.log:13`） |
+| P1 | 回写式改按"显示的是哪套"选（看板未加载就退回本机两轴） | 降级态那条 | 红 1 条，正是它（`一次性留痕（今已不可取）`） |
+| P2 | 去掉同一任务的写链排队 | 连续两次拖动 | 红 1 条（`一次性留痕（今已不可取）`） |
+| P3 | 组合1 也偷写 `dueAt` | 纯函数那条 + 组合1 拖到 Q2 + 降级态 | 红 3 条（`一次性留痕（今已不可取）`） |
 
 P1 的名单**故意不含**「组合1 拖到 Q2」：那条看板已加载，显示与规则同源，改坏后仍然绿是应有行为，
 把它列进"应红"就是把判据写松（第 6 列写的是范围，不是"越多越好"）。

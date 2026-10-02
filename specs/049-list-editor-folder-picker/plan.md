@@ -6,7 +6,7 @@
 
 | 文件 | 动什么 |
 | ---- | ------ |
-| `lib/features/list/list_editor_sheet.dart` | 唯一的实现文件：State 多持有 `_folderLocalId` 与 `_error`；`build` 里加一格 `InputDecorator(labelText: '所属文件夹')` 包受控 `DropdownButton<String?>`；`_save` 改成"先移动后改名"，失败写可见提示且不关弹层 |
+| `lib/features/list/list_editor_sheet.dart` | 唯一的实现文件：State 多持有 `_folderLocalId` 与 `_error`；`build` 里把 `InputDecorator(labelText: '所属文件夹')` 接进表单 包受控 `DropdownButton<String?>`；`_save` 改成"先移动后改名"，失败写可见提示且不关弹层 |
 | `test/features/list/list_editor_folder_picker_test.dart` | 新增 15 条用例（归属读写 4 + 四件套 4 + 负路径/降级 6 + 嵌套命名 1）；每条钉什么见 `tasks.md` 探针表 |
 | `specs/049-list-editor-folder-picker/*.md` | 本规格 |
 
@@ -25,7 +25,7 @@
 
 ## 验证计划
 
-- 用例本身即红测：`PA`（develop 字节）下 15 条里 14 条红（唯一绿的是「只改名不动文件夹」，理由见 `tasks.md`）。
+- 用例本身即红测：`PA`（develop 字节）下 15 条里 14 条红（唯一绿的是「只改名不动文件夹」，理由见 `tasks.md`。复算：`grep -c "testWidgets(" test/features/list/list_editor_folder_picker_test.dart` 现读 15）
 - 反向探针 `PB…PQ` + `PR`/`PS`/`PU`：每条只抽掉一个行为（不传归属 / 不移动 / 无脑移动 / 失败不给提示 / 失败也关弹层 /
   不预选 / 去掉语义合并 / 去掉占位候选 / 改成非受控 / 先改名后移动 / 失败清空已选 / 菜单永不展开 /
   丢父链 / 仓库为 null 静默 / 新建失败文案 / 候选超大），要求**各自红在该红的那条用例上**；

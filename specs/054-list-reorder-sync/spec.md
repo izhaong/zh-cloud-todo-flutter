@@ -14,7 +14,7 @@
 `list_page.dart:40` 的 `_move(TodoList list, int delta)`，`:308` 与 `:313` 是两个
 `IconButton(tooltip: '上移')` / `IconButton(tooltip: '下移')`；该文件内 `Draggable`、
 `LongPressDraggable`、`ReorderableList`、`onPan` 命中数 **0**（`grep -cE` 实测）。
-⇒ 能力名一律写**「清单排序（上移/下移）」**。这条不靠"全篇已统一"这种全称句担保（⚠️ 判据本身也会被破例：第 3 轮复核 N-1 量出原来的 `grep -rn "拖"` 有 7 处命中，破例的 2 处是 `plan.md:22`「不是拖延」这个无关词与 `spec.md:44` 的禁令句，都不在豁免集里 ⇒ 单字判据换成词组，实测 4 处命中且全落在豁免集内），自扫命令：`grep -rnE "拖拽|拖动" specs/054-list-reorder-sync test/state/list_repository_reorder_sync_test.dart lib/state/repositories/list_repository.dart`，剩下的每一处命中都必须是**引用旧措辞的历史句**（本节与 tasks 的复核表），出现活的断言即失项。逐字引用那格去掉了我自加的
+⇒ 能力名一律写**「清单排序（上移/下移）」**。这条不靠"全篇已统一"这种全称句担保（⚠️ 判据本身也会被破例：第 3 轮复核 N-1 量出原来的 `grep -rn "拖"` 有 7 处命中，破例的两条是 `specs/054-list-reorder-sync/plan.md`「不是拖延」这个无关词与 `specs/054-list-reorder-sync/spec.md` 的禁令句（行号随编辑漂，按词搜），都不在豁免集里 ⇒ 单字判据换成词组，实测 4 处命中且全落在豁免集内），自扫命令：`grep -rnE "拖拽|拖动" specs/054-list-reorder-sync test/state/list_repository_reorder_sync_test.dart lib/state/repositories/list_repository.dart`，剩下的每一处命中都必须是**引用旧措辞的历史句**（本节与 tasks 的复核表），出现活的断言即失项。逐字引用那格去掉了我自加的
 三对 `**`（源页 `:78` 的字节里没有）。
 
 ## 二、现状（基准 `zh-cloud-todo-flutter origin/develop@9032005`，逐条实测）
