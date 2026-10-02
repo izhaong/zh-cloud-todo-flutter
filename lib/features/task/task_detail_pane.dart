@@ -3370,7 +3370,7 @@ class _TagChipsState extends ConsumerState<_TagChips> {
       loading: () => const SizedBox(height: 32),
       error: (e, _) => Text('标签加载失败: $e'),
       data: (tags) {
-        if (tags.isEmpty) return const Text('暂无标签，请先在清单页右上角创建');
+        if (tags.isEmpty) return const Text('暂无标签，可先在侧栏「标签」里创建');
         return Wrap(
           spacing: 8,
           runSpacing: 8,
