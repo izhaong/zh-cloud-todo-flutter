@@ -7,8 +7,8 @@ Gitea Issue #381；矩阵 #28 缺口「无按日热力」。**PR 尚未合并 �
 
 | 轮 | 日志 | 读数 |
 | --- | --- | --- |
-| 草稿测试 | 统计行 `00:00 +0 -1: Some tests failed.` 在 `/tmp/r110/g-red.log:96`、全文 99 行 | 5 条 `Error: Method not found: 'calendarHeatmapLevel'`（测试文件 `:63`-`:75`） |
-| 定稿测试 | 统计行 `+0 -1` 在 `/tmp/r110/g-red2.log:128`、全文 131 行 | 8 条编译错（括号内为测试文件行号）：`calendarHeatmapLevel` ×5（`:134/:140/:152/:102/:103`）、`No named parameter 'showHeatmap'` ×1（`:74`）、`getter 'showHeatmap' isn't defined` ×2（`:268/:284`） |
+| 草稿测试 | 统计行 `00:00 +0 -1: Some tests failed.` 当时记在 `/tmp` 临时日志里，该日志已不在本机 ⇒ 这个读数不可复核，按无证据处理；可复跑口径：`flutter test test/features/task/calendar_year_heatmap_test.dart`（本轮没重跑） | 5 条 `Error: Method not found: 'calendarHeatmapLevel'`（测试文件 `:63`-`:75`） |
+| 定稿测试 | 统计行 `+0 -1` 当时记在 `/tmp` 临时日志里，该日志已不在本机 ⇒ 读数不可复核，按无证据处理；可复跑口径同上 | 8 条编译错（括号内为测试文件行号）：`calendarHeatmapLevel` ×5（`:134/:140/:152/:102/:103`）、`No named parameter 'showHeatmap'` ×1（`:74`）、`getter 'showHeatmap' isn't defined` ×2（`:268/:284`） |
 
 计数判据（现跑）：`grep -c "Error:" /tmp/r110/g-red2.log` 读 8（其中 2 条是同一批错误的重复回显段，
 所以 `grep -oE "Error: [^']*'([a-zA-Z]+)'` 命中 3 个不同符号：`calendarHeatmapLevel` / `showHeatmap` 参数 / `showHeatmap` getter）。
@@ -50,7 +50,7 @@ Gitea Issue #381；矩阵 #28 缺口「无按日热力」。**PR 尚未合并 �
 ### 计数可复算
 
 `+914 = develop 基线 898 + 本轮新增 16`。两侧都是现量：
-基线 `+898 ~26: All tests passed!` 在 `/tmp/r109/baseline-develop.log:1152`、全文 1153 行（该文件另有
+基线 `+898 ~26: All tests passed!` 当时记在 `/tmp` 临时日志里，该日志已不在本机 ⇒ 读数不可复核，按无证据处理（该文件另有
 `baseline rc=0` 一行；运行目录是 `origin/develop@90320057` 的一次性检出）；
 新增判据 `git diff origin/develop HEAD -- test/ | grep -cE '^\+[[:space:]]*(test|testWidgets)\('` = 16、
 去掉的用例 `grep -cE '^\-[[:space:]]*(test|testWidgets)\('` = 0。
@@ -60,7 +60,7 @@ Gitea Issue #381；矩阵 #28 缺口「无按日热力」。**PR 尚未合并 �
 ## 三、反向探针：分母下限不是白加的
 
 把 `calendarHeatmapLevel` 的分母下限从 4 改成 1（等价于"纯按当年最大值归一"），
-只跑热力图测试：统计行 `00:01 +15 -1: Some tests failed.` 在 `/tmp/r110/probe-floor.log:88`、全文 91 行；
+只跑热力图测试：统计行 `00:01 +15 -1: Some tests failed.` 当时记在 `/tmp` 临时日志里，该日志已不在本机 ⇒ 读数不可复核，按无证据处理；
 失项清单长度判据 `awk '/^Failing tests:/{f=1;next} f&&NF' /tmp/r110/probe-floor.log | wc -l` = 1，
 内容 = `稀疏年份不把唯一一次完成画成最深档` ⇒ 探针只打中这一项（`+15 -1` 的 15 就是其余未受影响条数），
 这条用例**确实**在量下限，不是恒真断言。
