@@ -10,7 +10,7 @@
 - [x] T-004 未改动的提示原样回传，不发 `null`（FR-3 边界②；探针 PE 把 `reminderAt` 恒置 null → 红）
 - [x] T-005 `HabitRepository.delete` → `DELETE /habit/delete?id=`；取消确认不发任何写请求（FR-4；探针 PF 摘掉 delete 调用 → 红；PG 摘掉 `!confirmed` 早退 → 红）
 - [x] T-006 失败保留已加载数据 + 提示落在弹层内联可见（探针 PH 摘掉 `_submitError` 赋值 → 红）
-- [x] T-007 新建与编辑共用同一表单，`create` 带齐表单字段（FR-5；新增用例 + PN 红；复核 NIT8 的「FR-5 零用例」已补）
+- [x] T-007 新建与编辑共用同一表单，`create` 上送 7 个 wire 键（`name`、`icon`、`color`、`period`、`targetCount`、`reminderAt`、`sortOrder`）；取证：`lib/features/habit/habit_repository.dart:95` 的 create 收 6 个形参，`_habitBody` 再原值回传 `sortOrder`，`test/efficiency_api_contract_test.dart:354` 钉的就是这 7 个键。对应 FR-5，新增用例 + PN 红，复核 NIT8 指出的「FR-5 零用例」补上了用例
 - [x] T-008 时间字段按 epoch 毫秒上送（FR-6；探针 PJ 让 `checkedAt` 退回 ISO → 红）
 - [x] T-009 四件套：320px + 1.3 档位在**四个**新表面（详情页 / 编辑弹层 / 「...」菜单路由 / 删除确认框）各用自己的 context 复检；「...」与色块有独立读屏语义；校验错误落在字段上（探针 PM 摘掉 `errorText: _nameError` → 红）
 - [ ] T-010 六项门禁日志齐全（见下）
