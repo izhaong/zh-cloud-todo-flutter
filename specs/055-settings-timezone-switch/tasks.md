@@ -17,7 +17,7 @@
 | FR-1 有「日期与时间 → 时区」开关 | W1 `find.text('日期与时间')` + `ValueKey('settings-timezone-enabled')` 内的 `Switch` | `+10`（终态实跑见「四·重跑」：门禁 5 = `+908 ~26`，`908 − 10 = 898` 对得上 develop 基线） |
 | FR-2 关掉 ⇒ 「固定时区」不出现、IANA 输入框仍在 | `test/features/task/reminder_timezone_gate_test.dart` 两条（开/关各一条，成对） | 同上；**这条先红过一次**（见「三-1」） |
 | FR-3 开关不改写任务数据 | R2：切三次后逐字段比对 `timeZone` / `fixedTimezone` | 同上 |
-| FR-4 持久化 + 同步 | R1：`get()` 默认开、`todo_view_preferences` 恰 1 行、`todo_sync_changes` 恰 1 条 `entity=viewPreference`、再开仍是 1 行 | 同上。⚠️ 复核 F-3 记一句红因：把 update 分支改成「再插一行」时，红是 **schema 的 UNIQUE(2067) 抛在仓储里**，`hasLength(1)` 那条断言根本没执行到 ⇒ 这一格真正兜住重复行的是库上的唯一索引，我的断言只是第二道网；并发那道的判据在 R3 |
+| FR-4 持久化 + 同步 | R1：`get()` 默认开、`todo_view_preferences` 恰 1 行、`todo_sync_changes` 恰 1 条 `entity=viewPreference`、再开仍是 1 行 | 判据可复跑：`flutter test test/features/settings/timezone_preference_test.dart --plain-name R1` ⇒ 绿；「恰 1 行」「恰 1 条」由该用例内两处 `hasLength(1)` 兜住，复算 `git grep -c "hasLength(1)" origin/develop -- test/features/settings/timezone_preference_test.dart` = 4。⚠️ 复核 F-3 记一句红因：把 update 分支改成「再插一行」时，红是 **schema 的 UNIQUE(2067) 抛在仓储里**，`hasLength(1)` 那条断言根本没执行到 ⇒ 这一格真正兜住重复行的是库上的唯一索引，我的断言只是第二道网；并发那道的判据在 R3 |
 | FR-5 展示层不受影响 | **无行为测试**，用两条静态判据：`git grep -n "timezoneEnabledProvider" -- lib` ⇒ 3 命中（定义 + 设置页 + 提醒编辑器），`lib/core/time` 内 0 命中；`git status --porcelain lib/core/time \| wc -l` = 0，`task_time_formatter.dart:167` 的「`<IANA> 固定时区`」原样 | 命令已跑（本次会话内），读数如左 |
 | FR-6 「固定时间」档 | **本面不做**，另立 FL #369（前置是 service 的逐任务三态模式位） | — |
 
@@ -28,7 +28,7 @@
 | 1 320px + 1.3 倍字号（本路由自己的 context） | W3：视口宽 320、`TextScaler.linear(1.3)`，先确认 `Switch` 真被渲染，再 `expect(tester.takeException(), isNull)` | 有判据、绿 |
 | 2 独立读屏语义 | W2：`getSemantics(f).getSemanticsData().flagsCollection.isToggled` 开时 `Tristate.isTrue`、切换后 `isFalse`（正反两条）；名称由 `find.bySemanticsLabel(RegExp('时区'))` 钉；另判 `onChanged != null` | 有判据、绿。**这一格返工过两次**：先按红测加了 `semanticsLabel`，复核 F-1 证明那是「读错数据源」换来的假结论 ⇒ 文案已撤回，见「三-3」 |
 | 3 失败保留已加载数据 | W4（仓储为 null ⇒ 「时区设置暂不可用」）+ W5（写抛错 ⇒ 「时区设置未保存」且开关与内存态都停在原值） | 有判据、绿 |
-| 4 过期响应不覆盖新响应 | **R3**（新增）：并发 `setEnabled(false)` / `setEnabled(true)` ⇒ 不抛异常、偏好表恰 1 行、`get()` 回最后一次意图、outbox 2 条 | 有判据、绿。**上一版这里写的是「无判据 / 本面不可达」，两句都是假的**（复核 F-2 + 本仓复算，见「三-4」）；连取证句 `grep -n "await" lib/features/settings/settings_route.dart` 也站不住 —— 4 命中里有 3 条不在 `_save` 内（`:183` 属 `_signOut`、`:207`/`:221` 属 capture-defaults 页） |
+| 4 过期响应不覆盖新响应 | **R3**（新增）：并发 `setEnabled(false)` / `setEnabled(true)` ⇒ 不抛异常、偏好表恰 1 行、`get()` 回最后一次意图、outbox 2 条 | 有判据、绿。**上一版这里写的是「无判据 / 本面不可达」，两句都是假的**（复核 F-2 + 本仓复算，见「三-4」）；连取证句也站不住、且原句行号已过期 ⇒ 改按方法体现读：`git grep -c "await" origin/develop -- lib/features/settings/settings_route.dart` = 10 命中。`_save` 的两个重载体内各有一处 `await` —— `lib/features/settings/settings_route.dart:437` 与 `lib/features/settings/settings_route.dart:549`；剩下的落在别的方法里，按方法名数得 `_pickWeekStart`、`_signOut`、`_pickShowTags`、`_pickShowFilters` 四个 |
 
 ## 三、红测记录（真红过两次，各修一处）
 
@@ -81,13 +81,13 @@
 | 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:27 +907 ~26: All tests passed!`（`:1314`） |
 | 6 `flutter build web --release`（带 test 域名与租户两个 dart-define） | `✓ Built build/web`（`:1393`），`rc=0` |
 
-计数对账（不是减法反推，两端各有实跑来源）：`907 − 本轮新增 9 = 898` = develop 全量基线，
-那份基线的实跑留痕是 `/tmp/r68/baseline_develop.log:1152`（`+898 ~26`，全文 1153 行、`:1153` 才是物理末行）
-与 `/tmp/r77c/rerun-898.log:1154`（该行是 `02:38 +898 ~26: All tests passed!`；`:1155` 是 `rc=0` ——
-上一版把指针写成 `:1155` 指错了，复核 F-5）；`~26` 与 develop 的 26 条 skip 一致（本轮没新增 skip）。
-复算命令：`grep -n "All tests passed" /tmp/r82/gates-b571ef1.log`、
-`git log --oneline 9032005..HEAD | wc -l`（= 2 是 `b571ef1` 当下的值；**这个数每多一笔台账就涨**，
-不钉 sha 就等于没写）。
+计数对账的历史式 `907 − 本轮新增 9 = 898`（`b571ef1` 那轮）——
+当年两端各有实跑留痕，但那些文件落在未入库的一次性目录、今已不可取 ⇒ 这类指针从本笔起一律作废，改钉「命令 + 现跑读数」：
+在 FL `origin/develop@ded9791` 的一次性工作树跑 `flutter test --exclude-tags "golden || performance" --concurrency=1` ⇒
+现读 `+1314 ~26: All tests passed!`、`rc=0`（本笔实跑；命令本身可复跑，日志不入库）。
+⚠️ 但别把 skip 数当常量：它只能现跑现读 —— 本笔在 `ded9791` 现读 `~26`，与当年记的 `~26` 相等 ⇒ 这条链上没新增 skip（若哪天不等，就是仓内 skip 变了，不是这里写错）。
+提交数改钉死尾 sha 后复算：`git log --oneline 9032005..b571ef1 | wc -l` = 2（与当年记的值一致；
+上一版把尾 sha 写成 `HEAD`，那正是「自己作废自己」的计数法 —— 每多一笔台账它就涨一格）。
 
 ⚠️ 门禁 2 **第一次是红的**：`ac51c0b` 上 `Formatted 6 files (3 changed)` ⇒ `rc=1`
 （第一份日志 `/tmp/r82/gates-ac51c0b.log`，读数留在 `:6-11`，没被覆写）。
@@ -109,9 +109,9 @@
 | 5 全量非 golden（`--concurrency=1`） | `02:50 +908 ~26: All tests passed!`（`:1315`） |
 | 6 `flutter build web --release` | `✓ Built build/web`（`:1396`），`rc=0`（`:1397`） |
 
-计数对账换了新的锚点：`908 − 本轮新增 10 = 898` = develop 全量基线（两处实跑：
-`/tmp/r68/baseline_develop.log:1152` 与 `/tmp/r77c/rerun-898.log:1154`）⇒ 新增的 10 条 = 上一版的 9 条 + R3。
-跑完 `git status --porcelain pubspec.lock` 仍为空（这份日志的 `脏项数=0` 在 `:1400`）⇒
+同一式的第二个读数：`908 − 本轮新增 10 = 898`（新增 10 条 = 上一版 9 条 + R3）——
+那两处一次性留痕同样已不可取 ⇒ 按「二」节那条命令现跑复算为准，本笔实测 `+1314 ~26`。
+门禁跑在已提交终态上：本笔在 `ded9791` 的一次性工作树跑完 `git status --porcelain` 输出为空（`pubspec.lock` 未被本机镜像改写）⇒
 **门禁是跑在已提交终态上、且没把本机镜像扫进 `pubspec.lock`**。
 
 台账这几笔（`876c35e` 之后的 md 改动）不动代码字节 ⇒ 上面这份读数对终态仍然有效；
@@ -178,8 +178,8 @@ M7b 真溢出 ⇒ 红 W3 并打出 `RenderFlex overflowed by 638 pixels`）；
 | F-1 | 「`SwitchListTile` 的状态位到不了读屏」是**假实测**：我读的是 `SemanticsNode.flagsCollection`（恒 `none`），平台吃的是 `getSemanticsData()`；且这句假事实写进了 `settings_route.dart` 的注释 | 探针复跑：同节点、`node.toggled=none` 而 `data.toggled=isTrue`；cursor-agent 独立给同一结论（`_addToUpdate` 先 `getSemanticsData()` 再 `updateNode(flags: …)`） | 撤回 `semanticsLabel` 与那段注释；判据改钉 `getSemanticsData().flagsCollection.isToggled` 正反两条。spec 五-2、六-4 同步 |
 | F-2 | 四件套-4 的「本面不存在并发覆盖」**结论与取证双假**：并发两次 `setEnabled` ⇒ `UNIQUE 2067` + 最后意图丢失；`grep await` 那句里 4 命中有 3 条不在 `_save` 内 | 复跑同一形状：`SqliteException(2067) … source_type, source_key`、`rows=1`、`get()=false`（`/tmp/r82/probe-pre-fix-bad0933.log`） | `setEnabled` 整段补 `_db.transaction`（照仓内先例）+ 新增 R3 四条断言；台账与 spec 五-4 改写成判据不是取舍 |
 | F-3 | 台账把 M4 的拦截者记成 `hasLength(1)`，实际红因是 schema 的 UNIQUE 抛在仓储里，断言根本没执行到 | `git show` 逐行对：R1 的 `expect(…, hasLength(1))` 在 insert 抛错之后 | 「二」FR-4 那格不改判据但补一句红因；并发那格由 R3 承担 |
-| F-4 | 弹窗前那次 `await` 若流不出首帧 ⇒ 点了没反应也不给反馈 | 不可达论证见「七」最后一条（同一条 `appDatabaseProvider` 的查询在此之前已 `await`；drift 的 `watchSingleOrNull()` 必发首帧） | **登记不修**，复现方式与理由链一并写进「七」 |
-| F-5 | 四处指针/计数不精确：`rerun-898.log:1155`（真身 `:1154`）、三-1 的「第 45 行」、`wc -l` = 2 未钉 sha、spec 二 `:405` 与同文 `:404` 打架 | `sed -n 1154p` = `02:38 +898 ~26: All tests passed!`；`git show 9032005:lib/features/task/task_detail_pane.dart` 里再 `grep -n task-reminder-fixed-timezone` = **404**；`grep -n findsNothing` = `:43` | 逐处订正；行号易漂的两处改成「用命令定位」 |
+| F-4 | 弹窗前那次 `await` 若流不出首帧 ⇒ 点了没反应也不给反馈 | 不可达论证见「七」最后一条，理由两处：① 同一条 `appDatabaseProvider` 的查询在此之前已 `await`；② drift 的 `watchSingleOrNull()` 必发首帧 | **登记不修**，复现方式与理由链一并写进「七」 |
+| F-5 | 四处指针/计数不精确：日志行号指针（原写 `:1155`，真身 `:1154`）、三-1 的「第 45 行」、`wc -l` 未钉尾 sha、spec 二 `:405` 与同文 `:404` 打架 | 日志指针那处随「二」节改钉命令一并撤销（旧引证那份文件已不可取）；`git show 9032005:lib/features/task/task_detail_pane.dart` 里再 `grep -n task-reminder-fixed-timezone` = **404**；`grep -n findsNothing` = `:43`；提交数已钉尾 sha（现读 = 2，见「二」） | 逐处订正；行号易漂的两处改成「用命令定位」 |
 | F-6 | 「缺项 ⑤/⑥」矩阵读者无从解析；FL #369 存在性它没法核（会话里无 Gitea 凭据，匿名 404） | **半对半驳回**：`origin/develop` 的 #12 只有「字段有；缺跨时区展示闭环」⇒ 它对 develop 成立；但清单在未合并的 docs 分支 `:79` 里就有（`grep -c ⑤`：develop 3 vs 分支 21）⇒ 不是写错，是 docs 没合。#369 我用 API 现读 `state=open`，标题带「缺项 ⑤」 | 矩阵侧本轮已改写成文字缺口 + Issue 号（docs `27525b4`，!102）；编号来源在 spec 七 写清是哪个 ref |
 
 **本笔动了实现** ⇒ 上面「四」节 `b571ef1` 那套门禁作废，终态另跑一份新日志（见「四」末尾的「重跑」）。
@@ -199,7 +199,7 @@ M7b 真溢出 ⇒ 红 W3 并打出 `RenderFlex overflowed by 638 pixels`）；
   `pubspec.lock` 四处 blob 同为 `7ef8030b`；门禁 1–5 在副本复跑，`+908 ~26`、`+9`、
   `Formatted 6 files (0 changed)`、`No issues found` 全对上；F-6 的驳回被独立复现。
 
-三条**本轮新写的**台账缺陷（纯 md，复核未判 FAIL，本笔全改；改法就地见 spec 六-1 与「三-3」）：
+**本轮新写的**台账缺陷共三条，逐条见下表九-1、九-2、九-3；改法就地见 spec 六-1 与「三-3」：
 
 | 条目 | 复核指的问题 | 本仓复验（命令与读数） | 处置 |
 | --- | --- | --- | --- |
