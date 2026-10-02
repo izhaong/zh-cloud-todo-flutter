@@ -42,7 +42,7 @@
 | 2 `dart format --output=none --set-exit-if-changed`（本轮 3 个 .dart，未做全仓原地格式化） | `format_rc=0`（`g1-format.log`）。**这一格可信的前提**：先取 `HEAD` 两份同名文件到 `/tmp/fmt-head/` 跑同一条判据 ⇒ `Formatted 2 files (0 changed)`，`rc=0` ⇒ 基线本来就是格式化过的，原地格式化不会顺手改无关代码 |
 | 3 `flutter analyze` | `No issues found!`，`analyze_rc=0` |
 | 4 `flutter test --tags golden` | `golden_rc=0`（`g1-golden.log`）；跑完 `git status --porcelain` 里 png/gold 计数 `0`（`g1-golden-dirty-png-count.txt`）⇒ 9 张基线一张未重录。这条判据不是恒绿：9 张基线是受版本管理文件（`git ls-files 'test/*' \| grep -cE '\.(png\|gold)$'` ⇒ `9`），被重录就会以 ` M test/goldens/…png` 出现在同一条 porcelain 里 |
-| 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:24 +901 ~26: All tests passed!`，`test_rc=0`（`g1-test.log`）。对账用实跑不作减法反推：develop 基线 898 的两处日志指针是 `/tmp/r68/baseline_develop.log:1152` 与 `/tmp/r77c/rerun-898.log:1154`，本轮新增 3 条 ⇒ 898 + 3 = 901 |
+| 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:24 +901 ~26: All tests passed!`，`test_rc=0`（`g1-test.log`）。对账用实跑不作减法反推：develop 基线 898 的两处日志是一次性留痕（今已不可取），本轮新增用例逐条点名见「二、三节」⇒ 898 + 3 = 901 |
 | 6 `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web`，`build_rc=0` |
 
 `git status --porcelain pubspec.lock` ⇒ 空（`g1-publock.log`）⇒ 门禁的 `pub get` 没把本机镜像扫进这笔。
@@ -96,7 +96,7 @@
 | --- | --- |
 | `lib/features/filter/filter_bar.dart` | `FilterBar` 多一个可选入参 `previewResolver`；新增私有 `_draftFilter`；「高级筛选」对话框加「预览模式」开关（`Key('task-filter-advanced-preview')`，默认关）与预览区（`Key('task-filter-advanced-preview-panel')`，念「命中 N 项」+ 最多三条标题）；三个输入框补 `onChanged` 触发重算；`应用高级筛选` 的 `onChanged` 改走 `_draftFilter` |
 | `lib/features/task/tasks_by_list_page.dart` | `FilterBar(...)` 注入 `previewResolver`，闭包用 `_openFilterPanel(raw)` 那份未过滤列表 + `_selectedListId` + `currentDateTimeProvider` ⇒ 与列表渲染同一口径 |
-| `test/features/filter/filter_advanced_preview_test.dart` | 新增 3 条用例（见二、三节） |
+| `test/features/filter/filter_advanced_preview_test.dart` | 新增用例逐条点名见「二、三节」（历史计数 3，日志已不可取） |
 | `specs/045-filter-preview-mode/{spec,plan,tasks}.md` | 本台账 |
 
 ## 七、下一轮入口

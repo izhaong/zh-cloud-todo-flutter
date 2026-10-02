@@ -77,8 +77,8 @@ Issue **#279**（存量治理）。判据源：嘀嗒《01-任务/02-任务详�
    我照它改成 `48 + visualDensity.horizontal * 4` 跑了一遍：**紧凑主题下面板 300dp 直接溢出 56px**
    （= 7×48+4 − 内容 284），也就是图标压根没缩。回源看：本仓主题 `useMaterial3: true`
    （`lib/app.dart:109`、`:150`），而 M3 的 `IconButton` 把样式里的 `visualDensity` 硬编成 standard
-   （SDK `material/icon_button.dart:1152`、`:1294`、`:1436`、`:1573` 四个 getter），
-   `ThemeData.visualDensity` 走不到这几枚按钮 —— 只有 M2 的 legacy 分支（`icon_button.dart:779`）才读它。
+   （SDK Flutter SDK 的 `packages/flutter/lib/src/material/icon_button.dart`（不在本仓 git 索引内，行号随 SDK 版本漂；本机 SDK 见 `flutter --version`）、`:1294`、`:1436`、`:1573` 四个 getter），
+   `ThemeData.visualDensity` 走不到这几枚按钮 —— 只有 M2 的 legacy 分支（同上一行的 SDK 文件里的 tooltip 生成处）才读它。
    所以阈值留在 340，并加一条用例把"紧凑密度下仍折、图标仍 48dp"钉住；
    如果哪天 M3 改成跟随密度，那条用例会先红，届时按新读数重算，而不是照抄 40。
 

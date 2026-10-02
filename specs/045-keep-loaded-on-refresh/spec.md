@@ -21,7 +21,7 @@ kind=AsyncError  isLoading=false  hasValue=true  valueOrNull≠null  hasError=tr
 
 ⇒ **框架没丢数据，丢数据的是 `.when` 的分支判别**：它按 `error:` 分支渲染，不再回看 `value`。
 所以修法不需要局部缓存、不需要 `keepPreviousData`，只需要把读法换成「先取 `valueOrNull`」。
-边界要说准：`habit_page_test.dart` 第 1 条用例钉的是**渲染结果**（失败后行与统计卡仍在、提示可见），不是上面这行字段值本身；字段值这一形状另有两条支撑——`pubspec.lock` 锁定的 riverpod 2.6.1 源码（`AsyncError.copyWithPrevious` 把 `hasValue` 带过去），以及反向探针 PA 把实现退回 develop 后该用例必红。第 1 轮复核也按这个口径判过（不算夸大）。
+边界要说准：`test/features/habit/habit_page_test.dart` 的首条用例钉的是**渲染结果**（复算：`grep -n "首条 testWidgets" test/features/habit/habit_page_test.dart` 之类按名搜，行号随编辑漂）（失败后行与统计卡仍在、提示可见），不是上面这行字段值本身；字段值这一形状另有两条支撑——`pubspec.lock` 锁定的 riverpod 2.6.1 源码（`AsyncError.copyWithPrevious` 把 `hasValue` 带过去），以及反向探针 PA 把实现退回 develop 后该用例必红。第 1 轮复核也按这个口径判过（不算夸大）。
 
 ## 需求
 
@@ -31,7 +31,7 @@ kind=AsyncError  isLoading=false  hasValue=true  valueOrNull≠null  hasError=tr
   带「重试」出口。提示用 `Semantics(liveRegion: true)` 包，使读屏在其余界面未变时仍会播报
   （与已合并的 `recommendation_panel.dart` 同一口径）。
 - **FR-003 首值就没读到才走失败态**：`valueOrNull == null` 且 `hasError` 时才是整页失败。
-  习惯页在此形态补一个「重试」按钮（原来只有一行错误文本、无出口）；
+  习惯页在此形态补「重试」按钮（原来只有错误文本一行、无出口）；
   倒数日页保持 develop 的错误文本形态不变（本轮不顺手改它的失败态）。
 - **FR-004 统计格的既有行为不扩大**：首屏就失败时 develop 是「不渲染统计卡」（`SizedBox.shrink`），
   本轮**保留**这一形态——只补「刷新失败但卡片已有值」这一新可见的失败面，不擅自新增首屏失败 UI。
