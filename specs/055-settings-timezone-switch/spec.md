@@ -37,7 +37,7 @@ git grep -n -e 日期与时间 -e 时区 -- lib/features/settings    # 0 命中�
 ## 四、功能需求
 
 - **FR-1 有一个「日期与时间」小节，内含「时区」开关**：`settings_route.dart` 里新增 `_Section(title: '日期与时间')`，
-  其内一条 `SwitchListTile(key: ValueKey('settings-timezone-enabled'))`、`title: Text('时区')`。文案与术语逐字取嘀嗒。
+  其内 1 个 `SwitchListTile(key: ValueKey('settings-timezone-enabled'))`，标题为 `Text('时区')`。文案与术语逐字取嘀嗒。
 - **FR-2 关掉 ⇒ 任务上的「固定时区」这一档不出现**：`task_detail_pane.dart` 的固定时区 `SwitchListTile`
   （现值 `:403-412`）仅在偏好为开时渲染。**关掉后「创建时区（IANA）」那个输入框仍要在**
   （`labelText` 三元在 `:417`，它是本仓既有的普通字段，不因总开关消失 —— 这条边界写下来防我下一步顺手把它也藏了）。
@@ -88,7 +88,7 @@ git grep -n -e 日期与时间 -e 时区 -- lib/features/settings    # 0 命中�
    ① 嘀嗒这页**通篇没写默认状态** —— 命令：`git show origin/develop:"todo/99_参考资料/dida365-help-center/02-功能指南/01-任务/07-固定时间与固定时区.md"`（在 zh-cloud-docs 仓里跑）
       计行数 = 64，同一管道 `grep -c 默认` = **0**（`grep` 无命中时退出码 1，那是"零命中"不是"命令失败"），
       所以"默认关"从来不是原文判据，是我替它加的；
-   ② "默认关不可测"也不成立（第 1 轮复核「四-1」那条：`/tmp/r83rev370/report.md:85` 判"站得住，但挑战句的前提不成立"，
+   ② "默认关不可测"也不成立：仓内用例现跑即证 —— `git grep -c "setEnabled(false)" origin/develop -- test/features/settings/timezone_preference_test.dart` = 4 命中（第 1 轮复核「四-1」判"站得住，但挑战句的前提不成立"，那份报告在未入库的一次性目录、已不可取 ⇒ 判据改钉本命令，
       `:94` 明写**不判失项、只改措辞** ⇒ 本仓复算接受。**原来这里写的是"复核 F-1′ 驳回"——那个编号不存在**，
       第 1 轮失项只有 F-1…F-6，默认值那条在正文而不在失项清单）：默认值有断言（R1 `get()` 即"无记录=开"）、
       "不改写既有任务"有 R2、"入口消失"有提醒显隐那两条 ⇒ 三块合起来完全可测，没有哪一块测不到。
