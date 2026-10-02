@@ -14,7 +14,7 @@
 
 | 面 | 复算命令 | 读数 |
 | --- | --- | --- |
-| 旧文案把用户指向清单页 | `git grep -n "暂无标签，请先在清单页右上角创建" origin/develop -- lib` | 命中 `lib/features/task/task_detail_pane.dart:3398`（旧行号） |
+| 旧文案把用户指向清单页 | `git grep -n "暂无标签，请先在清单页右上角创建" origin/develop -- lib` | 命中 `lib/features/task/task_detail_pane.dart:3373`（上一版这里写 3398 是抄了 !427 分支那个工作树的行号：那笔实现给同一文件加了 25 行 ⇒ 只对本分支成立，对 `origin/develop` 不成立） |
 | 清单页其实没有入口 | 新增用例逐行扫 `lib/` 里出现 `ListPage(` 的行，按「前一个字符不是字母」排除 `TasksByListPage(` | 只剩 `lib/features/list/list_page.dart:18` 自身的构造声明 |
 | 真入口存在 | `git grep -n "todo-sidebar-row-tags" origin/develop -- lib` | 命中 `lib/features/shell/sidebar.dart:243`，其 `onTap` 调 `lib/features/home/home_shell.dart:496` 的 `_openTags` 推 `TagPage` |
 

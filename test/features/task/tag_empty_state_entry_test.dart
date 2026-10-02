@@ -69,6 +69,47 @@ void main() {
     await settleTimers(tester);
   });
 
+  testWidgets('320px + 1.3 倍字号下这条空态仍在详情里可见、读屏念得出全文', (tester) async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final queue = SyncChangeQueue(db);
+    final list = await ListRepository(db, queue).create(name: '工作');
+    final task = await TaskRepository(
+      db,
+      queue,
+    ).create(listId: list.id, title: '写一份很长的周报标题用来在窄屏挤兑标签区的那一行布局');
+    await tester.binding.setSurfaceSize(const Size(320, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          syncChangeQueueProvider.overrideWithValue(queue),
+        ],
+        child: MaterialApp(
+          theme: themed().copyWith(textTheme: null),
+          home: MediaQuery(
+            data: const MediaQueryData(textScaler: TextScaler.linear(1.3)),
+            child: Scaffold(
+              body: TaskDetailPane(taskId: task.id, embedded: true),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final empty = find.text('暂无标签，可先在侧栏「标签」里创建');
+    expect(tester.takeException(), isNull, reason: '窄屏 + 大字号不许溢出');
+    expect(empty, findsOneWidget);
+    // 读屏语义量的是这块文本自己：裸 Text 的节点 label 必须就是全文，
+    // 不能靠旁侧 Text 或全树随便一个同名节点满足。
+    expect(tester.getSemantics(empty).label, contains('侧栏「标签」'));
+    final box = tester.renderObject<RenderBox>(empty);
+    expect(box.size.width, lessThanOrEqualTo(320));
+    await settleTimers(tester);
+  });
+
   test('ListPage 除了自身声明之外在 lib 里没有任何被引用的地方', () {
     // 判据要避开子串陷阱：`TasksByListPage(` 里也含 `ListPage(`，
     // 所以按「前一个字符不是字母」才算一次真引用。
