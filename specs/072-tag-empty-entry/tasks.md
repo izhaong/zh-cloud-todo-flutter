@@ -12,8 +12,11 @@
   原因是我第一版判据按子串扫，把 `TasksByListPage(` 也算成了引用——那是我自造的假判据。
 - 判据纠错：改成按「前一个字符不是字母」再扫 ⇒ 该条转绿。
 - 改后同一条命令 ⇒ `00:00 +2: All tests passed!`。
-- 反向对照（现跑）：把 `lib/features/task/task_detail_pane.dart` 的文案退回旧句后重跑该文件
-  ⇒ `00:00 +1 -1`，红的正是断言新文案的那条；字节用 `cp` 备份、`cmp -s` 还原，输出 `restored byte-identical`。
+- 反向对照（现跑，带失败断言行号自证）：把 `lib/features/task/task_detail_pane.dart` 的文案退回旧句后重跑该文件
+  ⇒ `00:02 +1 -2`，栈里两行分别指到 `test/features/task/tag_empty_state_entry_test.dart:63`（空态文案那条）
+  与 `test/features/task/tag_empty_state_entry_test.dart:104`（新加的 320px + 1.3 倍字号那条读 `find.text(新文案)`）
+  ⇒ 两条判据都咬在这行文本上，不互相顶替；字节用 `cp` 备份、`cmp -s` 还原，输出 `restored byte-identical`。
+  上一版记的是 `00:00 +1 -1`，那是加窄屏用例之前的读数；加了一条之后必须重跑，现读就是 `+1 -2`。
 
 ## 二、六道门禁（跑在最终字节上）
 
@@ -22,15 +25,15 @@
 | 1 `git diff --check`（工作树与 `origin/develop HEAD` 差集各一次） | rc=0 |
 | 2 `dart format --output=none --set-exit-if-changed` 加两个字面量路径 | `Formatted 2 files (0 changed)`、rc=0 |
 | 3 `flutter analyze` | `No issues found!`、rc=0 |
-| 4 `flutter test --tags golden` | `00:05 +9: All tests passed!`、rc=0，基线未重录 |
-| 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `03:34 +1316 ~26: All tests passed!`、rc=0 |
+| 4 `flutter test --tags golden` | `00:09 +9: All tests passed!`、rc=0，基线未重录（跑在含新窄屏用例的字节上） |
+| 5 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `04:44 +1317 ~26: All tests passed!`、rc=0（+1317 = 前一笔的 +1316 再加新窄屏那条） |
 | 6 `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web`、rc=0 |
 
 - 门 5 的 `+1316` 与 !427 分支的 `+1318` 差 2，是「那分支加 4 条、本分支加 2 条」的净差
   （`git show 772029f:test/features/task/detail_hash_tag_test.dart` 数 `testWidgets(` 得 4，本分支新增的两条 = 一份文件里的 1 个 testWidgets + 1 个 test）。
   上一版把它写成「不含两条用例」是把 4 说成 2，已由 !428 第 1 轮复核抓出。
-- 门 1 的差集那次跑在 `66e26d7` 上；specs 目录另加一笔（只动 `specs/`），
-  所以门 2 至门 6 的读数由该笔承接，门 1 在新头另跑一次。
+- 门 1 到门 6 现读都在头 `0a98890` 之后重跑：`git diff --check` rc=0、`dart format --output=none` rc=0、
+  `flutter analyze` `No issues found!`、门 4/5/6 如上；本台账这一笔只动 `specs/`，门 2 至门 6 由上文承接、门 1 在新头另跑。
 - 卫生：`git status --short` 在门禁后为空；`pubspec.lock` 未进暂存（门 5、门 6 跑在提交之后）。
 
 ## 三、四件套归属
