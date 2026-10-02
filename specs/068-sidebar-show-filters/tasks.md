@@ -142,7 +142,7 @@ FAIL 的收回要一轮新复核 ⇒ 第 2 轮已入队。矩阵 #22 仍不翻�
   （实际字号取自该行 `MediaQuery`，尺寸取自 `tester.view`）；`tasks.md` 的「改动前 5」改成带 ref 的可复算命令。
   诚实记账：订正首笔 `373044498` 的正文说改了两处，实际脚本在写 `tasks.md` 前抛异常、只落了 `spec.md` 一处，
   第二处由 `a337e47` 补上并在正文里更正说明；已推送的历史不改写。
-- 合并提交 `9fd24c5e85f399eb2e9eebf4ff06a111c2d97c38`（回读 `merged=true`、该提交即 `origin/develop` 现头，
+- 合并提交 `9fd24c5e85f399eb2e9eebf4ff06a111c2d97c38`（回读 `merged=true`；写这笔账时它就是 `origin/develop` 的头，此后 develop 又前移到 !356 的合并提交 ⇒ 「现头」二字以当时为准，)
   分支头 `a337e47` 经 `git merge-base --is-ancestor` 证为其祖先）。FL Issue #336 随合并自动关闭（现读 `state=closed`）。
 - 覆盖面绑定：审头 `f2cb384` 到合并头 `a337e47` 的差集 = `git diff --name-only` 现读 2 条，全在 `specs/068-sidebar-show-filters/`
   下（文档路径）⇒ 报告对合并头仍成立。
