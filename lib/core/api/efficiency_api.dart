@@ -920,6 +920,7 @@ class CountdownApi {
     required DateTime targetDate,
     bool showAge = false,
     int style = 1,
+    String? backgroundImage,
   }) async {
     final r = await _dio.post<Map<String, dynamic>>(
       '${ApiConfig.todoPrefix}/countdown/create',
@@ -928,6 +929,7 @@ class CountdownApi {
         'targetDate': _dateOnly(targetDate),
         'style': style,
         'showAge': showAge,
+        'backgroundImage': ?backgroundImage,
       },
     );
     final data = _unwrapData(r.data);
@@ -942,6 +944,7 @@ class CountdownApi {
     required DateTime targetDate,
     required int style,
     required bool showAge,
+    String? backgroundImage,
   }) async {
     final response = await _dio.put<Map<String, dynamic>>(
       '${ApiConfig.todoPrefix}/countdown/update',
@@ -951,6 +954,7 @@ class CountdownApi {
         'targetDate': _dateOnly(targetDate),
         'style': style,
         'showAge': showAge,
+        'backgroundImage': ?backgroundImage,
       },
     );
     _unwrapData(response.data);
