@@ -39,3 +39,10 @@
 ## 复核与合并前置
 
 `claude -p` 通道本轮未取到结论（输出 0 字节）⇒ 不声称复核通过；合并依据是上面六道门禁、判据用例与合并试算。
+
+## 反向对照（合并后补做，FL develop `3ba8569` 上现跑）
+
+摘掉两条 `backgroundImage: saved.backgroundImage,`（create 那处与 update 那处，同文件两处一次摘）后现跑
+`flutter test test/features/countdown/countdown_switch_image_test.dart --concurrency=1`
+读回 `+3 -2`，红的两条是「点「切换图片」把上传回来的地址设成背景图，保存时送得出这一键」（失败原因即「界面选了图、create 却不送这一键 = 选了等于没选」）与「上传失败给出可见原因，且已有背景图不被吃掉」（保存仍送旧值那一断）；
+还原同一条命令 rc=0、`git status --short` 现读为空。⇒ 出站这一键确实在 binding，PR !448 正文里「反向对照未跑」那条欠债到此结清。
