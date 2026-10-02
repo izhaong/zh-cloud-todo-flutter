@@ -86,72 +86,92 @@ class _CountdownTileState extends State<_CountdownTile> {
             unit: _unit,
           )
         : countdownDateSubtitle(item);
+    final background = item.backgroundImage;
     return InkWell(
       key: Key('countdown-row-${item.id}'),
       onTap: widget.writePending ? null : widget.onEdit,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Row(
-          children: [
-            _CountdownBadge(countdown: item),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.title,
-                    style: theme.textTheme.titleMedium,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (showDays)
-                    Semantics(
-                      container: true,
-                      button: true,
-                      label: '切换天数单位 $label',
-                      child: InkWell(
-                        key: Key('todo-countdown-unit-${item.id}'),
-                        onTap: widget.writePending
-                            ? null
-                            : () => setState(() => _unit = _unit.next),
-                        child: ExcludeSemantics(
-                          child: Text(label, style: theme.textTheme.bodySmall),
-                        ),
+      child: Stack(
+        fit: StackFit.passthrough,
+        children: [
+          if (background != null && background.isNotEmpty)
+            Positioned.fill(
+              child: Image.network(
+                background,
+                key: Key('countdown-background-${item.id}'),
+                fit: BoxFit.cover,
+                semanticLabel: '${item.title} 的背景图',
+                errorBuilder: (context, error, stackTrace) =>
+                    const SizedBox.shrink(),
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                _CountdownBadge(countdown: item),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.title,
+                        style: theme.textTheme.titleMedium,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    )
-                  else
-                    Text(label, style: theme.textTheme.bodySmall),
-                ],
-              ),
-            ),
-            Semantics(
-              container: true,
-              button: true,
-              label: '编辑 ${item.title}',
-              onTap: widget.writePending ? null : widget.onEdit,
-              child: ExcludeSemantics(
-                child: IconButton(
-                  key: Key('countdown-edit-${item.id}'),
-                  icon: const Icon(Icons.edit_outlined),
-                  onPressed: widget.writePending ? null : widget.onEdit,
+                      if (showDays)
+                        Semantics(
+                          container: true,
+                          button: true,
+                          label: '切换天数单位 $label',
+                          child: InkWell(
+                            key: Key('todo-countdown-unit-${item.id}'),
+                            onTap: widget.writePending
+                                ? null
+                                : () => setState(() => _unit = _unit.next),
+                            child: ExcludeSemantics(
+                              child: Text(
+                                label,
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ),
+                          ),
+                        )
+                      else
+                        Text(label, style: theme.textTheme.bodySmall),
+                    ],
+                  ),
                 ),
-              ),
-            ),
-            Semantics(
-              container: true,
-              button: true,
-              label: '删除 ${item.title}',
-              onTap: widget.writePending ? null : widget.onDelete,
-              child: ExcludeSemantics(
-                child: IconButton(
-                  key: Key('countdown-delete-${item.id}'),
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: widget.writePending ? null : widget.onDelete,
+                Semantics(
+                  container: true,
+                  button: true,
+                  label: '编辑 ${item.title}',
+                  onTap: widget.writePending ? null : widget.onEdit,
+                  child: ExcludeSemantics(
+                    child: IconButton(
+                      key: Key('countdown-edit-${item.id}'),
+                      icon: const Icon(Icons.edit_outlined),
+                      onPressed: widget.writePending ? null : widget.onEdit,
+                    ),
+                  ),
                 ),
-              ),
+                Semantics(
+                  container: true,
+                  button: true,
+                  label: '删除 ${item.title}',
+                  onTap: widget.writePending ? null : widget.onDelete,
+                  child: ExcludeSemantics(
+                    child: IconButton(
+                      key: Key('countdown-delete-${item.id}'),
+                      icon: const Icon(Icons.delete_outline),
+                      onPressed: widget.writePending ? null : widget.onDelete,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
