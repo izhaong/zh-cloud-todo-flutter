@@ -28,7 +28,7 @@
 | 320px + 1.3 倍 | 在 `_MobileQuickAddSheet` 自己的 context 上实测 `MediaQuery.textScalerOf(...).scale(10)≈13` | `320px + 1.3 倍：新建标签行与「标签 N」都排得下、可命中、读屏分得清` |
 | 独立读屏语义 | 标签入口给 `todo_mobile_quick_add_tags`，计数用**可见文案**「标签 N」承载（tooltip 进不了读屏，实测记录见 `task_quick_add_sheet.dart:203`） | 同上一条 + `桌面：# 让标签工具图标带出数量角标与读屏标签` |
 | 失败保留已加载数据 | 建标签失败：弹层不关、已勾的「专注」仍在、可重试、不摆出没建成的那一行 | `创建标签失败：sheet 不关、已选保留、给可见提示` |
-| 过期响应不覆盖新响应 | **本面不适用**：`#` 的名字列表是从输入框同步派生的（无异步回写），唯一异步点是提交时/表内建行时的 ensurer，而它回来后只往 `_selected`/`tagIds` **追加**，不覆盖别的状态；关弹层后的迟到回调用 `if (!mounted) return` 拦住 | 见探针 PF（去掉同步闸门 ⇒ 迟到那次的副作用被第二次点击接走，红在 `连点两次「确定」只建一个标签`） |
+| 过期响应不覆盖新响应 | **本面不适用**：`#` 的名字列表是从输入框同步派生的（无异步回写），唯一异步点是提交时/表内建行时的 ensurer，而它回来后只往 `_selected`/`tagIds` **追加**，不覆盖别的状态；关弹层后的迟到回调用 `if (!mounted) return` 拦住 | 见探针 PF（去掉同步闸门 ⇒ 迟到那次的副作用被第二次点击接走，红在 `连点两次「确定」只建一个标签`，判据：`grep -c "只建一个标签" test/features/shell/quick_add_hash_tag_test.dart` 现读 1） |
 
 ### 实测抓到的一个真缺陷（不是本轮引入的写法问题，是本轮把文案变长后暴露的）
 
@@ -48,7 +48,7 @@
 
 | 探针 | 抽掉什么 | 打补丁后 | 红在哪条 |
 | ---- | -------- | -------- | -------- |
-| PA | 词法整个退回"不认 #" | `-16` | 词法 **5** 条 + 界面 11 条（复核 F4 更正：原表写"8 条词法单测"是错的，`进度 50#`、`##草稿`、`C#` 这三条 PA 打不红 ⇒ 另立 PL）|
+| PA | 词法整个退回"不认 #" | `-16` | 词法 **5** 条 + 界面 11 条 —— 复核 F4 更正：原表写"8 条词法单测"是错的，`进度 50#`、`##草稿`、`C#` 这三处 PA 打不红 ⇒ 另立 PL|
 | PB | 未接 ensurer 时也剥 token | `-1` | `没接线 ensureTagIds 时 # 就是普通文字` |
 | PC | 不按名字去重（按钮所选与 # 各算各的） | `-2` | `按钮所选标签与「#」标签合并去重后一起提交`（desktop+mobile） |
 | PD | 空标题时静默 `return null`（不给提示） | `-1` | `整段只有「#周会」⇒ 不静默早退` |
@@ -107,7 +107,7 @@ merge-tree 复测结果见下节。
 | F2 | 同一会话二次建同名 ⇒ `_created` 长出两个同 key 的行 ⇒ `Duplicate keys found.` | 抄 `rv350_dupkey_real_test.dart`（真 Drift）跑 ⇒ 红；读 `_confirmNewTag` 确认 `for (id in ids) _created.add(...)` 无判重 | `if (_created.any((tag) => tag.id == id)) continue;` + 新增「连建两次同名只多一行、不炸」 |
 | F3 | 「不是弹层本来就在漏」这句归因是错的：develop 的 `Row + Spacer` 勾一个标签就溢出同样的 31px | 独立复跑 `rv350_dev_overflow_test.dart`（develop 字节）⇒ `未勾=null`、`勾1个=overflowed by 31 pixels` | 更正那一节为"develop 上勾任意标签就已漏，本轮 `Wrap` 顺手修掉这条既有缺陷"，并写进 PR 正文 |
 | F4 | PA 表写"8 条词法单测"不实（只有 5 条会被 PA 打红）；三条排除项缺探针 | 用脚本对词法做两处变异分别跑：PA ⇒ 词法 5 条红；新 PL（`isToken = line[index] == '#'`）⇒ 正好红 `单独一个 #`、`## 开头`、`C#` 三条 | PA 行改 `-16`（词法 5 + 界面 11）并写明原因；新增 PL 行 |
-| F5 | 桌面 `_report` 与提交时的 `catch` 两条已上线分支没有任何"能失败"的用例 | 变异复跑：清空 `_report` body ⇒ 红 2 条；摘掉 `catch` ⇒ 红 2 条（这两条正是本轮新增的用例，见 PM/PN） | 新增 3 条用例（桌面空标题 SnackBar、桌面/mobile 提交时建标签失败） |
+| F5 | 桌面 `_report` 与提交时的 `catch` 两条已上线分支没有任何"能失败"的用例 | 变异复跑：清空 `_report` body ⇒ 红 2 条；摘掉 `catch` ⇒ 红 2 条（这两条正是本轮新增的用例，见 PM/PN） | 新增 3 项用例，覆盖桌面空标题 SnackBar、桌面与 mobile 提交时建标签失败 |
 | 非阻塞 | 门禁记录指向 `112d8b3` 而 tip 已移动 | — | 见下节"门禁原文记录（复核修复轮）" |
 | 非阻塞 | `specs/045-sort-direction/tasks.md` 在本分支 HEAD 不存在 | `git cat-file -e HEAD:specs/045-sort-direction/tasks.md` ⇒ 不存在 | 已在计数对账处标明它在**未合并的 `!347` 分支**上，且 898 由复核员独立复算 |
 | 非阻塞 | 取舍 5 承诺"列出这批将添加的标签"，实装只有计数 | 读 `quick_add_bar.dart` 确认只有 `标签 N` | 以代码为准改 spec.md：只报数、不列名，列名与否待有图后校正 |
@@ -115,7 +115,7 @@ merge-tree 复测结果见下节。
 | 非阻塞 | `tasks.md` 把"过期响应"写成 FR-6，FR-6 实为"不 bump schemaVersion" | 读 spec.md 的 FR 表 | 改挂到 FR-5 第四维 |
 | 非阻塞 | 词法注释声称"没井号的行一个字都不该被改动"，实则每行都 `trim()` | `parseHashTagInput('  明天见').title == '明天见'` | 改注释说清"只去首尾空白，连续空白收拢仅对剥过 token 的行" |
 | 非阻塞 | 读屏证据停在 widget 树；标识符节点自身 label 为空 | 复核员的语义 dump ⇒ `SemanticsNode#17 identifier 空 label`、子节点 `#18 label='标签 1'` | 320px 那条补 `find.bySemanticsLabel('标签 1')`，并在注释里写明"标识符节点本身 label 是空的" |
-| 非阻塞 | 「确定」是本 sheet 里第三个确认动词（sheet 用「完成」、tag_page 用「保存」） | 读 `quick_add_bar.dart:292` 与 `tag_page.dart:219` | 建标签的确认按钮改「保存」，与 `tag_page` 同词 |
+| 非阻塞 | 「确定」是本 sheet 里第三个确认动词 —— 另两处是 sheet 用「完成」、tag_page 用「保存」 | 读 `quick_add_bar.dart:292` 与 `tag_page.dart:219` | 建标签的确认按钮改「保存」，与 `tag_page` 同词 |
 
 ## 门禁原文记录（复核修复轮）
 
