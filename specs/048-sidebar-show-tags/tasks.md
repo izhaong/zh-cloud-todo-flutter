@@ -35,7 +35,7 @@
 | ① 320px + 1.3 | 通过：设置页与弹层各在自己的 context 上测（`MediaQuery.builder` 注入 1.3，视口 320×720），`takeException()` 为 null | 设置文件最后一条 |
 | ② 独立读屏语义 | 通过：取值是 `trailingText` 的 `Text`，合并进该行的语义节点 ⇒ 念出「标签 … 显示」；配对反向断言（当前「显示」时念不到「隐藏」） | 设置文件第二条 |
 | ③ 失败保留已加载数据 | 通过：`save` 抛错 → SnackBar「保存失败，显示标签仍为当前设置」，行内取值与 `todo_view_preferences` 行数都不变；SnackBar 4s 后自动消失仍被断言 | 设置文件第三条 |
-| ④ 过期响应不覆盖新响应 | **通过（第一轮是假绿，复核已补）**：写入的是**点中的字面值**，不是 `!current`；`current` 只用于画勾选标记。设置第一条现在多走一步"当前已是显示时再点一次显示"，并断言界面取值与库里 `showTags` 都还是 `true` ⇒ 取反实现必须红 | 设置文件第 1 条 + 探针 PG |
+| ④ 过期响应不覆盖新响应 | **通过（第一轮是假绿，复核已补）**：写入的是**点中的字面值**，不是 `!current`；`current` 只用于画勾选标记。设置面首项用例现在多走一步"当前已是显示时再点一次显示"，并断言界面取值与库里 `showTags` 都还是 `true` ⇒ 取反实现必须红 | 设置面首项用例 + 探针 PG |
 
 ## 反向探针（摘掉实现看测试会不会红）
 
@@ -44,7 +44,7 @@
 | PA | 侧栏门控 `!showTags` → `!false && showTags`（等于永不收起） | 红 | 红 `-2` |
 | PB | `defaultShowTags = false` | 红 | 红 `-5`（仓库 + 侧栏） |
 | PC | `_decode` 丢掉服务端嵌套包装分支 | 红 | 红 `-1` |
-| PD | `save` 的 id 改为每次新生成（update 命中 0 行） | 红 | **首跑绿 —— 假阳性，已补强后转红** |
+| PD | `save` 的 id 改为每次新生成（update 匹配不到既有行） | 红 | **首跑绿 —— 假阳性，已补强后转红** |
 | PE | 设置行 `trailingText` 的取值改成 `null` | 红 | 红 `-4` |
 | PF | `catch` 里改成 `rethrow`（不再给可见提示） | 红 | 红 `-1` |
 | PG | `_pickShowTags` 写成 `save(showTags: !current)`（取反而非照抄字面值） | 红 | **首跑绿（复核抓出的假绿）⇒ 补一步后转红 `-1`**，见下节 |
@@ -86,7 +86,7 @@
 基线 898 **本轮由本轮自己的证据反算**：`git diff --name-status origin/develop...HEAD -- test` 全为 `A`（只新增测试文件、没改任何既有用例）
 ⇒ 基线 = 912 − 14 = 898。
 （第一版这里写的是"沿用第 64/66 轮实跑记录"，复核指出 `/tmp` 里没有任何日志的**末行**是 `+898`
-（`/tmp/r66-full.log` 的 `+898` 是 `02:52` 的进度行，该轮末行是 `+930`），那个数只是别处文档里的转述
+（`/tmp/r66-full.log` 的 `+898` 是 `02:52` 的进度行，该轮统计行是 `+930`），那个数只是别处文档里的转述
 ⇒ 引用别轮"实跑"是不实措辞，已换成本轮可复算的口径。）
 `~26` 跳过数：本轮未新增 skip。
 `pubspec.lock` 未进提交：`git log --stat origin/develop..HEAD -- pubspec.lock` 为空。
@@ -138,7 +138,7 @@ widget 只管三态各自落点。**这条最终版前后走了两轮，第一�
 
 红测（跑在 `ada7eb7`，日志 `/tmp/r74/red.log`）：`00:00 +3 -1`，红的正是新加那条，
 失败点落在**首值未到达那一帧**（`sidebar_show_tags_test.dart:121`，`focusTag()` 实测 `Found 1 widget`）。
-同一条用例里先跑两条正向对照（智能清单行在、`todo-sidebar-row-tags` 入口行在）⇒
+同一用例里先各跑一次正向对照：智能清单行在、`todo-sidebar-row-tags` 入口行在 ⇒
 红不是"整棵侧栏还没数据"造成的。
 
 第一版实现写成三参数 `.when(data/loading/error)`，四条反向探针全绿（`/tmp/r74/PROBES.log` 的第一轮记录）。
@@ -215,7 +215,7 @@ final showTags =
 
 - **① 「带旧值的 `AsyncError` 走 `valueOrNull`」是实测还是想当然** ⇒ **成立，且两路证实**。
   QE 探针（退回 `.when` 那一版）只有「出过一次值之后流才失败」那条红；复核员另读 riverpod 2.6.1
-  源码 `common.dart:572`（`valueOrNull => hasValue ? value : null`）、`:528`
+  源码 Flutter SDK 的 common.dart（不在本仓索引内，行号随 SDK 版本漂）（`valueOrNull => hasValue ? value : null`）、`:528`
   （`AsyncError.copyWithPrevious` 把 `hasValue: previous.hasValue` 带过去）、`:605`
   （`hasError => error != null`）独立对上。
 - **② 同类折叠是否还在别处** ⇒ **它没按我的口径做完**。我要的是"全仓 17 处 `valueOrNull ??` 逐处判"，

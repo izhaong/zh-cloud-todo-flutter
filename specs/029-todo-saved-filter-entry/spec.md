@@ -17,14 +17,14 @@
 ## 现状（实地证据，2026-09-23，基线 = develop `a1d7733`）
 
 - **真表与同步链路早就齐了，只有 UI 零消费**：
-  `core/db/app_database.dart:307-321` 定义 `todoFilters`（`conditionJson` / `sortOrdersJson` /
+  `lib/core/db/app_database.dart` 定义 `todoFilters`（`conditionJson` / `sortOrdersJson` /
   `isSmart` / `isPinned` / `sortOrder`），第 13 号迁移补齐列（`:579-587`，`schemaVersion` 现为 22）；
-  出站本地化 `core/sync/sync_coordinator.dart:742-770`、入站 `_upsertLocalFilter` `:1975-2016`、
-  tombstone `:1346-1349`；远端契约 `core/api/todo_api.dart:138-195` `POST /filter/apply`。
+  出站本地化 `lib/core/sync/sync_coordinator.dart`、入站 `_upsertLocalFilter` `:1975-2016`、
+  tombstone `:1346-1349`；远端契约 `lib/core/api/todo_api.dart` `POST /filter/apply`。
   ⇒ **服务端已有的过滤器今天就在往本地库里落，只是没人渲染**。
-- 仓库层 `state/repositories/filter_repository.dart:44` 只有 `save()`，无 list/watch/delete；
+- 仓库层 `lib/state/repositories/filter_repository.dart` 只有 `save()`，无 list/watch/delete；
   `providers.dart` 里没有 `filterRepositoryProvider`（`grep -rn "FilterRepository" lib` 除自身声明外零命中）。
-- 侧栏早就有一行入口：`features/shell/sidebar.dart:237-247`（`Key('todo-sidebar-row-filters')`、
+- 侧栏早就有一行入口：`lib/features/shell/sidebar.dart`（`Key('todo-sidebar-row-filters')`、
   文案「筛选器」）→ `home_shell.dart:451` push 的 `_FiltersPage` 是**写死 3 条假条目的静态占位**
   （`今日任务 / 已完成 / 已过期`，无 `onTap`、不读任何 repository）。
 - 另一条「智能清单」路是**半成品死链路**（本切片不复用它，理由见下）：

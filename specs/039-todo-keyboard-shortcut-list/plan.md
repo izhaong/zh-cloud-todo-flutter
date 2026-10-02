@@ -22,7 +22,7 @@
    `primaryFocus.context` 的 widget 是 `EditableText`（或其后代）时返回 `KeyEventResult.ignored`。
    shift **不算**在这里的"修饰键"里 —— 否则搜索框里 Shift+/ 会被抢走（那正是要避免的行为）。
 4. **别把 `pumpAndSettle` 当禁区，要看是哪个页面**：`SettingsRoute` 本身可用 `pumpAndSettle`
-   （既有先例 `test/native_entry_page_test.dart:282`，该文件共 7 处）；会永不返回的是
+   （既有先例 `test/native_entry_page_test.dart:282`，该文件里同款写法成串出现）；会永不返回的是
    `settings_route.dart:219` 那个 **`_TaskCaptureDefaultsPage`** 分支上的无限 `CircularProgressIndicator`。
    本轮用例仍用 `pump()`（够用且与该页解耦），但**理由不是"SettingsRoute 有持续动画"**。
 5. 四件套：对话框 320px + 1.3 倍不溢出。行**两侧都用 `Flexible`（3:2）**——
@@ -30,7 +30,7 @@
    标题与每行动作名各自独立语义节点（不用 `ListTile`：实测裸 `ListTile(title, subtitle)`
    只出一个节点，label = `成就与勋章\n成就值、等级与勋章墙`，`^成就与勋章$` 0 命中）。
    机制更正（第二轮复核 NIT）：`list_tile.dart` 里没有 `MergeSemantics`，显式合并语义的是
-   `checkbox_list_tile.dart:604`（radio/switch 同）；`ListTile` 是把自己的 `Semantics` 容器
+   Flutter SDK 的 checkbox_list_tile.dart（不在本仓索引内，行号随 SDK 版本漂）（radio/switch 同）；`ListTile` 是把自己的 `Semantics` 容器
    节点收下了 title+subtitle 两条文案。**行为不变，别据此改回 `ListTile`。**
 
 ## 不在本轮

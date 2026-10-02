@@ -6,7 +6,7 @@ specs 编号取 048：`develop` 上最大 044，未合并分支已占 045（`!34
 ## 判据源（逐字，均在 `zh-cloud-docs` **`origin/develop`**）
 
 `todo/99_参考资料/dida365-help-center/02-功能指南/01-任务/09-如何管理海量任务/04-用标签管理任务.md`
-（`wc -l` = 122，末行有换行符。目录名以 develop 的 `09-` 为准：工作树当前所在的未合并分支
+（`wc -l` = 122，文件尾以换行结束。目录名以 develop 的 `09-` 为准：工作树当前所在的未合并分支
 `docs/80-countdown-achievement-parity-evidence` 把它改成了 `08-` ⇒ 引外部锚点一律
 `git show 'origin/develop:<path>'` 量，别拿工作树）
 
