@@ -41,8 +41,8 @@ Issue #317（实现）+ 矩阵 #15「团队看板」三面的判定。判定口�
 6. **窄屏的卡片是懒建的。** 320px + 1.3 倍字号时 `kanban-task-…` 根本没 build，
    所以辅助函数是"先滚到卡片、再断言它存在"，不是"先断言、再滚"。顺序反了就会得到一个假故障。
 7. **看板卡片这一路没做 `desktopMode` 判定，与清单行的右键菜单口径不一致（第 2 轮复核抓到，本轮只记录不改）。**
-   清单行是 `widgets/task_row_host.dart:186` `if (!widget.desktopMode) return taskRow;` 才挂 `onSecondaryTapDown`（`:189`）；
-   看板卡片在 `views/kanban_view.dart:479` 直接挂 `onSecondaryTapDown`，没有那道门。
+   清单行是 `lib/features/task/widgets/task_row_host.dart:187` 的 `if (!widget.desktopMode) return taskRow;`，`onSecondaryTapDown` 挂在其后的 `lib/features/task/widgets/task_row_host.dart:190`；
+   看板卡片在 `lib/features/task/views/kanban_view.dart:686` 直接挂 `onSecondaryTapDown`，没有那道门。（以上行号按本分支 HEAD=ded9791 现跑 `grep -n` 得到；旧写法 `:186`/`:189`/`:479` 与代码不符，已按代码改正）
    实际影响很小（触屏没有右键，`onSecondaryTapDown` 不会被触发），但**两处同一手势的平台判定不一样**是事实：
    触屏端 `:175` 那条「右键任务」本来就都没有入口，只是清单行是"显式不给"、看板是"隐式不给"。
    为什么不在本轮补：那是一处**行为变更**（触屏端会不会走进别的分支要重测），
