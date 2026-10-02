@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:zh_cloud_todo_flutter/core/time/task_time_mode.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -207,6 +208,7 @@ class _FailingReminderRepository extends ReminderRepository {
     int? intervalMinutes,
     String? timeZone,
     bool fixedTimezone = false,
+    TaskTimeMode? timeMode,
   }) async {
     throw StateError('本地写入被占用');
   }

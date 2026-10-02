@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:zh_cloud_todo_flutter/core/time/task_time_mode.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../core/db/app_database.dart';
@@ -26,8 +27,11 @@ class ReminderRepository {
     int? intervalMinutes,
     String? timeZone,
     bool fixedTimezone = false,
+    TaskTimeMode? timeMode,
   }) async {
     _validatePersistentInterval(persistent, intervalMinutes);
+    final effectiveMode =
+        timeMode ?? TaskTimeMode.fromLegacyFlag(fixedTimezone);
     final now = DateTime.now();
     final id = _uuid.v4();
     final mutationId = _uuid.v4();
@@ -51,7 +55,8 @@ class ReminderRepository {
               persistent: Value(persistent),
               intervalMinutes: Value(intervalMinutes),
               timeZone: Value(timeZone),
-              fixedTimezone: Value(fixedTimezone),
+              fixedTimezone: Value(TaskTimeMode.legacyFlagOf(effectiveMode)),
+              timeMode: Value(effectiveMode.wire),
               clientMutationId: Value(mutationId),
               updatedAt: now,
               createdAt: now,
@@ -80,8 +85,11 @@ class ReminderRepository {
     int? intervalMinutes,
     String? timeZone,
     required bool fixedTimezone,
+    TaskTimeMode? timeMode,
   }) async {
     _validatePersistentInterval(persistent, intervalMinutes);
+    final effectiveMode =
+        timeMode ?? TaskTimeMode.fromLegacyFlag(fixedTimezone);
     final existing = await (_db.select(
       _db.todoReminders,
     )..where((t) => t.id.equals(id))).getSingleOrNull();
@@ -103,7 +111,8 @@ class ReminderRepository {
           persistent: Value(persistent),
           intervalMinutes: Value(intervalMinutes),
           timeZone: Value(timeZone),
-          fixedTimezone: Value(fixedTimezone),
+          fixedTimezone: Value(TaskTimeMode.legacyFlagOf(effectiveMode)),
+          timeMode: Value(effectiveMode.wire),
           clientMutationId: Value(mutationId),
           updatedAt: Value(now),
         ),
@@ -162,6 +171,7 @@ class ReminderRepository {
       intervalMinutes: intervalMinutes,
       timeZone: row.timeZone,
       fixedTimezone: row.fixedTimezone,
+      timeMode: TaskTimeMode.fromWire(row.timeMode),
     );
   }
 
@@ -188,5 +198,6 @@ class ReminderRepository {
     'intervalMinutes': row.intervalMinutes,
     'timeZone': row.timeZone,
     'fixedTimezone': row.fixedTimezone,
+    'timeMode': row.timeMode,
   };
 }

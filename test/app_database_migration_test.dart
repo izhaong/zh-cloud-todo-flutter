@@ -61,7 +61,7 @@ void main() {
         .customSelect("PRAGMA table_info('todo_tasks')")
         .get();
 
-    expect(version.data['user_version'], 23);
+    expect(version.data['user_version'], 24);
     expect(task.title, '迁移前任务');
     expect(sectionTable.data['name'], 'todo_task_sections');
     expect(taskColumns.map((row) => row.data['name']), contains('section_id'));
@@ -133,7 +133,7 @@ void main() {
         .customSelect('SELECT id, time_mode FROM todo_tasks ORDER BY id')
         .get();
 
-    expect(version.data['user_version'], 23);
+    expect(version.data['user_version'], 24);
     expect(
       rows.map((row) => '${row.data['id']}=${row.data['time_mode']}'),
       containsAll(<String>['task-fixed=2', 'task-plain=0']),
@@ -199,7 +199,7 @@ void main() {
           .getSingle();
       final filter = await upgraded.select(upgraded.todoFilters).getSingle();
 
-      expect(version.data['user_version'], 23);
+      expect(version.data['user_version'], 24);
       expect(filter.conditionJson, contains('"local-list"'));
       expect(filter.conditionJson, contains('"local-tag"'));
       expect(filter.conditionJson, isNot(contains('[101]')));
@@ -256,7 +256,7 @@ void main() {
           .getSingle();
       final list = await upgraded.listByLocalId('list-before-local-reference');
 
-      expect(version.data['user_version'], 23);
+      expect(version.data['user_version'], 24);
       expect(list?.folderId, 88);
       expect(list?.folderLocalId, 'folder-before-local-reference');
     },
@@ -304,7 +304,7 @@ void main() {
           )
           .getSingle();
 
-      expect(version.data['user_version'], 23);
+      expect(version.data['user_version'], 24);
       expect(access.data['id'], 'list-before-access-role');
       expect(access.data['access_role'], 'owner');
       expect(access.data['writable'], 1);
@@ -347,7 +347,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 23);
+      expect(version.data['user_version'], 24);
       final task = await upgraded.select(upgraded.todoTasks).getSingle();
       expect(task.title, '迁移前任务');
       expect(task.assigneeUserId, isNull);
@@ -375,7 +375,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 23);
+      expect(version.data['user_version'], 24);
 
       final taskColumns = await upgraded
           .customSelect('PRAGMA table_info(todo_tasks)')
@@ -511,7 +511,7 @@ void main() {
           .getSingle();
       final rule = await upgraded.select(upgraded.todoRepeatRules).getSingle();
 
-      expect(version.data['user_version'], 23);
+      expect(version.data['user_version'], 24);
       expect(rule.id, 'repeat-rule-before-b2-b3-merge');
       expect(rule.byDay, '1,3,5');
       expect(rule.selectedDatesJson, isNull);
@@ -556,7 +556,7 @@ void main() {
         .getSingle();
     final rule = await upgraded.select(upgraded.todoRepeatRules).getSingle();
 
-    expect(version.data['user_version'], 23);
+    expect(version.data['user_version'], 24);
     expect(rule.freq, 'CUSTOM');
     expect(rule.byDay, '1,3,5');
     expect(rule.repeatMode, 'ON_DUE');
@@ -644,7 +644,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 23);
+      expect(version.data['user_version'], 24);
       await upgraded.close();
 
       final reopened = AppDatabase.forTesting(NativeDatabase(databaseFile));
@@ -736,11 +736,93 @@ void main() {
           )
           .getSingle();
 
-      expect(version.data['user_version'], 23);
+      expect(version.data['user_version'], 24);
       expect(task.title, '迁移前看板任务');
       expect(boardTable.data['name'], 'todo_board_preferences');
     },
   );
+
+  test('v23→v24 升级给提醒加 time_mode 并回填勾过固定的老提醒', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'zh_cloud_todo_reminder_time_mode_backfill_',
+    );
+    final databaseFile = File('${directory.path}/todo.sqlite');
+    addTearDown(() async {
+      if (await directory.exists()) {
+        await directory.delete(recursive: true);
+      }
+    });
+
+    final seeded = AppDatabase.forTesting(NativeDatabase(databaseFile));
+    final now = DateTime.utc(2026, 9, 20, 8);
+    await seeded.batch((batch) {
+      batch.insert(
+        seeded.todoLists,
+        TodoListsCompanion.insert(
+          id: 'list-reminder-time-mode',
+          name: '工作',
+          updatedAt: now,
+          createdAt: now,
+        ),
+      );
+      batch.insert(
+        seeded.todoTasks,
+        TodoTasksCompanion.insert(
+          id: 'task-with-reminders',
+          listId: 'list-reminder-time-mode',
+          title: '带提醒的老任务',
+          updatedAt: now,
+          createdAt: now,
+        ),
+      );
+      batch.insert(
+        seeded.todoReminders,
+        TodoRemindersCompanion.insert(
+          id: 'reminder-fixed',
+          taskId: 'task-with-reminders',
+          remindAt: DateTime.utc(2026, 10, 1, 9),
+          fixedTimezone: const Value(true),
+          updatedAt: now,
+          createdAt: now,
+        ),
+      );
+      batch.insert(
+        seeded.todoReminders,
+        TodoRemindersCompanion.insert(
+          id: 'reminder-plain',
+          taskId: 'task-with-reminders',
+          remindAt: DateTime.utc(2026, 10, 1, 10),
+          updatedAt: now,
+          createdAt: now,
+        ),
+      );
+    });
+    await seeded.close();
+
+    // 退回"提醒表上还没有 time_mode 这一列"的 v23 形状，测的是加列 + 回填整条路。
+    final legacy = sqlite.sqlite3.open(databaseFile.path);
+    try {
+      legacy.execute('ALTER TABLE todo_reminders DROP COLUMN time_mode');
+      legacy.execute('PRAGMA user_version = 23');
+    } finally {
+      legacy.dispose();
+    }
+
+    final upgraded = AppDatabase.forTesting(NativeDatabase(databaseFile));
+    addTearDown(upgraded.close);
+    final version = await upgraded
+        .customSelect('PRAGMA user_version')
+        .getSingle();
+    final rows = await upgraded
+        .customSelect('SELECT id, time_mode FROM todo_reminders ORDER BY id')
+        .get();
+
+    expect(version.data['user_version'], 24);
+    expect(
+      rows.map((row) => '${row.data['id']}=${row.data['time_mode']}'),
+      containsAll(<String>['reminder-fixed=2', 'reminder-plain=0']),
+    );
+  });
 
   test(
     'upgrades schema 16 with recovery metadata and recommendation cache',
@@ -801,7 +883,7 @@ void main() {
           )
           .getSingle();
 
-      expect(version.data['user_version'], 23);
+      expect(version.data['user_version'], 24);
       expect(task.title, '迁移前可靠性任务');
       expect(change.status, 'queued');
       expect(change.nextAttemptAt, isNull);

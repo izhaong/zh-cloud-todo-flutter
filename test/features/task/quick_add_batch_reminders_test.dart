@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:zh_cloud_todo_flutter/core/time/task_time_mode.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
@@ -147,6 +148,7 @@ class _FlakyReminderRepository extends ReminderRepository {
     int? intervalMinutes,
     String? timeZone,
     bool fixedTimezone = false,
+    TaskTimeMode? timeMode,
   }) async {
     _calls += 1;
     if (_calls == 2) {
