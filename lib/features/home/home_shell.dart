@@ -34,6 +34,7 @@ import '../tag/tag_page.dart';
 import 'sync_recovery_banner.dart';
 import 'recommendation_panel.dart';
 import 'todo_workspace.dart';
+import '../../features/task/quick_add_batch_reminders.dart';
 
 /// Todo 主壳：只负责状态与内容分发，布局交给 [TodoWorkspace]。
 class HomeShell extends ConsumerStatefulWidget {
@@ -592,12 +593,20 @@ class _HomeShellState extends ConsumerState<HomeShell>
         created.map((task) => tags.setTaskTags(task.id, request.tagIds)),
       );
     }
+    final reminderMessage = await attachResolvedReminders(
+      created: created,
+      reminders: ref.read(reminderRepositoryProvider),
+    );
     if (!mounted || created.isEmpty) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          content: Text('已创建 ${created.length} 项任务'),
+          content: Text(
+            reminderMessage == null
+                ? '已创建 ${created.length} 项任务'
+                : '已创建 ${created.length} 项任务；$reminderMessage',
+          ),
           action: SnackBarAction(
             label: '撤销',
             onPressed: () => unawaited(

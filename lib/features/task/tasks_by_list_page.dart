@@ -33,6 +33,7 @@ import 'widgets/task_batch_action_bar.dart';
 import 'widgets/task_group_header.dart';
 import 'widgets/task_row_host.dart';
 import 'widgets/task_workspace_header.dart';
+import 'quick_add_batch_reminders.dart';
 
 /// Task workspace body driven by the parent sidebar selection.
 class TasksByListPage extends ConsumerStatefulWidget {
@@ -1578,6 +1579,14 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         created.map((task) => tags.setTaskTags(task.id, request.tagIds)),
       );
     }
+    final reminderMessage = await attachResolvedReminders(
+      created: created,
+      reminders: ref.read(reminderRepositoryProvider),
+    );
+    if (reminderMessage == null || !mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(reminderMessage)));
   }
 
   Future<void> _createTaskSection() async {
