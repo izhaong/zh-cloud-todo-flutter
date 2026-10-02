@@ -39,8 +39,7 @@
   判据在 `test/features/task/reminder_time_mode_test.dart:169`
 - 失败可见：更新抛错时给出可见原因且库里没有半写档位，判据在
   `test/features/task/reminder_time_mode_test.dart:192`
-- 独立读屏语义：本轮没有判据。控件用的是 `RadioListTile`，其选中态语义由框架自带，
-  但我没写量 `flagsCollection` 的用例 ⇒ 按无证据处理，不得声称已过
+- 独立读屏语义：**已补判据（第 187 轮）**。带 key 的那个语义节点要同时带这一档自己的「标题 + 嘀嗒副标题」label 与选中态，判据在 `test/features/task/reminder_time_mode_test.dart:172`；实现形状是 `Semantics(key:…, selected:…, label:…)` 包住 `RadioListTile`，锚点 `lib/features/task/task_detail_pane.dart:469` 与 `lib/features/task/task_detail_pane.dart:391`
 - 过期响应不覆盖新响应：本面写的是本地 Drift、不存在异步回包覆盖，未立判据
 
 ## 六道门禁（最终字节上各跑一次）
@@ -66,4 +65,20 @@
 ## 遗留
 
 - 服务端触发时刻换算调用方仍缺（zh-cloud-service Issue #302 的算法面），矩阵第 12 行因此保持「部分」。
-- 「独立读屏语义」这条判据本轮没补，下一轮若要翻该行需要它。
+- 「独立读屏语义」这条判据已由第 187 轮补上（见上一节），矩阵该行仍差的只剩后端算法面调用方。
+
+## 第 187 轮：形状实验与反向对照（FL Issue #444）
+
+形状实验（同一份 `RadioGroup` 里并排三种写法，读 `getSemantics(find.byKey(…))`）现读：
+key 放包壳且不写 label ⇒ 该节点 `label` 为空、选中态也没进来；key 留在 `RadioListTile` 上、包壳不带 key ⇒ 节点有 label 但 `isSelected` 恒 `Tristate.isFalse`；
+key 与 label 都在包壳上（本轮采用的形状）⇒ 同一个节点读到 `flags: [isSelected, hasSelectedState]` 与 `label: "固定时间\n不论所处时区如何变化，任务的时间都会保持一致"`。
+实验还否掉两条旧候选：`RadioListTile.selected` 这条 SDK 属性不顶用，「改判 `Radio` 的 `isChecked`」也无面可读（`CHK` 恒 `CheckedState.none`）。
+
+反向对照：删掉 `lib/features/task/task_detail_pane.dart:469` 这一行后现跑
+`flutter test test/features/task/reminder_time_mode_test.dart --concurrency=1` 读回 `+6 -1`，
+失败的那条正是「选中态要落在带 key 的那个读屏节点上，屏幕阅读器念得出当前档」；还原后同一条命令 `+7`（含显隐那两条一起跑为 `+9`）。
+
+六道门禁在补判据后的最终字节各跑一次：`git diff --check` 无输出；`dart format --output=none --set-exit-if-changed` 两个显式文件 `0 changed`；
+`flutter analyze` `No issues found!`；`flutter test --tags golden` `+9: All tests passed!`（`test/goldens` 无改动、基线未重录）；
+非 golden 全量 `+1342 ~26: All tests passed!`；`flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` `✓ Built build/web`。
+只读复核通道 `claude -p` 仍输出 0 字节 ⇒ 未取到 VERDICT，本节与 PR 正文都不声称复核通过。

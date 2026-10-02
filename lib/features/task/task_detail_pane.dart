@@ -462,16 +462,21 @@ class _TaskReminderTile extends ConsumerWidget {
                               TaskTimeMode.fixedTimezone,
                               TaskTimeMode.fixedTime,
                             ])
-                              RadioListTile<TaskTimeMode>(
+                              Semantics(
                                 key: Key(
                                   'task-reminder-time-mode-${option.wire}',
                                 ),
-                                contentPadding: EdgeInsets.zero,
-                                value: option,
-                                toggleable: true,
-                                title: Text(option.label!),
-                                subtitle: Text(
-                                  _reminderTimeModeSubtitle(option),
+                                selected: timeMode == option,
+                                label:
+                                    '${option.label!}\n${_reminderTimeModeSubtitle(option)}',
+                                child: RadioListTile<TaskTimeMode>(
+                                  contentPadding: EdgeInsets.zero,
+                                  value: option,
+                                  toggleable: true,
+                                  title: Text(option.label!),
+                                  subtitle: Text(
+                                    _reminderTimeModeSubtitle(option),
+                                  ),
                                 ),
                               ),
                           ],
