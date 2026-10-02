@@ -16,6 +16,7 @@ import '../../core/theme/todo_layout_tokens.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../native/native_intents.dart';
 import '../../state/providers.dart';
+import '../tag/hash_tag_input.dart';
 import '../../state/repositories/reminder_repository.dart';
 import '../../state/repositories/task_query_repository.dart';
 import '../shell/app_dialog.dart';
@@ -1080,11 +1081,15 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     final repo = ref.read(taskRepositoryProvider);
     if (repo == null) return;
     final messenger = ScaffoldMessenger.of(context);
+    // 嘀嗒《01-任务/09-如何管理海量任务/04-用标签管理任务.md》:61（desktop 方式二）
+    // 「创建任务时输入「#」或在任务详情中输入「#」快速创建标签」：
+    // 标题里的「#名称」剥成标签，落库的标题不留井号原文。
+    final hashDraft = parseHashTagInput(_title.text);
     TodoTask updated;
     try {
       updated = await repo.update(
         t.id,
-        title: _title.text.trim(),
+        title: hashDraft.title,
         description: _desc.text.trim(),
         priority: _priority,
         startAt: _startAt,
@@ -1115,6 +1120,26 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
         _clearEndAt = false;
       });
       messenger.showSnackBar(const SnackBar(content: Text('已保存')));
+    }
+    if (hashDraft.tagNames.isEmpty) return;
+    // 标签是第二次写：失败不能带走已经保存的任务，也不能静默早退。
+    try {
+      final tagRepo = ref.read(tagRepositoryProvider);
+      if (tagRepo == null) throw StateError('标签仓储不可用');
+      final ids = await resolveTagIdsByName(
+        repo: tagRepo,
+        names: hashDraft.tagNames,
+      );
+      if (ids.isEmpty) return;
+      final existing = (await tagRepo.tagIdsOf(updated.id)).toSet();
+      await tagRepo.setTaskTags(
+        updated.id,
+        existing.union(ids.toSet()).toList(),
+      );
+    } on Object {
+      if (mounted && widget.taskId == updated.id) {
+        messenger.showSnackBar(const SnackBar(content: Text('标签保存失败，任务已保存')));
+      }
     }
   }
 
