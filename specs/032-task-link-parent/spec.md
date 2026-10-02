@@ -30,10 +30,10 @@
   而 `ScaffoldMessenger` 的提示会渲染在**下层** `Scaffold` 上、被模态屏障挡住；
   与其为一条提示给弹层套一层 `Scaffold`（本仓无此先例），沿用「批量操作失败 → 关闭选择器 + 顶部提示」的既有回路。
 - **候选只按「同清单 + 非自己 + 非后代」过滤**，不在 UI 侧预筛五级上限与只读清单：
-  这两条规则的唯一事实源是 `TaskRepository.reparent`，UI 复制一遍就会与它漂移，改为把它的报错如实转成提示。
+  这两项规则的唯一事实源是 `TaskRepository.reparent`，UI 复制一遍就会与它漂移，改为把它的报错如实转成提示。
 - 新增界面自带「读屏独立节点」用 `Semantics(container: true, label:, onTap:) + ExcludeSemantics(child:)`：
   M3 `IconButton` 只把 `tooltip` 交给 `Tooltip`（气泡出现时才有 label），按钮节点本身无 label
-  （`icon_button.dart:838` 只给 `Semantics(button:, enabled:)`），所以「取消关联」必须显式给节点。
+  （`/Users/zhonghao/development/flutter/packages/flutter/lib/src/material/icon_button.dart:838` 只给 `Semantics(button:, enabled:)`），所以「取消关联」必须显式给节点。
   反向探针：去掉这层包装，读屏用例当场红。
 
 ## 验证边界

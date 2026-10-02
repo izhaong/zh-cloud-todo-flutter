@@ -108,7 +108,7 @@
 ⇒ 对本轮任何改动恒真。按区间重跑才是真相：
 
 ```
-git diff --check b23e002~1 b23e002  →  specs/030-todo-note-task-summary/spec.md:72: new blank line at EOF.   exit=2
+git diff --check b23e002~1 b23e002  →  git diff --check 报的是 `spec.md` 末行 `new blank line at EOF`（该空行后来已删，故不再写成行号锚）   exit=2
 git diff --check 38dcb0d~1 38dcb0d  →  exit=0
 ```
 
@@ -119,7 +119,7 @@ git diff --check 38dcb0d~1 38dcb0d  →  exit=0
 
 - 接受：「空组不渲染标题」是实现里唯一没被断言的验收口径 —— 随切片一起消失，重做时要写进用例。
 - 接受但降级：320px+1.3 用例没像 `note_task_summary_test.dart:522` 那样在弹层自身 context 自检档位=13。
-  复核核了 SDK `bottom_sheet.dart:1301` 的 `useRootNavigator = false`  ⇒ 机制成立、只是断言不敏感，属测试质量而非缺陷。
+  复核核了 SDK `/Users/zhonghao/development/flutter/packages/flutter/lib/src/material/bottom_sheet.dart:1301` 的 `useRootNavigator = false`  ⇒ 机制成立、只是断言不敏感，属测试质量而非缺陷。
 - 接受：「使用模板」与「插入摘要」是两个上下堆叠的 `Align(centerLeft)`，我写成了"并列"。
 - 接受：tasks.md 里的 `TodoApi.templates` 应为 `TodoRestApi.templates`（仓内无 `TodoApi` 符号）。
 - 不适用：`listPublic` 恒空 —— 已并入 B1 的契约缺口，不单列。

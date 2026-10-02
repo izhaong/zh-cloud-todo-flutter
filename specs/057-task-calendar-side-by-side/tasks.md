@@ -36,7 +36,7 @@ Gitea：Issue #379 · 判据源见 `spec.md` §一
 
 用例数不是靠减法推出来的：基线在**被测对象副本**上直接跑
 （`/private/tmp/r68-baseline` 检出 `origin/develop@90320057`），
-统计行 `+898 ~26: All tests passed!` 在 `/tmp/r109/baseline-develop.log:1152`（全文 1153 行）；
+统计行 `+898 ~26: All tests passed!` 当时记在 `/tmp` 临时日志里，该日志已不在本机 ⇒ 读数不可复核、按无证据处理；
 本轮没重跑基线，因为**基的 ref 没动**：`git rev-parse --short=8 origin/develop` ⇒ `90320057`
 （复算于本轮，`/tmp/r114/develop-tip.txt:1`）。
 本分支同一命令 ⇒ `+916 ~26`（`/tmp/r114/g5-test.log:1174`）。
@@ -65,7 +65,7 @@ Gitea：Issue #379 · 判据源见 `spec.md` §一
 还原：`cp /tmp/r114/todo_workspace.dart.bak` 回来并 `filecmp.cmp(..., shallow=False)` ⇒ `RESTORE_IDENTICAL`，
 `git status --short` 回到"只有本轮 4 个文件"，复跑 ⇒ `+18: All tests passed!` 在
 `/tmp/r114/after-restore.log:84`（全文 84 行）。⇒ 这把尺子开过火，且量的是最终字节。
-第 109 轮那次（`/tmp/r109/probe-left.log:205`，当时全文 212 行）跑的是 `dedd329` 的字节，已被本轮取代。
+第 109 轮那次的日志文件已不在本机 ⇒ 那次读数不可复核、按无证据处理；它跑的是 `dedd329` 的字节，已被本轮取代。
 
 
 ## 四、交叉验证（cursor-agent，第二个意见真的改写了结论）

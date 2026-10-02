@@ -35,7 +35,7 @@
   `flutter build web --release --dart-define=TODO_API_BASE_URL=… --dart-define=TODO_TENANT_ID=1` `✓ Built build/web`。`sidebar.dart` / `list_page.dart` 另用「HEAD 版与工作树版各自格式化后 diff」核过，
   差异只有本轮的语义改动（1 行 import、`StatelessWidget`→`ConsumerWidget`、`build` 多一个 `WidgetRef ref`、
   一行 `onLongPress`、`_deleteList` 由 28 行缩为 2 行委托），无顺带重排。
-- 2026-09-23：「置顶」判为后端契约缺口的依据已双侧核对：本地 Drift `TodoLists`（`core/db/app_database.dart:29-48`）
+- 2026-09-23：「置顶」判为后端契约缺口的依据已双侧核对：本地 Drift `TodoLists`（`lib/core/db/app_database.dart:29`）
   只有 `sortOrder`，无 pinned 列；服务端建表脚本 `zh-cloud-service/sql/mysql/modules/todo-baseline-2026-09-18.sql:334`
   同样只有 `sort_order`。不用 `sortOrder` 冒充「置顶」（排序值会被下一次拖动覆盖，语义不同），
   须先在 Service 加字段与端点再回客户端。

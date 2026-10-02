@@ -1,7 +1,7 @@
 # 042 实施计划 — 倒数纪念日 天/年/周 单位切换
 
 ## 落点
-唯一改动文件：`lib/features/countdown/countdown_page.dart`（develop 上 117 行、`样式`/`备注` 0 命中、无详情页）。
+唯一改动文件：`lib/features/countdown/countdown_page.dart`（develop 上 489 行（判据：`git show origin/develop:lib/features/countdown/countdown_page.dart | wc -l`），`样式`/`备注` 0 命中、无详情页）。
 把 `itemBuilder` 里的 `ListTile` 搬进 `_CountdownTile`（StatefulWidget），因为单位切换是**按行**状态；
 换算规则留在顶层纯函数 `countdownCountLabel` 里。
 

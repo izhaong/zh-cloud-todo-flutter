@@ -15,7 +15,7 @@
 | `:65` | 「- 方式三：将任务拖动到已有标签上快速为任务添加标签。」 | desktop（→ #331） |
 
 > **路径/行号的基准 ref**：上面那张表的行号是在 `zh-cloud-docs` **`origin/develop`** 的副本上量的
-> （`git show 'origin/develop:<path>' > /tmp/x.md && grep -n …`），`wc -l` = 122 且末行**有**换行符
+> （`git show 'origin/develop:<path>' > /tmp/x.md && grep -n …`），`wc -l` = 122 且文件末尾**有**换行符
 > （Issue 正文写"全页 123 行"，多算了一行）。
 > 目录名按 develop 是 **`09-如何管理海量任务`**；工作树当前所在的未合并分支
 > （`docs/80-countdown-achievement-parity-evidence`）把它改成了 `08-`，而 `09-设置重复任务.md`

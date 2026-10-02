@@ -4,8 +4,8 @@
 来源：嘀嗒《01-任务/08-如何管理海量任务/02-用清单管理任务》「编辑清单」；对照矩阵 #19、#18。
 
 ## 现状（实地核对，2026-09-23）
-`ListRepository.rename`（`state/repositories/list_repository.dart:95`）、`delete` 与
-`ListEditorSheet(existing:)`（`features/list/list_editor_sheet.dart:9/41`）都已实现且有测试，
+`ListRepository.rename`（`lib/state/repositories/list_repository.dart:95`）、`delete` 与
+`ListEditorSheet(existing:)`（`lib/features/list/list_editor_sheet.dart:13`）都已实现且有测试，
 但**没有任何可达入口**：`ListPage` 在 `lib/` 内零引用（`grep -rn "ListPage" lib` 除自身声明外只命中
 `TasksByListPage`；`app.dart:33` 路由表只有 `/login` 与 `/`），而
 `ListEditorSheet(existing:)` 的唯一传参方就是 `list_page.dart:32`，侧栏只以无参构造调用它

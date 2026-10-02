@@ -7,7 +7,7 @@
 1. `TaskListDropTarget`：纯手势容器。
    - `currentListId == null` 时原样返回 `child`（不存在的落点不该有语义节点，也不该截住拖放）。
    - `onWillAcceptWithDetails` 判「拖来的任务不在这个清单」⇒ 同清单不接受（结论 4）。
-   - 命中候选时给 `child` 描一条主色边框（只有边框，不引入新文案、不动布局）。
+   - 命中候选时给 `child` 描一圈主色边框（只有边框，不引入新文案、不动布局）。
    - `Semantics(key: 'todo-list-drop-target', container: true, label: '移入当前清单')`
      —— label 挂在**落点自己的节点**上，测试读这个节点的 `label`，不靠全树 `bySemanticsLabel`
      被旁边某个 `Text` 蒙过去。label 用词取源页 `:55` 的效果描述，不自造功能名。

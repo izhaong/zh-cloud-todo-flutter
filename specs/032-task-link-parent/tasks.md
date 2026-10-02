@@ -2,7 +2,7 @@
 
 ## 已证实（每条都有命令输出或反向探针为凭）
 
-- [x] T001 「关联主任务」入口在任务详情 `...` 里，术语与帮助中心一致（FR-1），三处容器均已由用例覆盖。
+- [x] T001 「关联主任务」入口在任务详情 `...` 里，术语与帮助中心一致（FR-1），这几处容器均已由用例覆盖。
   证据：`_compactMoreActions` 里的 `value: _TaskDetailAction.linkParent`（嵌入态，宽屏页复用）与窄屏全屏页
   内联 `...` 里的同名 `case`/`value`。**本文件的 `文件:行号` 一律以 `feat/todo-link-parent-task@7043323` 为基准**，
   行号会随分支增删漂移，定位优先用下面的符号名。
@@ -35,7 +35,7 @@
 - [x] T009 读屏独立节点：`主任务：X`、`关联主任务`、`取消关联`（FR-7）。
   证据：`ensureSemantics()` + `try/finally` 释放；三条 `findsOneWidget` 全过。
   本轮踩到的两个坑：① `RegExp(r'...$_metadataTitle$')` **raw 字符串不插值** ⇒ 模式恒 0 命中（假阴性）；
-  ② M3 `IconButton` 的 `tooltip` 只在气泡出现时才是语义 label（`icon_button.dart:838` 的节点无 label），
+  ② M3 `IconButton` 的 `tooltip` 只在气泡出现时才是语义 label（`/Users/zhonghao/development/flutter/packages/flutter/lib/src/material/icon_button.dart:838` 的节点无 label），
   所以「取消关联」必须由外层 `Semantics(container + label + onTap)` 给出。
 - [x] T015 「关联主任务」入口有在飞守卫：候选加载期间重复点入口只弹一层。
   证据：`_linkParentOpen` + `try/finally`；用例「候选还在加载时再点一次入口：不得叠两层弹层」
