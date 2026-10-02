@@ -188,7 +188,7 @@ sha256 与本地两份文件一致（`4f082f98f16…` / `33be868e647…`），�
    承认是可读屏体验缺陷，但**修它需要换控件形态**（`Semantics(mergesDescendantsState: true)` 或自建按钮），
    属于 #289 那一片（同源的还有 `_save()` 的两条 SnackBar），且必须真机 VoiceOver 复验 ——
    本机无第二台设备，widget 测试证明不了读屏顺序，不在此自证通过。
-3. ~~NIT6 没有一条用例把宿主弹窗经 `showModalBottomSheet` 泵进树~~ **第 3 轮已补**：
+3. ~~NIT6 没有用例把宿主弹窗经 `showModalBottomSheet` 泵进树~~ **第 3 轮已补**：
    `task_quick_add_sheet_test.dart:137` 那条走的就是生产拓扑（`showModalBottomSheet` + `FakeViewPadding(bottom: 260)` + 320×568 + 1.3 倍字体），
    并断言反馈行 `rect.bottom ≤ 308`。没有新增 golden，也未重录 9 张基线。
    这一条不是摆设：它当场量出 `A RenderFlex overflowed by 8.2 pixels on the bottom`，即第 2 轮那句 `feedbackInsideSheet=true` 只证明了「在子树里」，没证明「在可见区里」。
@@ -235,7 +235,7 @@ sha256 与本地两份文件一致（`4f082f98f16…` / `33be868e647…`），�
    归档字段的修法仓内已有先例，不必自创形状：`AppTodoPomodoroTimerController.java:65`（`@PutMapping("/{id}/archived")`
    → `timerService.setArchived(id, archived)`）与 `AppTodoNoteController.java:45`（`@PutMapping("/archive")`）——
    habit 与 countdown 各照此加一个 app-api 端点即可。
-4. **轨道 A 到此收口**：A/B/C 三段都已清算（A 段最后一批 6 行落在 `zh-cloud-docs@09c7e8b`，PR !69）。
+4. **轨道 A 到此收口**：A/B/C 三段都已清算（A 段最后一批矩阵行落在 `zh-cloud-docs@09c7e8b`，PR !69）。
    轨道 A 只剩「矩阵之外的两处人工判定」：B33/C9 早已判完，剩 `specs/001-todo-dida-core-parity/spec.md:66`
    与成就入口路线的措辞冲突（队列 5 里那条），以及 #52 的共享三种方式要先在 Service 加端点。
 5. 待合并积压（合并是人的动作）：todo-flutter !259/!261/!263/!267/!268/!269/!271/!273/!275/!277/!280/!282/!284/!286/!288

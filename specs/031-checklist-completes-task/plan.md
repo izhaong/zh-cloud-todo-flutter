@@ -29,6 +29,6 @@
 ## 影响面核对
 
 - `toggleComplete` / `abandon` / 完成态相关的其它调用方未改（`task_detail_pane.dart:892`、
-  `widgets/task_row_host.dart:147,177`）。
+  `lib/features/task/task_detail_pane.dart:3451`）。
 - `deleteChecklistItem`（`task_repository.dart:714`）本轮**不挂**该规则，作为仍缺记在 `tasks.md`。
 - 入口不在任何侧栏/dock/路由上，不改可见布局 ⇒ 9 张黄金图基线预期不变（已用 `flutter test --tags golden` 证实）。

@@ -92,7 +92,7 @@
 - [ ] T013 页面只在 `initState` 取一次仓储并订一次流：provider 若在页面存活期间被换成另一个仓储实例，
   页面仍看旧仓储的流。未做 `didUpdateWidget`/`ref.listen` 重订。
   **第 12 轮改掉原来的记账理由**（原写「`recommendationRepositoryProvider` 与登录态同生命周期，存活期被换不是可达状态」）：
-  这句站不住 —— `state/providers.dart:94-109` 每次 `sessionProvider` 变更就新建 `AppDatabase` 并 `ref.onDispose(db.close)`，
+  这句站不住 —— `lib/state/providers.dart:101` 每次 `sessionProvider` 变更就新建 `AppDatabase` 并 `ref.onDispose(db.close)`，
   而 `_refresh` 走 `ref.read`（写新库）、页面读旧流 ⇒ 症状是「刷新后列表不动」。
   至于登出时这条 push 路由是否还活着**未验证**（要真机/手手感），所以本条仍是未做而非"不可达"。
   本轮把**后果**改小了：旧写法下这条流的错误会被当成「没有数据」，念成「暂无推荐任务」（假空态）；
