@@ -30,8 +30,8 @@
 | 2 `dart format --output=none --set-exit-if-changed` 加两个字面量路径 | `Formatted 2 files (0 changed)`、rc=0 |
 | 3 `flutter analyze` | `No issues found! (ran in 1.3s)`、rc=0（先前一条 `unused_import` 已把测试里没用上的 drift import 去掉） |
 | 4 `flutter test --tags golden` | `00:10 +9: All tests passed!`、rc=0，基线 9 张未重录 |
-| 5 非 golden 用例集 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | 见下面「五、门禁补读」：这一条要在最终字节上现读，未读到之前不得当作通过 |
-| 6 `flutter build web --release --dart-define=TODO_API_BASE_URL=… --dart-define=TODO_TENANT_ID=1` | 同上，未读到不得当作通过 |
+| 5 非 golden 用例集 `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `03:26 +1318 ~26: All tests passed!`、rc=0（`~26` 是既有 skip，与 `origin/develop` 上的口径一致） |
+| 6 `flutter build web --release --dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web`、编译 19.6s、rc=0 |
 
 ## 三、四件套归属
 
@@ -52,6 +52,11 @@
    未承诺输入态预览，故不加（记为已知边界，见 `spec.md` 五）。
 4. 交叉验证通道本轮未取第二意见：三处取舍都有既有用例的红灯当判据，不需要外部意见顶替。
 
-## 五、门禁补读
+## 五、六个 rc 与卫生
 
-（本节由现跑读数填写；填上前，门 5 与门 6 属「未执行≠通过」。）
+- 六个 rc：门1=0 门2=0 门3=0 门4=0 门5=0 门6=0（门 5、门 6 跑在含本台账前一笔提交的最终字节上）。
+- 卫生：`git status --short` 在门禁后仍只含本目录两份台账；`pubspec.lock` 未进暂存
+  （门 6 会触发 pub get，故门 5、门 6 跑在提交之后，避免把本机镜像扫进 PR）。
+- 台账自扫判据（现跑）：`python3 tool/check_spec_selfscan.py specs/071-detail-hash-tag/spec.md`
+  与 `python3 tool/check_spec_selfscan.py specs/071-detail-hash-tag/tasks.md` ⇒ 两行都读「失项 0 条」。
+- 矩阵 #21 那一行**本轮不翻状态**：本 PR 未合并前只写「已实现待合并 + PR 号」。
