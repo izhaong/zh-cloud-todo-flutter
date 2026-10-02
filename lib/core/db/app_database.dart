@@ -226,6 +226,10 @@ class TodoReminders extends Table {
   TextColumn get timeZone => text().nullable()();
   BoolColumn get fixedTimezone =>
       boolean().withDefault(const Constant(false))();
+
+  /// 提醒自己的时间模式档位（`0` 浮动 / `1` 固定时区 / `2` 固定时间），
+  /// 取值与服务端 `todo_reminder.time_mode` 一致（zh-cloud-service #292 / PR !294）。
+  IntColumn get timeMode => integer().withDefault(const Constant(0))();
   TextColumn get clientMutationId => text().nullable()();
   DateTimeColumn get updatedAt => dateTime()();
   DateTimeColumn get createdAt => dateTime()();
@@ -437,7 +441,7 @@ class AppDatabase extends _$AppDatabase {
   }) : super(_open(_userDatabaseName(tenantId, userId, testNamespace)));
 
   @override
-  int get schemaVersion => 23;
+  int get schemaVersion => 24;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -675,6 +679,16 @@ class AppDatabase extends _$AppDatabase {
           // 存量 true 的实际行为就是保留配置时区墙钟 ⇒ 回填成「固定时间」。
           await customStatement(
             'UPDATE todo_tasks SET time_mode = 2 WHERE fixed_timezone = 1',
+          );
+        }
+      }
+      if (from < 24) {
+        if (!await _columnExists(m, 'todo_reminders', 'time_mode')) {
+          await m.addColumn(todoReminders, todoReminders.timeMode);
+          // 与任务侧同一条口径：存量 fixed_timezone=true 的实际行为是保留墙钟，
+          // 加列不回填就会把已设固定的提醒静默降成浮动。
+          await customStatement(
+            'UPDATE todo_reminders SET time_mode = 2 WHERE fixed_timezone = 1',
           );
         }
       }

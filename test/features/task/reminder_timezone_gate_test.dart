@@ -17,7 +17,8 @@ import '../../support/todo_visual_fixture.dart';
 /// `todo_tasks.timeZone` / `fixedTimezone`"，这里只钉嘀嗒《01-任务/07-固定时间与固定时区》:11
 /// 那条"开启后才能选"的入口形状。
 const _taskId = TodoVisualFixture.pinnedTaskId;
-const _fixedTimezoneRow = Key('task-reminder-fixed-timezone');
+// 双档改造后，「固定时区」这一档的 key 变成按档位编号的那一个。
+const _fixedTimezoneRow = Key('task-reminder-time-mode-1');
 const _ianaField = Key('task-reminder-timezone');
 
 void main() {

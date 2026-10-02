@@ -92,6 +92,7 @@ class _ReminderDraft {
     required this.intervalMinutes,
     required this.timeZone,
     required this.fixedTimezone,
+    required this.timeMode,
   });
 
   final DateTime fireAt;
@@ -101,6 +102,16 @@ class _ReminderDraft {
   final int? intervalMinutes;
   final String? timeZone;
   final bool fixedTimezone;
+  final TaskTimeMode timeMode;
+}
+
+String _reminderTimeModeSubtitle(TaskTimeMode mode) {
+  // 措辞照抄嘀嗒《01-任务/07-固定时间与固定时区》，与任务侧同一口径。
+  return switch (mode) {
+    TaskTimeMode.fixedTimezone => '任务的时间会随着所在时区的不同而改变',
+    TaskTimeMode.fixedTime => '不论所处时区如何变化，任务的时间都会保持一致',
+    TaskTimeMode.floating => '',
+  };
 }
 
 class _TaskReminderSection extends ConsumerWidget {
@@ -163,7 +174,7 @@ class _TaskReminderTile extends ConsumerWidget {
             formatTaskDateTime(
               reminder.remindAt,
               allDay: false,
-              mode: TaskTimeMode.fromLegacyFlag(reminder.fixedTimezone),
+              mode: TaskTimeMode.fromWire(reminder.timeMode),
               timeZone: reminder.timeZone,
             ),
           ),
@@ -264,6 +275,7 @@ class _TaskReminderTile extends ConsumerWidget {
         intervalMinutes: draft.intervalMinutes,
         timeZone: draft.timeZone,
         fixedTimezone: draft.fixedTimezone,
+        timeMode: draft.timeMode,
       );
       if (context.mounted) {
         messenger.showSnackBar(const SnackBar(content: Text('提醒已更新')));
@@ -288,7 +300,8 @@ class _TaskReminderTile extends ConsumerWidget {
         : 'ABSOLUTE';
     var fireAt = reminder.remindAt;
     var persistent = reminder.persistent;
-    var fixedTimezone = reminder.fixedTimezone;
+    var timeMode = TaskTimeMode.fromWire(reminder.timeMode);
+    var fixedTimezone = TaskTimeMode.legacyFlagOf(timeMode);
     var offsetText = reminder.offsetMinutes?.toString() ?? '';
     var intervalText = reminder.intervalMinutes?.toString() ?? '30';
     var timeZoneText = reminder.timeZone ?? '';
@@ -379,7 +392,7 @@ class _TaskReminderTile extends ConsumerWidget {
                           formatTaskDateTime(
                             fireAt,
                             allDay: false,
-                            mode: TaskTimeMode.fromLegacyFlag(fixedTimezone),
+                            mode: timeMode,
                             timeZone: timeZoneText.trim(),
                           ),
                         ),
@@ -435,15 +448,34 @@ class _TaskReminderTile extends ConsumerWidget {
                       ),
                     const SizedBox(height: 8),
                     if (timezoneCapabilityEnabled)
-                      SwitchListTile(
-                        key: const Key('task-reminder-fixed-timezone'),
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('固定时区'),
-                        value: fixedTimezone,
-                        onChanged: (value) => setDialogState(() {
-                          fixedTimezone = value;
+                      RadioGroup<TaskTimeMode>(
+                        groupValue: timeMode,
+                        onChanged: (picked) => setDialogState(() {
+                          timeMode = picked ?? TaskTimeMode.floating;
+                          fixedTimezone = TaskTimeMode.legacyFlagOf(timeMode);
                           validationMessage = null;
                         }),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            for (final option in const [
+                              TaskTimeMode.fixedTimezone,
+                              TaskTimeMode.fixedTime,
+                            ])
+                              RadioListTile<TaskTimeMode>(
+                                key: Key(
+                                  'task-reminder-time-mode-${option.wire}',
+                                ),
+                                contentPadding: EdgeInsets.zero,
+                                value: option,
+                                toggleable: true,
+                                title: Text(option.label!),
+                                subtitle: Text(
+                                  _reminderTimeModeSubtitle(option),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     TextFormField(
                       key: const Key('task-reminder-timezone'),
@@ -526,6 +558,7 @@ class _TaskReminderTile extends ConsumerWidget {
                       intervalMinutes: intervalMinutes,
                       timeZone: timeZone.isEmpty ? null : timeZone,
                       fixedTimezone: fixedTimezone,
+                      timeMode: timeMode,
                     ),
                   );
                 },
