@@ -37,7 +37,7 @@
   - 契约没有「鼓励自己的话」/描述列（`TodoHabitDO` 字段仅 id/userId/name/icon/color/period/targetCount/reminderAt/sortOrder/archived），故本单**不做**描述字段——宁缺勿造。
 - **FR-4 删除**：点「删除」先二次确认，正文取嘀嗒 :122 的措辞；确认后走 `DELETE /app-api/todo/habit/delete?id=`，成功后返回列表并把该习惯从列表中移除。取消则不发请求。
 - **FR-5 新建补齐**：`create` 与 `update` 共用同一份字段（名称/图标/颜色/频率/目标/提示），新建习惯不再只有名字。
-- **FR-6 时间字段的 wire 形状修正（本单实证）**：`zh-cloud-service` 全局把 `LocalDateTime` 注册成 **epoch 毫秒** —— `YudaoJacksonAutoConfiguration.java:52-53`（`TimestampLocalDateTimeSerializer`/`TimestampLocalDateTimeDeserializer`），反序列化器实现是 `LocalDateTime.ofInstant(Instant.ofEpochMilli(p.getValueAsLong()), systemDefault())`（`yudao-framework/yudao-common/.../TimestampLocalDateTimeDeserializer.java`）。同仓其它调用点也确实按毫秒上送（`state/repositories/task_repository.dart:1063`、`core/api/todo_api.dart:580-582`）。
+- **FR-6 时间字段的 wire 形状修正（本单实证）**：`zh-cloud-service` 全局把 `LocalDateTime` 注册成 **epoch 毫秒** —— `YudaoJacksonAutoConfiguration.java:52-53`（`TimestampLocalDateTimeSerializer`/`TimestampLocalDateTimeDeserializer`），反序列化器实现是 `LocalDateTime.ofInstant(Instant.ofEpochMilli(p.getValueAsLong()), systemDefault())`（`yudao-framework/yudao-common/.../TimestampLocalDateTimeDeserializer.java`）。同仓其它调用点也确实按毫秒上送（`lib/state/repositories/task_repository.dart:1116`、`lib/core/api/todo_api.dart:587-589`）。
   而 `habit_repository.dart` 现在把 `checkedAt` 拼成 ISO 字符串 `'2026-07-30T08:00:00.000'` 上送 ⇒ **形状与契约不符**。本单把习惯家族（`checkedAt`、`reminderAt`）统一改为 epoch 毫秒，并修正 `test/efficiency_api_contract_test.dart:357-359` —— 那条断言把错误的 wire 形状钉成了"契约"。
   诚实边界：发 ISO 字符串时服务端**具体**落成什么值未实测（本机想用 jackson-core 3.1.5 直接复现 `getValueAsLong()` 对 `VALUE_STRING` 的行为，两次都没编译过，未跑通）。但无论退化成 1970 还是报错，都不是期望值 —— 结论不依赖这个未知数。真机验证需要能登录 test 的设备，属已知硬阻塞。
 

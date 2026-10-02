@@ -10,7 +10,7 @@
 - [x] T-004 未改动的提示原样回传，不发 `null`（FR-3 边界②；探针 PE 把 `reminderAt` 恒置 null → 红）
 - [x] T-005 `HabitRepository.delete` → `DELETE /habit/delete?id=`；取消确认不发任何写请求（FR-4；探针 PF 摘掉 delete 调用 → 红；PG 摘掉 `!confirmed` 早退 → 红）
 - [x] T-006 失败保留已加载数据 + 提示落在弹层内联可见（探针 PH 摘掉 `_submitError` 赋值 → 红）
-- [x] T-007 新建与编辑共用同一张表单，`create` 带齐 7 个字段（FR-5；新增用例 + PN 红；复核 NIT8 的「FR-5 零用例」已补）
+- [x] T-007 新建与编辑共用同一表单，`create` 带齐表单字段（FR-5；新增用例 + PN 红；复核 NIT8 的「FR-5 零用例」已补）
 - [x] T-008 时间字段按 epoch 毫秒上送（FR-6；探针 PJ 让 `checkedAt` 退回 ISO → 红）
 - [x] T-009 四件套：320px + 1.3 档位在**四个**新表面（详情页 / 编辑弹层 / 「...」菜单路由 / 删除确认框）各用自己的 context 复检；「...」与色块有独立读屏语义；校验错误落在字段上（探针 PM 摘掉 `errorText: _nameError` → 红）
 - [ ] T-010 六项门禁日志齐全（见下）
@@ -248,7 +248,7 @@ G5 `02:23 +906 ~26: All tests passed!`、G6 `✓ Built build/web`，跑完工作
 - C 复核员补了我没做的一层：不只抽 `maxLength`（红在 `Expected: <64> Actual: <null>`），
   还另塞 `counterText: ''` 单独证第二条可红（红在 `Found 0 widgets with text containing /64`），
   并确认全 `lib/` 只有 `habit_editor.dart:172` 一处 `64` ⇒ `/64` 不会撞到别的文案。
-- D 全量在副本上重跑：`02:21 +906 ~26: All tests passed!`；`5da193d..262b242` 的 `test/` 差异 0 行，
+- D 全量在副本上重跑：`02:21 +906 ~26: All tests passed!`；`5da193d..262b242` 的 `test/` 差异 0 行（判据：`git diff --stat 5da193d..262b242 -- test/ | wc -l` 现读 0），
   所以"门禁跑在 `5da193d`"对 HEAD 仍然有效。
 - E 我那条驳回被实测支持：同一破坏下把全局查找换成 `sheetChild(...)`，第二条**根本轮不到执行**
   （死在第一条），边际判据恒为 0 ⇒ 正是 R1-③(a) 那一类永真断言。
