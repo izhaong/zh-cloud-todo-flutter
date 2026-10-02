@@ -41,6 +41,7 @@ class _FakeCountdownApi extends CountdownApi {
     required DateTime targetDate,
     required int style,
     required bool showAge,
+    String? backgroundImage,
   }) async {
     await writeGate;
     if (failNextWrite) {

@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:file_picker/file_picker.dart';
+
+import '../../core/api/attachment_upload_api.dart';
 import '../../core/api/efficiency_api.dart';
+import '../../state/providers.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../state/efficiency_providers.dart';
 
@@ -177,8 +181,21 @@ class _CountdownTileState extends State<_CountdownTile> {
   }
 }
 
+/// 选背景图与上传背景图两条缝隙：默认走 `file_picker`（本仓只有静态用法）与 infra 文件服务；
+/// 测试注入假的实现，「切换图片」这条入口才能在 widget 测里判。
+typedef CountdownBackgroundPicker = Future<String?> Function();
+typedef CountdownBackgroundUploader =
+    Future<String> Function(String localPath, String name);
+
 class CountdownPage extends ConsumerStatefulWidget {
-  const CountdownPage({super.key});
+  const CountdownPage({
+    super.key,
+    this.pickBackgroundImage,
+    this.uploadBackgroundImage,
+  });
+
+  final CountdownBackgroundPicker? pickBackgroundImage;
+  final CountdownBackgroundUploader? uploadBackgroundImage;
 
   @override
   ConsumerState<CountdownPage> createState() => _CountdownPageState();
@@ -295,11 +312,26 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
             targetDate: existing.targetDate,
             style: existing.style,
             showAge: existing.showAge,
+            backgroundImage: existing.backgroundImage,
           );
     final saved = await showDialog<_CountdownDraft>(
       context: context,
-      builder: (ctx) =>
-          _CountdownEditor(initial: draft, isNew: existing == null),
+      builder: (ctx) => _CountdownEditor(
+        initial: draft,
+        isNew: existing == null,
+        pickImage:
+            widget.pickBackgroundImage ??
+            () async {
+              final picked = await FilePicker.pickFiles(type: FileType.image);
+              if (picked == null || picked.files.isEmpty) return null;
+              return picked.files.first.path;
+            },
+        uploadImage:
+            widget.uploadBackgroundImage ??
+            (localPath, name) => DioAttachmentUploadApi(
+              ref.read(apiClientProvider),
+            ).uploadFile(localPath: localPath, name: name),
+      ),
     );
     if (saved == null || !mounted) return;
     final api = ref.read(countdownApiProvider);
@@ -310,6 +342,7 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
           targetDate: saved.targetDate,
           style: saved.style,
           showAge: saved.showAge,
+          backgroundImage: saved.backgroundImage,
         ),
       );
     } else {
@@ -321,6 +354,7 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
           targetDate: saved.targetDate,
           style: saved.style,
           showAge: saved.showAge,
+          backgroundImage: saved.backgroundImage,
         ),
       );
     }
@@ -333,33 +367,44 @@ class _CountdownDraft {
     required this.targetDate,
     this.style = 1,
     this.showAge = false,
+    this.backgroundImage,
   });
 
   final String title;
   final DateTime targetDate;
   final int style;
   final bool showAge;
+  final String? backgroundImage;
 
   _CountdownDraft copyWith({
     String? title,
     DateTime? targetDate,
     int? style,
     bool? showAge,
+    String? backgroundImage,
   }) {
     return _CountdownDraft(
       title: title ?? this.title,
       targetDate: targetDate ?? this.targetDate,
       style: style ?? this.style,
       showAge: showAge ?? this.showAge,
+      backgroundImage: backgroundImage ?? this.backgroundImage,
     );
   }
 }
 
 class _CountdownEditor extends StatefulWidget {
-  const _CountdownEditor({required this.initial, required this.isNew});
+  const _CountdownEditor({
+    required this.initial,
+    required this.isNew,
+    required this.pickImage,
+    required this.uploadImage,
+  });
 
   final _CountdownDraft initial;
   final bool isNew;
+  final CountdownBackgroundPicker pickImage;
+  final CountdownBackgroundUploader uploadImage;
 
   @override
   State<_CountdownEditor> createState() => _CountdownEditorState();
@@ -370,6 +415,42 @@ class _CountdownEditorState extends State<_CountdownEditor> {
     text: widget.initial.title,
   );
   late _CountdownDraft _draft = widget.initial;
+  String? _imageError;
+  bool _uploading = false;
+
+  /// 嘀嗒《02-功能指南/06-倒数纪念日/02-打造专属纪念页.md》「在样式编辑窗口，点击「切换图片」，
+  /// 可以上传新的背景图片」⇒ 入口文案照抄「切换图片」。
+  /// 取消选择与上传失败都不许吃掉已有背景图（四件套：失败保留已加载数据）。
+  Future<void> _switchImage() async {
+    setState(() {
+      _uploading = true;
+      _imageError = null;
+    });
+    try {
+      final localPath = await widget.pickImage();
+      if (!mounted) return;
+      if (localPath == null) {
+        setState(() => _uploading = false);
+        return;
+      }
+      final slash = localPath.lastIndexOf('/');
+      final url = await widget.uploadImage(
+        localPath,
+        slash < 0 ? localPath : localPath.substring(slash + 1),
+      );
+      if (!mounted) return;
+      setState(() {
+        _draft = _draft.copyWith(backgroundImage: url);
+        _uploading = false;
+      });
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _imageError = '背景图上传失败：$error';
+        _uploading = false;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -441,6 +522,35 @@ class _CountdownEditorState extends State<_CountdownEditor> {
               onChanged: (value) =>
                   setState(() => _draft = _draft.copyWith(showAge: value)),
             ),
+            const SizedBox(height: 8),
+            Semantics(
+              key: const Key('countdown-switch-image'),
+              button: true,
+              label: '切换背景图',
+              child: TextButton.icon(
+                onPressed: _uploading ? null : _switchImage,
+                icon: const Icon(Icons.image_outlined),
+                label: ExcludeSemantics(
+                  child: Text(_uploading ? '上传中…' : '切换图片'),
+                ),
+              ),
+            ),
+            if (_imageError != null)
+              Text(
+                _imageError!,
+                key: const Key('countdown-image-error'),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            if (_draft.backgroundImage != null)
+              Image.network(
+                _draft.backgroundImage!,
+                key: const Key('countdown-image-preview'),
+                height: 48,
+                fit: BoxFit.cover,
+                semanticLabel: '当前背景图',
+                errorBuilder: (context, error, stackTrace) =>
+                    const SizedBox.shrink(),
+              ),
           ],
         ),
       ),
