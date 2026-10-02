@@ -5,7 +5,7 @@
 ## 为什么现在做这一项
 
 矩阵 #86 现写「`部分 | WEB | SystemEntry 原型`」——唯一证据挂在已废弃的 `zh-cloud-client/apps/todo` 上，
-按北极星口径（唯一 C 端 = `zh-cloud-todo-flutter`）那不算证据。而本端其实已有**一个真快捷键**：
+按北极星口径（唯一 C 端 = `zh-cloud-todo-flutter`）那不算证据。而本端其实已有**真快捷键**：
 `lib/features/home/todo_workspace.dart` 把 ⌘K/Ctrl+K 绑到全局搜索（`task_organize_search_test.dart:362-380`
 有既成用例），但它对用户完全不可见——没有列表、没有入口、设置页也没提。
 嘀嗒《03-特色功能/08-桌面快捷键.md》给出的正是这种可见性。

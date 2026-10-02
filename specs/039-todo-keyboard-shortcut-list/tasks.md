@@ -98,11 +98,11 @@ flutter test --exclude-tags 'golden || performance' --concurrency=1
 | N1 | 注册表无"activator 互不相同"的护栏，两个 kind 共用 activator 时 Map 静默覆盖 | 成立：`todoShortcutActivators` 是 Map 字面量 | **采纳**：新增 `runtimeType:$activator` 集合大小 == bindings 长度的断言 |
 | N2 | 读屏 finder 未限定在弹层内 ⇒ 钉的是"全树唯一"不是"归属弹层"，且键位串没有独立节点断言 | 成立 | **采纳**：`find.descendant(of: dialog, …)`，并补每条键位串的语义断言 |
 | N3 | 长键位串（如 `Ctrl+Shift+Space`）超宽只会静默裁字，`takeException()` 抓不到 ⇒ 该用例对"键位变长"是瞎的 | 成立（本轮只有 `Ctrl+K / ⌘K`，实际不触发） | **记为边界**，本轮不加为未来设计的容器，避免无需求的可配置项 |
-| N4 | `spec.md:9` 引 `task_organize_search_test.dart:363-379`，实为 362-380 | `sed -n '360,382p'` 核到 testWidgets 在 362 | **采纳** |
+| N4 | `specs/039-todo-keyboard-shortcut-list/spec.md` 引 `task_organize_search_test.dart:363-379`，实为 362-380 | `sed -n '360,382p'` 核到 testWidgets 在 362 | **采纳** |
 | N5 | 验收标准里「`?` 正常进文本」与用例的免责不一致 | 成立 | **采纳**：验收标准改成"不出现对话框"，并就地写明本地测不到字符插入 |
 | N6 | 工作树 `pubspec.lock` 是 tracked 文件，`git add -A` 会误带 | 成立 | 记着；本 PR 全程按路径 `git add` |
 
-复核员对**主张 4** 的更正值得留下：320px 不溢出的真实机制是 `dialog.dart:275` 的 `minWidth: 280`
+复核员对**主张 4** 的更正值得留下：320px 不溢出的真实机制是 Flutter SDK 的 dialog.dart（不在本仓索引内，行号随 SDK 版本漂） 的 `minWidth: 280`
 与 `:32` 的水平 `insetPadding: 40` 把弹层强制收到 240，再被内容区约束 ⇒ 结构上只会换行、抛不出
 `RenderFlex`。所以"两侧 `Flexible`"是对的写法，但**13px 那个红是修之前的真实溢出**（修复前键位列不是 Flexible）。
 
@@ -123,7 +123,7 @@ flutter test --exclude-tags 'golden || performance' --concurrency=1
 
 | NIT | 内容 | 处置 |
 | --- | --- | --- |
-| N1 | `plan.md:30` 说 `ListTile` "合成节点"的**归因**不准：`list_tile.dart` 无 `MergeSemantics`（只有 `:995` 的 `Semantics(button:/selected:/enabled:)`），显式合并的是 `checkbox_list_tile.dart:604` | **部分采纳**：结论不动，归因改写。**自己量了一次**再决定 —— 裸 `ListTile(title, subtitle)` + `ensureSemantics()` + 一帧 pump ⇒ `node.label` = `成就与勋章\n成就值、等级与勋章墙`，`^成就与勋章$` **0** 命中、`^成就与勋章` **1**、`bySemanticsLabel('成就与勋章')`（裸字符串）**0**。⇒ 行为成立、机制是 `ListTile` 自己的语义节点而非 `MergeSemantics`；顺带证出 `bySemanticsLabel(String)` 走**全等**。探针文件跑完即删，未入库 |
+| N1 | `specs/039-todo-keyboard-shortcut-list/plan.md` 说 `ListTile` "合成节点"的**归因**不准：`list_tile.dart` 无 `MergeSemantics`（只有 `:995` 的 `Semantics(button:/selected:/enabled:)`），显式合并的是 Flutter SDK 的 checkbox_list_tile.dart（不在本仓索引内，行号随 SDK 版本漂） | **部分采纳**：结论不动，归因改写。**自己量了一次**再决定 —— 裸 `ListTile(title, subtitle)` + `ensureSemantics()` + 一帧 pump ⇒ `node.label` = `成就与勋章\n成就值、等级与勋章墙`，`^成就与勋章$` **0** 命中、`^成就与勋章` **1**、`bySemanticsLabel('成就与勋章')`（裸字符串）**0**。⇒ 行为成立、机制是 `ListTile` 自己的语义节点而非 `MergeSemantics`；顺带证出 `bySemanticsLabel(String)` 走**全等**。探针文件跑完即删，未入库 |
 | N2 | `tasks.md` 出现两条 T7（一条未勾、一条已勾） | **采纳**：勾选统一在上方，门禁段那条降为说明 |
 | N3 | 「范围外」三处引文略去句末 `。`，与上方表格体例不齐 | **采纳**：`:26`/`:27`/`:29` 补回 `。`，补前先 `sed -n '26,29p'` 逐字确认原文确实带句号 |
 | N4 | `test:235` 的 `handle.dispose()` 在末尾而非 `finally`/`addTearDown`，建议改 `addTearDown` | **不采纳**：specs/026 实测过 `A SemanticsHandle was active at the end of the test`，收尾校验跑在 `addTearDown` **之前** ⇒ 本仓既有写法是 `try/finally`；当前形态（测试体内末尾显式 dispose）已在同一位置避开该问题，改成 `addTearDown` 反而回到已知会炸的写法 |
