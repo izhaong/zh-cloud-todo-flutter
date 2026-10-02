@@ -61,7 +61,7 @@
 | 7 | 工作树 `M pubspec.lock`（227 行 `pub.dev`→`pub.flutter-io.cn`）没进 PR，但要求它不能被误提交 | **已知**：本机镜像所致，按 objective 约定不入库；本轮 `git diff --name-only origin/develop...HEAD` 复核过是 6 个文件、不含 lock |
 | 8 | 复核环境无网络/Gitea MCP ⇒ `zh-cloud-service` Issue #281 与 gate5/6 只能读我的日志 | 属实，我不要求复核员核这两条；`#281` 由我在本会话用 API 建单（返回 201）持有，gate5/6 的 rc 已按第 3 条的方式重取 |
 
-复核员另外**独立证实**为真的几项（不是它的功劳但我记账）：`isButton` 确实只能靠生产的 `button: true`（SDK `material/ink_well.dart:1401`-`:1405` 只设 `onTap`/`onLongPress`）；`MaterialApp.builder` 的结果确实插在 Navigator **之上**（`widgets/app.dart:1722`-`:1727`），所以档位能进弹层；`mobile-detail` 那 1 张黄金图确实拍得到 push 路由。
+复核员另外**独立证实**为真的几项（不是它的功劳但我记账）：`isButton` 确实只能靠生产的 `button: true`（SDK 绝对路径 `/Users/zhonghao/development/flutter/packages/flutter/lib/src/material/ink_well.dart:1401`-`:1405` 只设 `onTap`/`onLongPress`）；`MaterialApp.builder` 的结果确实插在 Navigator **之上**（`/Users/zhonghao/development/flutter/packages/flutter/lib/src/widgets/app.dart:1722`-`:1727`），所以档位能进弹层；`mobile-detail` 那 1 张黄金图确实拍得到 push 路由。
 
 ## 门禁（第三次跑：终态工作树，日志 `/tmp/r43_gates3.log`）
 本轮 7 处改动**全是注释与 markdown**，无行为改动（`git diff --stat` 里生产文件只动了 `///`/`//` 行）。六项仍按要求在终态跑完，且这次 **rc 全部直取**（gate4/5/6 各跑两遍：一遍留输出、一遍 `>/dev/null` 单取退出码）。
@@ -162,7 +162,7 @@
 
 | 复核发现 | 我的复验 | 处置 |
 | -------- | -------- | ---- |
-| **D1** `git diff origin/develop HEAD --check` 在最终字节上 **rc=2**（`tasks.md:154: new blank line at EOF.`），而门禁表把这一项报成 `rc=0` | 复跑确认：删掉那行空行前 rc=2、之后 rc=0。机制是**只写 md 的那次提交自己**在文件末尾留了空行 —— 六项里只有门禁 1 会随 md-only 提交改变，所以它恰好是唯一被漏掉的一项 | **采纳**。空行已删；本轮起门禁 1 **在两处各跑一次**并分别记数（下表）；写文件的脚本结尾一律断言 `endswith('\n') and not endswith('\n\n')` |
+| **D1** `git diff origin/develop HEAD --check` 在最终字节上 **rc=2**（当时 `git diff --check` 报的是本文件 EOF 处多出的空行 `new blank line at EOF`，空行已删，故现文里已无该空行可指），而门禁表把这一项报成 `rc=0` | 复跑确认：删掉那行空行前 rc=2、之后 rc=0。机制是**只写 md 的那次提交自己**在文件末尾留了空行 —— 六项里只有门禁 1 会随 md-only 提交改变，所以它恰好是唯一被漏掉的一项 | **采纳**。空行已删；本轮起门禁 1 **在两处各跑一次**并分别记数（下表）；写文件的脚本结尾一律断言 `endswith('\n') and not endswith('\n\n')` |
 | **D2** `_load` 的 catch 不清 `_notice`、未来守卫不动 `_loadSeq` ⇒ 「在飞的刷新失败」与「刚点的未来格提示」可同屏；PR 正文那句「下一次操作前清场，不残留」对这条例外说过头 | 读 `_backfill`（非未来路径先清提示）与 `_load` catch（只写 `_error`）⇒ 路径成立。**但结论不同**：两条消息各说各的事（错误 = 上一次刷新失败；提示 = 这一次点按被拒），同屏不互相否定；按建议清掉 `_notice` 等于让**较早那次操作**的失败抹掉**较晚一次点按**的反馈，正是四件套 ④ 的反向病 | **措辞采纳、代码修法驳回**。补 2 条用例把该行为钉成设计（含 320px + 1.3 倍字号同屏不溢出，`takeException()` 为 null）；FR-009 的清场范围收窄为「下一次点按格子时」。**反向证据（探针 PI）**：把建议那一行 `_notice = null;` 加进 `_load` 的 catch ⇒ 单文件 `+13 -2`，两条新用例同时红 ⇒ 它们钉的方向不是恒真 |
 
 ### 门禁（跑在最终字节 `a838461`，日志 `/tmp/r72b/gates.log`）
@@ -177,7 +177,7 @@
 | 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:47 +905 ~26: All tests passed!` |
 | 6 | `flutter build web --release --dart-define=…` | `✓ Built build/web` |
 
-计数对账：`+905 = 903 + 2`（903 是本表上一轮那格「复核后重跑」的全量末行），本轮只新增 2 条用例、
+计数对账：`+905 = 903 + 2`（903 是本表上一轮那格「复核后重跑」的全量末行），本轮只新增 2 项用例、
 未改任何既有用例 ⇒ 改动集 `git show --name-only a838461` 只含 1 个测试文件 + 2 个 md。
 `~26` 未新增 skip。**注意**：其中 2 条新用例在**月末当天**会走 `markTestSkipped` 分支（没有可点的未来格），
 那时末行会变成 `+903 ~28` 而不是 `+905 ~26` —— 这个跳法差异是显式的，不是静默通道。
@@ -207,7 +207,7 @@
 | 编号 | 否的是什么 | 复验 | 处置 |
 | --- | --- | --- | --- |
 | F-1 | 「合并轮」那张门禁表（六格读数）**一格都指不到日志文件**：表里没写日志路径，`grep -rl "885 ~" /tmp` = 空 ⇒ `+885 = 876 + 8 + 1` 只是自洽算术 | 我按它的命令复跑：`grep -rl "885 ~" /tmp` → 0 命中；本文件那一节确实没有路径 ⇒ **成立** | **不假装能补出历史证据**：那一次的原始日志已不在盘上。改为两件事 ——（a）在旧表上加一行标注「读数未留证」；（b）用**本头** `45723db` 重跑六道门禁并留下 `/tmp/r72c/gates.log`（下面那张新表），把"终态有可指认证据"这件事补上 |
-| F-2 | 第 72 轮表里 gate1 `rc=0` 与 gate2 `Formatted 2 files (0 changed)` 两格**无运行日志**；其中 gate1 已被证伪（`git diff --check origin/develop 6e24b80 -- specs/.../tasks.md` → **rc=2**，`tasks.md:154 new blank line at EOF`） | 复跑：`git diff --check origin/develop 6e24b80 -- specs/043-habit-month-grid/tasks.md` → rc=2 命中同一行；终态 `0165ebb`/`45723db` → rc=0 ⇒ 它说得对：**当时记的是没捕获的读数** | 新表每一格都带日志路径；旧表那两格标注「未留证，按 `45723db` 复跑为准」 |
+| F-2 | 第 72 轮表里 gate1 `rc=0` 与 gate2 `Formatted 2 files (0 changed)` 两格**无运行日志**；其中 gate1 已被证伪（`git diff --check origin/develop 6e24b80 -- specs/043-habit-month-grid/tasks.md` → **rc=2**，报的是文件 EOF 处多出的空行 `new blank line at EOF`） | 复跑：`git diff --check origin/develop 6e24b80 -- specs/043-habit-month-grid/tasks.md` → rc=2 命中同一行；终态 `0165ebb`/`45723db` → rc=0 ⇒ 它说得对：**当时记的是没捕获的读数** | 新表每一格都带日志路径；旧表那两格标注「未留证，按 `45723db` 复跑为准」 |
 | F-3 | **换宿主带出来的新表面（「...」菜单三项）没有读屏语义断言** —— 同一 PR 在第 43 轮被要求给格子补 `isButton` + label 全等，这里却没补；`git grep "bySemanticsLabel('月度打卡表'" HEAD -- test/` 无命中 | 复跑该 grep → 0 命中 ⇒ **成立**。且实测三项本来就走 `PopupMenuItem` 自带语义 ⇒ **缺的是断言，不是实现** | 新增用例「读屏：『...』菜单三项各自念得出且是按钮」（提交 `45723db`）：`ensureSemantics()` + 三项各断 `bySemanticsLabel(label)` findsOneWidget 与 `flagsCollection.isButton`。**有牙已实测**：把三项各裹一层 `ExcludeSemantics` ⇒ 该用例转红（`/tmp/r72c/probe_f3_red.log`），还原 `cmp -s` 逐字节一致后复绿（`/tmp/r72c/probe_f3_green.log`） |
 
 两条"非阻塞建议"也一并落了（不占门禁）：

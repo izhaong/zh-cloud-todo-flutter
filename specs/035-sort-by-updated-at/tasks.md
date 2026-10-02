@@ -77,15 +77,15 @@ Gitea：Issue #285 / PR !286 / 服务端债 izhaong/zh-cloud-service#273 / 矩�
 
 | NIT | 我的复验（不采信复核员的转述） | 处置 |
 | --- | ------------------------------- | ---- |
-| N1 `tasks.md:60` 过度声称「嵌套线格式无任何用例覆盖」 | 复核员对：`test/sync_coordinator_organize_search_test.dart:244` 真的走了 A 端 `save(dueDate)` → push → B 端 `pull()` → `get('list-a') == TaskSort.dueDate`（`:351`），穿过 `sync_coordinator.dart:1929` 的真实嵌套写入；该文件无 tag ⇒ 在门禁第 5 项里跑，PE 也会把它弄红 | 采纳：B3 行改窄为「嵌套线格式的 **`updatedAt` 档** 无用例覆盖」，未知名那一支仍只有本切片覆盖（全仓只有 2 条 `TaskSort.smart` 断言） |
-| N2 `plan.md:28` 写「4 例」而文件是 5 例 | `grep -c` 实数：`test:` ×4 + `testWidgets:` ×1，声明在 `:25/:45/:95/:110/:148` | 采纳：改 5 例；探针表编号以 `tasks.md` 为准（脚本注释沿用旧编号，属 `/tmp` 一次性工件，不改） |
+| N1 本表 B3 行 过度声称「嵌套线格式无任何用例覆盖」 | 复核员对：`test/sync_coordinator_organize_search_test.dart:244` 真的走了 A 端 `save(dueDate)` → push → B 端 `pull()` → `get('list-a') == TaskSort.dueDate`（`:351`），穿过 `sync_coordinator.dart:1929` 的真实嵌套写入；该文件无 tag ⇒ 在门禁第 5 项里跑，PE 也会把它弄红 | 采纳：B3 行改窄为「嵌套线格式的 **`updatedAt` 档** 无用例覆盖」，未知名那一支仍只有本切片覆盖（全仓只有 2 条 `TaskSort.smart` 断言） |
+| N2 `specs/035-sort-by-updated-at/plan.md:28` 写「4 例」而文件是 5 例 | `grep -c` 实数：`test:` ×4 + `testWidgets:` ×1，声明在 `:25/:45/:95/:110/:148` | 采纳：改 5 例；探针表编号以 `tasks.md` 为准（脚本注释沿用旧编号，属 `/tmp` 一次性工件，不改） |
 | N3 「整个 `lib/` 只 +7 行」 | `git show --numstat be6a788 -- lib/` = `4 0` + `2 1` ⇒ 6 增 1 删，净 **+5**；「+7」是 diffstat 的触达行数 | 采纳：T003 改成净 +5 并写明两个口径 |
 | N4 `spec.md:9-10` 用现在时描述五档枚举 | 属实，但 `:7` 已标基准 ⇒ 只是易读误 | 采纳：加一句「（基准态；本轮在其后追加第六档）」 |
 | N5 探针脚本 `apply()` 在 `restore()` 之前 ⇒ 锚点落空会把 `lib/` 留在打过补丁的状态；且 `verdicts[name] = code != 0` 不校验**哪一条**用例红 | 属实。本轮 6 个探针的 `+N -M` 求和都等于 5（用例总数）且逐条对照过打印的用例名与补丁语义 ⇒ 这一次归因成立，但机制上确实靠人工 | **不重构脚本**（一次性工件），记进「限制」：探针归因依赖打印的用例名，脚本自身不保证 |
 | N6 `/tmp/r15-probes4.log` 是 140 字节的 aborted stub（`can't open file`），文档未提 | `wc -c` 属实 | 采纳：在 NIT5（第 1 轮）处置里补一句，说明作废日志存在且不参与判据 |
 | N7 FR-5 的服务端行号引用没标基准 SHA（本仓自己的口径要求标） | 复核员核过：service 检出在 `docs/sync-dev-docs-20260923@a00a47a9f5`，且 `git diff develop -- TodoFilterServiceImpl.java` 为空 ⇒ 行号对 `develop` 同样成立 | 采纳：T009 补基准 SHA 与「与 develop 逐字节一致」这句依据 |
 
-**复核员唯一无法静态验的一条已当场补验**（它要求我跑的摘要命令）：
+**复核员唯一无法静态验的那项已当场补验**（它要求我跑的摘要命令）：
 `shasum -a 256 lib/state/repositories/task_query_repository.dart lib/features/task/widgets/task_workspace_header.dart test/task_sort_updated_at_test.dart | cut -c1-8,65-200`
 ⇒ 输出 `f9fa39e5` / `539443f4` / `8eaadeda`，与 §门禁第 8 项逐字相符 ⇒ 六项门禁确实跑在最终字节上。
 
@@ -133,7 +133,7 @@ Gitea：Issue #285 / PR !286 / 服务端债 izhaong/zh-cloud-service#273 / 矩�
 
 1. **本轮复核已封顶**：第 1 轮 `FAIL`、第 2 轮 `PASS`（代码面无 blocker）⇒ 不再派第 3 轮。剩下的是**人合并** !286；
    合并后把矩阵聚合行的 ② 从「已实现待合并」改成合并 SHA，并 bump 父仓 submodule 指针。
-2. 队列回到 #89 附件挂载入口（已取证：`attachment_upload_api.dart` 在生产侧只被 `core/sync/sync_coordinator.dart:35-43` 消费，
+2. 队列回到 #89 附件挂载入口（已取证：`attachment_upload_api.dart` 在生产侧只被 `lib/core/sync/sync_coordinator.dart:35-43` 消费，
    UI 侧零入口），或做 #86 暴露的 ⌘K 指令菜单（注意 ⌘K/Ctrl+K 已被打开搜索占用）。
 3. 轨道 A：**A 段并未「已收口」**（矩阵 `zh-cloud-docs@207104a` 已就地更正我这个过度声称）——B 段清完，A 段仍有零星靠
    废弃 Web 支撑的「有」行待换成 `文件:行号`；第 17 轮已把四条「无」换成可复现判据并修掉一个假判据（`announcement` 实为 3 命中），
