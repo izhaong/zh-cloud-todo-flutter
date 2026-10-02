@@ -10,7 +10,7 @@
 - [x] FR-3 编辑：打开预选当前归属；改选后保存真的移入/移出，并留 `list/upsert` outbox（用例读库 + 数 outbox 行数）
 - [x] FR-4 只改名不动文件夹 ⇒ 不多打一条移动记录（探针 PD 证：去掉闸门就红）
 - [x] FR-5 从文件夹里点新建 ⇒ 预选那个文件夹（隐式行为，探针 PG 证）
-- [x] FR-6 四件套（见下表；第 1 版的③是假绿，复核后补了「移入失败」才真锁住；第 2 轮又抓到"仓库为 null"与"新建失败文案"两格 0 覆盖，已补）
+- [x] FR-6 四件套（见下表；第 1 版的③是假绿，复核后补了「移入失败」才真锁住；第 2 轮又抓到"仓库为 null"与"新建失败文案"当时 0 覆盖，现已各有用例（复算：`grep -c "testWidgets(" test/features/list/list_editor_folder_picker_test.dart` 现读 15））
 - [ ] #339 的另两子面：**颜色** 与 **Emoji 图标** 未做（要新增本地列 + 后端 `TodoListDO` 字段 ⇒ 属"先修契约再动前端"），Issue 保持 open
 - [x] 只读复核第 1 版 `VERDICT: FAIL` → 补测后第 2 版仍 `VERDICT: FAIL`（3 条覆盖缺口 + 文档措辞）→ 第 3 版仍 `FAIL`，但**只抓到 2 条 P2 + 3 条 nit，全是文档/口径级**（无新增覆盖缺口）⇒ 5 条全部采纳并落到 `plan.md`/`spec.md`/本文件与 `5475e63`
 - [x] 第 4 版复核（范围只圈在 3 处文档改动 + `5475e63` 的拓扑改动与其 `PV`/PM′ 复测）：**`VERDICT: PASS`**，0 条 P1、0 条 P2、2 条 nit ⇒ nit-1 已采纳（`b0bf131`）⇒ 复核循环收口，不再刷第 5 版
@@ -59,7 +59,7 @@
 
 | 探针 | 抽掉什么 | 结果 | 红在哪条 |
 | ---- | -------- | ---- | -------- |
-| PA | develop 字节（整格都没有） | `+1 -14` | 14 条红；唯一绿的是 `只改名不动文件夹`（它钉"不许顺手多同步一次"，develop 本来就没这能力 ⇒ 这条绿是对的） |
+| PA | develop 字节（整格都没有） | `+1 -14` | 当时读数 14 条红（复算：`git worktree add --detach /tmp/049pa origin/develop && cd /tmp/049pa && flutter test test/features/list/list_editor_folder_picker_test.dart`，那份副本不含本轮实现）；唯一绿的是 `只改名不动文件夹`（它钉"不许顺手多同步一次"，develop 本来就没这能力 ⇒ 这条绿是对的） |
 | PB | 新建时不把归属传给 `create` | `+13 -2` | 新建 + `serverId 为空`（都读库看 folderLocalId） |
 | PC | 编辑时根本不发起移动 | `+12 -3` | 编辑移出 + 移出失败 + 移入失败 |
 | PD | 去掉「值没变就不动」闸门 | `+14 -1` | `只改名不动文件夹 ⇒ 不额外打一条移动记录`（FR-4 正面判据） |
@@ -68,7 +68,7 @@
 | PG | 打开时不预选 | `+10 -5` | 预选、编辑移出、只改名、晚到、已删除 |
 | PH | 去掉 `MergeSemantics` | `+14 -1` | 读屏那条（四件套②唯一锚点） |
 | PI | 去掉占位候选 | `+8 -7` | 「踩到的断言」那节列的 7 条（新增的两条失败用例不受影响 ⇒ 它们走的是 catch，不是占位） |
-| PJ | 显示值改回入参派生（非受控） | `+8 -7` | 晚到（四件套④）+ 新建 + 移出失败 + 移入失败 + 新建失败 + 本地库未就绪 + 读屏（共 7 条） |
+| PJ | 显示值改回入参派生（非受控） | `+8 -7` | 晚到（四件套④）+ 新建 + 移出失败 + 移入失败 + 新建失败 + 本地库未就绪 + 读屏（逐项点名，不另给合计数） |
 | PK | 先改名再移动 | `+14 -1` | 移出失败那条（断言 `after.name == '工作'`） |
 | **PL** | **失败时顺手清空已选归属**（复核 P1 的那个 bug） | `+13 -2` | 移入失败 + 新建失败 ⇒ 两条"失败后已选还在"的断言都咬得住 |
 | PM | 候选菜单永不展开（`onChanged: null`） | `+2 -13` | 13 条红，含 320 那条（靠 `openMenu` 自带的自检，见 PM′） |
@@ -165,11 +165,11 @@ lock 里 150 行 url 翻成 pub.dev）。
 
 | 发现 | 我的复验 | 处置 |
 | ---- | -------- | ---- |
-| **P1** `spec.md:41`/`tasks.md:13` 的 FR-6 写「仓库为 null / 移动抛错」两种失败都有提示，但 null 那半句 0 覆盖：`NULL_branch_silent`（摘掉 `list_editor_sheet.dart:48` 的 setState）⇒ `+13` 全绿 | 我自己跑同一变异（P0）⇒ 补测前同样全绿 | **采纳**。新增「本地库还没就绪」用例（`listRepositoryProvider.overrideWith((ref) => null)`，断弹层不关＋提示可见＋已填不丢＋库里没写）；P0 现在 `+14 -1` 只红它 |
+| **P1** `specs/049-list-editor-folder-picker/spec.md` 与 `specs/049-list-editor-folder-picker/tasks.md` 的 FR-6 条目 写「仓库为 null / 移动抛错」两种失败都有提示，但 null 那半句 0 覆盖：`NULL_branch_silent`（摘掉 `list_editor_sheet.dart:48` 的 setState）⇒ `+13` 全绿 | 我自己跑同一变异（P0）⇒ 补测前同样全绿 | **采纳**。新增「本地库还没就绪」用例（`listRepositoryProvider.overrideWith((ref) => null)`，断弹层不关＋提示可见＋已填不丢＋库里没写）；P0 现在 `+14 -1` 只红它 |
 | **P2** catch 里的三元文案只钉过"移动失败"那侧：`CREATE_fail_msg`（把「新建清单失败，请重试」换成任意串）⇒ 13 全绿 | 复现同一变异（PQ）⇒ 补测前确实全绿 | **采纳**。新增「新建失败（不是移动失败）」用例 + `_CreateFailingRepository`；PQ 现在 `+14 -1` 只红它 |
-| **P2** `tasks.md:22` 的「收起与**展开**两种状态各测一次溢出」超出证据：`MENU500_only`/`MENU_fixed_width` 不红，`MENU_tall_text` 只红在 `find.text('项目')`；量框版 `MENU500_plus_rect` 也被父约束夹住 ⇒ **测不到，别写做不到的判据** | 我按 PS/PR/PU 三条变异复跑：`PU`（2000px 高、文案保留）与 `PR`（500dp 宽）下 320 那条**都不红**；`PS` 红的原因是文案没了 ⇒ 复核对 | **采纳**。删掉那句恒真的 `takeException`，用例注释与本文件都改成"展开态不写溢出判据"。我第一版曾按建议加过一圈量框断言，实测它唯一的作用是 `reason:` 里急切求值的 `itemLabel` 抛类型错 ⇒ **红的是崩溃不是判据**，已回滚（`ba96660`） |
-| **P2** `plan.md:10/:28/:29` 旧数字未同步（写 10 条实为 13；PA 写"10 里 9 红"表里是 `+1 -12`；探针写到 PK） | 对 | **采纳**。`plan.md` 现按 15 条口径写，探针清单到 PU |
-| **P2** `tasks.md:44` 文档仍写 `There must be…`（第 1 轮 nit 只改了代码注释）；`:45` PI 写 `+3 -7` 与表里矛盾 | 对（`dropdown.dart:1035` 是 `There should be…`） | **采纳**，两处都改并随本轮重测更新 |
+| **P2** `specs/049-list-editor-folder-picker/tasks.md` 的「收起与**展开**两种状态各测一次溢出」超出证据：`MENU500_only`/`MENU_fixed_width` 不红，`MENU_tall_text` 只红在 `find.text('项目')`；量框版 `MENU500_plus_rect` 也被父约束夹住 ⇒ **测不到，别写做不到的判据** | 我按 PS/PR/PU 逐档变异复跑：`PU`（2000px 高、文案保留）与 `PR`（500dp 宽）下 320 那条**都不红**；`PS` 红的原因是文案没了 ⇒ 复核对 | **采纳**。删掉那句恒真的 `takeException`，用例注释与本文件都改成"展开态不写溢出判据"。我第一版曾按建议加过一圈量框断言，实测它唯一的作用是 `reason:` 里急切求值的 `itemLabel` 抛类型错 ⇒ **红的是崩溃不是判据**，已回滚（`ba96660`） |
+| **P2** `specs/049-list-editor-folder-picker/plan.md` 的旧数字未同步（写 10 条实为 13；PA 写"10 里 9 红"表里是 `+1 -12`；探针写到 PK） | 对 | **采纳**。`plan.md` 现按 15 条口径写，探针清单到 PU |
+| **P2** `specs/049-list-editor-folder-picker/tasks.md` 文档仍写 `There must be…`（第 1 轮 nit 只改了代码注释）；`:45` PI 写 `+3 -7` 与表里矛盾 | 对（Flutter SDK 的 dropdown 源码里那句本是 `There should be…`） | **采纳**，两处引文都改并随本轮重测更新（复算：`grep -c "There must be" specs/049-list-editor-folder-picker/tasks.md` 现读 0） |
 | **nit** 门禁表头写"跑在最终字节 `aad865c`"，而 tip 是别的 SHA | 对：`git diff --name-only aad865c <tip>` 只含 specs/*.md，dart 字节相同 ⇒ 数字仍成立，但措辞不准 | **采纳**。表头改成"跑在 tip 的 dart 字节 = `<SHA>`" |
 
 第 2 轮复核的两条"不确定项"我这边的答复：
@@ -187,9 +187,9 @@ lock 里 150 行 url 翻成 pub.dev）。
 
 | 发现 | 我的复验 | 处置 |
 | ---- | -------- | ---- |
-| **P2-1** `plan.md:10` 的用例分解写成 14 条（归属读写 4 + 四件套 4 + 负路径 5 + 嵌套 1），与 `tasks.md` 的 15 条口径不一致 | `grep -c "testWidgets" test/features/list/list_editor_folder_picker_test.dart` = **15** ⇒ 复核对，是我的 `plan.md` 落后一轮 | **采纳**。`plan.md` 改成 15 = 归属读写 4 + 四件套 4 + 负路径/降级 6 + 嵌套命名 1 |
+| **P2-1** `specs/049-list-editor-folder-picker/plan.md` 的用例分解写成 14 条（归属读写 4 + 四件套 4 + 负路径 5 + 嵌套 1），与 `tasks.md` 的 15 条口径不一致 | `grep -c "testWidgets" test/features/list/list_editor_folder_picker_test.dart` = **15** ⇒ 复核对，是我的 `plan.md` 落后一轮 | **采纳**。`plan.md` 改成 15 = 归属读写 4 + 四件套 4 + 负路径/降级 6 + 嵌套命名 1 |
 | **P2-2** 四件套③「失败保留已加载数据」在 `spec.md`/`tasks.md` 只写了两条出口（移动失败、仓库为 null），代码实际是**三条**（新建失败那句文案不同） | 读 `list_editor_sheet.dart` 的 catch：`existing == null ? '新建清单失败，请重试' : '移动到文件夹失败，请重试'` ⇒ 三出口成立 | **采纳**。两处措辞补齐三出口，且每出口各有用例（PQ/P0/PL 分别只红一条） |
-| **nit-1** 「相撞面」一段仍写 9 条 open PR，且 PJ 那条的描述与表里数字对不上 | 重新过一遍 `list_pull_requests(state=open)`：**10 条**（!354 是第 69 轮新开的，我数 PR 时它还没落地） | **采纳**。相撞面改成 10 条并列出编号；PJ 行改成"共 7 条"并逐条点名 |
+| **nit-1** 「相撞面」一段的 open PR 计数停在 9，且 PJ 那条的描述与表里数字对不上 | 重新过一遍 `list_pull_requests(state=open)`：计数 10（!354 是第 69 轮新开的，我数 PR 时它还没落地） | **采纳**。相撞面按新计数改写并列出编号；PJ 行改成逐项点名、不写合计数 |
 | **nit-2** 探针代号 `P0` 极易读成字母 O；`PQ`–`PU` 的来历没交代 | 对，`P0` 取自复核员的变异名 `NULL_branch_silent`，不在字母序里 | **采纳**。表前加"探针代号的读法"一段，并规定区间记法一律写全 |
 | **nit-3** 320px 那条把 `ListEditorSheet` 直接放在 `Scaffold.body` 里量，与生产入口（`showModalBottomSheet(isScrollControlled: true)`）不同拓扑 ⇒ 宽松约束可能掩盖溢出 | 查同仓先例：`test/features/task/task_quick_add_sheet_test.dart:171` 就是从 `showModalBottomSheet` 入口量。复核对，我这层的"body 也能量"是推理不是证据 | **采纳**（`5460283`→`5475e63`）。改按生产拓扑：主页放一个按钮 → `showModalBottomSheet` → `ListEditorSheet`。**改完必须重证这条有力** ⇒ 新增探针 `PV`（操作行「取消」撑长）实测 `+14 -1`、只红 320 那条、红在 `RenderFlex overflowed by 250 pixels`；PM′ 也重跑一遍仍是 `+3 -12` 且 320 不红 |
 

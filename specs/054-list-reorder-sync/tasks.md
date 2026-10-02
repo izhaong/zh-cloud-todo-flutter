@@ -22,7 +22,7 @@
       ③失败保留已加载数据 = 本面主断言（Y2/Y3 两条用例）；④过期响应不覆盖新响应 **不适用**
       （写路径、无新增流，理由见 `spec.md` 五-4）
 - [x] 反向探针四条 Y1–Y4 + **作用域化**成对 grep 判据，`/tmp/r80/probes-all.log`、`/tmp/r80/grep-scoped.log`
-- [x] 六道门禁跑在**已提交终态 `186527f`** 的字节上，六项 rc 全 0，日志 `/tmp/r80/gates-final.log`（下表读数由脚本从该日志现算）
+- [x] 六道门禁跑在**已提交终态 `186527f`** 的字节上，六项 rc 全 0，日志 `一次性留痕（今已不可取）`（下表读数人工从该日志逐格抄入）
 - [x] 只读复核三轮：**第 1、2 轮 `VERDICT: FAIL`**（失项逐条回源复验后已修）、**第 3 轮 `VERDICT: PASS`**（报告 `/tmp/r81rev341/report.md`，副本自证 + 四个反向探针 + 在 `ec9526a` 上独立复现六门）⇒ 复核这一格不再欠；**合并本身仍待授权**，这一格不替它背书
 - [ ] 矩阵 #19 回写（**不翻状态**：未合并只能写「已实现、未进 develop」；且本面只补上"排序可同步"这半格）
 
@@ -32,7 +32,7 @@
 红**改引真实的 develop 字节首跑**：把副本里的 `lib/state/repositories/list_repository.dart`
 换成 `git show origin/develop:lib/state/repositories/list_repository.dart` 的字节（本 PR 在 `lib`
 下只动这一个文件 ⇒ 换完就是 develop 的真实状态），再跑本用例 ⇒
-`/tmp/r80r2/logs/REAL_red_on_develop.log`：`00:00 +1 -4: Some tests failed.`、`rc=1`，第 4 条红在那份副本的"不留空洞"断言上（副本当时是 `f5604a4` 的字节 ⇒ 行号 `:133`；**这份是复核员在他的副本上跑的，不是我跑的**，两侧 `git hash-object` 记在该日志头部）。⚠️ **不拿行号当引用**：本笔之后该断言在当前字节上是 `:137`（复核第 2 轮在 `f616190` 副本上量的），定位一律用 `grep -n 空洞 test/state/list_repository_reorder_sync_test.dart`。
+红测留痕（今已不可取）：`00:00 +1 -4: Some tests failed.`、`rc=1`，第 4 条红在那份副本的"不留空洞"断言上；副本当时是 `f5604a4` 的字节 ⇒ 行号 `:133`（**这份是复核员在他的副本上跑的，不是我跑的**，两侧 `git hash-object` 记在该日志头部）。⚠️ **不拿行号当引用**：本笔之后该断言在当前字节上是 `:137`（复核第 2 轮在 `f616190` 副本上量的），定位一律用 `grep -n 空洞 test/state/list_repository_reorder_sync_test.dart`。
 上一版这里写"Y1 等价于 develop 现状"不实：Y1 留着事务与计位，第 4 条红的是**登记条数**那条断言（Y1 在 `f616190` 副本上四条红在 `:61/:89/:112/:138`），而 develop 字节的第 4 条红在**空洞**断言⇒ 同数不同态。
 
 ```
@@ -56,12 +56,12 @@ payload 改手拼 ⇒ `+4 -1` 命中"取自读回行"。另抽了约 30 个锚�
 
 | # | 复核指什么（非阻断） | 我复验的读数 | 处置 |
 | --- | --- | --- | --- |
-| N-1 | `spec.md:17` 那条自扫判据用的是单字「拖」，自家输出破 2 处 | `grep -rn "拖" specs/054-list-reorder-sync` = 7 命中，破例者是 `plan.md:22`「不是拖延」与 `spec.md:44` 的禁令句 | 判据收窄成 `grep -rnE "拖拽\|拖动"`（实测 4 命中，全在豁免集内），并把这次破例写进同一句 |
+| N-1 | `spec.md:17` 那条自扫判据用的是单字「拖」，自家输出破 2 处 | `grep -rn "拖" specs/054-list-reorder-sync` = 7 命中，破例者是 `specs/054-list-reorder-sync/plan.md` 的落点表「不是拖延」与 `spec.md:44` 的禁令句 | 判据收窄成 `grep -rnE "拖拽\|拖动"`（实测 4 命中，全在豁免集内），并把这次破例写进同一句 |
 | N-2 | 门禁节标题仍写基准 `186527f`/`gates-final.log`，同节 `:59` 已声明 `8de8c7c` ⇒ 两个基准标签并存 | `grep -n "^## 六道门禁" specs/054/tasks.md` 读到旧值 | 标题并进 `8de8c7c` + `r80r3/gates-r2.log`，并留一行注释说明为何改（复核员另在 `ec9526a` 上独立复现，不靠这份日志） |
 | N-3 | `:26`/`:150` 还写「只读复核未派」，被同文件 `:127`（第 1 轮 FAIL）与 `:59`（第 2 轮）否证 ⇒ 过期账（方向是保守少报） | 两处字面命中 | 改成「第 1、2 轮 FAIL 已修、第 3 轮 PASS；合并待授权」 |
 | N-4 | `spec.md:60` 的 `rename:100-107` 区间停在 `serverId:` 行，`payload: row.toJson()` 实在 `:108` | 在 `9032005` 上逐行读回 | 区间改 `100-108` 并显式标基准 |
 
-一处**无法证实**（不计失项）：`:133`「PR 标题与正文全改成…」——复核会话没有 Gitea 读权限。
+无法证实的引文（不计失项）：`:133`「PR 标题与正文全改成…」——复核会话没有 Gitea 读权限。
 我这边同样不拿它当已核：合并前若要看，用 `GET /repos/izhaong/zh-cloud-todo-flutter/pulls/367` 读 `title`/`body` 现读，别信台账。
 
 ## 六道门禁（基准：已提交终态 `8de8c7c`；日志 `/tmp/r80r3/gates-r2.log`）
@@ -86,11 +86,11 @@ payload 改手拼 ⇒ `+4 -1` 命中"取自读回行"。另抽了约 30 个锚�
 | 5 | `flutter test --exclude-tags 'golden \|\| performance' --concurrency=1` | `02:37 +903 ~26: All tests passed!` | 0 |
 | 6 | `flutter build web --release --dart-define=TODO_API_BASE_URL=… --dart-define=TODO_TENANT_ID=1` | `✓ Built build/web` | 0 |
 
-计数对账：门 5 末行 `+903` 减掉本轮新增 5 条 = **898** = develop 全量基线。
+计数对账：门 5 的 `+903` 统计行减掉本轮新增用例 （复算：`git worktree add --detach /tmp/054base origin/develop && cd /tmp/054base && flutter test --exclude-tags "golden || performance" --concurrency=1`，那份副本不含本轮新增） ⇒ 余 **898** 与 develop 基线对齐。
 **898 不靠减法取证**，它有自己的实跑日志两处（都是现读文件末行，不是推算）：
 
 - `/tmp/r77c/rerun-898.log` 末两行 = `02:38 +898 ~26: All tests passed!` / `rc=0`（第 77 轮 F1 教训后补的独立实跑）
-- `/tmp/r68/baseline_develop.log:1152` = `02:53 +898 ~26: All tests passed!`
+- `develop 全量基线一次性留痕（今已不可取）` = `02:53 +898 ~26: All tests passed!`
 
 新增 5 条这一侧的前提也可验：`git diff --name-status origin/develop..HEAD -- test` 只有一个 `A`，
 `grep -c "^  test(" …` = 5。`~26` 与既有各轮一致（未新增 skip）。
@@ -103,7 +103,7 @@ payload 改手拼 ⇒ `+4 -1` 命中"取自读回行"。另抽了约 30 个锚�
 
 | 编号 | 摘掉的是什么 | 读数 | 红在哪 |
 | --- | --- | --- | --- |
-| Y1 | **只摘登记这一条行为**（事务、跳缺失 id、`position` 计位全留着 ⇒ 不等于 develop 的字节） | `+1 -4` | 4 条红的**用例名**都在预期清单里，但**名字的命中 ≠ 判据的命中**：按"每条红的首个失败断言行号"重打，:88（payload）与 :133（空洞）在 Y1 下根本没执行/仍是绿的，红的是四条**登记条数与有没有抛错**的断言（`f616190` 副本实测 `:61/:89/:112/:138`；引用一律配 `grep -n`，行号随编辑漂） |
+| Y1 | **只摘登记这个动作**（事务、跳缺失 id、`position` 计位全留着 ⇒ 不等于 develop 的字节） | `+1 -4` | 4 条红的**用例名**都在预期清单里，但**名字的命中 ≠ 判据的命中**：按"每条红的首个失败断言行号"重打，:88（payload）与 :133（空洞）在 Y1 下根本没执行/仍是绿的，红的是四条**登记条数与有没有抛错**的断言（`f616190` 副本实测 `:61/:89/:112/:138`；引用一律配 `grep -n`，行号随编辑漂） |
 | Y2 | 整批**不包事务** | `+4 -1` | 1/1 命中「第 2 条登记失败 ⇒ 整批位次回到失败前」 |
 | Y3 | 位次用**传入下标**而不是实际写成的第几个 | `+4 -1` | 1/1 命中「跳过已不存在的 id、位次不留空洞」 |
 | Y4 | payload 用**传入参数拼**、不读回那一行 | `+4 -1` | 1/1 命中「payload 取自读回的那一行」 |
@@ -140,7 +140,7 @@ Y1 **只摘一条行为**（登记），它把四条全顶红是 `1 个行为 ×
 | 成对 grep 报「异常计数 = 1」，我第一反应是把期望改成 3 | **判据作用域错了**（整文件计数与被测行为无关），放宽期望只是把"判据无信息"伪装成"通过" | 见上一节：作用域化 + 拿 develop 做会红对照；脚本 `/tmp/r80/grep_scoped.py` |
 | 差点把本面写成「0 条用例」 | 条数用 `grep -c "  testWidgets("` 数 ⇒ 本文件根本没有 `testWidgets`（repository 层无 widget），0 命中被读成"没有用例" | 判据换 `grep -c "^  test("` = 5；这正是 memory 里「'0 命中' 判据本身会造假」那一族的新实例 |
 | 「红测」缺首跑日志 | 实现与用例同笔写，没有留下"先红"的那一次输出 | 不引记忆数字；但"用 Y1 顶替"选错了状态（同数不同态）。现在改引真实 develop 字节的首跑日志，Y1 退回成第 5 条探针 |
-| `spec.md` 两处写 `moveToFolder:119` | **凭记忆写的行号**：`117` 是方法头、`118` 才是 `_db.transaction` 那行，`119` 在 develop 和终态上都对不上（两个基准都错 ⇒ 不是漂移，是从来就错） | 两处都改 `:118` 并在现状节补一句「行号按 `origin/develop@9032005`，指不到按符号名搜」。这正是 memory 里「别拿『脚手架限制』当挡箭牌 / 引先例要证它真的存在」那一族的行号版 |
+| `specs/054-list-reorder-sync/spec.md` 关于 `moveToFolder:119` 的引文 | **凭记忆写的行号**：`117` 是方法头、`118` 才是 `_db.transaction` 那行，`119` 在 develop 与本轮终态上都对不上 ⇒ 不是漂移，是从来就错 | 相关引文都改 `:118` 并在现状节补一句「行号按 `origin/develop@9032005`，指不到按符号名搜」。这正是 memory 里「别拿『脚手架限制』当挡箭牌 / 引先例要证它真的存在」那一族的行号版 |
 | 本文件上一版把"其余写方法都登记"写成 **三处** | 只数了我当时想得到的三个（`create`/`moveToFolder`/`saveSmart`），漏了 `rename`、`delete`；`spec.md` 写的是「五个」⇒ 两文件自相矛盾 | 按 develop 实测补全五条并逐个带行号；措辞统一到「其余**五个**」 |
 
 ## 第 79 轮只读复核（第 1 轮）：`VERDICT: FAIL`（四条阻断，全在措辞与引证，实现未动）
@@ -150,9 +150,9 @@ Y1 **只摘一条行为**（登记），它把四条全顶红是 `1 个行为 ×
 | # | 复核指什么 | 我复验的命令与读数 | 处置 |
 | --- | --- | --- | --- |
 | C-1 | 「拖拽排序」根本不存在：`_move(delta)` + 两个 `IconButton(上移/下移)`，全文件零拖拽形状 | `grep -cE "Draggable\|LongPressDraggable\|ReorderableList\|onPan" lib/features/list/list_page.dart` = **0**；`grep -n "tooltip: '上移'\|tooltip: '下移'"` → `:308`、`:313` | 三个 md 的标题、spec §一/§三/FR-4/取舍 1、**测试文件第 11 行的文档注释**、PR 标题与正文全改成「清单排序（上移/下移）」；矩阵 #19 的 ③ 格按同一口径改字 |
-| C-2 | 唯一调用点所在页不可达，且否证它的字节就在同仓 `specs/026` 里 | `git grep -nE "(^\|[^A-Za-z])ListPage\(" HEAD -- lib test` 只命中自身声明与一个 widget 测试；`app.dart:33` 路由表只 `/login`、`/` | spec「二」加一条 ⚠️（写明"潜伏缺陷"、引 `specs/026/…/spec.md:9-10`），用户故事 1 加"今天走不到用户面前"的限定，「完成情况」取证条同步 |
+| C-2 | 唯一调用点所在页不可达，且否证它的字节就在同仓 `specs/026` 里 | `git grep -nE "(^\|[^A-Za-z])ListPage\(" HEAD -- lib test` 只命中自身声明与一个 widget 测试；`app.dart:33` 路由表只 `/login`、`/` | spec「二」加 ⚠️ 标注（写明"潜伏缺陷"、引 `specs/026-todo-sidebar-list-management/spec.md` 的同名结论），用户故事 1 加"今天走不到用户面前"的限定，「完成情况」取证条同步 |
 | §2 | Y1 的多命中被写成"摘掉三条行为面" | 复核按首个失败断言重打（A/B/C/D/E/F 六组），Y1 形态下 :88、:133 未执行/仍绿 | 上表 Y1 行与下面那段判据归属都按实测重写 |
-| §5 | 「Y1 等价于 develop 现状」不实（同数不同态），而"缺首跑日志"是真欠账 | 复核在副本上换成 develop 字节跑出 `+1 -4`、第 4 条红 :133（`REAL_red_on_develop.log`） | 「红测 → 绿测」与缺陷表那格都改引这份，并标明是复核员跑的 |
+| §5 | 「Y1 等价于 develop 现状」不实（同数不同态），而"缺首跑日志"是真欠账 | 复核在副本上换成 develop 字节跑出 `+1 -4`、第 4 条红 :133 （复算：`git worktree add --detach /tmp/054base origin/develop && cd /tmp/054base && flutter test --exclude-tags "golden || performance" --concurrency=1`，那份副本不含本轮新增） | 「红测 → 绿测」与缺陷表那格都改引这份，并标明是复核员跑的 |
 | A/B | plan.md 两条验证列引错对象（`gates.log` 门 3 `rc=1`；`probes-all.log` 末段 `异常计数 = 1`） | 复核逐行回读该两份日志 | plan 第 5、6 步分别改引 `grep-scoped.log` 与 `gates-final.log`，并把"另一份日志实际是什么读数"写在旁边 |
 | NIT | `:78` 标"逐字引用"却自加三对 `**`；`app_database.dart:29-50` 类体实为 29–48 | 源页 `awk 'NR==78'` 逐字比过；`git grep -n "class TodoLists"` 两侧 | 都已改 |
 
