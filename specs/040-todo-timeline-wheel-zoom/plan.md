@@ -22,9 +22,9 @@ double? timelineWheelZoomTarget(PointerSignalEvent event, {required double zoom}
 
 ## 事件入口：为什么是 `Listener`
 
-`Scrollable` 消费滚轮走的是 `Listener(onPointerSignal: _receivedPointerSignal)`（Flutter `scrollable.dart:1027`，handler `:953`），不是手势竞技场，所以在画布外层再挂一个 `Listener` 就能在同一条滚轮事件上收到它，不必替换 `Scrollable`、也不动 `_TimelineContinuousCanvas` 的内部结构。（`PointerSignalResolver.register` 是先注册者赢，但**本例没有任何注册者**——外层 `Listener` 只是观察，不参与仲裁。）
+`Scrollable` 消费滚轮走的是 `Listener(onPointerSignal: _receivedPointerSignal)`（Flutter Flutter SDK 的 scrollable.dart（不在本仓 git 索引内，行号随 SDK 版本漂），handler `:953`），不是手势竞技场，所以在画布外层再挂一个 `Listener` 就能在同一条滚轮事件上收到它，不必替换 `Scrollable`、也不动 `_TimelineContinuousCanvas` 的内部结构。（`PointerSignalResolver.register` 是先注册者赢，但**本例没有任何注册者**——外层 `Listener` 只是观察，不参与仲裁。）
 
-**边界要说清**：`Listener.onPointerSignal` 只观察、不 resolve，因此我们**没有**吞掉这次信号。当前 Ctrl+滚轮不推动画布，是因为该画布只有一个**横向** `SingleChildScrollView`（`timeline_view.dart:816`），而 `_pointerSignalEventDelta`（`scrollable.dart:932-951`）对鼠标取 `scrollDelta.dx`，只有 `pointerAxisModifiers`（默认 Shift，见 `scroll_configuration.dart:154`）才翻转轴 ⇒ 若将来在时间线里嵌纵向可滚动区，Ctrl+滚轮会同时缩放与滚动，那时要改用 `PointerSignalResolver` 显式 resolve。不留「两者已互斥」的假结论。
+**边界要说清**：`Listener.onPointerSignal` 只观察、不 resolve，因此我们**没有**吞掉这次信号。当前 Ctrl+滚轮不推动画布，是因为该画布只有一个**横向** `SingleChildScrollView`（`timeline_view.dart:816`），而 `_pointerSignalEventDelta`（Flutter SDK 的 scrollable.dart（不在本仓 git 索引内，行号随 SDK 版本漂））对鼠标取 `scrollDelta.dx`，只有 `pointerAxisModifiers`（默认 Shift，见 Flutter SDK 的 scroll_configuration.dart（不在本仓 git 索引内，行号随 SDK 版本漂））才翻转轴 ⇒ 若将来在时间线里嵌纵向可滚动区，Ctrl+滚轮会同时缩放与滚动，那时要改用 `PointerSignalResolver` 显式 resolve。不留「两者已互斥」的假结论。
 
 ## 测试设计（`test/features/task/timeline_wheel_zoom_test.dart`）
 

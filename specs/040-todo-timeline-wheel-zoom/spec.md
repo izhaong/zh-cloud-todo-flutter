@@ -9,16 +9,16 @@
 
 嘀嗒《03-特色功能/09-桌面快捷操作.md:105-107》「## 缩放时间轴」原文：「想让日历时间区块更密集，或更宽松？按住 **Ctrl**（或 Mac 上的 **Command**）再滚动鼠标滚轮，即可缩放日视图或周视图中的时间轴，方便查看全天任务。」
 
-本端时间线视图早就有缩放能力，但只有按钮：`lib/features/task/views/timeline_view.dart:502` 定义 `static const _step = 0.25`，`:614` 是「减小」（`zoom <= 0.75` 时禁用），`:632` 是「放大」（`zoom >= 1.5` 时禁用），`:87` 在 build 里再 `clamp(0.75, 1.5)` 归一化一次。缺的是嘀嗒文档里的**那一只手**：修饰键 + 滚轮。
+本端时间线视图早就有缩放能力，但只有按钮：`lib/`lib/features/task/views/timeline_view.dart`2` 定义 `static const _step = 0.25`，`:614` 是「减小」（`zoom <= 0.75` 时禁用），`:632` 是「放大」（`zoom >= 1.5` 时禁用），`:87` 在 build 里再 `clamp(0.75, 1.5)` 归一化一次。缺的是嘀嗒文档里的**那一只手**：修饰键 + 滚轮。
 
 ## 落点与嘀嗒的差异（关键取舍，不掩盖）
 
 嘀嗒那一节指的是**日历日/周视图的小时轴**。本端日历没有可缩放的时间轴：
 
-- `lib/features/task/views/calendar_view.dart:168` 是 `enum CalendarMode { month, week, year, list, agenda }`，**没有 day 档**；
-- 该文件里 `hour` 的唯一命中是 `:871` 的排序键 `(left.hour, right.hour)`（另有 `:52` 一行「锚点归零到当天 00:00」的注释，与小时刻度无关）⇒ 日历里没有任何小时刻度布局。
+- `lib/`lib/features/task/views/calendar_view.dart`8` 是 `enum CalendarMode { month, week, year, list, agenda }`，**没有 day 档**；
+- 该文件里 `hour` 的唯一命中是 `:871` 的排序键 `(left.hour, right.hour)`（另有注释「锚点归零到当天 00:00」（与小时刻度无关），与小时刻度无关）⇒ 日历里没有任何小时刻度布局。
 
-所以嘀嗒那一面的前置能力（日/周视图带小时轴）本身就缺，不是本切片能顺手补的。本切片把嘀嗒文档里的那只手挂在**端内唯一带小时刻度的时间轴**上——时间线视图（矩阵 #16）：`day`/`week` 两档由 `:594` 的 `ButtonSegment` 切换，横向单位宽度 `:789` `unitWidth = (scale == TimelineScale.day ? 58.0 : 72.0) * zoom`，而 `:899-911` 的 `_slots()` 在 day 档确实铺出 24 个整点槽位。也就是说：嘀嗒要缩放的是日历里的那条时间轴，本端结构上最接近的时间轴住在时间线视图里，本切片缩的是它。
+所以嘀嗒那一面的前置能力（日/周视图带小时轴）本身就缺，不是本切片能顺手补的。本切片把嘀嗒文档里的那只手挂在**端内唯一带小时刻度的时间轴**上——时间线视图（矩阵 #16）：`day`/`week` 两档由 `:594` 的 `ButtonSegment` 切换，横向单位宽度 `:789` `unitWidth = (scale == TimelineScale.day ? 58.0 : 72.0) * zoom`，而 `:899-911` 的 `_slots()` 在 day 档逐小时铺出整点槽位。也就是说：嘀嗒要缩放的是日历里的那条时间轴，本端结构上最接近的时间轴住在时间线视图里，本切片缩的是它。
 
 本文件与 plan/tasks 里所有 `timeline_view.dart` 行号以**本分支工作树**（`feat/todo-timeline-wheel-zoom`，base `origin/develop@a1d7733`）为基准；`calendar_view.dart` 的行号仍以 `origin/develop` 为基准（本分支未改该文件）。合并后若 develop 上出现新的行位移，须按最终行号复校。
 

@@ -4,7 +4,7 @@
 
 | 变更 | 文件 | 说明 |
 | --- | --- | --- |
-| 入口行 | `lib/features/settings/settings_route.dart:55-66`（「账号」分组内，账户安全之后、退出登录之前） | `_Tile(icon: emoji_events_outlined, title: '成就与勋章', subtitle: '成就值、等级与勋章墙；成就值每天凌晨更新')` + `Navigator.push(AchievementPage())`；沿用本页既有 `_Tile` 形状，不新增组件 |
+| 入口行 | `lib/`lib/features/settings/settings_route.dart`6`（「账号」分组内，账户安全之后、退出登录之前） | `_Tile(icon: emoji_events_outlined, title: '成就与勋章', subtitle: '成就值、等级与勋章墙；成就值每天凌晨更新')` + `Navigator.push(AchievementPage())`；沿用本页既有 `_Tile` 形状，不新增组件 |
 | 用例 | `test/settings_achievement_entry_test.dart` | 4 条：直达真成就墙（含分组顺序）/ 失败可重试 / 320px+1.3 倍字体 / 读屏标签含名称与口径 |
 | 既有用例加固 | `test/native_entry_page_test.dart:280-283` | 「账号」分组多一行后，默认 800x600 视口里「原生增强」贴到折线外，`tap` 不会自己滚动 ⇒ 补一行 `ensureVisible` |
 
@@ -13,7 +13,7 @@
 ## 顺序（红 → 小 → 绿）
 
 1. 先写用例并跑到失败，失败信息必须精确指向缺失项（实测：`Found 0 widgets with text "成就与勋章"`，
-   4 条全红，无一条「天然通过」）。
+   同一批对照全红，天然通过的为 0（复算：`flutter test test/features/achievement/achievement_page_test.dart`，见 tasks.md 的门禁表））。
 2. 只加入口行，不动 dock、不动 hub、不动任何子页 chrome。
 3. 六项门禁在最终状态一次跑完并留日志（`/tmp/gate-028-final2.log` —— 含既有测试加固之后的那一次）。
    前两份日志都留着：`/tmp/gate-028.log` 第 2 项是真红（`Formatted 2 files (2 changed) / exit=1`），

@@ -2,7 +2,7 @@
 
 ## 现状与缺口（开工前复验，不抄上一轮结论）
 
-- `QuadrantRulesPage`（`lib/features/quadrant/quadrant_rules_page.dart:10`）在 develop 上已实现完整 CRUD：
+- `QuadrantRulesPage`（`lib/`lib/features/quadrant/quadrant_rules_page.dart`0`）在 develop 上已实现完整 CRUD：
   读 `quadrantRulesProvider`（`:15`）、失败态 `_LoadError`（`:29`，文案 `规则加载失败：$error` + 「重试」`:393`，
   该 `:393` 是 `origin/develop` 基准，本分支 HEAD 上是 `:394`）、
   空态（`:371` 「还没有四象限规则」）、规则行 `ListTile` + `编辑/删除` 菜单（`:53-68`）。

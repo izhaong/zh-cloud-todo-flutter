@@ -10,11 +10,11 @@
 
 ## 现有落点（本规格的地基）
 
-- 视图：`features/task/views/eisenhower_view.dart:26` `EisenhowerView`，由
-  `features/task/tasks_by_list_page.dart:448`（基准 `origin/develop`；本分支 HEAD 上是 `:452`）
+- 视图：`features/task/`lib/views/eisenhower_view.dart`6` `EisenhowerView`，由
+  `lib/features/task/tasks_by_list_page.dart`（基准 `origin/develop`；本分支 HEAD 上是 `:452`）
   在 `TaskViewMode.eisenhower` 分支渲染；
-  枚举与标签 `features/task/view_mode.dart:5,16,31`。⇒ 四象限视图本身**可达**（矩阵 #34/#35 有依据）。
-- 规则页：`features/quadrant/quadrant_rules_page.dart:10` `QuadrantRulesPage` 已实现完整的
+  枚举与标签 `lib/features/task/view_mode.dart`（枚举与标签三处，行号随编辑漂，按符号名搜）。⇒ 四象限视图本身**可达**（矩阵 #34/#35 有依据）。
+- 规则页：`lib/features/quadrant/quadrant_rules_page.dart` `QuadrantRulesPage` 已实现完整的
   读/新建/编辑/删除（`:105` `quadrantApiProvider`、`:111/:120` create/update、`:167` 删除确认、
   `:291` 「新建/编辑四象限规则」表单、`:371` 「还没有四象限规则」空态），读写落 `/app-api/todo/quadrant/**`。
 - **缺口（本轮要修的）**：全库（`lib/` + `test/`）只有该文件自身的定义与它自己的用例引用它 ——
