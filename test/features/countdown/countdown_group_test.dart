@@ -161,6 +161,30 @@ void main() {
     expect(find.text('倒数日甲'), findsOneWidget);
   });
 
+  testWidgets('分组标题自己就是读屏节点，label 念得出分类名', (tester) async {
+    final handle = tester.ensureSemantics();
+    await _pump(tester);
+    await _toggleGroups(tester);
+    // label 挂在带 key 的那个 Semantics 节点上，不是它的子孙：用 descendant 恒 0，
+    // 所以直接读该节点的 SemanticsController.label。
+    for (final pair in [
+      [1, '倒数日'],
+      [2, '纪念日'],
+      [3, '生日'],
+      [4, '节日'],
+    ]) {
+      final node = tester.getSemantics(
+        find.byKey(Key('countdown-group-header-${pair[0]}')),
+      );
+      expect(
+        node.label,
+        contains(pair[1] as String),
+        reason: '第 ${pair[0]} 档标题的 label 不对',
+      );
+    }
+    handle.dispose();
+  });
+
   testWidgets('列表加载失败时不吞掉界面：给出提示而不是空白', (tester) async {
     final api = _FakeCountdownApi(_fourGroups());
     await _pump(tester, withApi: api);

@@ -451,11 +451,12 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
         continue;
       }
       rows.add(
-        KeyedSubtree(
+        Semantics(
           key: Key('countdown-group-header-${entry.key}'),
-          child: Semantics(
-            header: true,
-            label: entry.value,
+          container: true,
+          header: true,
+          label: entry.value,
+          child: ExcludeSemantics(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
               child: Text(
