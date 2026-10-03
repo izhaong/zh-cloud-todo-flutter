@@ -338,6 +338,7 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
         actions: [
           if (!_showArchived)
             IconButton(
+              tooltip: '新建倒数纪念日',
               icon: const Icon(Icons.add),
               onPressed: _writePending ? null : () => _showEditor(),
             ),

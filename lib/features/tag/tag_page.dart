@@ -20,6 +20,7 @@ class TagPage extends ConsumerWidget {
         title: const Text('标签'),
         actions: [
           IconButton(
+            tooltip: '新建标签',
             icon: const Icon(Icons.add),
             onPressed: () => _create(context, ref, tagsAsync.valueOrNull ?? []),
           ),
@@ -45,10 +46,12 @@ class TagPage extends ConsumerWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
+                          tooltip: '编辑标签',
                           icon: const Icon(Icons.edit_outlined),
                           onPressed: () => _edit(context, ref, t),
                         ),
                         IconButton(
+                          tooltip: '删除标签',
                           icon: const Icon(Icons.delete_outline),
                           onPressed: () => _delete(context, ref, t),
                         ),
