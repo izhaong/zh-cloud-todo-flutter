@@ -18,8 +18,11 @@ class _FakeCountdownApi extends CountdownApi {
   final List<({int id, bool pinned})> writes = [];
   bool failWrite = false;
 
-  /// 非空时列表请求挂起，等测试手动投「迟到的响应」。
-  Completer<List<CountdownDto>>? listGate;
+  /// 非空时**下一次**列表请求挂在这个 completer 上，并把请求时刻的快照存进 [heldSnapshot]，
+  /// 这样测试就能造出「旧请求晚于新请求返回」的真时序（上一版只有一条 gate，被 _runPin
+  /// 自己的重取撞上，等于没造出时序 —— FL #453）。
+  Completer<List<CountdownDto>>? holdNext;
+  List<CountdownDto>? heldSnapshot;
 
   @override
   Future<List<CountdownDto>> list({bool archived = false}) async {
@@ -41,8 +44,9 @@ class _FakeCountdownApi extends CountdownApi {
             )
             .toList()
           ..sort((a, b) => (a.isPinned ? 0 : 1).compareTo(b.isPinned ? 0 : 1));
-    if (listGate != null) {
-      return listGate!.future.then((_) => rows);
+    if (holdNext != null) {
+      heldSnapshot = rows;
+      return holdNext!.future.then((_) => rows);
     }
     return rows;
   }
@@ -106,6 +110,12 @@ Future<_FakeCountdownApi> _pump(
   );
   await tester.pumpAndSettle();
   return api;
+}
+
+Future<void> _advance(WidgetTester tester) async {
+  for (var i = 0; i < 8; i++) {
+    await tester.pump(const Duration(milliseconds: 50));
+  }
 }
 
 Future<void> _openTileMenu(WidgetTester tester, int id) async {
@@ -204,16 +214,33 @@ void main() {
 
   testWidgets('迟到的列表响应不得覆盖置顶后的顺序', (tester) async {
     final api = await _pump(tester);
-    api.listGate = Completer<List<CountdownDto>>();
+    // 先让「置顶 2」这次重取挂住：它带的是「2 在顶」的旧快照
+    final gate = Completer<List<CountdownDto>>();
+    api.holdNext = gate;
     await _openTileMenu(tester, 2);
     await tester.tap(find.byKey(const Key('countdown-menu-pin-2')));
+    await _advance(tester);
+    expect(api.writes, [(id: 2, pinned: true)]);
+    expect(api.heldSnapshot, isNotNull, reason: '重取请求没发出去，时序就没造起来');
+    api.holdNext = null;
+    // 再让「置顶 1」走通：这是更新的请求，服务端独占后 1 在顶
+    await _openTileMenu(tester, 1);
+    await tester.tap(find.byKey(const Key('countdown-menu-pin-1')));
     await tester.pumpAndSettle();
-    final gate = api.listGate;
-    api.listGate = null;
-    gate!.complete(<CountdownDto>[]);
+    expect(
+      tester.getTopLeft(find.text('倒数日1')).dy <
+          tester.getTopLeft(find.text('倒数日2')).dy,
+      isTrue,
+      reason: '更新的响应没把 1 排到前面，后面的对照没有意义',
+    );
+    // 旧快照现在才回来
+    gate.complete(api.heldSnapshot!);
     await tester.pumpAndSettle();
-    final y2 = tester.getTopLeft(find.text('倒数日2')).dy;
-    final y1 = tester.getTopLeft(find.text('倒数日1')).dy;
-    expect(y2 < y1, isTrue, reason: '迟到的旧响应把顺序改回去了 1=$y1 2=$y2');
+    expect(
+      tester.getTopLeft(find.text('倒数日1')).dy <
+          tester.getTopLeft(find.text('倒数日2')).dy,
+      isTrue,
+      reason: '迟到的旧响应把顺序改回去了',
+    );
   });
 }
