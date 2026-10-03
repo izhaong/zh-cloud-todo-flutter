@@ -242,6 +242,7 @@ class RepeatRuleRepository {
       'MONTHLY',
       'YEARLY',
       'WEEKDAY',
+      'WEEKEND',
       'CUSTOM',
     };
     if (!frequencies.contains(frequency)) {
@@ -257,11 +258,7 @@ class RepeatRuleRepository {
       throw ArgumentError.value(countLimit, 'countLimit', '次数上限必须为正整数');
     }
     if (untilAt != null && countLimit != null) {
-      throw ArgumentError.value(
-        countLimit,
-        'countLimit',
-        '重复结束日期和次数上限只能选择一种',
-      );
+      throw ArgumentError.value(countLimit, 'countLimit', '重复结束日期和次数上限只能选择一种');
     }
     const selectedDatesMode = 'ON_SELECTED_DATES';
     if (repeatMode != 'ON_DUE' &&
@@ -300,6 +297,7 @@ class RepeatRuleRepository {
       );
     }
     if (frequency == 'WEEKDAY') return const [1, 2, 3, 4, 5];
+    if (frequency == 'WEEKEND') return const [6, 7];
     if (frequency == 'CUSTOM' && normalized.isEmpty) {
       throw ArgumentError.value(weekdays, 'weekdays', '自定义重复必须指定星期');
     }
