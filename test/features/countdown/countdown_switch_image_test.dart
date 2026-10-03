@@ -19,7 +19,7 @@ class _RecordingCountdownApi extends CountdownApi {
   String? updatedBackground;
 
   @override
-  Future<List<CountdownDto>> list() async => _items;
+  Future<List<CountdownDto>> list({bool archived = false}) async => _items;
 
   @override
   Future<int> create({

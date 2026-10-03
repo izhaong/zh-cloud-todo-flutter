@@ -29,7 +29,7 @@ class _FakeCountdownApi extends CountdownApi {
   Future<void>? writeGate;
 
   @override
-  Future<List<CountdownDto>> list() async {
+  Future<List<CountdownDto>> list({bool archived = false}) async {
     listCalls++;
     return List.unmodifiable(items);
   }

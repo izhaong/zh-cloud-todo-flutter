@@ -289,6 +289,7 @@ class CountdownDto {
   final int style;
   final bool showAge;
   final String? backgroundImage;
+  final bool archived;
 
   CountdownDto({
     required this.id,
@@ -298,6 +299,7 @@ class CountdownDto {
     this.style = 1,
     this.showAge = false,
     this.backgroundImage,
+    this.archived = false,
   });
 
   factory CountdownDto.fromJson(Map<String, dynamic> j) {
@@ -318,6 +320,7 @@ class CountdownDto {
       style: (j['style'] as num?)?.toInt() ?? 1,
       showAge: j['showAge'] == true,
       backgroundImage: j['backgroundImage']?.toString(),
+      archived: j['archived'] == true,
     );
   }
 
@@ -902,9 +905,10 @@ class CountdownApi {
   CountdownApi(this._dio);
   final Dio _dio;
 
-  Future<List<CountdownDto>> list() async {
+  Future<List<CountdownDto>> list({bool archived = false}) async {
     final r = await _dio.get<Map<String, dynamic>>(
       '${ApiConfig.todoPrefix}/countdown/list',
+      queryParameters: {'archived': archived},
     );
     final data = _unwrapData(r.data);
     final raw = data is List
@@ -964,6 +968,16 @@ class CountdownApi {
     final response = await _dio.delete<Map<String, dynamic>>(
       '${ApiConfig.todoPrefix}/countdown/delete',
       queryParameters: {'id': id},
+    );
+    _unwrapData(response.data);
+  }
+
+  /// 嘀嗒《03-管理倒数纪念日》「归档」一节：归档后条目移出主列表、进入「已归档」，
+  /// 「恢复」即取消归档回到主列表。服务端查询参数名就是 `value`。
+  Future<void> setArchived(int id, bool archived) async {
+    final response = await _dio.put<Map<String, dynamic>>(
+      '${ApiConfig.todoPrefix}/countdown/$id/archived',
+      queryParameters: {'value': archived},
     );
     _unwrapData(response.data);
   }

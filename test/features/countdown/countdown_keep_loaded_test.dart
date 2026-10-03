@@ -99,7 +99,7 @@ class _FakeCountdownApi extends CountdownApi {
   bool fail = false;
 
   @override
-  Future<List<CountdownDto>> list() async {
+  Future<List<CountdownDto>> list({bool archived = false}) async {
     if (fail) throw Exception('boom');
     return [
       CountdownDto(
