@@ -936,9 +936,15 @@ class AppDatabase extends _$AppDatabase {
   }
 
   static QueryExecutor _open(String? fileName) {
-    // 测试环境（forTesting 注入 NativeDatabase.memory）或无文件名时用默认。
-    // driftFlutter 的 driftDatabase 在 Web 自动选用 wasm。
-    return driftDatabase(name: fileName ?? 'zh_cloud_todo');
+    // drift_flutter 在 Web 不会自动选 wasm：不传 `web:` 会直接抛 ArgumentError，
+    // 而原生平台忽略这个参数。web/ 下两个文件的版本必须与锁定的 drift 一致。
+    return driftDatabase(
+      name: fileName ?? 'zh_cloud_todo',
+      web: DriftWebOptions(
+        sqlite3Wasm: Uri.parse('sqlite3.wasm'),
+        driftWorker: Uri.parse('drift_worker.js'),
+      ),
+    );
   }
 
   // --- DAO helpers ---------------------------------------------------------
