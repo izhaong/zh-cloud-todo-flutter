@@ -38,6 +38,12 @@ final sessionProvider = NotifierProvider<SessionController, TodoAuthSession?>(
 /// 会话初次校验是否完成（避免登录页在校验期间闪现）。
 final sessionBootstrappedProvider = StateProvider<bool>((ref) => false);
 
+/// 本次会话消失是不是「被服务端拒掉」（令牌过期 / 失效）。
+///
+/// 登录页据此决定是否说明原因：主动退出登录时它必须是 false，否则等于把用户的
+/// 操作说成系统故障（Issue #475）。只活在内存里，不持久化。
+final sessionExpiredNoticeProvider = StateProvider<bool>((ref) => false);
+
 /// 已持久化会话在离线或弱网启动时最多等待一次短校验；超时仅代表网络
 /// 不可确认，必须保留本地会话与 Drift 数据，不能当成令牌被服务端拒绝。
 final sessionValidationTimeoutProvider = Provider<Duration>(
@@ -77,10 +83,13 @@ class SessionController extends Notifier<TodoAuthSession?> {
       if (valid) {
         state = session;
       } else {
+        ref.read(sessionExpiredNoticeProvider.notifier).state = true;
         await store.clearSession();
         _clearNativeTaskProjections();
       }
     } catch (_) {
+      // 走到这里是读本地会话或校验过程本身异常，无法断定服务端拒绝过令牌，
+      // 所以不标「已失效」——那句说明只留给确实拿到「无效」答复的路径。
       await store.clearSession();
       _clearNativeTaskProjections();
     } finally {
@@ -100,10 +109,15 @@ class SessionController extends Notifier<TodoAuthSession?> {
     await store.writeSession(session);
   }
 
-  Future<void> signOut() async {
+  /// 服务端把当前令牌判为无效（401）导致会话被清理：与主动「退出登录」区分开，
+  /// 登录页要据此给出说明。
+  Future<void> expireSession() => signOut(expired: true);
+
+  Future<void> signOut({bool expired = false}) async {
     final current = state;
     if (current == null) return;
     state = null;
+    ref.read(sessionExpiredNoticeProvider.notifier).state = expired;
     final store = ref.read(sessionStoreProvider);
     await store.clearSession();
     _clearNativeTaskProjections();

@@ -1,5 +1,9 @@
 import 'package:dio/dio.dart';
 
+/// 会话被服务端判为无效时的统一说法：401 兜底文案与登录页的过期说明共用这一句，
+/// 避免出现「请求里说已失效、登录页说已过期」两套措辞（Issue #475）。
+const String kSessionExpiredMessage = '登录状态已失效，请重新登录';
+
 /// 用户可见文案里出现「无法归类的错误」时的兜底原因。
 const String kGenericErrorReason = '请稍后重试';
 
@@ -51,7 +55,7 @@ String? _serverMessage(DioException error) {
 }
 
 String _statusMessage(int? code) {
-  if (code == 401) return '登录状态已失效，请重新登录';
+  if (code == 401) return kSessionExpiredMessage;
   if (code == 403) return '没有权限执行该操作';
   if (code == 404) return '请求的内容找不到，请稍后重试';
   if (code != null && code >= 500) return '服务暂时不可用，请稍后重试';
