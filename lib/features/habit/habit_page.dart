@@ -25,6 +25,7 @@ class HabitPage extends ConsumerWidget {
         title: const Text('习惯'),
         actions: [
           IconButton(
+            tooltip: '新建习惯',
             icon: const Icon(Icons.add),
             onPressed: () async {
               if (await showHabitEditor(context) && context.mounted) {

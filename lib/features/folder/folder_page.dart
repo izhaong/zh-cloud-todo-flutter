@@ -18,6 +18,7 @@ class FolderPage extends ConsumerWidget {
         title: const Text('文件夹'),
         actions: [
           IconButton(
+            tooltip: '新建文件夹',
             icon: const Icon(Icons.add),
             onPressed: () =>
                 _create(context, ref, foldersAsync.valueOrNull ?? const []),
@@ -55,10 +56,12 @@ class FolderPage extends ConsumerWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
+                            tooltip: '编辑文件夹',
                             icon: const Icon(Icons.edit_outlined),
                             onPressed: () => _edit(context, ref, f, folders),
                           ),
                           IconButton(
+                            tooltip: '删除文件夹',
                             icon: const Icon(Icons.delete_outline),
                             onPressed: () => _delete(context, ref, f),
                           ),

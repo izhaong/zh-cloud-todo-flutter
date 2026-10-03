@@ -221,6 +221,7 @@ class _FolderGroup extends StatelessWidget {
             leading: const Icon(Icons.folder),
             title: Text(folder.name),
             trailing: IconButton(
+              tooltip: '在该文件夹新建清单',
               icon: const Icon(Icons.add),
               onPressed: onCreate,
             ),
