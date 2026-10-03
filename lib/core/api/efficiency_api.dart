@@ -290,6 +290,7 @@ class CountdownDto {
   final bool showAge;
   final String? backgroundImage;
   final bool archived;
+  final bool isPinned;
 
   CountdownDto({
     required this.id,
@@ -300,6 +301,7 @@ class CountdownDto {
     this.showAge = false,
     this.backgroundImage,
     this.archived = false,
+    this.isPinned = false,
   });
 
   factory CountdownDto.fromJson(Map<String, dynamic> j) {
@@ -321,6 +323,7 @@ class CountdownDto {
       showAge: j['showAge'] == true,
       backgroundImage: j['backgroundImage']?.toString(),
       archived: j['archived'] == true,
+      isPinned: j['isPinned'] == true,
     );
   }
 
@@ -978,6 +981,16 @@ class CountdownApi {
     final response = await _dio.put<Map<String, dynamic>>(
       '${ApiConfig.todoPrefix}/countdown/$id/archived',
       queryParameters: {'value': archived},
+    );
+    _unwrapData(response.data);
+  }
+
+  /// 嘀嗒《03-管理倒数纪念日》:64「点击右上角「...」-「置顶」，即可将这个日子固定在列表顶部」。
+  /// 「:204 只支持置顶一个」由服务端在同一事务里清其余行，所以这里只发一次请求，不在客户端补第二次写。
+  Future<void> setPinned(int id, bool pinned) async {
+    final response = await _dio.put<Map<String, dynamic>>(
+      '${ApiConfig.todoPrefix}/countdown/$id/pinned',
+      queryParameters: {'value': pinned},
     );
     _unwrapData(response.data);
   }

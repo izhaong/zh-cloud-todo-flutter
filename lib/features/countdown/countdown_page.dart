@@ -64,6 +64,7 @@ class _CountdownTile extends StatefulWidget {
     required this.onDelete,
     required this.onArchive,
     required this.onRestore,
+    required this.onPin,
   });
 
   final CountdownDto item;
@@ -72,6 +73,7 @@ class _CountdownTile extends StatefulWidget {
   final VoidCallback onDelete;
   final VoidCallback onArchive;
   final VoidCallback onRestore;
+  final VoidCallback onPin;
 
   @override
   State<_CountdownTile> createState() => _CountdownTileState();
@@ -162,6 +164,7 @@ class _CountdownTileState extends State<_CountdownTile> {
                       onSelected: (value) {
                         if (value == 'archive') widget.onArchive();
                         if (value == 'restore') widget.onRestore();
+                        if (value == 'pin') widget.onPin();
                       },
                       itemBuilder: (_) => [
                         if (item.archived)
@@ -175,6 +178,12 @@ class _CountdownTileState extends State<_CountdownTile> {
                             key: Key('countdown-menu-archive-${item.id}'),
                             value: 'archive',
                             child: const Text('归档'),
+                          ),
+                        if (!item.archived && !item.isPinned)
+                          PopupMenuItem<String>(
+                            key: Key('countdown-menu-pin-${item.id}'),
+                            value: 'pin',
+                            child: const Text('置顶'),
                           ),
                       ],
                     ),
@@ -248,6 +257,8 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
 
   /// 失败文案要按实际那一步说「归档失败」还是「恢复失败」，不许两件事共用一句。
   String? _archiveFailedAction;
+  String? _pinError;
+  Future<void> Function()? _pinRetry;
 
   Future<void> _runWrite(Future<void> Function() write) async {
     if (_writePending) return;
@@ -297,6 +308,22 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
     }
   }
 
+  Future<void> _runPin(CountdownDto item) async {
+    setState(() => _pinError = null);
+    try {
+      await ref.read(countdownApiProvider).setPinned(item.id, true);
+      ref.invalidate(countdownsProvider);
+      ref.invalidate(archivedCountdownsProvider);
+      await ref.read(countdownsProvider.future);
+      setState(() => _pinRetry = null);
+    } catch (error) {
+      setState(() {
+        _pinError = '$error';
+        _pinRetry = () => _runPin(item);
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(
@@ -342,6 +369,12 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
       ),
       body: Column(
         children: [
+          if (_pinError != null)
+            AppRefreshFailedHint(
+              key: const Key('countdown-pin-error'),
+              message: '置顶失败：$_pinError，列表仍是上一次加载的数据',
+              onRetry: () => _pinRetry?.call(),
+            ),
           if (_archiveError != null)
             AppRefreshFailedHint(
               key: const Key('countdown-archive-error'),
@@ -394,6 +427,7 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
           onDelete: () => _confirmDelete(c),
           onArchive: () => _runArchive(c, true),
           onRestore: () => _runArchive(c, false),
+          onPin: () => _runPin(c),
         );
       },
     );
