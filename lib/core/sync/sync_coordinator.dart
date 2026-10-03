@@ -8,6 +8,7 @@ import '../api/attachment_upload_api.dart';
 import '../api/api_client.dart';
 import '../api/sync_api.dart';
 import '../db/app_database.dart';
+import 'repeat_frequency_wire.dart';
 import 'sync_entities.dart';
 import 'sync_retry_policy.dart';
 
@@ -1789,10 +1790,9 @@ class SyncCoordinator {
       serverId: Value(serverId),
       taskId: Value(localTaskId),
       freq: Value(
-        (payload['frequency']?.toString() ??
-                payload['freq']?.toString() ??
-                'DAILY')
-            .toUpperCase(),
+        repeatFrequencyFromWire(
+          payload['frequency'] ?? payload['freq'] ?? 'DAILY',
+        ),
       ),
       interval: Value(
         (payload['intervalValue'] as num?)?.toInt() ??

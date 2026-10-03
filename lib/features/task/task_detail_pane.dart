@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/todo_api.dart';
 import '../../core/db/app_database.dart';
+import '../../core/sync/repeat_frequency_wire.dart';
 import '../../core/time/task_time_formatter.dart';
 import '../../core/time/task_time_mode.dart';
 import '../../core/theme/brand_colors.dart';
@@ -2093,13 +2094,17 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                             ('MONTHLY', '每月'),
                             ('YEARLY', '每年'),
                             ('WEEKDAY', '工作日'),
+                            // 顺序照嘀嗒《10-设置重复任务》：法定工作日紧跟在工作日后、
+                            // 法定节假日紧跟在每周末后（文档按「工作日」「节假日」两组分节）。
+                            ('LEGAL_WORKDAY', '法定工作日'),
                             ('WEEKEND', '每周末'),
+                            ('LEGAL_HOLIDAY', '法定节假日'),
                             ('CUSTOM', '自定义'),
                           ]
                           .map(
                             (option) => ChoiceChip(
                               key: Key(
-                                'task-repeat-frequency-${option.$1.toLowerCase()}',
+                                'task-repeat-frequency-${repeatFrequencyToWire(option.$1)}',
                               ),
                               label: Text(option.$2),
                               selected: frequency == option.$1,
@@ -2426,7 +2431,9 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       'MONTHLY': '每月',
       'YEARLY': '每年',
       'WEEKDAY': '工作日',
+      'LEGAL_WORKDAY': '法定工作日',
       'WEEKEND': '每周末',
+      'LEGAL_HOLIDAY': '法定节假日',
       'CUSTOM': '自定义',
     };
     final label = labels[rule.freq] ?? rule.freq;

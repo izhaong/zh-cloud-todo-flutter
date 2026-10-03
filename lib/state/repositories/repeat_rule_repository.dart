@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../core/db/app_database.dart';
+import '../../core/sync/repeat_frequency_wire.dart';
 import '../../core/sync/sync_change_queue.dart';
 import '../../core/sync/sync_entities.dart';
 
@@ -242,7 +243,9 @@ class RepeatRuleRepository {
       'MONTHLY',
       'YEARLY',
       'WEEKDAY',
+      'LEGAL_WORKDAY',
       'WEEKEND',
+      'LEGAL_HOLIDAY',
       'CUSTOM',
     };
     if (!frequencies.contains(frequency)) {
@@ -298,6 +301,9 @@ class RepeatRuleRepository {
     }
     if (frequency == 'WEEKDAY') return const [1, 2, 3, 4, 5];
     if (frequency == 'WEEKEND') return const [6, 7];
+    // LEGAL_WORKDAY / LEGAL_HOLIDAY 故意不在这里派生星期集：命中哪天由国家放假安排
+    // （服务端 todo_calendar_holiday 字典表）决定，写成 1..5 或 6..7 就是把「法定」
+    // 偷偷降级成「按星期」，还会作为事实同步出去。
     if (frequency == 'CUSTOM' && normalized.isEmpty) {
       throw ArgumentError.value(weekdays, 'weekdays', '自定义重复必须指定星期');
     }
@@ -332,7 +338,7 @@ class RepeatRuleRepository {
     'id': row.id,
     'serverId': row.serverId,
     'taskId': row.taskId,
-    'frequency': row.freq.toLowerCase(),
+    'frequency': repeatFrequencyToWire(row.freq),
     'intervalValue': row.interval,
     'weekdays': row.byDay,
     'monthDay': row.monthDay,
