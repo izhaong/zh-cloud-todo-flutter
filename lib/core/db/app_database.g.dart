@@ -72,6 +72,21 @@ class $TodoListsTable extends TodoLists
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _isPinnedMeta = const VerificationMeta(
+    'isPinned',
+  );
+  @override
+  late final GeneratedColumn<bool> isPinned = GeneratedColumn<bool>(
+    'is_pinned',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_pinned" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _accessRoleMeta = const VerificationMeta(
     'accessRole',
   );
@@ -129,6 +144,7 @@ class $TodoListsTable extends TodoLists
     folderLocalId,
     folderId,
     sortOrder,
+    isPinned,
     accessRole,
     writable,
     updatedAt,
@@ -184,6 +200,12 @@ class $TodoListsTable extends TodoLists
       context.handle(
         _sortOrderMeta,
         sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('is_pinned')) {
+      context.handle(
+        _isPinnedMeta,
+        isPinned.isAcceptableOrUnknown(data['is_pinned']!, _isPinnedMeta),
       );
     }
     if (data.containsKey('access_role')) {
@@ -247,6 +269,10 @@ class $TodoListsTable extends TodoLists
         DriftSqlType.int,
         data['${effectivePrefix}sort_order'],
       )!,
+      isPinned: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_pinned'],
+      )!,
       accessRole: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}access_role'],
@@ -283,6 +309,10 @@ class TodoList extends DataClass implements Insertable<TodoList> {
   /// folder REST 服务端整数 ID 缓存，仅供同步协议和旧数据迁移使用。
   final int? folderId;
   final int sortOrder;
+
+  /// 置顶位（嘀嗒《02-用清单管理任务》：侧边栏左滑清单出现「置顶」）。
+  /// 服务端同名列 `todo_list.is_pinned`，出库 payload 走 `toJson()`。
+  final bool isPinned;
   final String accessRole;
   final bool writable;
   final DateTime updatedAt;
@@ -294,6 +324,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
     this.folderLocalId,
     this.folderId,
     required this.sortOrder,
+    required this.isPinned,
     required this.accessRole,
     required this.writable,
     required this.updatedAt,
@@ -314,6 +345,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
       map['folder_id'] = Variable<int>(folderId);
     }
     map['sort_order'] = Variable<int>(sortOrder);
+    map['is_pinned'] = Variable<bool>(isPinned);
     map['access_role'] = Variable<String>(accessRole);
     map['writable'] = Variable<bool>(writable);
     map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -335,6 +367,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
           ? const Value.absent()
           : Value(folderId),
       sortOrder: Value(sortOrder),
+      isPinned: Value(isPinned),
       accessRole: Value(accessRole),
       writable: Value(writable),
       updatedAt: Value(updatedAt),
@@ -354,6 +387,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
       folderLocalId: serializer.fromJson<String?>(json['folderLocalId']),
       folderId: serializer.fromJson<int?>(json['folderId']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      isPinned: serializer.fromJson<bool>(json['isPinned']),
       accessRole: serializer.fromJson<String>(json['accessRole']),
       writable: serializer.fromJson<bool>(json['writable']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
@@ -370,6 +404,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
       'folderLocalId': serializer.toJson<String?>(folderLocalId),
       'folderId': serializer.toJson<int?>(folderId),
       'sortOrder': serializer.toJson<int>(sortOrder),
+      'isPinned': serializer.toJson<bool>(isPinned),
       'accessRole': serializer.toJson<String>(accessRole),
       'writable': serializer.toJson<bool>(writable),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
@@ -384,6 +419,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
     Value<String?> folderLocalId = const Value.absent(),
     Value<int?> folderId = const Value.absent(),
     int? sortOrder,
+    bool? isPinned,
     String? accessRole,
     bool? writable,
     DateTime? updatedAt,
@@ -397,6 +433,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
         : this.folderLocalId,
     folderId: folderId.present ? folderId.value : this.folderId,
     sortOrder: sortOrder ?? this.sortOrder,
+    isPinned: isPinned ?? this.isPinned,
     accessRole: accessRole ?? this.accessRole,
     writable: writable ?? this.writable,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -412,6 +449,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
           : this.folderLocalId,
       folderId: data.folderId.present ? data.folderId.value : this.folderId,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      isPinned: data.isPinned.present ? data.isPinned.value : this.isPinned,
       accessRole: data.accessRole.present
           ? data.accessRole.value
           : this.accessRole,
@@ -430,6 +468,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
           ..write('folderLocalId: $folderLocalId, ')
           ..write('folderId: $folderId, ')
           ..write('sortOrder: $sortOrder, ')
+          ..write('isPinned: $isPinned, ')
           ..write('accessRole: $accessRole, ')
           ..write('writable: $writable, ')
           ..write('updatedAt: $updatedAt, ')
@@ -446,6 +485,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
     folderLocalId,
     folderId,
     sortOrder,
+    isPinned,
     accessRole,
     writable,
     updatedAt,
@@ -461,6 +501,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
           other.folderLocalId == this.folderLocalId &&
           other.folderId == this.folderId &&
           other.sortOrder == this.sortOrder &&
+          other.isPinned == this.isPinned &&
           other.accessRole == this.accessRole &&
           other.writable == this.writable &&
           other.updatedAt == this.updatedAt &&
@@ -474,6 +515,7 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
   final Value<String?> folderLocalId;
   final Value<int?> folderId;
   final Value<int> sortOrder;
+  final Value<bool> isPinned;
   final Value<String> accessRole;
   final Value<bool> writable;
   final Value<DateTime> updatedAt;
@@ -486,6 +528,7 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
     this.folderLocalId = const Value.absent(),
     this.folderId = const Value.absent(),
     this.sortOrder = const Value.absent(),
+    this.isPinned = const Value.absent(),
     this.accessRole = const Value.absent(),
     this.writable = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -499,6 +542,7 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
     this.folderLocalId = const Value.absent(),
     this.folderId = const Value.absent(),
     this.sortOrder = const Value.absent(),
+    this.isPinned = const Value.absent(),
     this.accessRole = const Value.absent(),
     this.writable = const Value.absent(),
     required DateTime updatedAt,
@@ -515,6 +559,7 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
     Expression<String>? folderLocalId,
     Expression<int>? folderId,
     Expression<int>? sortOrder,
+    Expression<bool>? isPinned,
     Expression<String>? accessRole,
     Expression<bool>? writable,
     Expression<DateTime>? updatedAt,
@@ -528,6 +573,7 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
       if (folderLocalId != null) 'folder_local_id': folderLocalId,
       if (folderId != null) 'folder_id': folderId,
       if (sortOrder != null) 'sort_order': sortOrder,
+      if (isPinned != null) 'is_pinned': isPinned,
       if (accessRole != null) 'access_role': accessRole,
       if (writable != null) 'writable': writable,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -543,6 +589,7 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
     Value<String?>? folderLocalId,
     Value<int?>? folderId,
     Value<int>? sortOrder,
+    Value<bool>? isPinned,
     Value<String>? accessRole,
     Value<bool>? writable,
     Value<DateTime>? updatedAt,
@@ -556,6 +603,7 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
       folderLocalId: folderLocalId ?? this.folderLocalId,
       folderId: folderId ?? this.folderId,
       sortOrder: sortOrder ?? this.sortOrder,
+      isPinned: isPinned ?? this.isPinned,
       accessRole: accessRole ?? this.accessRole,
       writable: writable ?? this.writable,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -585,6 +633,9 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
     if (sortOrder.present) {
       map['sort_order'] = Variable<int>(sortOrder.value);
     }
+    if (isPinned.present) {
+      map['is_pinned'] = Variable<bool>(isPinned.value);
+    }
     if (accessRole.present) {
       map['access_role'] = Variable<String>(accessRole.value);
     }
@@ -612,6 +663,7 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
           ..write('folderLocalId: $folderLocalId, ')
           ..write('folderId: $folderId, ')
           ..write('sortOrder: $sortOrder, ')
+          ..write('isPinned: $isPinned, ')
           ..write('accessRole: $accessRole, ')
           ..write('writable: $writable, ')
           ..write('updatedAt: $updatedAt, ')
@@ -11554,6 +11606,7 @@ typedef $$TodoListsTableCreateCompanionBuilder =
       Value<String?> folderLocalId,
       Value<int?> folderId,
       Value<int> sortOrder,
+      Value<bool> isPinned,
       Value<String> accessRole,
       Value<bool> writable,
       required DateTime updatedAt,
@@ -11568,6 +11621,7 @@ typedef $$TodoListsTableUpdateCompanionBuilder =
       Value<String?> folderLocalId,
       Value<int?> folderId,
       Value<int> sortOrder,
+      Value<bool> isPinned,
       Value<String> accessRole,
       Value<bool> writable,
       Value<DateTime> updatedAt,
@@ -11611,6 +11665,11 @@ class $$TodoListsTableFilterComposer
 
   ColumnFilters<int> get sortOrder => $composableBuilder(
     column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isPinned => $composableBuilder(
+    column: $table.isPinned,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -11674,6 +11733,11 @@ class $$TodoListsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get isPinned => $composableBuilder(
+    column: $table.isPinned,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get accessRole => $composableBuilder(
     column: $table.accessRole,
     builder: (column) => ColumnOrderings(column),
@@ -11724,6 +11788,9 @@ class $$TodoListsTableAnnotationComposer
   GeneratedColumn<int> get sortOrder =>
       $composableBuilder(column: $table.sortOrder, builder: (column) => column);
 
+  GeneratedColumn<bool> get isPinned =>
+      $composableBuilder(column: $table.isPinned, builder: (column) => column);
+
   GeneratedColumn<String> get accessRole => $composableBuilder(
     column: $table.accessRole,
     builder: (column) => column,
@@ -11773,6 +11840,7 @@ class $$TodoListsTableTableManager
                 Value<String?> folderLocalId = const Value.absent(),
                 Value<int?> folderId = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
+                Value<bool> isPinned = const Value.absent(),
                 Value<String> accessRole = const Value.absent(),
                 Value<bool> writable = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -11785,6 +11853,7 @@ class $$TodoListsTableTableManager
                 folderLocalId: folderLocalId,
                 folderId: folderId,
                 sortOrder: sortOrder,
+                isPinned: isPinned,
                 accessRole: accessRole,
                 writable: writable,
                 updatedAt: updatedAt,
@@ -11799,6 +11868,7 @@ class $$TodoListsTableTableManager
                 Value<String?> folderLocalId = const Value.absent(),
                 Value<int?> folderId = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
+                Value<bool> isPinned = const Value.absent(),
                 Value<String> accessRole = const Value.absent(),
                 Value<bool> writable = const Value.absent(),
                 required DateTime updatedAt,
@@ -11811,6 +11881,7 @@ class $$TodoListsTableTableManager
                 folderLocalId: folderLocalId,
                 folderId: folderId,
                 sortOrder: sortOrder,
+                isPinned: isPinned,
                 accessRole: accessRole,
                 writable: writable,
                 updatedAt: updatedAt,

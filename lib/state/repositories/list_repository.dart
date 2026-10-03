@@ -17,13 +17,15 @@ class ListRepository {
   final SyncChangeQueue _queue;
   final Uuid _uuid;
 
-  /// 顶层非智能清单（不解析 smart 前缀），按本地 folder UUID / sortOrder 排序。
+  /// 顶层非智能清单（不解析 smart 前缀），置顶优先，再按本地 folder UUID / sortOrder 排序。
   Stream<List<TodoList>> watchAll() {
     return (_db.select(_db.todoLists)
           ..where(
             (t) => t.name.like('smart:%').not() & t.id.equals('inbox').not(),
           )
           ..orderBy([
+            (t) =>
+                OrderingTerm(expression: t.isPinned, mode: OrderingMode.desc),
             (t) => OrderingTerm(expression: t.folderLocalId),
             (t) => OrderingTerm(expression: t.sortOrder),
             (t) => OrderingTerm(expression: t.createdAt),
@@ -37,6 +39,8 @@ class ListRepository {
             (t) => t.name.like('smart:%').not() & t.id.equals('inbox').not(),
           )
           ..orderBy([
+            (t) =>
+                OrderingTerm(expression: t.isPinned, mode: OrderingMode.desc),
             (t) => OrderingTerm(expression: t.folderLocalId),
             (t) => OrderingTerm(expression: t.sortOrder),
           ]))
@@ -96,6 +100,28 @@ class ListRepository {
     final now = DateTime.now();
     await (_db.update(_db.todoLists)..where((t) => t.id.equals(listId))).write(
       TodoListsCompanion(name: Value(newName), updatedAt: Value(now)),
+    );
+    final row = await (_db.select(
+      _db.todoLists,
+    )..where((t) => t.id.equals(listId))).getSingle();
+    await _queue.enqueue(
+      entity: SyncEntities.list,
+      op: SyncOps.upsert,
+      localId: listId,
+      serverId: row.serverId,
+      payload: row.toJson(),
+    );
+    return row;
+  }
+
+  /// 置顶或取消置顶清单（嘀嗒《02-用清单管理任务》侧边栏左滑出现「置顶」）。
+  ///
+  /// 与 [rename] 同一条口径：本地写入与 list/upsert outbox 必须一起落，
+  /// payload 走 `toJson()`，服务端 `todo_list.is_pinned` 收同一字段名。
+  Future<TodoList> setPinned(String listId, bool pinned) async {
+    final now = DateTime.now();
+    await (_db.update(_db.todoLists)..where((t) => t.id.equals(listId))).write(
+      TodoListsCompanion(isPinned: Value(pinned), updatedAt: Value(now)),
     );
     final row = await (_db.select(
       _db.todoLists,
