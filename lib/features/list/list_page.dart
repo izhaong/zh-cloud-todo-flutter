@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/error_text.dart';
 import '../../core/db/app_database.dart';
 import '../../state/providers.dart';
 import 'list_actions.dart';
@@ -95,7 +96,7 @@ class _ListPageState extends ConsumerState<ListPage> {
       ),
       body: listsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('加载清单失败: $e')),
+        error: (e, _) => Center(child: Text('加载清单失败: ${describeError(e)}')),
         data: (lists) {
           final folders = foldersAsync.valueOrNull ?? const <TodoFolder>[];
           return ListView(

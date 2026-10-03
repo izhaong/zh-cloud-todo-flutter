@@ -1,9 +1,8 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/auth/auth_gateway.dart';
+import '../../core/api/error_text.dart';
 import '../../state/providers.dart';
 import '../../state/session_state.dart';
 
@@ -56,7 +55,7 @@ class _ChangePasswordPageState extends ConsumerState<ChangePasswordPage> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('发送失败：${_messageOf(error)}')));
+        ).showSnackBar(SnackBar(content: Text('发送失败：${describeError(error)}')));
       }
     } finally {
       if (mounted) setState(() => _sendingCode = false);
@@ -85,7 +84,7 @@ class _ChangePasswordPageState extends ConsumerState<ChangePasswordPage> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('修改失败：${_messageOf(error)}')));
+        ).showSnackBar(SnackBar(content: Text('修改失败：${describeError(error)}')));
       }
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -222,16 +221,4 @@ class _ChangePasswordPageState extends ConsumerState<ChangePasswordPage> {
       ),
     );
   }
-}
-
-String _messageOf(Object error) {
-  if (error is TodoAuthException) return error.message;
-  if (error is DioException) {
-    final data = error.response?.data;
-    if (data is Map && data['msg'] != null) {
-      return data['msg'].toString();
-    }
-  }
-  final message = error.toString().replaceFirst('Exception: ', '');
-  return message.isEmpty ? '请稍后重试' : message;
 }

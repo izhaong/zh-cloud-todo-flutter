@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/error_text.dart';
 import '../../core/theme/brand_colors.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../state/efficiency_providers.dart';
@@ -117,7 +118,9 @@ class HabitDetailPage extends ConsumerWidget {
       ref.invalidate(habitStatsProvider);
       if (navigator.canPop()) navigator.pop();
     } catch (error) {
-      messenger.showSnackBar(SnackBar(content: Text('删除失败: $error')));
+      messenger.showSnackBar(
+        SnackBar(content: Text('删除失败: ${describeError(error)}')),
+      );
     }
   }
 }

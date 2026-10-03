@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/error_text.dart';
 import '../../core/db/app_database.dart';
 import '../../state/providers.dart';
 import 'folder_actions.dart';
@@ -27,7 +28,7 @@ class FolderPage extends ConsumerWidget {
       ),
       body: foldersAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('加载文件夹失败: $e')),
+        error: (e, _) => Center(child: Text('加载文件夹失败: ${describeError(e)}')),
         data: (folders) {
           final entries = flattenSidebarHierarchy(
             folders,

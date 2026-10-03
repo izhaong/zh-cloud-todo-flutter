@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 
 import '../../core/api/attachment_upload_api.dart';
 import '../../core/api/efficiency_api.dart';
+import '../../core/api/error_text.dart';
 import '../../state/providers.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../state/efficiency_providers.dart';
@@ -274,7 +275,9 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
       // 页面已卸载时不得再弹：context 脱离树后 showSnackBar 会抛，
       // 且该抛点位于 catch 内，没人再兜住它。
       if (mounted) {
-        messenger.showSnackBar(SnackBar(content: Text('操作失败：$error')));
+        messenger.showSnackBar(
+          SnackBar(content: Text('操作失败：${describeError(error)}')),
+        );
       }
     } finally {
       if (mounted) setState(() => _writePending = false);
@@ -299,7 +302,7 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
     } on Object catch (error) {
       if (mounted) {
         setState(() {
-          _archiveError = '$error';
+          _archiveError = describeError(error);
           _archiveFailedAction = archived ? '归档' : '恢复';
           _archiveRetry = () => _runArchive(item, archived);
         });
@@ -319,7 +322,7 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
       setState(() => _pinRetry = null);
     } catch (error) {
       setState(() {
-        _pinError = '$error';
+        _pinError = describeError(error);
         _pinRetry = () => _runPin(item);
       });
     }
@@ -404,7 +407,7 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
           if (items == null)
             Expanded(
               child: async.hasError
-                  ? Center(child: Text('加载失败: ${async.error}'))
+                  ? Center(child: Text('加载失败: ${describeError(async.error)}'))
                   : const Center(child: CircularProgressIndicator()),
             )
           else if (async.hasError)
@@ -655,7 +658,7 @@ class _CountdownEditorState extends State<_CountdownEditor> {
     } on Object catch (error) {
       if (!mounted) return;
       setState(() {
-        _imageError = '背景图上传失败：$error';
+        _imageError = '背景图上传失败：${describeError(error)}';
         _uploading = false;
       });
     }

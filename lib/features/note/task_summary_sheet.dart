@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/error_text.dart';
 import '../../state/providers.dart';
 import '../../state/repositories/summary_repository.dart';
 import 'task_summary.dart';
@@ -107,7 +108,7 @@ class _NoteTaskSummarySheetState extends ConsumerState<NoteTaskSummarySheet> {
       if (!mounted || requestId != _requestId) return;
       // 失败时保留上一次已加载数据，只追加提示。
       setState(() {
-        _error = '刷新失败，已保留上一次摘要：$error';
+        _error = '刷新失败，已保留上一次摘要：${describeError(error)}';
         _loading = false;
       });
     }

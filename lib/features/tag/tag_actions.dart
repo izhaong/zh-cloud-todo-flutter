@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/error_text.dart';
 import '../../core/db/app_database.dart';
 import '../../state/providers.dart';
 
@@ -52,7 +53,9 @@ Future<void> showTagActions(
                   await repo.setPinned(tag.id, !tag.isPinned);
                 } on Object catch (e) {
                   if (sheetContext.mounted) {
-                    setSheetState(() => pinError = '置顶失败：$e，标签列表仍是原来的');
+                    setSheetState(
+                      () => pinError = '置顶失败：${describeError(e)}，标签列表仍是原来的',
+                    );
                   }
                   return;
                 }

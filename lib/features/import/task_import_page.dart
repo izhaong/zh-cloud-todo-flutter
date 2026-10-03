@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../core/api/error_text.dart';
 import '../../core/api/todo_api.dart';
 import '../../state/providers.dart';
 import '../../state/session_state.dart';
@@ -244,7 +245,7 @@ class _TaskImportPageState extends ConsumerState<TaskImportPage> {
       if (!mounted) return;
       setState(() {
         _loadingTargets = false;
-        _targetError = '清单归属校验失败：$error';
+        _targetError = '清单归属校验失败：${describeError(error)}';
       });
     }
   }
@@ -262,7 +263,7 @@ class _TaskImportPageState extends ConsumerState<TaskImportPage> {
       if (!mounted) return;
       setState(() {
         _loadingHistory = false;
-        _historyError = '导入历史加载失败：$error';
+        _historyError = '导入历史加载失败：${describeError(error)}';
       });
     }
   }
@@ -277,7 +278,7 @@ class _TaskImportPageState extends ConsumerState<TaskImportPage> {
         _requestId = _uuid.v4();
       });
     } catch (error) {
-      if (mounted) _message('文件解析失败：$error');
+      if (mounted) _message('文件解析失败：${describeError(error)}');
     }
   }
 
@@ -320,7 +321,7 @@ class _TaskImportPageState extends ConsumerState<TaskImportPage> {
         );
       }
     } catch (error) {
-      if (mounted) _message('导入失败：$error');
+      if (mounted) _message('导入失败：${describeError(error)}');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -354,7 +355,7 @@ class _TaskImportPageState extends ConsumerState<TaskImportPage> {
       await _loadBatches();
       if (mounted) _message('已回滚 ${rolledBack.rolledBackCount} 个任务');
     } catch (error) {
-      if (mounted) _message('回滚失败：$error');
+      if (mounted) _message('回滚失败：${describeError(error)}');
     } finally {
       if (mounted) setState(() => _busy = false);
     }

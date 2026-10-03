@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/error_text.dart';
 import '../../core/api/todo_api.dart';
 import '../../state/providers.dart';
 import '../../state/session_state.dart';
@@ -164,7 +165,7 @@ class _TwoFactorCardState extends ConsumerState<_TwoFactorCard> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('操作失败：$e')));
+        ).showSnackBar(SnackBar(content: Text('操作失败：${describeError(e)}')));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -370,7 +371,7 @@ class _ExportCardState extends ConsumerState<_ExportCard> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('导出失败：$e')));
+        ).showSnackBar(SnackBar(content: Text('导出失败：${describeError(e)}')));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -392,7 +393,7 @@ class _ExportCardState extends ConsumerState<_ExportCard> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('下载失败：$e')));
+        ).showSnackBar(SnackBar(content: Text('下载失败：${describeError(e)}')));
       }
     } finally {
       if (mounted) setState(() => _busy = false);

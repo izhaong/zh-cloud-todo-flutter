@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/error_text.dart';
 import '../../state/efficiency_providers.dart';
 import 'habit_repository.dart';
 
@@ -102,7 +103,7 @@ class _HabitMonthSheetState extends ConsumerState<HabitMonthSheet> {
       if (!mounted || seq != _loadSeq) return;
       setState(() {
         _loading = false;
-        _error = '当月打卡情况加载失败：$e';
+        _error = '当月打卡情况加载失败：${describeError(e)}';
       });
     }
   }
@@ -124,7 +125,7 @@ class _HabitMonthSheetState extends ConsumerState<HabitMonthSheet> {
     } catch (e) {
       // 失败只换错误条，_counts 原样留着 ⇒ 已渲染的当月格子不丢
       if (!mounted) return;
-      setState(() => _error = '补记失败：$e');
+      setState(() => _error = '补记失败：${describeError(e)}');
       return;
     }
     await _load();

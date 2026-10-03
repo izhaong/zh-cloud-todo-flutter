@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/error_text.dart';
 import '../../core/api/todo_api.dart';
 import '../../core/db/app_database.dart';
 import '../../core/sync/repeat_frequency_wire.dart';
@@ -1305,7 +1306,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       if (!mounted || widget.taskId != task.id) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('转换失败：$error')));
+      ).showSnackBar(SnackBar(content: Text('转换失败：${describeError(error)}')));
     }
   }
 
@@ -3440,7 +3441,7 @@ class _TagChipsState extends ConsumerState<_TagChips> {
     final tagsAsync = ref.watch(tagsStreamProvider);
     return tagsAsync.when(
       loading: () => const SizedBox(height: 32),
-      error: (e, _) => Text('标签加载失败: $e'),
+      error: (e, _) => Text('标签加载失败: ${describeError(e)}'),
       data: (tags) {
         if (tags.isEmpty) return const Text('暂无标签，可先在侧栏「标签」里创建');
         return Wrap(
@@ -3836,7 +3837,7 @@ class _AttachmentSectionState extends ConsumerState<_AttachmentSection> {
                   title: Text(attachment.name),
                   subtitle: Text(
                     attachment.status == 'failed' && attachment.error != null
-                        ? '${status.label}：${attachment.error}'
+                        ? '${status.label}：${describeError(attachment.error)}'
                         : status.label,
                     style: TextStyle(color: status.color),
                   ),

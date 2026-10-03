@@ -31,9 +31,9 @@ void main() {
     );
     expect(find.text('列表刷新失败，仍显示上一次的数据'), findsOneWidget);
     expect(
-      find.textContaining('加载失败: Exception: boom'),
+      find.textContaining('加载失败:'),
       findsNothing,
-      reason: '有值时不再整页失败',
+      reason: '有值时不再整页失败（#468 后错误分支只给中文原因，所以这里按分支前缀判）',
     );
   });
 
