@@ -291,6 +291,7 @@ class CountdownDto {
   final String? backgroundImage;
   final bool archived;
   final bool isPinned;
+  final int type;
 
   CountdownDto({
     required this.id,
@@ -302,6 +303,7 @@ class CountdownDto {
     this.backgroundImage,
     this.archived = false,
     this.isPinned = false,
+    this.type = 1,
   });
 
   factory CountdownDto.fromJson(Map<String, dynamic> j) {
@@ -324,6 +326,7 @@ class CountdownDto {
       backgroundImage: j['backgroundImage']?.toString(),
       archived: j['archived'] == true,
       isPinned: j['isPinned'] == true,
+      type: (j['type'] as num?)?.toInt() ?? 1,
     );
   }
 
