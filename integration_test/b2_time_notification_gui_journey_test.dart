@@ -111,10 +111,10 @@ void main() {
         await tasks.update(
           taskId,
           dueAt: DateTime.now().subtract(const Duration(minutes: 2)),
-          // 「在结束时提醒」按 endAt 落 fireAt：没有结束时间时它会当场弹
-          // 「请先设置结束时间」并返回（task_detail_pane.dart 的 _addEndTimeReminder），
-          // 所以这条旅程必须先有结束时间。
-          endAt: DateTime.now().add(const Duration(minutes: 6)),
+          // 「在结束时提醒」按 endAt 落 fireAt：没有结束时间时它当场弹「请先设置结束时间」并返回
+          // （_addEndTimeReminder）。偏移要落在下面 90 秒轮询窗口之内 ——
+          // 服务端只在 fireAt 到点时才生成派发，给到 +6 分钟会让这条判据永远等不到。
+          endAt: DateTime.now().add(const Duration(seconds: 45)),
         );
         await tester.pumpAndSettle();
 
@@ -244,9 +244,25 @@ void main() {
         }
         await tester.pumpAndSettle();
         expect(find.byType(SnackBar), findsNothing);
-        await tester.tap(
-          find.byKey(const Key('todo-reminder-inbox-action')).first,
-        );
+        // 宽屏的收件箱入口在工作区顶部（rail 上），窄屏（mobile/tablet）把整块侧栏放进
+        // Scaffold 的 start drawer，同一个 rowKey 只有抽屉打开时才在树上 ——
+        // 直接 tap 会打在空 finder 上（实测 Bad state: No element）。
+        final inboxAction = find.byKey(const Key('todo-reminder-inbox-action'));
+        if (inboxAction.evaluate().isEmpty) {
+          // 此时窄屏的任务详情还压在上面（ModalBarrier>=1），抽屉被 modal 挡住点不到；
+          // 先按系统 pop 收回 shell —— 与 b1 用 handlePopRoute 而非 pageBack 同一理由
+          // （pageBack 只认英文 'Back'，中文界面下打不中）。
+          await tester.binding.handlePopRoute();
+          await tester.pumpAndSettle();
+          for (final scaffold in tester.stateList<ScaffoldState>(
+            find.byType(Scaffold),
+          )) {
+            scaffold.openDrawer();
+          }
+          await tester.pumpAndSettle();
+          await _pumpUntilWithDump(tester, inboxAction, attempts: 24);
+        }
+        await tester.tap(inboxAction.first);
         await _pumpUntil(tester, find.text('提醒收件箱'));
         await _pumpUntil(tester, find.text(taskTitle));
         expect(find.text(taskTitle), findsWidgets);
