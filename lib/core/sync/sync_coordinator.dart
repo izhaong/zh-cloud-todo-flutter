@@ -1501,6 +1501,9 @@ class SyncCoordinator {
       ),
       folderId: Value(resolvedFolderId),
       sortOrder: Value((payload['sortOrder'] as num?)?.toInt() ?? 0),
+      isPinned: Value(
+        payload['isPinned'] as bool? ?? existing?.isPinned ?? false,
+      ),
       accessRole: Value(
         payload['accessRole']?.toString() ??
             payload['access_role']?.toString() ??

@@ -680,14 +680,48 @@ class _ListRow extends ConsumerWidget {
           ..hideCurrentSnackBar()
           ..showSnackBar(SnackBar(content: Text('移到「${list.name}」失败')));
       },
-      child: _SidebarRow(
-        rowKey: ValueKey('todo-sidebar-list-${list.id}'),
-        icon: Icons.list_alt_outlined,
-        label: list.name,
-        selected: selected,
-        colors: colors,
-        onTap: onTap,
-        onLongPress: () => showListActions(context, ref, list),
+      child: Dismissible(
+        // 嘀嗒《02-用清单管理任务》：「在侧边栏左滑某个清单，会出现「置顶」、「编辑」和「删除」3个选项。」
+        // 左滑唤出动作表；长按这一入口保留（既有交互与桌面/读屏都靠它，删掉会倒退）。
+        key: ValueKey('todo-sidebar-list-swipe-${list.id}'),
+        direction: DismissDirection.endToStart,
+        resizeDuration: null,
+        movementDuration: const Duration(milliseconds: 120),
+        confirmDismiss: (direction) async {
+          if (!context.mounted) return false;
+          await showListActions(context, ref, list);
+          return false;
+        },
+        background: Container(color: colors.surface),
+        secondaryBackground: Semantics(
+          label: '左滑出现置顶、编辑、删除',
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: const [
+              Icon(Icons.push_pin, size: 18),
+              SizedBox(width: 4),
+              Text('置顶', style: TextStyle(fontSize: 13)),
+              SizedBox(width: 12),
+              Icon(Icons.edit_outlined, size: 18),
+              SizedBox(width: 4),
+              Text('编辑', style: TextStyle(fontSize: 13)),
+              SizedBox(width: 12),
+              Icon(Icons.delete_outline, size: 18),
+              SizedBox(width: 4),
+              Text('删除', style: TextStyle(fontSize: 13)),
+              SizedBox(width: 12),
+            ],
+          ),
+        ),
+        child: _SidebarRow(
+          rowKey: ValueKey('todo-sidebar-list-${list.id}'),
+          icon: Icons.list_alt_outlined,
+          label: list.name,
+          selected: selected,
+          colors: colors,
+          onTap: onTap,
+          onLongPress: () => showListActions(context, ref, list),
+        ),
       ),
     );
   }

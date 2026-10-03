@@ -37,6 +37,10 @@ class TodoLists extends Table {
   /// folder REST 服务端整数 ID 缓存，仅供同步协议和旧数据迁移使用。
   IntColumn get folderId => integer().nullable()();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+
+  /// 置顶位（嘀嗒《02-用清单管理任务》：侧边栏左滑清单出现「置顶」）。
+  /// 服务端同名列 `todo_list.is_pinned`，出库 payload 走 `toJson()`。
+  BoolColumn get isPinned => boolean().withDefault(const Constant(false))();
   TextColumn get accessRole =>
       text().withDefault(const Constant('owner'))(); // owner/editor/viewer
   BoolColumn get writable => boolean().withDefault(const Constant(true))();
@@ -441,7 +445,7 @@ class AppDatabase extends _$AppDatabase {
   }) : super(_open(_userDatabaseName(tenantId, userId, testNamespace)));
 
   @override
-  int get schemaVersion => 24;
+  int get schemaVersion => 25;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -690,6 +694,12 @@ class AppDatabase extends _$AppDatabase {
           await customStatement(
             'UPDATE todo_reminders SET time_mode = 2 WHERE fixed_timezone = 1',
           );
+        }
+      }
+      if (from < 25) {
+        if (!await _columnExists(m, 'todo_lists', 'is_pinned')) {
+          await m.addColumn(todoLists, todoLists.isPinned);
+          // 加列默认 false：存量清单本来没有置顶位，未置顶就是它们的真实状态，无需回填。
         }
       }
     },
