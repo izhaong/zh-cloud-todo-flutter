@@ -1843,7 +1843,14 @@ class _ListBodyState extends State<_ListBody> {
   @override
   Widget build(BuildContext context) {
     if (widget.items.isEmpty) {
-      return const AppEmptyState(title: '暂无任务', subtitle: '在上方输入任务并按回车。');
+      // 快速添加条只在 tablet 及以上渲染（见本文件的 showQuickAdd），
+      // 窄视口的添加入口是右下角 FAB ⇒ 提示必须指向真实存在的控件。
+      final hasInlineQuickAdd =
+          MediaQuery.sizeOf(context).width >= TodoLayoutTokens.tabletMinWidth;
+      return AppEmptyState(
+        title: '暂无任务',
+        subtitle: hasInlineQuickAdd ? '在上方输入任务并按回车。' : '点右下角的 + 添加任务。',
+      );
     }
 
     final sortedItems = _sortedItems(widget.items);
