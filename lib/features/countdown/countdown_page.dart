@@ -257,6 +257,7 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
 
   /// 失败文案要按实际那一步说「归档失败」还是「恢复失败」，不许两件事共用一句。
   String? _archiveFailedAction;
+  bool _showGroups = false;
   String? _pinError;
   Future<void> Function()? _pinRetry;
 
@@ -345,12 +346,30 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
             enabled: !_writePending,
             icon: const Icon(Icons.more_horiz),
             onSelected: (value) => setState(() {
+              if (value == 'groups') {
+                _showGroups = !_showGroups;
+                return;
+              }
               _showArchived = value == 'archived';
               _archiveError = null;
               _archiveRetry = null;
               _archiveFailedAction = null;
             }),
             itemBuilder: (_) => [
+              PopupMenuItem<String>(
+                key: const Key('countdown-menu-groups'),
+                value: 'groups',
+                child: Row(
+                  children: [
+                    const Text('显示分组'),
+                    if (_showGroups)
+                      const Padding(
+                        padding: EdgeInsets.only(left: 8),
+                        child: Icon(Icons.check, size: 18),
+                      ),
+                  ],
+                ),
+              ),
               if (!_showArchived)
                 const PopupMenuItem<String>(
                   key: Key('countdown-menu-archived'),
@@ -415,21 +434,54 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
     if (items.isEmpty) {
       return const Center(child: Text('暂无倒数日'));
     }
-    return ListView.separated(
-      itemCount: items.length,
-      separatorBuilder: (_, _) => const Divider(height: 1),
-      itemBuilder: (_, i) {
-        final c = items[i];
-        return _CountdownTile(
-          item: c,
-          writePending: _writePending,
-          onEdit: () => _showEditor(existing: c),
-          onDelete: () => _confirmDelete(c),
-          onArchive: () => _runArchive(c, true),
-          onRestore: () => _runArchive(c, false),
-          onPin: () => _runPin(c),
-        );
-      },
+    if (!_showGroups) {
+      return ListView.separated(
+        itemCount: items.length,
+        separatorBuilder: (_, _) => const Divider(height: 1),
+        itemBuilder: (_, i) => _tileFor(items[i]),
+      );
+    }
+    // 嘀嗒 :9「开启后，所有日子将根据类型自动分组：倒数日、纪念日、生日、节日」
+    // 四类是固定档，空档不出标题；分类只认服务端给的 type，客户端不自造判据。
+    const labels = {1: '倒数日', 2: '纪念日', 3: '生日', 4: '节日'};
+    final rows = <Widget>[];
+    for (final entry in labels.entries) {
+      final group = items.where((c) => c.type == entry.key).toList();
+      if (group.isEmpty) {
+        continue;
+      }
+      rows.add(
+        KeyedSubtree(
+          key: Key('countdown-group-header-${entry.key}'),
+          child: Semantics(
+            header: true,
+            label: entry.value,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Text(
+                entry.value,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ),
+      );
+      for (final c in group) {
+        rows.add(_tileFor(c));
+      }
+    }
+    return ListView(children: rows);
+  }
+
+  Widget _tileFor(CountdownDto c) {
+    return _CountdownTile(
+      item: c,
+      writePending: _writePending,
+      onEdit: () => _showEditor(existing: c),
+      onDelete: () => _confirmDelete(c),
+      onArchive: () => _runArchive(c, true),
+      onRestore: () => _runArchive(c, false),
+      onPin: () => _runPin(c),
     );
   }
 
