@@ -4,6 +4,33 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../auth/auth_session.dart';
 
+/// macOS 用传统 login keychain，不用数据保护钥匙串。
+///
+/// 本机只能 ad-hoc 签名（无 Apple Developer ID / 描述文件）：带上
+/// `keychain-access-groups` entitlement 会让 `flutter build macos` 直接失败，
+/// 而默认的数据保护钥匙串在没有该 entitlement 时写回 `-34018`（FL #481）。
+/// 代价是每个新 cdhash（重新构建或换包）读旧项会弹一次系统授权框。
+const macOsSessionStorageOptions = MacOsOptions(
+  useDataProtectionKeyChain: false,
+);
+
+/// 会话没能落进本机安全存储。
+class SessionPersistenceException implements Exception {
+  const SessionPersistenceException({
+    this.message = kSessionPersistenceMessage,
+    this.cause,
+  });
+
+  final String message;
+  final Object? cause;
+
+  @override
+  String toString() => message;
+}
+
+/// 界面文案的唯一来源：登录页与异常本身都念这一句。
+const kSessionPersistenceMessage = '本机无法保存登录态，关闭应用后需要重新登录';
+
 /// 会话安全持久化：用 [FlutterSecureStorage] 替换旧版明文 `shared_preferences`。
 ///
 /// - keychain/keystore 加密存储完整会话 JSON（token / userId / tenantId）。
@@ -17,6 +44,7 @@ class SessionStore {
             iOptions: IOSOptions(
               accessibility: KeychainAccessibility.first_unlock,
             ),
+            mOptions: macOsSessionStorageOptions,
           );
 
   final FlutterSecureStorage _storage;

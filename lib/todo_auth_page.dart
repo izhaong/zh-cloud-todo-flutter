@@ -510,6 +510,11 @@ class _TodoAuthPageState extends ConsumerState<TodoAuthPage> {
         _message = error.message;
         _messageIsError = true;
       });
+    } on SessionPersistenceException catch (error) {
+      setState(() {
+        _message = error.message;
+        _messageIsError = true;
+      });
     } on Object {
       setState(() {
         _message = '暂时无法完成请求，请稍后重试';

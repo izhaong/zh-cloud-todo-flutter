@@ -12,7 +12,8 @@ import '../native/native_intents.dart';
 /// 新架构入口类型的再导出，方便下游 provider / 页面直接 import 本文件即可。
 export '../core/auth/auth_session.dart' show TodoAuthSession;
 export '../core/auth/auth_gateway.dart' show AuthGateway;
-export '../core/storage/session_store.dart' show SessionStore;
+export '../core/storage/session_store.dart'
+    show SessionPersistenceException, SessionStore;
 export '../core/api/api_client.dart' show ApiClient;
 
 /// 会话仓库（secure 持久化）；ProviderScope.overrides 可注入 Fake。
@@ -89,8 +90,8 @@ class SessionController extends Notifier<TodoAuthSession?> {
       }
     } catch (_) {
       // 走到这里是读本地会话或校验过程本身异常，无法断定服务端拒绝过令牌，
-      // 所以不标「已失效」——那句说明只留给确实拿到「无效」答复的路径。
-      await store.clearSession();
+      // 所以既不标「已失效」、也不清已存项：钥匙串这次读不到（用户拒绝授权、
+      // 钥匙串暂不可用）不等于令牌被拒，抹掉项会把一次抖动变成必须重新登录。
       _clearNativeTaskProjections();
     } finally {
       ref.read(sessionBootstrappedProvider.notifier).state = true;
@@ -104,9 +105,17 @@ class SessionController extends Notifier<TodoAuthSession?> {
             current.tenantId != session.tenantId)) {
       _clearNativeTaskProjections();
     }
-    state = session;
     final store = ref.read(sessionStoreProvider);
-    await store.writeSession(session);
+    // 先落盘再改 state：反过来会让界面显示「已登录」而本机其实没存下，
+    // 用户重启后掉登录只会理解成自己没勾「记住登录」（FL #481 ③）。
+    try {
+      await store.writeSession(session);
+    } on SessionPersistenceException {
+      rethrow;
+    } catch (cause) {
+      throw SessionPersistenceException(cause: cause);
+    }
+    state = session;
   }
 
   /// 服务端把当前令牌判为无效（401）导致会话被清理：与主动「退出登录」区分开，
