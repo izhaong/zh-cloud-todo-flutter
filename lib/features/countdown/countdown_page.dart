@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import 'package:file_picker/file_picker.dart';
 
@@ -30,12 +31,15 @@ enum TodoCountdownUnit {
       TodoCountdownUnit.values[(index + 1) % TodoCountdownUnit.values.length];
 }
 
+/// 倒数纪念日的目标日期展示形状：月/日一律补零（`2026-11-03`，不是 `2026-11-3`）。
+///
+/// 同屏其它日期面（任务、日历）都是补零的，裸插值会在这屏里变成两种写法并存。
+/// 列表副标题与编辑器的日期按钮共用它，避免只修一处。
+String countdownDateText(DateTime d) => DateFormat('yyyy-MM-dd').format(d);
+
 /// 正数且关掉 showAge 时，源页那一行只显示目标日期（develop 既有行为，`!259`）。
 /// 顶层而非页面私有：tile 与页面都要用同一份文案，别让 tile 反向依赖页面类。
-String countdownDateSubtitle(CountdownDto c) {
-  final d = c.targetDate;
-  return '${d.year}-${d.month}-${d.day}';
-}
+String countdownDateSubtitle(CountdownDto c) => countdownDateText(c.targetDate);
 
 /// 前缀取源页用词：《01-添加倒数纪念日.md:106》「显示距离该日期已过/还有多少天」
 /// ⇒ 正数「已过」、倒数「还有」，不自创「已 N 天」。只给整数档：
@@ -706,7 +710,7 @@ class _CountdownEditorState extends State<_CountdownEditor> {
                 const Text('目标日期: '),
                 TextButton(
                   onPressed: _pickDate,
-                  child: Text('${d.year}-${d.month}-${d.day}'),
+                  child: Text(countdownDateText(d)),
                 ),
               ],
             ),
