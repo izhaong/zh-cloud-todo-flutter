@@ -66,7 +66,9 @@ final apiClientProvider = Provider<ApiClient>((ref) {
     tenantIdProvider: () =>
         ref.read(sessionProvider)?.tenantId ?? ApiConfig.defaultTenantId,
     onUnauthorized: () {
-      Future.microtask(() => ref.read(sessionProvider.notifier).signOut());
+      Future.microtask(
+        () => ref.read(sessionProvider.notifier).expireSession(),
+      );
     },
   );
 });

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/api/error_text.dart';
 import 'core/auth/auth_gateway.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/widgets/auth_brand_panel.dart';
@@ -37,6 +38,17 @@ class _TodoAuthPageState extends ConsumerState<TodoAuthPage> {
   bool _twoFactorRequired = false;
   String? _message;
   bool _messageIsError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // 会话是被服务端判为无效才落到这里的，得说清楚为什么；主动退出不会置这个标记，
+    // 所以这条路只有表单（Issue #475）。
+    if (ref.read(sessionExpiredNoticeProvider)) {
+      _message = kSessionExpiredMessage;
+      _messageIsError = true;
+    }
+  }
 
   @override
   void dispose() {
