@@ -135,6 +135,7 @@ class TodoTags extends Table {
   TextColumn get parentId => text().nullable()();
   TextColumn get name => text()();
   TextColumn get color => text().nullable()();
+  BoolColumn get isPinned => boolean().withDefault(const Constant(false))();
   DateTimeColumn get updatedAt => dateTime()();
   DateTimeColumn get createdAt => dateTime()();
 
@@ -445,7 +446,7 @@ class AppDatabase extends _$AppDatabase {
   }) : super(_open(_userDatabaseName(tenantId, userId, testNamespace)));
 
   @override
-  int get schemaVersion => 25;
+  int get schemaVersion => 26;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -700,6 +701,12 @@ class AppDatabase extends _$AppDatabase {
         if (!await _columnExists(m, 'todo_lists', 'is_pinned')) {
           await m.addColumn(todoLists, todoLists.isPinned);
           // 加列默认 false：存量清单本来没有置顶位，未置顶就是它们的真实状态，无需回填。
+        }
+      }
+      if (from < 26) {
+        if (!await _columnExists(m, 'todo_tags', 'is_pinned')) {
+          await m.addColumn(todoTags, todoTags.isPinned);
+          // 同上一条口径：标签侧本来没有置顶位，未置顶即存量真实状态，不回填。
         }
       }
     },

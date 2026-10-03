@@ -10,6 +10,7 @@ import '../../state/repositories/sidebar_visibility_repository.dart';
 import '../folder/folder_actions.dart';
 import '../list/list_actions.dart';
 import '../list/list_editor_sheet.dart';
+import '../tag/tag_actions.dart';
 import 'section.dart';
 import 'sidebar_hierarchy.dart';
 import 'sidebar_task_drop.dart';
@@ -640,14 +641,42 @@ class _TagRow extends ConsumerWidget {
           ..hideCurrentSnackBar()
           ..showSnackBar(SnackBar(content: Text('打上「${tag.name}」失败')));
       },
-      child: _SidebarRow(
-        rowKey: ValueKey('todo-sidebar-tag-${tag.id}'),
-        icon: Icons.label_outline,
-        label: tag.name,
-        selected: false,
-        colors: colors,
-        contentIndent: depth * TodoLayoutTokens.sidebarIconGap,
-        onTap: onTap,
+      child: Dismissible(
+        // 嘀嗒《04-用标签管理任务》:79「在侧边栏左滑某个标签，会出现「置顶」、「编辑」和「删除」3个选项。」
+        // 本端左滑唤出「置顶」；编辑/删除在点标签行即到的一层（见 tag_actions.dart 顶部说明）。
+        key: ValueKey('todo-sidebar-tag-swipe-${tag.id}'),
+        direction: DismissDirection.endToStart,
+        resizeDuration: null,
+        movementDuration: const Duration(milliseconds: 120),
+        confirmDismiss: (direction) async {
+          if (!context.mounted) return false;
+          await showTagActions(context, ref, tag);
+          return false;
+        },
+        background: Container(color: colors.surface),
+        secondaryBackground: Semantics(
+          key: const ValueKey('todo-sidebar-tag-swipe-actions'),
+          label: '左滑出现置顶',
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: const [
+              Icon(Icons.push_pin, size: 18),
+              SizedBox(width: 4),
+              Text('置顶', style: TextStyle(fontSize: 13)),
+              SizedBox(width: 12),
+            ],
+          ),
+        ),
+        child: _SidebarRow(
+          rowKey: ValueKey('todo-sidebar-tag-${tag.id}'),
+          icon: Icons.label_outline,
+          label: tag.name,
+          selected: false,
+          colors: colors,
+          contentIndent: depth * TodoLayoutTokens.sidebarIconGap,
+          onTap: onTap,
+          onLongPress: () => showTagActions(context, ref, tag),
+        ),
       ),
     );
   }

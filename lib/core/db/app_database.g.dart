@@ -3141,6 +3141,21 @@ class $TodoTagsTable extends TodoTags with TableInfo<$TodoTagsTable, TodoTag> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _isPinnedMeta = const VerificationMeta(
+    'isPinned',
+  );
+  @override
+  late final GeneratedColumn<bool> isPinned = GeneratedColumn<bool>(
+    'is_pinned',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_pinned" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _updatedAtMeta = const VerificationMeta(
     'updatedAt',
   );
@@ -3170,6 +3185,7 @@ class $TodoTagsTable extends TodoTags with TableInfo<$TodoTagsTable, TodoTag> {
     parentId,
     name,
     color,
+    isPinned,
     updatedAt,
     createdAt,
   ];
@@ -3214,6 +3230,12 @@ class $TodoTagsTable extends TodoTags with TableInfo<$TodoTagsTable, TodoTag> {
       context.handle(
         _colorMeta,
         color.isAcceptableOrUnknown(data['color']!, _colorMeta),
+      );
+    }
+    if (data.containsKey('is_pinned')) {
+      context.handle(
+        _isPinnedMeta,
+        isPinned.isAcceptableOrUnknown(data['is_pinned']!, _isPinnedMeta),
       );
     }
     if (data.containsKey('updated_at')) {
@@ -3261,6 +3283,10 @@ class $TodoTagsTable extends TodoTags with TableInfo<$TodoTagsTable, TodoTag> {
         DriftSqlType.string,
         data['${effectivePrefix}color'],
       ),
+      isPinned: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_pinned'],
+      )!,
       updatedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}updated_at'],
@@ -3286,6 +3312,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
   final String? parentId;
   final String name;
   final String? color;
+  final bool isPinned;
   final DateTime updatedAt;
   final DateTime createdAt;
   const TodoTag({
@@ -3294,6 +3321,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
     this.parentId,
     required this.name,
     this.color,
+    required this.isPinned,
     required this.updatedAt,
     required this.createdAt,
   });
@@ -3311,6 +3339,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
     if (!nullToAbsent || color != null) {
       map['color'] = Variable<String>(color);
     }
+    map['is_pinned'] = Variable<bool>(isPinned);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
@@ -3329,6 +3358,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
       color: color == null && nullToAbsent
           ? const Value.absent()
           : Value(color),
+      isPinned: Value(isPinned),
       updatedAt: Value(updatedAt),
       createdAt: Value(createdAt),
     );
@@ -3345,6 +3375,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
       parentId: serializer.fromJson<String?>(json['parentId']),
       name: serializer.fromJson<String>(json['name']),
       color: serializer.fromJson<String?>(json['color']),
+      isPinned: serializer.fromJson<bool>(json['isPinned']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
@@ -3358,6 +3389,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
       'parentId': serializer.toJson<String?>(parentId),
       'name': serializer.toJson<String>(name),
       'color': serializer.toJson<String?>(color),
+      'isPinned': serializer.toJson<bool>(isPinned),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
@@ -3369,6 +3401,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
     Value<String?> parentId = const Value.absent(),
     String? name,
     Value<String?> color = const Value.absent(),
+    bool? isPinned,
     DateTime? updatedAt,
     DateTime? createdAt,
   }) => TodoTag(
@@ -3377,6 +3410,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
     parentId: parentId.present ? parentId.value : this.parentId,
     name: name ?? this.name,
     color: color.present ? color.value : this.color,
+    isPinned: isPinned ?? this.isPinned,
     updatedAt: updatedAt ?? this.updatedAt,
     createdAt: createdAt ?? this.createdAt,
   );
@@ -3387,6 +3421,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
       parentId: data.parentId.present ? data.parentId.value : this.parentId,
       name: data.name.present ? data.name.value : this.name,
       color: data.color.present ? data.color.value : this.color,
+      isPinned: data.isPinned.present ? data.isPinned.value : this.isPinned,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
@@ -3400,6 +3435,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
           ..write('parentId: $parentId, ')
           ..write('name: $name, ')
           ..write('color: $color, ')
+          ..write('isPinned: $isPinned, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -3407,8 +3443,16 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, serverId, parentId, name, color, updatedAt, createdAt);
+  int get hashCode => Object.hash(
+    id,
+    serverId,
+    parentId,
+    name,
+    color,
+    isPinned,
+    updatedAt,
+    createdAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -3418,6 +3462,7 @@ class TodoTag extends DataClass implements Insertable<TodoTag> {
           other.parentId == this.parentId &&
           other.name == this.name &&
           other.color == this.color &&
+          other.isPinned == this.isPinned &&
           other.updatedAt == this.updatedAt &&
           other.createdAt == this.createdAt);
 }
@@ -3428,6 +3473,7 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
   final Value<String?> parentId;
   final Value<String> name;
   final Value<String?> color;
+  final Value<bool> isPinned;
   final Value<DateTime> updatedAt;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
@@ -3437,6 +3483,7 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
     this.parentId = const Value.absent(),
     this.name = const Value.absent(),
     this.color = const Value.absent(),
+    this.isPinned = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -3447,6 +3494,7 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
     this.parentId = const Value.absent(),
     required String name,
     this.color = const Value.absent(),
+    this.isPinned = const Value.absent(),
     required DateTime updatedAt,
     required DateTime createdAt,
     this.rowid = const Value.absent(),
@@ -3460,6 +3508,7 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
     Expression<String>? parentId,
     Expression<String>? name,
     Expression<String>? color,
+    Expression<bool>? isPinned,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
@@ -3470,6 +3519,7 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
       if (parentId != null) 'parent_id': parentId,
       if (name != null) 'name': name,
       if (color != null) 'color': color,
+      if (isPinned != null) 'is_pinned': isPinned,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
@@ -3482,6 +3532,7 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
     Value<String?>? parentId,
     Value<String>? name,
     Value<String?>? color,
+    Value<bool>? isPinned,
     Value<DateTime>? updatedAt,
     Value<DateTime>? createdAt,
     Value<int>? rowid,
@@ -3492,6 +3543,7 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
       parentId: parentId ?? this.parentId,
       name: name ?? this.name,
       color: color ?? this.color,
+      isPinned: isPinned ?? this.isPinned,
       updatedAt: updatedAt ?? this.updatedAt,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
@@ -3516,6 +3568,9 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
     if (color.present) {
       map['color'] = Variable<String>(color.value);
     }
+    if (isPinned.present) {
+      map['is_pinned'] = Variable<bool>(isPinned.value);
+    }
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
@@ -3536,6 +3591,7 @@ class TodoTagsCompanion extends UpdateCompanion<TodoTag> {
           ..write('parentId: $parentId, ')
           ..write('name: $name, ')
           ..write('color: $color, ')
+          ..write('isPinned: $isPinned, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
@@ -13029,6 +13085,7 @@ typedef $$TodoTagsTableCreateCompanionBuilder =
       Value<String?> parentId,
       required String name,
       Value<String?> color,
+      Value<bool> isPinned,
       required DateTime updatedAt,
       required DateTime createdAt,
       Value<int> rowid,
@@ -13040,6 +13097,7 @@ typedef $$TodoTagsTableUpdateCompanionBuilder =
       Value<String?> parentId,
       Value<String> name,
       Value<String?> color,
+      Value<bool> isPinned,
       Value<DateTime> updatedAt,
       Value<DateTime> createdAt,
       Value<int> rowid,
@@ -13076,6 +13134,11 @@ class $$TodoTagsTableFilterComposer
 
   ColumnFilters<String> get color => $composableBuilder(
     column: $table.color,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isPinned => $composableBuilder(
+    column: $table.isPinned,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -13124,6 +13187,11 @@ class $$TodoTagsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get isPinned => $composableBuilder(
+    column: $table.isPinned,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
@@ -13158,6 +13226,9 @@ class $$TodoTagsTableAnnotationComposer
 
   GeneratedColumn<String> get color =>
       $composableBuilder(column: $table.color, builder: (column) => column);
+
+  GeneratedColumn<bool> get isPinned =>
+      $composableBuilder(column: $table.isPinned, builder: (column) => column);
 
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
@@ -13199,6 +13270,7 @@ class $$TodoTagsTableTableManager
                 Value<String?> parentId = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String?> color = const Value.absent(),
+                Value<bool> isPinned = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -13208,6 +13280,7 @@ class $$TodoTagsTableTableManager
                 parentId: parentId,
                 name: name,
                 color: color,
+                isPinned: isPinned,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
                 rowid: rowid,
@@ -13219,6 +13292,7 @@ class $$TodoTagsTableTableManager
                 Value<String?> parentId = const Value.absent(),
                 required String name,
                 Value<String?> color = const Value.absent(),
+                Value<bool> isPinned = const Value.absent(),
                 required DateTime updatedAt,
                 required DateTime createdAt,
                 Value<int> rowid = const Value.absent(),
@@ -13228,6 +13302,7 @@ class $$TodoTagsTableTableManager
                 parentId: parentId,
                 name: name,
                 color: color,
+                isPinned: isPinned,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
                 rowid: rowid,

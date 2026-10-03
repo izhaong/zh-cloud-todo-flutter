@@ -1718,6 +1718,9 @@ class SyncCoordinator {
       parentId: Value(parentId),
       name: Value(payload['name']?.toString() ?? existing?.name ?? ''),
       color: Value(payload['color']?.toString()),
+      isPinned: Value(
+        payload['isPinned'] as bool? ?? existing?.isPinned ?? false,
+      ),
       updatedAt: Value(now),
       createdAt: Value(existing?.createdAt ?? now),
     );

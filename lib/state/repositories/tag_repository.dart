@@ -26,15 +26,19 @@ class TagRepository {
   ];
 
   Stream<List<TodoTag>> watchAll() {
-    return (_db.select(
-      _db.todoTags,
-    )..orderBy([(t) => OrderingTerm(expression: t.createdAt)])).watch();
+    return (_db.select(_db.todoTags)..orderBy([
+          (t) => OrderingTerm(expression: t.isPinned, mode: OrderingMode.desc),
+          (t) => OrderingTerm(expression: t.createdAt),
+        ]))
+        .watch();
   }
 
   Future<List<TodoTag>> getAll() {
-    return (_db.select(
-      _db.todoTags,
-    )..orderBy([(t) => OrderingTerm(expression: t.createdAt)])).get();
+    return (_db.select(_db.todoTags)..orderBy([
+          (t) => OrderingTerm(expression: t.isPinned, mode: OrderingMode.desc),
+          (t) => OrderingTerm(expression: t.createdAt),
+        ]))
+        .get();
   }
 
   Future<TodoTag> create({
@@ -82,6 +86,30 @@ class TagRepository {
         parentId: Value(parentId),
         updatedAt: Value(now),
       ),
+    );
+    final row = await (_db.select(
+      _db.todoTags,
+    )..where((t) => t.id.equals(tagId))).getSingle();
+    await _queue.enqueue(
+      entity: SyncEntities.tag,
+      op: SyncOps.upsert,
+      localId: tagId,
+      serverId: row.serverId,
+      payload: row.toJson(),
+    );
+    return row;
+  }
+
+  /// 置顶或取消置顶标签（嘀嗒《04-用标签管理任务》:79 侧边栏左滑出现「置顶」、
+  /// :94 右键同样出现「置顶」）。
+  ///
+  /// 与 [update] 同一条口径：本地写入与 tag/upsert outbox 必须一起落，
+  /// payload 走 `toJson()`，服务端 `todo_tag.is_pinned` 收同一字段名。
+  /// 允许多个标签同时置顶 —— 标签这页原文没有「只支持置顶一个」那种话。
+  Future<TodoTag> setPinned(String tagId, bool pinned) async {
+    final now = DateTime.now();
+    await (_db.update(_db.todoTags)..where((t) => t.id.equals(tagId))).write(
+      TodoTagsCompanion(isPinned: Value(pinned), updatedAt: Value(now)),
     );
     final row = await (_db.select(
       _db.todoTags,
