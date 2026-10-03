@@ -30,8 +30,9 @@
 - [x] `schemaVersion` 常量一推，**另一个文件**里硬编码同数字的用例也会红：
       `test/state/list_pinned_repository_sync_test.dart:96` 断的是 `schemaVersion == 25`，全量测试把它抓了出来
       ⇒ 改为断 26 并把用例名改成「库表升到 v26：todo_lists 仍带 is_pinned 列」。
-      教训已按可复算方式处理：本仓现读 `grep -rn "schemaVersion, 2[0-9]|user_version'], 2[0-9]"` 全仓 19 处命中，
-      除本文件外都在 `test/app_database_migration_test.dart`（一次改到 26）。
+      教训已按可复算方式处理：复算命令 `grep -rnE "schemaVersion, 2[0-9]|user_version'\], 2[0-9]" test`，
+      本次实测 17 处命中，按文件分：`test/app_database_migration_test.dart` 15 处、
+      `test/state/list_pinned_repository_sync_test.dart` 1 处、`test/state/tag_pinned_repository_sync_test.dart` 1 处。
 
 ## 四件套（新 UI 逐条量，不写"不适用"）
 
