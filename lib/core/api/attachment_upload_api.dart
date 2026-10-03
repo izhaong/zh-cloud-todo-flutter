@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 
 import 'api_client.dart';
+import 'envelope.dart';
 
 abstract interface class AttachmentUploadApi {
   Future<String> uploadFile({required String localPath, required String name});
@@ -175,9 +176,10 @@ class DioAttachmentUploadApi implements AttachmentUploadApi {
     if (body == null) throw StateError('空响应');
     if (body.containsKey('code')) {
       if (body['code'] != 0) {
-        throw DioException(
-          requestOptions: RequestOptions(path: '/app-api/infra/file/upload'),
-          error: body['msg'] ?? '附件上传失败',
+        throw envelopeFailure(
+          body,
+          path: '/app-api/infra/file/upload',
+          fallback: '附件上传失败',
         );
       }
       return body['data'];

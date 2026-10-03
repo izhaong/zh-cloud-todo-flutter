@@ -4,15 +4,13 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 
 import 'api_config.dart';
+import 'envelope.dart';
 
 dynamic _unwrapData(Map<String, dynamic>? body) {
   if (body == null) return null;
   if (!body.containsKey('code')) return body;
   if (body['code'] != 0) {
-    throw DioException(
-      requestOptions: RequestOptions(path: ApiConfig.todoPrefix),
-      error: body['msg'] ?? '请求失败',
-    );
+    throw envelopeFailure(body, path: ApiConfig.todoPrefix);
   }
   return body['data'];
 }
