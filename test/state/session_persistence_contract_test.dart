@@ -120,6 +120,14 @@ void main() {
       'false',
       reason: '改成 true 就等于把桌面登录交回需要 entitlement 的数据保护钥匙串',
     );
+    // service 名必须是本应用专属：插件默认名 flutter_secure_storage_service
+    // 与同机其它 Flutter macOS 档共用，而旧 cdhash 留下的同名项会让首次读取弹系统授权框
+    // —— 真钥匙串下的端到端就是靠这一条才跑通的。
+    expect(
+      macOsSessionStorageOptions.toMap()['accountName'],
+      'zh_cloud_todo_flutter_session',
+      reason: '共用默认 service 名会把「读自己的会话」变成读别的应用留下的项',
+    );
     expect(const SessionPersistenceException().message, isNotEmpty);
   });
 }

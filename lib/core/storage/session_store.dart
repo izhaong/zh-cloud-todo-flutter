@@ -12,6 +12,7 @@ import '../auth/auth_session.dart';
 /// 代价是每个新 cdhash（重新构建或换包）读旧项会弹一次系统授权框。
 const macOsSessionStorageOptions = MacOsOptions(
   useDataProtectionKeyChain: false,
+  accountName: 'zh_cloud_todo_flutter_session',
 );
 
 /// 会话没能落进本机安全存储。
