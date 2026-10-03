@@ -16,7 +16,8 @@ String describeError(Object? error) {
   final message = _stripClassName(error.toString());
   // 本仓自定义异常带的是中文句子（`StateError('提醒规则不存在：x')`），剥掉英文类名后
   // 可以原样展示；框架的英文原文不进界面。
-  if (_hasCjk(message)) return message;
+  // 带 URL 或 Dart 堆栈的串是诊断信息，即使夹着中文也不给用户看。
+  if (_hasCjk(message) && !_looksDiagnostic(message)) return message;
   return kGenericErrorReason;
 }
 
@@ -44,6 +45,8 @@ String? _serverMessage(DioException error) {
   if (msg is! String) return null;
   final trimmed = msg.trim();
   if (trimmed.isEmpty) return null;
+  // 先按整句判诊断串，再截断：截断可能把句尾的 URL 切掉，就漏过去了。
+  if (_looksDiagnostic(trimmed)) return null;
   return trimmed.length > 60 ? '${trimmed.substring(0, 60)}…' : trimmed;
 }
 
@@ -52,6 +55,7 @@ String _statusMessage(int? code) {
   if (code == 403) return '没有权限执行该操作';
   if (code == 404) return '请求的内容找不到，请稍后重试';
   if (code != null && code >= 500) return '服务暂时不可用，请稍后重试';
+  if (code == null) return '服务返回异常，请稍后重试';
   return '服务返回异常（HTTP $code），请稍后重试';
 }
 
@@ -65,3 +69,8 @@ String _stripClassName(String text) => text.replaceFirst(_classNamePrefix, '');
 /// 是否含中日韩文字（U+3000–U+9FFF：含全角标点与汉字）。
 /// 用作「这句是不是本仓自己写的中文文案」的判据，英文诊断句不会落进这个区间。
 bool _hasCjk(String text) => text.contains(RegExp('[\\u3000-\\u9fff]'));
+
+/// 带链接或 Dart 堆栈帧的串属于诊断信息，不该出现在界面上。
+final RegExp _diagnosticMarkers = RegExp(r'https?://|package:|dart:');
+
+bool _looksDiagnostic(String text) => _diagnosticMarkers.hasMatch(text);

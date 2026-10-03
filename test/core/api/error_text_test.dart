@@ -136,5 +136,88 @@ void main() {
       );
       expect(describeError(42), kGenericErrorReason);
     });
+
+    // 第二意见（agent --model grok-4.7-high）判出的洞：「含 CJK 就放行」会把
+    // 中文句子夹带的 URL 或 Dart 堆栈一起放进界面，信封 msg 更是不经这道门。
+    test('中文句子夹 URL 或 package: 堆栈时降为通用原因', () {
+      expect(
+        describeError(StateError('提醒创建失败，详见 https://doc.zh04.com/todo#remind')),
+        kGenericErrorReason,
+      );
+      expect(
+        describeError(
+          Exception('导入失败 http://127.0.0.1:48080/app-api/todo/import'),
+        ),
+        kGenericErrorReason,
+      );
+      expect(
+        describeError(
+          StateError(
+            '同步队列未就绪\n#0 TodoSyncRepository.flush (package:zh_cloud_todo_flutter/core/sync/sync_coordinator.dart:277:19)',
+          ),
+        ),
+        kGenericErrorReason,
+      );
+    });
+
+    test('信封 msg 同样不得带出 URL 或堆栈', () {
+      Response<Object?> envelopeWithStatus(int? code, Object? data) =>
+          Response<Object?>(
+            requestOptions: _options,
+            statusCode: code,
+            data: data,
+          );
+      // 诊断 msg 被挡掉之后，落回状态码分档，而不是把「系统异常 + 链接」端给用户。
+      expect(
+        describeError(
+          _dio(
+            DioExceptionType.badResponse,
+            response: envelopeWithStatus(500, {
+              'code': 500,
+              'msg':
+                  '系统异常，参见 https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500',
+            }),
+          ),
+        ),
+        '服务暂时不可用，请稍后重试',
+      );
+      expect(
+        describeError(
+          _dio(
+            DioExceptionType.badResponse,
+            response: envelopeWithStatus(500, {
+              'code': 500,
+              'msg': '空指针 package:zh_cloud_todo_flutter/x.dart',
+            }),
+          ),
+        ),
+        '服务暂时不可用，请稍后重试',
+      );
+      // 句尾才出现 URL 的长句也必须挡住（先判整句再截断）。
+      expect(
+        describeError(
+          _dio(
+            DioExceptionType.badResponse,
+            response: envelopeWithStatus(500, {
+              'code': 500,
+              'msg': '参数校验没通过，请检查输入${'字' * 70} https://example.com/a',
+            }),
+          ),
+        ),
+        '服务暂时不可用，请稍后重试',
+      );
+    });
+
+    test('badResponse 没有状态码时不渲染「HTTP null」', () {
+      expect(
+        describeError(
+          _dio(
+            DioExceptionType.badResponse,
+            response: Response<Object?>(requestOptions: _options),
+          ),
+        ),
+        '服务返回异常，请稍后重试',
+      );
+    });
   });
 }
