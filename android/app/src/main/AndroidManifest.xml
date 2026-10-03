@@ -1,4 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- INTERNET 必须在 main 里声明：此前它只存在于 src/debug/AndroidManifest.xml，
+         于是 debug 产物能联网、release 产物一个包都发不出去（release 合并清单里
+         android.permission.INTERNET 计数为 0）。 -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-feature android:name="android.software.app_widgets" android:required="false"/>
