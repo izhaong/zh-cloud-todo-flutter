@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/efficiency_api.dart';
+import '../../core/api/error_text.dart';
 import '../../state/efficiency_providers.dart';
 
 /// 四象限规则管理：所有读写均落到 `/app-api/todo/quadrant/**`。
@@ -134,7 +135,7 @@ class QuadrantRulesPage extends ConsumerWidget {
       if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('规则保存失败：$error')));
+      ).showSnackBar(SnackBar(content: Text('规则保存失败：${describeError(error)}')));
     }
   }
 
@@ -187,7 +188,7 @@ class QuadrantRulesPage extends ConsumerWidget {
       if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('规则删除失败：$error')));
+      ).showSnackBar(SnackBar(content: Text('规则删除失败：${describeError(error)}')));
     }
   }
 }
@@ -389,7 +390,7 @@ class _LoadError extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('规则加载失败：$error'),
+          Text('规则加载失败：${describeError(error)}'),
           const SizedBox(height: 12),
           OutlinedButton(onPressed: onRetry, child: const Text('重试')),
         ],

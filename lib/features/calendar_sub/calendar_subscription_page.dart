@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/error_text.dart';
 import '../../core/api/todo_api.dart';
 import '../../state/providers.dart';
 
@@ -24,7 +25,11 @@ final calSubscriptionProvider = FutureProvider.autoDispose<CalSubState>((
     final list = await api.list();
     return CalSubState(loading: false, items: list);
   } catch (e) {
-    return CalSubState(loading: false, items: const [], error: e.toString());
+    return CalSubState(
+      loading: false,
+      items: const [],
+      error: describeError(e),
+    );
   }
 });
 
@@ -70,7 +75,9 @@ class _CalendarSubscriptionPageState
       ref.invalidate(calSubscriptionProvider);
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text('订阅失败: $e')));
+      messenger.showSnackBar(
+        SnackBar(content: Text('订阅失败: ${describeError(e)}')),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -85,7 +92,9 @@ class _CalendarSubscriptionPageState
       ref.invalidate(calSubscriptionProvider);
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text('删除失败: $e')));
+      messenger.showSnackBar(
+        SnackBar(content: Text('删除失败: ${describeError(e)}')),
+      );
     }
   }
 
@@ -112,7 +121,7 @@ class _CalendarSubscriptionPageState
       ),
       body: state.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('加载失败: $e')),
+        error: (e, _) => Center(child: Text('加载失败: ${describeError(e)}')),
         data: (s) => _content(s),
       ),
     );
@@ -124,7 +133,7 @@ class _CalendarSubscriptionPageState
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('加载失败: ${s.error}'),
+            Text('加载失败: ${describeError(s.error)}'),
             const SizedBox(height: 8),
             FilledButton.icon(
               onPressed: () => ref.invalidate(calSubscriptionProvider),
@@ -232,7 +241,9 @@ class _CalendarSubscriptionPageState
       messenger.showSnackBar(const SnackBar(content: Text('任务 ICS 订阅链接已复制')));
     } catch (error) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text('生成订阅链接失败: $error')));
+      messenger.showSnackBar(
+        SnackBar(content: Text('生成订阅链接失败: ${describeError(error)}')),
+      );
     }
   }
 }

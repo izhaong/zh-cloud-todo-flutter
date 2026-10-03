@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/error_text.dart';
 import '../../core/widgets/app_widgets.dart';
 
 import '../../state/efficiency_providers.dart';
@@ -119,7 +120,7 @@ class _HabitEditorFormState extends ConsumerState<_HabitEditorForm> {
       // 提示必须落在弹层自己的子树里：根 ScaffoldMessenger 会被模态路由盖住。
       setState(() {
         _saving = false;
-        _submitError = '保存失败：$error';
+        _submitError = '保存失败：${describeError(error)}';
       });
     }
   }

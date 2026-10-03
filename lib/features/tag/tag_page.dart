@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/error_text.dart';
 import '../../core/db/app_database.dart';
 import '../../state/providers.dart';
 import '../../state/repositories/tag_repository.dart';
@@ -28,7 +29,7 @@ class TagPage extends ConsumerWidget {
       ),
       body: tagsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('加载标签失败: $e')),
+        error: (e, _) => Center(child: Text('加载标签失败: ${describeError(e)}')),
         data: (tags) => tags.isEmpty
             ? const Center(child: Text('暂无标签'))
             : ListView.builder(

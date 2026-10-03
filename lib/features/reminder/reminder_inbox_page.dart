@@ -4,6 +4,7 @@ import 'package:drift/drift.dart' show OrderingTerm;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/error_text.dart';
 import '../../core/db/app_database.dart' show TodoSyncChange;
 import '../../core/sync/sync_entities.dart' show SyncEntities;
 import '../../state/providers.dart';
@@ -155,7 +156,7 @@ class ReminderInboxPage extends ConsumerWidget {
       host?.showSnackBar(const SnackBar(content: Text('提醒操作已加入同步队列')));
       ref.invalidate(inboxProvider);
     } catch (e) {
-      host?.showSnackBar(SnackBar(content: Text('操作失败: $e')));
+      host?.showSnackBar(SnackBar(content: Text('操作失败: ${describeError(e)}')));
     }
   }
 
@@ -183,7 +184,7 @@ class ReminderInboxPage extends ConsumerWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('加载失败: $e'),
+                    Text('加载失败: ${describeError(e)}'),
                     const SizedBox(height: 8),
                     FilledButton.icon(
                       onPressed: () => ref.invalidate(inboxProvider),

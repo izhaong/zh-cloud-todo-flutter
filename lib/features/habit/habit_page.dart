@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/error_text.dart';
 import '../../core/theme/brand_colors.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../state/efficiency_providers.dart';
@@ -73,7 +74,7 @@ class HabitPage extends ConsumerWidget {
             child: habits == null
                 ? (async.hasError
                       ? _ListLoadFailed(
-                          message: '加载失败: ${async.error}',
+                          message: '加载失败: ${describeError(async.error)}',
                           onRetry: () => ref.invalidate(myHabitsProvider),
                         )
                       : const Center(child: CircularProgressIndicator()))

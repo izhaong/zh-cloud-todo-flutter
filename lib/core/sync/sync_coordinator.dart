@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 
 import '../api/attachment_upload_api.dart';
 import '../api/api_client.dart';
+import '../api/error_text.dart';
 import '../api/sync_api.dart';
 import '../db/app_database.dart';
 import 'repeat_frequency_wire.dart';
@@ -274,7 +275,8 @@ class SyncCoordinator {
         )..where((row) => row.id.equals(localId))).write(
           TodoAttachmentsCompanion(
             status: const Value('failed'),
-            error: Value(error.toString()),
+            // 这一列会被任务详情的附件行当副标题展示，存英文原文等于泄漏给用户。
+            error: Value(describeError(error)),
             updatedAt: Value(DateTime.now()),
           ),
         );

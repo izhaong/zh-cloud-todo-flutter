@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/error_text.dart';
 import '../../core/api/todo_api.dart';
 import '../../state/providers.dart';
 import '../../state/session_state.dart';
@@ -36,7 +37,7 @@ final listMembersProvider = FutureProvider.family
         return ListMembersState(
           status: MembersState.error,
           members: const [],
-          error: e.toString(),
+          error: describeError(e),
         );
       }
     });
@@ -74,7 +75,9 @@ class _ListMemberPageState extends ConsumerState<ListMemberPage> {
       ref.invalidate(listMembersProvider(widget.listServerId));
       return true;
     } catch (e) {
-      messenger?.showSnackBar(SnackBar(content: Text('操作失败: $e')));
+      messenger?.showSnackBar(
+        SnackBar(content: Text('操作失败: ${describeError(e)}')),
+      );
       return false;
     }
   }
@@ -282,14 +285,14 @@ class _ListMemberPageState extends ConsumerState<ListMemberPage> {
   Widget _content(AsyncValue<ListMembersState> state, bool iAmOwner) {
     return state.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('加载失败: $e')),
+      error: (e, _) => Center(child: Text('加载失败: ${describeError(e)}')),
       data: (s) {
         if (s.status == MembersState.error) {
           return Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('加载失败: ${s.error}'),
+                Text('加载失败: ${describeError(s.error)}'),
                 const SizedBox(height: 8),
                 FilledButton.icon(
                   onPressed: () =>

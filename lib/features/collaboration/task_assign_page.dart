@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/error_text.dart';
 import '../../core/api/todo_api.dart';
 import '../../state/providers.dart';
 import '../../state/session_state.dart';
@@ -22,7 +23,7 @@ final taskAssignProvider = FutureProvider.family
         final assignee = await api.assignee(taskServerId);
         return TaskAssignState(assignee: assignee);
       } catch (e) {
-        return TaskAssignState(assignee: null, error: e.toString());
+        return TaskAssignState(assignee: null, error: describeError(e));
       }
     });
 
@@ -63,7 +64,9 @@ class _TaskAssignPageState extends ConsumerState<TaskAssignPage> {
       messenger.showSnackBar(const SnackBar(content: Text('已指派')));
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text('操作失败: $e')));
+      messenger.showSnackBar(
+        SnackBar(content: Text('操作失败: ${describeError(e)}')),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -103,7 +106,9 @@ class _TaskAssignPageState extends ConsumerState<TaskAssignPage> {
       messenger.showSnackBar(const SnackBar(content: Text('已移除执行人')));
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text('操作失败: $e')));
+      messenger.showSnackBar(
+        SnackBar(content: Text('操作失败: ${describeError(e)}')),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -131,10 +136,10 @@ class _TaskAssignPageState extends ConsumerState<TaskAssignPage> {
       ),
       body: state.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('加载失败: $e')),
+        error: (e, _) => Center(child: Text('加载失败: ${describeError(e)}')),
         data: (s) => members.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(child: Text('成员加载失败: $e')),
+          error: (e, _) => Center(child: Text('成员加载失败: ${describeError(e)}')),
           data: (memberState) => _content(s, memberState, currentUserId),
         ),
       ),
@@ -151,7 +156,7 @@ class _TaskAssignPageState extends ConsumerState<TaskAssignPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('加载失败: ${s.error}'),
+            Text('加载失败: ${describeError(s.error)}'),
             const SizedBox(height: 8),
             FilledButton.icon(
               onPressed: () =>
@@ -168,7 +173,7 @@ class _TaskAssignPageState extends ConsumerState<TaskAssignPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('成员加载失败: ${memberState.error}'),
+            Text('成员加载失败: ${describeError(memberState.error)}'),
             const SizedBox(height: 8),
             FilledButton.icon(
               onPressed: () =>

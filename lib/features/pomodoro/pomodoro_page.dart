@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/efficiency_api.dart';
+import '../../core/api/error_text.dart';
 import '../../core/db/app_database.dart';
 import '../../native/native_intents.dart';
 import '../../state/efficiency_providers.dart';
@@ -186,7 +187,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage>
       if (!mounted) return;
       setState(() {
         _loadingPresets = false;
-        _presetError = '专注模式加载失败：$error';
+        _presetError = '专注模式加载失败：${describeError(error)}';
       });
     }
   }
@@ -213,7 +214,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage>
       if (!mounted || request != _timersRequest) return;
       setState(() {
         _loadingTimers = false;
-        _timerError = '计时器加载失败：$error';
+        _timerError = '计时器加载失败：${describeError(error)}';
       });
     }
   }
@@ -231,7 +232,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage>
       _activateSession(session, secondsLeft: _sessionDisplaySeconds(session));
     } catch (error) {
       if (!mounted) return;
-      setState(() => _timerError = '计时器启动失败：$error');
+      setState(() => _timerError = '计时器启动失败：${describeError(error)}');
     } finally {
       if (mounted) setState(() => _timerActionPendingId = null);
     }
@@ -259,7 +260,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage>
       };
     } catch (error) {
       if (!mounted) return;
-      setState(() => _timerError = '习惯加载失败：$error');
+      setState(() => _timerError = '习惯加载失败：${describeError(error)}');
       return;
     }
     if (!mounted) return;
@@ -337,8 +338,9 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage>
     } catch (error) {
       if (!mounted) return;
       setState(
-        () =>
-            _timerError = initial == null ? '计时器新增失败：$error' : '计时器编辑失败：$error',
+        () => _timerError = initial == null
+            ? '计时器新增失败：${describeError(error)}'
+            : '计时器编辑失败：${describeError(error)}',
       );
     } finally {
       if (mounted) setState(() => _timerActionPendingId = null);
@@ -391,7 +393,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage>
       unawaited(_loadTimers(archived: _showingArchivedTimers));
     } catch (error) {
       if (!mounted) return;
-      setState(() => _timerError = '计时器$action失败：$error');
+      setState(() => _timerError = '计时器$action失败：${describeError(error)}');
     } finally {
       if (mounted) setState(() => _timerActionPendingId = null);
     }
@@ -412,7 +414,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage>
       unawaited(_loadTimers(archived: _showingArchivedTimers));
     } catch (error) {
       if (!mounted) return;
-      setState(() => _timerError = '计时器删除失败：$error');
+      setState(() => _timerError = '计时器删除失败：${describeError(error)}');
     } finally {
       if (mounted) setState(() => _timerActionPendingId = null);
     }
@@ -443,7 +445,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage>
       _activateSession(session, secondsLeft: _sessionDisplaySeconds(session));
     } catch (error) {
       if (!mounted) return;
-      setState(() => _actionError = '开始失败：$error');
+      setState(() => _actionError = '开始失败：${describeError(error)}');
     } finally {
       if (mounted) setState(() => _actionPending = false);
     }
@@ -464,7 +466,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage>
       setState(() => _syncError = null);
     } catch (error) {
       if (!mounted || request != _syncRequest) return;
-      setState(() => _syncError = '会话同步失败：$error');
+      setState(() => _syncError = '会话同步失败：${describeError(error)}');
     } finally {
       _syncInFlight = false;
     }
@@ -489,7 +491,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage>
       if (!mounted || request != _recordsRequest) return;
       setState(() {
         _loadingRecords = false;
-        _recordsError = '记录加载失败：$error';
+        _recordsError = '记录加载失败：${describeError(error)}';
       });
     }
   }
@@ -866,7 +868,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage>
       await _refreshRecordsAndStats();
     } catch (error) {
       if (!mounted) return;
-      setState(() => _actionError = '调整失败：$error');
+      setState(() => _actionError = '调整失败：${describeError(error)}');
     } finally {
       if (mounted) setState(() => _actionPending = false);
     }
@@ -890,7 +892,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage>
       _syncKeepScreenAwake();
     } catch (error) {
       if (!mounted) return;
-      setState(() => _actionError = '暂停失败：$error');
+      setState(() => _actionError = '暂停失败：${describeError(error)}');
     } finally {
       if (mounted) setState(() => _actionPending = false);
     }
@@ -914,7 +916,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage>
       _syncKeepScreenAwake();
     } catch (error) {
       if (!mounted) return;
-      setState(() => _actionError = '恢复失败：$error');
+      setState(() => _actionError = '恢复失败：${describeError(error)}');
     } finally {
       if (mounted) setState(() => _actionPending = false);
     }
@@ -949,7 +951,11 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage>
       await _refreshRecordsAndStats();
     } catch (error) {
       if (!mounted) return;
-      setState(() => _actionError = complete ? '完成失败：$error' : '取消失败：$error');
+      setState(
+        () => _actionError = complete
+            ? '完成失败：${describeError(error)}'
+            : '取消失败：${describeError(error)}',
+      );
     } finally {
       if (mounted) setState(() => _actionPending = false);
     }
@@ -1013,7 +1019,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage>
       await _refreshRecordsAndStats();
     } catch (error) {
       if (!mounted) return;
-      setState(() => _recordActionError = '更新失败：$error');
+      setState(() => _recordActionError = '更新失败：${describeError(error)}');
     } finally {
       if (mounted) setState(() => _recordActionPending = false);
     }
@@ -1048,7 +1054,7 @@ class _PomodoroPageState extends ConsumerState<PomodoroPage>
       await _refreshRecordsAndStats();
     } catch (error) {
       if (!mounted) return;
-      setState(() => _recordActionError = '删除失败：$error');
+      setState(() => _recordActionError = '删除失败：${describeError(error)}');
     } finally {
       if (mounted) setState(() => _recordActionPending = false);
     }
@@ -2408,7 +2414,7 @@ class _BackfillDialogState extends State<_BackfillDialog> {
       if (mounted) Navigator.pop(context, true);
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = '保存失败：$error');
+      setState(() => _error = '保存失败：${describeError(error)}');
     } finally {
       if (mounted) setState(() => _submitting = false);
     }

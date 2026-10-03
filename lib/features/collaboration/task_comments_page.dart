@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/error_text.dart';
 import '../../core/api/todo_api.dart';
 import '../../state/providers.dart';
 import '../../state/session_state.dart';
@@ -36,7 +37,7 @@ final taskCommentsProvider = FutureProvider.family
         return TaskCommentsState(
           loading: false,
           items: const [],
-          error: e.toString(),
+          error: describeError(e),
         );
       }
     });
@@ -92,7 +93,9 @@ class _TaskCommentsPageState extends ConsumerState<TaskCommentsPage> {
     } catch (e) {
       if (!mounted) return;
       _addCtrl.text = text;
-      messenger.showSnackBar(SnackBar(content: Text('添加失败: $e')));
+      messenger.showSnackBar(
+        SnackBar(content: Text('添加失败: ${describeError(e)}')),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -133,7 +136,9 @@ class _TaskCommentsPageState extends ConsumerState<TaskCommentsPage> {
       await _reload();
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text('保存失败: $e')));
+      messenger.showSnackBar(
+        SnackBar(content: Text('保存失败: ${describeError(e)}')),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -171,7 +176,9 @@ class _TaskCommentsPageState extends ConsumerState<TaskCommentsPage> {
       await _reload();
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text('删除失败: $e')));
+      messenger.showSnackBar(
+        SnackBar(content: Text('删除失败: ${describeError(e)}')),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -270,14 +277,14 @@ class _TaskCommentsPageState extends ConsumerState<TaskCommentsPage> {
   }) {
     return state.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('加载失败: $e')),
+      error: (e, _) => Center(child: Text('加载失败: ${describeError(e)}')),
       data: (s) {
         if (s.error != null) {
           return Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('加载失败: ${s.error}'),
+                Text('加载失败: ${describeError(s.error)}'),
                 const SizedBox(height: 8),
                 FilledButton.icon(
                   onPressed: _reload,

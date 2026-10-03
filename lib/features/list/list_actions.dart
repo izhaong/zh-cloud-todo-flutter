@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/error_text.dart';
 import '../../core/db/app_database.dart';
 import '../../state/providers.dart';
 import '../collaboration/list_member_page.dart';
@@ -129,7 +130,9 @@ Future<void> showListActions(
                   await repo.setPinned(list.id, !list.isPinned);
                 } on Object catch (e) {
                   if (sheetContext.mounted) {
-                    setSheetState(() => pinError = '置顶失败：$e，清单列表仍是原来的');
+                    setSheetState(
+                      () => pinError = '置顶失败：${describeError(e)}，清单列表仍是原来的',
+                    );
                   }
                   return;
                 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/error_text.dart';
 import '../../core/api/todo_api.dart';
 import '../../state/providers.dart';
 import 'task_summary_sheet.dart';
@@ -37,7 +38,7 @@ class _NotePageState extends ConsumerState<NotePage> {
       setState(() => _items = items);
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = error.toString());
+      setState(() => _error = describeError(error));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -66,7 +67,7 @@ class _NotePageState extends ConsumerState<NotePage> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('保存失败：$error')));
+        ).showSnackBar(SnackBar(content: Text('保存失败：${describeError(error)}')));
       }
     }
   }
@@ -79,7 +80,7 @@ class _NotePageState extends ConsumerState<NotePage> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('归档失败：$error')));
+        ).showSnackBar(SnackBar(content: Text('归档失败：${describeError(error)}')));
       }
     }
   }
@@ -110,7 +111,7 @@ class _NotePageState extends ConsumerState<NotePage> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('删除失败：$error')));
+        ).showSnackBar(SnackBar(content: Text('删除失败：${describeError(error)}')));
       }
     }
   }
