@@ -317,7 +317,7 @@ void main() {
     ]);
 
     expect(find.text('已过 5 天'), findsOneWidget);
-    expect(find.text('2026-8-10'), findsOneWidget);
+    expect(find.text('2026-08-10'), findsOneWidget);
     expect(find.textContaining('还有 -5'), findsNothing);
   });
 

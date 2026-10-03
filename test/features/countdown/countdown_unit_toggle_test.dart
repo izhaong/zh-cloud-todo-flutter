@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/intl.dart';
 
 import 'package:zh_cloud_todo_flutter/core/api/efficiency_api.dart';
 import 'package:zh_cloud_todo_flutter/features/countdown/countdown_page.dart';
@@ -100,7 +101,8 @@ void main() {
     // 与 develop 已验收的行为一致：这一支显示目标日期而非天数。
     // 断言值由 fixture 同一份输入算出，不手写日期（我上一版就是靠猜日期红的）。
     final d = DateTime(2026, 1, 1).add(const Duration(days: -2000));
-    expect(find.text('${d.year}-${d.month}-${d.day}'), findsOneWidget);
+    // 期望值用 intl 这个独立来源算（不是抄实现的字符串拼法），否则实现写错它也跟着错。
+    expect(find.text(DateFormat('yyyy-MM-dd').format(d)), findsOneWidget);
     expect(find.textContaining('已过'), findsNothing);
     expect(
       find.byKey(const Key('todo-countdown-unit-3')),
