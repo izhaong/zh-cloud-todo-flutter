@@ -162,6 +162,28 @@ void main() {
     expect(container.read(sessionExpiredNoticeProvider), isTrue);
   });
 
+  test('业务请求撞到 HTTP 200 + 信封 code:401 时也结束会话（#477 的真形状）', () async {
+    final store = _MemorySessionStore();
+    final container = ProviderContainer(
+      overrides: [
+        sessionStoreProvider.overrideWithValue(store),
+        authGatewayProvider.overrideWithValue(_FakeAuthGateway()),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await container.read(sessionProvider.notifier).setSession(persistedSession);
+    final client = container.read(apiClientProvider);
+    client.raw.httpClientAdapter = _EnvelopeUnauthorizedAdapter();
+    // HTTP 是 200，dio 不抛；「这是未登录」只能从信封里读出来。
+    await client.get<Map<String, dynamic>>('/lists');
+    await pumpEventQueue();
+
+    expect(container.read(sessionProvider), isNull);
+    expect(store.cleared, isTrue);
+    expect(container.read(sessionExpiredNoticeProvider), isTrue);
+  });
+
   test(
     'sign out clears persisted native widget and lock screen snapshots',
     () async {
@@ -207,6 +229,25 @@ void main() {
       );
     },
   );
+}
+
+/// 芋道真形状：HTTP 200，业务码 401 装在信封里。
+class _EnvelopeUnauthorizedAdapter implements HttpClientAdapter {
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async => ResponseBody.fromString(
+    '{"code":401,"msg":"账号未登录","data":null}',
+    200,
+    headers: {
+      Headers.contentTypeHeader: [Headers.jsonContentType],
+    },
+  );
+
+  @override
+  void close({bool force = false}) {}
 }
 
 /// 只回 401 的假传输层：用来驱动 `apiClientProvider` 里那条真接线。

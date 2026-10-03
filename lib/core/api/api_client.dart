@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import 'api_config.dart';
+import 'envelope.dart';
 
 /// 会话凭证供给：网络层在每次请求前回调取最新 token / tenantId。
 typedef TokenProvider = String Function();
@@ -14,7 +15,7 @@ typedef OnUnauthorized = void Function();
 ///
 /// - 默认 5s 连接 / 10s 接收超时。
 /// - 请求前注入 `Bearer <token>` + `tenant-id`（与后端「登录态一体化」一致）。
-/// - 响应 401 触发 [onUnauthorized]（延后到下一帧，避免 build 期改 provider）。
+/// - 401 触发 [onUnauthorized]：HTTP 401，或 HTTP 200 的信封 `code:401`（芋道的「未登录」是后者）。
 /// - 业务错误信封 `{code,msg,data}`：`code != 0` 抛 [DioException]。
 class ApiClient {
   ApiClient({
@@ -44,6 +45,14 @@ class ApiClient {
           options.headers['tenant-id'] =
               tenantIdProvider?.call() ?? ApiConfig.defaultTenantId;
           handler.next(options);
+        },
+        onResponse: (response, handler) {
+          // 芋道把「未登录」装进 HTTP 200 的信封里（`code:401`），dio 的 onError
+          // 看不见这一档；不在这里收尾，用户会留在应用里对着「网络异常」反复重试。
+          if (envelopeCode(response.data) == 401) {
+            onUnauthorized?.call();
+          }
+          handler.next(response);
         },
         onError: (error, handler) {
           if (error.response?.statusCode == 401) {

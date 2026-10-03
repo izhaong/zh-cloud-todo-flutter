@@ -1,5 +1,7 @@
 import 'package:dio/dio.dart';
 
+import 'envelope.dart';
+
 /// 会话被服务端判为无效时的统一说法：401 兜底文案与登录页的过期说明共用这一句，
 /// 避免出现「请求里说已失效、登录页说已过期」两套措辞（Issue #475）。
 const String kSessionExpiredMessage = '登录状态已失效，请重新登录';
@@ -26,6 +28,9 @@ String describeError(Object? error) {
 }
 
 String _describeDio(DioException error) {
+  // 信封码先判：芋道的「未登录」是 HTTP 200 + `code:401`，若不先认这个码，
+  // 就会顺着 msg 念成「账号未登录」或掉进兜底的「网络连接异常」——两句都不是原因。
+  if (envelopeCode(error.response?.data) == 401) return kSessionExpiredMessage;
   final serverMessage = _serverMessage(error);
   if (serverMessage != null) return serverMessage;
   return switch (error.type) {

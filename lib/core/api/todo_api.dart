@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 
 import 'api_client.dart';
 import 'api_config.dart';
+import 'envelope.dart';
 
 export 'api_config.dart' show ApiConfig;
 
@@ -19,10 +20,7 @@ Map<String, dynamic> _unwrapBody(Map<String, dynamic>? body) {
   if (body.containsKey('code')) {
     final code = body['code'];
     if (code != 0) {
-      throw DioException(
-        requestOptions: RequestOptions(path: '/app-api/todo'),
-        error: body['msg'] ?? '请求失败',
-      );
+      throw envelopeFailure(body, path: '/app-api/todo');
     }
     return (body['data'] as Map?)?.cast<String, dynamic>() ?? const {};
   }
@@ -32,10 +30,7 @@ Map<String, dynamic> _unwrapBody(Map<String, dynamic>? body) {
 void _ensureSuccess(Map<String, dynamic>? body) {
   if (body == null || !body.containsKey('code')) return;
   if (body['code'] != 0) {
-    throw DioException(
-      requestOptions: RequestOptions(path: '/app-api/todo'),
-      error: body['msg'] ?? '请求失败',
-    );
+    throw envelopeFailure(body, path: '/app-api/todo');
   }
 }
 
@@ -44,10 +39,7 @@ List<dynamic> _unwrapListBody(Map<String, dynamic>? body) {
   if (body.containsKey('code')) {
     final code = body['code'];
     if (code != 0) {
-      throw DioException(
-        requestOptions: RequestOptions(path: '/app-api/todo'),
-        error: body['msg'] ?? '请求失败',
-      );
+      throw envelopeFailure(body, path: '/app-api/todo');
     }
     return (body['data'] as List?)?.toList(growable: false) ?? const [];
   }
@@ -709,9 +701,10 @@ class ActivityApi {
     );
     final body = response.data ?? const <String, dynamic>{};
     if (body['code'] != null && body['code'] != 0) {
-      throw DioException(
-        requestOptions: RequestOptions(path: '/task/$taskServerId/activities'),
-        error: body['msg'] ?? '动态加载失败',
+      throw envelopeFailure(
+        body,
+        path: '/task/$taskServerId/activities',
+        fallback: '动态加载失败',
       );
     }
     final raw = body['data'] as List? ?? const [];
@@ -1166,11 +1159,9 @@ class ReminderActionApi {
     if (body is Map<String, dynamic> && body.containsKey('code')) {
       final code = body['code'];
       if (code != 0) {
-        throw DioException(
-          requestOptions: RequestOptions(
-            path: '/app-api/todo/reminder-action/inbox',
-          ),
-          error: body['msg'] ?? '请求失败',
+        throw envelopeFailure(
+          body,
+          path: '/app-api/todo/reminder-action/inbox',
         );
       }
       // 收件箱成功信封的 data 是列表而非通用 REST helper 所假定的 Map。

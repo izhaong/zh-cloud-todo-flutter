@@ -1,7 +1,6 @@
-import 'package:dio/dio.dart';
-
 import 'api_client.dart';
 import 'api_config.dart';
+import 'envelope.dart';
 
 /// `/app-api/todo/sync/{pull,push}` 请求/响应 DTO。
 ///
@@ -214,9 +213,10 @@ class SyncApi {
     if (body.containsKey('code')) {
       final code = body['code'];
       if (code != 0) {
-        throw DioException(
-          requestOptions: RequestOptions(path: ApiConfig.syncPrefix),
-          error: body['msg'] ?? '同步请求失败',
+        throw envelopeFailure(
+          body,
+          path: ApiConfig.syncPrefix,
+          fallback: '同步请求失败',
         );
       }
       return (body['data'] as Map?)?.cast<String, dynamic>() ?? const {};

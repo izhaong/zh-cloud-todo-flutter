@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../../core/api/api_config.dart';
+import '../../core/api/envelope.dart';
 
 /// 习惯数据访问 — M11-B4：纯后端驱动，不依赖本地 Drift 表
 /// （schema 暂未包含 habits/habit_logs，列表与打卡均走 `/app-api/todo/habit/**`）。
@@ -208,10 +209,7 @@ class HabitRepository {
 int _unwrapInt(Map<String, dynamic>? body) {
   if (body == null) return 0;
   if (body.containsKey('code') && body['code'] != 0) {
-    throw DioException(
-      requestOptions: RequestOptions(path: ApiConfig.todoPrefix),
-      error: body['msg'] ?? '请求失败',
-    );
+    throw envelopeFailure(body, path: ApiConfig.todoPrefix);
   }
   final data = body.containsKey('code') ? body['data'] : body;
   if (data is num) return data.toInt();
@@ -222,10 +220,7 @@ int _unwrapInt(Map<String, dynamic>? body) {
 dynamic _unwrapHabitData(Map<String, dynamic>? body) {
   if (body == null) return null;
   if (body.containsKey('code') && body['code'] != 0) {
-    throw DioException(
-      requestOptions: RequestOptions(path: ApiConfig.todoPrefix),
-      error: body['msg'] ?? '请求失败',
-    );
+    throw envelopeFailure(body, path: ApiConfig.todoPrefix);
   }
   return body.containsKey('code') ? body['data'] : body;
 }
@@ -233,9 +228,6 @@ dynamic _unwrapHabitData(Map<String, dynamic>? body) {
 void _unwrapBool(Map<String, dynamic>? body) {
   if (body == null) return;
   if (body.containsKey('code') && body['code'] != 0) {
-    throw DioException(
-      requestOptions: RequestOptions(path: ApiConfig.todoPrefix),
-      error: body['msg'] ?? '请求失败',
-    );
+    throw envelopeFailure(body, path: ApiConfig.todoPrefix);
   }
 }
