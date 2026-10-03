@@ -2093,6 +2093,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                             ('MONTHLY', '每月'),
                             ('YEARLY', '每年'),
                             ('WEEKDAY', '工作日'),
+                            ('WEEKEND', '每周末'),
                             ('CUSTOM', '自定义'),
                           ]
                           .map(
@@ -2425,6 +2426,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       'MONTHLY': '每月',
       'YEARLY': '每年',
       'WEEKDAY': '工作日',
+      'WEEKEND': '每周末',
       'CUSTOM': '自定义',
     };
     final label = labels[rule.freq] ?? rule.freq;
