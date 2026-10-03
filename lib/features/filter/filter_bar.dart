@@ -678,7 +678,7 @@ String dueRangeChipLabel(String? v) {
     case 'future':
       return '将来';
     default:
-      return 'Due';
+      return '日期';
   }
 }
 
