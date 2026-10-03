@@ -62,12 +62,16 @@ class _CountdownTile extends StatefulWidget {
     required this.writePending,
     required this.onEdit,
     required this.onDelete,
+    required this.onArchive,
+    required this.onRestore,
   });
 
   final CountdownDto item;
   final bool writePending;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final VoidCallback onArchive;
+  final VoidCallback onRestore;
 
   @override
   State<_CountdownTile> createState() => _CountdownTileState();
@@ -149,6 +153,36 @@ class _CountdownTileState extends State<_CountdownTile> {
                 Semantics(
                   container: true,
                   button: true,
+                  label: '更多操作 ${item.title}',
+                  child: ExcludeSemantics(
+                    child: PopupMenuButton<String>(
+                      key: Key('countdown-tile-more-${item.id}'),
+                      enabled: !widget.writePending,
+                      icon: const Icon(Icons.more_horiz),
+                      onSelected: (value) {
+                        if (value == 'archive') widget.onArchive();
+                        if (value == 'restore') widget.onRestore();
+                      },
+                      itemBuilder: (_) => [
+                        if (item.archived)
+                          PopupMenuItem<String>(
+                            key: Key('countdown-menu-restore-${item.id}'),
+                            value: 'restore',
+                            child: const Text('恢复'),
+                          )
+                        else
+                          PopupMenuItem<String>(
+                            key: Key('countdown-menu-archive-${item.id}'),
+                            value: 'archive',
+                            child: const Text('归档'),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                Semantics(
+                  container: true,
+                  button: true,
                   label: '编辑 ${item.title}',
                   onTap: widget.writePending ? null : widget.onEdit,
                   child: ExcludeSemantics(
@@ -206,6 +240,15 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
   /// 因此一次只放行一个写请求。
   bool _writePending = false;
 
+  /// 嘀嗒《03-管理倒数纪念日》把内容分成主列表与「已归档」两个视图。
+  bool _showArchived = false;
+
+  String? _archiveError;
+  Future<void> Function()? _archiveRetry;
+
+  /// 失败文案要按实际那一步说「归档失败」还是「恢复失败」，不许两件事共用一句。
+  String? _archiveFailedAction;
+
   Future<void> _runWrite(Future<void> Function() write) async {
     if (_writePending) return;
     final messenger = ScaffoldMessenger.of(context);
@@ -213,6 +256,7 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
     try {
       await write();
       ref.invalidate(countdownsProvider);
+      ref.invalidate(archivedCountdownsProvider);
     } on Object catch (error) {
       // 失败时不刷新列表，原数据仍在原位并可重试。
       // 页面已卸载时不得再弹：context 脱离树后 showSnackBar 会抛，
@@ -225,36 +269,111 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
     }
   }
 
+  /// 归档／恢复单独走一条路：失败时把提示放在列表上方当场可见，
+  /// 并记住这一步以便重试；已加载的列表数据不受影响。
+  Future<void> _runArchive(CountdownDto item, bool archived) async {
+    if (_writePending) return;
+    setState(() => _writePending = true);
+    try {
+      await ref.read(countdownApiProvider).setArchived(item.id, archived);
+      if (mounted) {
+        setState(() {
+          _archiveError = null;
+          _archiveRetry = null;
+        });
+      }
+      ref.invalidate(countdownsProvider);
+      ref.invalidate(archivedCountdownsProvider);
+    } on Object catch (error) {
+      if (mounted) {
+        setState(() {
+          _archiveError = '$error';
+          _archiveFailedAction = archived ? '归档' : '恢复';
+          _archiveRetry = () => _runArchive(item, archived);
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _writePending = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final async = ref.watch(countdownsProvider);
+    final async = ref.watch(
+      _showArchived ? archivedCountdownsProvider : countdownsProvider,
+    );
     // 同 #375：重取失败时 AsyncError 仍带上一次的 value，`.when` 会把它丢掉 ⇒ 先读 valueOrNull。
     final items = async.valueOrNull;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('倒数日'),
+        title: Text(_showArchived ? '已归档' : '倒数日'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: _writePending ? null : () => _showEditor(),
+          if (!_showArchived)
+            IconButton(
+              icon: const Icon(Icons.add),
+              onPressed: _writePending ? null : () => _showEditor(),
+            ),
+          PopupMenuButton<String>(
+            key: const Key('countdown-page-more'),
+            enabled: !_writePending,
+            icon: const Icon(Icons.more_horiz),
+            onSelected: (value) => setState(() {
+              _showArchived = value == 'archived';
+              _archiveError = null;
+              _archiveRetry = null;
+              _archiveFailedAction = null;
+            }),
+            itemBuilder: (_) => [
+              if (!_showArchived)
+                const PopupMenuItem<String>(
+                  key: Key('countdown-menu-archived'),
+                  value: 'archived',
+                  child: Text('已归档'),
+                )
+              else
+                const PopupMenuItem<String>(
+                  key: Key('countdown-menu-main'),
+                  value: 'main',
+                  child: Text('主列表'),
+                ),
+            ],
           ),
         ],
       ),
-      body: items == null
-          ? (async.hasError
-                ? Center(child: Text('加载失败: ${async.error}'))
-                : const Center(child: CircularProgressIndicator()))
-          : (async.hasError
-                ? Column(
-                    children: [
-                      AppRefreshFailedHint(
-                        message: '列表刷新失败，仍显示上一次的数据',
-                        onRetry: () => ref.invalidate(countdownsProvider),
-                      ),
-                      Expanded(child: _countdownList(items)),
-                    ],
-                  )
-                : _countdownList(items)),
+      body: Column(
+        children: [
+          if (_archiveError != null)
+            AppRefreshFailedHint(
+              key: const Key('countdown-archive-error'),
+              message: '$_archiveFailedAction失败：$_archiveError，列表仍是上一次加载的数据',
+              onRetry: () => _archiveRetry?.call(),
+            ),
+          if (items == null)
+            Expanded(
+              child: async.hasError
+                  ? Center(child: Text('加载失败: ${async.error}'))
+                  : const Center(child: CircularProgressIndicator()),
+            )
+          else if (async.hasError)
+            Expanded(
+              child: Column(
+                children: [
+                  AppRefreshFailedHint(
+                    message: '列表刷新失败，仍显示上一次的数据',
+                    onRetry: () => ref.invalidate(
+                      _showArchived
+                          ? archivedCountdownsProvider
+                          : countdownsProvider,
+                    ),
+                  ),
+                  Expanded(child: _countdownList(items)),
+                ],
+              ),
+            )
+          else
+            Expanded(child: _countdownList(items)),
+        ],
+      ),
     );
   }
 
@@ -273,6 +392,8 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
           writePending: _writePending,
           onEdit: () => _showEditor(existing: c),
           onDelete: () => _confirmDelete(c),
+          onArchive: () => _runArchive(c, true),
+          onRestore: () => _runArchive(c, false),
         );
       },
     );

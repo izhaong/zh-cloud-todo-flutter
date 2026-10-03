@@ -59,6 +59,14 @@ final countdownsProvider = FutureProvider.autoDispose<List<CountdownDto>>((
   return api.list();
 });
 
+/// 「已归档」列表：嘀嗒《03-管理倒数纪念日》把它与主列表分成两个视图，
+/// 服务端用 `GET /countdown/list?archived=true` 表达。
+final archivedCountdownsProvider =
+    FutureProvider.autoDispose<List<CountdownDto>>((ref) async {
+      final api = ref.watch(countdownApiProvider);
+      return api.list(archived: true);
+    });
+
 /// 当前会员的成就值、等级与勋章墙。
 final achievementWallProvider = FutureProvider.autoDispose<AchievementWallDto>((
   ref,
