@@ -73,7 +73,11 @@ void main() {
     );
     await tester.tap(find.byKey(const Key('todo_task_detail_save_button')));
     await tester.pump(const Duration(seconds: 1));
-    await tester.pageBack();
+    // pageBack() 只认英文 'Back' tooltip 与 Cupertino 导航条按钮：应用挂了中文
+    // 本地化、且真机 Android 没有 Cupertino 导航条，所以它在 Android 上必然红
+    // （Issue #484）。系统返回是平台无关的那条路。
+    await tester.binding.handlePopRoute();
+    await tester.pump(const Duration(milliseconds: 250));
     await _pumpUntil(tester, taskTitleInRow);
     await tester.tap(
       find.descendant(of: taskRow, matching: find.byType(InkWell)).first,
