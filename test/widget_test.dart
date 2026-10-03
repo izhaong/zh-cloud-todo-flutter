@@ -50,6 +50,29 @@ void main() {
     expect(find.text('欢迎回来'), findsOneWidget);
     expect(sessionStore.cleared, isTrue);
   });
+
+  // Issue #471：没挂 flutter_localizations 时框架自带文案是英文，
+  // web 实测在语义树里读到 button "Back" 与 button "Show menu"。
+  testWidgets('框架自带文案解析成中文（MaterialLocalizations 走 zh）', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sessionStoreProvider.overrideWithValue(_FakeSessionStore()),
+          authGatewayProvider.overrideWithValue(_FakeAuthClient()),
+        ],
+        child: const TodoFlutterApp(),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    final context = tester.element(find.text('欢迎回来'));
+    final material = MaterialLocalizations.of(context);
+    expect(material.backButtonTooltip, '返回');
+    expect(material.showMenuTooltip, '显示菜单');
+    expect(material.closeButtonTooltip, '关闭');
+    expect(Localizations.localeOf(context), const Locale('zh'));
+  });
 }
 
 class _FakeAuthClient implements AuthGateway {

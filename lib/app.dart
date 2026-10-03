@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -7,6 +8,20 @@ import 'features/home/home_shell.dart';
 import 'features/shell/app_theme_controller.dart';
 import 'state/session_state.dart';
 import 'todo_auth_page.dart';
+
+/// 框架自带文案（返回键、溢出菜单、日期/时间选择器、长按菜单）走中文。
+///
+/// 不挂 delegate 时 MaterialApp 只会拿到英文的 `GlobalMaterialLocalizations`，
+/// 界面上就会混进「Back」「Show menu」这类英文（Issue #471）。
+const List<LocalizationsDelegate<dynamic>> kLocalizationsDelegates = [
+  GlobalMaterialLocalizations.delegate,
+  GlobalWidgetsLocalizations.delegate,
+  GlobalCupertinoLocalizations.delegate,
+];
+
+const List<Locale> kSupportedLocales = [Locale('zh'), Locale('en')];
+
+const Locale kLocale = Locale('zh');
 
 /// 应用根路由：依据 [sessionProvider] / [sessionBootstrappedProvider] 在登录页与
 /// 主壳之间重定向。
@@ -77,6 +92,9 @@ class _TodoFlutterAppState extends ConsumerState<TodoFlutterApp> {
       return MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'zh-cloud todo',
+        locale: kLocale,
+        supportedLocales: kSupportedLocales,
+        localizationsDelegates: kLocalizationsDelegates,
         theme: _lightTheme(),
         darkTheme: _darkTheme(),
         themeMode: themeMode,
@@ -87,6 +105,9 @@ class _TodoFlutterAppState extends ConsumerState<TodoFlutterApp> {
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       title: 'zh-cloud todo',
+      locale: kLocale,
+      supportedLocales: kSupportedLocales,
+      localizationsDelegates: kLocalizationsDelegates,
       theme: _lightTheme(),
       darkTheme: _darkTheme(),
       themeMode: themeMode,
