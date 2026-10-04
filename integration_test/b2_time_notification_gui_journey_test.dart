@@ -75,7 +75,9 @@ void main() {
       );
       final tasks = container.read(taskRepositoryProvider)!;
       final database = container.read(appDatabaseProvider)!;
+      _trace('before coordinator');
       final coordinator = await _waitForCoordinator(tester, container);
+      _trace('coordinator ready');
       final taskTitle = 'B2 提醒验收 ${DateTime.now().microsecondsSinceEpoch}';
       String? taskId;
 
@@ -100,18 +102,34 @@ void main() {
           await tester.testTextInput.receiveAction(TextInputAction.done);
         }
 
+        // 顺序很关键：先在本地库确认真的落库（数据面为真），再回界面找那一行。
+        // 反过来的话，脏夹具上会「滚完一整圈行才出现」，滚动白做，红在「Found 0 widgets
+        // with text …」上看着像创建没生效。干净账号只有一行、滚不滚都在视口里，
+        // 所以一直掩盖着这个顺序问题。
+        var hits = (await tasks.watchAll().first)
+            .where((task) => task.title == taskTitle)
+            .toList();
+        for (var attempt = 0; hits.isEmpty && attempt < 40; attempt++) {
+          await tester.pump(const Duration(milliseconds: 250));
+          hits = (await tasks.watchAll().first)
+              .where((task) => task.title == taskTitle)
+              .toList();
+        }
+        if (hits.isEmpty) {
+          throw TestFailure('本地库里没有这条新建任务: $taskTitle（快速添加没落库）');
+        }
+        final created = hits.single;
+        taskId = created.id;
+
         final taskTitleInRow = find.descendant(
           of: find.byType(TaskRow),
           matching: find.text(taskTitle),
         );
         await _scrollToTaskRow(tester, taskTitleInRow);
-        // 夹具体量大时这一句会红。用带屏上文案与 ModalBarrier 计数的等待，才能分清
-        // 「行没进构建窗口」「根本没进这个列表」「快速添加被静默挡回」三种情况。
+        // 屏上文案 + ModalBarrier + Scrollable 计数：这一步再红就能直接看出停在哪个面上。
+        _trace('look for created row');
         await _pumpUntilWithDump(tester, taskTitleInRow, attempts: 60);
-        final created = (await tasks.watchAll().first).singleWhere(
-          (task) => task.title == taskTitle,
-        );
-        taskId = created.id;
+        _trace('created row on screen');
         await tasks.update(
           taskId,
           dueAt: DateTime.now().subtract(const Duration(minutes: 2)),
@@ -122,6 +140,10 @@ void main() {
         );
         await tester.pumpAndSettle();
 
+        // 找到过一次不等于还在屏上：推荐面板刷新会带着任务列表重建，滚动位置回到顶部，
+        // 于是 find.ancestor 在「当前一个 TaskRow 都没命中」上抛 Bad state: No element。
+        // 所以每次要碰这一行之前都先把它滚回视口（helper 已在视口内时是 no-op）。
+        await _scrollToTaskRow(tester, taskTitleInRow);
         final taskRow = find.ancestor(
           of: taskTitleInRow,
           matching: find.byType(TaskRow),
@@ -220,6 +242,7 @@ void main() {
         expect(repeat.serverId, isNotNull);
         expect(repeat.freq, 'WEEKLY');
 
+        _trace('await server dispatch');
         final dispatch = await tester.runAsync(() async {
           for (var attempt = 0; attempt < 45; attempt++) {
             final inbox = await container
@@ -264,6 +287,7 @@ void main() {
             scaffold.openDrawer();
           }
           await tester.pumpAndSettle();
+          _trace('open reminder inbox');
           await _pumpUntilWithDump(tester, inboxAction, attempts: 24);
         }
         await tester.tap(inboxAction.first);
@@ -314,6 +338,7 @@ Future<void> _pumpUntil(
   Finder finder, {
   int attempts = 40,
 }) async {
+  _trace('pumpUntil enter');
   for (var attempt = 0; attempt < attempts; attempt++) {
     if (finder.evaluate().isNotEmpty) return;
     await tester.pump(const Duration(milliseconds: 250));
@@ -327,6 +352,7 @@ Future<void> _pumpUntilWithDump(
   Finder finder, {
   int attempts = 12,
 }) async {
+  _trace('pumpUntilWithDump enter');
   for (var attempt = 0; attempt < attempts; attempt++) {
     if (finder.evaluate().isNotEmpty) return;
     await tester.pump(const Duration(milliseconds: 250));
@@ -347,12 +373,17 @@ bool _submitEnabled(WidgetTester tester) =>
         .onPressed !=
     null;
 
+/// 阶段流水：8 分钟裸 Timeout 不给出「停在第几步」，只给最后一行 STAGE 就能定位。
+/// 上一轮 iOS 就是这么红的（04:00→08:00 预算耗尽，无任何 TestFailure）。
+void _trace(String what) => debugPrint('B2-STAGE $what');
+
 /// 布局分支用：宽屏与窄屏各有自己的任务入口，命中任意一个即算进主壳。
 Future<void> _pumpUntilAny(
   WidgetTester tester,
   List<Finder> finders, {
   int attempts = 40,
 }) async {
+  _trace('pumpUntilAny enter');
   for (var attempt = 0; attempt < attempts; attempt++) {
     if (finders.any((finder) => finder.evaluate().isNotEmpty)) return;
     await tester.pump(const Duration(milliseconds: 250));
@@ -376,6 +407,7 @@ Future<void> _pumpUntilAbsent(
   Finder finder, {
   int attempts = 40,
 }) async {
+  _trace('pumpUntilAbsent enter');
   for (var attempt = 0; attempt < attempts; attempt++) {
     if (finder.evaluate().isEmpty) return;
     await tester.pump(const Duration(milliseconds: 250));
