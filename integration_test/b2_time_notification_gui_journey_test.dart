@@ -105,7 +105,9 @@ void main() {
           matching: find.text(taskTitle),
         );
         await _scrollToTaskRow(tester, taskTitleInRow);
-    await _pumpUntil(tester, taskTitleInRow);
+        // 夹具体量大时这一句会红。用带屏上文案与 ModalBarrier 计数的等待，才能分清
+        // 「行没进构建窗口」「根本没进这个列表」「快速添加被静默挡回」三种情况。
+        await _pumpUntilWithDump(tester, taskTitleInRow, attempts: 60);
         final created = (await tasks.watchAll().first).singleWhere(
           (task) => task.title == taskTitle,
         );
