@@ -53,6 +53,7 @@ void main() {
       of: find.byType(TaskRow),
       matching: find.text(taskTitle),
     );
+    await _scrollToTaskRow(tester, taskTitleInRow);
     await _pumpUntil(tester, taskTitleInRow);
     final taskRow = find.ancestor(
       of: taskTitleInRow,
@@ -88,4 +89,31 @@ Future<void> _pumpUntil(WidgetTester tester, Finder finder) async {
     await tester.pump(const Duration(milliseconds: 250));
   }
   throw TestFailure('未在固定时间内找到 GUI 锚点: $finder');
+}
+
+/// 任务列表是懒构建的 ListView.builder：无截止时间的新建任务落在「无日期」分组
+/// （六组里的第五组），fixture 任务一多，那一行根本没进构建窗口，
+/// 直接 find 只会得到「Found 0 widgets」，分不清是功能坏了还是没滚到。
+/// 滚动定位同时把该行留在视口里，后面的 tap 才打得中。
+Future<void> _scrollToTaskRow(WidgetTester tester, Finder rowTitle) async {
+  if (rowTitle.evaluate().isNotEmpty) return;
+  final rows = find.byType(TaskRow);
+  if (rows.evaluate().isEmpty) return;
+  // 不靠命名 Scrollable：scrollUntilVisible 要求 scrollable: 恰好命中一个，而实测这里
+  // 既不在 todo-task-list-scroll 之下、也可能套着行内的横向滚动。改为在所有 Scrollable
+  // 里取「可滚动范围最大」的那个——几百行的任务列表远大于任何行内滑动容器。
+  ScrollPosition? position;
+  for (final element in find.byType(Scrollable).evaluate()) {
+    final state = (element as StatefulElement).state as ScrollableState;
+    if (position == null || state.position.maxScrollExtent > position.maxScrollExtent) {
+      position = state.position;
+    }
+  }
+  if (position == null) return;
+  for (var step = 0; step < 400 && rowTitle.evaluate().isEmpty; step++) {
+    final next = (position.pixels + 400).clamp(0.0, position.maxScrollExtent);
+    if (next == position.pixels) break;
+    position.jumpTo(next);
+    await tester.pump(const Duration(milliseconds: 50));
+  }
 }

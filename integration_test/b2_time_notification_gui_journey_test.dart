@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -74,7 +75,9 @@ void main() {
       );
       final tasks = container.read(taskRepositoryProvider)!;
       final database = container.read(appDatabaseProvider)!;
+      _trace('before coordinator');
       final coordinator = await _waitForCoordinator(tester, container);
+      _trace('coordinator ready');
       final taskTitle = 'B2 提醒验收 ${DateTime.now().microsecondsSinceEpoch}';
       String? taskId;
 
@@ -99,15 +102,34 @@ void main() {
           await tester.testTextInput.receiveAction(TextInputAction.done);
         }
 
+        // 顺序很关键：先在本地库确认真的落库（数据面为真），再回界面找那一行。
+        // 反过来的话，脏夹具上会「滚完一整圈行才出现」，滚动白做，红在「Found 0 widgets
+        // with text …」上看着像创建没生效。干净账号只有一行、滚不滚都在视口里，
+        // 所以一直掩盖着这个顺序问题。
+        var hits = (await tasks.watchAll().first)
+            .where((task) => task.title == taskTitle)
+            .toList();
+        for (var attempt = 0; hits.isEmpty && attempt < 40; attempt++) {
+          await tester.pump(const Duration(milliseconds: 250));
+          hits = (await tasks.watchAll().first)
+              .where((task) => task.title == taskTitle)
+              .toList();
+        }
+        if (hits.isEmpty) {
+          throw TestFailure('本地库里没有这条新建任务: $taskTitle（快速添加没落库）');
+        }
+        final created = hits.single;
+        taskId = created.id;
+
         final taskTitleInRow = find.descendant(
           of: find.byType(TaskRow),
           matching: find.text(taskTitle),
         );
-        await _pumpUntil(tester, taskTitleInRow);
-        final created = (await tasks.watchAll().first).singleWhere(
-          (task) => task.title == taskTitle,
-        );
-        taskId = created.id;
+        await _scrollToTaskRow(tester, taskTitleInRow);
+        // 屏上文案 + ModalBarrier + Scrollable 计数：这一步再红就能直接看出停在哪个面上。
+        _trace('look for created row');
+        await _pumpUntilWithDump(tester, taskTitleInRow, attempts: 60);
+        _trace('created row on screen');
         await tasks.update(
           taskId,
           dueAt: DateTime.now().subtract(const Duration(minutes: 2)),
@@ -118,6 +140,10 @@ void main() {
         );
         await tester.pumpAndSettle();
 
+        // 找到过一次不等于还在屏上：推荐面板刷新会带着任务列表重建，滚动位置回到顶部，
+        // 于是 find.ancestor 在「当前一个 TaskRow 都没命中」上抛 Bad state: No element。
+        // 所以每次要碰这一行之前都先把它滚回视口（helper 已在视口内时是 no-op）。
+        await _scrollToTaskRow(tester, taskTitleInRow);
         final taskRow = find.ancestor(
           of: taskTitleInRow,
           matching: find.byType(TaskRow),
@@ -216,6 +242,7 @@ void main() {
         expect(repeat.serverId, isNotNull);
         expect(repeat.freq, 'WEEKLY');
 
+        _trace('await server dispatch');
         final dispatch = await tester.runAsync(() async {
           for (var attempt = 0; attempt < 45; attempt++) {
             final inbox = await container
@@ -260,6 +287,7 @@ void main() {
             scaffold.openDrawer();
           }
           await tester.pumpAndSettle();
+          _trace('open reminder inbox');
           await _pumpUntilWithDump(tester, inboxAction, attempts: 24);
         }
         await tester.tap(inboxAction.first);
@@ -273,7 +301,9 @@ void main() {
         }
       }
     },
-    timeout: const Timeout(Duration(minutes: 4)),
+    // 真后端 + 模拟器：4 分钟在 macOS 干净账号上是 00:56 过，在 iOS 模拟器上会撞上预算而不是撞上断言
+    // （实测 04:00 TimeoutException 且没有任何定位信息）。判据不变，只抬墙钟预算。
+    timeout: const Timeout(Duration(minutes: 8)),
   );
 }
 
@@ -281,7 +311,19 @@ Future<SyncCoordinator> _waitForCoordinator(
   WidgetTester tester,
   ProviderContainer container,
 ) async {
-  await container.read(deviceIdProvider.future);
+  // 这一句原本是无界 await：设备号取不到时旅程既不报错也不结束，连用例自己声明的
+  // 4 分钟 Timeout 都不会触发（实测跑到 10:02 仍无 TestFailure），三端排查时只能靠猜。
+  try {
+    await container
+        .read(deviceIdProvider.future)
+        .timeout(const Duration(seconds: 30));
+  } on TimeoutException {
+    throw TestFailure(
+      '设备号未在 30 秒内就绪（多为会话存储走到了真实钥匙串：'
+      '跑集成测试需要同时带 FLUTTER_TEST 与 TODO_E2E_DEVICE_ID 两个 dart-define）；'
+      '屏幕上现有文案: ${_onScreenTexts()}',
+    );
+  }
   container.invalidate(syncCoordinatorProvider);
   for (var attempt = 0; attempt < 40; attempt++) {
     final coordinator = container.read(syncCoordinatorProvider);
@@ -296,6 +338,7 @@ Future<void> _pumpUntil(
   Finder finder, {
   int attempts = 40,
 }) async {
+  _trace('pumpUntil enter');
   for (var attempt = 0; attempt < attempts; attempt++) {
     if (finder.evaluate().isNotEmpty) return;
     await tester.pump(const Duration(milliseconds: 250));
@@ -309,6 +352,7 @@ Future<void> _pumpUntilWithDump(
   Finder finder, {
   int attempts = 12,
 }) async {
+  _trace('pumpUntilWithDump enter');
   for (var attempt = 0; attempt < attempts; attempt++) {
     if (finder.evaluate().isNotEmpty) return;
     await tester.pump(const Duration(milliseconds: 250));
@@ -329,12 +373,17 @@ bool _submitEnabled(WidgetTester tester) =>
         .onPressed !=
     null;
 
+/// 阶段流水：8 分钟裸 Timeout 不给出「停在第几步」，只给最后一行 STAGE 就能定位。
+/// 上一轮 iOS 就是这么红的（04:00→08:00 预算耗尽，无任何 TestFailure）。
+void _trace(String what) => debugPrint('B2-STAGE $what');
+
 /// 布局分支用：宽屏与窄屏各有自己的任务入口，命中任意一个即算进主壳。
 Future<void> _pumpUntilAny(
   WidgetTester tester,
   List<Finder> finders, {
   int attempts = 40,
 }) async {
+  _trace('pumpUntilAny enter');
   for (var attempt = 0; attempt < attempts; attempt++) {
     if (finders.any((finder) => finder.evaluate().isNotEmpty)) return;
     await tester.pump(const Duration(milliseconds: 250));
@@ -358,6 +407,7 @@ Future<void> _pumpUntilAbsent(
   Finder finder, {
   int attempts = 40,
 }) async {
+  _trace('pumpUntilAbsent enter');
   for (var attempt = 0; attempt < attempts; attempt++) {
     if (finder.evaluate().isEmpty) return;
     await tester.pump(const Duration(milliseconds: 250));
@@ -368,5 +418,32 @@ Future<void> _pumpUntilAbsent(
 void _closeOpenEndDrawer(WidgetTester tester) {
   for (final state in tester.stateList<ScaffoldState>(find.byType(Scaffold))) {
     if (state.isEndDrawerOpen) state.closeEndDrawer();
+  }
+}
+
+/// 任务列表是懒构建的 ListView.builder：无截止时间的新建任务落在「无日期」分组
+/// （六组里的第五组），fixture 任务一多，那一行根本没进构建窗口，
+/// 直接 find 只会得到「Found 0 widgets」，分不清是功能坏了还是没滚到。
+/// 滚动定位同时把该行留在视口里，后面的 tap 才打得中。
+Future<void> _scrollToTaskRow(WidgetTester tester, Finder rowTitle) async {
+  if (rowTitle.evaluate().isNotEmpty) return;
+  final rows = find.byType(TaskRow);
+  if (rows.evaluate().isEmpty) return;
+  // 不靠命名 Scrollable：scrollUntilVisible 要求 scrollable: 恰好命中一个，而实测这里
+  // 既不在 todo-task-list-scroll 之下、也可能套着行内的横向滚动。改为在所有 Scrollable
+  // 里取「可滚动范围最大」的那个——几百行的任务列表远大于任何行内滑动容器。
+  ScrollPosition? position;
+  for (final element in find.byType(Scrollable).evaluate()) {
+    final state = (element as StatefulElement).state as ScrollableState;
+    if (position == null || state.position.maxScrollExtent > position.maxScrollExtent) {
+      position = state.position;
+    }
+  }
+  if (position == null) return;
+  for (var step = 0; step < 400 && rowTitle.evaluate().isEmpty; step++) {
+    final next = (position.pixels + 400).clamp(0.0, position.maxScrollExtent);
+    if (next == position.pixels) break;
+    position.jumpTo(next);
+    await tester.pump(const Duration(milliseconds: 50));
   }
 }
