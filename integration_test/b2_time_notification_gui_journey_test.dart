@@ -243,25 +243,47 @@ void main() {
         expect(repeat.freq, 'WEEKLY');
 
         _trace('await server dispatch');
+        final wantTaskServerId = syncedTask!.serverId;
         final dispatch = await tester.runAsync(() async {
+          // 这个循环以前既不报第几轮、也不报每次拿到几条、还把异常吞在 runAsync 里：
+          // iOS 上一路挂到 8 分钟预算耗尽，读日志分不清是「请求不返回」「请求返回但空列表」
+          // 还是「有派发但 taskId 对不上本地 serverId」。逐轮打点后就剩一种可能。
           for (var attempt = 0; attempt < 45; attempt++) {
-            final inbox = await container
-                .read(reminderInboxRepositoryProvider)
-                .list();
-            for (final item in inbox) {
-              if (item.taskId == syncedTask!.serverId && item.pending) {
-                return item;
+            try {
+              final inbox = await container
+                  .read(reminderInboxRepositoryProvider)
+                  .list();
+              _trace(
+                'inbox attempt=${attempt + 1} items=${inbox.length} '
+                'wantTaskServerId=$wantTaskServerId',
+              );
+              for (final item in inbox) {
+                if (item.taskId == syncedTask!.serverId && item.pending) {
+                  return item;
+                }
               }
+            } on Object catch (error) {
+              _trace('inbox attempt=${attempt + 1} ERROR $error');
             }
             await Future<void>.delayed(const Duration(seconds: 2));
           }
           return null;
         });
         expect(dispatch, isNotNull, reason: '服务端未在 90 秒内生成到期提醒派发');
+        _trace('dispatch matched dispatchTaskId=${dispatch?.taskId}');
 
-        final shown = await container
-            .read(reminderNotificationPollerProvider)!
-            .poll();
+        // 空夹具上实测：派发在第 31 轮命中，之后就再无输出直到 8 分钟预算耗尽 ——
+        // 卡点已经挪到 poller 或它之后的抽屉/收件箱 UI。先把 poll 变成有界并报数，
+        // 下一轮就能一眼分出是「poll 不返回」还是「UI 锚点等不到」。
+        final poller = container.read(reminderNotificationPollerProvider);
+        _trace('before notification poll');
+        final shown = poller == null
+            ? null
+            : await poller.poll().timeout(
+                const Duration(seconds: 60),
+                onTimeout: () => -1,
+              );
+        _trace('after notification poll shown=$shown');
         expect(shown, greaterThanOrEqualTo(1));
 
         for (final messenger in tester.stateList<ScaffoldMessengerState>(
