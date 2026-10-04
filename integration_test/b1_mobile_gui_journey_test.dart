@@ -53,6 +53,7 @@ void main() {
       of: find.byType(TaskRow),
       matching: find.text(taskTitle),
     );
+    await _scrollToTaskRow(tester, taskTitleInRow);
     await _pumpUntil(tester, taskTitleInRow);
     final taskRow = find.ancestor(
       of: taskTitleInRow,
@@ -78,6 +79,7 @@ void main() {
     // （Issue #484）。系统返回是平台无关的那条路。
     await tester.binding.handlePopRoute();
     await tester.pump(const Duration(milliseconds: 250));
+    await _scrollToTaskRow(tester, taskTitleInRow);
     await _pumpUntil(tester, taskTitleInRow);
     await tester.tap(
       find.descendant(of: taskRow, matching: find.byType(InkWell)).first,
@@ -107,4 +109,21 @@ Future<void> _pumpUntilAbsent(WidgetTester tester, Finder finder) async {
     await tester.pump(const Duration(milliseconds: 250));
   }
   throw TestFailure('GUI 锚点未在固定时间内消失: $finder');
+}
+
+/// 任务列表是懒构建的 ListView.builder：无截止时间的新建任务落在「无日期」分组
+/// （六组里的第五组），fixture 任务一多，那一行根本没进构建窗口，
+/// 直接 find 只会得到「Found 0 widgets」，分不清是功能坏了还是没滚到。
+/// 滚动定位同时把该行留在视口里，后面的 tap 才打得中。
+Future<void> _scrollToTaskRow(WidgetTester tester, Finder rowTitle) async {
+  if (rowTitle.evaluate().isNotEmpty) return;
+  await tester.scrollUntilVisible(
+    rowTitle,
+    240,
+    scrollable: find.descendant(
+      of: find.byKey(const Key('todo-task-list-scroll')),
+      matching: find.byType(Scrollable),
+    ),
+    maxScrolls: 600,
+  );
 }

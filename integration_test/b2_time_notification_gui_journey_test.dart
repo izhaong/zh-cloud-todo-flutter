@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -103,7 +104,8 @@ void main() {
           of: find.byType(TaskRow),
           matching: find.text(taskTitle),
         );
-        await _pumpUntil(tester, taskTitleInRow);
+        await _scrollToTaskRow(tester, taskTitleInRow);
+    await _pumpUntil(tester, taskTitleInRow);
         final created = (await tasks.watchAll().first).singleWhere(
           (task) => task.title == taskTitle,
         );
@@ -273,7 +275,9 @@ void main() {
         }
       }
     },
-    timeout: const Timeout(Duration(minutes: 4)),
+    // 真后端 + 模拟器：4 分钟在 macOS 干净账号上是 00:56 过，在 iOS 模拟器上会撞上预算而不是撞上断言
+    // （实测 04:00 TimeoutException 且没有任何定位信息）。判据不变，只抬墙钟预算。
+    timeout: const Timeout(Duration(minutes: 8)),
   );
 }
 
@@ -281,7 +285,19 @@ Future<SyncCoordinator> _waitForCoordinator(
   WidgetTester tester,
   ProviderContainer container,
 ) async {
-  await container.read(deviceIdProvider.future);
+  // 这一句原本是无界 await：设备号取不到时旅程既不报错也不结束，连用例自己声明的
+  // 4 分钟 Timeout 都不会触发（实测跑到 10:02 仍无 TestFailure），三端排查时只能靠猜。
+  try {
+    await container
+        .read(deviceIdProvider.future)
+        .timeout(const Duration(seconds: 30));
+  } on TimeoutException {
+    throw TestFailure(
+      '设备号未在 30 秒内就绪（多为会话存储走到了真实钥匙串：'
+      '跑集成测试需要同时带 FLUTTER_TEST 与 TODO_E2E_DEVICE_ID 两个 dart-define）；'
+      '屏幕上现有文案: ${_onScreenTexts()}',
+    );
+  }
   container.invalidate(syncCoordinatorProvider);
   for (var attempt = 0; attempt < 40; attempt++) {
     final coordinator = container.read(syncCoordinatorProvider);
@@ -369,4 +385,21 @@ void _closeOpenEndDrawer(WidgetTester tester) {
   for (final state in tester.stateList<ScaffoldState>(find.byType(Scaffold))) {
     if (state.isEndDrawerOpen) state.closeEndDrawer();
   }
+}
+
+/// 任务列表是懒构建的 ListView.builder：无截止时间的新建任务落在「无日期」分组
+/// （六组里的第五组），fixture 任务一多，那一行根本没进构建窗口，
+/// 直接 find 只会得到「Found 0 widgets」，分不清是功能坏了还是没滚到。
+/// 滚动定位同时把该行留在视口里，后面的 tap 才打得中。
+Future<void> _scrollToTaskRow(WidgetTester tester, Finder rowTitle) async {
+  if (rowTitle.evaluate().isNotEmpty) return;
+  await tester.scrollUntilVisible(
+    rowTitle,
+    240,
+    scrollable: find.descendant(
+      of: find.byKey(const Key('todo-task-list-scroll')),
+      matching: find.byType(Scrollable),
+    ),
+    maxScrolls: 600,
+  );
 }
