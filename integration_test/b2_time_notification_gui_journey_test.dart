@@ -270,10 +270,20 @@ void main() {
           return null;
         });
         expect(dispatch, isNotNull, reason: '服务端未在 90 秒内生成到期提醒派发');
+        _trace('dispatch matched dispatchTaskId=${dispatch?.taskId}');
 
-        final shown = await container
-            .read(reminderNotificationPollerProvider)!
-            .poll();
+        // 空夹具上实测：派发在第 31 轮命中，之后就再无输出直到 8 分钟预算耗尽 ——
+        // 卡点已经挪到 poller 或它之后的抽屉/收件箱 UI。先把 poll 变成有界并报数，
+        // 下一轮就能一眼分出是「poll 不返回」还是「UI 锚点等不到」。
+        final poller = container.read(reminderNotificationPollerProvider);
+        _trace('before notification poll');
+        final shown = poller == null
+            ? null
+            : await poller.poll().timeout(
+                const Duration(seconds: 60),
+                onTimeout: () => -1,
+              );
+        _trace('after notification poll shown=$shown');
         expect(shown, greaterThanOrEqualTo(1));
 
         for (final messenger in tester.stateList<ScaffoldMessengerState>(
