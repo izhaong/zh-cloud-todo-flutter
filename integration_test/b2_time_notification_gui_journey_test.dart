@@ -243,15 +243,27 @@ void main() {
         expect(repeat.freq, 'WEEKLY');
 
         _trace('await server dispatch');
+        final wantTaskServerId = syncedTask!.serverId;
         final dispatch = await tester.runAsync(() async {
+          // 这个循环以前既不报第几轮、也不报每次拿到几条、还把异常吞在 runAsync 里：
+          // iOS 上一路挂到 8 分钟预算耗尽，读日志分不清是「请求不返回」「请求返回但空列表」
+          // 还是「有派发但 taskId 对不上本地 serverId」。逐轮打点后就剩一种可能。
           for (var attempt = 0; attempt < 45; attempt++) {
-            final inbox = await container
-                .read(reminderInboxRepositoryProvider)
-                .list();
-            for (final item in inbox) {
-              if (item.taskId == syncedTask!.serverId && item.pending) {
-                return item;
+            try {
+              final inbox = await container
+                  .read(reminderInboxRepositoryProvider)
+                  .list();
+              _trace(
+                'inbox attempt=${attempt + 1} items=${inbox.length} '
+                'wantTaskServerId=$wantTaskServerId',
+              );
+              for (final item in inbox) {
+                if (item.taskId == syncedTask!.serverId && item.pending) {
+                  return item;
+                }
               }
+            } on Object catch (error) {
+              _trace('inbox attempt=${attempt + 1} ERROR $error');
             }
             await Future<void>.delayed(const Duration(seconds: 2));
           }
