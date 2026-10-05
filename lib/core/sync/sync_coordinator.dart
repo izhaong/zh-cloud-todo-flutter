@@ -776,8 +776,10 @@ class SyncCoordinator {
   }
 
   void _prepareTemporaryEntityIds(List<TodoSyncChange> changes) {
-    _tempIdSeq = 0;
-    _temporaryEntityIds.clear();
+    // 不整批清空、也不把序号归零：服务端把临时 ID 当作
+    // (tenant, user, entityType, device, tempId) 的映射键（izhaong/zh-cloud-service!331），
+    // 一旦某个号被第二条本地实体复用，服务端会把它认成第一条那一行。
+    // 条目只在本次 App 会话内保留；未同步实体数量有限，回收留给拿到 serverId 之后。
     for (final change in changes) {
       if (change.entityServerId == null &&
           change.entityLocalId != null &&
