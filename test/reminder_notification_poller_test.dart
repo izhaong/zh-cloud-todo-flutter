@@ -303,7 +303,97 @@ void main() {
     expect(await Future.wait([first, second]), [0, 0]);
     expect(notifications.scheduled, hasLength(1));
   });
+  test(
+    '投递通知的通道调用不返回时 poll 有界返回，且不被 in-flight 永久占住',
+    () async {
+      // iOS 模拟器实测（10-04 04:57Z，空夹具、真后端）：提醒派发已在第 27 轮命中，
+      // 但 poll() 60 秒不返回，旅程一路挂到预算耗尽。修法见 _bounded：
+      // 每次系统调用设上限，拿不到就按「系统里没有」处理，下一轮再查。
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final now = DateTime.utc(2026, 7, 29, 12);
+      await db
+          .into(db.todoLists)
+          .insert(
+            TodoListsCompanion.insert(
+              id: 'list-local',
+              serverId: const Value(101),
+              name: '收集箱',
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      await db
+          .into(db.todoTasks)
+          .insert(
+            TodoTasksCompanion.insert(
+              id: 'task-local',
+              serverId: const Value(201),
+              listId: 'list-local',
+              title: '本地任务标题',
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      final poller = ReminderNotificationPoller(
+        repository: _FakeReminderInboxRepository([
+          ReminderInboxItem(
+            id: 301,
+            taskId: 201,
+            taskTitle: '到期提醒',
+            remindAt: now.subtract(const Duration(minutes: 1)),
+          ),
+        ]),
+        database: db,
+        notifications: _HangingScheduleNotificationService(),
+        stateStore: _MemoryReminderNotificationStateStore(),
+        notificationScope: 'tenant_user',
+        now: () => now,
+      );
+
+      // 上限是每次调用 10 秒，所以这里给 30 秒的外层判据：
+      // 修复前 poll() 永不返回（-1），修复后约 10 秒就有一条可读结果。
+      final first = await poller
+          .poll()
+          .timeout(const Duration(seconds: 30), onTimeout: () => -1);
+      expect(
+        first,
+        greaterThanOrEqualTo(0),
+        reason: '系统排期查询卡住时 poll 必须有界返回，不能把提醒链路挂死',
+      );
+      final second = await poller
+          .poll()
+          .timeout(const Duration(seconds: 30), onTimeout: () => -1);
+      expect(
+        second,
+        greaterThanOrEqualTo(0),
+        reason: '第一轮卡住后，第二轮不能被 _pollInFlight 永久占住',
+      );
+    },
+  );
 }
+
+class _HangingScheduleNotificationService extends LocalNotificationService {
+  @override
+  Future<Map<int, DateTime>> pendingReminderSchedules(String scope) async =>
+      const <int, DateTime>{};
+
+  @override
+  Future<Set<int>> activeReminderIds(String scope) async => const <int>{};
+
+  @override
+  Future<bool> cancel(int id, {String? tag}) async => true;
+
+  @override
+  Future<bool> show({
+    required int id,
+    required String title,
+    String? body,
+    String? payload,
+    String? tag,
+  }) => Completer<bool>().future;
+}
+
 
 class _FakeReminderInboxRepository extends ReminderInboxRepository {
   _FakeReminderInboxRepository(this.items)
