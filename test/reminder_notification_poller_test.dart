@@ -304,7 +304,7 @@ void main() {
     expect(notifications.scheduled, hasLength(1));
   });
   test(
-    '系统排期查询不返回时 poll 有界返回，且不被 in-flight 永久占住',
+    '投递通知的通道调用不返回时 poll 有界返回，且不被 in-flight 永久占住',
     () async {
       // iOS 模拟器实测（10-04 04:57Z，空夹具、真后端）：提醒派发已在第 27 轮命中，
       // 但 poll() 60 秒不返回，旅程一路挂到预算耗尽。修法见 _bounded：
@@ -375,8 +375,8 @@ void main() {
 
 class _HangingScheduleNotificationService extends LocalNotificationService {
   @override
-  Future<Map<int, DateTime>> pendingReminderSchedules(String scope) =>
-      Completer<Map<int, DateTime>>().future;
+  Future<Map<int, DateTime>> pendingReminderSchedules(String scope) async =>
+      const <int, DateTime>{};
 
   @override
   Future<Set<int>> activeReminderIds(String scope) async => const <int>{};
@@ -391,7 +391,7 @@ class _HangingScheduleNotificationService extends LocalNotificationService {
     String? body,
     String? payload,
     String? tag,
-  }) async => true;
+  }) => Completer<bool>().future;
 }
 
 

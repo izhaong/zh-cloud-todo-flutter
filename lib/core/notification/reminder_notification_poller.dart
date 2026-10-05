@@ -168,8 +168,8 @@ class ReminderNotificationPoller {
       final payload =
           'reminder:${item.id}:$_notificationScope:'
           '${item.remindAt.millisecondsSinceEpoch}:${item.taskId}';
-      final delivered = isFuture
-          ? await _notifications.schedule(
+      final deliveryAttempt = isFuture
+          ? _notifications.schedule(
               id: item.id,
               title: title,
               body: '到期提醒',
@@ -177,13 +177,16 @@ class ReminderNotificationPoller {
               payload: payload,
               tag: notificationTag,
             )
-          : await _notifications.show(
+          : _notifications.show(
               id: item.id,
               title: title,
               body: '到期提醒',
               payload: payload,
               tag: notificationTag,
             );
+      // 实测就是这个调用在 iOS 上不返回（阶段日志停在 deliver.begin 之后没有 deliver.done），
+      // 所以投递也要设上限；超时必须按「没送达」处理，否则会把没弹出去的提醒标成已弹。
+      final delivered = await _bounded(deliveryAttempt, fallback: false);
       if (!delivered) continue;
       if (!isFuture) shown++;
       dispatchState[item.id] = item.remindAt;
