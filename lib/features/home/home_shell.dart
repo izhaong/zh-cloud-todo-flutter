@@ -67,6 +67,9 @@ class _HomeShellState extends ConsumerState<HomeShell>
   StreamSubscription<Uri>? _incomingUriSubscription;
   Future<void> _nativeTaskAddQueue = Future.value();
 
+  /// 撤销提示的应用侧退场看门狗（FL #512）；随 State 一起取消，不留悬空 Timer。
+  Timer? _undoNoticeTimer;
+
   bool _syncing = false;
   String _syncStatus = '同步尚未执行';
   Timer? _periodicSync;
@@ -104,6 +107,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
 
   @override
   void dispose() {
+    _undoNoticeTimer?.cancel();
     _periodicSync?.cancel();
     unawaited(_reminderSelectionSubscription?.cancel());
     unawaited(_incomingUriSubscription?.cancel());
@@ -620,13 +624,12 @@ class _HomeShellState extends ConsumerState<HomeShell>
         ),
       ),
     );
-    unawaited(
-      Future<void>.delayed(const Duration(seconds: 5), () {
-        if (noticeDismissed || !messenger.mounted) return;
-        noticeDismissed = true;
-        messenger.removeCurrentSnackBar();
-      }),
-    );
+    _undoNoticeTimer?.cancel();
+    _undoNoticeTimer = Timer(const Duration(seconds: 5), () {
+      if (noticeDismissed || !messenger.mounted) return;
+      noticeDismissed = true;
+      messenger.removeCurrentSnackBar();
+    });
   }
 
   @override
