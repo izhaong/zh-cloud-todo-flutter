@@ -148,6 +148,19 @@ void main() {
         // 找到过一次不等于还在屏上：推荐面板刷新会带着任务列表重建，滚动位置回到顶部，
         // 于是 find.ancestor 在「当前一个 TaskRow 都没命中」上抛 Bad state: No element。
         // 所以每次要碰这一行之前都先把它滚回视口（helper 已在视口内时是 no-op）。
+        //
+        // 但「出视口」和「不在这张列表里了」是两回事，修法完全不同（前者是旅程没滚到位，
+        // 后者是改了截止时间之后任务的归属视图变了）。这条红在 macOS 与 Android 上都复现过，
+        // 所以先把两者量开：红的文案要能指出是哪种，别再留一句 Bad state 让人猜。
+        final rowTotal = find.byType(TaskRow).evaluate().length;
+        final titleHits = taskTitleInRow.evaluate().length;
+        _trace('after update TaskRow=$rowTotal titleHits=$titleHits');
+        if (titleHits == 0) {
+          throw TestFailure(
+            '设完截止时间，这条任务已经不在当前列表的树里了（屏上 TaskRow=$rowTotal）。'
+            '这是归属视图变了（收集箱不再含已排期任务之类），不是滚动位置能解释的。',
+          );
+        }
         await _scrollToTaskRow(tester, taskTitleInRow);
         final taskRow = find.ancestor(
           of: taskTitleInRow,
