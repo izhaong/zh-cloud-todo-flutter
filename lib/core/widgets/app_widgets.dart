@@ -261,11 +261,20 @@ class AppEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = brandColors(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+    // 居中的空状态在系统大字号下会被撑高（iOS 实测溢出 55px）。
+    // 用「至少撑满可视高度 + 超高时可滚动」代替 Center：放得下时仍居中，
+    // 放不下时滚动，而不是抛 RenderFlex overflow。
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: constraints.hasBoundedHeight
+              ? BoxConstraints(minHeight: constraints.maxHeight)
+              : const BoxConstraints(),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
           children: [
             // 抽象品牌插画（.CustomPainter 圆环 + 勾选占位）
             Container(
@@ -302,7 +311,9 @@ class AppEmptyState extends StatelessWidget {
               const SizedBox(height: AppSpacing.lg),
               action!,
             ],
-          ],
+              ],
+            ),
+          ),
         ),
       ),
     );
