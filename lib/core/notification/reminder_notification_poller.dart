@@ -81,6 +81,15 @@ class ReminderNotificationPoller {
   Future<int>? _pollInFlight;
   bool _stateDirty = false;
 
+  /// 提醒轮询里的每一次系统调用都设上限：iOS 模拟器实测（10-04 04:57Z，空夹具）
+  /// `pendingReminderSchedules` 这类通道调用可以不返回，而无界的 await 会把
+  /// `_pollInFlight` 永久占住——之后每一轮都拿到同一个卡死的 Future，
+  /// 等于应用内提醒永久停摆。拿不到就按「系统里没有」处理，下一轮再查。
+  static const Duration _platformCallCeiling = Duration(seconds: 10);
+
+  Future<T> _bounded<T>(Future<T> call, {required T fallback}) =>
+      call.timeout(_platformCallCeiling, onTimeout: () => fallback);
+
   Future<int> poll() {
     final active = _pollInFlight;
     if (active != null) return active;
@@ -95,12 +104,19 @@ class ReminderNotificationPoller {
   Future<int> _pollOnce() async {
     final current = _now();
     final upcomingBoundary = current.add(const Duration(seconds: 30));
-    final dispatchState = _dispatchState ??= await _stateStore.read();
-    final systemSchedules = await _notifications.pendingReminderSchedules(
-      _notificationScope,
+    final Map<int, DateTime> loadedState = await _bounded(
+      _stateStore.read(),
+      fallback: const <int, DateTime>{},
     );
-    final activeIds = await _notifications.activeReminderIds(
-      _notificationScope,
+    _dispatchState ??= loadedState;
+    final Map<int, DateTime> dispatchState = _dispatchState!;
+    final systemSchedules = await _bounded(
+      _notifications.pendingReminderSchedules(_notificationScope),
+      fallback: const <int, DateTime>{},
+    );
+    final activeIds = await _bounded(
+      _notifications.activeReminderIds(_notificationScope),
+      fallback: const <int>{},
     );
     final items = await _repository.list();
     final pendingIds = items
@@ -117,7 +133,11 @@ class ReminderNotificationPoller {
       _notificationScope,
     );
     for (final id in cancelledIds) {
-      if (await _notifications.cancel(id, tag: notificationTag)) {
+      final cancelled = await _bounded(
+        _notifications.cancel(id, tag: notificationTag),
+        fallback: false,
+      );
+      if (cancelled) {
         stateChanged = dispatchState.remove(id) != null || stateChanged;
       }
     }
@@ -170,7 +190,11 @@ class ReminderNotificationPoller {
       stateChanged = true;
     }
     if (stateChanged) {
-      _stateDirty = !await _stateStore.write(dispatchState);
+      final written = await _bounded(
+        _stateStore.write(dispatchState),
+        fallback: false,
+      );
+      _stateDirty = !written;
     }
     return shown;
   }
