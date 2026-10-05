@@ -67,6 +67,9 @@ class _HomeShellState extends ConsumerState<HomeShell>
   StreamSubscription<Uri>? _incomingUriSubscription;
   Future<void> _nativeTaskAddQueue = Future.value();
 
+  /// 撤销提示的应用侧退场看门狗（FL #512）；随 State 一起取消，不留悬空 Timer。
+  Timer? _undoNoticeTimer;
+
   bool _syncing = false;
   String _syncStatus = '同步尚未执行';
   Timer? _periodicSync;
@@ -104,6 +107,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
 
   @override
   void dispose() {
+    _undoNoticeTimer?.cancel();
     _periodicSync?.cancel();
     unawaited(_reminderSelectionSubscription?.cancel());
     unawaited(_incomingUriSubscription?.cancel());
@@ -598,23 +602,34 @@ class _HomeShellState extends ConsumerState<HomeShell>
       reminders: ref.read(reminderRepositoryProvider),
     );
     if (!mounted || created.isEmpty) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(
-            reminderMessage == null
-                ? '已创建 ${created.length} 项任务'
-                : '已创建 ${created.length} 项任务；$reminderMessage',
-          ),
-          action: SnackBarAction(
-            label: '撤销',
-            onPressed: () => unawaited(
-              Future.wait(created.map((task) => repo.delete(task.id))),
-            ),
-          ),
+    // web 上带 action 的 SnackBar 不会按 duration 自己退场（FL #512，
+    // 同症状上游单 flutter/flutter#126756；hide/remove 两种写法与鼠标悬停都已实验否掉）。
+    // 到点自己摘一次：手动撤销或新的提示顶掉它时，messenger 的当前态已不是这条，
+    // 所以只在「还是这条」时摘，不会误伤后来的提示。
+    var noticeDismissed = false;
+    final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          reminderMessage == null
+              ? '已创建 ${created.length} 项任务'
+              : '已创建 ${created.length} 项任务；$reminderMessage',
         ),
-      );
+        action: SnackBarAction(
+          label: '撤销',
+          onPressed: () {
+            noticeDismissed = true;
+            unawaited(Future.wait(created.map((task) => repo.delete(task.id))));
+          },
+        ),
+      ),
+    );
+    _undoNoticeTimer?.cancel();
+    _undoNoticeTimer = Timer(const Duration(seconds: 5), () {
+      if (noticeDismissed || !messenger.mounted) return;
+      noticeDismissed = true;
+      messenger.removeCurrentSnackBar();
+    });
   }
 
   @override
