@@ -164,6 +164,7 @@ class FilterBar extends ConsumerWidget {
             label: _advancedFilterLabel(filter),
             selected: _hasAdvancedFilter(filter),
             onTap: () async {
+              final tagRepository = ref.read(tagRepositoryProvider);
               final next = await _pickAdvancedFilter(
                 context,
                 filter,
@@ -171,6 +172,9 @@ class FilterBar extends ConsumerWidget {
                 tagsAsync.valueOrNull ?? const <TodoTag>[],
                 tagsAsync.hasError,
                 previewResolver,
+                onCreateTag: tagRepository == null
+                    ? null
+                    : (name) => tagRepository.create(name: name),
               );
               if (next == null) return;
               onChanged(
@@ -329,8 +333,9 @@ class FilterBar extends ConsumerWidget {
     List<TaskAssigneeOption> assigneeOptions,
     List<TodoTag> tags,
     bool tagsUnavailable,
-    List<TodoTask> Function(TaskFilter draft)? previewResolver,
-  ) async {
+    List<TodoTask> Function(TaskFilter draft)? previewResolver, {
+    Future<TodoTag?> Function(String name)? onCreateTag,
+  }) async {
     final keywordController = TextEditingController(
       text: current.keyword ?? '',
     );
@@ -435,6 +440,7 @@ class FilterBar extends ConsumerWidget {
                     tags: tags,
                     unavailable: tagsUnavailable,
                     selected: selectedTagIds,
+                    onCreateTag: onCreateTag,
                     onToggle: (tagId, selected) {
                       setDialogState(() {
                         if (selected) {
@@ -719,12 +725,13 @@ class _Choice extends StatelessWidget {
 
 /// 「标签」这一条筛选条件：多选，缺省按「且」（与 `applyTaskFilter` 的 `containsAll` 同口径）。
 /// 读不出标签时不静默退化成"没有标签条件"，要给可见提示（四件套③）。
-class _TagConditionSection extends StatelessWidget {
+class _TagConditionSection extends StatefulWidget {
   const _TagConditionSection({
     required this.tags,
     required this.unavailable,
     required this.selected,
     required this.onToggle,
+    this.onCreateTag,
   });
 
   final List<TodoTag> tags;
@@ -732,41 +739,140 @@ class _TagConditionSection extends StatelessWidget {
   final Set<String> selected;
   final void Function(String tagId, bool selected) onToggle;
 
+  /// 就地建标签。高级筛选里零标签时，用户不必先去标签页建一条再回来选（FL #493）。
+  /// 为 null 时保持旧行为：只给一句提示。
+  final Future<TodoTag?> Function(String name)? onCreateTag;
+
+  @override
+  State<_TagConditionSection> createState() => _TagConditionSectionState();
+}
+
+class _TagConditionSectionState extends State<_TagConditionSection> {
+  final _controller = TextEditingController();
+
+  /// 本小节建出来的标签：标签流不一定立刻重发，光等 `widget.tags` 会出现「建了却看不见」。
+  final List<TodoTag> _created = <TodoTag>[];
+  String? _error;
+  var _creating = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  List<TodoTag> get _available => [
+    ...widget.tags,
+    for (final tag in _created)
+      if (!widget.tags.any((item) => item.id == tag.id)) tag,
+  ];
+
+  Future<void> _create() async {
+    if (_creating) return;
+    final name = _controller.text.trim();
+    if (name.isEmpty) {
+      setState(() => _error = '先输入标签名');
+      return;
+    }
+    setState(() {
+      _creating = true;
+      _error = null;
+    });
+    try {
+      final existing = _available.where((tag) => tag.name == name);
+      final tag = existing.isNotEmpty
+          ? existing.first
+          : await widget.onCreateTag!(name);
+      if (!mounted) return;
+      if (tag == null) {
+        setState(() {
+          _creating = false;
+          _error = '现在建不了标签，请稍后再试';
+        });
+        return;
+      }
+      setState(() {
+        if (!_created.any((item) => item.id == tag.id)) _created.add(tag);
+        _controller.clear();
+        _creating = false;
+      });
+      // 建完即选中：复用 onToggle，标签条件走的是同一条写回路径。
+      widget.onToggle(tag.id, true);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _creating = false;
+        _error = '建标签没成功，请稍后再试';
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final tags = _available;
     return Column(
       key: const Key('task-filter-tag-section'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text('标签', style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 8),
-        if (unavailable)
+        if (widget.unavailable)
           const Text('标签暂不可用，其余条件仍可继续筛选')
-        else if (tags.isEmpty)
-          const Text('暂无可选择的标签')
-        else
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final tag in tags)
-                Semantics(
-                  key: Key('task-filter-tag-semantics-${tag.id}'),
-                  label:
-                      '标签 ${tag.name}，${selected.contains(tag.id) ? '已选中' : '未选中'}',
-                  selected: selected.contains(tag.id),
-                  button: true,
-                  excludeSemantics: true,
-                  child: FilterChip(
-                    key: Key('task-filter-tag-${tag.id}'),
-                    label: Text(tag.name),
-                    selected: selected.contains(tag.id),
-                    onSelected: (next) => onToggle(tag.id, next),
+        else ...[
+          if (tags.isEmpty)
+            Text(widget.onCreateTag == null ? '暂无可选择的标签' : '还没有标签，用下面一行建一个')
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final tag in tags)
+                  Semantics(
+                    key: Key('task-filter-tag-semantics-${tag.id}'),
+                    label: '标签 ${tag.name}，${_selectedLabel(tag.id)}',
+                    selected: widget.selected.contains(tag.id),
+                    button: true,
+                    excludeSemantics: true,
+                    child: FilterChip(
+                      key: Key('task-filter-tag-${tag.id}'),
+                      label: Text(tag.name),
+                      selected: widget.selected.contains(tag.id),
+                      onSelected: (next) => widget.onToggle(tag.id, next),
+                    ),
                   ),
-                ),
-            ],
-          ),
+              ],
+            ),
+          if (widget.onCreateTag != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      key: const Key('task-filter-new-tag-input'),
+                      controller: _controller,
+                      decoration: InputDecoration(
+                        labelText: '新建标签',
+                        isDense: true,
+                        border: const OutlineInputBorder(),
+                        errorText: _error,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    key: const Key('task-filter-create-tag'),
+                    onPressed: _creating ? null : _create,
+                    child: const Text('添加'),
+                  ),
+                ],
+              ),
+            ),
+        ],
       ],
     );
   }
+
+  String _selectedLabel(String tagId) =>
+      widget.selected.contains(tagId) ? '已选中' : '未选中';
 }
