@@ -786,7 +786,9 @@ class SyncCoordinator {
           change.entityLocalId!.isNotEmpty) {
         _temporaryEntityIds.putIfAbsent(
           _temporaryEntityKey(change.entity, change.entityLocalId!),
-          () => -(++_tempIdSeq),
+          () => _stableTemporaryEntityId(
+            _temporaryEntityKey(change.entity, change.entityLocalId!),
+          ),
         );
       }
     }
@@ -831,11 +833,30 @@ class SyncCoordinator {
   }
 
   int _temporaryEntityId(String entity, String? localId) {
+    // 没有本地 ID 的行退进程内序号：这类行本来也没有「未同步的新实体」语义。
     if (localId == null || localId.isEmpty) return -(++_tempIdSeq);
     return _temporaryEntityIds.putIfAbsent(
       _temporaryEntityKey(entity, localId),
-      () => -(++_tempIdSeq),
+      () => _stableTemporaryEntityId(_temporaryEntityKey(entity, localId)),
     );
+  }
+
+  /// 由「实体类型 + 本地 ID」稳定派生负数临时 ID。
+  ///
+  /// 服务端把临时 ID 当映射键 `(tenant, user, entityType, device, tempEntityId)`
+  /// （izhaong/zh-cloud-service!331）。序号实现跨进程重启会从小数字重新分配，
+  /// 于是新实体能拿到上一个实体用过的号，被服务端写成上一行 —— 必须按身份派生。
+  ///
+  /// 两条通道的乘加都控制在 2^53 以内（lane1 21 位 × 2^31 + lane2 31 位 < 2^52），
+  /// 保证 Dart VM 与 web 编译（double 运算）得到同一个整数。
+  int _stableTemporaryEntityId(String key) {
+    var lane1 = 0x1505;
+    var lane2 = 0x2925;
+    for (final unit in key.codeUnits) {
+      lane1 = (lane1 * 31 + unit) & 0x1fffff;
+      lane2 = (lane2 * 37 + unit * 7) & 0x7fffffff;
+    }
+    return -(lane1 * 2147483648 + lane2 + 1);
   }
 
   String _temporaryEntityKey(String entity, String localId) =>
