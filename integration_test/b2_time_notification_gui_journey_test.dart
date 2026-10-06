@@ -152,16 +152,40 @@ void main() {
         // 但「出视口」和「不在这张列表里了」是两回事，修法完全不同（前者是旅程没滚到位，
         // 后者是改了截止时间之后任务的归属视图变了）。这条红在 macOS 与 Android 上都复现过，
         // 所以先把两者量开：红的文案要能指出是哪种，别再留一句 Bad state 让人猜。
+        // 「当下不在树里」不等于「离开了这张列表」：任务列表是懒构建的，滚动位置回到
+        // 顶部时这一行本来就没被 build。而 _scrollToTaskRow 内部是「按 400px 步进、
+        // 跳满 400 次直到这一行被重新构建」的循环 —— 所以判归属之前必须先让它跑完。
+        // 上一版把这条检查放在滚动之前，于是把正常的虚拟卸载当成「视图成员变了」，
+        // 红在自家插桩上（文案还断言「不是滚动位置能解释的」，方向是反的）。
         final rowTotal = find.byType(TaskRow).evaluate().length;
-        final titleHits = taskTitleInRow.evaluate().length;
-        _trace('after update TaskRow=$rowTotal titleHits=$titleHits');
-        if (titleHits == 0) {
+        _trace(
+          'after update TaskRow=$rowTotal '
+          'titleHits=${taskTitleInRow.evaluate().length}',
+        );
+        await _scrollToTaskRow(tester, taskTitleInRow);
+        if (taskTitleInRow.evaluate().isEmpty) {
+          final stillThere = (await tasks.watchAll().first)
+              .where((task) => task.id == taskId)
+              .toList();
+          final scrollables = <String>[];
+          for (final element in find.byType(Scrollable).evaluate()) {
+            final state = (element as StatefulElement).state as ScrollableState;
+            scrollables.add(
+              'max=${state.position.maxScrollExtent.toStringAsFixed(0)} '
+              'px=${state.position.pixels.toStringAsFixed(0)}',
+            );
+          }
           throw TestFailure(
-            '设完截止时间，这条任务已经不在当前列表的树里了（屏上 TaskRow=$rowTotal）。'
-            '这是归属视图变了（收集箱不再含已排期任务之类），不是滚动位置能解释的。',
+            '滚遍整张列表仍未构建出这一行（屏上 TaskRow=$rowTotal）。'
+            '数据层归属：'
+            '${stillThere.isEmpty ? '任务已不在 watchAll 结果里（不是卸载）' : 'listId=${stillThere.single.listId}'}；'
+            'watchAll 共 ${(await tasks.watchAll().first).length} 条；'
+            'Scrollable(${scrollables.length})=[${scrollables.join(" | ")}]',
           );
         }
-        await _scrollToTaskRow(tester, taskTitleInRow);
+        _trace(
+          'after scrollTo titleHits=${taskTitleInRow.evaluate().length}',
+        );
         final taskRow = find.ancestor(
           of: taskTitleInRow,
           matching: find.byType(TaskRow),
@@ -492,6 +516,11 @@ Future<void> _scrollToTaskRow(WidgetTester tester, Finder rowTitle) async {
     }
   }
   if (position == null) return;
+  // 只能往前扫是这条 helper 的老缺陷：改完截止时间后列表按日期重排，那一行会跑到
+  // 当前偏移**之上**，从当前位置向下扫到 max 就永远碰不到它（#510 偶发红的确切机制：
+  // 红不红取决于行原来在哪、重排后去哪）。所以每次未命中都从顶部重新扫一遍整张列表。
+  position.jumpTo(0);
+  await tester.pump(const Duration(milliseconds: 50));
   for (var step = 0; step < 400 && rowTitle.evaluate().isEmpty; step++) {
     final next = (position.pixels + 400).clamp(0.0, position.maxScrollExtent);
     if (next == position.pixels) break;
