@@ -130,6 +130,10 @@ Future<void> _scrollToTaskRow(WidgetTester tester, Finder rowTitle) async {
     }
   }
   if (position == null) return;
+  // 未命中时从顶部重扫：列表会按日期/排序重排，目标行可能跑到当前偏移之上，
+  // 只向前扫永远碰不到（同 #510 在 b2 里定位到的机制）。
+  position.jumpTo(0);
+  await tester.pump(const Duration(milliseconds: 50));
   for (var step = 0; step < 400 && rowTitle.evaluate().isEmpty; step++) {
     final next = (position.pixels + 400).clamp(0.0, position.maxScrollExtent);
     if (next == position.pixels) break;
