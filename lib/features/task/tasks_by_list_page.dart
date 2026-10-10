@@ -2328,10 +2328,14 @@ List<TodoTask> applyTaskFilter(
   for (var i = 0; i < pieces.length; i++) {
     final piece = pieces[i];
     final isOr = filter.isConditionOr(piece.key);
-    if (i == 0 || isOr) clauses.add(<bool Function(TodoTask task)>[]);
+    if (i == 0 || isOr) {
+      clauses.add(<bool Function(TodoTask task)>[]);
+    }
     if (i > 0 && !isOr) {
       // 「且」是把这条追加进**每一个**已有子句（叉乘），不是只跟紧挨着的前一条配对。
-      for (final clause in clauses) clause.add(piece.test);
+      for (final clause in clauses) {
+        clause.add(piece.test);
+      }
     } else {
       clauses.last.add(piece.test);
     }
