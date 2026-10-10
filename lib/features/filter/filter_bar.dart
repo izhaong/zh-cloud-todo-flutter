@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../core/db/app_database.dart' show TodoTag, TodoTask;
+import '../../core/db/app_database.dart' show TodoFolder, TodoTag, TodoTask;
 import '../../state/providers.dart';
 import 'saved_filter_mapping.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -28,7 +28,9 @@ class TaskFilter {
   });
 
   final String? listId;
-  final int? folderId;
+  /// 本地文件夹主键（不是服务端 id）：`TodoFolders.serverId` 可空，离线建的文件夹用
+  /// 服务端 id 就筛不了；与本类的 `listId`（同样是本地主键）保持一致口径。
+  final String? folderId;
   final List<String> tagIds;
   final int? priority;
   final String? dueRange; // today / overdue / future
@@ -44,7 +46,8 @@ class TaskFilter {
 
   TaskFilter copyWith({
     String? listId,
-    int? folderId,
+    String? folderId,
+    bool clearFolderId = false,
     List<String>? tagIds,
     int? priority,
     String? dueRange,
@@ -60,7 +63,7 @@ class TaskFilter {
   }) {
     return TaskFilter(
       listId: listId ?? this.listId,
-      folderId: folderId ?? this.folderId,
+      folderId: clearFolderId ? null : folderId ?? this.folderId,
       tagIds: tagIds ?? this.tagIds,
       priority: priority ?? this.priority,
       dueRange: dueRange ?? this.dueRange,
@@ -124,6 +127,7 @@ class FilterBar extends ConsumerWidget {
     final dueRange = filter.dueRange;
     final completed = filter.completed;
     final tagsAsync = ref.watch(tagsStreamProvider);
+    final foldersAsync = ref.watch(foldersStreamProvider);
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
@@ -171,6 +175,8 @@ class FilterBar extends ConsumerWidget {
                 assigneeOptions,
                 tagsAsync.valueOrNull ?? const <TodoTag>[],
                 tagsAsync.hasError,
+                foldersAsync.valueOrNull ?? const <TodoFolder>[],
+                foldersAsync.hasError,
                 previewResolver,
                 onCreateTag: tagRepository == null
                     ? null
@@ -185,6 +191,7 @@ class FilterBar extends ConsumerWidget {
                   dueAtTo: next.dueAtTo,
                   assigneeUserId: next.assigneeUserId,
                   tagIds: next.tagIds,
+                  folderId: next.folderId,
                 ),
               );
             },
@@ -312,6 +319,7 @@ class FilterBar extends ConsumerWidget {
     required DateTime? dueAtTo,
     required int? assigneeUserId,
     required List<String> tagIds,
+    required String? folderId,
   }) {
     return base.copyWith(
       keyword: keyword.isEmpty ? null : keyword,
@@ -324,6 +332,8 @@ class FilterBar extends ConsumerWidget {
       clearAssigneeUserId: assigneeUserId == null,
       // 空列表 = 清空标签条件：copyWith 的 `tagIds ?? this.tagIds` 里 [] 是非 null，会覆盖旧值。
       tagIds: tagIds,
+      folderId: folderId,
+      clearFolderId: folderId == null,
     );
   }
 
@@ -333,6 +343,8 @@ class FilterBar extends ConsumerWidget {
     List<TaskAssigneeOption> assigneeOptions,
     List<TodoTag> tags,
     bool tagsUnavailable,
+    List<TodoFolder> folders,
+    bool foldersUnavailable,
     List<TodoTask> Function(TaskFilter draft)? previewResolver, {
     Future<TodoTag?> Function(String name)? onCreateTag,
   }) async {
@@ -341,6 +353,7 @@ class FilterBar extends ConsumerWidget {
     );
     int? selectedAssigneeUserId = current.assigneeUserId;
     final selectedTagIds = current.tagIds.toSet();
+    String? selectedFolderId = current.folderId;
     final dueAtFromController = TextEditingController(
       text: _formatDate(current.dueAtFrom),
     );
@@ -370,6 +383,7 @@ class FilterBar extends ConsumerWidget {
                     dueAtTo: draftDueAtTo,
                     assigneeUserId: selectedAssigneeUserId,
                     tagIds: selectedTagIds.toList(),
+                    folderId: selectedFolderId,
                   ),
                 )
               : null;
@@ -448,6 +462,18 @@ class FilterBar extends ConsumerWidget {
                         } else {
                           selectedTagIds.remove(tagId);
                         }
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  _FolderConditionSection(
+                    folders: folders,
+                    unavailable: foldersUnavailable,
+                    selectedId: selectedFolderId,
+                    onSelect: (folderId) {
+                      setDialogState(() {
+                        // 单选：再点一次已选中的那个就是取消这条条件。
+                        selectedFolderId = selectedFolderId == folderId ? null : folderId;
                       });
                     },
                   ),
@@ -539,6 +565,7 @@ class FilterBar extends ConsumerWidget {
                       dueAtTo: dueAtTo,
                       assigneeUserId: selectedAssigneeUserId,
                       tagIds: (selectedTagIds.toList()..sort()),
+                      folderId: selectedFolderId,
                     ),
                   );
                 },
@@ -625,6 +652,7 @@ class _AdvancedFilter {
     required this.dueAtTo,
     required this.assigneeUserId,
     this.tagIds = const [],
+    this.folderId,
   });
 
   final String? keyword;
@@ -632,6 +660,9 @@ class _AdvancedFilter {
   final DateTime? dueAtTo;
   final int? assigneeUserId;
   final List<String> tagIds;
+
+  /// 本地文件夹主键；null = 没有这条条件。
+  final String? folderId;
 }
 
 bool _hasAdvancedFilter(TaskFilter filter) =>
@@ -639,10 +670,12 @@ bool _hasAdvancedFilter(TaskFilter filter) =>
     filter.dueAtFrom != null ||
     filter.dueAtTo != null ||
     filter.assigneeUserId != null ||
+    filter.folderId != null ||
     filter.tagIds.isNotEmpty;
 
 String _advancedFilterLabel(TaskFilter filter) {
   if (filter.tagIds.isNotEmpty) return '标签';
+  if (filter.folderId != null) return '文件夹';
   if (filter.assigneeUserId != null) return '负责人';
   if (filter.keyword?.trim().isNotEmpty == true) return '关键词';
   if (filter.dueAtFrom != null || filter.dueAtTo != null) return '日期';
@@ -718,6 +751,55 @@ class _Choice extends StatelessWidget {
         label: Text(label),
         selected: selected,
         onSelected: (_) => onTap(),
+      ),
+    );
+  }
+}
+
+/// 「文件夹」这一条筛选条件：单选，值域来自文件夹列表（Issue #333）。
+/// 读不出文件夹、或一个文件夹都没有时给可见提示，不静默退化成「什么都不列」。
+class _FolderConditionSection extends StatelessWidget {
+  const _FolderConditionSection({
+    required this.folders,
+    required this.unavailable,
+    required this.selectedId,
+    required this.onSelect,
+  });
+
+  final List<TodoFolder> folders;
+  final bool unavailable;
+  final String? selectedId;
+  final void Function(String folderId) onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      container: true,
+      child: Column(
+        key: const Key('task-filter-folder-section'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('文件夹'),
+          const SizedBox(height: 4),
+          if (unavailable)
+            const Text('现在读不到文件夹列表，稍后再试')
+          else if (folders.isEmpty)
+            const Text('还没有文件夹：先在侧栏新建一个文件夹，再回来按它筛')
+          else
+            Wrap(
+              children: [
+                for (final folder in folders)
+                  Semantics(
+                    selected: folder.id == selectedId,
+                    child: _Choice(
+                      label: folder.name,
+                      selected: folder.id == selectedId,
+                      onTap: () => onSelect(folder.id),
+                    ),
+                  ),
+              ],
+            ),
+        ],
       ),
     );
   }

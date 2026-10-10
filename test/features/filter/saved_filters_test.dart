@@ -76,7 +76,7 @@ void main() {
       home: Scaffold(
         body: FilterBar(
           filter: const TaskFilter(
-            folderId: 7,
+            folderId: 'folder-local',
             assigneeUserId: 21,
             priority: 2,
             dueRange: 'overdue',
@@ -297,7 +297,7 @@ void main() {
       tester,
       home: Scaffold(
         body: FilterBar(
-          filter: const TaskFilter(folderId: 7),
+          filter: const TaskFilter(folderId: 'folder-local'),
           onChanged: (_) {},
         ),
       ),

@@ -475,6 +475,19 @@ final listsStreamProvider = StreamProvider<List<TodoList>>((ref) {
   return repo.watchAll();
 });
 
+/// 清单 → 文件夹的本地归属索引，供「文件夹」筛选条件求值（FL Issue #333）。
+/// 用 `folderLocalId`（本地主键）而不是 `folderId`（服务端 id）：离线建的文件夹还没有
+/// 服务端 id，用后者这类文件夹根本筛不了；也与 `TaskFilter.listId` 的本地口径一致。
+/// 清单流还没发值时返回 null，让调用方去等，而不是给一张空图把有文件夹条件读成「零命中」。
+final listFolderIndexProvider = Provider<Map<String, String>?>((ref) {
+  final lists = ref.watch(listsStreamProvider).valueOrNull;
+  if (lists == null) return null;
+  return {
+    for (final list in lists)
+      if (list.folderLocalId != null) list.id: list.folderLocalId!,
+  };
+});
+
 /// 用户保存的智能清单 stream（`smart:` 前缀）。
 final smartListsStreamProvider = StreamProvider<List<TodoList>>((ref) {
   final repo = ref.watch(listRepositoryProvider);
