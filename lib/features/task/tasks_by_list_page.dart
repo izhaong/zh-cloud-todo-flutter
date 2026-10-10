@@ -2212,7 +2212,13 @@ List<TodoTask> applyTaskFilter(
     // 这里不假装「没有标签条件」把全量放行。
     if (filter.tagIds.isNotEmpty && taskTagIds != null) {
       final owned = taskTagIds[task.id] ?? const <String>{};
-      if (!owned.containsAll(filter.tagIds)) return false;
+      // 「且」要全部命中（与服务端 LOGIC_AND 一致），「或」任一命中即可
+      // （嘀嗒 :71 第二句 + 服务端 LOGIC_OR）。两条分支成对出现：只加「或」
+      // 而留着写死的 containsAll，就等于缺省档随改写漂移。
+      final matched = filter.tagsMatchAny
+          ? filter.tagIds.any(owned.contains)
+          : owned.containsAll(filter.tagIds);
+      if (!matched) return false;
     }
     // 文件夹维度（Issue #333）：文件夹是清单的容器，所以「任务属于哪个文件夹」由它所在
     // 清单的本地 folder 主键决定。未归类清单不在图里 ⇒ 不命中任何文件夹条件，而不是放行。

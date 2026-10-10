@@ -24,6 +24,8 @@ import 'filter_bar.dart';
     conditions: TodoFilterConditions(
       listIds: filter.listId == null ? const [] : [filter.listId!],
       tagIds: filter.tagIds,
+      // 「且」不写键（等价于服务端的缺省 AND）；写出去的值一律归到词表内的小写形式。
+      tagLogic: filter.tagsMatchAny ? tagLogicOr : null,
       priorities: filter.priority == null ? const [] : [filter.priority!],
       statuses: filter.completed == null
           ? const []
@@ -46,6 +48,16 @@ TaskFilter? taskFilterFromSaved(
   // tagIds 如今真的参与求值（Issue #417 在 `applyTaskFilter` 里补了标签分支），
   // 所以带标签的已存过滤器可以套用，不再一律标「不支持」。
 
+  // 「且/或」只认词表内两个值：未知取值既不当 and 也不当 or，直接标不支持套用 ——
+  // 猜哪一种都是替用户改条件（大小写不敏感，与服务端 equalsIgnoreCase 同口径）。
+  final rawTagLogic = conditions.tagLogic;
+  final loweredTagLogic = rawTagLogic?.toLowerCase();
+  if (rawTagLogic != null &&
+      loweredTagLogic != tagLogicOr &&
+      loweredTagLogic != tagLogicAnd) {
+    return null;
+  }
+
   // 只认 done/todo；in_progress、cancelled 等契约值在本地筛选态里没有对应字段，
   // 静默还原成「不限状态」等于凭空删掉一个条件。
   if (conditions.statuses.any((s) => s != 'done' && s != 'todo')) return null;
@@ -54,6 +66,7 @@ TaskFilter? taskFilterFromSaved(
   return TaskFilter(
     listId: conditions.listIds.isEmpty ? null : conditions.listIds.single,
     tagIds: conditions.tagIds,
+    tagLogic: loweredTagLogic ?? tagLogicAnd,
     priority: conditions.priorities.isEmpty
         ? null
         : conditions.priorities.single,
