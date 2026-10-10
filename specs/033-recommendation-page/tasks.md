@@ -155,3 +155,8 @@
 **本轮（第 11 轮 = 033 复核修复轮）结束状态**：BLOCKER + M2/M4/M5(前半)/M6/M7 + N9 全部落地，
 每项都有反向探针（PK/PL/PM/PN/PO/PP 六条，各自红、恢复后 `cmp -s` 逐字节一致）；
 新页用例 `+12`（原 `+10`，多两条：同帧连点、流报错）。M3 按「收窄措辞 + 记账」处置，不采纳为代码改动，理由见上。
+## 2026-10-07 订正（FL !521 之后）
+
+- 本文件先前记的「`flutter build ios` 卡 SPM（github 直连超时）」这条前提已失效：`flutter build ios --release --no-codesign` 在 develop `9ac64c7` 返回 rc=0 并产出 `build/ios/iphoneos/Runner.app`；真因是 workspace 缺 Pods 工程引用，已由 FL !521 补进仓库，判据 `git show origin/develop:ios/Runner.xcworkspace/contents.xcworkspacedata | grep -c "Pods.xcodeproj"` 现读 1，详见 FL #520。
+- github 的 git 协议本轮现测可达：`git ls-remote https://github.com/zhangao0086/DKImagePickerController` 返回 HEAD `0bdfeace`。这条只对本轮负责，复现前需重测。
+- 未勾选项保持不变：可登录 test 的第二台设备与远端 CI 本轮仍无证据，上面的本地结果不替代它们。

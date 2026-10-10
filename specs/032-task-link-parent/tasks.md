@@ -143,4 +143,8 @@ UI 不复制仓储规则、无真机声称。
   客户端可先落四组 + 「即将到来 明天/后天」（能从 `dueAt` 算），子档在 `spec.md` 里写成仍缺项，不算完成。
   入口优先放进现有 `RecommendationPanel` 的标题行（面板只在有缓存时渲染、push 路由拍不到黄金图）⇒ 不重录黄金基线。
 - 需要授权才动的：#23 缺项 ①「清单页渲染子任务树」（改可见列表布局 ⇒ 先申请重录 9 张黄金图）。
+## 2026-10-07 订正（FL !521 之后）
 
+- 本文件先前记的「`flutter build ios` 卡 SPM（github 直连超时）」这条前提已失效：`flutter build ios --release --no-codesign` 在 develop `9ac64c7` 返回 rc=0 并产出 `build/ios/iphoneos/Runner.app`；真因是 workspace 缺 Pods 工程引用，已由 FL !521 补进仓库，判据 `git show origin/develop:ios/Runner.xcworkspace/contents.xcworkspacedata | grep -c "Pods.xcodeproj"` 现读 1，详见 FL #520。
+- github 的 git 协议本轮现测可达：`git ls-remote https://github.com/zhangao0086/DKImagePickerController` 返回 HEAD `0bdfeace`。这条只对本轮负责，复现前需重测。
+- 未勾选项保持不变：可登录 test 的第二台设备与远端 CI 本轮仍无证据，上面的本地结果不替代它们。

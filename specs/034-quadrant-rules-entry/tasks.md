@@ -182,3 +182,8 @@
   代码面第 2 轮没有提出新 blocker（其原文：「BLOCKER（均为文档/证据，不涉代码）」）。
 - 第 2 轮之后我又自行复验推翻了自己一处更早写下的结论（`isExpanded` 那条「生产真缺陷」的定性，见 T012）；
   这一处不在任何一轮复核的 finding 里，是本规格目前**主动改判的地方**（不在任何一轮复核 findings 里）。
+## 2026-10-07 订正（FL !521 之后）
+
+- 本文件先前记的「`flutter build ios` 卡 SPM（github 直连超时）」这条前提已失效：`flutter build ios --release --no-codesign` 在 develop `9ac64c7` 返回 rc=0 并产出 `build/ios/iphoneos/Runner.app`；真因是 workspace 缺 Pods 工程引用，已由 FL !521 补进仓库，判据 `git show origin/develop:ios/Runner.xcworkspace/contents.xcworkspacedata | grep -c "Pods.xcodeproj"` 现读 1，详见 FL #520。
+- github 的 git 协议本轮现测可达：`git ls-remote https://github.com/zhangao0086/DKImagePickerController` 返回 HEAD `0bdfeace`。这条只对本轮负责，复现前需重测。
+- 未勾选项保持不变：可登录 test 的第二台设备与远端 CI 本轮仍无证据，上面的本地结果不替代它们。

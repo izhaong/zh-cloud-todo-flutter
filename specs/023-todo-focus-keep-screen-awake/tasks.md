@@ -21,3 +21,9 @@
 - Android/iOS 的真实自动锁屏阻止效果需要物理设备；编译或 Dart Mock 不替代该验收。
 - iOS 本机若缺少 Platform Support / Simulator runtime，只记录编译或设备门槛，不伪造 iOS 通过。
 - 当前 Gradle/Kotlin 组合不能以本机 JDK 25.0.3 配置 Android；本切片 Android JVM 与 Kotlin 编译明确使用 JDK 17，JDK 25 的运行时开发线不因此改变。
+## 2026-10-07 复校（FL !521 之后）
+
+- iOS Runner 编译不再受阻：`flutter build ios --release --no-codesign` 在 develop `9ac64c7` 返回 rc=0 并产出 `build/ios/iphoneos/Runner.app`（arm64）。当时记的「卡 SPM」真因是 workspace 缺 Pods 工程引用，已由 FL !521 补进仓库；判据 `git show origin/develop:ios/Runner.xcworkspace/contents.xcworkspacedata | grep -c "Pods.xcodeproj"` 现读 1。
+- github 的 git 协议本轮现测可达：`git ls-remote https://github.com/zhangao0086/DKImagePickerController` 返回 HEAD `0bdfeace`，这条只对本轮负责，复现前需重测。
+- JDK 前提变化：`/usr/libexec/java_home -V` 现注册 ms-25.0.4.1 与 ms-21.0.12.1 两个，Gradle 8.14 需以 21 启动；以 25 启动时构建报 `What went wrong: 25.0.4.1`，仓内不写绝对路径的 java.home。
+- T005 继续保持未勾选：自动锁屏的真机效果与远端 CI 两项本轮仍无证据。
