@@ -9,6 +9,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 const String tagLogicAnd = 'and';
 const String tagLogicOr = 'or';
 
+/// 六个可命名条件的规范顺序，逐字对齐服务端 `TodoFilterConditionsDO.CONDITION_ORDER`
+/// （zh-cloud-service `origin/develop@7bd493dd1265` 的 `:58-59`）。
+/// 服务端那条注释就是理由：「『前后两个筛选条件』的『前/后』只能由这张表判定，
+/// 服务端求值与客户端条件行必须同源，否则连接词会挂到另一条条件上」。
+const List<String> conditionOrder = <String>[
+  'listIds',
+  'tagIds',
+  'priorities',
+  'statuses',
+  'dateRange',
+  'keyword',
+];
+
 class TaskAssigneeOption {
   const TaskAssigneeOption({required this.userId, required this.name});
 
@@ -23,6 +36,7 @@ class TaskFilter {
     this.folderId,
     this.tagIds = const [],
     this.tagLogic = tagLogicAnd,
+    this.conditionLogics = const {},
     this.priority,
     this.dueRange,
     this.completed,
@@ -43,6 +57,13 @@ class TaskFilter {
   /// 词表与服务端同源（`TodoFilterConditionsDO.LOGIC_AND/LOGIC_OR`），缺省 and；
   /// 未知值一律按 and 求值（`tagsMatchAny`），不在求值层自创第三种口径。
   final String tagLogic;
+
+  /// 跨条件的逻辑词（FL #524，嘀嗒《05-过滤器》:71 第一句）。
+  /// 键取 [conditionOrder] 里的条件名，值取 `and`/`or`，说的是**这条条件相对前面累计结果**的连接方式 ——
+  /// 不是「与紧挨着的前一条」两两判断：服务端把它拼成析取范式（带 `and` 的词会把这条追加进所有已有子句）。
+  /// 空表 = 全部「且」，与本轮改动前的行为逐字节等价；不在 [conditionOrder] 里的键读不到 ⇒ 惰性，
+  /// 所以存不下的维度（文件夹、负责人）不会被一份逻辑词翻成「或」。
+  final Map<String, String> conditionLogics;
   final int? priority;
   final String? dueRange; // today / overdue / future
   final bool? completed;
@@ -61,6 +82,7 @@ class TaskFilter {
     bool clearFolderId = false,
     List<String>? tagIds,
     String? tagLogic,
+    Map<String, String>? conditionLogics,
     int? priority,
     String? dueRange,
     bool? completed,
@@ -78,6 +100,7 @@ class TaskFilter {
       folderId: clearFolderId ? null : folderId ?? this.folderId,
       tagIds: tagIds ?? this.tagIds,
       tagLogic: tagLogic ?? this.tagLogic,
+      conditionLogics: conditionLogics ?? this.conditionLogics,
       priority: priority ?? this.priority,
       dueRange: dueRange ?? this.dueRange,
       completed: completed ?? this.completed,
@@ -98,6 +121,12 @@ class TaskFilter {
   /// `savedFilterOf` 也因此不会写出多余的 `tagLogic` 键。
   bool get tagsMatchAny =>
       tagLogic.toLowerCase() == tagLogicOr && tagIds.length > 1;
+
+  /// 某条条件挂的是否「或」。与服务端 `isOrLogic` 同口径（`TodoFilterServiceImpl.java:322-325`）：
+  /// 值忽略大小写等于 `or` 才算「或」，缺失、`and`、未知值一律算「且」。
+  /// 键只认 [conditionOrder] 里那六个 —— 传进来的别的名字读不到，天然惰性。
+  bool isConditionOr(String key) =>
+      conditionLogics[key]?.toLowerCase() == tagLogicOr;
 
   bool get isEmpty =>
       listId == null &&
