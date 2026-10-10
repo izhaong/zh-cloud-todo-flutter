@@ -5,6 +5,10 @@ import '../../state/providers.dart';
 import 'saved_filter_mapping.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+/// 标签条件内部的逻辑词，取值与服务端 `TodoFilterConditionsDO.LOGIC_AND/LOGIC_OR` 一致。
+const String tagLogicAnd = 'and';
+const String tagLogicOr = 'or';
+
 class TaskAssigneeOption {
   const TaskAssigneeOption({required this.userId, required this.name});
 
@@ -18,6 +22,7 @@ class TaskFilter {
     this.listId,
     this.folderId,
     this.tagIds = const [],
+    this.tagLogic = tagLogicAnd,
     this.priority,
     this.dueRange,
     this.completed,
@@ -28,10 +33,16 @@ class TaskFilter {
   });
 
   final String? listId;
+
   /// 本地文件夹主键（不是服务端 id）：`TodoFolders.serverId` 可空，离线建的文件夹用
   /// 服务端 id 就筛不了；与本类的 `listId`（同样是本地主键）保持一致口径。
   final String? folderId;
   final List<String> tagIds;
+
+  /// 标签这一条条件内部的逻辑词：`and` = 全部命中，`or` = 任一命中。
+  /// 词表与服务端同源（`TodoFilterConditionsDO.LOGIC_AND/LOGIC_OR`），缺省 and；
+  /// 未知值一律按 and 求值（`tagsMatchAny`），不在求值层自创第三种口径。
+  final String tagLogic;
   final int? priority;
   final String? dueRange; // today / overdue / future
   final bool? completed;
@@ -49,6 +60,7 @@ class TaskFilter {
     String? folderId,
     bool clearFolderId = false,
     List<String>? tagIds,
+    String? tagLogic,
     int? priority,
     String? dueRange,
     bool? completed,
@@ -65,6 +77,7 @@ class TaskFilter {
       listId: listId ?? this.listId,
       folderId: clearFolderId ? null : folderId ?? this.folderId,
       tagIds: tagIds ?? this.tagIds,
+      tagLogic: tagLogic ?? this.tagLogic,
       priority: priority ?? this.priority,
       dueRange: dueRange ?? this.dueRange,
       completed: completed ?? this.completed,
@@ -76,6 +89,15 @@ class TaskFilter {
       dueAtTo: clearDueAtTo ? null : dueAtTo ?? this.dueAtTo,
     );
   }
+
+  /// 「或」档的判定口：大小写不敏感（服务端 `equalsIgnoreCase` 同口径），
+  /// 非 `or` 的一切取值都落回「且」。
+  ///
+  /// 标签不足两个时也算「且」：单标签下 `containsAll` 与 `any` 命中集本就相同，
+  /// 而界面上这个开关只在 ≥2 个标签时出现——留着 `or` 就是一份「存得下、看不见、改不动」的条件，
+  /// `savedFilterOf` 也因此不会写出多余的 `tagLogic` 键。
+  bool get tagsMatchAny =>
+      tagLogic.toLowerCase() == tagLogicOr && tagIds.length > 1;
 
   bool get isEmpty =>
       listId == null &&
@@ -191,6 +213,7 @@ class FilterBar extends ConsumerWidget {
                   dueAtTo: next.dueAtTo,
                   assigneeUserId: next.assigneeUserId,
                   tagIds: next.tagIds,
+                  tagLogic: next.tagLogic,
                   folderId: next.folderId,
                 ),
               );
@@ -319,6 +342,7 @@ class FilterBar extends ConsumerWidget {
     required DateTime? dueAtTo,
     required int? assigneeUserId,
     required List<String> tagIds,
+    required String tagLogic,
     required String? folderId,
   }) {
     return base.copyWith(
@@ -332,6 +356,7 @@ class FilterBar extends ConsumerWidget {
       clearAssigneeUserId: assigneeUserId == null,
       // 空列表 = 清空标签条件：copyWith 的 `tagIds ?? this.tagIds` 里 [] 是非 null，会覆盖旧值。
       tagIds: tagIds,
+      tagLogic: tagLogic,
       folderId: folderId,
       clearFolderId: folderId == null,
     );
@@ -353,6 +378,7 @@ class FilterBar extends ConsumerWidget {
     );
     int? selectedAssigneeUserId = current.assigneeUserId;
     final selectedTagIds = current.tagIds.toSet();
+    var selectedTagLogic = current.tagLogic;
     String? selectedFolderId = current.folderId;
     final dueAtFromController = TextEditingController(
       text: _formatDate(current.dueAtFrom),
@@ -383,6 +409,7 @@ class FilterBar extends ConsumerWidget {
                     dueAtTo: draftDueAtTo,
                     assigneeUserId: selectedAssigneeUserId,
                     tagIds: selectedTagIds.toList(),
+                    tagLogic: selectedTagLogic,
                     folderId: selectedFolderId,
                   ),
                 )
@@ -452,6 +479,9 @@ class FilterBar extends ConsumerWidget {
                   ),
                   _TagConditionSection(
                     tags: tags,
+                    logic: selectedTagLogic,
+                    onLogicChanged: (next) =>
+                        setDialogState(() => selectedTagLogic = next),
                     unavailable: tagsUnavailable,
                     selected: selectedTagIds,
                     onCreateTag: onCreateTag,
@@ -473,7 +503,9 @@ class FilterBar extends ConsumerWidget {
                     onSelect: (folderId) {
                       setDialogState(() {
                         // 单选：再点一次已选中的那个就是取消这条条件。
-                        selectedFolderId = selectedFolderId == folderId ? null : folderId;
+                        selectedFolderId = selectedFolderId == folderId
+                            ? null
+                            : folderId;
                       });
                     },
                   ),
@@ -565,6 +597,7 @@ class FilterBar extends ConsumerWidget {
                       dueAtTo: dueAtTo,
                       assigneeUserId: selectedAssigneeUserId,
                       tagIds: (selectedTagIds.toList()..sort()),
+                      tagLogic: selectedTagLogic,
                       folderId: selectedFolderId,
                     ),
                   );
@@ -652,6 +685,7 @@ class _AdvancedFilter {
     required this.dueAtTo,
     required this.assigneeUserId,
     this.tagIds = const [],
+    this.tagLogic = tagLogicAnd,
     this.folderId,
   });
 
@@ -660,6 +694,7 @@ class _AdvancedFilter {
   final DateTime? dueAtTo;
   final int? assigneeUserId;
   final List<String> tagIds;
+  final String tagLogic;
 
   /// 本地文件夹主键；null = 没有这条条件。
   final String? folderId;
@@ -813,6 +848,8 @@ class _TagConditionSection extends StatefulWidget {
     required this.unavailable,
     required this.selected,
     required this.onToggle,
+    required this.logic,
+    required this.onLogicChanged,
     this.onCreateTag,
   });
 
@@ -820,6 +857,11 @@ class _TagConditionSection extends StatefulWidget {
   final bool unavailable;
   final Set<String> selected;
   final void Function(String tagId, bool selected) onToggle;
+
+  /// 标签内部的逻辑词（`and` / `or`）。只在选了 ≥2 个标签时才画出来——
+  /// 零个或一个标签时两档结果相同，摆一个没意义的开关还会让断言恒真。
+  final String logic;
+  final void Function(String logic) onLogicChanged;
 
   /// 就地建标签。高级筛选里零标签时，用户不必先去标签页建一条再回来选（FL #493）。
   /// 为 null 时保持旧行为：只给一句提示。
@@ -923,6 +965,35 @@ class _TagConditionSectionState extends State<_TagConditionSection> {
                     ),
                   ),
               ],
+            ),
+          if (widget.selected.length > 1)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Wrap(
+                key: const Key('task-filter-tag-logic'),
+                spacing: 8,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  const Text('标签内逻辑'),
+                  for (final option in const <(String, String)>[
+                    (tagLogicAnd, '且'),
+                    (tagLogicOr, '或'),
+                  ])
+                    Semantics(
+                      key: Key('task-filter-tag-logic-${option.$1}'),
+                      label: '标签逻辑 ${option.$2}',
+                      selected: widget.logic == option.$1,
+                      button: true,
+                      excludeSemantics: true,
+                      child: ChoiceChip(
+                        label: Text(option.$2),
+                        selected: widget.logic == option.$1,
+                        onSelected: (_) => widget.onLogicChanged(option.$1),
+                      ),
+                    ),
+                ],
+              ),
             ),
           if (widget.onCreateTag != null)
             Padding(

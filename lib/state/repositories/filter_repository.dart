@@ -13,6 +13,7 @@ class TodoFilterConditions {
   const TodoFilterConditions({
     this.listIds = const [],
     this.tagIds = const [],
+    this.tagLogic,
     this.priorities = const [],
     this.statuses = const [],
     this.keyword,
@@ -21,6 +22,10 @@ class TodoFilterConditions {
 
   final List<String> listIds;
   final List<String> tagIds;
+  /// 标签条件内部的逻辑词，只存服务端词表的两个值（`and` / `or`）。
+  /// null = 键不存在，语义与 `and` 相同（服务端 TodoFilterServiceImpl 就这么当缺省），
+  /// 所以「且」这一档一律不写键 ⇒ 老数据的 conditions JSON 字节不变。
+  final String? tagLogic;
   final List<int> priorities;
   final List<String> statuses;
   final String? keyword;
@@ -29,6 +34,7 @@ class TodoFilterConditions {
   Map<String, dynamic> toJson() => {
     if (listIds.isNotEmpty) 'listIds': listIds,
     if (tagIds.isNotEmpty) 'tagIds': tagIds,
+    if (tagLogic != null) 'tagLogic': tagLogic,
     if (priorities.isNotEmpty) 'priorities': priorities,
     if (statuses.isNotEmpty) 'statuses': statuses,
     if (keyword?.trim().isNotEmpty == true) 'keyword': keyword!.trim(),
@@ -42,6 +48,7 @@ class TodoFilterConditions {
     final known = {
       'listIds',
       'tagIds',
+      'tagLogic',
       'priorities',
       'statuses',
       'keyword',
@@ -53,6 +60,7 @@ class TodoFilterConditions {
       conditions: TodoFilterConditions(
         listIds: _strings(json['listIds']),
         tagIds: _strings(json['tagIds']),
+        tagLogic: json['tagLogic']?.toString(),
         priorities: _ints(json['priorities']),
         statuses: _strings(json['statuses']),
         keyword: json['keyword']?.toString(),
