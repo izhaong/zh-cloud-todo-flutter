@@ -230,6 +230,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     }
 
     final taskTagIds = ref.watch(taskTagIndexProvider).valueOrNull;
+    final listFolderIds = ref.watch(listFolderIndexProvider);
     final tasksStream = _resolveTasksStream(taskRepo);
 
     final body = StreamBuilder<List<TodoTask>>(
@@ -240,12 +241,17 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         if (_filter.tagIds.isNotEmpty && taskTagIds == null) {
           return const Center(child: CircularProgressIndicator());
         }
+        // 文件夹条件同理（Issue #333）：归属索引没就位时不能先画一份「文件夹没参与筛选」的列表。
+        if (_filter.folderId != null && listFolderIds == null) {
+          return const Center(child: CircularProgressIndicator());
+        }
         final items = applyTaskFilter(
           raw,
           _filter,
           _selectedListId,
           now,
           taskTagIds: taskTagIds,
+          listFolderIds: listFolderIds,
         );
         final listOrderedItems = _visibleTasksInListOrder(
           items,
@@ -1697,6 +1703,9 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                     taskTagIds:
                         ref.read(taskTagIndexProvider).valueOrNull ??
                         const <String, Set<String>>{},
+                    listFolderIds:
+                        ref.read(listFolderIndexProvider) ??
+                        const <String, String>{},
                   ),
                   onChanged: (next) {
                     draft = next;
@@ -2186,6 +2195,7 @@ List<TodoTask> applyTaskFilter(
   String? selectedListId,
   DateTime now, {
   Map<String, Set<String>>? taskTagIds,
+  Map<String, String>? listFolderIds,
 }) {
   if (filter.isEmpty && selectedListId == null) return source;
   final startOfDay = DateTime(now.year, now.month, now.day);
@@ -2203,6 +2213,12 @@ List<TodoTask> applyTaskFilter(
     if (filter.tagIds.isNotEmpty && taskTagIds != null) {
       final owned = taskTagIds[task.id] ?? const <String>{};
       if (!owned.containsAll(filter.tagIds)) return false;
+    }
+    // 文件夹维度（Issue #333）：文件夹是清单的容器，所以「任务属于哪个文件夹」由它所在
+    // 清单的本地 folder 主键决定。未归类清单不在图里 ⇒ 不命中任何文件夹条件，而不是放行。
+    // 与标签同一口径：`listFolderIds == null` 是索引没就位，由调用方等它。
+    if (filter.folderId != null && listFolderIds != null) {
+      if (listFolderIds[task.listId] != filter.folderId) return false;
     }
     if (filter.priority != null && task.priority != filter.priority) {
       return false;
