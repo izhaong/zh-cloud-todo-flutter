@@ -70,3 +70,8 @@ No issues found! (ran in 1.5s)
 3. 看板/时间线 B4 跨端可操作闭环；#67 导入收口（滴答官方导出格式仍 0 命中）。
 4. #18 文件夹管理 UI 入口（`list_page.dart` 零引用）——同样需批准重录基线。
 5. 矩阵轨道 A：未复校行 42 → 逐行换 `文件:行号` 证据；#20 分组排序与 #23 多级任务的行状态在 !277 合并后要翻并引合并 SHA。
+## 2026-10-07 订正（FL !521 之后）
+
+- 本文件先前记的「`flutter build ios` 卡 SPM（github 直连超时）」这条前提已失效：`flutter build ios --release --no-codesign` 在 develop `9ac64c7` 返回 rc=0 并产出 `build/ios/iphoneos/Runner.app`；真因是 workspace 缺 Pods 工程引用，已由 FL !521 补进仓库，判据 `git show origin/develop:ios/Runner.xcworkspace/contents.xcworkspacedata | grep -c "Pods.xcodeproj"` 现读 1，详见 FL #520。
+- github 的 git 协议本轮现测可达：`git ls-remote https://github.com/zhangao0086/DKImagePickerController` 返回 HEAD `0bdfeace`。这条只对本轮负责，复现前需重测。
+- 未勾选项保持不变：可登录 test 的第二台设备与远端 CI 本轮仍无证据，上面的本地结果不替代它们。
