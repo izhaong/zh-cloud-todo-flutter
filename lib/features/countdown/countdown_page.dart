@@ -235,6 +235,127 @@ typedef CountdownBackgroundPicker = Future<String?> Function();
 typedef CountdownBackgroundUploader =
     Future<String> Function(String localPath, String name);
 
+/// 嘀嗒《03-管理倒数纪念日.md:187》「在倒数纪念日列表中左滑，即可快速进行置顶、归档或删除操作」。
+/// 行左滑露出快捷钮；`:204` 写明开启分组后不再支持滑动 ⇒ 只包未分组的非归档视图。
+class _SwipeAction {
+  const _SwipeAction({
+    required this.key,
+    required this.label,
+    required this.background,
+    required this.foreground,
+    required this.onPressed,
+  });
+
+  final Key key;
+  final String label;
+  final Color background;
+  final Color foreground;
+  final VoidCallback? onPressed;
+}
+
+class _SwipeRevealRow extends StatefulWidget {
+  const _SwipeRevealRow({
+    super.key,
+    required this.actions,
+    required this.child,
+  });
+
+  final List<_SwipeAction> actions;
+  final Widget child;
+
+  @override
+  State<_SwipeRevealRow> createState() => _SwipeRevealRowState();
+}
+
+class _SwipeRevealRowState extends State<_SwipeRevealRow>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 150),
+  );
+
+  double get _actionsWidth => 72.0 * widget.actions.length;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragUpdate: (details) {
+            _ctrl.stop();
+            _ctrl.value = (_ctrl.value - details.delta.dx / _actionsWidth)
+                .clamp(0.0, 1.0);
+          },
+          onHorizontalDragEnd: (details) {
+            final velocity = details.primaryVelocity ?? 0;
+            final open = _ctrl.value > 0.4 || velocity < -400;
+            _ctrl.animateTo(
+              open ? 1 : 0,
+              curve: Curves.easeOut,
+              duration: const Duration(milliseconds: 150),
+            );
+          },
+          child: Stack(
+            children: [
+              Positioned(
+                right: 0,
+                top: 0,
+                bottom: 0,
+                width: _actionsWidth,
+                child: Row(
+                  children: [
+                    for (final action in widget.actions)
+                      Expanded(
+                        child: Semantics(
+                          button: true,
+                          label: action.label,
+                          child: ExcludeSemantics(
+                            child: Material(
+                              color: action.background,
+                              child: InkWell(
+                                key: action.key,
+                                onTap: action.onPressed,
+                                child: Center(
+                                  child: Text(
+                                    action.label,
+                                    style: TextStyle(
+                                      color: action.foreground,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              AnimatedBuilder(
+                animation: _ctrl,
+                builder: (context, child) => Transform.translate(
+                  offset: Offset(-_actionsWidth * _ctrl.value, 0),
+                  child: SizedBox(width: width, child: child),
+                ),
+                child: widget.child,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 class CountdownPage extends ConsumerStatefulWidget {
   const CountdownPage({
     super.key,
@@ -448,10 +569,13 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
       return const Center(child: Text('暂无倒数日'));
     }
     if (!_showGroups) {
+      // 嘀嗒 :187：未分组的主列表行支持左滑快捷（置顶/归档/删除）；
+      // 「已归档」视图不在 :187 的范围内，保持行尾按钮形态。
       return ListView.separated(
         itemCount: items.length,
         separatorBuilder: (_, _) => const Divider(height: 1),
-        itemBuilder: (_, i) => _tileFor(items[i]),
+        itemBuilder: (_, i) =>
+            _showArchived ? _tileFor(items[i]) : _swipeableTile(items[i]),
       );
     }
     // 嘀嗒 :9「开启后，所有日子将根据类型自动分组：倒数日、纪念日、生日、节日」
@@ -568,6 +692,40 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
       onArchive: () => _runArchive(c, true),
       onRestore: () => _runArchive(c, false),
       onPin: () => _runPin(c),
+    );
+  }
+
+  /// 嘀嗒 :187「左滑，即可快速进行置顶、归档或删除操作」；:204 写明
+  /// 「开启分组后不再支持滑动」⇒ 已分组页面走 _groupPage，不经这里。
+  Widget _swipeableTile(CountdownDto c) {
+    final scheme = Theme.of(context).colorScheme;
+    return _SwipeRevealRow(
+      key: Key('countdown-swipe-${c.id}'),
+      actions: [
+        if (!c.isPinned)
+          _SwipeAction(
+            key: Key('countdown-swipe-pin-${c.id}'),
+            label: '置顶',
+            background: scheme.primaryContainer,
+            foreground: scheme.onPrimaryContainer,
+            onPressed: _writePending ? null : () => _runPin(c),
+          ),
+        _SwipeAction(
+          key: Key('countdown-swipe-archive-${c.id}'),
+          label: '归档',
+          background: scheme.secondaryContainer,
+          foreground: scheme.onSecondaryContainer,
+          onPressed: _writePending ? null : () => _runArchive(c, true),
+        ),
+        _SwipeAction(
+          key: Key('countdown-swipe-delete-${c.id}'),
+          label: '删除',
+          background: scheme.errorContainer,
+          foreground: scheme.onErrorContainer,
+          onPressed: _writePending ? null : () => _confirmDelete(c),
+        ),
+      ],
+      child: _tileFor(c),
     );
   }
 
