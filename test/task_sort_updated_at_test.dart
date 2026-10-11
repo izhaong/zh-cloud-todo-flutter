@@ -37,8 +37,17 @@ void main() {
     // 所以「紧跟创建时间 + 不重排既有档位」这条 FR-1 判据落在声明顺序上才是可证的。
     expect(
       TaskSort.values.map((sort) => sort.name).toList(),
-      ['smart', 'priorityDesc', 'dueDate', 'title', 'createdAt', 'updatedAt'],
-      reason: '「修改时间」必须在「创建时间」之后，且既有五档顺序不动（重排会让已存偏好的语义位移）',
+      [
+        'smart',
+        'priorityDesc',
+        'dueDate',
+        'title',
+        'createdAt',
+        'updatedAt',
+        // 标签档（specs/090）追加在末尾：偏好按 name 序列化，重排/插队会让已存偏好的语义位移。
+        'tag',
+      ],
+      reason: '「修改时间」必须在「创建时间」之后，且既有档位顺序不动（重排会让已存偏好的语义位移）',
     );
   });
 
