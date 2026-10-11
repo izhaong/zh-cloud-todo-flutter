@@ -347,7 +347,7 @@ void main() {
           id: 41,
           title: '失败也要留痕',
           code: 'LONG_UNFINISHED',
-          reason: '已超过 14 天未完成',
+          reason: '长时间未完成',
           dueAt: null,
           score: 800,
         ),

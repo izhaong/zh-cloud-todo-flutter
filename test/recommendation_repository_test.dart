@@ -32,7 +32,7 @@ void main() {
           taskServerId: 9,
           title: '长期未完成的任务',
           reasonCode: 'LONG_UNFINISHED',
-          reason: '已超过 14 天未完成',
+          reason: '长时间未完成',
           score: 800,
         ),
         RecommendationTask(
@@ -58,7 +58,7 @@ void main() {
     expect(cached.first.reasonCode, 'REPEATEDLY_RESCHEDULED');
     expect(cached.first.reason, '已多次改期，建议重新安排');
     expect(cached[1].dueAt?.toUtc(), DateTime.utc(2026, 7, 17, 8));
-    expect(cached[2].reason, '已超过 14 天未完成');
+    expect(cached[2].reason, '长时间未完成');
     expect(cached.last.reason, '刚刚添加，建议安排下一步');
   });
 
