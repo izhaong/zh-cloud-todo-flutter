@@ -129,7 +129,14 @@ void main() {
     await _pump(tester);
     await _openTileMenu(tester, 1);
     expect(find.byKey(const Key('countdown-menu-pin-1')), findsOneWidget);
-    expect(find.text('置顶'), findsOneWidget);
+    // 滑动快捷钮也叫「置顶」：菜单文案的断言收窄到弹层菜单内。
+    expect(
+      find.descendant(
+        of: find.byType(PopupMenuItem<String>),
+        matching: find.text('置顶'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('点「置顶」发出 value=true 并重取，该行排到首位', (tester) async {
@@ -169,7 +176,13 @@ void main() {
     await tester.tap(find.byKey(const Key('countdown-menu-pin-1')));
     await tester.pumpAndSettle();
     await _openTileMenu(tester, 1);
-    expect(find.text('置顶'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byType(PopupMenuItem<String>),
+        matching: find.text('置顶'),
+      ),
+      findsNothing,
+    );
     expect(api.writes.length, 1, reason: '只发过一次置顶写入');
   });
 

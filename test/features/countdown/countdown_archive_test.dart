@@ -148,7 +148,14 @@ void main() {
     await _pump(tester);
     await _openTileMenu(tester, 1);
     expect(find.byKey(const Key('countdown-menu-archive-1')), findsOneWidget);
-    expect(find.text('归档'), findsOneWidget);
+    // 滑动快捷钮也叫「归档」：菜单文案的断言收窄到弹层菜单内。
+    expect(
+      find.descendant(
+        of: find.byType(PopupMenuItem<String>),
+        matching: find.text('归档'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('点「归档」发出 value=true 并重取，该条离开主列表', (tester) async {
