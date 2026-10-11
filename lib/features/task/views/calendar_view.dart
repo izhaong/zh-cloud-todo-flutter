@@ -1618,7 +1618,9 @@ class _ListView extends StatelessWidget {
       return ad.compareTo(bd);
     });
     if (sorted.isEmpty) {
-      return AppEmptyState(title: '该日无任务', subtitle: '在日历上选择日期，点击即可添加任务。');
+      // 时间轴关闭时本列表展示的是「全部任务」而非某一天（matrix #29 第 274 轮订正），
+      // 空态文案不能再说「该日无任务」——那是 _DayTimeline（按天口径）的句子。
+      return AppEmptyState(title: '暂无任务', subtitle: '在日历上选择日期，点击即可添加任务。');
     }
     final df = DateFormat('yyyy-MM-dd');
     return ListView.separated(

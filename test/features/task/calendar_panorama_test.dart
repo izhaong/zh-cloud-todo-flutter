@@ -50,6 +50,17 @@ bool _expandedLabel(WidgetTester tester) {
 }
 
 void main() {
+  testWidgets('时间轴关闭的列表档是全部任务口径：空态不写「该日无任务」', (tester) async {
+    await _pump(tester);
+
+    expect(find.text('暂无任务'), findsOneWidget);
+    expect(
+      find.text('该日无任务'),
+      findsNothing,
+      reason: '「该日无任务」是时间轴开（按天口径）的句子，列表档看全部任务',
+    );
+  });
+
   testWidgets('列表档默认收起：只有第一排日历，没有全景', (tester) async {
     await _pump(tester);
 
