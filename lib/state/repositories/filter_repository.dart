@@ -14,6 +14,7 @@ class TodoFilterConditions {
     this.listIds = const [],
     this.tagIds = const [],
     this.tagLogic,
+    this.conditionLogics,
     this.priorities = const [],
     this.statuses = const [],
     this.keyword,
@@ -22,10 +23,16 @@ class TodoFilterConditions {
 
   final List<String> listIds;
   final List<String> tagIds;
+
   /// 标签条件内部的逻辑词，只存服务端词表的两个值（`and` / `or`）。
   /// null = 键不存在，语义与 `and` 相同（服务端 TodoFilterServiceImpl 就这么当缺省），
   /// 所以「且」这一档一律不写键 ⇒ 老数据的 conditions JSON 字节不变。
   final String? tagLogic;
+
+  /// 条件之间的逻辑词（键 = 服务端 `TodoFilterConditionsDO.CONDITION_ORDER` 里的条件名，
+  /// 值 = `and` / `or`）。null 与空表都不写键 —— 缺省本来就是「且」，写出来只会让老数据的
+  /// `conditions` JSON 白白变一次形状。
+  final Map<String, String>? conditionLogics;
   final List<int> priorities;
   final List<String> statuses;
   final String? keyword;
@@ -39,6 +46,8 @@ class TodoFilterConditions {
     if (statuses.isNotEmpty) 'statuses': statuses,
     if (keyword?.trim().isNotEmpty == true) 'keyword': keyword!.trim(),
     if (dateRange != null) 'dateRange': dateRange!.toJson(),
+    if (conditionLogics != null && conditionLogics!.isNotEmpty)
+      'conditionLogics': conditionLogics,
   };
 
   /// 容忍服务端下发的多余键与单值/多值差异；无法表示的键留到 `unsupportedKeys`。
@@ -49,12 +58,28 @@ class TodoFilterConditions {
       'listIds',
       'tagIds',
       'tagLogic',
+      'conditionLogics',
       'priorities',
       'statuses',
       'keyword',
       'dateRange',
     };
     unsupported.addAll(json.keys.where((key) => !known.contains(key)));
+    // `conditionLogics` 认得键，但只有「对象 + 两项都是字符串」这个形状才认得值；
+    // 读成空表等于把一条真实存在的条件丢掉，所以形状不对就退回 unsupportedKeys。
+    final rawLogics = json['conditionLogics'];
+    Map<String, String>? conditionLogics;
+    if (rawLogics == null) {
+      conditionLogics = null;
+    } else if (rawLogics is Map &&
+        rawLogics.entries.every((e) => e.key is String && e.value is String)) {
+      conditionLogics = {
+        for (final e in rawLogics.entries)
+          e.key as String: (e.value as String).toLowerCase(),
+      };
+    } else {
+      unsupported.add('conditionLogics');
+    }
     final rawRange = json['dateRange'];
     return (
       conditions: TodoFilterConditions(
@@ -64,6 +89,7 @@ class TodoFilterConditions {
         priorities: _ints(json['priorities']),
         statuses: _strings(json['statuses']),
         keyword: json['keyword']?.toString(),
+        conditionLogics: conditionLogics,
         dateRange: rawRange is Map
             ? TodoFilterDateRange(
                 preset: rawRange['preset']?.toString(),

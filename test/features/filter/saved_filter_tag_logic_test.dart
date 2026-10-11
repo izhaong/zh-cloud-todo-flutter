@@ -72,20 +72,25 @@ void main() {
     expect(parsed.conditions.tagLogic, 'or');
   });
 
-  test('跨条件的 conditionLogics 仍然算不支持（那是 #334 面 ②，没做就不许假装支持）', () {
+  // 本条原先钉的是「conditionLogics 算不支持」——那是 #334 面 ② 没做时的诚实形状。
+  // #524 把它做掉了（第二刀：`saved_filter_condition_logics_test.dart`），旧断言按定义作废，
+  // 这里换成新的不变量：**读**侧不再因位置问题判死。
+  test('读回来的跨条件词不丢：位置是否参与求值由服务端那条 i==0 规则决定，不在读侧提前判死', () {
     final parsed = TodoFilterConditions.fromJson(const {
       'tagIds': ['t1'],
       'priorities': [3],
       'conditionLogics': {'priorities': 'or'},
     });
-    expect(parsed.unsupportedKeys, contains('conditionLogics'));
+    expect(parsed.unsupportedKeys, isNot(contains('conditionLogics')));
+    final restored = taskFilterFromSaved(
+      parsed.conditions,
+      unsupportedKeys: parsed.unsupportedKeys,
+    );
+    expect(restored, isNotNull);
     expect(
-      taskFilterFromSaved(
-        parsed.conditions,
-        unsupportedKeys: parsed.unsupportedKeys,
-      ),
-      isNull,
-      reason: '还原不出忠实条件要返回 null，界面据此标「本机暂不支持套用」',
+      restored!.isConditionOr('priorities'),
+      isTrue,
+      reason: '词要原样带回来；它挂在 tagIds 之后，是合法位置',
     );
   });
 

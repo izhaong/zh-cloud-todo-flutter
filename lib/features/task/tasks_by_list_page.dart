@@ -2189,6 +2189,60 @@ List<TodoTask> _visibleTasksInListOrder(
   return [for (final group in groups) ...group.tasks];
 }
 
+/// 日期这一条（契约里的 `dateRange`）是否命中。
+///
+/// `dueRange` 与 `dueAtFrom`/`dueAtTo` 在契约里是**同一个对象**（`TodoFilterConditionsDO.DateRange`
+/// 的 preset 与 from/to 可并存），所以求值里也必须是一个整体：拆成两条就凭空多出两个
+/// 能挂跨条件逻辑词的位置，与 `conditionOrder` 对不上。
+bool _dateConditionMatches(
+  TodoTask task,
+  TaskFilter filter,
+  DateTime startOfDay,
+  DateTime todayEnd,
+) {
+  if (filter.dueAtFrom != null || filter.dueAtTo != null) {
+    final due = _taskDueWallClock(task);
+    if (due == null) return false;
+    final dueDay = DateTime(due.year, due.month, due.day);
+    if (filter.dueAtFrom != null && dueDay.isBefore(filter.dueAtFrom!)) {
+      return false;
+    }
+    if (filter.dueAtTo != null && dueDay.isAfter(filter.dueAtTo!)) {
+      return false;
+    }
+  }
+  if (filter.dueRange != null) {
+    final due = _taskDueWallClock(task);
+    if (due == null) return false;
+    switch (filter.dueRange) {
+      case 'today':
+        if (due.isBefore(startOfDay) || !due.isBefore(todayEnd)) return false;
+      case 'tomorrow':
+        final tomorrowEnd = todayEnd.add(const Duration(days: 1));
+        if (due.isBefore(todayEnd) || !due.isBefore(tomorrowEnd)) {
+          return false;
+        }
+      case 'last7days':
+        final weekStart = startOfDay.subtract(const Duration(days: 7));
+        if (due.isBefore(weekStart) || !due.isBefore(todayEnd)) return false;
+      case 'next7days':
+        final weekEndExclusive = startOfDay.add(const Duration(days: 8));
+        if (due.isBefore(todayEnd) || !due.isBefore(weekEndExclusive)) {
+          return false;
+        }
+      case 'overdue':
+        if (!due.isBefore(startOfDay)) return false;
+      case 'future':
+        if (due.isBefore(todayEnd)) return false;
+    }
+  }
+  return true;
+}
+
+/// 本地筛选求值。跨条件的「且 / 或」按服务端同一条算法构造析取范式
+/// （`TodoFilterServiceImpl.java:308-320`，zh-cloud-service `origin/develop@7bd493dd1265`）：
+/// 挂 `or` 的条件新开一个子句，挂 `and`（含缺失）的条件**追加进所有已有子句**；
+/// 子句内部 AND、子句之间 OR。全部挂「且」时只有一条子句，与本轮改动前逐字节等价。
 List<TodoTask> applyTaskFilter(
   List<TodoTask> source,
   TaskFilter filter,
@@ -2202,83 +2256,95 @@ List<TodoTask> applyTaskFilter(
   final todayEnd = startOfDay.add(const Duration(days: 1));
   final keyword = filter.keyword?.trim().toLowerCase();
 
-  return source.where((task) {
+  // 硬闸门：页面作用域，加上契约里根本存不下的两个维度（文件夹、负责人）。
+  // 它们不在 `conditionOrder` 里 ⇒ 跨条件逻辑词点不到它们，永远按「且」参与，
+  // 所以一份 `{"assigneeUserId": "or"}` 这种脏数据也不会把别的任务放进来。
+  bool hardGates(TodoTask task) {
     if (selectedListId != null && task.listId != selectedListId) return false;
-    if (filter.listId != null && task.listId != filter.listId) return false;
-    // 标签维度真正参与求值（Issue #417：此前这里根本没有标签分支，带标签的已存过滤器
-    // 只能被标成「不支持套用」）。缺省按「且」：所选标签要全部命中，口径与服务端
-    // TodoFilterConditionsDO.LOGIC_AND 一致；「或」属 Issue #334，本轮不开这个口子。
-    // `taskTagIds == null` 表示索引还没就位，调用方要么等它，要么传空图（命中 0 项），
-    // 这里不假装「没有标签条件」把全量放行。
-    if (filter.tagIds.isNotEmpty && taskTagIds != null) {
-      final owned = taskTagIds[task.id] ?? const <String>{};
-      // 「且」要全部命中（与服务端 LOGIC_AND 一致），「或」任一命中即可
-      // （嘀嗒 :71 第二句 + 服务端 LOGIC_OR）。两条分支成对出现：只加「或」
-      // 而留着写死的 containsAll，就等于缺省档随改写漂移。
-      final matched = filter.tagsMatchAny
-          ? filter.tagIds.any(owned.contains)
-          : owned.containsAll(filter.tagIds);
-      if (!matched) return false;
-    }
     // 文件夹维度（Issue #333）：文件夹是清单的容器，所以「任务属于哪个文件夹」由它所在
     // 清单的本地 folder 主键决定。未归类清单不在图里 ⇒ 不命中任何文件夹条件，而不是放行。
     // 与标签同一口径：`listFolderIds == null` 是索引没就位，由调用方等它。
     if (filter.folderId != null && listFolderIds != null) {
       if (listFolderIds[task.listId] != filter.folderId) return false;
     }
-    if (filter.priority != null && task.priority != filter.priority) {
-      return false;
-    }
-    if (filter.completed != null && task.completed != filter.completed) {
-      return false;
-    }
     if (filter.assigneeUserId != null &&
         task.assigneeUserId != filter.assigneeUserId) {
       return false;
     }
-    if (keyword != null && keyword.isNotEmpty) {
-      final titleMatches = task.title.toLowerCase().contains(keyword);
-      final descriptionMatches =
-          task.description?.toLowerCase().contains(keyword) ?? false;
-      if (!titleMatches && !descriptionMatches) return false;
-    }
-    if (filter.dueAtFrom != null || filter.dueAtTo != null) {
-      final due = _taskDueWallClock(task);
-      if (due == null) return false;
-      final dueDay = DateTime(due.year, due.month, due.day);
-      if (filter.dueAtFrom != null && dueDay.isBefore(filter.dueAtFrom!)) {
-        return false;
-      }
-      if (filter.dueAtTo != null && dueDay.isAfter(filter.dueAtTo!)) {
-        return false;
-      }
-    }
-    if (filter.dueRange != null) {
-      final due = _taskDueWallClock(task);
-      if (due == null) return false;
-      switch (filter.dueRange) {
-        case 'today':
-          if (due.isBefore(startOfDay) || !due.isBefore(todayEnd)) return false;
-        case 'tomorrow':
-          final tomorrowEnd = todayEnd.add(const Duration(days: 1));
-          if (due.isBefore(todayEnd) || !due.isBefore(tomorrowEnd)) {
-            return false;
-          }
-        case 'last7days':
-          final weekStart = startOfDay.subtract(const Duration(days: 7));
-          if (due.isBefore(weekStart) || !due.isBefore(todayEnd)) return false;
-        case 'next7days':
-          final weekEndExclusive = startOfDay.add(const Duration(days: 8));
-          if (due.isBefore(todayEnd) || !due.isBefore(weekEndExclusive)) {
-            return false;
-          }
-        case 'overdue':
-          if (!due.isBefore(startOfDay)) return false;
-        case 'future':
-          if (due.isBefore(todayEnd)) return false;
-      }
-    }
     return true;
+  }
+
+  // 活跃条件按契约的规范顺序收集（不按用户点选的先后 —— 顺序决定连接词挂在哪条上）。
+  final pieces = <({String key, bool Function(TodoTask task) test})>[];
+  if (filter.listId != null) {
+    pieces.add((key: 'listIds', test: (task) => task.listId == filter.listId));
+  }
+  if (filter.tagIds.isNotEmpty && taskTagIds != null) {
+    // 标签维度真正参与求值（Issue #417）；`taskTagIds == null` 表示索引还没就位，
+    // 调用方要么等它，要么传空图（命中 0 项），这里不假装「没有标签条件」把全量放行。
+    final tagIndex = taskTagIds;
+    pieces.add((
+      key: 'tagIds',
+      test: (task) {
+        final owned = tagIndex[task.id] ?? const <String>{};
+        // 「且」要全部命中（与服务端 LOGIC_AND 一致），「或」任一命中即可
+        // （嘀嗒 :71 第二句 + 服务端 LOGIC_OR）。两条分支成对出现。
+        return filter.tagsMatchAny
+            ? filter.tagIds.any(owned.contains)
+            : owned.containsAll(filter.tagIds);
+      },
+    ));
+  }
+  if (filter.priority != null) {
+    pieces.add((
+      key: 'priorities',
+      test: (task) => task.priority == filter.priority,
+    ));
+  }
+  if (filter.completed != null) {
+    pieces.add((
+      key: 'statuses',
+      test: (task) => task.completed == filter.completed,
+    ));
+  }
+  if (filter.dueRange != null ||
+      filter.dueAtFrom != null ||
+      filter.dueAtTo != null) {
+    pieces.add((
+      key: 'dateRange',
+      test: (task) => _dateConditionMatches(task, filter, startOfDay, todayEnd),
+    ));
+  }
+  if (keyword != null && keyword.isNotEmpty) {
+    pieces.add((
+      key: 'keyword',
+      test: (task) =>
+          task.title.toLowerCase().contains(keyword) ||
+          (task.description?.toLowerCase().contains(keyword) ?? false),
+    ));
+  }
+
+  final clauses = <List<bool Function(TodoTask task)>>[];
+  for (var i = 0; i < pieces.length; i++) {
+    final piece = pieces[i];
+    final isOr = filter.isConditionOr(piece.key);
+    if (i == 0 || isOr) {
+      clauses.add(<bool Function(TodoTask task)>[]);
+    }
+    if (i > 0 && !isOr) {
+      // 「且」是把这条追加进**每一个**已有子句（叉乘），不是只跟紧挨着的前一条配对。
+      for (final clause in clauses) {
+        clause.add(piece.test);
+      }
+    } else {
+      clauses.last.add(piece.test);
+    }
+  }
+
+  return source.where((task) {
+    if (!hardGates(task)) return false;
+    if (clauses.isEmpty) return true;
+    return clauses.any((clause) => clause.every((test) => test(task)));
   }).toList();
 }
 
