@@ -15,6 +15,7 @@ const String tagLogicOr = 'or';
 /// 服务端求值与客户端条件行必须同源，否则连接词会挂到另一条条件上」。
 const List<String> conditionOrder = <String>[
   'listIds',
+  'folderIds',
   'tagIds',
   'priorities',
   'statuses',
@@ -25,6 +26,7 @@ const List<String> conditionOrder = <String>[
 /// 契约条件名的中文读法。未知键原样回显：面板不许把认不出的键伪装成没有这条条件。
 String conditionKeyLabel(String key) => switch (key) {
   'listIds' => '清单',
+  'folderIds' => '文件夹',
   'tagIds' => '标签',
   'priorities' => '优先级',
   'statuses' => '状态',
@@ -40,6 +42,7 @@ String conditionKeyLabel(String key) => switch (key) {
 List<String> activeConditionKeys(TaskFilter filter) {
   final active = <String>[];
   if (filter.listId != null) active.add('listIds');
+  if (filter.folderId != null) active.add('folderIds');
   if (filter.tagIds.isNotEmpty) active.add('tagIds');
   if (filter.priority != null) active.add('priorities');
   if (filter.completed != null) active.add('statuses');
@@ -698,7 +701,12 @@ class FilterBar extends ConsumerWidget {
     WidgetRef ref,
     TaskFilter filter,
   ) async {
-    final mapped = savedFilterOf(filter);
+    // 文件夹条件要写成服务端 id，所以保存这一刻现取本地主键→服务端 id 的索引；
+    // 索引没就绪（null）与「这个文件夹没服务端 id」是两种点名，映射层分开处理。
+    final mapped = savedFilterOf(
+      filter,
+      folderServerIds: ref.read(folderServerIdIndexProvider),
+    );
     final name = await showDialog<String?>(
       context: context,
       builder: (ctx) {

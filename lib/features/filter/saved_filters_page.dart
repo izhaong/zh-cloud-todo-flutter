@@ -39,6 +39,7 @@ class SavedFiltersPage extends ConsumerWidget {
         : taskFilterFromSaved(
             parsed.conditions,
             unsupportedKeys: parsed.unsupportedKeys,
+            folderLocalByServerId: ref.watch(folderLocalIdByServerIdProvider),
           );
     final summary = parsed == null
         ? '条件已损坏，无法套用'

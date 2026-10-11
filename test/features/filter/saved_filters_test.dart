@@ -92,11 +92,56 @@ void main() {
     expect(
       find.textContaining('不保存', findRichText: true),
       findsOneWidget,
-      reason: '文件夹与负责人没有对应条件字段，必须告知用户而不是存成半个过滤器',
+      reason: '文件夹没有服务端 id、负责人与到期范围没有字段，必须告知用户而不是存成半个过滤器',
     );
     // 精确断言整句：`负责人` 三个字在筛选条本身的芯片上也有，只查子串会误判。
-    expect(find.text('本过滤器不保存：文件夹、负责人、到期范围「已过期」'), findsOneWidget);
+    // 文件夹这一维自 FL Issue #527 起「能存」，但要给得出服务端 id ——
+    // 点名从「不保存这一维」变成「这个文件夹还没同步上去」，仍然不静默丢弃。
+    expect(
+      find.text('本过滤器不保存：文件夹「folder-local」还没同步到服务端、负责人、到期范围「已过期」'),
+      findsOneWidget,
+    );
     expect(find.byKey(const Key('saved-filter-name')), findsOneWidget);
+  });
+
+  testWidgets('文件夹有服务端 id 时存得下：写 folderIds，不再点名文件夹', (tester) async {
+    final fixture = await _pump(
+      tester,
+      home: Scaffold(
+        body: FilterBar(
+          filter: const TaskFilter(folderId: 'folder-local', priority: 2),
+          onChanged: (_) {},
+        ),
+      ),
+      overridesBuilder: (database) => [
+        folderServerIdIndexProvider.overrideWithValue(const {
+          'folder-local': 41,
+        }),
+      ],
+    );
+
+    await tester.tap(find.text('保存为过滤器'));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('不保存', findRichText: true),
+      findsNothing,
+      reason: '负责人与到期范围都没勾，文件夹映射得到 ⇒ 没有该点名的维度',
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('saved-filter-name')),
+      '文件夹内的重要',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, '保存'));
+    await tester.pumpAndSettle();
+
+    final rows = await fixture.database
+        .select(fixture.database.todoFilters)
+        .get();
+    final conditions =
+        jsonDecode(rows.single.conditionJson) as Map<String, dynamic>;
+    expect(conditions['folderIds'], [41]);
+    expect(conditions['priorities'], [2]);
   });
 
   testWidgets('筛选器页列出真保存的过滤器并给出可读条件摘要，假条目不再出现', (tester) async {

@@ -19,15 +19,24 @@ void main() {
       TaskFilter(tagIds: const ['t1', 't2'], tagLogic: logic);
 
   test('「或」档写进契约的 tagLogic，且值是服务端词表的小写 or', () {
-    final mapped = savedFilterOf(filterWith(tagLogicOr));
+    final mapped = savedFilterOf(
+      filterWith(tagLogicOr),
+      folderServerIds: const {},
+    );
     expect(mapped.conditions.tagLogic, tagLogicOr);
     expect(mapped.skipped, isEmpty);
     expect(jsonEncode(mapped.conditions.toJson()), contains('"tagLogic":"or"'));
   });
 
   test('缺省「且」不出键：老数据的 conditions JSON 一个字节都不变', () {
-    final implicit = savedFilterOf(TaskFilter(tagIds: const ['t1', 't2']));
-    final explicit = savedFilterOf(filterWith(tagLogicAnd));
+    final implicit = savedFilterOf(
+      TaskFilter(tagIds: const ['t1', 't2']),
+      folderServerIds: const {},
+    );
+    final explicit = savedFilterOf(
+      filterWith(tagLogicAnd),
+      folderServerIds: const {},
+    );
     expect(implicit.conditions.toJson().containsKey('tagLogic'), isFalse);
     expect(explicit.conditions.toJson().containsKey('tagLogic'), isFalse);
     expect(
@@ -35,6 +44,7 @@ void main() {
       jsonEncode(
         savedFilterOf(
           TaskFilter(tagIds: const ['t1', 't2']),
+          folderServerIds: const {},
         ).conditions.toJson(),
       ),
     );
@@ -43,7 +53,13 @@ void main() {
   test('大写 OR 出仓前归一小写：出仓的每个 tagLogic 值都在词表内', () {
     // 服务端用 equalsIgnoreCase 认，但「同一份过滤器在别的客户端念成什么」不该靠运气；
     // 本仓其它出仓值（如 statuses 的 done/todo）也都是小写词表。
-    expect(savedFilterOf(filterWith('OR')).conditions.tagLogic, tagLogicOr);
+    expect(
+      savedFilterOf(
+        filterWith('OR'),
+        folderServerIds: const {},
+      ).conditions.tagLogic,
+      tagLogicOr,
+    );
   });
 
   test('只有一个标签时不算「或」、也不写键：档位不能是一份界面上看不见也改不动的条件', () {
@@ -51,6 +67,7 @@ void main() {
     // 但界面上开关只在 ≥2 个标签时出现，留着 `or` 就落了一份「看不见、改不动」的条件。
     final single = savedFilterOf(
       TaskFilter(tagIds: const ['t1'], tagLogic: tagLogicOr),
+      folderServerIds: const {},
     );
     expect(single.conditions.tagLogic, isNull);
     expect(single.conditions.toJson().containsKey('tagLogic'), isFalse);
@@ -58,6 +75,7 @@ void main() {
       taskFilterFromSaved(
         single.conditions,
         unsupportedKeys: const {},
+        folderLocalByServerId: const {},
       )!.tagsMatchAny,
       isFalse,
     );
@@ -85,6 +103,7 @@ void main() {
     final restored = taskFilterFromSaved(
       parsed.conditions,
       unsupportedKeys: parsed.unsupportedKeys,
+      folderLocalByServerId: const {},
     );
     expect(restored, isNotNull);
     expect(
@@ -102,6 +121,7 @@ void main() {
     final restored = taskFilterFromSaved(
       parsed.conditions,
       unsupportedKeys: parsed.unsupportedKeys,
+      folderLocalByServerId: const {},
     );
     expect(restored, isNotNull);
     expect(restored!.tagsMatchAny, isTrue);
@@ -116,6 +136,7 @@ void main() {
       taskFilterFromSaved(
         parsed.conditions,
         unsupportedKeys: parsed.unsupportedKeys,
+        folderLocalByServerId: const {},
       ),
       isNull,
       reason: '「xor」既不是 and 也不是 or，套成任何一种都是凭空替用户做决定',
