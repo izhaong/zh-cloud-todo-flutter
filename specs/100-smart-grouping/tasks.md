@@ -9,7 +9,8 @@
   接线（恢复/保存 + 组渲染 + 行 key 带组 id）
 - [x] T003 测试：引擎 10 用例 + 偏好仓 3 用例 + 页面 6 用例全绿；
   两处变异探针证红还原；红测抓到并修复 GlobalKey 撞车缺陷（见 spec.md）
-- [ ] T004 门禁：`flutter analyze` 全仓 0 issue + `flutter test` 全量
-  （2026-10-12 实测，日志 /tmp/fl321-gate.log）
+- [x] T004 门禁：`flutter analyze` 全仓 0 issue + `flutter test` 全量
+  （2026-10-12 实测，日志 /tmp/fl321-gate2.log；首跑 7 张 workspace golden 红，
+  isolatedDiff 确认差异仅头部新按钮，重录后全绿）
 - [x] T005 `check_spec_selfscan.py` 单文件自扫：spec.md / tasks.md 失项 0 条（rc=0）
 - [ ] T006 PR → 合并 develop → 关 #321 → 矩阵 #20 追记（docs PR）→ 父仓 bump

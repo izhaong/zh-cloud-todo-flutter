@@ -47,6 +47,9 @@
   标签组头 + 多标签任务三次渲染、指派人单组、
   重挂载恢复 + 勾选态、320px + 1.3 倍字号不溢出。
 - 回归：`drag_list_task_into_calendar_test.dart` 7 用例全绿（默认分组行 key 未变）。
+- golden：头部新增分组按钮改变工作区视觉，`todo_workspace_golden_test.dart`
+  7 张基线重录（isolatedDiff 确认差异只在头部两图标位置，无其它区域漂移），
+  重录后该文件 9/9 绿。
 
 ## 变异探针（cp 备份 + cmp -s 字节一致还原）
 
