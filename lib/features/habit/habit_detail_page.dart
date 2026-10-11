@@ -9,6 +9,7 @@ import '../shell/app_dialog.dart';
 import 'habit_editor.dart';
 import 'habit_month_grid.dart';
 import 'habit_repository.dart';
+import 'habit_year_stats.dart';
 
 /// 嘀嗒《01-开始坚持一个习惯》:58「点击习惯进入详情页，点击右上角「...」，
 /// 可进行编辑、开始专注、分享、归档或删除等操作」——本文件只做「编辑」「删除」：
@@ -70,6 +71,8 @@ class HabitDetailPage extends ConsumerWidget {
               ),
             ),
           ),
+          const SizedBox(height: 12),
+          HabitStatsCard(habitId: habitId),
         ],
       ),
     );
