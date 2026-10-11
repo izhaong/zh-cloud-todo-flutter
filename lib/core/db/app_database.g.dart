@@ -9992,6 +9992,39 @@ class $TodoRecommendationsTable extends TodoRecommendations
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _rescheduleCountMeta = const VerificationMeta(
+    'rescheduleCount',
+  );
+  @override
+  late final GeneratedColumn<int> rescheduleCount = GeneratedColumn<int>(
+    'reschedule_count',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _unfinishedDaysMeta = const VerificationMeta(
+    'unfinishedDays',
+  );
+  @override
+  late final GeneratedColumn<int> unfinishedDays = GeneratedColumn<int>(
+    'unfinished_days',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _refreshedAtMeta = const VerificationMeta(
     'refreshedAt',
   );
@@ -10011,6 +10044,9 @@ class $TodoRecommendationsTable extends TodoRecommendations
     reasonCode,
     reason,
     score,
+    createdAt,
+    rescheduleCount,
+    unfinishedDays,
     refreshedAt,
   ];
   @override
@@ -10072,6 +10108,30 @@ class $TodoRecommendationsTable extends TodoRecommendations
     } else if (isInserting) {
       context.missing(_scoreMeta);
     }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('reschedule_count')) {
+      context.handle(
+        _rescheduleCountMeta,
+        rescheduleCount.isAcceptableOrUnknown(
+          data['reschedule_count']!,
+          _rescheduleCountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('unfinished_days')) {
+      context.handle(
+        _unfinishedDaysMeta,
+        unfinishedDays.isAcceptableOrUnknown(
+          data['unfinished_days']!,
+          _unfinishedDaysMeta,
+        ),
+      );
+    }
     if (data.containsKey('refreshed_at')) {
       context.handle(
         _refreshedAtMeta,
@@ -10116,6 +10176,18 @@ class $TodoRecommendationsTable extends TodoRecommendations
         DriftSqlType.int,
         data['${effectivePrefix}score'],
       )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      ),
+      rescheduleCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}reschedule_count'],
+      ),
+      unfinishedDays: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}unfinished_days'],
+      ),
       refreshedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}refreshed_at'],
@@ -10137,6 +10209,12 @@ class TodoRecommendation extends DataClass
   final String reasonCode;
   final String reason;
   final int score;
+
+  /// #271 契约三列：⑥⑦⑧ 子档（刚刚/今天/昨天、超过 5/3/2 次、超过 7/14/30 天）
+  /// 的算法输入；服务端不给时为 null，行仍按未分桶渲染。
+  final DateTime? createdAt;
+  final int? rescheduleCount;
+  final int? unfinishedDays;
   final DateTime refreshedAt;
   const TodoRecommendation({
     required this.taskServerId,
@@ -10145,6 +10223,9 @@ class TodoRecommendation extends DataClass
     required this.reasonCode,
     required this.reason,
     required this.score,
+    this.createdAt,
+    this.rescheduleCount,
+    this.unfinishedDays,
     required this.refreshedAt,
   });
   @override
@@ -10158,6 +10239,15 @@ class TodoRecommendation extends DataClass
     map['reason_code'] = Variable<String>(reasonCode);
     map['reason'] = Variable<String>(reason);
     map['score'] = Variable<int>(score);
+    if (!nullToAbsent || createdAt != null) {
+      map['created_at'] = Variable<DateTime>(createdAt);
+    }
+    if (!nullToAbsent || rescheduleCount != null) {
+      map['reschedule_count'] = Variable<int>(rescheduleCount);
+    }
+    if (!nullToAbsent || unfinishedDays != null) {
+      map['unfinished_days'] = Variable<int>(unfinishedDays);
+    }
     map['refreshed_at'] = Variable<DateTime>(refreshedAt);
     return map;
   }
@@ -10172,6 +10262,15 @@ class TodoRecommendation extends DataClass
       reasonCode: Value(reasonCode),
       reason: Value(reason),
       score: Value(score),
+      createdAt: createdAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(createdAt),
+      rescheduleCount: rescheduleCount == null && nullToAbsent
+          ? const Value.absent()
+          : Value(rescheduleCount),
+      unfinishedDays: unfinishedDays == null && nullToAbsent
+          ? const Value.absent()
+          : Value(unfinishedDays),
       refreshedAt: Value(refreshedAt),
     );
   }
@@ -10188,6 +10287,9 @@ class TodoRecommendation extends DataClass
       reasonCode: serializer.fromJson<String>(json['reasonCode']),
       reason: serializer.fromJson<String>(json['reason']),
       score: serializer.fromJson<int>(json['score']),
+      createdAt: serializer.fromJson<DateTime?>(json['createdAt']),
+      rescheduleCount: serializer.fromJson<int?>(json['rescheduleCount']),
+      unfinishedDays: serializer.fromJson<int?>(json['unfinishedDays']),
       refreshedAt: serializer.fromJson<DateTime>(json['refreshedAt']),
     );
   }
@@ -10201,6 +10303,9 @@ class TodoRecommendation extends DataClass
       'reasonCode': serializer.toJson<String>(reasonCode),
       'reason': serializer.toJson<String>(reason),
       'score': serializer.toJson<int>(score),
+      'createdAt': serializer.toJson<DateTime?>(createdAt),
+      'rescheduleCount': serializer.toJson<int?>(rescheduleCount),
+      'unfinishedDays': serializer.toJson<int?>(unfinishedDays),
       'refreshedAt': serializer.toJson<DateTime>(refreshedAt),
     };
   }
@@ -10212,6 +10317,9 @@ class TodoRecommendation extends DataClass
     String? reasonCode,
     String? reason,
     int? score,
+    Value<DateTime?> createdAt = const Value.absent(),
+    Value<int?> rescheduleCount = const Value.absent(),
+    Value<int?> unfinishedDays = const Value.absent(),
     DateTime? refreshedAt,
   }) => TodoRecommendation(
     taskServerId: taskServerId ?? this.taskServerId,
@@ -10220,6 +10328,13 @@ class TodoRecommendation extends DataClass
     reasonCode: reasonCode ?? this.reasonCode,
     reason: reason ?? this.reason,
     score: score ?? this.score,
+    createdAt: createdAt.present ? createdAt.value : this.createdAt,
+    rescheduleCount: rescheduleCount.present
+        ? rescheduleCount.value
+        : this.rescheduleCount,
+    unfinishedDays: unfinishedDays.present
+        ? unfinishedDays.value
+        : this.unfinishedDays,
     refreshedAt: refreshedAt ?? this.refreshedAt,
   );
   TodoRecommendation copyWithCompanion(TodoRecommendationsCompanion data) {
@@ -10234,6 +10349,13 @@ class TodoRecommendation extends DataClass
           : this.reasonCode,
       reason: data.reason.present ? data.reason.value : this.reason,
       score: data.score.present ? data.score.value : this.score,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      rescheduleCount: data.rescheduleCount.present
+          ? data.rescheduleCount.value
+          : this.rescheduleCount,
+      unfinishedDays: data.unfinishedDays.present
+          ? data.unfinishedDays.value
+          : this.unfinishedDays,
       refreshedAt: data.refreshedAt.present
           ? data.refreshedAt.value
           : this.refreshedAt,
@@ -10249,6 +10371,9 @@ class TodoRecommendation extends DataClass
           ..write('reasonCode: $reasonCode, ')
           ..write('reason: $reason, ')
           ..write('score: $score, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rescheduleCount: $rescheduleCount, ')
+          ..write('unfinishedDays: $unfinishedDays, ')
           ..write('refreshedAt: $refreshedAt')
           ..write(')'))
         .toString();
@@ -10262,6 +10387,9 @@ class TodoRecommendation extends DataClass
     reasonCode,
     reason,
     score,
+    createdAt,
+    rescheduleCount,
+    unfinishedDays,
     refreshedAt,
   );
   @override
@@ -10274,6 +10402,9 @@ class TodoRecommendation extends DataClass
           other.reasonCode == this.reasonCode &&
           other.reason == this.reason &&
           other.score == this.score &&
+          other.createdAt == this.createdAt &&
+          other.rescheduleCount == this.rescheduleCount &&
+          other.unfinishedDays == this.unfinishedDays &&
           other.refreshedAt == this.refreshedAt);
 }
 
@@ -10284,6 +10415,9 @@ class TodoRecommendationsCompanion extends UpdateCompanion<TodoRecommendation> {
   final Value<String> reasonCode;
   final Value<String> reason;
   final Value<int> score;
+  final Value<DateTime?> createdAt;
+  final Value<int?> rescheduleCount;
+  final Value<int?> unfinishedDays;
   final Value<DateTime> refreshedAt;
   const TodoRecommendationsCompanion({
     this.taskServerId = const Value.absent(),
@@ -10292,6 +10426,9 @@ class TodoRecommendationsCompanion extends UpdateCompanion<TodoRecommendation> {
     this.reasonCode = const Value.absent(),
     this.reason = const Value.absent(),
     this.score = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rescheduleCount = const Value.absent(),
+    this.unfinishedDays = const Value.absent(),
     this.refreshedAt = const Value.absent(),
   });
   TodoRecommendationsCompanion.insert({
@@ -10301,6 +10438,9 @@ class TodoRecommendationsCompanion extends UpdateCompanion<TodoRecommendation> {
     required String reasonCode,
     required String reason,
     required int score,
+    this.createdAt = const Value.absent(),
+    this.rescheduleCount = const Value.absent(),
+    this.unfinishedDays = const Value.absent(),
     required DateTime refreshedAt,
   }) : title = Value(title),
        reasonCode = Value(reasonCode),
@@ -10314,6 +10454,9 @@ class TodoRecommendationsCompanion extends UpdateCompanion<TodoRecommendation> {
     Expression<String>? reasonCode,
     Expression<String>? reason,
     Expression<int>? score,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rescheduleCount,
+    Expression<int>? unfinishedDays,
     Expression<DateTime>? refreshedAt,
   }) {
     return RawValuesInsertable({
@@ -10323,6 +10466,9 @@ class TodoRecommendationsCompanion extends UpdateCompanion<TodoRecommendation> {
       if (reasonCode != null) 'reason_code': reasonCode,
       if (reason != null) 'reason': reason,
       if (score != null) 'score': score,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rescheduleCount != null) 'reschedule_count': rescheduleCount,
+      if (unfinishedDays != null) 'unfinished_days': unfinishedDays,
       if (refreshedAt != null) 'refreshed_at': refreshedAt,
     });
   }
@@ -10334,6 +10480,9 @@ class TodoRecommendationsCompanion extends UpdateCompanion<TodoRecommendation> {
     Value<String>? reasonCode,
     Value<String>? reason,
     Value<int>? score,
+    Value<DateTime?>? createdAt,
+    Value<int?>? rescheduleCount,
+    Value<int?>? unfinishedDays,
     Value<DateTime>? refreshedAt,
   }) {
     return TodoRecommendationsCompanion(
@@ -10343,6 +10492,9 @@ class TodoRecommendationsCompanion extends UpdateCompanion<TodoRecommendation> {
       reasonCode: reasonCode ?? this.reasonCode,
       reason: reason ?? this.reason,
       score: score ?? this.score,
+      createdAt: createdAt ?? this.createdAt,
+      rescheduleCount: rescheduleCount ?? this.rescheduleCount,
+      unfinishedDays: unfinishedDays ?? this.unfinishedDays,
       refreshedAt: refreshedAt ?? this.refreshedAt,
     );
   }
@@ -10368,6 +10520,15 @@ class TodoRecommendationsCompanion extends UpdateCompanion<TodoRecommendation> {
     if (score.present) {
       map['score'] = Variable<int>(score.value);
     }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rescheduleCount.present) {
+      map['reschedule_count'] = Variable<int>(rescheduleCount.value);
+    }
+    if (unfinishedDays.present) {
+      map['unfinished_days'] = Variable<int>(unfinishedDays.value);
+    }
     if (refreshedAt.present) {
       map['refreshed_at'] = Variable<DateTime>(refreshedAt.value);
     }
@@ -10383,6 +10544,9 @@ class TodoRecommendationsCompanion extends UpdateCompanion<TodoRecommendation> {
           ..write('reasonCode: $reasonCode, ')
           ..write('reason: $reason, ')
           ..write('score: $score, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rescheduleCount: $rescheduleCount, ')
+          ..write('unfinishedDays: $unfinishedDays, ')
           ..write('refreshedAt: $refreshedAt')
           ..write(')'))
         .toString();
@@ -16561,6 +16725,9 @@ typedef $$TodoRecommendationsTableCreateCompanionBuilder =
       required String reasonCode,
       required String reason,
       required int score,
+      Value<DateTime?> createdAt,
+      Value<int?> rescheduleCount,
+      Value<int?> unfinishedDays,
       required DateTime refreshedAt,
     });
 typedef $$TodoRecommendationsTableUpdateCompanionBuilder =
@@ -16571,6 +16738,9 @@ typedef $$TodoRecommendationsTableUpdateCompanionBuilder =
       Value<String> reasonCode,
       Value<String> reason,
       Value<int> score,
+      Value<DateTime?> createdAt,
+      Value<int?> rescheduleCount,
+      Value<int?> unfinishedDays,
       Value<DateTime> refreshedAt,
     });
 
@@ -16610,6 +16780,21 @@ class $$TodoRecommendationsTableFilterComposer
 
   ColumnFilters<int> get score => $composableBuilder(
     column: $table.score,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get rescheduleCount => $composableBuilder(
+    column: $table.rescheduleCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get unfinishedDays => $composableBuilder(
+    column: $table.unfinishedDays,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -16658,6 +16843,21 @@ class $$TodoRecommendationsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get rescheduleCount => $composableBuilder(
+    column: $table.rescheduleCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get unfinishedDays => $composableBuilder(
+    column: $table.unfinishedDays,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get refreshedAt => $composableBuilder(
     column: $table.refreshedAt,
     builder: (column) => ColumnOrderings(column),
@@ -16694,6 +16894,19 @@ class $$TodoRecommendationsTableAnnotationComposer
 
   GeneratedColumn<int> get score =>
       $composableBuilder(column: $table.score, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get rescheduleCount => $composableBuilder(
+    column: $table.rescheduleCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get unfinishedDays => $composableBuilder(
+    column: $table.unfinishedDays,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<DateTime> get refreshedAt => $composableBuilder(
     column: $table.refreshedAt,
@@ -16750,6 +16963,9 @@ class $$TodoRecommendationsTableTableManager
                 Value<String> reasonCode = const Value.absent(),
                 Value<String> reason = const Value.absent(),
                 Value<int> score = const Value.absent(),
+                Value<DateTime?> createdAt = const Value.absent(),
+                Value<int?> rescheduleCount = const Value.absent(),
+                Value<int?> unfinishedDays = const Value.absent(),
                 Value<DateTime> refreshedAt = const Value.absent(),
               }) => TodoRecommendationsCompanion(
                 taskServerId: taskServerId,
@@ -16758,6 +16974,9 @@ class $$TodoRecommendationsTableTableManager
                 reasonCode: reasonCode,
                 reason: reason,
                 score: score,
+                createdAt: createdAt,
+                rescheduleCount: rescheduleCount,
+                unfinishedDays: unfinishedDays,
                 refreshedAt: refreshedAt,
               ),
           createCompanionCallback:
@@ -16768,6 +16987,9 @@ class $$TodoRecommendationsTableTableManager
                 required String reasonCode,
                 required String reason,
                 required int score,
+                Value<DateTime?> createdAt = const Value.absent(),
+                Value<int?> rescheduleCount = const Value.absent(),
+                Value<int?> unfinishedDays = const Value.absent(),
                 required DateTime refreshedAt,
               }) => TodoRecommendationsCompanion.insert(
                 taskServerId: taskServerId,
@@ -16776,6 +16998,9 @@ class $$TodoRecommendationsTableTableManager
                 reasonCode: reasonCode,
                 reason: reason,
                 score: score,
+                createdAt: createdAt,
+                rescheduleCount: rescheduleCount,
+                unfinishedDays: unfinishedDays,
                 refreshedAt: refreshedAt,
               ),
           withReferenceMapper: (p0) => p0

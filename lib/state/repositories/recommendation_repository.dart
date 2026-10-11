@@ -38,6 +38,9 @@ class RecommendationRepository {
                   reasonCode: item.reasonCode,
                   reason: item.reason,
                   score: item.score,
+                  createdAt: Value(item.createdAt),
+                  rescheduleCount: Value(item.rescheduleCount),
+                  unfinishedDays: Value(item.unfinishedDays),
                   refreshedAt: refreshedAt,
                 ),
               )

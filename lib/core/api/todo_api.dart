@@ -528,6 +528,9 @@ class RecommendationTask {
     required this.reasonCode,
     required this.reason,
     required this.score,
+    this.createdAt,
+    this.rescheduleCount,
+    this.unfinishedDays,
   });
 
   final int taskServerId;
@@ -537,11 +540,17 @@ class RecommendationTask {
   final String reason;
   final int score;
 
+  /// #271 契约三列：⑥⑦⑧ 子档的算法输入；旧服务端或缺列时为 null。
+  final DateTime? createdAt;
+  final int? rescheduleCount;
+  final int? unfinishedDays;
+
   factory RecommendationTask.fromJson(Map<String, dynamic> json) {
     // 服务端 `AppTodoRecommendTaskRespVO.dueAt` 是裸 `LocalDateTime` 且无 `@JsonFormat`，
     // 被 `TimestampLocalDateTimeSerializer` 写成 **epoch 毫秒数字**（同文件 1113/1495/1598 已是毫秒口径）；
     // 只认字符串会让 dueAt 恒 null ⇒ 「即将到来」的明天/后天子档在真实数据下永远不出现。
     final dueRaw = json['dueAt'];
+    final createdRaw = json['createdAt'];
     return RecommendationTask(
       taskServerId: (json['taskId'] as num?)?.toInt() ?? 0,
       title: json['title']?.toString() ?? '',
@@ -553,6 +562,14 @@ class RecommendationTask {
       reasonCode: json['reasonCode']?.toString() ?? '',
       reason: json['reason']?.toString() ?? '',
       score: (json['score'] as num?)?.toInt() ?? 0,
+      // createdAt 与 dueAt 同为裸 LocalDateTime，同样只可能是 epoch 毫秒或字符串。
+      createdAt: createdRaw is num
+          ? DateTime.fromMillisecondsSinceEpoch(createdRaw.toInt())
+          : (createdRaw is String && createdRaw.isNotEmpty
+                ? DateTime.tryParse(createdRaw)
+                : null),
+      rescheduleCount: (json['rescheduleCount'] as num?)?.toInt(),
+      unfinishedDays: (json['unfinishedDays'] as num?)?.toInt(),
     );
   }
 }
