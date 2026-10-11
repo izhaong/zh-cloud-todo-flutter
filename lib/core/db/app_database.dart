@@ -346,6 +346,13 @@ class TodoRecommendations extends Table {
   TextColumn get reasonCode => text()();
   TextColumn get reason => text()();
   IntColumn get score => integer()();
+
+  /// #271 契约三列：⑥⑦⑧ 子档（刚刚/今天/昨天、超过 5/3/2 次、超过 7/14/30 天）
+  /// 的算法输入；服务端不给时为 null，行仍按未分桶渲染。
+  DateTimeColumn get createdAt => dateTime().nullable()();
+  IntColumn get rescheduleCount => integer().nullable()();
+  IntColumn get unfinishedDays => integer().nullable()();
+
   DateTimeColumn get refreshedAt => dateTime()();
 
   @override
@@ -450,7 +457,7 @@ class AppDatabase extends _$AppDatabase {
   }) : super(_open(_userDatabaseName(tenantId, userId, testNamespace)));
 
   @override
-  int get schemaVersion => 27;
+  int get schemaVersion => 28;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -719,6 +726,37 @@ class AppDatabase extends _$AppDatabase {
           // 不回填：存量全 0 时并列塌到 createdAt ASC，升级前后界面顺序一致；
           // 也避免迁移即向服务端推出全量 upsert。重排过的组才有显式位次并随 outbox 同步。
         }
+      }
+      if (from < 28) {
+        if (!await _columnExists(
+          m,
+          todoRecommendations.actualTableName,
+          'created_at',
+        )) {
+          await m.addColumn(todoRecommendations, todoRecommendations.createdAt);
+        }
+        if (!await _columnExists(
+          m,
+          todoRecommendations.actualTableName,
+          'reschedule_count',
+        )) {
+          await m.addColumn(
+            todoRecommendations,
+            todoRecommendations.rescheduleCount,
+          );
+        }
+        if (!await _columnExists(
+          m,
+          todoRecommendations.actualTableName,
+          'unfinished_days',
+        )) {
+          await m.addColumn(
+            todoRecommendations,
+            todoRecommendations.unfinishedDays,
+          );
+        }
+        // 不回填：三列都来自服务端 #271 契约，下次成功 refresh 会整表替换；
+        // 缓存里旧行没有这三列就按未分桶渲染，不猜。
       }
     },
   );

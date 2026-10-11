@@ -208,7 +208,7 @@ void main() {
   test('库表升到 v26：todo_tags 建表带 is_pinned 列', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
-    expect(db.schemaVersion, 27, reason: '标签置顶位需要一次迁移，拖拽位次又推了一格');
+    expect(db.schemaVersion, 28, reason: '标签置顶位需要一次迁移，拖拽位次又推了一格，推荐契约列再推一格');
     final cols = await db.customSelect('PRAGMA table_info(todo_tags)').get();
     final names = cols.map((r) => r.data['name'] as String).toSet();
     expect(names, contains('is_pinned'), reason: '建表必须带置顶列');

@@ -61,7 +61,7 @@ void main() {
         .customSelect("PRAGMA table_info('todo_tasks')")
         .get();
 
-    expect(version.data['user_version'], 27);
+    expect(version.data['user_version'], 28);
     expect(task.title, '迁移前任务');
     expect(sectionTable.data['name'], 'todo_task_sections');
     expect(taskColumns.map((row) => row.data['name']), contains('section_id'));
@@ -133,7 +133,7 @@ void main() {
         .customSelect('SELECT id, time_mode FROM todo_tasks ORDER BY id')
         .get();
 
-    expect(version.data['user_version'], 27);
+    expect(version.data['user_version'], 28);
     expect(
       rows.map((row) => '${row.data['id']}=${row.data['time_mode']}'),
       containsAll(<String>['task-fixed=2', 'task-plain=0']),
@@ -199,7 +199,7 @@ void main() {
           .getSingle();
       final filter = await upgraded.select(upgraded.todoFilters).getSingle();
 
-      expect(version.data['user_version'], 27);
+      expect(version.data['user_version'], 28);
       expect(filter.conditionJson, contains('"local-list"'));
       expect(filter.conditionJson, contains('"local-tag"'));
       expect(filter.conditionJson, isNot(contains('[101]')));
@@ -256,7 +256,7 @@ void main() {
           .getSingle();
       final list = await upgraded.listByLocalId('list-before-local-reference');
 
-      expect(version.data['user_version'], 27);
+      expect(version.data['user_version'], 28);
       expect(list?.folderId, 88);
       expect(list?.folderLocalId, 'folder-before-local-reference');
     },
@@ -304,7 +304,7 @@ void main() {
           )
           .getSingle();
 
-      expect(version.data['user_version'], 27);
+      expect(version.data['user_version'], 28);
       expect(access.data['id'], 'list-before-access-role');
       expect(access.data['access_role'], 'owner');
       expect(access.data['writable'], 1);
@@ -347,7 +347,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 27);
+      expect(version.data['user_version'], 28);
       final task = await upgraded.select(upgraded.todoTasks).getSingle();
       expect(task.title, '迁移前任务');
       expect(task.assigneeUserId, isNull);
@@ -375,7 +375,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 27);
+      expect(version.data['user_version'], 28);
 
       final taskColumns = await upgraded
           .customSelect('PRAGMA table_info(todo_tasks)')
@@ -511,7 +511,7 @@ void main() {
           .getSingle();
       final rule = await upgraded.select(upgraded.todoRepeatRules).getSingle();
 
-      expect(version.data['user_version'], 27);
+      expect(version.data['user_version'], 28);
       expect(rule.id, 'repeat-rule-before-b2-b3-merge');
       expect(rule.byDay, '1,3,5');
       expect(rule.selectedDatesJson, isNull);
@@ -556,7 +556,7 @@ void main() {
         .getSingle();
     final rule = await upgraded.select(upgraded.todoRepeatRules).getSingle();
 
-    expect(version.data['user_version'], 27);
+    expect(version.data['user_version'], 28);
     expect(rule.freq, 'CUSTOM');
     expect(rule.byDay, '1,3,5');
     expect(rule.repeatMode, 'ON_DUE');
@@ -644,7 +644,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 27);
+      expect(version.data['user_version'], 28);
       await upgraded.close();
 
       final reopened = AppDatabase.forTesting(NativeDatabase(databaseFile));
@@ -736,7 +736,7 @@ void main() {
           )
           .getSingle();
 
-      expect(version.data['user_version'], 27);
+      expect(version.data['user_version'], 28);
       expect(task.title, '迁移前看板任务');
       expect(boardTable.data['name'], 'todo_board_preferences');
     },
@@ -817,7 +817,7 @@ void main() {
         .customSelect('SELECT id, time_mode FROM todo_reminders ORDER BY id')
         .get();
 
-    expect(version.data['user_version'], 27);
+    expect(version.data['user_version'], 28);
     expect(
       rows.map((row) => '${row.data['id']}=${row.data['time_mode']}'),
       containsAll(<String>['reminder-fixed=2', 'reminder-plain=0']),
@@ -869,7 +869,7 @@ void main() {
         .customSelect('SELECT id, name, sort_order, is_pinned FROM todo_lists')
         .get();
 
-    expect(version.data['user_version'], 27);
+    expect(version.data['user_version'], 28);
     expect(rows, hasLength(1), reason: '加列不能丢存量清单');
     expect(rows.single.data['id'], 'list-pin-migration');
     expect(rows.single.data['sort_order'], 3, reason: '原有 sortOrder 不能被迁移改写');
@@ -925,7 +925,7 @@ void main() {
         .customSelect('SELECT id, name, color, is_pinned FROM todo_tags')
         .get();
 
-    expect(version.data['user_version'], 27);
+    expect(version.data['user_version'], 28);
     expect(rows, hasLength(1), reason: '加列不能丢存量标签');
     expect(rows.single.data['id'], 'tag-pin-migration');
     expect(rows.single.data['color'], '#E53935', reason: '原有颜色不能被迁移改写');
@@ -995,7 +995,7 @@ void main() {
           )
           .getSingle();
 
-      expect(version.data['user_version'], 27);
+      expect(version.data['user_version'], 28);
       expect(task.title, '迁移前可靠性任务');
       expect(change.status, 'queued');
       expect(change.nextAttemptAt, isNull);
@@ -1004,7 +1004,7 @@ void main() {
     },
   );
 
-  test('v26→v27 给 todo_tags 加 sort_order，旧数据全 0、界面顺序不倒退', () async {
+  test('v26→v28 给 todo_tags 加 sort_order，旧数据全 0、界面顺序不倒退', () async {
     final directory = await Directory.systemTemp.createTemp(
       'zh_cloud_todo_tag_sort_order_',
     );
@@ -1058,7 +1058,7 @@ void main() {
         .customSelect("PRAGMA table_info('todo_tags')")
         .get();
 
-    expect(version.data['user_version'], 27);
+    expect(version.data['user_version'], 28);
     expect(columns.map((row) => row.data['name']), contains('sort_order'));
 
     // watchAll/getAll 的排序键（isPinned DESC, sortOrder DESC, createdAt ASC）。
@@ -1080,6 +1080,71 @@ void main() {
     );
     expect(rows.map((r) => r.sortOrder), everyElement(0));
   });
+
+  test('v27→v28 给 todo_recommendations 加 #271 契约三列，存量行为 null、不回填', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'zh_cloud_todo_recommend_contract_',
+    );
+    final databaseFile = File('${directory.path}/todo.sqlite');
+    addTearDown(() async {
+      if (await directory.exists()) {
+        await directory.delete(recursive: true);
+      }
+    });
+
+    final beforeUpgrade = AppDatabase.forTesting(NativeDatabase(databaseFile));
+    await beforeUpgrade
+        .into(beforeUpgrade.todoRecommendations)
+        .insert(
+          TodoRecommendationsCompanion.insert(
+            taskServerId: const Value(7),
+            title: '升级前缓存的推荐',
+            reasonCode: 'LONG_UNFINISHED',
+            reason: '长时间未完成',
+            score: 800,
+            refreshedAt: DateTime.utc(2026, 10, 1, 9),
+          ),
+        );
+    await beforeUpgrade.close();
+    _downgradeToSchema27WithoutRecommendationContractColumns(databaseFile);
+
+    final upgraded = AppDatabase.forTesting(NativeDatabase(databaseFile));
+    addTearDown(upgraded.close);
+    final version = await upgraded
+        .customSelect('PRAGMA user_version')
+        .getSingle();
+    final columns = await upgraded
+        .customSelect("PRAGMA table_info('todo_recommendations')")
+        .get();
+    final names = columns.map((row) => row.data['name']).toList();
+
+    expect(version.data['user_version'], 28);
+    expect(names, containsAll(['created_at', 'reschedule_count', 'unfinished_days']));
+
+    final rows = await upgraded.select(upgraded.todoRecommendations).get();
+    expect(rows.single.taskServerId, 7);
+    expect(rows.single.createdAt, isNull, reason: '三列来自服务端契约，缓存旧行没有就不猜，等下次 refresh 整表替换');
+    expect(rows.single.rescheduleCount, isNull);
+    expect(rows.single.unfinishedDays, isNull);
+  });
+}
+
+void _downgradeToSchema27WithoutRecommendationContractColumns(
+  File databaseFile,
+) {
+  final database = sqlite.sqlite3.open(databaseFile.path);
+  try {
+    database.execute('ALTER TABLE todo_recommendations DROP COLUMN created_at');
+    database.execute(
+      'ALTER TABLE todo_recommendations DROP COLUMN reschedule_count',
+    );
+    database.execute(
+      'ALTER TABLE todo_recommendations DROP COLUMN unfinished_days',
+    );
+    database.execute('PRAGMA user_version = 27');
+  } finally {
+    database.dispose();
+  }
 }
 
 void _downgradeToSchema21WithoutSections(File databaseFile) {

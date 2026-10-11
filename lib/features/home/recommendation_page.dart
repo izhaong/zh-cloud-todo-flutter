@@ -23,6 +23,30 @@ const _dueSoonBucketOrder = <({String label, String keyName})>[
   (label: '后天', keyName: 'day-after'),
 ];
 
+/// 「最近添加」三档（嘀嗒 :33 刚刚/今天/昨天）：「刚刚」嘀嗒没定义边界，
+/// 本端取 1 小时内；同日但超过 1 小时归「今天」，与「刚刚」互斥。
+const _recentlyAddedBucketOrder = <({String label, String keyName})>[
+  (label: '刚刚', keyName: 'just-now'),
+  (label: '今天', keyName: 'today'),
+  (label: '昨天', keyName: 'yesterday'),
+];
+
+/// 「多次修改时间」三档（嘀嗒 :40）：≥6 次→超过 5 次、4–5→超过 3 次、3→超过 2 次；
+/// 改 2 次够不上任何一档，行按未分桶渲染。
+const _rescheduledBucketOrder = <({String label, String keyName})>[
+  (label: '超过 5 次', keyName: 'gt-5-times'),
+  (label: '超过 3 次', keyName: 'gt-3-times'),
+  (label: '超过 2 次', keyName: 'gt-2-times'),
+];
+
+/// 「长时间未完成」三档（嘀嗒 :48）：≥31→超过 30 天、15–30→超过 14 天、8–14→超过 7 天；
+/// 准入是 7 天整（#300），刚好 7 天算不出「超过 7 天」，行按未分桶渲染。
+const _longUnfinishedBucketOrder = <({String label, String keyName})>[
+  (label: '超过 7 天', keyName: 'gt-7-days'),
+  (label: '超过 14 天', keyName: 'gt-14-days'),
+  (label: '超过 30 天', keyName: 'gt-30-days'),
+];
+
 /// 嘀嗒《推荐任务》独立页：把工作区面板里只有前几条的推荐摊开成四类分组。
 ///
 /// 分组依据是服务端给的 `reasonCode`，客户端不重新发明判据；
@@ -112,6 +136,61 @@ class _RecommendationPageState extends ConsumerState<RecommendationPage> {
     return null;
   }
 
+  List<({String label, String keyName})>? _bucketOrderFor(String code) {
+    switch (code) {
+      case _dueSoonCode:
+        return _dueSoonBucketOrder;
+      case 'RECENTLY_ADDED':
+        return _recentlyAddedBucketOrder;
+      case 'REPEATEDLY_RESCHEDULED':
+        return _rescheduledBucketOrder;
+      case 'LONG_UNFINISHED':
+        return _longUnfinishedBucketOrder;
+    }
+    return null;
+  }
+
+  String? _bucketLabel(String code, TodoRecommendation item) {
+    switch (code) {
+      case _dueSoonCode:
+        return _dueSoonBucketLabel(item.dueAt);
+      case 'RECENTLY_ADDED':
+        return _recentlyAddedBucketLabel(item.createdAt);
+      case 'REPEATEDLY_RESCHEDULED':
+        return _rescheduledBucketLabel(item.rescheduleCount);
+      case 'LONG_UNFINISHED':
+        return _longUnfinishedBucketLabel(item.unfinishedDays);
+    }
+    return null;
+  }
+
+  String? _recentlyAddedBucketLabel(DateTime? createdAt) {
+    if (createdAt == null) return null;
+    final now = (widget.now ?? DateTime.now)();
+    if (now.difference(createdAt) < const Duration(hours: 1)) return '刚刚';
+    final created = DateTime(createdAt.year, createdAt.month, createdAt.day);
+    final today = _today;
+    if (created == today) return '今天';
+    if (created == today.subtract(const Duration(days: 1))) return '昨天';
+    return null;
+  }
+
+  String? _rescheduledBucketLabel(int? rescheduleCount) {
+    if (rescheduleCount == null) return null;
+    if (rescheduleCount >= 6) return '超过 5 次';
+    if (rescheduleCount >= 4) return '超过 3 次';
+    if (rescheduleCount >= 3) return '超过 2 次';
+    return null;
+  }
+
+  String? _longUnfinishedBucketLabel(int? unfinishedDays) {
+    if (unfinishedDays == null) return null;
+    if (unfinishedDays >= 31) return '超过 30 天';
+    if (unfinishedDays >= 15) return '超过 14 天';
+    if (unfinishedDays >= 8) return '超过 7 天';
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final repository = ref.watch(recommendationRepositoryProvider);
@@ -173,7 +252,8 @@ class _RecommendationPageState extends ConsumerState<RecommendationPage> {
         .toList(growable: false);
     if (members.isEmpty) return const [];
     final header = '${group.title}（${members.length} 条）';
-    if (group.code != _dueSoonCode) {
+    final bucketOrder = _bucketOrderFor(group.code);
+    if (bucketOrder == null) {
       return [
         _GroupHeader(
           key: ValueKey('recommendation-group-${group.code}'),
@@ -184,14 +264,17 @@ class _RecommendationPageState extends ConsumerState<RecommendationPage> {
     }
     final sections =
         <({String label, String keyName}), List<TodoRecommendation>>{};
-    for (final bucket in _dueSoonBucketOrder) {
-      final items = members
-          .where((item) => _dueSoonBucketLabel(item.dueAt) == bucket.label)
-          .toList(growable: false);
+    for (final bucket in bucketOrder) {
+      final items = _sortedBucketMembers(
+        group.code,
+        members
+            .where((item) => _bucketLabel(group.code, item) == bucket.label)
+            .toList(growable: false),
+      );
       if (items.isNotEmpty) sections[bucket] = items;
     }
     final unbucketed = members
-        .where((item) => _dueSoonBucketLabel(item.dueAt) == null)
+        .where((item) => _bucketLabel(group.code, item) == null)
         .toList(growable: false);
     return [
       _GroupHeader(
@@ -222,6 +305,29 @@ class _RecommendationPageState extends ConsumerState<RecommendationPage> {
         ),
       for (final item in unbucketed) _buildRow(item),
     ];
+  }
+
+  /// 档内按分档原值降序（时间新→旧、次数/天数多→少）；
+  /// 「即将到来」嘀嗒没定义档内排序，保持服务端 score 序。
+  List<TodoRecommendation> _sortedBucketMembers(
+    String code,
+    List<TodoRecommendation> items,
+  ) {
+    if (code == _dueSoonCode || items.isEmpty) return items;
+    int rank(TodoRecommendation item) {
+      switch (code) {
+        case 'RECENTLY_ADDED':
+          return item.createdAt?.millisecondsSinceEpoch ?? 0;
+        case 'REPEATEDLY_RESCHEDULED':
+          return item.rescheduleCount ?? 0;
+        case 'LONG_UNFINISHED':
+          return item.unfinishedDays ?? 0;
+      }
+      return 0;
+    }
+
+    final sorted = [...items]..sort((a, b) => rank(b).compareTo(rank(a)));
+    return sorted;
   }
 
   Widget _buildRow(TodoRecommendation item) {

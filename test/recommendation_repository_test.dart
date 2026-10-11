@@ -62,6 +62,59 @@ void main() {
     expect(cached.last.reason, '刚刚添加，建议安排下一步');
   });
 
+  test('刷新会保留 #271 契约三列（createdAt/rescheduleCount/unfinishedDays）', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final repository = RecommendationRepository(
+      db,
+      _FakeRecommendationApi([
+        RecommendationTask(
+          taskServerId: 11,
+          title: '契约字段齐全的任务',
+          reasonCode: 'RECENTLY_ADDED',
+          reason: '刚刚添加，建议安排下一步',
+          score: 700,
+          createdAt: DateTime.utc(2026, 7, 16, 9, 30),
+          rescheduleCount: 2,
+        ),
+      ]),
+    );
+
+    await repository.refresh();
+    final cached = await repository.watchAll().first;
+
+    expect(cached.single.createdAt?.toUtc(), DateTime.utc(2026, 7, 16, 9, 30));
+    expect(cached.single.rescheduleCount, 2);
+    expect(cached.single.unfinishedDays, isNull, reason: '服务端没给就不落，不猜 0');
+  });
+
+  test('RecommendationTask.fromJson 读 #271 三列：epoch 毫秒与缺列都兜住', () {
+    final full = RecommendationTask.fromJson({
+      'taskId': 12,
+      'title': '长期未完成的任务',
+      'reasonCode': 'LONG_UNFINISHED',
+      'reason': '长时间未完成',
+      'score': 800,
+      'createdAt': 1789200000000,
+      'rescheduleCount': 7,
+      'unfinishedDays': 15,
+    });
+    expect(full.createdAt, DateTime.fromMillisecondsSinceEpoch(1789200000000));
+    expect(full.rescheduleCount, 7);
+    expect(full.unfinishedDays, 15);
+
+    final bare = RecommendationTask.fromJson({
+      'taskId': 13,
+      'title': '旧服务端没有三列',
+      'reasonCode': 'RECENTLY_ADDED',
+      'reason': '刚刚添加，建议安排下一步',
+      'score': 700,
+    });
+    expect(bare.createdAt, isNull);
+    expect(bare.rescheduleCount, isNull);
+    expect(bare.unfinishedDays, isNull);
+  });
+
   test('推荐读取失败时不覆盖已有的 Drift 缓存', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);

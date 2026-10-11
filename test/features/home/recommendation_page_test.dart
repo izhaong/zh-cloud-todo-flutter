@@ -26,6 +26,9 @@ void main() {
         String code,
         String reason,
         DateTime? dueAt,
+        DateTime? createdAt,
+        int? rescheduleCount,
+        int? unfinishedDays,
         int score,
       })
     >
@@ -44,6 +47,9 @@ void main() {
               reasonCode: row.code,
               reason: row.reason,
               score: row.score,
+              createdAt: Value(row.createdAt),
+              rescheduleCount: Value(row.rescheduleCount),
+              unfinishedDays: Value(row.unfinishedDays),
               refreshedAt: DateTime.utc(2026, 9, 23),
             ),
           );
@@ -102,24 +108,33 @@ void main() {
           title: '刚加的调研',
           code: 'RECENTLY_ADDED',
           reason: '刚刚添加，建议安排下一步',
+          createdAt: null,
+          rescheduleCount: null,
+          unfinishedDays: null,
           dueAt: null,
-          score: 700,
+          score:700,
         ),
         (
           id: 2,
           title: '改了三次期的申报',
           code: 'REPEATEDLY_RESCHEDULED',
           reason: '已多次改期，建议重新安排',
+          createdAt: null,
+          rescheduleCount: null,
+          unfinishedDays: null,
           dueAt: null,
-          score: 1003,
+          score:1003,
         ),
         (
           id: 4,
           title: '明天的评审',
           code: 'DUE_SOON',
           reason: '即将到期',
+          createdAt: null,
+          rescheduleCount: null,
+          unfinishedDays: null,
           dueAt: DateTime(2026, 9, 24, 10),
-          score: 900,
+          score:900,
         ),
       ]);
 
@@ -158,8 +173,11 @@ void main() {
           title: '明天交付',
           code: 'DUE_SOON',
           reason: '即将到期',
+          createdAt: null,
+          rescheduleCount: null,
+          unfinishedDays: null,
           dueAt: DateTime(2026, 9, 24, 9),
-          score: 900,
+          score:900,
         ),
         (
           id: 12,
@@ -168,16 +186,22 @@ void main() {
           reason: '即将到期',
           // 故意比「明天」高：仓储按 score desc 返回，「后天」会先回来。
           // 若子档顺序跟着数据走，后面两条顺序断言就会红。
+          createdAt: null,
+          rescheduleCount: null,
+          unfinishedDays: null,
           dueAt: DateTime(2026, 9, 25, 9),
-          score: 910,
+          score:910,
         ),
         (
           id: 13,
           title: '大后天交付',
           code: 'DUE_SOON',
           reason: '即将到期',
+          createdAt: null,
+          rescheduleCount: null,
+          unfinishedDays: null,
           dueAt: DateTime(2026, 9, 26, 9),
-          score: 900,
+          score:900,
         ),
       ]);
 
@@ -234,6 +258,367 @@ void main() {
       await settleDown(tester);
     });
 
+    testWidgets('「最近添加」按 createdAt 拆 刚刚/今天/昨天，档序不跟 score 走', (tester) async {
+      final today = DateTime(2026, 9, 23, 9);
+      final db = await seedDb(tester, [
+        (
+          id: 111,
+          title: '刚加半小时的',
+          code: 'RECENTLY_ADDED',
+          reason: '刚刚添加，建议安排下一步',
+          createdAt: today.subtract(const Duration(minutes: 30)),
+          rescheduleCount: null,
+          unfinishedDays: null,
+          dueAt: null,
+          // 故意让「昨天」分数最高：仓储按 score desc 返回，若档序跟着数据走，
+          // 下面三条顺序断言就会红。
+          score: 703,
+        ),
+        (
+          id: 112,
+          title: '今天上午加的',
+          code: 'RECENTLY_ADDED',
+          reason: '刚刚添加，建议安排下一步',
+          createdAt: DateTime(2026, 9, 23, 6),
+          rescheduleCount: null,
+          unfinishedDays: null,
+          dueAt: null,
+          score: 702,
+        ),
+        (
+          id: 113,
+          title: '昨天加的',
+          code: 'RECENTLY_ADDED',
+          reason: '刚刚添加，建议安排下一步',
+          createdAt: DateTime(2026, 9, 22, 15),
+          rescheduleCount: null,
+          unfinishedDays: null,
+          dueAt: null,
+          score: 705,
+        ),
+        (
+          id: 114,
+          title: '没有 createdAt 的',
+          code: 'RECENTLY_ADDED',
+          reason: '刚刚添加，建议安排下一步',
+          createdAt: null,
+          rescheduleCount: null,
+          unfinishedDays: null,
+          dueAt: null,
+          score: 701,
+        ),
+      ]);
+
+      await pumpPage(tester, db: db);
+
+      const justNow = ValueKey('recommendation-bucket-just-now');
+      const todayBucket = ValueKey('recommendation-bucket-today');
+      const yesterday = ValueKey('recommendation-bucket-yesterday');
+      expect(find.byKey(justNow), findsOneWidget);
+      expect(find.byKey(todayBucket), findsOneWidget);
+      expect(find.byKey(yesterday), findsOneWidget);
+      expect(find.text('刚刚'), findsOneWidget);
+      expect(find.text('今天'), findsOneWidget);
+      expect(find.text('昨天'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(justNow),
+          matching: find.byKey(const ValueKey('recommendation-item-111')),
+        ),
+        findsOneWidget,
+        reason: '半小时前创建必须落在「刚刚」档内部',
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(todayBucket),
+          matching: find.byKey(const ValueKey('recommendation-item-112')),
+        ),
+        findsOneWidget,
+        reason: '同日但超过 1 小时要落在「今天」档（与「刚刚」互斥）',
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(yesterday),
+          matching: find.byKey(const ValueKey('recommendation-item-113')),
+        ),
+        findsOneWidget,
+        reason: '昨天创建要落在「昨天」档内部',
+      );
+      expect(
+        tester
+            .getRect(find.byKey(const ValueKey('recommendation-item-111')))
+            .top,
+        lessThan(
+          tester
+              .getRect(find.byKey(const ValueKey('recommendation-item-112')))
+              .top,
+        ),
+      );
+      expect(
+        tester
+            .getRect(find.byKey(const ValueKey('recommendation-item-112')))
+            .top,
+        lessThan(
+          tester
+              .getRect(find.byKey(const ValueKey('recommendation-item-113')))
+              .top,
+        ),
+        reason: '嘀嗒是 刚刚 → 今天 → 昨天；「昨天」分数更高也不能排到前面',
+      );
+      expect(
+        find.byKey(const ValueKey('recommendation-item-114')),
+        findsOneWidget,
+        reason: 'createdAt 缺失的行仍要留在组里，不能被静默丢掉',
+      );
+      await settleDown(tester);
+    });
+
+    testWidgets('「多次修改时间」按 rescheduleCount 拆三档，改 2 次不够档仍在组里', (tester) async {
+      final db = await seedDb(tester, [
+        (
+          id: 121,
+          title: '改了八次的',
+          code: 'REPEATEDLY_RESCHEDULED',
+          reason: '已多次改期，建议重新安排',
+          rescheduleCount: 8,
+          createdAt: null,
+          unfinishedDays: null,
+          dueAt: null,
+          score: 1003,
+        ),
+        (
+          id: 122,
+          title: '改了四次的',
+          code: 'REPEATEDLY_RESCHEDULED',
+          reason: '已多次改期，建议重新安排',
+          rescheduleCount: 4,
+          createdAt: null,
+          unfinishedDays: null,
+          dueAt: null,
+          score: 1004,
+        ),
+        (
+          id: 123,
+          title: '改了三次的',
+          code: 'REPEATEDLY_RESCHEDULED',
+          reason: '已多次改期，建议重新安排',
+          rescheduleCount: 3,
+          createdAt: null,
+          unfinishedDays: null,
+          dueAt: null,
+          // 故意让「超过 2 次」分数最高：档序是嘀嗒的 5 → 3 → 2，不能跟着 score 走。
+          score: 1008,
+        ),
+        (
+          id: 124,
+          title: '只改了两次的',
+          code: 'REPEATEDLY_RESCHEDULED',
+          reason: '已多次改期，建议重新安排',
+          rescheduleCount: 2,
+          createdAt: null,
+          unfinishedDays: null,
+          dueAt: null,
+          score: 1002,
+        ),
+      ]);
+
+      await pumpPage(tester, db: db);
+
+      const gt5 = ValueKey('recommendation-bucket-gt-5-times');
+      const gt3 = ValueKey('recommendation-bucket-gt-3-times');
+      const gt2 = ValueKey('recommendation-bucket-gt-2-times');
+      expect(find.byKey(gt5), findsOneWidget);
+      expect(find.byKey(gt3), findsOneWidget);
+      expect(find.byKey(gt2), findsOneWidget);
+      expect(find.text('超过 5 次'), findsOneWidget);
+      expect(find.text('超过 3 次'), findsOneWidget);
+      expect(find.text('超过 2 次'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(gt5),
+          matching: find.byKey(const ValueKey('recommendation-item-121')),
+        ),
+        findsOneWidget,
+        reason: '改 8 次（≥6）落在「超过 5 次」档',
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(gt3),
+          matching: find.byKey(const ValueKey('recommendation-item-122')),
+        ),
+        findsOneWidget,
+        reason: '改 4 次落在「超过 3 次」档',
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(gt2),
+          matching: find.byKey(const ValueKey('recommendation-item-123')),
+        ),
+        findsOneWidget,
+        reason: '改 3 次落在「超过 2 次」档',
+      );
+      expect(
+        tester
+            .getRect(find.byKey(const ValueKey('recommendation-item-121')))
+            .top,
+        lessThan(
+          tester
+              .getRect(find.byKey(const ValueKey('recommendation-item-122')))
+              .top,
+        ),
+      );
+      expect(
+        tester
+            .getRect(find.byKey(const ValueKey('recommendation-item-122')))
+            .top,
+        lessThan(
+          tester
+              .getRect(find.byKey(const ValueKey('recommendation-item-123')))
+              .top,
+        ),
+        reason: '嘀嗒是 超过 5 次 → 超过 3 次 → 超过 2 次；「超过 2 次」分数更高也不能排到前面',
+      );
+      expect(
+        find.byKey(const ValueKey('recommendation-item-124')),
+        findsOneWidget,
+        reason: '改 2 次够不上任何一档（嘀嗒最低档是「超过 2 次」），行仍要留在组里',
+      );
+      await settleDown(tester);
+    });
+
+    testWidgets('「长时间未完成」按 unfinishedDays 拆三档，档内天数多在前且档头是 header', (tester) async {
+      final semantics = tester.ensureSemantics();
+      try {
+        final db = await seedDb(tester, [
+          (
+            id: 131,
+            title: '搁了 35 天的',
+            code: 'LONG_UNFINISHED',
+            reason: '长时间未完成',
+            unfinishedDays: 35,
+            createdAt: null,
+            rescheduleCount: null,
+            dueAt: null,
+            score: 803,
+          ),
+          (
+            id: 132,
+            title: '搁了 20 天的',
+            code: 'LONG_UNFINISHED',
+            reason: '长时间未完成',
+            unfinishedDays: 20,
+            createdAt: null,
+            rescheduleCount: null,
+            dueAt: null,
+            score: 801,
+          ),
+          (
+            id: 133,
+            title: '搁了 10 天的',
+            code: 'LONG_UNFINISHED',
+            reason: '长时间未完成',
+            unfinishedDays: 10,
+            createdAt: null,
+            rescheduleCount: null,
+            dueAt: null,
+            score: 802,
+          ),
+          (
+            id: 134,
+            title: '搁了 25 天的',
+            code: 'LONG_UNFINISHED',
+            reason: '长时间未完成',
+            unfinishedDays: 25,
+            createdAt: null,
+            rescheduleCount: null,
+            dueAt: null,
+            score: 800,
+          ),
+        ]);
+
+        await pumpPage(tester, db: db);
+
+        const gt7 = ValueKey('recommendation-bucket-gt-7-days');
+        const gt14 = ValueKey('recommendation-bucket-gt-14-days');
+        const gt30 = ValueKey('recommendation-bucket-gt-30-days');
+        expect(find.byKey(gt7), findsOneWidget);
+        expect(find.byKey(gt14), findsOneWidget);
+        expect(find.byKey(gt30), findsOneWidget);
+        expect(find.text('超过 7 天'), findsOneWidget);
+        expect(find.text('超过 14 天'), findsOneWidget);
+        expect(find.text('超过 30 天'), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byKey(gt7),
+            matching: find.byKey(const ValueKey('recommendation-item-133')),
+          ),
+          findsOneWidget,
+          reason: '10 天落在「超过 7 天」档',
+        );
+        expect(
+          find.descendant(
+            of: find.byKey(gt14),
+            matching: find.byKey(const ValueKey('recommendation-item-132')),
+          ),
+          findsOneWidget,
+          reason: '20 天落在「超过 14 天」档',
+        );
+        expect(
+          find.descendant(
+            of: find.byKey(gt14),
+            matching: find.byKey(const ValueKey('recommendation-item-134')),
+          ),
+          findsOneWidget,
+          reason: '25 天也落在「超过 14 天」档（15–30 区间）',
+        );
+        expect(
+          find.descendant(
+            of: find.byKey(gt30),
+            matching: find.byKey(const ValueKey('recommendation-item-131')),
+          ),
+          findsOneWidget,
+          reason: '35 天落在「超过 30 天」档',
+        );
+        expect(
+          tester
+              .getRect(find.byKey(const ValueKey('recommendation-item-133')))
+              .top,
+          lessThan(
+            tester
+                .getRect(find.byKey(const ValueKey('recommendation-item-132')))
+                .top,
+          ),
+          reason: '嘀嗒是 超过 7 天 → 14 天 → 30 天；「超过 30 天」分数更高也不能排到前面',
+        );
+        expect(
+          tester
+              .getRect(find.byKey(const ValueKey('recommendation-item-134')))
+              .top,
+          lessThan(
+            tester
+                .getRect(find.byKey(const ValueKey('recommendation-item-132')))
+                .top,
+          ),
+          reason: '同档内按搁置天数降序：25 天排在 20 天前面',
+        );
+        expect(
+          tester
+              .widgetList<Semantics>(
+                find.ancestor(
+                  of: find.text('超过 7 天'),
+                  matching: find.byType(Semantics),
+                ),
+              )
+              .any((widget) => widget.properties.header == true),
+          isTrue,
+          reason: '新档头与「明天」同形态，要标 header 让读屏念出档层级',
+        );
+        await settleDown(tester);
+      } finally {
+        semantics.dispose();
+      }
+    });
+
     testWidgets('点行进任务详情：把本地 serverId 交给回调', (tester) async {
       final db = await seedDb(tester, [
         (
@@ -241,8 +626,11 @@ void main() {
           title: '多次改期的验收',
           code: 'REPEATEDLY_RESCHEDULED',
           reason: '已多次改期，建议重新安排',
+          createdAt: null,
+          rescheduleCount: null,
+          unfinishedDays: null,
           dueAt: null,
-          score: 1003,
+          score:1003,
         ),
       ]);
       int? selected;
@@ -262,8 +650,11 @@ void main() {
           title: '待安排任务',
           code: 'RECENTLY_ADDED',
           reason: '刚刚添加，建议安排下一步',
+          createdAt: null,
+          rescheduleCount: null,
+          unfinishedDays: null,
           dueAt: null,
-          score: 700,
+          score:700,
         ),
       ]);
       final completion = Completer<void>();
@@ -313,8 +704,11 @@ void main() {
           title: '双击就重复安排的任务',
           code: 'RECENTLY_ADDED',
           reason: '刚刚添加，建议安排下一步',
+          createdAt: null,
+          rescheduleCount: null,
+          unfinishedDays: null,
           dueAt: null,
-          score: 700,
+          score:700,
         ),
       ]);
       final completion = Completer<void>();
@@ -348,8 +742,11 @@ void main() {
           title: '失败也要留痕',
           code: 'LONG_UNFINISHED',
           reason: '长时间未完成',
+          createdAt: null,
+          rescheduleCount: null,
+          unfinishedDays: null,
           dueAt: null,
-          score: 800,
+          score:800,
         ),
       ]);
       await pumpPage(
@@ -377,8 +774,11 @@ void main() {
           title: '缓存里的推荐',
           code: 'DUE_SOON',
           reason: '即将到期',
+          createdAt: null,
+          rescheduleCount: null,
+          unfinishedDays: null,
           dueAt: DateTime(2026, 9, 24, 9),
-          score: 900,
+          score:900,
         ),
       ]);
       await pumpPage(tester, db: db, api: _OfflineRecommendationApi());
@@ -398,8 +798,11 @@ void main() {
           title: '面板里的推荐',
           code: 'RECENTLY_ADDED',
           reason: '刚刚添加，建议安排下一步',
+          createdAt: null,
+          rescheduleCount: null,
+          unfinishedDays: null,
           dueAt: null,
-          score: 700,
+          score:700,
         ),
       ]);
       final repository = RecommendationRepository(
@@ -459,8 +862,11 @@ void main() {
           // 原用用例照样绿 ⇒ 覆盖缺口）。
           code: 'DUE_SOON',
           reason: '即将到期',
+          createdAt: null,
+          rescheduleCount: null,
+          unfinishedDays: null,
           dueAt: DateTime(2026, 9, 24, 9),
-          score: 1099,
+          score:1099,
         ),
       ]);
       tester.platformDispatcher.textScaleFactorTestValue = 1.3;
@@ -493,6 +899,9 @@ void main() {
             title: '读屏可见的推荐',
             code: 'RECENTLY_ADDED',
             reason: '刚刚添加，建议安排下一步',
+            createdAt: null,
+            rescheduleCount: null,
+            unfinishedDays: null,
             dueAt: null,
             score: 700,
           ),
@@ -545,6 +954,9 @@ void main() {
             title: '明天的评审',
             code: 'DUE_SOON',
             reason: '即将到期',
+            createdAt: null,
+            rescheduleCount: null,
+            unfinishedDays: null,
             dueAt: DateTime(2026, 9, 24, 9),
             score: 900,
           ),
