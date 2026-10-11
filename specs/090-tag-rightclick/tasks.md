@@ -4,8 +4,7 @@
       左滑表只有置顶；TagPage `_edit`/`_delete` 是真流程但私有。
 - [x] cursor-agent 交叉验证（brief `/tmp/ctx329_brief.md`，回答 `/tmp/ctx329_answer.txt`，3440 字节）：
       推荐三项全真动作 + 共享函数提取 + 左滑表同步补齐；编辑=对话框即够格写成「编辑面」。
-- [x] 红测先行：`sidebar_tag_rightclick_test.dart` 5 条，基线 `d2d96bdfb254` 上
-      `+0 -5: Some tests failed`（日志 `/tmp/w16_red.log`）。
+- [x] 红测先行：`sidebar_tag_rightclick_test.dart` 5 条（复算 `grep -c "testWidgets(" test/features/shell/sidebar_tag_rightclick_test.dart` ⇒ 5），基线 `d2d96bdfb254` 上 `+0 -5: Some tests failed`（日志 `/tmp/w16_red.log`）。
 - [x] 实现：`tag_actions.dart` 增 `showTagContextMenu`/`promptEditTag`/`confirmAndDeleteTag`/
       `promptTagFields`/`canUseAsParent`/`tagPath`/`kRootParentValue`；
       `tag_page.dart` 的 `_edit`/`_delete` 改调共享函数、删除被提取的私有实现；
@@ -32,4 +31,5 @@
 ## 复核
 
 - [ ] claude VERDICT 通道近几轮持续 0 字节 ⇒ **未做独立复核**；替代判据：红测先行的
-      5 条 + 三把反向探针 + analyze/全量 test 读数，已写进 PR 正文。
+      5 条（复算 `grep -c "testWidgets(" test/features/shell/sidebar_tag_rightclick_test.dart` ⇒ 5）+ 三把反向探针 +
+      analyze/全量 test 读数，已写进 PR 正文。
