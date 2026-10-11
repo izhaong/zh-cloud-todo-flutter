@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/brand_colors.dart';
 import '../../../core/theme/todo_layout_tokens.dart';
 import '../../../state/repositories/task_query_repository.dart';
+import '../smart_grouping.dart';
 import '../view_mode.dart';
 
 /// Commands kept in the existing sort menu so the idle workspace retains the
@@ -87,6 +88,8 @@ class TaskWorkspaceHeader extends StatelessWidget {
     required this.onModeChanged,
     required this.onSortChanged,
     required this.onFilterPressed,
+    this.grouping = SmartGrouping.none,
+    this.onGroupingChanged,
     this.sortDirection = TaskSortDirection.newestFirst,
     this.onSortDirectionChanged,
     this.batchSelectionActive = false,
@@ -106,6 +109,13 @@ class TaskWorkspaceHeader extends StatelessWidget {
   final ValueChanged<TaskViewMode> onModeChanged;
   final ValueChanged<TaskSort> onSortChanged;
   final VoidCallback onFilterPressed;
+
+  /// 当前智能分组档（嘀嗒《03-用分组和排序管理任务》「智能分组」节，Issue #321）。
+  /// null 回调 ⇒ 菜单整个不渲染（调用方还没接分组渲染时保持原样）。
+  final SmartGrouping grouping;
+
+  /// 智能分组档变化回调；null ⇒ 不渲染智能分组菜单。
+  final ValueChanged<SmartGrouping>? onGroupingChanged;
 
   /// 时间轴的当前方向。默认值等于本参数存在之前唯一的行为，所以不传也不会改变排序。
   final TaskSortDirection sortDirection;
@@ -185,6 +195,33 @@ class TaskWorkspaceHeader extends StatelessWidget {
                     ),
                 ],
               ),
+              if (onGroupingChanged != null)
+                PopupMenuButton<SmartGrouping>(
+                  key: const Key('todo-grouping-menu'),
+                  tooltip: '智能分组',
+                  initialValue: grouping,
+                  icon: const Icon(Icons.category_outlined, size: 20),
+                  onSelected: onGroupingChanged,
+                  itemBuilder: (context) => [
+                    for (final candidate in SmartGrouping.values)
+                      PopupMenuItem(
+                        key: Key('todo-grouping-${candidate.name}'),
+                        value: candidate,
+                        child: Row(
+                          children: [
+                            Expanded(child: Text(candidate.label)),
+                            if (candidate == grouping)
+                              Icon(
+                                Icons.check,
+                                size: 16,
+                                color: colors.accent,
+                                semanticLabel: '当前分组',
+                              ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
               PopupMenuButton<_TaskWorkspaceHeaderCommand>(
                 key: const Key('todo-sort-menu'),
                 tooltip: '排序与批量编辑',

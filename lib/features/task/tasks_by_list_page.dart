@@ -25,6 +25,7 @@ import '../shell/app_dialog.dart';
 import '../shell/quick_add_bar.dart';
 import '../tag/hash_tag_input.dart';
 import 'list_drop_target.dart';
+import 'smart_grouping.dart';
 import 'task_view_mutation_feedback.dart';
 import 'view_mode.dart';
 import 'views/calendar_view.dart';
@@ -82,6 +83,8 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   TaskSort _sort = TaskSort.smart;
   // 默认值 = 本轮之前写死的降序；不传偏好的清单行为不变。
   TaskSortDirection _sortDirection = TaskSortDirection.newestFirst;
+  // 智能分组档（嘀嗒《03-用分组和排序管理任务》，Issue #321）；默认 = 功能前的行为。
+  SmartGrouping _grouping = SmartGrouping.none;
   double _timelineZoom = 1;
   TimelineScale _timelineScale = TimelineScale.week;
   Set<String> _collapsedTimelineGroupIds = const {};
@@ -117,6 +120,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           completed: widget.initialCompleted,
         );
     Future<void>.microtask(_restoreSortPreference);
+    Future<void>.microtask(_restoreGroupingPreference);
     Future<void>.microtask(_restoreViewPreference);
     Future<void>.microtask(_restoreQuadrantHideCompleted);
   }
@@ -155,6 +159,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     }
     if (listSourceChanged) {
       Future<void>.microtask(_restoreSortPreference);
+      Future<void>.microtask(_restoreGroupingPreference);
     }
     if (listSourceChanged || filterSourceChanged) {
       Future<void>.microtask(_restoreViewPreference);
@@ -231,10 +236,14 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
 
     final taskTagIds = ref.watch(taskTagIndexProvider).valueOrNull;
     // 标签档排序键：与侧栏同序（tagsStreamProvider 即 TagRepository.watchAll 的流）。
-    final tagRank = {
-      for (final (index, tag)
-          in (ref.watch(tagsStreamProvider).valueOrNull ?? const []).indexed)
-        tag.id: index,
+    final tags = ref.watch(tagsStreamProvider).valueOrNull ?? const <TodoTag>[];
+    final tagRank = {for (final (index, tag) in tags.indexed) tag.id: index};
+    // 智能分组用的名称表：清单名（按清单分组）、标签名（按标签分组）。
+    final tagNamesById = {for (final tag in tags) tag.id: tag.name};
+    final listNamesById = {
+      for (final list
+          in (ref.watch(listsStreamProvider).valueOrNull ?? const <TodoList>[]))
+        list.id: list.name,
     };
     final listFolderIds = ref.watch(listFolderIndexProvider);
     final tasksStream = _resolveTasksStream(taskRepo);
@@ -283,6 +292,9 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 now: now,
                 taskTags: taskTagIds,
                 tagRank: tagRank,
+                grouping: _grouping,
+                tagNamesById: tagNamesById,
+                listNamesById: listNamesById,
               );
         final workspace = Column(
           children: [
@@ -294,6 +306,8 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 sort: _sort,
                 sortDirection: _sortDirection,
                 filterActive: !_filter.isEmpty,
+                grouping: _grouping,
+                onGroupingChanged: _changeGrouping,
                 onModeChanged: _changeMode,
                 onSortChanged: _changeSort,
                 onSortDirectionChanged: _changeSortDirection,
@@ -421,6 +435,9 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     required DateTime now,
     required Map<String, Set<String>>? taskTags,
     required Map<String, int> tagRank,
+    required SmartGrouping grouping,
+    required Map<String, String> tagNamesById,
+    required Map<String, String> listNamesById,
   }) {
     switch (_mode) {
       case TaskViewMode.list:
@@ -430,6 +447,9 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           sort: _sort,
           sortDirection: _sortDirection,
           taskTags: taskTags,
+          grouping: grouping,
+          tagNamesById: tagNamesById,
+          listNamesById: listNamesById,
           tagRank: tagRank,
           desktopMode: desktopMode,
           now: now,
@@ -633,6 +653,27 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       _sort = preference.sort;
       _sortDirection = preference.direction;
     });
+  }
+
+  Future<void> _restoreGroupingPreference() async {
+    final repository = ref.read(taskGroupingPreferenceRepositoryProvider);
+    final grouping = await repository?.get(_selectedListId);
+    if (!mounted || grouping == null) return;
+    setState(() => _grouping = grouping);
+  }
+
+  Future<void> _changeGrouping(SmartGrouping grouping) async {
+    setState(() => _grouping = grouping);
+    try {
+      await ref
+          .read(taskGroupingPreferenceRepositoryProvider)
+          ?.save(_selectedListId, grouping);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('分组偏好保存失败，请稍后重试')));
+    }
   }
 
   Future<void> _restoreViewPreference() async {
@@ -1744,6 +1785,9 @@ class _ListBody extends StatefulWidget {
     required this.sortDirection,
     required this.taskTags,
     required this.tagRank,
+    required this.grouping,
+    required this.tagNamesById,
+    required this.listNamesById,
     required this.desktopMode,
     required this.now,
     required this.selectedTaskId,
@@ -1761,6 +1805,9 @@ class _ListBody extends StatefulWidget {
   final TaskSortDirection sortDirection;
   final Map<String, Set<String>>? taskTags;
   final Map<String, int> tagRank;
+  final SmartGrouping grouping;
+  final Map<String, String> tagNamesById;
+  final Map<String, String> listNamesById;
   final bool desktopMode;
   final DateTime now;
   final String? selectedTaskId;
@@ -1828,11 +1875,43 @@ class _ListBodyState extends State<_ListBody> {
             .map((id) => byId[id])
             .whereType<TodoTask>()
             .toList(growable: false);
-    final groups = widget.sections.isEmpty
+    final smartGroups = widget.grouping == SmartGrouping.none
+        ? null
+        : groupTasksSmartly(
+            ordered,
+            grouping: widget.grouping,
+            now: widget.now,
+            listNameOf: (task) => widget.listNamesById[task.listId],
+            tagNamesOf: (task) => (widget.taskTags?[task.id] ?? const {})
+                .map((tagId) => widget.tagNamesById[tagId])
+                .whereType<String>()
+                .toSet(),
+          );
+    final groups = smartGroups != null
+        ? smartGroups
+              .map(
+                (group) => _TaskGroup(
+                  id: group.id,
+                  title: group.title,
+                  tasks: group.tasks,
+                ),
+              )
+              .toList(growable: false)
+        : widget.sections.isEmpty
         ? _groupTasks(ordered, widget.now)
         : _groupTasksBySection(ordered, widget.sections);
     final entries = <Object>[
       for (final group in groups) ...[group, ...group.tasks],
+    ];
+    // 智能分组（按标签）会让同一任务出现在多个组里；桌面端 ReorderableListView
+    // 会用子项 key 造 GlobalKey，裸 task.id 会撞车，行 key 必须带上组 id。
+    final smartGrouped = smartGroups != null;
+    final rowKeys = <Key>[
+      for (final group in groups) ...[
+        const ValueKey(''),
+        for (final task in group.tasks)
+          ValueKey(smartGrouped ? '${group.id}:${task.id}' : task.id),
+      ],
     ];
     final visibleTaskIds = entries
         .whereType<TodoTask>()
@@ -1906,7 +1985,7 @@ class _ListBodyState extends State<_ListBody> {
           }
           final task = entry as TodoTask;
           return KeyedSubtree(
-            key: ValueKey(task.id),
+            key: rowKeys[index],
             child: _CalendarDragSource(
               task: task,
               child: TaskRowHost(
