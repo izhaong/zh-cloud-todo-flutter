@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:drift/drift.dart' show Value;
+import 'package:drift/drift.dart' show OrderingMode, OrderingTerm, Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
@@ -61,7 +61,7 @@ void main() {
         .customSelect("PRAGMA table_info('todo_tasks')")
         .get();
 
-    expect(version.data['user_version'], 26);
+    expect(version.data['user_version'], 27);
     expect(task.title, '迁移前任务');
     expect(sectionTable.data['name'], 'todo_task_sections');
     expect(taskColumns.map((row) => row.data['name']), contains('section_id'));
@@ -133,7 +133,7 @@ void main() {
         .customSelect('SELECT id, time_mode FROM todo_tasks ORDER BY id')
         .get();
 
-    expect(version.data['user_version'], 26);
+    expect(version.data['user_version'], 27);
     expect(
       rows.map((row) => '${row.data['id']}=${row.data['time_mode']}'),
       containsAll(<String>['task-fixed=2', 'task-plain=0']),
@@ -199,7 +199,7 @@ void main() {
           .getSingle();
       final filter = await upgraded.select(upgraded.todoFilters).getSingle();
 
-      expect(version.data['user_version'], 26);
+      expect(version.data['user_version'], 27);
       expect(filter.conditionJson, contains('"local-list"'));
       expect(filter.conditionJson, contains('"local-tag"'));
       expect(filter.conditionJson, isNot(contains('[101]')));
@@ -256,7 +256,7 @@ void main() {
           .getSingle();
       final list = await upgraded.listByLocalId('list-before-local-reference');
 
-      expect(version.data['user_version'], 26);
+      expect(version.data['user_version'], 27);
       expect(list?.folderId, 88);
       expect(list?.folderLocalId, 'folder-before-local-reference');
     },
@@ -304,7 +304,7 @@ void main() {
           )
           .getSingle();
 
-      expect(version.data['user_version'], 26);
+      expect(version.data['user_version'], 27);
       expect(access.data['id'], 'list-before-access-role');
       expect(access.data['access_role'], 'owner');
       expect(access.data['writable'], 1);
@@ -347,7 +347,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 26);
+      expect(version.data['user_version'], 27);
       final task = await upgraded.select(upgraded.todoTasks).getSingle();
       expect(task.title, '迁移前任务');
       expect(task.assigneeUserId, isNull);
@@ -375,7 +375,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 26);
+      expect(version.data['user_version'], 27);
 
       final taskColumns = await upgraded
           .customSelect('PRAGMA table_info(todo_tasks)')
@@ -511,7 +511,7 @@ void main() {
           .getSingle();
       final rule = await upgraded.select(upgraded.todoRepeatRules).getSingle();
 
-      expect(version.data['user_version'], 26);
+      expect(version.data['user_version'], 27);
       expect(rule.id, 'repeat-rule-before-b2-b3-merge');
       expect(rule.byDay, '1,3,5');
       expect(rule.selectedDatesJson, isNull);
@@ -556,7 +556,7 @@ void main() {
         .getSingle();
     final rule = await upgraded.select(upgraded.todoRepeatRules).getSingle();
 
-    expect(version.data['user_version'], 26);
+    expect(version.data['user_version'], 27);
     expect(rule.freq, 'CUSTOM');
     expect(rule.byDay, '1,3,5');
     expect(rule.repeatMode, 'ON_DUE');
@@ -644,7 +644,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 26);
+      expect(version.data['user_version'], 27);
       await upgraded.close();
 
       final reopened = AppDatabase.forTesting(NativeDatabase(databaseFile));
@@ -736,7 +736,7 @@ void main() {
           )
           .getSingle();
 
-      expect(version.data['user_version'], 26);
+      expect(version.data['user_version'], 27);
       expect(task.title, '迁移前看板任务');
       expect(boardTable.data['name'], 'todo_board_preferences');
     },
@@ -817,7 +817,7 @@ void main() {
         .customSelect('SELECT id, time_mode FROM todo_reminders ORDER BY id')
         .get();
 
-    expect(version.data['user_version'], 26);
+    expect(version.data['user_version'], 27);
     expect(
       rows.map((row) => '${row.data['id']}=${row.data['time_mode']}'),
       containsAll(<String>['reminder-fixed=2', 'reminder-plain=0']),
@@ -869,7 +869,7 @@ void main() {
         .customSelect('SELECT id, name, sort_order, is_pinned FROM todo_lists')
         .get();
 
-    expect(version.data['user_version'], 26);
+    expect(version.data['user_version'], 27);
     expect(rows, hasLength(1), reason: '加列不能丢存量清单');
     expect(rows.single.data['id'], 'list-pin-migration');
     expect(rows.single.data['sort_order'], 3, reason: '原有 sortOrder 不能被迁移改写');
@@ -925,7 +925,7 @@ void main() {
         .customSelect('SELECT id, name, color, is_pinned FROM todo_tags')
         .get();
 
-    expect(version.data['user_version'], 26);
+    expect(version.data['user_version'], 27);
     expect(rows, hasLength(1), reason: '加列不能丢存量标签');
     expect(rows.single.data['id'], 'tag-pin-migration');
     expect(rows.single.data['color'], '#E53935', reason: '原有颜色不能被迁移改写');
@@ -995,7 +995,7 @@ void main() {
           )
           .getSingle();
 
-      expect(version.data['user_version'], 26);
+      expect(version.data['user_version'], 27);
       expect(task.title, '迁移前可靠性任务');
       expect(change.status, 'queued');
       expect(change.nextAttemptAt, isNull);
@@ -1003,6 +1003,83 @@ void main() {
       expect(recommendationTable.data['name'], 'todo_recommendations');
     },
   );
+
+  test('v26→v27 给 todo_tags 加 sort_order，旧数据全 0、界面顺序不倒退', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'zh_cloud_todo_tag_sort_order_',
+    );
+    final databaseFile = File('${directory.path}/todo.sqlite');
+    addTearDown(() async {
+      if (await directory.exists()) {
+        await directory.delete(recursive: true);
+      }
+    });
+
+    final beforeUpgrade = AppDatabase.forTesting(NativeDatabase(databaseFile));
+    final now = DateTime.utc(2026, 10, 1, 9);
+    await beforeUpgrade.batch((batch) {
+      batch.insert(
+        beforeUpgrade.todoTags,
+        TodoTagsCompanion.insert(
+          id: 'tag-a',
+          name: '专注',
+          updatedAt: now,
+          createdAt: now.subtract(const Duration(days: 3)),
+        ),
+      );
+      batch.insert(
+        beforeUpgrade.todoTags,
+        TodoTagsCompanion.insert(
+          id: 'tag-b',
+          name: '评审',
+          updatedAt: now,
+          createdAt: now.subtract(const Duration(days: 2)),
+        ),
+      );
+      batch.insert(
+        beforeUpgrade.todoTags,
+        TodoTagsCompanion.insert(
+          id: 'tag-c',
+          name: '跟进',
+          updatedAt: now,
+          createdAt: now.subtract(const Duration(days: 1)),
+        ),
+      );
+    });
+    await beforeUpgrade.close();
+    _downgradeToSchema26WithoutTagSortOrder(databaseFile);
+
+    final upgraded = AppDatabase.forTesting(NativeDatabase(databaseFile));
+    addTearDown(upgraded.close);
+    final version = await upgraded
+        .customSelect('PRAGMA user_version')
+        .getSingle();
+    final columns = await upgraded
+        .customSelect("PRAGMA table_info('todo_tags')")
+        .get();
+
+    expect(version.data['user_version'], 27);
+    expect(columns.map((row) => row.data['name']), contains('sort_order'));
+
+    // watchAll/getAll 的排序键（isPinned DESC, sortOrder DESC, createdAt ASC）。
+    final rows =
+        await (upgraded.select(upgraded.todoTags)..orderBy([
+              (t) =>
+                  OrderingTerm(expression: t.isPinned, mode: OrderingMode.desc),
+              (t) => OrderingTerm(
+                expression: t.sortOrder,
+                mode: OrderingMode.desc,
+              ),
+              (t) => OrderingTerm(expression: t.createdAt),
+            ]))
+            .get();
+    expect(
+      rows.map((r) => r.id).toList(),
+      ['tag-a', 'tag-b', 'tag-c'],
+      reason: '迁移后全 0、并列塌到 createdAt ASC ⇒ 升级前后界面顺序一致，不回填、不推全量',
+    );
+    expect(rows.map((r) => r.sortOrder), everyElement(0));
+  });
 }
 
 void _downgradeToSchema21WithoutSections(File databaseFile) {
@@ -1305,6 +1382,16 @@ void _downgradeToSchema4(File databaseFile) {
       'ALTER TABLE todo_repeat_rules_v4 RENAME TO todo_repeat_rules',
     );
     database.execute('PRAGMA user_version = 4');
+  } finally {
+    database.dispose();
+  }
+}
+
+void _downgradeToSchema26WithoutTagSortOrder(File databaseFile) {
+  final database = sqlite.sqlite3.open(databaseFile.path);
+  try {
+    database.execute('ALTER TABLE todo_tags DROP COLUMN sort_order');
+    database.execute('PRAGMA user_version = 26');
   } finally {
     database.dispose();
   }
