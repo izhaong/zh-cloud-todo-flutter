@@ -7,4 +7,4 @@
 - [x] T5 既有 fake create/update 签名补参（invalid_override 修复）；契约钉补 `'noteShowInDetail': false`
 - [x] T6 变异探针：删 body 三键 + 显隐条件恒假 ⇒ 1 过 4 挂；还原后全绿
 - [x] T7 `flutter analyze` No issues found
-- [x] T8 全量 `flutter test`：`00:56 +1131: All tests passed!`（1131 过 0 挂，2026-10-12 本工作树）
+- [x] T8 全量 `flutter test`：`01:15 +1631 ~26: All tests passed!`（gate-rc=0，`set -o pipefail`，2026-10-12 本工作树；首跑漏改 `test/efficiency_api_contract_test.dart` 的 create body 精确钉，补 `'noteShowInDetail': false` 后复跑全绿）
