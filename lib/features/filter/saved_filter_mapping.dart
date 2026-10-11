@@ -20,6 +20,38 @@ import 'filter_bar.dart';
     from: filter.dueAtFrom,
     to: filter.dueAtTo,
   );
+  // 跨条件的逻辑词要先过服务端同一条放置校验，再决定写不写：
+  // `TodoFilterServiceImpl.java:644-660` 要求词只能挂在**已启用**的条件上，且不能挂在
+  // 第一条已启用条件上（它前面没有条件可连），否则 `todo_filter` 整个保存请求会被拒。
+  // 这里不许「顺手丢掉那半条」—— 静默丢词会存出一份与用户所选不一致的过滤器；
+  // 改成点名给 UI（skipped 非空时对话框本来就拒绝保存），让用户自己决定撤哪一条。
+  final activeKeys = <String>[];
+  if (filter.listId != null) activeKeys.add('listIds');
+  if (filter.tagIds.isNotEmpty) activeKeys.add('tagIds');
+  if (filter.priority != null) activeKeys.add('priorities');
+  if (filter.completed != null) activeKeys.add('statuses');
+  if (filter.dueRange != null ||
+      filter.dueAtFrom != null ||
+      filter.dueAtTo != null) {
+    activeKeys.add('dateRange');
+  }
+  if (filter.keyword?.trim().isNotEmpty == true) activeKeys.add('keyword');
+  final conditionLogics = <String, String>{};
+  for (final entry in filter.conditionLogics.entries) {
+    final logic = entry.value.toLowerCase();
+    if (!conditionOrder.contains(entry.key) ||
+        (logic != tagLogicAnd && logic != tagLogicOr)) {
+      skipped.add('跨条件逻辑词「${entry.key}」');
+      continue;
+    }
+    if (!activeKeys.contains(entry.key) || activeKeys.first == entry.key) {
+      // 挂在第一条上或挂在没启用的条件上，服务端都会整份拒绝；连 activeKeys 为空
+      // （`active.isEmpty` 那条分支）也走这里。
+      skipped.add('跨条件逻辑词「${entry.key}」（它前面没有可连接的条件）');
+      continue;
+    }
+    conditionLogics[entry.key] = logic;
+  }
   return (
     conditions: TodoFilterConditions(
       listIds: filter.listId == null ? const [] : [filter.listId!],
@@ -32,6 +64,7 @@ import 'filter_bar.dart';
           : [filter.completed! ? 'done' : 'todo'],
       keyword: filter.keyword,
       dateRange: range.isEmpty ? null : range,
+      conditionLogics: conditionLogics.isEmpty ? null : conditionLogics,
     ),
     skipped: skipped,
   );
@@ -60,6 +93,15 @@ TaskFilter? taskFilterFromSaved(
 
   // 只认 done/todo；in_progress、cancelled 等契约值在本地筛选态里没有对应字段，
   // 静默还原成「不限状态」等于凭空删掉一个条件。
+  // `conditionLogics` 只认「键在 CONDITION_ORDER 里 + 值在 and/or 词表内」（同服务端
+  // validateLogicWords:614-635）。猜哪一种都是替用户改条件。
+  for (final entry
+      in (conditions.conditionLogics ?? const <String, String>{}).entries) {
+    if (!conditionOrder.contains(entry.key) ||
+        (entry.value != tagLogicAnd && entry.value != tagLogicOr)) {
+      return null;
+    }
+  }
   if (conditions.statuses.any((s) => s != 'done' && s != 'todo')) return null;
   final preset = conditions.dateRange?.preset;
   if (preset != null && preset != 'today') return null;
@@ -67,6 +109,7 @@ TaskFilter? taskFilterFromSaved(
     listId: conditions.listIds.isEmpty ? null : conditions.listIds.single,
     tagIds: conditions.tagIds,
     tagLogic: loweredTagLogic ?? tagLogicAnd,
+    conditionLogics: conditions.conditionLogics ?? const {},
     priority: conditions.priorities.isEmpty
         ? null
         : conditions.priorities.single,
