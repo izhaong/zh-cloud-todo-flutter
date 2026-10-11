@@ -8,13 +8,13 @@
 
 ## 门禁读数（跑在 commit 之后的最终字节上）
 
-- [ ] `flutter analyze` ⇒ 待 commit 后重跑并回填读数。
-- [ ] 全量 `flutter test` ⇒ 待 commit 后重跑并回填读数（预跑读数 `+1587 ~26`，含本分支 5 条新用例）。
-- [ ] 反向探针 ⇒ 待 commit 后重跑并回填（预跑：P1 红 5、P2 红 2、P3 红 2，日志 `/tmp/w31_probe2.log`）。
+- [x] `flutter analyze` ⇒ rc=0，`No issues found!`（日志 `/tmp/w31_analyze.log`）。
+- [x] 全量 `flutter test` ⇒ rc=0，尾行 `01:18 +1587 ~26: All tests passed!`（比基线 `b66bca1338a4` 的 `+1582 ~26` 多 5，即本分支 5 条新用例）。
+- [x] 反向探针（锚点命中各 1 次、还原后字节相等）：P1 红 5、P2 红 2（预选断言 + 应用换标签）、P3 红 2，日志 `/tmp/w31_probe2.log`。
 
 ## 台账自扫
 
-- [ ] `python3 tool/check_spec_selfscan.py specs/091-task-rightclick-tag/spec.md` 与 `.../tasks.md` ⇒ 待跑并回填。
+- [x] `python3 tool/check_spec_selfscan.py specs/091-task-rightclick-tag/spec.md` ⇒ `失项 0 条`；同一条命令把路径换成 `specs/091-task-rightclick-tag/tasks.md` ⇒ `失项 0 条`（两份都是独立成命令跑，rc 各为 0）。
 
 ## 复核
 
