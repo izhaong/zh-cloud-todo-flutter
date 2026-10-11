@@ -218,6 +218,7 @@ void main() {
     required TaskSort sort,
     required TaskSortDirection direction,
     void Function(TaskSortDirection)? onDirection,
+    void Function(TaskSort)? onSort,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -230,7 +231,7 @@ void main() {
             sortDirection: direction,
             filterActive: false,
             onModeChanged: (_) {},
-            onSortChanged: (_) {},
+            onSortChanged: onSort ?? (_) {},
             onSortDirectionChanged: onDirection,
             onFilterPressed: () {},
             onBatchPressed: () {},
@@ -635,6 +636,291 @@ void main() {
     await tester.pumpAndSettle();
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  group('标签档（嘀嗒《用标签管理任务》:122「在任务列表『···』-『排序』中，将任务按标签进行排序」）', () {
+    // 种子刻意让「兜底键（sortOrder）顺序」与「标签位次顺序」互逆：
+    //   task-a     挂 tag-second（位次 1），sortOrder 0
+    //   task-b     挂 tag-first （位次 0），sortOrder 1
+    //   task-multi 挂两个标签（最小位次 0），sortOrder 2
+    //   task-none  无标签（末位哨兵），sortOrder 3
+    // ⇒ 标签档期望 [task-b, task-multi, task-a, task-none]；
+    //   比较器被摘成 `=> 0` 时兜底会排出 [task-a, task-b, task-multi, task-none]，断言不假绿。
+    //   侧栏顺序 = isPinned DESC, sortOrder DESC, createdAt ASC（与 TagRepository.watchAll 同序）。
+    Future<AppDatabase> seededTagDb() async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final base = DateTime.utc(2026, 9, 1, 9);
+      await db.batch((batch) {
+        batch.insertAll(db.todoTags, [
+          TodoTagsCompanion.insert(
+            id: 'tag-first',
+            name: '工作',
+            sortOrder: const Value(2),
+            createdAt: base,
+            updatedAt: base,
+          ),
+          TodoTagsCompanion.insert(
+            id: 'tag-second',
+            name: '生活',
+            sortOrder: const Value(1),
+            createdAt: base,
+            updatedAt: base,
+          ),
+        ]);
+        batch.insertAll(db.todoTaskTags, [
+          TodoTaskTagsCompanion.insert(taskId: 'task-a', tagId: 'tag-second'),
+          TodoTaskTagsCompanion.insert(taskId: 'task-b', tagId: 'tag-first'),
+          TodoTaskTagsCompanion.insert(
+            taskId: 'task-multi',
+            tagId: 'tag-first',
+          ),
+          TodoTaskTagsCompanion.insert(
+            taskId: 'task-multi',
+            tagId: 'tag-second',
+          ),
+        ]);
+        batch.insertAll(db.todoTasks, [
+          TodoTasksCompanion.insert(
+            id: 'task-a',
+            listId: 'inbox',
+            title: '甲 挂生活',
+            sortOrder: const Value(0),
+            createdAt: base,
+            updatedAt: base,
+          ),
+          TodoTasksCompanion.insert(
+            id: 'task-b',
+            listId: 'inbox',
+            title: '乙 挂工作',
+            sortOrder: const Value(1),
+            createdAt: base,
+            updatedAt: base,
+          ),
+          TodoTasksCompanion.insert(
+            id: 'task-multi',
+            listId: 'inbox',
+            title: '丙 两个都挂',
+            sortOrder: const Value(2),
+            createdAt: base,
+            updatedAt: base,
+          ),
+          TodoTasksCompanion.insert(
+            id: 'task-none',
+            listId: 'inbox',
+            title: '丁 无标签',
+            sortOrder: const Value(3),
+            createdAt: base,
+            updatedAt: base,
+          ),
+        ]);
+      });
+      return db;
+    }
+
+    test('按标签排序跟随侧栏顺序（取最小位次）；无标签排最后', () async {
+      final db = await seededTagDb();
+      expect(
+        await orderOf(db, TaskSort.tag, TaskSortDirection.newestFirst),
+        ['task-b', 'task-multi', 'task-a', 'task-none'],
+        reason:
+            'tag-first 在侧栏领前 ⇒ 挂它的 task-b 与 task-multi（取两标签最小位次）领头，'
+            '两者并列后按手工顺序分先后；无标签的 task-none 用末位哨兵，不许当位次 0',
+      );
+    });
+
+    test('标签档没有方向一说，切方向不改变结果', () async {
+      final db = await seededTagDb();
+      expect(
+        await orderOf(db, TaskSort.tag, TaskSortDirection.oldestFirst),
+        await orderOf(db, TaskSort.tag, TaskSortDirection.newestFirst),
+        reason: '嘀嗒原文没给标签档方向 ⇒ 方向参数对它必须是 no-op',
+      );
+    });
+
+    test('置顶优先压过标签档（既有前置键不许被新档位顶掉）', () async {
+      final db = await seededTagDb();
+      final base = DateTime.utc(2026, 9, 1, 9);
+      await db
+          .into(db.todoTasks)
+          .insert(
+            TodoTasksCompanion.insert(
+              id: 'task-pinned',
+              listId: 'inbox',
+              title: '置顶但无标签',
+              sortOrder: const Value(4),
+              isPinned: const Value(true),
+              createdAt: base,
+              updatedAt: base,
+            ),
+          );
+      final rows = await orderOf(
+        db,
+        TaskSort.tag,
+        TaskSortDirection.newestFirst,
+      );
+      expect(
+        rows.first,
+        'task-pinned',
+        reason: 'compareTodoTasks 的置顶键在所有档位之前，标签档也不例外',
+      );
+      expect(rows, hasLength(5));
+    });
+
+    test('位次表缺该标签 ⇒ 与无标签同哨兵；两表未到位 ⇒ 全并列退回手工顺序', () async {
+      final db = await seededTagDb();
+      final rows = await TaskQueryRepository(
+        db,
+      ).filter(const TaskQueryFilter());
+      final byId = {for (final task in rows) task.id: task};
+      final left = byId['task-a']!;
+      final right = byId['task-none']!;
+      expect(
+        compareTodoTasks(
+          left,
+          right,
+          TaskSort.tag,
+          taskTags: {
+            'task-a': {'ghost'},
+          },
+          tagRank: const {},
+        ),
+        lessThan(0),
+        reason:
+            'task-a 挂的标签不在位次表 ⇒ 与无标签同哨兵 ⇒ 回落 sortOrder（0 < 3）。'
+            '若缺失被当 0 处理，它会插队到所有任务前面',
+      );
+      expect(
+        compareTodoTasks(left, right, TaskSort.tag),
+        lessThan(0),
+        reason: '两张表都没到位（页面索引未就位）时全并列 ⇒ 兜底键接管，不许抛错',
+      );
+    });
+
+    testWidgets('排序菜单含「标签」档、不给方向行；点击带出 TaskSort.tag', (tester) async {
+      TaskSort? tapped;
+      await pumpHeaderWithOpenMenu(
+        tester,
+        sort: TaskSort.tag,
+        direction: TaskSortDirection.newestFirst,
+        onSort: (next) => tapped = next,
+      );
+      expect(find.text('标签'), findsOneWidget, reason: '菜单缺「标签」档 ⇒ 用户选不到这一档');
+      expect(
+        find.text('从旧到新'),
+        findsNothing,
+        reason: '嘀嗒没给标签档方向 ⇒ 多出方向行就是自创交互',
+      );
+      await tester.tap(find.text('标签'));
+      await tester.pumpAndSettle();
+      expect(tapped, TaskSort.tag, reason: '点了没把档位带出来 ⇒ 菜单是装饰');
+    });
+
+    testWidgets('页面级：标签档真的按侧栏顺序重排（种子偏好直读，绕开「标签」文案与快速添加栏撞车）', (tester) async {
+      final fixture = await TodoVisualFixture.create(
+        set: TodoVisualFixtureSet.empty,
+      );
+      addTearDown(fixture.dispose);
+      final base = fixture.fixedNow;
+      await fixture.database.batch((batch) {
+        batch.insertAll(fixture.database.todoTags, [
+          TodoTagsCompanion.insert(
+            id: 'tag-first',
+            name: '工作',
+            sortOrder: const Value(2),
+            createdAt: base,
+            updatedAt: base,
+          ),
+          TodoTagsCompanion.insert(
+            id: 'tag-second',
+            name: '生活',
+            sortOrder: const Value(1),
+            createdAt: base,
+            updatedAt: base,
+          ),
+        ]);
+        batch.insertAll(fixture.database.todoTaskTags, [
+          TodoTaskTagsCompanion.insert(
+            taskId: 'page-tag-a',
+            tagId: 'tag-second',
+          ),
+          TodoTaskTagsCompanion.insert(
+            taskId: 'page-tag-b',
+            tagId: 'tag-first',
+          ),
+        ]);
+        batch.insertAll(fixture.database.todoTasks, [
+          TodoTasksCompanion.insert(
+            id: 'page-tag-a',
+            listId: 'inbox',
+            title: '标签档页面甲',
+            sortOrder: const Value(0),
+            createdAt: base,
+            updatedAt: base,
+          ),
+          TodoTasksCompanion.insert(
+            id: 'page-tag-b',
+            listId: 'inbox',
+            title: '标签档页面乙',
+            sortOrder: const Value(1),
+            createdAt: base,
+            updatedAt: base,
+          ),
+          TodoTasksCompanion.insert(
+            id: 'page-tag-none',
+            listId: 'inbox',
+            title: '标签档页面丁',
+            sortOrder: const Value(2),
+            createdAt: base,
+            updatedAt: base,
+          ),
+        ]);
+        batch.insert(
+          fixture.database.todoViewPreferences,
+          TodoViewPreferencesCompanion.insert(
+            id: 'seed-tag-sort',
+            sourceType: 'TASK_SORT',
+            sourceKey: 'inbox',
+            valueJson: jsonEncode({'sort': 'tag', 'direction': 'newestFirst'}),
+            createdAt: base,
+            updatedAt: base,
+          ),
+        );
+      });
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: fixture.container,
+          child: MaterialApp(
+            theme: ThemeData.light().copyWith(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            home: const Scaffold(body: TasksByListPage(hideAppBar: true)),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      Future<double> rowTop(String id) async {
+        final finder = find.byKey(Key('task-row-surface-$id'));
+        expect(finder, findsOneWidget, reason: '这一行不在屏上 ⇒ 比几何位置没有意义');
+        return tester.getRect(finder).top;
+      }
+
+      expect(
+        await rowTop('page-tag-b'),
+        lessThan(await rowTop('page-tag-a')),
+        reason: '侧栏 tag-first 在前 ⇒ 挂它的任务在上；偏好里存了 tag 档却没生效 ⇒ 穿线断了',
+      );
+      expect(
+        await rowTop('page-tag-a'),
+        lessThan(await rowTop('page-tag-none')),
+        reason: '无标签任务落末位',
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    });
   });
 }
 

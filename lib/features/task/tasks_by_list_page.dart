@@ -230,6 +230,12 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     }
 
     final taskTagIds = ref.watch(taskTagIndexProvider).valueOrNull;
+    // 标签档排序键：与侧栏同序（tagsStreamProvider 即 TagRepository.watchAll 的流）。
+    final tagRank = {
+      for (final (index, tag)
+          in (ref.watch(tagsStreamProvider).valueOrNull ?? const []).indexed)
+        tag.id: index,
+    };
     final listFolderIds = ref.watch(listFolderIndexProvider);
     final tasksStream = _resolveTasksStream(taskRepo);
 
@@ -259,6 +265,8 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           sort: _sort,
           sortDirection: _sortDirection,
           now: now,
+          taskTags: taskTagIds,
+          tagRank: tagRank,
         );
         if (snapshot.hasData) {
           _reportInvalidSelection(items);
@@ -273,6 +281,8 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 taskSections: taskSections,
                 desktopMode: desktopMode,
                 now: now,
+                taskTags: taskTagIds,
+                tagRank: tagRank,
               );
         final workspace = Column(
           children: [
@@ -409,6 +419,8 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     required List<TodoTaskSection> taskSections,
     required bool desktopMode,
     required DateTime now,
+    required Map<String, Set<String>>? taskTags,
+    required Map<String, int> tagRank,
   }) {
     switch (_mode) {
       case TaskViewMode.list:
@@ -417,6 +429,8 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           sections: taskSections,
           sort: _sort,
           sortDirection: _sortDirection,
+          taskTags: taskTags,
+          tagRank: tagRank,
           desktopMode: desktopMode,
           now: now,
           selectedTaskId: widget.selectedTaskId,
@@ -1728,6 +1742,8 @@ class _ListBody extends StatefulWidget {
     required this.sections,
     required this.sort,
     required this.sortDirection,
+    required this.taskTags,
+    required this.tagRank,
     required this.desktopMode,
     required this.now,
     required this.selectedTaskId,
@@ -1743,6 +1759,8 @@ class _ListBody extends StatefulWidget {
   final List<TodoTaskSection> sections;
   final TaskSort sort;
   final TaskSortDirection sortDirection;
+  final Map<String, Set<String>>? taskTags;
+  final Map<String, int> tagRank;
   final bool desktopMode;
   final DateTime now;
   final String? selectedTaskId;
@@ -1950,8 +1968,14 @@ class _ListBodyState extends State<_ListBody> {
   List<TodoTask> _sortedItems(List<TodoTask> items) {
     final sorted = [...items];
     sorted.sort(
-      (a, b) =>
-          compareTodoTasks(a, b, widget.sort, direction: widget.sortDirection),
+      (a, b) => compareTodoTasks(
+        a,
+        b,
+        widget.sort,
+        direction: widget.sortDirection,
+        taskTags: widget.taskTags,
+        tagRank: widget.tagRank,
+      ),
     );
     return sorted;
   }
@@ -2180,9 +2204,20 @@ List<TodoTask> _visibleTasksInListOrder(
   required TaskSort sort,
   required TaskSortDirection sortDirection,
   required DateTime now,
+  Map<String, Set<String>>? taskTags,
+  Map<String, int>? tagRank,
 }) {
   final sorted = [...tasks]
-    ..sort((a, b) => compareTodoTasks(a, b, sort, direction: sortDirection));
+    ..sort(
+      (a, b) => compareTodoTasks(
+        a,
+        b,
+        sort,
+        direction: sortDirection,
+        taskTags: taskTags,
+        tagRank: tagRank,
+      ),
+    );
   final groups = sections.isEmpty
       ? _groupTasks(sorted, now)
       : _groupTasksBySection(sorted, sections);
@@ -2267,8 +2302,9 @@ List<TodoTask> applyTaskFilter(
     // 侧栏按层级渲染、清单只挂在直属文件夹上，所以选父文件夹要等于选它整棵子树。
     // 与标签同一口径：`listFolderIds == null` 是索引没就位，由调用方等它。
     if (filter.folderId != null && listFolderIds != null) {
-      if (!(listFolderIds[task.listId] ?? const <String>{})
-              .contains(filter.folderId)) {
+      if (!(listFolderIds[task.listId] ?? const <String>{}).contains(
+        filter.folderId,
+      )) {
         return false;
       }
     }

@@ -14,6 +14,7 @@ enum _TaskWorkspaceHeaderCommand {
   title,
   createdAt,
   updatedAt,
+  tag,
   batchEdit,
   createSection,
   editQuadrantRules,
@@ -30,6 +31,7 @@ extension on _TaskWorkspaceHeaderCommand {
     _TaskWorkspaceHeaderCommand.title => TaskSort.title,
     _TaskWorkspaceHeaderCommand.createdAt => TaskSort.createdAt,
     _TaskWorkspaceHeaderCommand.updatedAt => TaskSort.updatedAt,
+    _TaskWorkspaceHeaderCommand.tag => TaskSort.tag,
     _TaskWorkspaceHeaderCommand.batchEdit => null,
     _TaskWorkspaceHeaderCommand.createSection => null,
     _TaskWorkspaceHeaderCommand.editQuadrantRules => null,
@@ -55,6 +57,8 @@ extension TaskSortX on TaskSort {
     TaskSort.title => '标题',
     TaskSort.createdAt => '创建时间',
     TaskSort.updatedAt => '修改时间',
+    // 嘀嗒《用标签管理任务》:122 的菜单措辞就是「按标签进行排序」。
+    TaskSort.tag => '标签',
   };
 
   /// 嘀嗒《03-用分组和排序管理任务》只在 `:169-176`「按创建时间排序」与
@@ -211,6 +215,7 @@ class TaskWorkspaceHeader extends StatelessWidget {
                     case _TaskWorkspaceHeaderCommand.title:
                     case _TaskWorkspaceHeaderCommand.createdAt:
                     case _TaskWorkspaceHeaderCommand.updatedAt:
+                    case _TaskWorkspaceHeaderCommand.tag:
                     case _TaskWorkspaceHeaderCommand.directionNewestFirst:
                     case _TaskWorkspaceHeaderCommand.directionOldestFirst:
                       break;
