@@ -688,60 +688,68 @@ class _TagRow extends ConsumerWidget {
     final controller = ref.watch(sidebarTaskDropControllerProvider);
     // 长按手势让给了拖拽（嘀嗒 :118）；动作表给读屏留这条 custom action 通道
     //（左滑对读屏不可达），specs/082 的可达性承诺不回退。
-    return Semantics(
-      customSemanticsActions: {
-        const CustomSemanticsAction(label: '置顶'): () {
-          showTagActions(context, ref, tag);
-        },
-      },
-      child: SidebarDropZone(
-        key: ValueKey('todo-sidebar-drop-tag-${tag.id}'),
-        hoverLabel: '打上标签「${tag.name}」',
-        accept: (_) => true,
-        onDrop: (task) async {
-          final outcome = await controller.addTagToTask(task, tag.id);
-          if (outcome != SidebarDropOutcome.failed || !context.mounted) return;
-          ScaffoldMessenger.of(context)
-            ..hideCurrentSnackBar()
-            ..showSnackBar(SnackBar(content: Text('打上「${tag.name}」失败')));
-        },
-        child: Dismissible(
-          // 嘀嗒《04-用标签管理任务》:79「在侧边栏左滑某个标签，会出现「置顶」、「编辑」和「删除」3个选项。」
-          // 本端左滑唤出「置顶」；编辑/删除在点标签行即到的一层（见 tag_actions.dart 顶部说明）。
-          // :118 的长按拖拽在标签分节的 ReorderableListView 上。
-          key: ValueKey('todo-sidebar-tag-swipe-${tag.id}'),
-          direction: DismissDirection.endToStart,
-          resizeDuration: null,
-          movementDuration: const Duration(milliseconds: 120),
-          confirmDismiss: (direction) async {
-            if (!context.mounted) return false;
-            await showTagActions(context, ref, tag);
-            return false;
+    // 右键（嘀嗒 :94）包在 Semantics 外层：读屏节点形状不因它改变；触屏不发出
+    // 次键，无需 desktopMode 门（看板卡片右键同一写法）。
+    return GestureDetector(
+      onSecondaryTapDown: (details) =>
+          showTagContextMenu(context, ref, tag, details.globalPosition),
+      child: Semantics(
+        customSemanticsActions: {
+          const CustomSemanticsAction(label: '置顶'): () {
+            showTagActions(context, ref, tag);
           },
-          background: Container(color: colors.surface),
-          secondaryBackground: Semantics(
-            key: const ValueKey('todo-sidebar-tag-swipe-actions'),
-            label: '左滑出现置顶',
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: const [
-                Icon(Icons.push_pin, size: 18),
-                SizedBox(width: 4),
-                Text('置顶', style: TextStyle(fontSize: 13)),
-                SizedBox(width: 12),
-              ],
+        },
+        child: SidebarDropZone(
+          key: ValueKey('todo-sidebar-drop-tag-${tag.id}'),
+          hoverLabel: '打上标签「${tag.name}」',
+          accept: (_) => true,
+          onDrop: (task) async {
+            final outcome = await controller.addTagToTask(task, tag.id);
+            if (outcome != SidebarDropOutcome.failed || !context.mounted) {
+              return;
+            }
+            ScaffoldMessenger.of(context)
+              ..hideCurrentSnackBar()
+              ..showSnackBar(SnackBar(content: Text('打上「${tag.name}」失败')));
+          },
+          child: Dismissible(
+            // 嘀嗒《04-用标签管理任务》:79「在侧边栏左滑某个标签，会出现「置顶」、「编辑」和「删除」3个选项。」
+            // 本端左滑唤出「置顶」；编辑/删除在点标签行即到的一层（见 tag_actions.dart 顶部说明）。
+            // :118 的长按拖拽在标签分节的 ReorderableListView 上。
+            key: ValueKey('todo-sidebar-tag-swipe-${tag.id}'),
+            direction: DismissDirection.endToStart,
+            resizeDuration: null,
+            movementDuration: const Duration(milliseconds: 120),
+            confirmDismiss: (direction) async {
+              if (!context.mounted) return false;
+              await showTagActions(context, ref, tag);
+              return false;
+            },
+            background: Container(color: colors.surface),
+            secondaryBackground: Semantics(
+              key: const ValueKey('todo-sidebar-tag-swipe-actions'),
+              label: '左滑出现置顶',
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: const [
+                  Icon(Icons.push_pin, size: 18),
+                  SizedBox(width: 4),
+                  Text('置顶', style: TextStyle(fontSize: 13)),
+                  SizedBox(width: 12),
+                ],
+              ),
             ),
-          ),
-          child: _SidebarRow(
-            rowKey: ValueKey('todo-sidebar-tag-${tag.id}'),
-            icon: Icons.label_outline,
-            label: tag.name,
-            selected: false,
-            colors: colors,
-            contentIndent: depth * TodoLayoutTokens.sidebarIconGap,
-            onTap: onTap,
-            // 不设 onLongPress：长按已被 ReorderableListView 的拖拽手柄占住
-            //（嘀嗒 :118 长按=拖拽）；动作表走左滑与外层 custom action。
+            child: _SidebarRow(
+              rowKey: ValueKey('todo-sidebar-tag-${tag.id}'),
+              icon: Icons.label_outline,
+              label: tag.name,
+              selected: false,
+              colors: colors,
+              contentIndent: depth * TodoLayoutTokens.sidebarIconGap,
+              onTap: onTap,
+              // 不设 onLongPress：长按已被 ReorderableListView 的拖拽手柄占住
+              //（嘀嗒 :118 长按=拖拽）；动作表走左滑与外层 custom action。
+            ),
           ),
         ),
       ),
