@@ -7,6 +7,20 @@ import '../../core/db/app_database.dart';
 import '../../core/sync/sync_change_queue.dart';
 import '../../core/sync/sync_entities.dart';
 
+/// 智能清单的三种显示状态（嘀嗒《02-用清单管理任务.md》:45）。
+///
+/// 放在仓储层而不是 UI：键与解码都归这里，侧栏与管理弹层共用同一份口径。
+enum SmartListVisibility {
+  /// 「显示」——也是缺键时的默认值。
+  show,
+
+  /// 「隐藏」。
+  hide,
+
+  /// 「有内容时显示」——内容判定由消费侧用自己的计数口径兑现。
+  auto,
+}
+
 /// 侧栏「显示标签」偏好（嘀嗒《01-任务/09-如何管理海量任务/04-用标签管理任务.md》:10/:16/:23/:27）。
 ///
 /// 与 `TaskSortPreferenceRepository` 同一套：`todo_view_preferences` 行 + `viewPreference` outbox，
@@ -78,6 +92,44 @@ class SidebarVisibilityRepository {
   Future<void> saveFilters({required bool showFilters}) =>
       _write(<String, Object>{_keyShowFilters: showFilters});
 
+  /// 智能清单三态的键前缀；键名 = `smartList.<SmartList 枚举名>`。
+  /// 用 String 而不是 SmartList 类型做参数，仓储层就不必反向依赖 UI 的枚举。
+  static const _smartKeyPrefix = 'smartList.';
+
+  /// 显式读三态映射；只含有值的键，缺键 = 默认「显示」。
+  Future<Map<String, SmartListVisibility>> getSmartListStates() async =>
+      _decodeSmartStates(
+        await (_db.select(_db.todoViewPreferences)..where(
+              (preference) =>
+                  preference.sourceType.equals(sourceType) &
+                  preference.sourceKey.equals(sourceKey),
+            ))
+            .getSingleOrNull(),
+      );
+
+  Stream<Map<String, SmartListVisibility>> watchSmartListStates() =>
+      (_db.select(_db.todoViewPreferences)..where(
+            (preference) =>
+                preference.sourceType.equals(sourceType) &
+                preference.sourceKey.equals(sourceKey),
+          ))
+          .watchSingleOrNull()
+          .map(_decodeSmartStates);
+
+  /// 嘀嗒《02-用清单管理任务.md》:20「收集箱是不可以被隐藏或删除」⇒
+  /// 写成显式守卫，不靠"恰好没有入口"。被拒的写入不留半条状态。
+  Future<void> saveSmartListState(
+    String smartListName,
+    SmartListVisibility state,
+  ) {
+    if (smartListName == 'inbox' && state != SmartListVisibility.show) {
+      throw ArgumentError('收集箱不可隐藏或删除（嘀嗒《02-用清单管理任务》:20）');
+    }
+    return _write(<String, Object>{
+      '$_smartKeyPrefix$smartListName': state.name,
+    });
+  }
+
   /// 两个开关共用同一行偏好 ⇒ 每个写方法只 patch 自己那个键。
   /// 原先那种 `jsonEncode({'showTags': …})` 整块覆盖的写法，在加第二个键之后就是缺陷：
   /// 用户改「过滤器」会被顺手把「标签」顶回默认值。
@@ -143,6 +195,23 @@ class SidebarVisibilityRepository {
     return map[key] == true;
   }
 
+  /// 三态映射：只收带前缀且值可辨认的键；缺键 = 「显示」由消费侧兜底。
+  /// 同步拉回来的行可能被服务端实体包一层，[_jsonMap] 已统一拆壳。
+  Map<String, SmartListVisibility> _decodeSmartStates(TodoViewPreference? row) {
+    final states = <String, SmartListVisibility>{};
+    _jsonMap(row).forEach((key, value) {
+      if (!key.startsWith(_smartKeyPrefix)) return;
+      final name = value is String ? value : null;
+      final state = SmartListVisibility.values
+          .where((v) => v.name == name)
+          .firstOrNull;
+      if (state != null) {
+        states[key.substring(_smartKeyPrefix.length)] = state;
+      }
+    });
+    return states;
+  }
+
   /// 旧行的键值。写之前先取这份，是为了 patch 而不是覆盖（见 [_write]）。
   Map<String, Object> _jsonMap(TodoViewPreference? row) {
     final raw = row?.valueJson;
@@ -160,7 +229,10 @@ class SidebarVisibilityRepository {
       if (map is Map<String, dynamic>) {
         return <String, Object>{
           for (final entry in map.entries)
-            if (entry.value is bool) entry.key: entry.value as bool,
+            // bool 是既有两键（showTags/showFilters），String 是智能清单三态。
+            // 放宽成"留 bool + String"时旧键不受影响；别的类型仍然丢弃。
+            if (entry.value is bool || entry.value is String)
+              entry.key: entry.value as Object,
         };
       }
     } on FormatException {
