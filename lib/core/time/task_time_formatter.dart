@@ -179,3 +179,54 @@ String _timeZoneLabel(TaskTimeMode mode, String? timeZone) {
   }
   return '本地时区';
 }
+
+/// 「固定时间」档的提醒触发瞬间（FL #371，矩阵 #12 面④）。
+///
+/// 收件箱里的 remindAt 是按锚点区墙上钟点落成的瞬间，直接交给系统调度的话，人出差后
+/// 仍在原瞬间响。嘀嗒《07-固定时间与固定时区.md:64》要的是「当地时间上午 7 点」：
+/// 先取锚点区读数，再按设备当前时区重算成触发瞬间。其余档位锚的就是瞬间本身，原样
+/// 返回；锚点区缺失或非法时退回原瞬间（与既有行为一致，不比现在更差）。
+///
+/// 生产路径的设备时区走 Dart 运行时的当地解释（`DateTime.toLocal()`，含 DST），
+/// 固定点两趟收敛；[deviceZone] 只给测试钉确定值用。
+DateTime reminderTriggerDateTime(
+  DateTime remindAt, {
+  required TaskTimeMode mode,
+  required String? timeZone,
+  timezone.Location? deviceZone,
+  DateTime Function()? now,
+}) {
+  if (mode != TaskTimeMode.fixedTime) return remindAt;
+  final anchor = _resolveLocation(timeZone);
+  if (anchor == null) return remindAt;
+  final wall = timezone.TZDateTime.from(remindAt.toUtc(), anchor);
+  final fields = DateTime.utc(
+    wall.year,
+    wall.month,
+    wall.day,
+    wall.hour,
+    wall.minute,
+    wall.second,
+    wall.millisecond,
+    wall.microsecond,
+  );
+  if (deviceZone != null) {
+    return timezone.TZDateTime(
+      deviceZone,
+      wall.year,
+      wall.month,
+      wall.day,
+      wall.hour,
+      wall.minute,
+      wall.second,
+      wall.millisecond,
+      wall.microsecond,
+    );
+  }
+  // 求 T 使 T 的当地钟点 == 锚点区读数：T = fields − offset(T)，两趟收敛
+  // （now 与 T 之间最多一道 DST 台阶）；全程用 UTC 表示避免本地字段的 DST 陷阱。
+  final clockNow = (now ?? DateTime.now)();
+  var candidate = fields.subtract(clockNow.timeZoneOffset);
+  candidate = fields.subtract(candidate.toLocal().timeZoneOffset);
+  return candidate;
+}

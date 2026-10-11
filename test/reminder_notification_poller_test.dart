@@ -303,74 +303,200 @@ void main() {
     expect(await Future.wait([first, second]), [0, 0]);
     expect(notifications.scheduled, hasLength(1));
   });
-  test(
-    '投递通知的通道调用不返回时 poll 有界返回，且不被 in-flight 永久占住',
-    () async {
-      // iOS 模拟器实测（10-04 04:57Z，空夹具、真后端）：提醒派发已在第 27 轮命中，
-      // 但 poll() 60 秒不返回，旅程一路挂到预算耗尽。修法见 _bounded：
-      // 每次系统调用设上限，拿不到就按「系统里没有」处理，下一轮再查。
-      final db = AppDatabase.forTesting(NativeDatabase.memory());
-      addTearDown(db.close);
-      final now = DateTime.utc(2026, 7, 29, 12);
-      await db
-          .into(db.todoLists)
-          .insert(
-            TodoListsCompanion.insert(
-              id: 'list-local',
-              serverId: const Value(101),
-              name: '收集箱',
-              updatedAt: now,
-              createdAt: now,
-            ),
-          );
-      await db
-          .into(db.todoTasks)
-          .insert(
-            TodoTasksCompanion.insert(
-              id: 'task-local',
-              serverId: const Value(201),
-              listId: 'list-local',
-              title: '本地任务标题',
-              updatedAt: now,
-              createdAt: now,
-            ),
-          );
-      final poller = ReminderNotificationPoller(
-        repository: _FakeReminderInboxRepository([
-          ReminderInboxItem(
-            id: 301,
-            taskId: 201,
-            taskTitle: '到期提醒',
-            remindAt: now.subtract(const Duration(minutes: 1)),
+  test('投递通知的通道调用不返回时 poll 有界返回，且不被 in-flight 永久占住', () async {
+    // iOS 模拟器实测（10-04 04:57Z，空夹具、真后端）：提醒派发已在第 27 轮命中，
+    // 但 poll() 60 秒不返回，旅程一路挂到预算耗尽。修法见 _bounded：
+    // 每次系统调用设上限，拿不到就按「系统里没有」处理，下一轮再查。
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final now = DateTime.utc(2026, 7, 29, 12);
+    await db
+        .into(db.todoLists)
+        .insert(
+          TodoListsCompanion.insert(
+            id: 'list-local',
+            serverId: const Value(101),
+            name: '收集箱',
+            updatedAt: now,
+            createdAt: now,
           ),
-        ]),
-        database: db,
-        notifications: _HangingScheduleNotificationService(),
-        stateStore: _MemoryReminderNotificationStateStore(),
-        notificationScope: 'tenant_user',
-        now: () => now,
-      );
+        );
+    await db
+        .into(db.todoTasks)
+        .insert(
+          TodoTasksCompanion.insert(
+            id: 'task-local',
+            serverId: const Value(201),
+            listId: 'list-local',
+            title: '本地任务标题',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    final poller = ReminderNotificationPoller(
+      repository: _FakeReminderInboxRepository([
+        ReminderInboxItem(
+          id: 301,
+          taskId: 201,
+          taskTitle: '到期提醒',
+          remindAt: now.subtract(const Duration(minutes: 1)),
+        ),
+      ]),
+      database: db,
+      notifications: _HangingScheduleNotificationService(),
+      stateStore: _MemoryReminderNotificationStateStore(),
+      notificationScope: 'tenant_user',
+      now: () => now,
+    );
 
-      // 上限是每次调用 10 秒，所以这里给 30 秒的外层判据：
-      // 修复前 poll() 永不返回（-1），修复后约 10 秒就有一条可读结果。
-      final first = await poller
-          .poll()
-          .timeout(const Duration(seconds: 30), onTimeout: () => -1);
-      expect(
-        first,
-        greaterThanOrEqualTo(0),
-        reason: '系统排期查询卡住时 poll 必须有界返回，不能把提醒链路挂死',
-      );
-      final second = await poller
-          .poll()
-          .timeout(const Duration(seconds: 30), onTimeout: () => -1);
-      expect(
-        second,
-        greaterThanOrEqualTo(0),
-        reason: '第一轮卡住后，第二轮不能被 _pollInFlight 永久占住',
-      );
-    },
-  );
+    // 上限是每次调用 10 秒，所以这里给 30 秒的外层判据：
+    // 修复前 poll() 永不返回（-1），修复后约 10 秒就有一条可读结果。
+    final first = await poller.poll().timeout(
+      const Duration(seconds: 30),
+      onTimeout: () => -1,
+    );
+    expect(
+      first,
+      greaterThanOrEqualTo(0),
+      reason: '系统排期查询卡住时 poll 必须有界返回，不能把提醒链路挂死',
+    );
+    final second = await poller.poll().timeout(
+      const Duration(seconds: 30),
+      onTimeout: () => -1,
+    );
+    expect(
+      second,
+      greaterThanOrEqualTo(0),
+      reason: '第一轮卡住后，第二轮不能被 _pollInFlight 永久占住',
+    );
+  });
+
+  test('固定时间档按设备当地钟点调度，同一触发只排一次', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    // 上海 2026-07-15 07:00 = UTC 2026-07-14 23:00；7 月中旬无 DST 切换。
+    // now 取两条候选触发的最坏下界之前：设备偏移可到 ±14h，换区前后的触发
+    // 瞬间（当地 07:00 与 19:00）都必须落在未来，poller 才会走持久调度分支。
+    final remindAt = DateTime.utc(2026, 7, 14, 23, 0);
+    final now = DateTime.utc(2026, 7, 13);
+    await db
+        .into(db.todoLists)
+        .insert(
+          TodoListsCompanion.insert(
+            id: 'list-local',
+            serverId: const Value(101),
+            name: '晨跑',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    await db
+        .into(db.todoTasks)
+        .insert(
+          TodoTasksCompanion.insert(
+            id: 'task-fixed',
+            serverId: const Value(209),
+            listId: 'list-local',
+            title: '晨跑',
+            updatedAt: now,
+            createdAt: now,
+            timeMode: const Value(2),
+            timeZone: const Value('Asia/Shanghai'),
+          ),
+        );
+    final notifications = _RecordingNotificationService();
+    final poller = ReminderNotificationPoller(
+      repository: _FakeReminderInboxRepository([
+        ReminderInboxItem(
+          id: 701,
+          taskId: 209,
+          taskTitle: '晨跑',
+          remindAt: remindAt,
+        ),
+      ]),
+      database: db,
+      notifications: notifications,
+      stateStore: _MemoryReminderNotificationStateStore(),
+      notificationScope: 'tenant_user',
+      now: () => now,
+    );
+
+    expect(await poller.poll(), 0);
+    expect(notifications.scheduled, hasLength(1));
+    final localWall = notifications.scheduled.single.fireAt.toLocal();
+    expect(localWall.hour, 7, reason: '嘀嗒 :64 出差也要当地时间 7 点提醒');
+    expect(localWall.minute, 0);
+    expect(localWall.day, 15);
+    expect(localWall.month, 7);
+    expect(localWall.year, 2026);
+
+    await poller.poll();
+    expect(notifications.scheduled, hasLength(1), reason: '同一触发瞬间不重排');
+  });
+
+  test('锚点区变化后触发瞬间重排（模拟用户换区）', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final remindAt = DateTime.utc(2026, 7, 14, 23, 0);
+    // 同上：两条触发（换区前当地 07:00、换区后当地 19:00）都要落在未来。
+    final now = DateTime.utc(2026, 7, 13);
+    await db
+        .into(db.todoLists)
+        .insert(
+          TodoListsCompanion.insert(
+            id: 'list-local',
+            serverId: const Value(101),
+            name: '晨跑',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    await db
+        .into(db.todoTasks)
+        .insert(
+          TodoTasksCompanion.insert(
+            id: 'task-fixed',
+            serverId: const Value(209),
+            listId: 'list-local',
+            title: '晨跑',
+            updatedAt: now,
+            createdAt: now,
+            timeMode: const Value(2),
+            timeZone: const Value('Asia/Shanghai'),
+          ),
+        );
+    final repository = _FakeReminderInboxRepository([
+      ReminderInboxItem(
+        id: 702,
+        taskId: 209,
+        taskTitle: '晨跑',
+        remindAt: remindAt,
+      ),
+    ]);
+    final notifications = _RecordingNotificationService();
+    final poller = ReminderNotificationPoller(
+      repository: repository,
+      database: db,
+      notifications: notifications,
+      stateStore: _MemoryReminderNotificationStateStore(),
+      notificationScope: 'tenant_user',
+      now: () => now,
+    );
+
+    expect(await poller.poll(), 0);
+    final first = notifications.scheduled.single.fireAt;
+
+    await (db.update(db.todoTasks)..where((row) => row.serverId.equals(209)))
+        .write(const TodoTasksCompanion(timeZone: Value('America/New_York')));
+    await poller.poll();
+
+    expect(notifications.scheduled, hasLength(2));
+    expect(
+      notifications.scheduled.last.fireAt.isAtSameMomentAs(first),
+      isFalse,
+      reason: '锚点区变了 ⇒ 锚点区读数变了 ⇒ 触发瞬间必须重排',
+    );
+  });
 }
 
 class _HangingScheduleNotificationService extends LocalNotificationService {
@@ -393,7 +519,6 @@ class _HangingScheduleNotificationService extends LocalNotificationService {
     String? tag,
   }) => Completer<bool>().future;
 }
-
 
 class _FakeReminderInboxRepository extends ReminderInboxRepository {
   _FakeReminderInboxRepository(this.items)

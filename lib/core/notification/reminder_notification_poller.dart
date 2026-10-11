@@ -4,6 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../state/repositories/reminder_inbox_repository.dart';
 import '../db/app_database.dart';
+import '../time/task_time_formatter.dart';
+import '../time/task_time_mode.dart';
 import 'local_notification_service.dart';
 
 abstract interface class ReminderNotificationStateStore {
@@ -147,19 +149,27 @@ class ReminderNotificationPoller {
       if (!item.pending) {
         continue;
       }
-      final isFuture = item.remindAt.isAfter(upcomingBoundary);
+      final task = await _database.taskByServerId(item.taskId);
+      // FL #371：「固定时间」档的触发瞬间要按设备当地钟点重解释（嘀嗒 :64），
+      // 其余档位原样返回。去重、到期判定、payload、系统调度全部用换算后的瞬间，
+      // 设备换区后触发瞬间变化 ⇒ 下一轮自动重排；服务端 remindAt 只作身份来源。
+      final trigger = reminderTriggerDateTime(
+        item.remindAt,
+        mode: TaskTimeMode.fromWire(task?.timeMode),
+        timeZone: task?.timeZone,
+      );
+      final isFuture = trigger.isAfter(upcomingBoundary);
       final alreadyHandled =
-          dispatchState[item.id] == item.remindAt ||
-          systemSchedules[item.id] == item.remindAt ||
+          dispatchState[item.id] == trigger ||
+          systemSchedules[item.id] == trigger ||
           (!isFuture && activeIds.contains(item.id));
       if (alreadyHandled) {
-        if (dispatchState[item.id] != item.remindAt) {
-          dispatchState[item.id] = item.remindAt;
+        if (dispatchState[item.id] != trigger) {
+          dispatchState[item.id] = trigger;
           stateChanged = true;
         }
         continue;
       }
-      final task = await _database.taskByServerId(item.taskId);
       final localTitle = task?.title.trim() ?? '';
       final remoteTitle = item.taskTitle.trim();
       final title = localTitle.isNotEmpty
@@ -167,13 +177,13 @@ class ReminderNotificationPoller {
           : (remoteTitle.isNotEmpty ? remoteTitle : '提醒');
       final payload =
           'reminder:${item.id}:$_notificationScope:'
-          '${item.remindAt.millisecondsSinceEpoch}:${item.taskId}';
+          '${trigger.millisecondsSinceEpoch}:${item.taskId}';
       final deliveryAttempt = isFuture
           ? _notifications.schedule(
               id: item.id,
               title: title,
               body: '到期提醒',
-              fireAt: item.remindAt,
+              fireAt: trigger,
               payload: payload,
               tag: notificationTag,
             )
@@ -189,7 +199,7 @@ class ReminderNotificationPoller {
       final delivered = await _bounded(deliveryAttempt, fallback: false);
       if (!delivered) continue;
       if (!isFuture) shown++;
-      dispatchState[item.id] = item.remindAt;
+      dispatchState[item.id] = trigger;
       stateChanged = true;
     }
     if (stateChanged) {

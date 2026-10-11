@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
+import 'package:timezone/timezone.dart' as timezone;
 
 import 'package:zh_cloud_todo_flutter/core/time/task_time_formatter.dart';
 import 'package:zh_cloud_todo_flutter/core/time/task_time_mode.dart';
@@ -119,6 +120,100 @@ void main() {
       );
       expect(wall.hour, 6);
       expect(wall.day, 1);
+    });
+  });
+
+  group('提醒触发瞬间（FL #371）', () {
+    // 上海 2026-07-15 07:00 = UTC 2026-07-14 23:00；7 月中旬两侧都没有 DST 切换。
+    final remindAt = DateTime.utc(2026, 7, 14, 23, 0);
+
+    test('「固定时间」把锚点区墙上钟点换到设备区：上海 07:00 → 洛杉矶当地 07:00', () {
+      final la = timezone.getLocation('America/Los_Angeles');
+      final trigger = reminderTriggerDateTime(
+        remindAt,
+        mode: TaskTimeMode.fixedTime,
+        timeZone: 'Asia/Shanghai',
+        deviceZone: la,
+      );
+      final laWall = timezone.TZDateTime.from(trigger.toUtc(), la);
+      expect(laWall.hour, 7, reason: '嘀嗒 :64 出差也要当地时间 7 点提醒');
+      expect(laWall.day, 15);
+      expect(trigger.toUtc(), DateTime.utc(2026, 7, 15, 14, 0));
+    });
+
+    test('设备区与锚点区同区时触发瞬间不变', () {
+      final shanghai = timezone.getLocation('Asia/Shanghai');
+      final trigger = reminderTriggerDateTime(
+        remindAt,
+        mode: TaskTimeMode.fixedTime,
+        timeZone: 'Asia/Shanghai',
+        deviceZone: shanghai,
+      );
+      expect(trigger.toUtc(), remindAt);
+    });
+
+    test('跨 DST 的冬季档：上海 1 月 07:00 → 洛杉矶 PST 当地 07:00', () {
+      final la = timezone.getLocation('America/Los_Angeles');
+      final janRemindAt = DateTime.utc(2026, 1, 14, 23, 0);
+      final trigger = reminderTriggerDateTime(
+        janRemindAt,
+        mode: TaskTimeMode.fixedTime,
+        timeZone: 'Asia/Shanghai',
+        deviceZone: la,
+      );
+      final laWall = timezone.TZDateTime.from(trigger.toUtc(), la);
+      expect(laWall.hour, 7);
+      expect(laWall.day, 15);
+      expect(laWall.month, 1);
+      expect(trigger.toUtc(), DateTime.utc(2026, 1, 15, 15, 0));
+    });
+
+    test('生产路径（不注入设备区）触发瞬间的当地钟点等于锚点区读数', () {
+      final trigger = reminderTriggerDateTime(
+        remindAt,
+        mode: TaskTimeMode.fixedTime,
+        timeZone: 'Asia/Shanghai',
+        now: () => DateTime.utc(2026, 7, 20, 3, 0),
+      );
+      final localWall = trigger.toLocal();
+      expect(localWall.hour, 7);
+      expect(localWall.minute, 0);
+      expect(localWall.day, 15);
+      expect(localWall.month, 7);
+      expect(localWall.year, 2026);
+    });
+
+    test('浮动与「固定时区」锚的是瞬间本身，原样返回', () {
+      for (final mode in [TaskTimeMode.floating, TaskTimeMode.fixedTimezone]) {
+        expect(
+          reminderTriggerDateTime(
+            remindAt,
+            mode: mode,
+            timeZone: 'Asia/Shanghai',
+          ),
+          remindAt,
+          reason: '$mode 不做设备区重解释',
+        );
+      }
+    });
+
+    test('锚点区缺失或非法时回退原瞬间，不比既有行为更差', () {
+      expect(
+        reminderTriggerDateTime(
+          remindAt,
+          mode: TaskTimeMode.fixedTime,
+          timeZone: null,
+        ),
+        remindAt,
+      );
+      expect(
+        reminderTriggerDateTime(
+          remindAt,
+          mode: TaskTimeMode.fixedTime,
+          timeZone: 'Not/AZone',
+        ),
+        remindAt,
+      );
     });
   });
 }
