@@ -32,6 +32,7 @@ import 'repositories/template_repository.dart';
 import 'repositories/task_capture_defaults_repository.dart';
 import 'repositories/task_repository.dart';
 import 'repositories/task_section_repository.dart';
+import 'repositories/task_grouping_preference_repository.dart';
 import 'repositories/task_sort_preference_repository.dart';
 import 'repositories/sidebar_visibility_repository.dart';
 import 'repositories/task_view_action_repository.dart';
@@ -357,6 +358,14 @@ final taskSortPreferenceRepositoryProvider =
       final queue = ref.watch(syncChangeQueueProvider);
       if (db == null || queue == null) return null;
       return TaskSortPreferenceRepository(db, queue);
+    });
+
+final taskGroupingPreferenceRepositoryProvider =
+    Provider<TaskGroupingPreferenceRepository?>((ref) {
+      final db = ref.watch(appDatabaseProvider);
+      final queue = ref.watch(syncChangeQueueProvider);
+      if (db == null || queue == null) return null;
+      return TaskGroupingPreferenceRepository(db, queue);
     });
 
 /// 「设置 → 日期与时间 → 时区」总开关的仓储（specs/055 / FL #368）。
