@@ -12,20 +12,30 @@ class BatchTagPickerSheet extends StatefulWidget {
     super.key,
     required this.tags,
     required this.onCreate,
+    this.initialSelected = const <String>{},
   });
 
   final List<TodoTag> tags;
   final Future<TodoTag> Function(String name) onCreate;
 
+  /// 预选中的标签 id。编辑单个任务时必须传当前已挂集合：
+  /// 表的应用语义是 `setTaskTags` 全量替换，不预选就会把旧标签静默清掉。
+  final Set<String> initialSelected;
+
   static Future<List<String>?> show(
     BuildContext context, {
     required List<TodoTag> tags,
     required Future<TodoTag> Function(String name) onCreate,
+    Set<String> initialSelected = const <String>{},
   }) {
     return showModalBottomSheet<List<String>>(
       context: context,
       showDragHandle: true,
-      builder: (_) => BatchTagPickerSheet(tags: tags, onCreate: onCreate),
+      builder: (_) => BatchTagPickerSheet(
+        tags: tags,
+        onCreate: onCreate,
+        initialSelected: initialSelected,
+      ),
     );
   }
 
@@ -36,7 +46,7 @@ class BatchTagPickerSheet extends StatefulWidget {
 class _BatchTagPickerSheetState extends State<BatchTagPickerSheet> {
   final _controller = TextEditingController();
   late final List<TodoTag> _available = [...widget.tags];
-  final Set<String> _selected = <String>{};
+  late final Set<String> _selected = <String>{...widget.initialSelected};
   String? _error;
   var _creating = false;
 
@@ -59,7 +69,9 @@ class _BatchTagPickerSheetState extends State<BatchTagPickerSheet> {
     });
     try {
       final existing = _available.where((tag) => tag.name == name);
-      final tag = existing.isNotEmpty ? existing.first : await widget.onCreate(name);
+      final tag = existing.isNotEmpty
+          ? existing.first
+          : await widget.onCreate(name);
       if (!mounted) return;
       setState(() {
         if (!_available.any((item) => item.id == tag.id)) _available.add(tag);
@@ -119,9 +131,7 @@ class _BatchTagPickerSheetState extends State<BatchTagPickerSheet> {
             ),
             Expanded(
               child: _available.isEmpty
-                  ? const Center(
-                      child: Text('还没有标签，用上面一行建一个'),
-                    )
+                  ? const Center(child: Text('还没有标签，用上面一行建一个'))
                   : ListView(
                       children: [
                         for (final tag in _available)
@@ -146,9 +156,9 @@ class _BatchTagPickerSheetState extends State<BatchTagPickerSheet> {
                 width: double.infinity,
                 child: ElevatedButton(
                   key: const Key('todo-batch-apply-tags'),
-                  onPressed: () => Navigator.of(context).pop(
-                    _selected.toList(growable: false),
-                  ),
+                  onPressed: () => Navigator.of(
+                    context,
+                  ).pop(_selected.toList(growable: false)),
                   child: const Text('应用标签'),
                 ),
               ),

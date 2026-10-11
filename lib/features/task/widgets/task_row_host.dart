@@ -7,9 +7,10 @@ import '../../../core/time/task_time_formatter.dart';
 import '../../../core/time/task_time_mode.dart';
 import '../../../state/providers.dart';
 import '../../pomodoro/pomodoro_page.dart';
+import '../../tag/batch_tag_picker_sheet.dart';
 import 'task_row.dart';
 
-enum _TaskRowContextAction { startPomodoro, more }
+enum _TaskRowContextAction { startPomodoro, tags, more }
 
 /// Provider-aware adapter that assembles row data and reports task actions.
 class TaskRowHost extends ConsumerStatefulWidget {
@@ -288,6 +289,11 @@ class _TaskRowHostState extends ConsumerState<TaskRowHost> {
             child: Text('开始专注'),
           ),
         const PopupMenuItem(
+          value: _TaskRowContextAction.tags,
+          key: Key('todo-task-context-tags'),
+          child: Text('标签'),
+        ),
+        const PopupMenuItem(
           value: _TaskRowContextAction.more,
           child: Text('更多操作'),
         ),
@@ -298,9 +304,45 @@ class _TaskRowHostState extends ConsumerState<TaskRowHost> {
       case _TaskRowContextAction.startPomodoro:
         _startPomodoro(context);
         return;
+      case _TaskRowContextAction.tags:
+        await _pickTags(context);
+        return;
       case _TaskRowContextAction.more:
         await _showMoreMenu(context);
         return;
+    }
+  }
+
+  /// 嘀嗒 :57「右键单击任务，选择「标签」添加已有标签或创建新标签」：
+  /// 复用批量「设置标签」那张表（表内有新建一行），应用 = `setTaskTags`
+  /// 全量替换，与详情 `_TagChips` 同语义，所以要预选当前已挂标签。
+  Future<void> _pickTags(BuildContext context) async {
+    final tagRepo = ref.read(tagRepositoryProvider);
+    if (tagRepo == null) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('标签暂不可用，请稍后重试')));
+      return;
+    }
+    final tags = await tagRepo.getAll();
+    if (!context.mounted) return;
+    final currentIds = await tagRepo.tagIdsOf(widget.task.id);
+    if (!context.mounted) return;
+    final selected = await BatchTagPickerSheet.show(
+      context,
+      tags: tags,
+      initialSelected: currentIds.toSet(),
+      onCreate: (name) => tagRepo.create(name: name),
+    );
+    if (selected == null || !context.mounted) return;
+    try {
+      await tagRepo.setTaskTags(widget.task.id, selected);
+    } on Object {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('标签保存失败，请重试')));
     }
   }
 
