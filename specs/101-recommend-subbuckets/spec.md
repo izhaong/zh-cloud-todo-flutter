@@ -31,6 +31,7 @@ service #300（PR !352，`daa385c083b4`）把 LONG_UNFINISHED 准入降到 7 天
 
 - 页面 3 个新用例（⑥ 档序不跟 score + 未分桶行、⑦ 三档 + 改 2 次未分桶、⑧ 三档 + 档内降序 + 档头 header）。
 - 仓储 2 个新用例（三列 round-trip、`fromJson` epoch 毫秒与缺列兜底）。
-- 迁移 1 个新用例（v27→v28 三列、存量行 null 不回填，`_downgradeToSchema27WithoutRecommendationContractColumns` 降级辅助）。
+- 迁移用例：v27→v28 给 `todo_recommendations` 加三列，存量行 null 不回填（降级辅助
+  `_downgradeToSchema27WithoutRecommendationContractColumns`）。
 - 变异探针 4 条证红还原：⑥ 档序互换、⑦ 门槛 6→9、⑧ 档界 31→25（31→26 不跨测试行，第一次探针假绿已换）、⑧ 档内排序短路。
 - 门禁：`flutter analyze` 0 issue + `flutter test` 全量（结果记在 tasks.md T004）。
