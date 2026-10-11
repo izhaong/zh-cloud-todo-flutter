@@ -12,6 +12,7 @@ import '../../core/sync/sync_entities.dart';
 class TodoFilterConditions {
   const TodoFilterConditions({
     this.listIds = const [],
+    this.folderIds = const [],
     this.tagIds = const [],
     this.tagLogic,
     this.conditionLogics,
@@ -22,6 +23,11 @@ class TodoFilterConditions {
   });
 
   final List<String> listIds;
+
+  /// 服务端文件夹 id（`todo_filter.conditions.folderIds`，FL Issue #527）。
+  /// 本地筛选态存的是文件夹**本地主键**，这里存的是**服务端 id** ——
+  /// 只有服务端 id 才跨设备互通，所以两侧映射必须显式做（见 `saved_filter_mapping.dart`）。
+  final List<int> folderIds;
   final List<String> tagIds;
 
   /// 标签条件内部的逻辑词，只存服务端词表的两个值（`and` / `or`）。
@@ -40,6 +46,7 @@ class TodoFilterConditions {
 
   Map<String, dynamic> toJson() => {
     if (listIds.isNotEmpty) 'listIds': listIds,
+    if (folderIds.isNotEmpty) 'folderIds': folderIds,
     if (tagIds.isNotEmpty) 'tagIds': tagIds,
     if (tagLogic != null) 'tagLogic': tagLogic,
     if (priorities.isNotEmpty) 'priorities': priorities,
@@ -56,6 +63,7 @@ class TodoFilterConditions {
     final unsupported = <String>{};
     final known = {
       'listIds',
+      'folderIds',
       'tagIds',
       'tagLogic',
       'conditionLogics',
@@ -80,10 +88,25 @@ class TodoFilterConditions {
     } else {
       unsupported.add('conditionLogics');
     }
+    // `folderIds` 只认「数组 + 每一项都是整数」。`_ints` 那种宽容读法在这里会把
+    // `["41"]` 或 `[41.5]` 折算成 41 —— 折算就是替用户换了一个文件夹，
+    // 宁可退回 unsupportedKeys 让 UI 标「本机暂不支持套用」。
+    final rawFolderIds = json['folderIds'];
+    List<int> folderIds;
+    if (rawFolderIds == null) {
+      folderIds = const [];
+    } else if (rawFolderIds is List &&
+        rawFolderIds.every((item) => item is int)) {
+      folderIds = List<int>.from(rawFolderIds);
+    } else {
+      unsupported.add('folderIds');
+      folderIds = const [];
+    }
     final rawRange = json['dateRange'];
     return (
       conditions: TodoFilterConditions(
         listIds: _strings(json['listIds']),
+        folderIds: folderIds,
         tagIds: _strings(json['tagIds']),
         tagLogic: json['tagLogic']?.toString(),
         priorities: _ints(json['priorities']),

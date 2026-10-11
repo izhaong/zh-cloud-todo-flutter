@@ -86,6 +86,7 @@ void main() {
     final restored = taskFilterFromSaved(
       const TodoFilterConditions(tagIds: ['work', 'urgent']),
       unsupportedKeys: <String>{},
+      folderLocalByServerId: const {},
     );
     expect(restored, isNotNull);
     expect(restored!.tagIds, ['work', 'urgent']);

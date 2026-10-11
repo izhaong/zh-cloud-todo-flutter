@@ -502,6 +502,27 @@ final foldersStreamProvider = StreamProvider<List<TodoFolder>>((ref) {
   return repo.watchAll();
 });
 
+/// 文件夹本地主键 → 服务端 id，供「已保存过滤器」写 `folderIds`（FL Issue #527）。
+///
+/// **还没发值时返回 null**，不给空表：空表会被读成「这个文件夹没有服务端 id」，
+/// 用户看到的点名就成了假话（真正的原因是索引还没就绪，稍后再保存就好）。
+final folderServerIdIndexProvider = Provider<Map<String, int>?>((ref) {
+  final folders = ref.watch(foldersStreamProvider).valueOrNull;
+  if (folders == null) return null;
+  return {
+    for (final folder in folders)
+      if (folder.serverId != null) folder.id: folder.serverId!,
+  };
+});
+
+/// 同一个索引的反向：服务端 id → 本地主键，供套用已保存过滤器时还原 `folderId`。
+/// 同样在索引未就绪时返回 null，调用方据此判「本机暂不支持套用」而不是套成不限文件夹。
+final folderLocalIdByServerIdProvider = Provider<Map<int, String>?>((ref) {
+  final index = ref.watch(folderServerIdIndexProvider);
+  if (index == null) return null;
+  return {for (final e in index.entries) e.value: e.key};
+});
+
 /// 标签列表 stream。
 final tagsStreamProvider = StreamProvider<List<TodoTag>>((ref) {
   final repo = ref.watch(tagRepositoryProvider);

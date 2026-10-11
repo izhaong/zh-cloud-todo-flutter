@@ -17,12 +17,20 @@ import 'package:zh_cloud_todo_flutter/state/repositories/filter_repository.dart'
 ///    也不许静默丢掉」。
 void main() {
   Map<String, dynamic> jsonOf(TaskFilter filter) =>
-      jsonDecode(jsonEncode(savedFilterOf(filter).conditions.toJson()))
+      jsonDecode(
+            jsonEncode(
+              savedFilterOf(
+                filter,
+                folderServerIds: const {},
+              ).conditions.toJson(),
+            ),
+          )
           as Map<String, dynamic>;
 
   // 「一个字节都不变」这种主张只能拿字符串比字符串：jsonEncode 不转义中文，键序即 toJson 的书写序。
-  String jsonText(TaskFilter filter) =>
-      jsonEncode(savedFilterOf(filter).conditions.toJson());
+  String jsonText(TaskFilter filter) => jsonEncode(
+    savedFilterOf(filter, folderServerIds: const {}).conditions.toJson(),
+  );
 
   test('没有跨条件词时不出键：本轮改动前已存在的过滤器 JSON 一个字节都不变', () {
     expect(
@@ -53,6 +61,7 @@ void main() {
         keyword: '周报',
         conditionLogics: {'keyword': 'or'},
       ),
+      folderServerIds: const {},
     );
     expect(mapped.skipped, isEmpty, reason: '这条是合法形状，不该拦着用户保存');
     expect(mapped.conditions.conditionLogics, {'keyword': 'or'});
@@ -75,6 +84,7 @@ void main() {
         keyword: '周报',
         conditionLogics: {'priorities': 'or'},
       ),
+      folderServerIds: const {},
     );
     expect(
       mapped.skipped,
@@ -92,6 +102,7 @@ void main() {
     // 只启用了 priorities；词挂 tagIds ⇒ 服务端 validateLogicPlacement 判非法。
     final mapped = savedFilterOf(
       const TaskFilter(priority: 3, conditionLogics: {'tagIds': 'or'}),
+      folderServerIds: const {},
     );
     expect(
       mapped.skipped.any((item) => item.contains('tagIds')),
@@ -107,6 +118,7 @@ void main() {
         keyword: '周报',
         conditionLogics: {'priorities': 'or', 'keyword': 'or'},
       ),
+      folderServerIds: const {},
     );
     expect(
       mapped.skipped.any((item) => item.contains('priorities')),
@@ -123,6 +135,7 @@ void main() {
           keyword: '周报',
           conditionLogics: {'keyword': 'OR'},
         ),
+        folderServerIds: const {},
       ).conditions.conditionLogics,
       {'keyword': 'or'},
     );
@@ -147,6 +160,7 @@ void main() {
     final restored = taskFilterFromSaved(
       parsed.conditions,
       unsupportedKeys: parsed.unsupportedKeys,
+      folderLocalByServerId: const {},
     );
     expect(restored, isNotNull);
     expect(restored!.isConditionOr('keyword'), isTrue);
@@ -163,6 +177,7 @@ void main() {
       taskFilterFromSaved(
         parsed.conditions,
         unsupportedKeys: parsed.unsupportedKeys,
+        folderLocalByServerId: const {},
       ),
       isNull,
       reason: '「xor」既不是 and 也不是 or（服务端 validateLogicWords 直接抛错）',
@@ -179,6 +194,7 @@ void main() {
       taskFilterFromSaved(
         parsed.conditions,
         unsupportedKeys: parsed.unsupportedKeys,
+        folderLocalByServerId: const {},
       ),
       isNull,
       reason: '负责人在契约里存不下，挂在这个名字上的词无从解释',
@@ -200,6 +216,7 @@ void main() {
       taskFilterFromSaved(
         parsed.conditions,
         unsupportedKeys: parsed.unsupportedKeys,
+        folderLocalByServerId: const {},
       ),
       isNull,
     );
@@ -225,7 +242,10 @@ void main() {
       isFalse,
     );
     expect(
-      savedFilterOf(const TaskFilter(priority: 3, conditionLogics: {})).skipped,
+      savedFilterOf(
+        const TaskFilter(priority: 3, conditionLogics: {}),
+        folderServerIds: const {},
+      ).skipped,
       isEmpty,
       reason: '空表 = 没有跨条件词，不该拦保存',
     );

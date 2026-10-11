@@ -5,11 +5,30 @@ import 'filter_bar.dart';
 
 /// 本机筛选态 ↔ 服务端 `todo_filter.conditions` 契约的双向映射。
 /// 契约里放不下的维度必须回报给 UI，不能静默存成半个过滤器。
+///
+/// [folderServerIds] 是「文件夹本地主键 → 服务端 id」索引（`folderServerIdIndexProvider`）。
+/// 传 null 表示本机文件夹索引还没发值 —— 那与「查不到」是两件事，文案要分开：
+/// 前者稍后再保存就好，后者是这个文件夹真的还没同步上去。
 ({TodoFilterConditions conditions, List<String> skipped}) savedFilterOf(
-  TaskFilter filter,
-) {
+  TaskFilter filter, {
+  required Map<String, int>? folderServerIds,
+}) {
   final skipped = <String>[];
-  if (filter.folderId != null) skipped.add('文件夹');
+  List<int> folderIds = const [];
+  if (filter.folderId != null) {
+    final serverId = folderServerIds == null
+        ? null
+        : folderServerIds[filter.folderId];
+    if (folderServerIds == null) {
+      skipped.add('文件夹条件：本机文件夹索引还没就绪，稍后再保存');
+    } else if (serverId == null) {
+      // 离线新建的文件夹还没有服务端 id：存成「没有文件夹条件」是替用户改条件，
+      // 存本地主键则别的端读不懂、服务端还会按未知 id 交集为空筛出空集。都不许——点名。
+      skipped.add('文件夹「${filter.folderId}」还没同步到服务端');
+    } else {
+      folderIds = [serverId];
+    }
+  }
   if (filter.assigneeUserId != null) skipped.add('负责人');
   final preset = filter.dueRange == 'today' ? 'today' : null;
   if (filter.dueRange != null && preset == null) {
@@ -47,6 +66,7 @@ import 'filter_bar.dart';
   return (
     conditions: TodoFilterConditions(
       listIds: filter.listId == null ? const [] : [filter.listId!],
+      folderIds: folderIds,
       tagIds: filter.tagIds,
       // 「且」不写键（等价于服务端的缺省 AND）；写出去的值一律归到词表内的小写形式。
       tagLogic: filter.tagsMatchAny ? tagLogicOr : null,
@@ -66,10 +86,24 @@ import 'filter_bar.dart';
 TaskFilter? taskFilterFromSaved(
   TodoFilterConditions conditions, {
   required Set<String> unsupportedKeys,
+  required Map<int, String>? folderLocalByServerId,
 }) {
   if (unsupportedKeys.isNotEmpty) return null;
   if (conditions.listIds.length > 1) return null;
   if (conditions.priorities.length > 1) return null;
+  // 本机筛选态的文件夹条件是**单选**（`TaskFilter.folderId`），契约是数组：
+  // 多于一项就还原不出忠实条件——挑一个是替用户改条件，全丢等于删掉一条条件。
+  String? restoredFolderId;
+  if (conditions.folderIds.isNotEmpty) {
+    if (conditions.folderIds.length > 1) return null;
+    final localId = folderLocalByServerId == null
+        ? null
+        : folderLocalByServerId[conditions.folderIds.single];
+    // 反查不到（这个文件夹在本机不存在，或索引还没发值）就整份不套 ——
+    // 套成「不限文件夹」等于凭空删掉用户唯一的那条条件。
+    if (localId == null) return null;
+    restoredFolderId = localId;
+  }
   // tagIds 如今真的参与求值（Issue #417 在 `applyTaskFilter` 里补了标签分支），
   // 所以带标签的已存过滤器可以套用，不再一律标「不支持」。
 
@@ -99,6 +133,7 @@ TaskFilter? taskFilterFromSaved(
   if (preset != null && preset != 'today') return null;
   return TaskFilter(
     listId: conditions.listIds.isEmpty ? null : conditions.listIds.single,
+    folderId: restoredFolderId,
     tagIds: conditions.tagIds,
     tagLogic: loweredTagLogic ?? tagLogicAnd,
     conditionLogics: conditions.conditionLogics ?? const {},
@@ -147,6 +182,9 @@ String savedFilterSummary(
   final parts = <String>[];
   if (conditions.listIds.isNotEmpty) {
     parts.add('清单 ${conditions.listIds.length} 个');
+  }
+  if (conditions.folderIds.isNotEmpty) {
+    parts.add('文件夹 ${conditions.folderIds.length} 个');
   }
   if (conditions.tagIds.isNotEmpty) {
     parts.add('标签 ${conditions.tagIds.length} 个');
