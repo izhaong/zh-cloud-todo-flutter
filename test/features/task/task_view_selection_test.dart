@@ -83,7 +83,9 @@ void main() {
     await tester.tap(personalList);
     await tester.pumpAndSettle();
 
-    expect(find.byType(ReorderableListView), findsOneWidget);
+    // 钉任务列表自己的滚动视图：侧栏标签分节（specs/088）也有一个
+    // ReorderableListView，按类型数会数到 2。
+    expect(find.byKey(const Key('todo-task-list-scroll')), findsOneWidget);
     expect(find.text('未开始'), findsNothing);
 
     await _switchWorkspaceMode(tester, TaskViewMode.timeline);

@@ -1747,6 +1747,10 @@ class SyncCoordinator {
       isPinned: Value(
         payload['isPinned'] as bool? ?? existing?.isPinned ?? false,
       ),
+      // 缺键保留本地值：另一端没重排过的 upsert 不该把本地已排的位次归零。
+      sortOrder: Value(
+        (payload['sortOrder'] as num?)?.toInt() ?? existing?.sortOrder ?? 0,
+      ),
       updatedAt: Value(now),
       createdAt: Value(existing?.createdAt ?? now),
     );

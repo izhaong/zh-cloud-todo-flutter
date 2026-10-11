@@ -93,7 +93,7 @@ void main() {
   test('库表升到 v26：todo_lists 仍带 is_pinned 列（specs/082 把 schema 又推了一格）', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
-    expect(db.schemaVersion, 26, reason: '标签置顶位把 schema 推到 v26，清单列不能被回退');
+    expect(db.schemaVersion, 27, reason: '标签置顶位/位次列把 schema 推到 v27，清单列不能被回退');
     final cols = await db.customSelect('PRAGMA table_info(todo_lists)').get();
     final names = cols.map((r) => r.data['name'] as String).toSet();
     expect(names, contains('is_pinned'), reason: '建表必须带置顶列');

@@ -136,6 +136,10 @@ class TodoTags extends Table {
   TextColumn get name => text()();
   TextColumn get color => text().nullable()();
   BoolColumn get isPinned => boolean().withDefault(const Constant(false))();
+
+  /// 服务端同名列 `todo_tag.sort_order`，排序语义 `sort_order DESC`（值大在前），
+  /// 出库 payload 走 `toJson()`。
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
   DateTimeColumn get updatedAt => dateTime()();
   DateTimeColumn get createdAt => dateTime()();
 
@@ -446,7 +450,7 @@ class AppDatabase extends _$AppDatabase {
   }) : super(_open(_userDatabaseName(tenantId, userId, testNamespace)));
 
   @override
-  int get schemaVersion => 26;
+  int get schemaVersion => 27;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -707,6 +711,13 @@ class AppDatabase extends _$AppDatabase {
         if (!await _columnExists(m, 'todo_tags', 'is_pinned')) {
           await m.addColumn(todoTags, todoTags.isPinned);
           // 同上一条口径：标签侧本来没有置顶位，未置顶即存量真实状态，不回填。
+        }
+      }
+      if (from < 27) {
+        if (!await _columnExists(m, 'todo_tags', 'sort_order')) {
+          await m.addColumn(todoTags, todoTags.sortOrder);
+          // 不回填：存量全 0 时并列塌到 createdAt ASC，升级前后界面顺序一致；
+          // 也避免迁移即向服务端推出全量 upsert。重排过的组才有显式位次并随 outbox 同步。
         }
       }
     },

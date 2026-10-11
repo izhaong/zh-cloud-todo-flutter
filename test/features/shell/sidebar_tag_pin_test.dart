@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
@@ -111,13 +112,29 @@ void main() {
     expect(find.text('置顶'), findsWidgets);
   });
 
-  testWidgets('长按给出同一动作表（读屏与桌面靠它，不只手势）', (tester) async {
+  /// 长按手势已被标签分节的 ReorderableListView 拖拽占用（specs/088），
+  /// 动作表给读屏留 `CustomSemanticsAction` 通道；动作表本体的行为由左滑用例覆盖。
+  testWidgets('读屏自定义动作「置顶」挂在标签行上（长按已改给拖拽）', (tester) async {
     await _pump(tester);
+    final handle = tester.ensureSemantics();
     await _revealRow(tester, TodoVisualFixture.reviewTagId);
-    await tester.longPress(_row(TodoVisualFixture.reviewTagId));
-    await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('sidebar-tag-action-pin')), findsOneWidget);
+    expect(
+      tester.getSemantics(_row(TodoVisualFixture.reviewTagId)),
+      matchesSemantics(
+        label: '评审',
+        hasTapAction: true,
+        hasFocusAction: true,
+        hasScrollLeftAction: true,
+        hasScrollRightAction: true,
+        isFocusable: true,
+        customActions: <CustomSemanticsAction>[
+          const CustomSemanticsAction(label: '置顶'),
+        ],
+      ),
+      reason: '失去长按入口后，读屏通道必须仍能到达动作表',
+    );
+    handle.dispose();
   });
 
   testWidgets('点「置顶」：落库并把该标签排到最前', (tester) async {
