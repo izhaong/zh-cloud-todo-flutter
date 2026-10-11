@@ -13,4 +13,7 @@
   （2026-10-12 实测，日志 /tmp/fl321-gate2.log；首跑 7 张 workspace golden 红，
   isolatedDiff 确认差异仅头部新按钮，重录后全绿）
 - [x] T005 `check_spec_selfscan.py` 单文件自扫：spec.md / tasks.md 失项 0 条（rc=0）
-- [ ] T006 PR → 合并 develop → 关 #321 → 矩阵 #20 追记（docs PR）→ 父仓 bump
+- [x] T006 收口全链完成（2026-10-12）：PR !550 合并 develop（`aaec68166517`）→
+  #321 关单（收口留言 id 13316）→ 矩阵 #20 翻「有」（docs PR !179，develop
+  `9ce1e409c96e`，缺口 58→57）→ 父仓双指针 bump（FL `aaec68166517` + docs
+  `9ce1e409c96e`，见父仓 develop 本轮 chore 提交）
