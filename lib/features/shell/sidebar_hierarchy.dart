@@ -51,3 +51,22 @@ List<SidebarHierarchyEntry<T>> flattenSidebarHierarchy<T>(
   }
   return result;
 }
+
+/// The folder itself plus every ancestor above it — the client-side half of the
+/// same rule the server applies to `folderIds` (zh-cloud-service Issue #344):
+/// picking a parent folder means picking its whole subtree, so a list that lives
+/// in a child folder must still be reachable from the parent.
+///
+/// The walk stops at the first unknown id (kept as-is) and `visited` bounds it,
+/// so a malformed parent chain degrades to a finite set instead of looping.
+Set<String> folderAndAncestors(
+  String folderId,
+  Map<String, String?> parentOf,
+) {
+  final chain = <String>{folderId};
+  String? current = parentOf[folderId];
+  while (current != null && chain.add(current)) {
+    current = parentOf[current];
+  }
+  return chain;
+}
