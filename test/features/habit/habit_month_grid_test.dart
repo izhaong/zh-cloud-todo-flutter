@@ -504,6 +504,11 @@ class _FakeHabitRepository implements HabitRepository {
     int habitId, {
     String period = 'WEEK',
   }) async {
+    // #377 的「打卡数据」卡片会在详情页额外拉一次 YEAR：竞态队列/闸门
+    // 只对当月表（MONTH）成立，其它档位直接回空，不掺进 statsCalls 计数。
+    if (period != 'MONTH') {
+      return {'dailyCounts': const <Map<String, dynamic>>[], 'period': period};
+    }
     statsCalls += 1;
     final index = statsCalls - 2;
     if (index >= 0 && index < queuedCounts.length) {
