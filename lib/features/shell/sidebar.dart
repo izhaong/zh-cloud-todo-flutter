@@ -13,6 +13,7 @@ import '../../state/providers.dart';
 import '../../state/repositories/sidebar_visibility_repository.dart';
 import '../folder/folder_actions.dart';
 import '../list/list_actions.dart';
+import '../list/list_color.dart';
 import '../list/list_editor_sheet.dart';
 import '../tag/tag_actions.dart';
 import 'section.dart';
@@ -823,6 +824,9 @@ class _ListRow extends ConsumerWidget {
           label: list.name,
           selected: selected,
           colors: colors,
+          // 嘀嗒《02-用清单管理任务》:73：清单颜色体现在行首图标上；
+          // 未设色保持选中 accent / 未选中 muted 的既有语义。
+          iconColor: listColorFromHex(list.color),
           onTap: onTap,
           onLongPress: () => showListActions(context, ref, list),
         ),
@@ -839,6 +843,7 @@ class _SidebarRow extends StatefulWidget {
     required this.selected,
     required this.colors,
     required this.onTap,
+    this.iconColor,
     this.trailing,
     this.contentIndent = 0,
     this.onLongPress,
@@ -850,6 +855,7 @@ class _SidebarRow extends StatefulWidget {
   final bool selected;
   final AppColors colors;
   final VoidCallback onTap;
+  final Color? iconColor;
   final Widget? trailing;
   final double contentIndent;
   final VoidCallback? onLongPress;
@@ -909,9 +915,11 @@ class _SidebarRowState extends State<_SidebarRow> {
                     Icon(
                       widget.icon,
                       size: TodoLayoutTokens.sidebarIconSize,
-                      color: widget.selected
-                          ? widget.colors.accent
-                          : widget.colors.mutedForeground,
+                      color:
+                          widget.iconColor ??
+                          (widget.selected
+                              ? widget.colors.accent
+                              : widget.colors.mutedForeground),
                     ),
                     const SizedBox(width: TodoLayoutTokens.sidebarIconGap),
                     Expanded(

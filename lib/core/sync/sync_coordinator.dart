@@ -1526,6 +1526,12 @@ class SyncCoordinator {
         hasFolderId ? localFolder?.id : existing?.folderLocalId,
       ),
       folderId: Value(resolvedFolderId),
+      color: Value(
+        // toJson 恒含 color 键：显式 null 是对端清色，缺键才保留本地值。
+        payload.containsKey('color')
+            ? payload['color']?.toString()
+            : existing?.color,
+      ),
       sortOrder: Value((payload['sortOrder'] as num?)?.toInt() ?? 0),
       isPinned: Value(
         payload['isPinned'] as bool? ?? existing?.isPinned ?? false,

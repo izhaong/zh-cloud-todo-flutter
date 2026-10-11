@@ -632,6 +632,7 @@ class _CreateFailingRepository extends ListRepository {
   Future<TodoList> create({
     required String name,
     String? folderLocalId,
+    String? color,
     int sortOrder = 0,
   }) {
     throw StateError('故意让新建失败');
