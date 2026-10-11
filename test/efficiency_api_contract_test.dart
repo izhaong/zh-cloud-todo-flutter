@@ -359,6 +359,7 @@ void main() {
           'targetCount': 1,
           'reminderAt': null,
           'sortOrder': 0,
+          'recordType': 1,
         },
       );
       expect(

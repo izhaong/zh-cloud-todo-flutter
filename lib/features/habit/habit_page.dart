@@ -187,6 +187,20 @@ class _HabitTile extends ConsumerWidget {
   const _HabitTile({required this.habit});
   final HabitDto habit;
 
+  Future<void> _checkIn(BuildContext context, WidgetRef ref) async {
+    final repo = ref.read(habitRepositoryProvider);
+    if (habit.recordType == 2) {
+      // 手动记录档：嘀嗒打卡时可输入「本次完成的量」，不输入就是没打。
+      final amount = await showHabitAmountSheet(context);
+      if (amount == null) return;
+      await repo.checkIn(habit.id, amount: amount);
+    } else {
+      await repo.checkIn(habit.id);
+    }
+    ref.invalidate(myHabitsProvider);
+    ref.invalidate(habitStatsProvider);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = brandColors(context);
@@ -236,11 +250,7 @@ class _HabitTile extends ConsumerWidget {
                 ),
               ),
               AppButton(
-                onPressed: () async {
-                  await ref.read(habitRepositoryProvider).checkIn(habit.id);
-                  ref.invalidate(myHabitsProvider);
-                  ref.invalidate(habitStatsProvider);
-                },
+                onPressed: () => _checkIn(context, ref),
                 child: const Text('打卡'),
               ),
             ],
@@ -252,5 +262,85 @@ class _HabitTile extends ConsumerWidget {
 }
 
 String _targetLabel(HabitDto habit) {
-  return '${habitPeriodLabel(habit.period)} ${habit.targetCount} 次';
+  final base = '${habitPeriodLabel(habit.period)} ${habit.targetCount} 次';
+  // 打卡方式只在非默认档（自动记录）时补一句，读得出来这行的计数口径。
+  final type = habitRecordTypeChoices[habit.recordType];
+  return habit.recordType == 1 || type == null ? base : '$base · $type';
+}
+
+/// 手动记录档的「本次完成量」输入弹层；取消或关掉返回 null（不打卡）。
+Future<int?> showHabitAmountSheet(BuildContext context) async {
+  return showModalBottomSheet<int>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    builder: (ctx) => const _HabitAmountSheet(),
+  );
+}
+
+class _HabitAmountSheet extends StatefulWidget {
+  const _HabitAmountSheet();
+
+  @override
+  State<_HabitAmountSheet> createState() => _HabitAmountSheetState();
+}
+
+class _HabitAmountSheetState extends State<_HabitAmountSheet> {
+  final _amount = TextEditingController(text: '1');
+  String? _error;
+
+  @override
+  void dispose() {
+    _amount.dispose();
+    super.dispose();
+  }
+
+  void _confirm() {
+    final value = int.tryParse(_amount.text.trim());
+    if (value == null || value < 1) {
+      setState(() => _error = '完成量至少为 1');
+      return;
+    }
+    Navigator.of(context).pop(value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: MediaQuery.viewInsetsOf(context).bottom + 16,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('本次完成量', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 12),
+            TextField(
+              key: const Key('habit-checkin-amount'),
+              controller: _amount,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(labelText: '完成量', errorText: _error),
+              onSubmitted: (_) => _confirm(),
+            ),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: AppButton(
+                key: const Key('habit-checkin-confirm'),
+                onPressed: _confirm,
+                child: const Text('打卡'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
