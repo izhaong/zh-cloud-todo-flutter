@@ -25,9 +25,12 @@ class TagRepository {
     '#6D4C41',
   ];
 
+  // 与服务端 `TodoTagMapper` 的 `is_pinned DESC, sort_order DESC, id DESC` 同源：
+  // 本地主键 UUID 无序，tie-break 用 createdAt ASC 对齐「先建在前」。
   Stream<List<TodoTag>> watchAll() {
     return (_db.select(_db.todoTags)..orderBy([
           (t) => OrderingTerm(expression: t.isPinned, mode: OrderingMode.desc),
+          (t) => OrderingTerm(expression: t.sortOrder, mode: OrderingMode.desc),
           (t) => OrderingTerm(expression: t.createdAt),
         ]))
         .watch();
@@ -36,6 +39,7 @@ class TagRepository {
   Future<List<TodoTag>> getAll() {
     return (_db.select(_db.todoTags)..orderBy([
           (t) => OrderingTerm(expression: t.isPinned, mode: OrderingMode.desc),
+          (t) => OrderingTerm(expression: t.sortOrder, mode: OrderingMode.desc),
           (t) => OrderingTerm(expression: t.createdAt),
         ]))
         .get();
@@ -122,6 +126,45 @@ class TagRepository {
       payload: row.toJson(),
     );
     return row;
+  }
+
+  /// 拖拽排序（嘀嗒《04-用标签管理任务》:118 侧边栏长按标签拖拽自由排序）。
+  ///
+  /// 与服务端 `TodoTagMapper` 的 `sort_order DESC`（值大在前）同源 ⇒ 传入顺序
+  /// 第一位拿**最大**位次 —— 与 `ListRepository.reorder`（0 = 第一位）同形不同向，
+  /// 两处不许互相抄。与 [update]/[setPinned] 同口径：位次写入与逐行 tag/upsert
+  /// outbox 在同一事务里落；不存在的 id 先滤掉再给幸存行连续位次，不留空洞；
+  /// 任一条登记失败 ⇒ 整批回滚、outbox 不留半条。
+  Future<void> reorder(List<String> orderedIds) async {
+    final now = DateTime.now();
+    await _db.transaction(() async {
+      final ordered = <TodoTag>[];
+      for (final tagId in orderedIds) {
+        final row = await (_db.select(
+          _db.todoTags,
+        )..where((t) => t.id.equals(tagId))).getSingleOrNull();
+        if (row != null) ordered.add(row);
+      }
+      var rank = ordered.length;
+      for (final row in ordered) {
+        rank--;
+        await (_db.update(
+          _db.todoTags,
+        )..where((t) => t.id.equals(row.id))).write(
+          TodoTagsCompanion(sortOrder: Value(rank), updatedAt: Value(now)),
+        );
+        final updated = await (_db.select(
+          _db.todoTags,
+        )..where((t) => t.id.equals(row.id))).getSingle();
+        await _queue.enqueue(
+          entity: SyncEntities.tag,
+          op: SyncOps.upsert,
+          localId: row.id,
+          serverId: updated.serverId,
+          payload: updated.toJson(),
+        );
+      }
+    });
   }
 
   Future<void> delete(String tagId) async {
