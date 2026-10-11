@@ -1,8 +1,12 @@
 import 'dart:convert';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zh_cloud_todo_flutter/core/db/app_database.dart'
+    show TodoFolder;
 import 'package:zh_cloud_todo_flutter/features/filter/filter_bar.dart';
 import 'package:zh_cloud_todo_flutter/features/filter/saved_filter_mapping.dart';
+import 'package:zh_cloud_todo_flutter/state/providers.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/filter_repository.dart';
 
 /// FL Issue #527：已保存过滤器要能存下、套出「文件夹」这一维。
@@ -184,6 +188,23 @@ void main() {
       );
 
       expect(mapped.skipped, contains('跨条件逻辑词「folderIds」（它前面没有可连接的条件）'));
+    });
+
+    test('文件夹流还没发值时索引是 null，不是空表', () {
+      // 这条量的才是 provider 本体：反向对照 T6 把 `return null` 改成 `return const {}` 时，
+      // 只有它会红 —— 上面那些用例是把映射表当参数传进去的，够不到 provider。
+      // 空表会让「稍后再保存」变成「这个文件夹还没同步上去」，那是一句假话。
+      final container = ProviderContainer(
+        overrides: [
+          foldersStreamProvider.overrideWith(
+            (ref) => const Stream<List<TodoFolder>>.empty(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      expect(container.read(folderServerIdIndexProvider), isNull);
+      expect(container.read(folderLocalIdByServerIdProvider), isNull);
     });
   });
 }
