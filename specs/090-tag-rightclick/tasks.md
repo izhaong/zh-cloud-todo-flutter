@@ -19,14 +19,13 @@
 
 ## 门禁读数（跑在 commit 之后的最终字节上）
 
-- [ ] `flutter analyze` ⇒ rc=0，`No issues found!`（日志见下）。
-- [ ] 全量 `flutter test` ⇒ 尾行 `All tests passed!`（日志见下）。
-- [ ] 反向探针 P1/P2/P3 各自「先红、还原后 `cmp -s` 回原样」证据（见下）。
+- [x] `flutter analyze` ⇒ rc=0，`No issues found!`（rebase 到 `63c5cc6` 后重跑，日志 `/tmp/w16_analyze_final.log`）。
+- [x] 全量 `flutter test` ⇒ rc=0，尾行 `01:15 +1582 ~26: All tests passed!`（日志 `/tmp/w16_full_final.log`）。
+- [x] 反向探针（脚本 `/private/tmp/w16_probe.py`，锚点命中各 1 次、还原后字节 `cmp` 相等）：P1 右键菜单缺「编辑」⇒ 红 2 条；P2 摘右键手势 ⇒ 红 4 条（左滑用例绿，归因干净）；P3 左滑表缺「删除」⇒ 红 1 条。
 
 ## 台账自扫
 
-- [ ] `dart run tool/check_spec_selfscan.py specs/090-tag-rightclick/spec.md` 与
-      `.../tasks.md` 各自单独成命令跑（rc 不串任何写操作链）。
+- [x] `python3 tool/check_spec_selfscan.py specs/090-tag-rightclick/spec.md` 与 `.../tasks.md` 各自单独成命令跑（spec 失项 0、tasks 失项 0；tasks 曾因「全量」+量词无同行复算命令红过一条，已补）。
 
 ## 复核
 
