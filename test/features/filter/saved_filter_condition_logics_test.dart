@@ -32,6 +32,19 @@ void main() {
     );
   });
 
+  test('只挂「且」不出键：它是缺省连接词，写出去就改了老数据的形状', () {
+    expect(
+      jsonText(
+        const TaskFilter(
+          priority: 3,
+          keyword: '跨端',
+          conditionLogics: {'keyword': 'and'},
+        ),
+      ),
+      '{"priorities":[3],"keyword":"跨端"}',
+    );
+  });
+
   test('合法的词原样出仓：挂在第二条已启用条件上', () {
     // 已启用：priorities → keyword；词挂 keyword ⇒ 合法（不是第一条）。
     final mapped = savedFilterOf(

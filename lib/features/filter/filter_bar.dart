@@ -22,6 +22,36 @@ const List<String> conditionOrder = <String>[
   'keyword',
 ];
 
+/// 契约条件名的中文读法。未知键原样回显：面板不许把认不出的键伪装成没有这条条件。
+String conditionKeyLabel(String key) => switch (key) {
+  'listIds' => '清单',
+  'tagIds' => '标签',
+  'priorities' => '优先级',
+  'statuses' => '状态',
+  'dateRange' => '日期',
+  'keyword' => '关键词',
+  _ => key,
+};
+
+/// 这份筛选态里「已启用」的契约条件，按 [conditionOrder] 排。
+///
+/// 面板用它决定哪些条件能挂连接词，映射层用它校验位置 —— 两处必须同源，
+/// 否则「界面上允许的形状」和「服务端接受的形状」会分家（保存被整份拒绝）。
+List<String> activeConditionKeys(TaskFilter filter) {
+  final active = <String>[];
+  if (filter.listId != null) active.add('listIds');
+  if (filter.tagIds.isNotEmpty) active.add('tagIds');
+  if (filter.priority != null) active.add('priorities');
+  if (filter.completed != null) active.add('statuses');
+  if (filter.dueRange != null ||
+      filter.dueAtFrom != null ||
+      filter.dueAtTo != null) {
+    active.add('dateRange');
+  }
+  if (filter.keyword?.trim().isNotEmpty == true) active.add('keyword');
+  return active;
+}
+
 class TaskAssigneeOption {
   const TaskAssigneeOption({required this.userId, required this.name});
 
@@ -243,6 +273,7 @@ class FilterBar extends ConsumerWidget {
                   assigneeUserId: next.assigneeUserId,
                   tagIds: next.tagIds,
                   tagLogic: next.tagLogic,
+                  conditionLogics: next.conditionLogics,
                   folderId: next.folderId,
                 ),
               );
@@ -372,6 +403,7 @@ class FilterBar extends ConsumerWidget {
     required int? assigneeUserId,
     required List<String> tagIds,
     required String tagLogic,
+    required Map<String, String> conditionLogics,
     required String? folderId,
   }) {
     return base.copyWith(
@@ -386,6 +418,7 @@ class FilterBar extends ConsumerWidget {
       // 空列表 = 清空标签条件：copyWith 的 `tagIds ?? this.tagIds` 里 [] 是非 null，会覆盖旧值。
       tagIds: tagIds,
       tagLogic: tagLogic,
+      conditionLogics: conditionLogics,
       folderId: folderId,
       clearFolderId: folderId == null,
     );
@@ -408,6 +441,9 @@ class FilterBar extends ConsumerWidget {
     int? selectedAssigneeUserId = current.assigneeUserId;
     final selectedTagIds = current.tagIds.toSet();
     var selectedTagLogic = current.tagLogic;
+    var selectedConditionLogics = Map<String, String>.from(
+      current.conditionLogics,
+    );
     String? selectedFolderId = current.folderId;
     final dueAtFromController = TextEditingController(
       text: _formatDate(current.dueAtFrom),
@@ -428,20 +464,22 @@ class FilterBar extends ConsumerWidget {
               (dueAtFromController.text.trim().isEmpty ||
                   draftDueAtFrom != null) &&
               (dueAtToController.text.trim().isEmpty || draftDueAtTo != null);
+          // 草稿只算一次：预览命中数与「条件之间」小节列哪几条，必须来自同一份筛选态，
+          // 否则小节会对着一个预览里已经不在的条件给开关。
+          final draftFilter = _draftFilter(
+            base: current,
+            keyword: draftKeyword,
+            dueAtFrom: draftDueAtFrom,
+            dueAtTo: draftDueAtTo,
+            assigneeUserId: selectedAssigneeUserId,
+            tagIds: selectedTagIds.toList(),
+            tagLogic: selectedTagLogic,
+            conditionLogics: selectedConditionLogics,
+            folderId: selectedFolderId,
+          );
           final previewMatches =
               previewEnabled && previewResolver != null && draftDatesUsable
-              ? previewResolver(
-                  _draftFilter(
-                    base: current,
-                    keyword: draftKeyword,
-                    dueAtFrom: draftDueAtFrom,
-                    dueAtTo: draftDueAtTo,
-                    assigneeUserId: selectedAssigneeUserId,
-                    tagIds: selectedTagIds.toList(),
-                    tagLogic: selectedTagLogic,
-                    folderId: selectedFolderId,
-                  ),
-                )
+              ? previewResolver(draftFilter)
               : null;
           return AlertDialog(
             title: const Text('高级筛选'),
@@ -539,6 +577,17 @@ class FilterBar extends ConsumerWidget {
                     },
                   ),
                   const SizedBox(height: 12),
+                  _ConditionLogicSection(
+                    activeKeys: activeConditionKeys(draftFilter),
+                    logics: selectedConditionLogics,
+                    onChanged: (key, logic) => setDialogState(
+                      () => selectedConditionLogics = {
+                        ...selectedConditionLogics,
+                        key: logic,
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       const Expanded(child: Text('预览模式')),
@@ -627,6 +676,7 @@ class FilterBar extends ConsumerWidget {
                       assigneeUserId: selectedAssigneeUserId,
                       tagIds: (selectedTagIds.toList()..sort()),
                       tagLogic: selectedTagLogic,
+                      conditionLogics: selectedConditionLogics,
                       folderId: selectedFolderId,
                     ),
                   );
@@ -715,6 +765,7 @@ class _AdvancedFilter {
     required this.assigneeUserId,
     this.tagIds = const [],
     this.tagLogic = tagLogicAnd,
+    this.conditionLogics = const {},
     this.folderId,
   });
 
@@ -724,6 +775,9 @@ class _AdvancedFilter {
   final int? assigneeUserId;
   final List<String> tagIds;
   final String tagLogic;
+
+  /// 条件之间的逻辑词，键是 [conditionOrder] 里的条件名。
+  final Map<String, String> conditionLogics;
 
   /// 本地文件夹主键；null = 没有这条条件。
   final String? folderId;
@@ -865,6 +919,69 @@ class _FolderConditionSection extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// 「条件之间」这一条：给每条**可挂词**的已启用条件一个「且 / 或」开关。
+///
+/// 两个门槛都抄服务端 `TodoFilterServiceImpl.java:644-660` 的放置校验：
+/// 只有已启用的条件能挂词，且第一条（按 `CONDITION_ORDER` 排）前面没有条件可连 ——
+/// 摆一个服务端会整份拒绝的开关，等于给用户一个「按下去就存不进去」的按钮。
+class _ConditionLogicSection extends StatelessWidget {
+  const _ConditionLogicSection({
+    required this.activeKeys,
+    required this.logics,
+    required this.onChanged,
+  });
+
+  final List<String> activeKeys;
+  final Map<String, String> logics;
+  final void Function(String key, String logic) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    if (activeKeys.length < 2) return const SizedBox.shrink();
+    return Column(
+      key: const Key('task-filter-condition-logic'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('条件之间', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        for (final key in activeKeys.skip(1))
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Wrap(
+              key: Key('task-filter-condition-logic-$key'),
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text('「${conditionKeyLabel(key)}」与前面'),
+                for (final option in const <(String, String)>[
+                  (tagLogicAnd, '且'),
+                  (tagLogicOr, '或'),
+                ])
+                  Semantics(
+                    key: Key('task-filter-condition-logic-$key-${option.$1}'),
+                    label: '条件之间 ${conditionKeyLabel(key)} ${option.$2}',
+                    selected:
+                        (logics[key]?.toLowerCase() ?? tagLogicAnd) ==
+                        option.$1,
+                    button: true,
+                    excludeSemantics: true,
+                    child: ChoiceChip(
+                      label: Text(option.$2),
+                      selected:
+                          (logics[key]?.toLowerCase() ?? tagLogicAnd) ==
+                          option.$1,
+                      onSelected: (_) => onChanged(key, option.$1),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }

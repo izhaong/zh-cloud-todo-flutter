@@ -25,17 +25,7 @@ import 'filter_bar.dart';
   // 第一条已启用条件上（它前面没有条件可连），否则 `todo_filter` 整个保存请求会被拒。
   // 这里不许「顺手丢掉那半条」—— 静默丢词会存出一份与用户所选不一致的过滤器；
   // 改成点名给 UI（skipped 非空时对话框本来就拒绝保存），让用户自己决定撤哪一条。
-  final activeKeys = <String>[];
-  if (filter.listId != null) activeKeys.add('listIds');
-  if (filter.tagIds.isNotEmpty) activeKeys.add('tagIds');
-  if (filter.priority != null) activeKeys.add('priorities');
-  if (filter.completed != null) activeKeys.add('statuses');
-  if (filter.dueRange != null ||
-      filter.dueAtFrom != null ||
-      filter.dueAtTo != null) {
-    activeKeys.add('dateRange');
-  }
-  if (filter.keyword?.trim().isNotEmpty == true) activeKeys.add('keyword');
+  final activeKeys = activeConditionKeys(filter);
   final conditionLogics = <String, String>{};
   for (final entry in filter.conditionLogics.entries) {
     final logic = entry.value.toLowerCase();
@@ -50,7 +40,9 @@ import 'filter_bar.dart';
       skipped.add('跨条件逻辑词「${entry.key}」（它前面没有可连接的条件）');
       continue;
     }
-    conditionLogics[entry.key] = logic;
+    // 「且」就是缺省连接词（服务端 isOrLogic 只认 or）⇒ 不进 JSON，
+    // 与 tagLogic 同一条形状规矩：写出去的一律是改变了行为的那些。
+    if (logic == tagLogicOr) conditionLogics[entry.key] = logic;
   }
   return (
     conditions: TodoFilterConditions(
