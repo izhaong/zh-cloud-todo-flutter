@@ -16,6 +16,10 @@ class HabitDto {
   final int sortOrder;
   final bool archived;
 
+  /// 打卡方式：1-自动记录、2-手动记录、3-完成全部（service !347 契约，嘀嗒
+  /// 《02-更好地完成习惯.md》打卡方式三档；存量/缺省按自动记录）。
+  final int recordType;
+
   HabitDto({
     required this.id,
     required this.name,
@@ -26,6 +30,7 @@ class HabitDto {
     this.reminderAt,
     this.sortOrder = 0,
     this.archived = false,
+    this.recordType = 1,
   });
 
   factory HabitDto.fromJson(Map<String, dynamic> j) {
@@ -42,6 +47,7 @@ class HabitDto {
       reminderAt: _epochMillisToDateTime(j['reminderAt']),
       sortOrder: (j['sortOrder'] as num?)?.toInt() ?? 0,
       archived: j['archived'] == true,
+      recordType: (j['recordType'] as num?)?.toInt() ?? 1,
     );
   }
 }
@@ -61,6 +67,7 @@ Map<String, Object?> _habitBody({
   required int targetCount,
   DateTime? reminderAt,
   int sortOrder = 0,
+  int recordType = 1,
 }) {
   return {
     'name': name,
@@ -70,6 +77,7 @@ Map<String, Object?> _habitBody({
     'targetCount': targetCount,
     'reminderAt': reminderAt?.millisecondsSinceEpoch,
     'sortOrder': sortOrder,
+    'recordType': recordType,
   };
 }
 
@@ -100,6 +108,7 @@ class HabitRepository {
     int period = 1,
     int targetCount = 1,
     DateTime? reminderAt,
+    int recordType = 1,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '${ApiConfig.todoPrefix}/habit/create',
@@ -110,6 +119,7 @@ class HabitRepository {
         period: period,
         targetCount: targetCount,
         reminderAt: reminderAt,
+        recordType: recordType,
       ),
     );
     return _unwrapInt(response.data);
@@ -127,6 +137,7 @@ class HabitRepository {
     required int targetCount,
     DateTime? reminderAt,
     int sortOrder = 0,
+    int recordType = 1,
   }) async {
     final response = await _dio.put<Map<String, dynamic>>(
       '${ApiConfig.todoPrefix}/habit/update',
@@ -139,6 +150,7 @@ class HabitRepository {
           targetCount: targetCount,
           reminderAt: reminderAt,
           sortOrder: sortOrder,
+          recordType: recordType,
         ),
         'id': id,
       },
@@ -155,11 +167,16 @@ class HabitRepository {
   }
 
   /// 打卡：返回当日累计打卡次数（后端计算）。
-  Future<int> checkIn(int habitId, {DateTime? date}) async {
+  /// `amount` 只在手动记录档（recordType=2）传入：本次完成量（嘀嗒打卡时可输入）。
+  Future<int> checkIn(int habitId, {DateTime? date, int? amount}) async {
     final d = date ?? DateTime.now();
     final r = await _dio.post<Map<String, dynamic>>(
       '${ApiConfig.todoPrefix}/habit/check-in',
-      data: {'habitId': habitId, 'checkedAt': d.millisecondsSinceEpoch},
+      data: {
+        'habitId': habitId,
+        'checkedAt': d.millisecondsSinceEpoch,
+        'amount': ?amount,
+      },
     );
     return _unwrapInt(r.data);
   }

@@ -21,6 +21,10 @@ const habitColorChoices = <String>['#22C55E', '#0EA5E9', '#F59E0B', '#EF4444'];
 /// 频率档位照抄 `AppTodoHabitBaseVO` 的 `period`：1=每天 2=每周 3=每月。
 const habitPeriodChoices = <int, String>{1: '每天', 2: '每周', 3: '每月'};
 
+/// 打卡方式照抄 service 契约 `record_type`（嘀嗒《02-更好地完成习惯.md》：
+/// 自动记录每次算一次、手动记录可输入完成量、完成全部当日有记录即完成）。
+const habitRecordTypeChoices = <int, String>{1: '自动记录', 2: '手动记录', 3: '完成全部'};
+
 Color habitColor(String? hex, Color fallback) {
   if (hex == null || hex.isEmpty) return fallback;
   final value = int.tryParse(hex.replaceFirst('#', ''), radix: 16);
@@ -62,6 +66,7 @@ class _HabitEditorFormState extends ConsumerState<_HabitEditorForm> {
   late String? _icon = widget.habit?.icon;
   late String? _color = widget.habit?.color;
   late int _period = widget.habit?.period ?? 1;
+  late int _recordType = widget.habit?.recordType ?? 1;
   late DateTime? _reminderAt = widget.habit?.reminderAt;
 
   String? _nameError;
@@ -100,6 +105,7 @@ class _HabitEditorFormState extends ConsumerState<_HabitEditorForm> {
           period: _period,
           targetCount: target,
           reminderAt: _reminderAt,
+          recordType: _recordType,
         );
       } else {
         await repo.update(
@@ -111,6 +117,7 @@ class _HabitEditorFormState extends ConsumerState<_HabitEditorForm> {
           targetCount: target,
           reminderAt: _reminderAt,
           sortOrder: habit.sortOrder,
+          recordType: _recordType,
         );
       }
       if (!mounted) return;
@@ -240,6 +247,23 @@ class _HabitEditorFormState extends ConsumerState<_HabitEditorForm> {
                       label: Text(entry.value),
                       selected: _period == entry.key,
                       onSelected: (_) => setState(() => _period = entry.key),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              // 嘀嗒把打卡方式放在「编辑-目标-打卡时」路径下；这里拍平到同一张
+              // 表单里，三档语义与 service 契约 `record_type` 一一对应。
+              Text('打卡方式', style: theme.textTheme.labelLarge),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final entry in habitRecordTypeChoices.entries)
+                    ChoiceChip(
+                      key: Key('habit-editor-recordtype-${entry.key}'),
+                      label: Text(entry.value),
+                      selected: _recordType == entry.key,
+                      onSelected: (_) =>
+                          setState(() => _recordType = entry.key),
                     ),
                 ],
               ),

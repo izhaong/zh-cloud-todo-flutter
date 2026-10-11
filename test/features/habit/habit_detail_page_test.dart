@@ -241,6 +241,7 @@ void main() {
       'targetCount': 21,
       'reminderAt': _reminderAt.millisecondsSinceEpoch,
       'sortOrder': 3,
+      'recordType': 1,
     });
   });
 
@@ -650,6 +651,7 @@ void main() {
         'targetCount': 1,
         'reminderAt': null,
         'sortOrder': 0,
+        'recordType': 1,
       },
     );
     // 请求体对不等于"这一面走得通"：还得看得见成功。基线（`9032005`，本文件 18 条）上
