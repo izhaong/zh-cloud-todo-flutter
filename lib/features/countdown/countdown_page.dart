@@ -263,6 +263,10 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
   /// 失败文案要按实际那一步说「归档失败」还是「恢复失败」，不许两件事共用一句。
   String? _archiveFailedAction;
   bool _showGroups = false;
+
+  /// 嘀嗒 mobile 段「点击顶部分组名或左右滑动页面切换分组」：当前停在 groups
+  /// 的第几组（下标），一次只显示一组。
+  int _activeGroupIndex = 0;
   String? _pinError;
   Future<void> Function()? _pinRetry;
 
@@ -356,6 +360,7 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
             onSelected: (value) => setState(() {
               if (value == 'groups') {
                 _showGroups = !_showGroups;
+                _activeGroupIndex = 0;
                 return;
               }
               _showArchived = value == 'archived';
@@ -450,15 +455,90 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
       );
     }
     // 嘀嗒 :9「开启后，所有日子将根据类型自动分组：倒数日、纪念日、生日、节日」
-    // 四类是固定档，空档不出标题；分类只认服务端给的 type，客户端不自造判据。
+    // 四类是固定档，空档不出分组名；分类只认服务端给的 type，客户端不自造判据。
     const labels = {1: '倒数日', 2: '纪念日', 3: '生日', 4: '节日'};
-    final rows = <Widget>[];
-    for (final entry in labels.entries) {
-      final group = items.where((c) => c.type == entry.key).toList();
-      if (group.isEmpty) {
-        continue;
-      }
-      rows.add(
+    final groups = labels.entries
+        .where((entry) => items.any((c) => c.type == entry.key))
+        .toList(growable: false);
+    if (groups.isEmpty) {
+      // 条目的 type 全是未知档：退回平铺，别把已有条目藏没。
+      return ListView.separated(
+        itemCount: items.length,
+        separatorBuilder: (_, _) => const Divider(height: 1),
+        itemBuilder: (_, i) => _tileFor(items[i]),
+      );
+    }
+    // 数据刷新后组数变少时下标可能越界，就地收敛到最后一组。
+    if (_activeGroupIndex >= groups.length) {
+      _activeGroupIndex = groups.length - 1;
+    }
+    final active = groups[_activeGroupIndex];
+    // 嘀嗒 mobile 段「你可以点击顶部分组名或左右滑动页面切换分组」：
+    // 顶部分组名点击直达，列表区横滑翻到相邻组；竖向滚动仍归 ListView。
+    return Column(
+      children: [
+        SingleChildScrollView(
+          key: const Key('countdown-group-tabs'),
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+          child: Row(
+            children: [
+              for (var i = 0; i < groups.length; i++)
+                Semantics(
+                  key: Key('countdown-group-tab-${groups[i].key}'),
+                  button: true,
+                  selected: i == _activeGroupIndex,
+                  label: groups[i].value,
+                  child: ExcludeSemantics(
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: () => setState(() => _activeGroupIndex = i),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        child: Text(
+                          groups[i].value,
+                          style: TextStyle(
+                            fontWeight: i == _activeGroupIndex
+                                ? FontWeight.bold
+                                : FontWeight.w500,
+                            color: i == _activeGroupIndex
+                                ? Theme.of(context).colorScheme.primary
+                                : null,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onHorizontalDragEnd: (details) {
+              final velocity = details.primaryVelocity ?? 0;
+              if (velocity < -120 && _activeGroupIndex < groups.length - 1) {
+                setState(() => _activeGroupIndex += 1);
+              } else if (velocity > 120 && _activeGroupIndex > 0) {
+                setState(() => _activeGroupIndex -= 1);
+              }
+            },
+            child: _groupPage(active, items),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _groupPage(MapEntry<int, String> entry, List<CountdownDto> items) {
+    final group = items.where((c) => c.type == entry.key).toList();
+    return ListView(
+      key: const Key('countdown-group-list'),
+      children: [
         Semantics(
           key: Key('countdown-group-header-${entry.key}'),
           container: true,
@@ -474,12 +554,9 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
             ),
           ),
         ),
-      );
-      for (final c in group) {
-        rows.add(_tileFor(c));
-      }
-    }
-    return ListView(children: rows);
+        for (final c in group) _tileFor(c),
+      ],
+    );
   }
 
   Widget _tileFor(CountdownDto c) {

@@ -107,27 +107,66 @@ void main() {
     expect(find.byKey(const Key('countdown-group-header-2')), findsNothing);
   });
 
-  testWidgets('开启「显示分组」后按类型自动分组：四类都有标题且顺序固定', (tester) async {
+  testWidgets('开启「显示分组」后顶部出现分组名，默认停在第一组', (tester) async {
     await _pump(tester);
     await _toggleGroups(tester);
     for (final type in [1, 2, 3, 4]) {
       expect(
-        find.byKey(Key('countdown-group-header-$type')),
+        find.byKey(Key('countdown-group-tab-$type')),
         findsOneWidget,
-        reason: '第 $type 类缺分组标题',
+        reason: '第 $type 类缺顶部分组名',
       );
     }
-    final ys = <int, double>{};
+    final xs = <int, double>{};
     for (final type in [1, 2, 3, 4]) {
-      ys[type] = tester
-          .getTopLeft(find.byKey(Key('countdown-group-header-$type')))
-          .dy;
+      xs[type] = tester
+          .getTopLeft(find.byKey(Key('countdown-group-tab-$type')))
+          .dx;
     }
     expect(
-      ys[1]! < ys[2]! && ys[2]! < ys[3]! && ys[3]! < ys[4]!,
+      xs[1]! < xs[2]! && xs[2]! < xs[3]! && xs[3]! < xs[4]!,
       isTrue,
-      reason: '分组标题要按 倒数日 纪念日 生日 节日 的先后排：$ys',
+      reason: '分组名要按 倒数日 纪念日 生日 节日 的先后排：$xs',
     );
+    // 一次只显示一组，默认第一组（嘀嗒 mobile 段：点击顶部分组名或左右滑动切换）。
+    expect(find.text('倒数日甲'), findsOneWidget);
+    expect(find.text('倒数日乙'), findsOneWidget);
+    expect(find.text('纪念日甲'), findsNothing);
+    expect(find.text('生日甲'), findsNothing);
+    expect(find.text('节日甲'), findsNothing);
+  });
+
+  testWidgets('点击顶部分组名切换到那一组', (tester) async {
+    await _pump(tester);
+    await _toggleGroups(tester);
+    await tester.tap(find.byKey(const Key('countdown-group-tab-2')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('countdown-group-header-2')), findsOneWidget);
+    expect(find.text('纪念日甲'), findsOneWidget);
+    expect(find.byKey(const Key('countdown-group-header-1')), findsNothing);
+    expect(find.text('倒数日甲'), findsNothing);
+    // 切走后选中的 tab 还在顶部，可以切回来。
+    await tester.tap(find.byKey(const Key('countdown-group-tab-1')));
+    await tester.pumpAndSettle();
+    expect(find.text('倒数日甲'), findsOneWidget);
+    expect(find.text('纪念日甲'), findsNothing);
+  });
+
+  testWidgets('左右滑动页面切换分组：左滑下一组、右滑上一组', (tester) async {
+    await _pump(tester);
+    await _toggleGroups(tester);
+    final list = find.byKey(const Key('countdown-group-list'));
+    expect(list, findsOneWidget);
+    await tester.fling(list, const Offset(-320, 0), 900);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('countdown-group-header-2')), findsOneWidget);
+    expect(find.text('纪念日甲'), findsOneWidget);
+    expect(find.text('倒数日甲'), findsNothing);
+    await tester.fling(list, const Offset(320, 0), 900);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('countdown-group-header-1')), findsOneWidget);
+    expect(find.text('倒数日甲'), findsOneWidget);
+    expect(find.text('纪念日甲'), findsNothing);
   });
 
   testWidgets('分组标题用的是嘀嗒原文的四类名', (tester) async {
@@ -138,18 +177,24 @@ void main() {
     }
   });
 
-  testWidgets('某一类没有条目时不出现那一组的标题', (tester) async {
+  testWidgets('某一类没有条目时，顶部与页面都不出现那一组', (tester) async {
     await _pump(
       tester,
       all: [_dto(1, '只有倒数日', type: 1), _dto(2, '也是倒数日', type: 1)],
     );
     await _toggleGroups(tester);
     expect(find.byKey(const Key('countdown-group-header-1')), findsOneWidget);
+    expect(find.byKey(const Key('countdown-group-tab-1')), findsOneWidget);
     for (final type in [2, 3, 4]) {
       expect(
         find.byKey(Key('countdown-group-header-$type')),
         findsNothing,
         reason: '空类别 $type 不该有标题',
+      );
+      expect(
+        find.byKey(Key('countdown-group-tab-$type')),
+        findsNothing,
+        reason: '空类别 $type 不该有顶部分组名',
       );
     }
   });
@@ -161,7 +206,7 @@ void main() {
     expect(find.text('倒数日甲'), findsOneWidget);
   });
 
-  testWidgets('分组标题自己就是读屏节点，label 念得出分类名', (tester) async {
+  testWidgets('分组名与组内标题都是读屏节点，label 念得出分类名', (tester) async {
     final handle = tester.ensureSemantics();
     await _pump(tester);
     await _toggleGroups(tester);
@@ -173,15 +218,22 @@ void main() {
       [3, '生日'],
       [4, '节日'],
     ]) {
-      final node = tester.getSemantics(
-        find.byKey(Key('countdown-group-header-${pair[0]}')),
+      final tab = tester.getSemantics(
+        find.byKey(Key('countdown-group-tab-${pair[0]}')),
       );
       expect(
-        node.label,
+        tab.label,
         contains(pair[1] as String),
-        reason: '第 ${pair[0]} 档标题的 label 不对',
+        reason: '第 ${pair[0]} 档顶部分组名的 label 不对',
       );
     }
+    // 组内标题只渲染当前组：切到第二组后它的标题节点要念得出「纪念日」。
+    await tester.tap(find.byKey(const Key('countdown-group-tab-2')));
+    await tester.pumpAndSettle();
+    final header = tester.getSemantics(
+      find.byKey(const Key('countdown-group-header-2')),
+    );
+    expect(header.label, contains('纪念日'), reason: '第 2 档组内标题的 label 不对');
     handle.dispose();
   });
 
