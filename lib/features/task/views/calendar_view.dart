@@ -62,6 +62,10 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
   /// 年视图热力图（嘀嗒《03-年视图》:76 默认关闭）。
   bool _showHeatmap = false;
 
+  /// 列表档「日历全景」展开态（嘀嗒《08-常见问题》:168）。同屏瞬时展开/收起，
+  /// 不进偏好 —— 嘀嗒没写跨启动保留。
+  bool _panoramaExpanded = false;
+
   /// 用户是否已经动过显示设置。恢复偏好是异步的，若期间用户已切了视图或拨了开关，
   /// 迟到的旧值必须作废 —— 否则表现为「刚点的档位被弹回上一次的选择」。
   bool _displayTouched = false;
@@ -140,16 +144,32 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
                 _changeMode(CalendarMode.month);
               },
             ),
-            CalendarMode.list =>
-              _showListTimeline
-                  ? _DayTimeline(
-                      tasks: tasksOnDayByTime(_visibleTasks, _anchor),
-                      onTaskTap: (t) => _openDetail(context, t),
-                    )
-                  : _ListView(
-                      tasks: _visibleTasks,
-                      onTaskTap: (t) => _openDetail(context, t),
-                    ),
+            CalendarMode.list => Column(
+              children: [
+                _ListCalendarStrip(
+                  anchor: _anchor,
+                  firstDay: firstDay,
+                  expanded: _panoramaExpanded,
+                  onToggle: () =>
+                      setState(() => _panoramaExpanded = !_panoramaExpanded),
+                  onDayTap: (day) => setState(() {
+                    _anchor = day;
+                    _panoramaExpanded = false;
+                  }),
+                ),
+                Expanded(
+                  child: _showListTimeline
+                      ? _DayTimeline(
+                          tasks: tasksOnDayByTime(_visibleTasks, _anchor),
+                          onTaskTap: (t) => _openDetail(context, t),
+                        )
+                      : _ListView(
+                          tasks: _visibleTasks,
+                          onTaskTap: (t) => _openDetail(context, t),
+                        ),
+                ),
+              ],
+            ),
             CalendarMode.agenda => _AgendaView(
               anchor: _anchor,
               today: widget._now ?? DateTime.now(),
@@ -1435,6 +1455,150 @@ int _compareWallClock(DateTime left, DateTime right) {
     if (compared != 0) return compared;
   }
   return 0;
+}
+
+/// 列表档「第一排日历」与「日历全景」（嘀嗒《08-常见问题》:168
+/// 「在列表视图，手指按住第一排日历，向下拉，即可展开一个小的日历全景。」）。
+/// 周条常驻（就是"第一排日历"），向下拉在其下方展开同屏的小月网格、上滑收起，
+/// 展开/收起也可走读屏按钮；不是新页面也不是弹层。全景是纯日期网格，
+/// 不渲染任务点（嘀嗒未写全景带任务标记，specs/099 明确不做）。
+class _ListCalendarStrip extends StatelessWidget {
+  const _ListCalendarStrip({
+    required this.anchor,
+    required this.firstDay,
+    required this.expanded,
+    required this.onToggle,
+    required this.onDayTap,
+  });
+
+  final DateTime anchor;
+  final int firstDay;
+  final bool expanded;
+  final VoidCallback onToggle;
+  final ValueChanged<DateTime> onDayTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final weekStart = WeekStart.startOf(anchor, firstDay: firstDay);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onVerticalDragEnd: (details) {
+        final velocity = details.primaryVelocity ?? 0;
+        if (!expanded && velocity > 120) onToggle();
+        if (expanded && velocity < -120) onToggle();
+      },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              for (var i = 0; i < 7; i++)
+                _ListStripDay(
+                  day: weekStart.add(Duration(days: i)),
+                  anchor: anchor,
+                  onDayTap: onDayTap,
+                ),
+              Semantics(
+                key: const Key('calendar-list-panorama-toggle'),
+                container: true,
+                button: true,
+                enabled: true,
+                label: expanded ? '收起日历全景' : '展开日历全景',
+                onTap: onToggle,
+                child: ExcludeSemantics(
+                  child: IconButton(
+                    tooltip: expanded ? '收起日历全景' : '展开日历全景',
+                    icon: Icon(
+                      expanded
+                          ? Icons.keyboard_arrow_up
+                          : Icons.keyboard_arrow_down,
+                    ),
+                    onPressed: onToggle,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (expanded)
+            ExcludeSemantics(
+              child: SizedBox(
+                key: const Key('calendar-list-panorama'),
+                height: 280,
+                child: _MonthGrid(
+                  anchor: anchor,
+                  firstDay: firstDay,
+                  tasks: const [],
+                  onDayTap: onDayTap,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 周条上的一个日期格：点选即把锚点切到那一天；读屏念「M月d日」与选中态。
+class _ListStripDay extends StatelessWidget {
+  const _ListStripDay({
+    required this.day,
+    required this.anchor,
+    required this.onDayTap,
+  });
+
+  final DateTime day;
+  final DateTime anchor;
+  final ValueChanged<DateTime> onDayTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = brandColors(context);
+    final isAnchor =
+        day.year == anchor.year &&
+        day.month == anchor.month &&
+        day.day == anchor.day;
+    final isCurrentMonth = day.month == anchor.month;
+    return Expanded(
+      child: Semantics(
+        key: ValueKey('calendar-strip-day-${day.year}-${day.month}-${day.day}'),
+        label: '${day.month}月${day.day}日',
+        selected: isAnchor,
+        child: InkWell(
+          onTap: () => onDayTap(day),
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: isAnchor
+                  ? colors.accent.withValues(alpha: 0.15)
+                  : colors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              border: Border.all(
+                color: isAnchor ? colors.accent : colors.border,
+                width: isAnchor ? 1.5 : 0.5,
+              ),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: ExcludeSemantics(
+              child: Text(
+                '${day.day}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isAnchor
+                      ? colors.accent
+                      : isCurrentMonth
+                      ? colors.foreground
+                      : colors.mutedForeground,
+                  fontWeight: isAnchor ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _ListView extends StatelessWidget {
