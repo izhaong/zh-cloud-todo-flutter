@@ -1705,7 +1705,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                         const <String, Set<String>>{},
                     listFolderIds:
                         ref.read(listFolderIndexProvider) ??
-                        const <String, String>{},
+                        const <String, Set<String>>{},
                   ),
                   onChanged: (next) {
                     draft = next;
@@ -2249,7 +2249,7 @@ List<TodoTask> applyTaskFilter(
   String? selectedListId,
   DateTime now, {
   Map<String, Set<String>>? taskTagIds,
-  Map<String, String>? listFolderIds,
+  Map<String, Set<String>>? listFolderIds,
 }) {
   if (filter.isEmpty && selectedListId == null) return source;
   final startOfDay = DateTime(now.year, now.month, now.day);
@@ -2263,9 +2263,14 @@ List<TodoTask> applyTaskFilter(
     if (selectedListId != null && task.listId != selectedListId) return false;
     // 文件夹维度（Issue #333）：文件夹是清单的容器，所以「任务属于哪个文件夹」由它所在
     // 清单的本地 folder 主键决定。未归类清单不在图里 ⇒ 不命中任何文件夹条件，而不是放行。
+    // 索引存的是「所在文件夹 + 全部祖先」（Issue #344，与服务端 folderIds 展开同一口径）：
+    // 侧栏按层级渲染、清单只挂在直属文件夹上，所以选父文件夹要等于选它整棵子树。
     // 与标签同一口径：`listFolderIds == null` 是索引没就位，由调用方等它。
     if (filter.folderId != null && listFolderIds != null) {
-      if (listFolderIds[task.listId] != filter.folderId) return false;
+      if (!(listFolderIds[task.listId] ?? const <String>{})
+              .contains(filter.folderId)) {
+        return false;
+      }
     }
     if (filter.assigneeUserId != null &&
         task.assigneeUserId != filter.assigneeUserId) {

@@ -12,6 +12,7 @@ import '../core/sync/sync_coordinator.dart';
 import '../core/time/task_time_formatter.dart';
 import '../core/time/task_time_mode.dart';
 import '../core/time/week_start.dart';
+import '../features/shell/sidebar_hierarchy.dart';
 import '../state/session_state.dart';
 import 'repositories/board_preference_repository.dart';
 import 'repositories/filter_repository.dart';
@@ -475,16 +476,22 @@ final listsStreamProvider = StreamProvider<List<TodoList>>((ref) {
   return repo.watchAll();
 });
 
-/// 清单 → 文件夹的本地归属索引，供「文件夹」筛选条件求值（FL Issue #333）。
+/// 清单 → 「它所在文件夹以及全部祖先」的索引，供「文件夹」筛选条件求值（FL Issue #333，
+/// 口径与 zh-cloud-service Issue #344 同轮对齐：选父文件夹＝选它整棵子树）。
 /// 用 `folderLocalId`（本地主键）而不是 `folderId`（服务端 id）：离线建的文件夹还没有
 /// 服务端 id，用后者这类文件夹根本筛不了；也与 `TaskFilter.listId` 的本地口径一致。
-/// 清单流还没发值时返回 null，让调用方去等，而不是给一张空图把有文件夹条件读成「零命中」。
-final listFolderIndexProvider = Provider<Map<String, String>?>((ref) {
+/// 任一来源流还没发值时返回 null，让调用方去等 —— 只按直属算的那张图会把父文件夹条件
+/// 读成「零命中」，正是本轮要修的静默少给，所以不能拿它当"已就位"。
+final listFolderIndexProvider = Provider<Map<String, Set<String>>?>((ref) {
   final lists = ref.watch(listsStreamProvider).valueOrNull;
   if (lists == null) return null;
+  final folders = ref.watch(foldersStreamProvider).valueOrNull;
+  if (folders == null) return null;
+  final parentOf = {for (final folder in folders) folder.id: folder.parentId};
   return {
     for (final list in lists)
-      if (list.folderLocalId != null) list.id: list.folderLocalId!,
+      if (list.folderLocalId != null)
+        list.id: folderAndAncestors(list.folderLocalId!, parentOf),
   };
 });
 

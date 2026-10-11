@@ -42,7 +42,10 @@ void main() {
   final now = DateTime(2026, 10, 9, 10);
 
   // 清单 → 文件夹的归属索引：work 在「公司」，home 未归类（不在图里）。
-  final listFolderIds = <String, String>{'work': 'folder-company'};
+  // 索引值是「所在文件夹 + 全部祖先」的集合（Issue #344），所以这里给集合而不是单个 id。
+  final listFolderIds = <String, Set<String>>{
+    'work': {'folder-company'},
+  };
 
   test('文件夹条件参与求值：只留所属清单挂在该文件夹下的任务', () {
     final items = applyTaskFilter(
@@ -72,9 +75,26 @@ void main() {
       const TaskFilter(folderId: 'folder-local-only'),
       null,
       now,
-      listFolderIds: <String, String>{'home': 'folder-local-only'},
+      listFolderIds: const <String, Set<String>>{
+        'home': {'folder-local-only'},
+      },
     );
     expect(items.map((t) => t.id), ['b']);
+  });
+
+  test('清单挂在子文件夹时，选父文件夹也要命中（Issue #344 的子树口径）', () {
+    // 侧栏按层级渲染、清单只挂在直属文件夹上：只算直属会让父文件夹条件静默给出空集。
+    final items = applyTaskFilter(
+      tasks,
+      const TaskFilter(folderId: 'folder-group'),
+      null,
+      now,
+      listFolderIds: const <String, Set<String>>{
+        'work': {'folder-company', 'folder-group'},
+      },
+    );
+
+    expect(items.map((t) => t.id), ['a', 'c']);
   });
 
   test('没有文件夹条件时，归属索引不得改变结果', () {
