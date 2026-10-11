@@ -393,6 +393,7 @@ void main() {
           'targetDate': '2026-09-01',
           'style': 1,
           'showAge': false,
+          'noteShowInDetail': false,
         },
       );
 

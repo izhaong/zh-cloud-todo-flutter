@@ -28,6 +28,9 @@ class _RecordingCountdownApi extends CountdownApi {
     bool showAge = false,
     int style = 1,
     String? backgroundImage,
+    String? color,
+    String? note,
+    bool noteShowInDetail = false,
   }) async {
     createdBackground = backgroundImage;
     return 0;
@@ -41,6 +44,9 @@ class _RecordingCountdownApi extends CountdownApi {
     required int style,
     required bool showAge,
     String? backgroundImage,
+    String? color,
+    String? note,
+    bool noteShowInDetail = false,
   }) async {
     updatedBackground = backgroundImage;
   }
@@ -119,6 +125,7 @@ void main() {
     );
     await openEditor(w);
     expect(find.byKey(const Key('countdown-switch-image')), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const Key('countdown-switch-image')));
     await tester.tap(find.byKey(const Key('countdown-switch-image')));
     await tester.pumpAndSettle();
     expect(picked, isTrue, reason: '没调选择器就是按钮点了没反应');
@@ -131,6 +138,7 @@ void main() {
       'https://cdn.example.com/bg-new.jpg',
     );
 
+    await tester.ensureVisible(find.byKey(const Key('countdown-switch-image')));
     await tester.tap(find.byKey(const Key('countdown-switch-image')));
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -165,6 +173,7 @@ void main() {
       'https://cdn.example.com/bg-old.jpg',
     );
 
+    await tester.ensureVisible(find.byKey(const Key('countdown-switch-image')));
     await tester.tap(find.byKey(const Key('countdown-switch-image')));
     await tester.pumpAndSettle();
 
@@ -190,6 +199,7 @@ void main() {
     );
     await w.tap(find.byKey(const Key('countdown-row-7')));
     await w.pumpAndSettle();
+    await w.ensureVisible(find.byKey(const Key('countdown-switch-image')));
     await w.tap(find.byKey(const Key('countdown-switch-image')));
     await w.pumpAndSettle();
 

@@ -108,6 +108,17 @@ class _CountdownTileState extends State<_CountdownTile> {
       child: Stack(
         fit: StackFit.passthrough,
         children: [
+          if (parseCountdownColor(item.color) != null)
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: 4,
+              child: Container(
+                key: Key('countdown-color-strip-${item.id}'),
+                color: parseCountdownColor(item.color),
+              ),
+            ),
           if (background != null && background.isNotEmpty)
             Positioned.fill(
               child: Image.network(
@@ -134,6 +145,16 @@ class _CountdownTileState extends State<_CountdownTile> {
                         style: theme.textTheme.titleMedium,
                         overflow: TextOverflow.ellipsis,
                       ),
+                      // 嘀嗒备注的「在详情页中显示」开关：本端暂无独立详情页（矩阵 #49 ④），
+                      // 卡片行就是详情表面，开关开着才把备注带出来。
+                      if (item.noteShowInDetail &&
+                          (item.note?.isNotEmpty ?? false))
+                        Text(
+                          item.note!,
+                          key: Key('countdown-note-${item.id}'),
+                          style: theme.textTheme.bodySmall,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       if (showDays)
                         Semantics(
                           container: true,
@@ -764,6 +785,9 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
             style: existing.style,
             showAge: existing.showAge,
             backgroundImage: existing.backgroundImage,
+            color: existing.color,
+            note: existing.note ?? '',
+            noteShowInDetail: existing.noteShowInDetail,
           );
     final saved = await showDialog<_CountdownDraft>(
       context: context,
@@ -794,6 +818,9 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
           style: saved.style,
           showAge: saved.showAge,
           backgroundImage: saved.backgroundImage,
+          color: saved.color,
+          note: saved.note,
+          noteShowInDetail: saved.noteShowInDetail,
         ),
       );
     } else {
@@ -806,6 +833,9 @@ class _CountdownPageState extends ConsumerState<CountdownPage> {
           style: saved.style,
           showAge: saved.showAge,
           backgroundImage: saved.backgroundImage,
+          color: saved.color,
+          note: saved.note,
+          noteShowInDetail: saved.noteShowInDetail,
         ),
       );
     }
@@ -819,6 +849,9 @@ class _CountdownDraft {
     this.style = 1,
     this.showAge = false,
     this.backgroundImage,
+    this.color,
+    this.note = '',
+    this.noteShowInDetail = false,
   });
 
   final String title;
@@ -826,6 +859,9 @@ class _CountdownDraft {
   final int style;
   final bool showAge;
   final String? backgroundImage;
+  final String? color;
+  final String note;
+  final bool noteShowInDetail;
 
   _CountdownDraft copyWith({
     String? title,
@@ -833,6 +869,9 @@ class _CountdownDraft {
     int? style,
     bool? showAge,
     String? backgroundImage,
+    String? color,
+    String? note,
+    bool? noteShowInDetail,
   }) {
     return _CountdownDraft(
       title: title ?? this.title,
@@ -840,8 +879,36 @@ class _CountdownDraft {
       style: style ?? this.style,
       showAge: showAge ?? this.showAge,
       backgroundImage: backgroundImage ?? this.backgroundImage,
+      color: color ?? this.color,
+      note: note ?? this.note,
+      noteShowInDetail: noteShowInDetail ?? this.noteShowInDetail,
     );
   }
+}
+
+/// 嘀嗒《02-打造专属纪念页.md》「挑选样式后，还可以为它配置专属颜色」——
+/// 预设色板（服务端不校验色值，客户端自守 #RRGGBB）。
+const _countdownColorChoices = <String>[
+  '#FF6B6B',
+  '#F59E0B',
+  '#22C55E',
+  '#3B82F6',
+  '#8B5CF6',
+  '#EC4899',
+  '#14B8A6',
+  '#F97316',
+];
+
+/// `#RRGGBB` / `#AARRGGBB`；空串、非法串与 null 都算「没指定」。
+Color? parseCountdownColor(String? hex) {
+  if (hex == null) return null;
+  var value = hex.trim();
+  if (value.isEmpty) return null;
+  if (value.startsWith('#')) value = value.substring(1);
+  if (value.length == 6) value = 'FF$value';
+  if (value.length != 8) return null;
+  final parsed = int.tryParse(value, radix: 16);
+  return parsed == null ? null : Color(parsed);
 }
 
 class _CountdownEditor extends StatefulWidget {
@@ -864,6 +931,9 @@ class _CountdownEditor extends StatefulWidget {
 class _CountdownEditorState extends State<_CountdownEditor> {
   late final TextEditingController _title = TextEditingController(
     text: widget.initial.title,
+  );
+  late final TextEditingController _note = TextEditingController(
+    text: widget.initial.note,
   );
   late _CountdownDraft _draft = widget.initial;
   String? _imageError;
@@ -906,6 +976,7 @@ class _CountdownEditorState extends State<_CountdownEditor> {
   @override
   void dispose() {
     _title.dispose();
+    _note.dispose();
     super.dispose();
   }
 
@@ -974,6 +1045,32 @@ class _CountdownEditorState extends State<_CountdownEditor> {
                   setState(() => _draft = _draft.copyWith(showAge: value)),
             ),
             const SizedBox(height: 8),
+            Text('颜色', style: Theme.of(context).textTheme.labelMedium),
+            Wrap(
+              spacing: 8,
+              children: [
+                ChoiceChip(
+                  key: const Key('countdown-color-default'),
+                  label: const Text('默认'),
+                  selected: parseCountdownColor(_draft.color) == null,
+                  onSelected: (_) =>
+                      setState(() => _draft = _draft.copyWith(color: '')),
+                ),
+                for (final hex in _countdownColorChoices)
+                  ChoiceChip(
+                    key: Key('countdown-color-$hex'),
+                    avatar: CircleAvatar(
+                      backgroundColor: parseCountdownColor(hex),
+                      radius: 8,
+                    ),
+                    label: const SizedBox.shrink(),
+                    selected: _draft.color?.toUpperCase() == hex,
+                    onSelected: (_) =>
+                        setState(() => _draft = _draft.copyWith(color: hex)),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
             Semantics(
               key: const Key('countdown-switch-image'),
               button: true,
@@ -1002,6 +1099,27 @@ class _CountdownEditorState extends State<_CountdownEditor> {
                 errorBuilder: (context, error, stackTrace) =>
                     const SizedBox.shrink(),
               ),
+            const SizedBox(height: 8),
+            TextField(
+              key: const Key('countdown-note-field'),
+              controller: _note,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: '备注',
+                hintText: '为这个日子添加一段文字记录',
+              ),
+              onChanged: (value) =>
+                  setState(() => _draft = _draft.copyWith(note: value)),
+            ),
+            SwitchListTile(
+              key: const Key('countdown-note-show-in-detail'),
+              contentPadding: EdgeInsets.zero,
+              title: const Text('在详情页中显示'),
+              value: _draft.noteShowInDetail,
+              onChanged: (value) => setState(
+                () => _draft = _draft.copyWith(noteShowInDetail: value),
+              ),
+            ),
           ],
         ),
       ),

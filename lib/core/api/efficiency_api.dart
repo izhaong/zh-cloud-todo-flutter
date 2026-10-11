@@ -290,6 +290,9 @@ class CountdownDto {
   final bool archived;
   final bool isPinned;
   final int type;
+  final String? color;
+  final String? note;
+  final bool noteShowInDetail;
 
   CountdownDto({
     required this.id,
@@ -302,6 +305,9 @@ class CountdownDto {
     this.archived = false,
     this.isPinned = false,
     this.type = 1,
+    this.color,
+    this.note,
+    this.noteShowInDetail = false,
   });
 
   factory CountdownDto.fromJson(Map<String, dynamic> j) {
@@ -325,6 +331,9 @@ class CountdownDto {
       archived: j['archived'] == true,
       isPinned: j['isPinned'] == true,
       type: (j['type'] as num?)?.toInt() ?? 1,
+      color: j['color']?.toString(),
+      note: j['note']?.toString(),
+      noteShowInDetail: j['noteShowInDetail'] == true,
     );
   }
 
@@ -929,6 +938,9 @@ class CountdownApi {
     bool showAge = false,
     int style = 1,
     String? backgroundImage,
+    String? color,
+    String? note,
+    bool noteShowInDetail = false,
   }) async {
     final r = await _dio.post<Map<String, dynamic>>(
       '${ApiConfig.todoPrefix}/countdown/create',
@@ -938,6 +950,9 @@ class CountdownApi {
         'style': style,
         'showAge': showAge,
         'backgroundImage': ?backgroundImage,
+        'color': ?color,
+        'note': ?note,
+        'noteShowInDetail': noteShowInDetail,
       },
     );
     final data = _unwrapData(r.data);
@@ -953,6 +968,9 @@ class CountdownApi {
     required int style,
     required bool showAge,
     String? backgroundImage,
+    String? color,
+    String? note,
+    bool noteShowInDetail = false,
   }) async {
     final response = await _dio.put<Map<String, dynamic>>(
       '${ApiConfig.todoPrefix}/countdown/update',
@@ -963,6 +981,9 @@ class CountdownApi {
         'style': style,
         'showAge': showAge,
         'backgroundImage': ?backgroundImage,
+        'color': ?color,
+        'note': ?note,
+        'noteShowInDetail': noteShowInDetail,
       },
     );
     _unwrapData(response.data);

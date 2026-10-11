@@ -71,6 +71,7 @@ void main() {
         'targetDate': '2026-08-10',
         'style': 3,
         'showAge': true,
+        'noteShowInDetail': false,
       });
     },
   );
