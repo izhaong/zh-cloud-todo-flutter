@@ -1,3 +1,5 @@
+import 'package:drift/drift.dart' show OrderingMode, OrderingTerm;
+
 import '../../core/db/app_database.dart';
 import '../../core/time/task_time_formatter.dart';
 import '../../core/time/task_time_mode.dart';
@@ -20,7 +22,8 @@ DateTime _dateOnly(DateTime value) =>
 ///
 /// 所有排序仍固定以置顶、手工顺序与任务 UUID 作为额外键，确保
 /// Drift 查询与 Widget 渲染在同值场景也拥有相同的确定性顺序。
-enum TaskSort { smart, priorityDesc, dueDate, title, createdAt, updatedAt }
+/// [tag] 追加在末尾（偏好按 `name` 序列化，顺序无关，仅图 diff 可读）。
+enum TaskSort { smart, priorityDesc, dueDate, title, createdAt, updatedAt, tag }
 
 /// 时间轴方向的档位。
 ///
@@ -30,11 +33,34 @@ enum TaskSort { smart, priorityDesc, dueDate, title, createdAt, updatedAt }
 /// [newestFirst] 排第一是因为它是默认值，也是本参数出现之前唯一的行为。
 enum TaskSortDirection { newestFirst, oldestFirst }
 
+/// 标签档的「任务没有标签 / 位次表缺该标签 / 两张表没到位」共同回退值：
+/// 排到最后（与 [TaskSort.dueDate] 对空截止时间的处理同形），绝不能当 0 处理。
+const int _unrankedTag = 1 << 62;
+
+/// 标签档的排序键：任务取其所有标签里侧栏位次最小者；没有标签或位次缺失都算末位。
+int _tagRankOfTask(
+  TodoTask task,
+  Map<String, Set<String>>? taskTags,
+  Map<String, int>? tagRank,
+) {
+  if (taskTags == null || tagRank == null) return _unrankedTag;
+  final tags = taskTags[task.id];
+  if (tags == null || tags.isEmpty) return _unrankedTag;
+  var best = _unrankedTag;
+  for (final tagId in tags) {
+    final rank = tagRank[tagId] ?? _unrankedTag;
+    if (rank < best) best = rank;
+  }
+  return best;
+}
+
 int compareTodoTasks(
   TodoTask left,
   TodoTask right,
   TaskSort sort, {
   TaskSortDirection direction = TaskSortDirection.newestFirst,
+  Map<String, Set<String>>? taskTags,
+  Map<String, int>? tagRank,
 }) {
   if (left.isPinned != right.isPinned) return left.isPinned ? -1 : 1;
 
@@ -50,6 +76,13 @@ int compareTodoTasks(
     ),
     TaskSort.createdAt => reversed * right.createdAt.compareTo(left.createdAt),
     TaskSort.updatedAt => reversed * right.updatedAt.compareTo(left.updatedAt),
+    // 嘀嗒《用标签管理任务》:122「在任务列表『···』-『排序』中，将任务按标签进行排序」。
+    // 标签顺序没有方向一说 ⇒ 不读 [direction]。位次表来源与同义键见 [_tagRankOfTask]。
+    TaskSort.tag => _tagRankOfTask(
+      left,
+      taskTags,
+      tagRank,
+    ).compareTo(_tagRankOfTask(right, taskTags, tagRank)),
   };
   if (bySelectedField != 0) return bySelectedField;
 
@@ -246,12 +279,35 @@ class TaskQueryRepository {
         (tagId) => tagIdsByTask[task.id]?.contains(tagId) ?? false,
       );
     }).toList();
+    Map<String, int>? tagRank;
+    if (filter.sort == TaskSort.tag) {
+      // 与 TagRepository.watchAll 同序（isPinned 降序、sortOrder 降序、createdAt 升序）。
+      // 改排序口径必须两处同改，否则侧栏顺序与标签档排序会分叉。
+      final orderedTags =
+          await (_db.select(_db.todoTags)..orderBy([
+                (t) => OrderingTerm(
+                  expression: t.isPinned,
+                  mode: OrderingMode.desc,
+                ),
+                (t) => OrderingTerm(
+                  expression: t.sortOrder,
+                  mode: OrderingMode.desc,
+                ),
+                (t) => OrderingTerm(expression: t.createdAt),
+              ]))
+              .get();
+      tagRank = {
+        for (var i = 0; i < orderedTags.length; i++) orderedTags[i].id: i,
+      };
+    }
     results.sort(
       (left, right) => compareTodoTasks(
         left,
         right,
         filter.sort,
         direction: filter.sortDirection,
+        taskTags: tagIdsByTask,
+        tagRank: tagRank,
       ),
     );
     return results;
