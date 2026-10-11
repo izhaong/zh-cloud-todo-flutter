@@ -41,6 +41,10 @@ class TodoLists extends Table {
   /// 置顶位（嘀嗒《02-用清单管理任务》：侧边栏左滑清单出现「置顶」）。
   /// 服务端同名列 `todo_list.is_pinned`，出库 payload 走 `toJson()`。
   BoolColumn get isPinned => boolean().withDefault(const Constant(false))();
+
+  /// 清单颜色（嘀嗒《02-用清单管理任务》:73，specs/102 / FL #339）。
+  /// `#RRGGBB` 字符串；服务端同名列 `todo_list.color`，出库 payload 走 `toJson()`。
+  TextColumn get color => text().nullable()();
   TextColumn get accessRole =>
       text().withDefault(const Constant('owner'))(); // owner/editor/viewer
   BoolColumn get writable => boolean().withDefault(const Constant(true))();
@@ -457,7 +461,7 @@ class AppDatabase extends _$AppDatabase {
   }) : super(_open(_userDatabaseName(tenantId, userId, testNamespace)));
 
   @override
-  int get schemaVersion => 28;
+  int get schemaVersion => 29;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -757,6 +761,13 @@ class AppDatabase extends _$AppDatabase {
         }
         // 不回填：三列都来自服务端 #271 契约，下次成功 refresh 会整表替换；
         // 缓存里旧行没有这三列就按未分桶渲染，不猜。
+      }
+      if (from < 29) {
+        if (!await _columnExists(m, todoLists.actualTableName, 'color')) {
+          await m.addColumn(todoLists, todoLists.color);
+          // 不回填：存量清单本来就没有颜色，null 即真实状态；
+          // 服务端 todo_list.color 已有值时下次成功 pull 会补上。
+        }
       }
     },
   );

@@ -64,6 +64,7 @@ class ListRepository {
   Future<TodoList> create({
     required String name,
     String? folderLocalId,
+    String? color,
     int sortOrder = 0,
   }) async {
     return _db.transaction(() async {
@@ -78,6 +79,7 @@ class ListRepository {
               name: name,
               folderLocalId: Value(folderLocalId),
               folderId: Value(folder?.serverId),
+              color: Value(color),
               sortOrder: Value(sortOrder),
               updatedAt: now,
               createdAt: now,
@@ -122,6 +124,29 @@ class ListRepository {
     final now = DateTime.now();
     await (_db.update(_db.todoLists)..where((t) => t.id.equals(listId))).write(
       TodoListsCompanion(isPinned: Value(pinned), updatedAt: Value(now)),
+    );
+    final row = await (_db.select(
+      _db.todoLists,
+    )..where((t) => t.id.equals(listId))).getSingle();
+    await _queue.enqueue(
+      entity: SyncEntities.list,
+      op: SyncOps.upsert,
+      localId: listId,
+      serverId: row.serverId,
+      payload: row.toJson(),
+    );
+    return row;
+  }
+
+  /// 设置或清除清单颜色（嘀嗒《02-用清单管理任务》:73 清单属性含「颜色」）。
+  ///
+  /// 与 [setPinned] 同一条口径：本地写入与 list/upsert outbox 必须一起落，
+  /// payload 走 `toJson()`，服务端 `todo_list.color` 收同一字段名；
+  /// 传 null 即清色，显式 null 也会随 payload 出库让另一端回退默认色。
+  Future<TodoList> setColor(String listId, String? color) async {
+    final now = DateTime.now();
+    await (_db.update(_db.todoLists)..where((t) => t.id.equals(listId))).write(
+      TodoListsCompanion(color: Value(color), updatedAt: Value(now)),
     );
     final row = await (_db.select(
       _db.todoLists,

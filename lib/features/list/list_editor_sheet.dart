@@ -4,12 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/db/app_database.dart';
 import '../../state/providers.dart';
 import 'list_actions.dart';
+import 'list_color.dart';
 
 /// M11-B2 清单创建 / 重命名 / 删除 弹窗。
 ///
 /// 嘀嗒《01-任务/09-如何管理海量任务/02-用清单管理任务.md》:73
 /// 「你可以设置清单的「名称」、「颜色」、「所属文件夹」及「在智能清单中显示/隐藏」。」
-/// 本轮补的是「所属文件夹」（颜色与图标要新增列，见 specs/049 的范围说明）。
 class ListEditorSheet extends ConsumerStatefulWidget {
   const ListEditorSheet({super.key, this.folderLocalId, this.existing});
 
@@ -23,6 +23,7 @@ class ListEditorSheet extends ConsumerStatefulWidget {
 class _ListEditorSheetState extends ConsumerState<ListEditorSheet> {
   late final TextEditingController _name;
   late String? _folderLocalId;
+  String? _color;
   String? _error;
 
   @override
@@ -31,6 +32,7 @@ class _ListEditorSheetState extends ConsumerState<ListEditorSheet> {
     _name = TextEditingController(text: widget.existing?.name ?? '');
     // FR-3 编辑时预选当前归属；FR-5 从文件夹里点新建时沿用带入的归属。
     _folderLocalId = widget.existing?.folderLocalId ?? widget.folderLocalId;
+    _color = widget.existing?.color;
   }
 
   @override
@@ -50,14 +52,21 @@ class _ListEditorSheetState extends ConsumerState<ListEditorSheet> {
     }
     setState(() => _error = null);
     try {
-      // 先移动再改名：移动失败时改名还没发生，弹层里不会出现"半改好"的清单。
+      // 先移动再改名再改色：前一步失败时后面还没发生，弹层里不会出现"半改好"的清单。
       if (existing == null) {
-        await repo.create(name: text, folderLocalId: _folderLocalId);
+        await repo.create(
+          name: text,
+          folderLocalId: _folderLocalId,
+          color: _color,
+        );
       } else {
         if (_folderLocalId != existing.folderLocalId) {
           await repo.moveToFolder(existing.id, _folderLocalId);
         }
         if (text != existing.name) await repo.rename(existing.id, text);
+        if (_color != existing.color) {
+          await repo.setColor(existing.id, _color);
+        }
       }
     } on Object {
       setState(() => _error = existing == null ? '新建清单失败，请重试' : '移动到文件夹失败，请重试');
@@ -147,6 +156,47 @@ class _ListEditorSheetState extends ConsumerState<ListEditorSheet> {
                 ),
               ),
             ),
+            const SizedBox(height: 12),
+            KeyedSubtree(
+              key: const Key('todo-list-editor-color-row'),
+              child: Row(
+                children: [
+                  const Text('颜色'),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        // 「无」不显示选中标记：默认无色时整行不应假装有选中
+                        // （specs/102 用例钉死这一点），点「无」只是把 _color 归 null。
+                        _ColorSwatch(
+                          key: const Key('todo-list-editor-color-none'),
+                          selected: false,
+                          onTap: () => setState(() {
+                            _color = null;
+                            _error = null;
+                          }),
+                        ),
+                        for (final hex in kListColorChoices)
+                          _ColorSwatch(
+                            key: Key(
+                              'todo-list-editor-color-'
+                              '${hex.substring(1).toLowerCase()}',
+                            ),
+                            color: listColorFromHex(hex),
+                            selected: _color == hex,
+                            onTap: () => setState(() {
+                              _color = hex;
+                              _error = null;
+                            }),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
@@ -189,4 +239,44 @@ String _folderPath(TodoFolder folder, Map<String, TodoFolder> byId) {
     parent = parent.parentId == null ? null : byId[parent.parentId];
   }
   return segments.join(' / ');
+}
+
+class _ColorSwatch extends StatelessWidget {
+  const _ColorSwatch({
+    super.key,
+    this.color,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final Color? color;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      customBorder: const CircleBorder(),
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: color == null ? Border.all(color: theme.dividerColor) : null,
+        ),
+        child: selected
+            ? Icon(
+                Icons.check,
+                size: 20,
+                color: color == null
+                    ? theme.colorScheme.onSurface
+                    : Colors.white,
+              )
+            : null,
+      ),
+    );
+  }
 }
