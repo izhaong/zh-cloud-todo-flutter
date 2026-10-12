@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -28,6 +30,15 @@ class TaskQuickAddSheet extends ConsumerStatefulWidget {
 
 class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
   final _titleCtrl = TextEditingController();
+  final _titleFocus = FocusNode();
+
+  /// 嘀嗒《02-功能指南/01-任务/09-如何管理海量任务/06-多级任务.md》:15「你可以在输入完第一个子任务之后
+  /// 点击「纸飞机」图标完成创建，或者点击键盘左下角的「换行」来完成创建当前子任务，并且可以继续创建
+  /// 第二个同级的子任务，如此往复。」与 desktop tab 的 :56「点击「Enter」来继续创建第二个同级的子任务」。
+  ///
+  /// 只有**建子任务**这张表是连续的：`:15`/`:56` 两句都长在「创建子任务」那一节里，
+  /// 收集箱/清单的快速添加原文没提"如此往复"，所以 `parentTaskId == null` 时提交仍然照旧关表。
+  bool get _consecutive => widget.parentTaskId != null;
   int? _priorityOverride;
   DateTime? _nlpResolvedDueAt;
 
@@ -49,6 +60,7 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
     _titleCtrl
       ..removeListener(_maybeResolveDate)
       ..dispose();
+    _titleFocus.dispose();
     super.dispose();
   }
 
@@ -87,6 +99,7 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
     // `_nlpResolvedDueAt` 只由识别路径赋值（模板那条 `_addFromTemplate` 不碰它），
     // 所以"识别命中"与"有 dueAt"在这文件里是同一件事，不需要再引第二个标志位。
     final dueAt = _nlpResolvedDueAt;
+    String? savedTitle;
     if (_savedTaskId == null) {
       final text = _titleCtrl.text.trim();
       if (text.isEmpty) {
@@ -106,6 +119,7 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
           dueAt: dueAt,
         );
         _savedTaskId = task.id;
+        savedTitle = text;
       } on StateError catch (error) {
         _report(error.message.toString());
         return;
@@ -115,7 +129,7 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
       }
     }
     if (dueAt == null) {
-      if (mounted) Navigator.pop(context);
+      _afterSaved(savedTitle);
       return;
     }
     // 提醒那半：任务已经落库，这一步失败不能说成"保存成功"，也不能回滚任务。
@@ -127,12 +141,35 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
     }
     try {
       await reminders.create(taskId: _savedTaskId!, fireAt: dueAt);
-      if (mounted) Navigator.pop(context);
+      _afterSaved(savedTitle);
     } on StateError catch (error) {
       _report('任务已建，但提醒没建成：${error.message}');
     } catch (_) {
       _report('任务已建，但提醒没建成，请稍后在任务里添加提醒');
     }
+  }
+
+  /// 建完一条之后的收尾：连续档把这张表留在原地（清空标题、抢回焦点、复位"已建过"标记），
+  /// 其余一律按原行为关表。
+  ///
+  /// `_savedTaskId = null` 是关键的一步：`_saveOnce` 靠它区分「这次只补提醒，不建第二遍任务」。
+  /// 不复位的话第二次「保存」会跳过建任务、只给第一条补提醒 ⇒ 用户以为建了两条，实际只有一条。
+  void _afterSaved(String? savedTitle) {
+    if (!_consecutive) {
+      if (mounted) Navigator.pop(context);
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _savedTaskId = null;
+      _titleCtrl.clear();
+      // `_nlpResolvedDueAt` 是从标题里识别出来的，标题清空后它不能再留着。
+      _nlpResolvedDueAt = null;
+      _titleError = null;
+      // 优先级是人在这张表上手选的，连续建同级子任务时不该被抹回默认值。
+      _feedback = savedTitle == null ? null : '已添加子任务「$savedTitle」，可以继续输入下一个';
+    });
+    _titleFocus.requestFocus();
   }
 
   /// 结果只写在弹窗自己的一行里，不走 SnackBar：生产里本弹窗是 `showModalBottomSheet`
@@ -217,8 +254,13 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
             ),
             const SizedBox(height: 12),
             TextField(
+              key: const Key('todo-quick-add-title-field'),
               controller: _titleCtrl,
+              focusNode: _titleFocus,
               autofocus: true,
+              // 连续档才改这一档动作：非连续传 null 就是平台默认值，与改动前逐字节等价。
+              textInputAction: _consecutive ? TextInputAction.newline : null,
+              onSubmitted: _consecutive ? (_) => unawaited(_save()) : null,
               decoration: InputDecoration(
                 labelText: '标题',
                 errorText: _titleError,
