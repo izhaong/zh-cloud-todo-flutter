@@ -1009,7 +1009,22 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   /// 页面身份复用 [_viewPreferenceSourceKey] 那一份判定，不另起一套"我在哪一页"的口径：
   /// `list:` 前缀＝某个清单或收集箱（`list:inbox`），
   /// `smart:` 前缀＝今天/明天/最近七天/已完成/指派给我/全部。
-  bool get _subtaskDropEnabled => _viewPreferenceSourceKey.startsWith('list:');
+  /// 后半句的「自己创建的普通清单」＝可写清单：订阅/共享来的清单 `TodoLists.writable` 为 false，
+  /// 仓储那条通道会抛「当前清单为只读，无法修改任务」（`task_repository.dart:653`），
+  /// 所以那一类清单上这一行根本不该是落点，而不是拖上去再报错。
+  bool get _subtaskDropEnabled {
+    if (!_viewPreferenceSourceKey.startsWith('list:')) return false;
+    final listId = _selectedListId;
+    if (listId == null) return false;
+    if (listId == kInboxListId) return true;
+    final lists =
+        ref.watch(listsStreamProvider).valueOrNull ?? const <TodoList>[];
+    for (final list in lists) {
+      if (list.id == listId) return list.writable;
+    }
+    // 流里读不到这一行 ⇒ 不给落点：拿不准时宁可没有，也别让人拖出一个只读报错。
+    return false;
+  }
 
   /// 落点只走仓储那条既有通道：自引用、成环（`任务父子关系形成循环`）与五层上限
   /// （`任务层级不能超过五级`）都在它里面，这里**不复制判定** —— 复制一份就会漂。

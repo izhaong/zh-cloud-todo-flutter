@@ -266,12 +266,151 @@ void main() {
     expect(listMoves, isEmpty);
   });
 
+  testWidgets('订阅/共享那种只读清单没有落点：嘀嗒 :28 只要收集箱与自己创建的清单', (tester) async {
+    final fixture = await _pumpList(
+      tester,
+      initialListId: TodoVisualFixture.workListId,
+      prepare: (db) async {
+        await _insertTask(
+          db,
+          id: 'work-task-second',
+          listId: TodoVisualFixture.workListId,
+          title: '第二项',
+        );
+        await (db.update(db.todoLists)
+              ..where((row) => row.id.equals(TodoVisualFixture.workListId)))
+            .write(TodoListsCompanion(writable: Value(false)));
+      },
+    );
+
+    expect(
+      await _parentTaskIdOf(fixture.database, 'visual-task-work-list'),
+      isNull,
+      reason: '前置条件：这一页真有两行可拖（否则 findsNothing 是空页造成的）',
+    );
+    expect(
+      _rowDropZones(),
+      findsNothing,
+      reason:
+          '只读清单上仓储必抛「当前清单为只读，无法修改任务」，'
+          '所以这一行根本不该是落点，而不是拖上去再报错',
+    );
+  });
+
+  testWidgets('同一张清单改回可写后落点出现：闸门读的是 writable 不是恒假', (tester) async {
+    final fixture = await _pumpList(
+      tester,
+      initialListId: TodoVisualFixture.workListId,
+      prepare: (db) async {
+        await _insertTask(
+          db,
+          id: 'work-task-second',
+          listId: TodoVisualFixture.workListId,
+          title: '第二项',
+        );
+      },
+    );
+
+    expect(
+      _rowDropZones(),
+      findsWidgets,
+      reason: '自建普通清单是 :28 明列的可用面；写死 false 会让这条红',
+    );
+
+    await _dragToBand(
+      tester,
+      sourceId: 'visual-task-work-list',
+      targetId: 'work-task-second',
+      band: _Band.lowerRight,
+    );
+
+    expect(
+      await _parentTaskIdOf(fixture.database, 'visual-task-work-list'),
+      'work-task-second',
+      reason: '自建清单里这一拖要真写进去：只把 findsWidgets 量出来而写不进，等于闸门修坏了',
+    );
+  });
+
+  testWidgets('320px + 1.3 倍字号：象限按行自身的比例算，拖动照样成立', (tester) async {
+    final fixture = await _pumpList(
+      tester,
+      viewport: const Size(320, 600),
+      textScale: 1.3,
+    );
+
+    await _dragToBand(
+      tester,
+      sourceId: draggedId,
+      targetId: parentId,
+      band: _Band.lowerRight,
+    );
+
+    expect(
+      await _parentTaskIdOf(fixture.database, draggedId),
+      parentId,
+      reason:
+          '落点没有固定像素宽度；窄屏大字号把它挤没的话这条要红'
+          '（嘀嗒 mobile tab :20 说的就是手机上这一拖）',
+    );
+  });
+
+  testWidgets('真仓储的五层上限从新入口被触发时：提示看得见且一个字节都不写', (tester) async {
+    final fixture = await _pumpList(
+      tester,
+      prepare: (db) async {
+        // `depthOf` 是 0 基（顶层＝0），所以 pinned 下面要挂五层后代：
+        // newTaskDepth 1 + subtreeDepth 5 = 6 > 5 才越界。
+        // 第一版只挂四层（正好五级，合法不拒），量出来是拖成功了而不是被拒。
+        var parent = draggedId;
+        for (var level = 1; level <= 5; level++) {
+          final id = 'deep-task-$level';
+          await _insertTask(
+            db,
+            id: id,
+            listId: TodoVisualFixture.inboxListId,
+            title: '深层 $level',
+          );
+          await (db.update(db.todoTasks)..where((row) => row.id.equals(id)))
+              .write(TodoTasksCompanion(parentTaskId: Value(parent)));
+          parent = id;
+        }
+      },
+    );
+
+    final before = await _queuedChangeCount(
+      fixture.database,
+      localId: draggedId,
+    );
+    await _dragToBand(
+      tester,
+      sourceId: draggedId,
+      targetId: parentId,
+      band: _Band.lowerRight,
+    );
+
+    expect(
+      find.textContaining('任务层级不能超过五级'),
+      findsOneWidget,
+      reason: '守卫原话经 describeError 上屏（本仓不许直接插异常对象）',
+    );
+    expect(
+      await _parentTaskIdOf(fixture.database, draggedId),
+      isNull,
+      reason: '被拒的一刀不许留下半个写入',
+    );
+    expect(
+      await _queuedChangeCount(fixture.database, localId: draggedId),
+      before,
+      reason: '也不许入队——同步出去就是一个服务端会拒的越级关系',
+    );
+  });
+
   testWidgets('智能清单里右下带落点不存在（嘀嗒 :28 的闸门）', (tester) async {
     // initialListId = null ⇒ 页面身份是 `smart:all`（"全部"智能清单）。
     final fixture = await _pumpList(tester, initialListId: null);
 
     expect(
-      find.byType(DragTarget<TodoTask>),
+      _rowDropZones(),
       findsNothing,
       reason: '闸门关掉时这一行连落点都不该建，不该只是"点了没反应"',
     );
@@ -293,7 +432,7 @@ void main() {
   testWidgets('收集箱有落点：闸门按页身份开', (tester) async {
     await _pumpList(tester);
     expect(
-      find.byType(DragTarget<TodoTask>),
+      _rowDropZones(),
       findsWidgets,
       reason: '收集箱（`list:inbox`）是嘀嗒 :28 明列的可用面',
     );
@@ -377,13 +516,17 @@ Future<TodoVisualFixture> _pumpList(
   String? initialListId = TodoVisualFixture.inboxListId,
   List<Override> Function(AppDatabase database)? overridesBuilder,
   void Function(String taskId)? onTaskSelected,
+  Size viewport = TodoVisualViewports.wide,
+  double textScale = 1,
+  Future<void> Function(AppDatabase database)? prepare,
 }) async {
   final fixture = await TodoVisualFixture.create(
     set: TodoVisualFixtureSet.populated,
     overridesBuilder: overridesBuilder,
   );
   addTearDown(fixture.dispose);
-  tester.view.physicalSize = TodoVisualViewports.wide;
+  if (prepare != null) await prepare(fixture.database);
+  tester.view.physicalSize = viewport;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -395,12 +538,20 @@ Future<TodoVisualFixture> _pumpList(
         theme: ThemeData(
           extensions: const [AppThemeExtension(AppColors.light)],
         ),
-        home: Scaffold(
-          body: TasksByListPage(
-            initialListId: initialListId,
-            lockedListId: true,
-            hideAppBar: true,
-            onTaskSelected: onTaskSelected,
+        home: MediaQuery(
+          // 窄屏 + 1.3 倍字号那一面要真量：落点是行自身的 0.5×0.5 象限，
+          // 不是固定像素，所以缩到 320px 也还在（这条用例是那句主张的读数）。
+          data: MediaQueryData(
+            size: viewport,
+            textScaler: TextScaler.linear(textScale),
+          ),
+          child: Scaffold(
+            body: TasksByListPage(
+              initialListId: initialListId,
+              lockedListId: true,
+              hideAppBar: true,
+              onTaskSelected: onTaskSelected,
+            ),
           ),
         ),
       ),
@@ -416,6 +567,14 @@ Future<TodoVisualFixture> _pumpList(
 /// 必须在**起手势之前**量：拖起来之后 feedback 会再渲染一份同一行
 /// （`childWhenDragging` + feedback），那时 `task-row-surface-<id>` 有两个，
 /// `getSize` 直接抛 `Too many elements`（本机实测踩过）。
+/// **行级**落点。全树 `find.byType(DragTarget<TodoTask>)` 会把页级的
+/// `TaskListDropTarget` 一起数进来（在清单页它恒在），那把尺量不出"这一行是不是落点"；
+/// 所以作用域要切到 TaskSubtaskDropTarget 里面。
+Finder _rowDropZones() => find.descendant(
+  of: find.byType(TaskSubtaskDropTarget),
+  matching: find.byType(DragTarget<TodoTask>),
+);
+
 Offset _bandCenter(WidgetTester tester, Finder row, _Band band) {
   expect(row, findsOneWidget);
   final size = tester.getSize(row);
@@ -436,6 +595,9 @@ Future<TestGesture> _startBandHover(
   expect(source, findsOneWidget);
   expect(target, findsOneWidget);
   await tester.ensureVisible(source);
+  // 字号放大那一档在起手势之前还会再排一次版；不等完就量，量到的是上一帧的行矩形，
+  // 落点会掉到别的行上（窄屏那条用例第一版就是这么错的）。
+  await tester.pumpAndSettle();
   final bandPoint = _bandCenter(tester, target, band);
   final startPoint = tester.getCenter(source);
 
@@ -599,6 +761,27 @@ Future<void> _dragSourceOntoQuadrant(WidgetTester tester) async {
   await tester.pump();
   await gesture.up();
   await tester.pump();
+}
+
+/// 直接落一行任务（绕开仓储守卫，只为把页面喂出可拖的两行/一条深链）。
+Future<void> _insertTask(
+  AppDatabase db, {
+  required String id,
+  required String listId,
+  required String title,
+}) async {
+  final stamp = DateTime.utc(2026, 7, 11, 9);
+  await db
+      .into(db.todoTasks)
+      .insert(
+        TodoTasksCompanion.insert(
+          id: id,
+          listId: listId,
+          title: title,
+          updatedAt: stamp,
+          createdAt: stamp,
+        ),
+      );
 }
 
 Future<String?> _parentTaskIdOf(AppDatabase db, String taskId) async {

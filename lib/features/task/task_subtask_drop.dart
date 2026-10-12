@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/api/error_text.dart';
 import '../../core/db/app_database.dart';
 
 /// 嘀嗒《02-功能指南/01-任务/09-如何管理海量任务/06-多级任务.md》的"拖动成子任务"：
@@ -55,7 +56,8 @@ class _TaskSubtaskDropTargetState extends State<TaskSubtaskDropTarget> {
   void _accept(TodoTask dragged) => unawaited(_drop(dragged));
 
   /// 失败必须看得见：成环与五层上限都在仓储里抛 `StateError`，
-  /// 这里把它原话转成提示，不吞、不改写成"操作失败"。
+  /// 提示走 `describeError` 这条本仓统一通道 —— 直接把异常对象插进文案会被
+  /// `test/tooling/raw_error_text_gate_test.dart` 判红（本面第一版就是这么写的）。
   Future<void> _drop(TodoTask dragged) async {
     try {
       await widget.onDrop(dragged);
@@ -64,12 +66,7 @@ class _TaskSubtaskDropTargetState extends State<TaskSubtaskDropTarget> {
       final messenger = ScaffoldMessenger.of(context);
       final parent = widget.task.title;
       messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            '变成「$parent」的子任务失败：'
-            '${error is StateError ? error.message : '请稍后重试'}',
-          ),
-        ),
+        SnackBar(content: Text('变成「$parent」的子任务失败：${describeError(error)}')),
       );
     }
   }
