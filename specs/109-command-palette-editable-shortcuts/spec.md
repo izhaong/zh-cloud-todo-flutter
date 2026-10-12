@@ -50,13 +50,20 @@
 
 ## 测试与探针
 
-- `test/features/home/command_palette_test.dart` 7 例：面板四条（过滤含说明匹配、回车执行首条并收起、
-  空态与清空后恢复、禁用项点了不动且讲得出原因）；接进工作区三条（⌘K 开面板且**不**直接进搜索页、
+- `test/features/home/command_palette_test.dart` 8 例：面板五条（过滤含说明匹配、回车执行首条并收起、
+  回车跳过禁用项、空态与清空后恢复、禁用项点了不动且讲得出原因）；
+  接进工作区三条（⌘K 开面板且**不**直接进搜索页、
   挑「设置」真的 push 到 `SettingsRoute`、关掉番茄/搜索后面板里不再列这两条——同一条用例里先正对照）。
 - `test/features/home/keyboard_shortcut_list_test.dart` 连带改判：注册表 kind 改名后两处 `forKind`
   跟着换；列表逐行断言本来就只读 `todoShortcutRows`，动作名跟着注册表走，所以这里没有硬钉文案。
 - `test/features/task/task_organize_search_test.dart`：原「Ctrl+K 直接开搜索」那条改成
   「Ctrl+K → 面板 → 点「全局搜索」⇒ 到得了 `TaskSearchPage`」，量的是"换语义没把搜索弄丢"。
-- 变异探针：⑯把 `⌘K` 那条 activator 摘掉 ⇒ ⌘K 用例红；⑰把过滤条件改成恒真（永不过滤）⇒
-  过滤用例的负向红；⑱把 `_run` 的 `if (!command.enabled) return;` 摘掉 ⇒ 禁用项用例红；
-  ⑲把 `paletteCommands` 传成空表 ⇒ 「面板里挑设置」与「正对照」两条红。
+- 变异探针 ⑯–㉓ 各自红、还原后与提交字节一致：⑯把 `Ctrl+K` 的 activator 改成 `keyJ`
+  ⇒ 三条工作区用例红；⑰过滤条件恒真 ⇒ 过滤与空态两条红；⑱`ListTile.enabled` 改成恒真
+  ⇒ 禁用项那条红；⑲`_runFirstMatch` 去掉 `where(enabled)` ⇒ 「回车跳过禁用项」红；
+  ⑳摘掉 `设置` 那一条 ⇒ 「挑「设置」真的进设置页」红；㉑把番茄的开关判据改成恒真
+  ⇒ 模块 gating 那条红；㉒去掉 hint 匹配 ⇒ 「说明也参与匹配」红；㉓去掉空态分支 ⇒ 空态那条红。
+- **第一版探针抓出的一处自欺**：`_run` 里那句 `if (!command.enabled) return;` 摘掉后全绿——
+  点击那条路径本来就被 `ListTile.enabled`（onTap 置空）拦住，这句闸门拦不到任何走得到的路径。
+  已删除该重复闸门，并补一条「首条禁用 ⇒ 回车执行下一条可用命令」的用例，
+  把判据压在真正各管一条路径的两处闸门上（`ListTile.enabled` 管点击、`where(enabled)` 管回车）。

@@ -7,7 +7,7 @@
       `_OpenGlobalSearchIntent`
 - [x] T005 用例：面板 4 条 + 工作区 3 条；两处连带改判（`keyboard_shortcut_list_test.dart`、
       `task_organize_search_test.dart` 的 Ctrl+K 那条）
-- [ ] T006 变异探针 ⑯⑰⑱⑲ 各自红、还原后 `cmp -s` 一致
+- [x] T006 变异探针 ⑯⑰⑱⑲ 各自红、还原后 `cmp -s` 一致
 - [ ] T007 门禁：`dart format`（只跑本轮文件）、commit 后 `flutter analyze` + 全量 `flutter test`
 - [ ] T008 收口：push → PR（Refs #579）→ 合并 → #579 留言（只做面①）→ docs 矩阵 #86 追记
       （保持「部分」）→ 父仓 bump FL 指针
