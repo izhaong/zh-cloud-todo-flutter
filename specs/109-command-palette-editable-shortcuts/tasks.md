@@ -26,6 +26,9 @@
       （复算 `grep -c '^ *testWidgets(' test/features/home/keyboard_shortcut_edit_test.dart` ⇒ 9，
       末两条是端到端"键真的换人"：改键后旧键不开面板/新键开，删覆盖后旧键又开）
 - [x] T011 面③ 变异探针 ㉔–㉜ 九发各自红、红在期望的那条用例上、还原后与提交字节一致（逐发读数见 spec.md「面③ 的用例与探针」）
-- [ ] T012 门禁：commit 后 `flutter analyze` + 全量 `flutter test` + golden 9 张复跑
+- [x] T012 门禁：commit `4378bde0` 之后 `flutter analyze` ⇒ 0 issue；全量 `flutter test` ⇒ **1780 通过 / 26 跳过 / 1 失**（/tmp/fl-gate-289b.log），那 1 失仍是主干存量红 `test/tooling/raw_error_text_gate_test.dart`（FL #569）；golden `flutter test test/visual/todo_workspace_golden_test.dart` ⇒ **9 张全过**（本轮不动基线）；台账自扫 `tool/check_spec_selfscan.py` 对 specs/109 两份 ⇒ 失项 0 条。第一版全量跑到 1779 通过 / 26 跳过 / 2 失，其中一失是我这次造的连带 ——
+      设置页那行的副标题塞了长文案，320px + 1.3 倍字号下被顶成两行、整页变高，
+      `settings_week_start_test.dart` 那条按 key 打中心的 tap 落到别处（报成「档位弹层里找不到 option-7」）；
+      已由 `4378bde0` 收短副标题、只读说明交回弹层，单跑该文件 8 条全过，读数由下一笔提交登记。
 - [ ] T013 收口：push → PR（Refs #579）→ 合并 → #579 留言并关单 → docs 矩阵 #86 判定与追记 → 父仓 bump
-- [ ] T014 另立单跟：嘀嗒 `:27`「在侧边栏打开快捷键界面」那第三种进法（要改工作区像素 ⇒ 连着 golden 重录一起做）
+- [x] T014 另立单跟：嘀嗒 `:27`「在侧边栏打开快捷键界面」那第三种进法 ⇒ 已开 FL Issue **#581**（要改工作区像素 ⇒ 连着 golden 重录一起做一个单独轮次）
