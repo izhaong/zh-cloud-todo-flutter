@@ -57,5 +57,9 @@
       ② 侧栏 `accept` 闭包单独改成恒 true 不会让任何用例红 —— 实测复现（P7，13 条全绿），
       那条不是测试缺口而是行为等价，我把台账里过头的那句改掉了（见 T005）。
       探针文件 `test/tz_probe_test.dart` 是临时的，跑完即删（`git status --porcelain` 为空为证）。
-- [ ] T007 收口：push → PR（Refs #400）→ 合并 → #400 关单 → 矩阵 #32 行「拖动排期」只剩的这一面翻「有」
+- [x] T007 收口：PR **!586** 已合并 FL develop `589bd6e0fa33`；FL #400 已关（收口留言 13688 回读含 #587 那条）；
+      矩阵 #32 由「部分」翻「有」＝ zh-cloud-docs PR **!196** develop `95945e71be7e`（docs Issue #195 已关，
+      `--summary` 剩余缺口 51）；父仓 bump＝zh-cloud PR **!266** develop `3fc4eefd727c`（Issue #265 已关，
+      两个 gitlink 现读为 FL `589bd6e0fa33` / docs `95945e71be7e`）。本轮另立 FL #584、#585、#587 三条账，
+      都不是本面的验收项。 → 矩阵 #32 行「拖动排期」只剩的这一面翻「有」
       （六处数字同批同步）→ 父仓 bump
