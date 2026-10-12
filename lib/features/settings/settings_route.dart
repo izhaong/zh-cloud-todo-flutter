@@ -144,9 +144,10 @@ class SettingsRoute extends ConsumerWidget {
                   icon: Icons.keyboard_outlined,
                   title: '键盘快捷键',
                   // 副标题不再写「（?）」：键位可以改之后，把某个默认字符印在这里就会说谎。
-                  subtitle: shortcutRepo == null
-                      ? '查看当前生效的组合键（本地数据库尚未就绪，暂时改不了）'
-                      : '查看与修改当前生效的组合键',
+                  // 也别在这儿塞"为什么暂时改不了"——那行长文案在 320px + 1.3 倍字号下会把这一行
+                  // 顶成两行、整页变高，`settings_week_start_test.dart` 那条按 key 打中心的用例
+                  // 就会 tap 到别处（第一版就是这么挂的）。只读说明留给弹层自己讲。
+                  subtitle: '查看与修改当前生效的组合键',
                   colors: colors,
                   onTap: () => showKeyboardShortcutsDialog(
                     context,
