@@ -334,7 +334,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 tagNamesById: tagNamesById,
                 listNamesById: listNamesById,
               );
-        final workspace = Column(
+        final bareWorkspace = Column(
           children: [
             if (widget.hideAppBar)
               TaskWorkspaceHeader(
@@ -398,22 +398,22 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                         ? 72
                         : 0,
                   ),
-                  // 嘀嗒《02-用清单管理任务》:103-:111：清单背景铺在详情区域。
-                  // theme（或无效取值）回 null ⇒ 保持原样，不套一层装饰。
-                  child: Builder(
-                    builder: (context) {
-                      final decoration = listBackgroundDecoration(selectedList);
-                      final body = modeBody;
-                      return decoration == null
-                          ? body
-                          : DecoratedBox(decoration: decoration, child: body);
-                    },
-                  ),
+                  child: modeBody,
                 ),
               ),
             ),
           ],
         );
+        // 嘀嗒《02-用清单管理任务》:100 那张图里，背景盖住的是整个详情屏（含标题区），
+        // 不是只有任务列表那一段 ⇒ 装饰包在整层外面。theme（或无效取值）回 null ⇒ 一层都不套。
+        final decoration = listBackgroundDecoration(selectedList);
+        final workspace = decoration == null
+            ? bareWorkspace
+            : DecoratedBox(
+                key: const Key('todo-list-background-surface'),
+                decoration: decoration,
+                child: bareWorkspace,
+              );
         return Stack(
           children: [
             workspace,
