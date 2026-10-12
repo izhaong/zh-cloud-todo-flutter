@@ -52,8 +52,15 @@ void main() {
     );
   });
 
-  testWidgets('同一次拖、落在左上象限：不建立父子关系（命中区不是整行）', (tester) async {
-    final fixture = await _pumpList(tester);
+  testWidgets('同一次拖、落在上半格：不建立父子关系（各格管各的）', (tester) async {
+    late final _RecordingTaskViewActionRepository repository;
+    final fixture = await _pumpList(
+      tester,
+      overridesBuilder: (db) {
+        repository = _RecordingTaskViewActionRepository(db);
+        return [taskViewActionRepositoryProvider.overrideWithValue(repository)];
+      },
+    );
 
     await _dragToBand(
       tester,
@@ -65,9 +72,16 @@ void main() {
     expect(
       await _parentTaskIdOf(fixture.database, draggedId),
       isNull,
-      reason: '同一对手势只换落点就该换结果；命中区扩成整行这条要红',
+      reason: '同一对手势只换落点就该换结果；右下那块要是扩成整行这条要红',
     );
-    expect(await _queuedChangeCount(fixture.database, localId: draggedId), 0);
+    // 第 295 轮（FL #595）改了这半句的预期：上半格不再是"什么都不发生"，
+    // 它按《01-列表视图.md》「按住任务，自由选择放置任务的位置」＝排到该行之前。
+    // 于是这里断言的从"零写入"换成"写的是顺序，不是父子关系"。
+    expect(
+      repository.requests,
+      hasLength(1),
+      reason: '上半格要真放置：只画高亮不写顺序，就是这一条要红的地方',
+    );
   });
 
   testWidgets('自己拖到自己：连 reparent 都不该被调到（落点自己就拒）', (tester) async {

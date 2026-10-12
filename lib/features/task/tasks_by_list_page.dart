@@ -2016,6 +2016,54 @@ class _ListBodyState extends State<_ListBody> {
     _orderedIds = _normalizeTaskIds(_orderedIds, currentIds);
   }
 
+  /// 排序落地的**唯一一处**：乐观改序 → 提交 → 失败回滚 + 可见提示。
+  /// 行首手柄那条 `onReorder` 与新加的"拖到另一行上半/左下放置"都走这里；
+  /// 回滚逻辑复制一份就会漂（本轮前面几面记过的同一类账）。
+  Future<void> _commitOrder(List<String> reordered) async {
+    final previousOrder = _orderedIds;
+    final previousHasCustomOrder = _hasCustomOrder;
+    setState(() {
+      _orderedIds = reordered;
+      _hasCustomOrder = true;
+    });
+    try {
+      await widget.onTasksReordered?.call(reordered);
+    } catch (error) {
+      // 必须是 State 的 mounted：analyzer 认它与 `context` 的关联（`context.mounted`
+      // 在这一版会被判成"无关的 mounted 检查"，info 级也会挂 analyze 退出码）。
+      if (!mounted) return;
+      setState(() {
+        _orderedIds = previousOrder;
+        _hasCustomOrder = previousHasCustomOrder;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(taskViewMutationFailureMessage(error, '排序保存失败，请重试')),
+        ),
+      );
+    }
+  }
+
+  /// 嘀嗒《02-功能指南/01-任务/08-不同的视图查看任务/01-列表视图.md》「拖动排序」那句
+  /// 「按住任务，自由选择放置任务的位置」⇒ 拖到某行**上半**＝排到它之前、**左下**＝排到它之后
+  /// （右下那块已经被《06-多级任务.md》的"转子任务"占用，见 `task_subtask_drop.dart`）。
+  /// 下标按当前可见顺序算：拖起之后列表变了（行没了/换了清单）就什么都不做，不猜位置。
+  Future<void> _placeTask(
+    List<Object> entries,
+    TodoTask dragged,
+    TodoTask target,
+    bool after,
+  ) async {
+    if (widget.batchSelectionActive) return;
+    final ids = entries.whereType<TodoTask>().map((task) => task.id).toList();
+    if (!ids.contains(dragged.id) || !ids.contains(target.id)) return;
+    final without = [...ids]..remove(dragged.id);
+    var insertAt = without.indexOf(target.id);
+    if (after) insertAt += 1;
+    without.insert(insertAt.clamp(0, without.length), dragged.id);
+    await _commitOrder(without);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.items.isEmpty) {
@@ -2118,28 +2166,7 @@ class _ListBodyState extends State<_ListBody> {
           final reordered = [...visibleTaskIds]..remove(entry.id);
           insertionIndex = insertionIndex.clamp(0, reordered.length);
           reordered.insert(insertionIndex, entry.id);
-          final previousOrder = _orderedIds;
-          final previousHasCustomOrder = _hasCustomOrder;
-          setState(() {
-            _orderedIds = reordered;
-            _hasCustomOrder = true;
-          });
-          try {
-            await widget.onTasksReordered?.call(reordered);
-          } catch (error) {
-            if (!context.mounted) return;
-            setState(() {
-              _orderedIds = previousOrder;
-              _hasCustomOrder = previousHasCustomOrder;
-            });
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  taskViewMutationFailureMessage(error, '排序保存失败，请重试'),
-                ),
-              ),
-            );
-          }
+          await _commitOrder(reordered);
         },
         itemBuilder: (context, index) {
           final entry = entries[index];
@@ -2158,6 +2185,10 @@ class _ListBodyState extends State<_ListBody> {
               enabled: widget.subtaskDropEnabled,
               onDrop: (dragged) => widget.onReparentSubtask(dragged, task),
               onCreateParent: widget.onCreateSubtask,
+              onPlace: widget.onTasksReordered == null
+                  ? null
+                  : (dragged, after) =>
+                        _placeTask(entries, dragged, task, after),
               child: _CalendarDragSource(
                 task: task,
                 child: TaskRowHost(
@@ -2202,6 +2233,9 @@ class _ListBodyState extends State<_ListBody> {
           enabled: widget.subtaskDropEnabled,
           onDrop: (dragged) => widget.onReparentSubtask(dragged, task),
           onCreateParent: widget.onCreateSubtask,
+          onPlace: widget.onTasksReordered == null
+              ? null
+              : (dragged, after) => _placeTask(entries, dragged, task, after),
           child: _CalendarDragSource(
             task: task,
             child: TaskRowHost(
