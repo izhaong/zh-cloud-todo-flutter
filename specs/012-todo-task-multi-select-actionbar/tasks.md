@@ -1,0 +1,15 @@
+# 任务
+
+- [x] T1：补充失败测试，锁定离散多选、连续多选、选择坞和删除确认契约。
+- [x] T2：实现页面级选择锚点与 `Shift/Cmd/Ctrl` 列表手势。
+- [x] T3：实现响应式底部批量操作栏并迁移现有批量动作。
+- [x] T4：实现复用 `TaskRepository.delete` 的安全批量删除与失败重试。
+- [x] T5：完成 Dart MCP 静态分析、定向/全量测试和 Web release 构建。
+- [x] T6：完成独立审查并清零 Blocker / Important。
+- [x] T7：实现按当前可见顺序汇总的批量系统分享，覆盖平台不支持反馈，并证明任务与 outbox 无写入。
+
+## 验证记录
+
+- 2026-08-01：T7 先以两条 Widget 红测复现“分享入口不存在”，实现后进一步发现原始查询顺序与分组后的实际可见顺序不一致；改为复用列表分组/排序语义后转绿。分享文本按实际可见顺序包含序号、标题、非空正文和截止时间，平台通道异常保留选择并显示“不支持”；测试前后完整对比任务与 outbox，确认没有写入。任务工作区 25 项通过；全仓非 golden/非性能测试 623 项通过、26 项受保护 live 用例跳过、0 失败；`flutter analyze` 无问题，Web release 构建成功。Claude CLI 2.1.216 对核心分享逻辑审查返回 PASS、无 Blocker/Important，实际模型为 LongCat-2.0；完整 diff 与 UI/测试大上下文调用多次长时间无输出后终止，未把超时当作通过，UI/测试结论仍以本地自动化证据为准。
+- 2026-08-01：PR #233 首次共享 Runner 门禁在 622 项通过后，仅 `sync_coordinator_folder_retry_test.dart` 因 30 秒超时失败；该既有测试本地单独约 1 秒通过。失败任务重跑后执行容器消失、Gitea 状态遗留为 `in_progress`，主机根分区同时达到 100%。根分区 ext4 预留比例由约 4.1% 调整为 1%，未删除业务数据，普通进程恢复约 3.0 GiB 可用空间；CI 测试改为 `--concurrency=1`，通过新提交生成独立门禁，旧孤儿记录保留为诊断证据。CI YAML 解析、`git diff --check` 与既有文件夹重试测试 3 项通过；Claude CLI 对该小差异复核为 PASS，实际模型自报 `claude-fable-5`，新门禁尚未运行时未提前记为 CI 成功。
+- 2026-08-01：单并发新门禁启动约 34 秒后，宿主机内核由 `kswapd0` 报页分配慢路径警告，journald 随后记录内存压力，Docker/containerd 全面超时并最终硬重启；没有正常 shutdown、OOM kill 或 Runner 健康脚本 reboot。该次任务同样遗留 `in_progress`。Runner job 容器此前无任何上限，现已在宿主机配置中限制为 2 CPU、3 GiB 内存、4 GiB（含 swap），并只重启现有 Runner daemon；配置已备份，新的受限门禁仍需取得真实终态后才能记为通过。

@@ -1,0 +1,38 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "todo-flutter (macOS · local)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "deviceId": "macos",
+      "toolArgs": [
+        "--dart-define=TODO_API_BASE_URL=http://127.0.0.1:48080",
+        "--dart-define=TODO_TENANT_ID=1"
+      ]
+    },
+    {
+      "name": "todo-flutter (Chrome · local)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "deviceId": "chrome",
+      "toolArgs": [
+        "--dart-define=TODO_API_BASE_URL=http://127.0.0.1:48080",
+        "--dart-define=TODO_TENANT_ID=1"
+      ]
+    },
+    {
+      "name": "todo-flutter (macOS · test)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "deviceId": "macos",
+      "toolArgs": [
+        "--dart-define=TODO_API_BASE_URL=https://todo-test.zh04.com",
+        "--dart-define=TODO_TENANT_ID=1"
+      ]
+    }
+  ]
+}

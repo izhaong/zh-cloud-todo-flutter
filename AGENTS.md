@@ -38,43 +38,52 @@ flutter run \
   --dart-define=TODO_TENANT_ID=1
 ```
 
-- 引入 `freezed` / `drift` 等代码生成依赖后，改注解/模型须跑 `dart run build_runner build --delete-conflicting-outputs`（当前脚手架尚未启用）。
-- **CI**：根目录 `Jenkinsfile`（GWT `zh-cloud-todo-flutter`）；Jenkins Job 与 MCP 索引见 **`docs/engineering/01-ci-jenkins.md`**。
+- 修改 Drift 表或生成模型后，运行 `dart run build_runner build --delete-conflicting-outputs` 并提交生成文件。
+- **CI/CD**：GitHub Actions 负责 PR、Web/H5 与桌面交付；根目录 `Jenkinsfile` 是 Gitea webhook 备用入口。见 `docs/engineering/01-ci-jenkins.md`、`03-github-actions.md`。
 
 ## Architecture
 
-当前为早期脚手架：Flutter `MaterialApp` + `StatefulWidget` 页面，状态用 `shared_preferences` 持久化（含同步队列雏形 `_SyncQueueItem`），登录通过 `TodoMemberAuthClient`（裸 `http` + Bearer + `tenant-id`）。
+当前为 Riverpod + go_router + Drift + dio 的离线优先客户端。业务写入先在 Drift 事务中落本地实体与 outbox，再由 `SyncCoordinator` 调用 `/app-api/todo/sync/{pull,push}`；视图只通过 Repository/Provider 读写，不直接拼同步请求。
 
 ```
-UI（Flutter Widget / 页面）
-  → 业务逻辑（当前：StatefulWidget State；目标：Riverpod Provider/Notifier）
-  → 数据层（当前：shared_preferences + http；目标：Drift 离线 + dio + outbox/SyncCoordinator）
-  → zh-cloud 后端 /app-api
+UI（Flutter Widget / go_router）
+  → State（Riverpod Provider / Notifier）
+  → Repository（Drift 本地事实源 + 原子 outbox）
+  → SyncCoordinator / dio ApiClient
+  → zh-cloud 后端 /app-api/todo
 ```
 
-- **目标分层**：UI（go_router 路由） → Logic（Riverpod） → Data（Drift 本地库 + dio 网络 + sync 协调），离线优先、在线增量同步。
-- 目标架构细则以父仓 `zh-cloud-docs` 的 `todo/03-architecture/11-前端架构.md` 与 spec-kit 规格为准。
+- 账号会话经 `SessionStore` 持久化；业务数据按 tenant/user 使用独立 Drift 数据库，避免跨账号污染。
+- 架构细则以父仓 `zh-cloud-docs` 的 Todo 前端架构与本仓 spec-kit 规格为准。
 
 ## Project Structure
 
 ```
 lib/
-  main.dart                     # 入口 + TodoHomePage（日历/效率/系统入口、本地状态与同步队列雏形）
-  todo_member_auth_client.dart  # todo-member 登录网关（TodoMemberAuthGateway / TodoMemberAuthClient / TodoAuthSession）
-  efficiency_dashboard.dart     # 效率工具（四象限 / 番茄 / 习惯 / 倒数）
-  system_entry_dashboard.dart   # 系统入口面板
+  main.dart                     # bootstrap
+  app.dart                      # ProviderScope、路由与应用生命周期
+  core/
+    api/                        # dio ApiClient 与业务契约
+    db/                         # Drift 表、迁移与查询
+    notification/               # 本地通知与持久调度
+    storage/                    # 会话存储
+    sync/                       # outbox、pull/push 与冲突处理
+  features/                     # task/list/tag/filter/calendar/efficiency 等页面
+  state/
+    providers.dart              # 依赖装配
+    repositories/               # 离线优先业务写链路
 test/
-  widget_test.dart              # widget 测试（Fake 网关 + 内存版 SharedPreferences）
+  ...                           # 单元、Widget、迁移、同步与受保护真实环境测试
 pubspec.yaml                    # 依赖与版本
 ```
-
-- **目标结构**（随功能迭代逐步落地，尚未建立）：`lib/features/{auth,task,list,calendar,focus,habit,...}`、`lib/core/{api,db,sync,storage}`。
 
 ## Tech Stack
 
 - **运行时**：Flutter（Dart SDK `^3.11.4`）；Material 3。
-- **当前依赖**（`pubspec.yaml`）：`http`（网络）、`shared_preferences`（本地持久化）、`cupertino_icons`；dev：`flutter_test`、`flutter_lints ^6.0.0`。
-- **目标技术栈**（规划，尚未引入）：Riverpod（状态）、`go_router`（路由）、Drift（离线 SQLite）、`dio` + Bearer + `tenant-id`（网络）、`freezed` + `build_runner`（模型/代码生成）。
+- **状态/路由**：Riverpod、`go_router`。
+- **数据/网络**：Drift SQLite + outbox、dio + Bearer + `tenant-id`。
+- **系统能力**：`flutter_local_notifications`、`timezone`、`flutter_secure_storage`、文件与 URL launcher 插件。
+- **模型/生成**：Drift generator、`freezed`、`json_serializable`、`build_runner`。
 - **测试**：`flutter_test`；外部依赖以 Fake / mock 替身注入（见 Testing Safety）。
 
 ## Git Workflow
@@ -88,7 +97,7 @@ pubspec.yaml                    # 依赖与版本
 ## Testing Safety
 
 - **测试绝不能产生真实副作用。** 不连真实后端、不发真实网络请求。
-- 网络网关（`TodoMemberAuthGateway`）在测试中用 Fake / mock 实现注入；`shared_preferences` 用 `SharedPreferences.setMockInitialValues` 提供内存版（现有 `test/widget_test.dart` 即如此）。
+- 网络网关在测试中用 Fake / mock 注入；Drift 使用内存或临时文件数据库，`shared_preferences` 使用内存替身。
 - 用 `flutter test` 运行；产生的临时文件须在用例结束时清理。
 
 ## Key Conventions
@@ -96,7 +105,7 @@ pubspec.yaml                    # 依赖与版本
 - **登录态一体化**：已登录不重复弹登录表单；`Authorization: Bearer <token>` + `tenant-id` 头随请求注入；`async` 回调中操作 `BuildContext` 前先判 `mounted`（见 `.cursor/rules/ux-preferences.mdc`）。
 - **后端契约**：登录走 `/app-api/todo-member/**`，业务走 `/app-api/todo/**`，离线同步走 `/app-api/todo/sync/{pull,push}`；响应信封 `{code,msg,data}`，`code != 0` 视为业务错误。后端契约变更须在 `zh-cloud-service`（`service-dev`）配套 PR。
 - **规则路由**：`.cursor/rules/00-zh-cloud-core.mdc`（跨仓核心，常驻）、`.cursor/rules/ux-preferences.mdc`（编辑 `**/*.dart` 时）；斜杠命令见 `.cursor/COMMANDS.md`（`/gitea-ops`）；流程见 `.cursor/skills/`。
-- **Subagent**：主 `todo-flutter-dev`；兜底 `flutter-dev`；Web Todo 用 `client-dev`；测试/冒烟用 `qa-engineer`。定义在 `.cursor/agents/`。
+- **Subagent**：主 `todo-flutter-dev`；兜底 `flutter-dev`；测试/冒烟用 `qa-engineer`。定义在 `.cursor/agents/`。
 - **MCP**：优先 `user-dart` MCP；契约对照 Apifox MCP。
 - **Token 预算**：先 `rg` 定位再读片段；不要读 `build/`、`.dart_tool/`、`ios/Pods/`、`android/.gradle/` 等生成物目录。
 - **安全**：不在对话/日志/代码/提交中泄露密码、Token、Cookie、私钥、AccessKey/Secret；示例用占位符。

@@ -1,19 +1,88 @@
-/// M11-B5 原生增强入口：
-/// - 桌面/锁屏小组件数据接口（widget plugin 在 native 端实现，本 Dart 侧只暴露今日任务快照）
-/// - 桌面便签：浮窗
-/// - 快捷指令 / URL Scheme
-/// - 系统分享入口
+/// 原生增强的 Dart 侧 platform channel 契约与安全降级入口。
 ///
-/// 实际 platform channel / widget / share extension 在 Android / iOS 原生层实现；
-/// 本文件提供 Dart 侧的注册与 fallback 入口。
+/// Android 已实现冷/热启动 URL Scheme、系统分享、可用时创建系统便签、
+/// 锁屏重要任务通知与今日任务桌面小组件；iOS 已实现冷/热启动 URL Scheme
+/// 与系统分享，其余尚未接入的能力仍返回“不支持”或空结果。
 library;
 
 import 'package:flutter/services.dart';
+
+class NativeLockScreenTask {
+  const NativeLockScreenTask({required this.serverId, required this.title});
+
+  final int serverId;
+  final String title;
+
+  Map<String, Object> toJson() => {'id': serverId, 'title': title};
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NativeLockScreenTask &&
+          serverId == other.serverId &&
+          title == other.title;
+
+  @override
+  int get hashCode => Object.hash(serverId, title);
+}
+
+class NativeTaskAddRequest {
+  const NativeTaskAddRequest({
+    required this.title,
+    required this.dueAt,
+    required this.allDay,
+  });
+
+  final String title;
+  final DateTime? dueAt;
+  final bool allDay;
+
+  static NativeTaskAddRequest? tryParse(Uri uri) {
+    if (uri.scheme.toLowerCase() != NativeIntents.urlScheme ||
+        uri.host.toLowerCase() != 'task' ||
+        uri.path != '/add' ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasPort ||
+        uri.fragment.isNotEmpty) {
+      return null;
+    }
+    final titleValues = uri.queryParametersAll['title'];
+    if (titleValues == null || titleValues.length != 1) return null;
+    final title = titleValues.single.trim();
+    if (title.isEmpty) return null;
+
+    final dueValues = uri.queryParametersAll['due'];
+    if (dueValues != null && dueValues.length != 1) return null;
+    final dueAt = dueValues == null ? null : _parseDate(dueValues.single);
+    if (dueValues != null && dueAt == null) return null;
+    return NativeTaskAddRequest(
+      title: title,
+      dueAt: dueAt,
+      allDay: dueAt != null,
+    );
+  }
+
+  static DateTime? _parseDate(String value) {
+    final match = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(value);
+    if (match == null) return null;
+    final year = int.parse(match.group(1)!);
+    final month = int.parse(match.group(2)!);
+    final day = int.parse(match.group(3)!);
+    final parsed = DateTime(year, month, day);
+    if (parsed.year != year || parsed.month != month || parsed.day != day) {
+      return null;
+    }
+    return parsed;
+  }
+}
 
 class NativeIntents {
   NativeIntents._();
 
   static const MethodChannel _channel = MethodChannel('zh_cloud_todo/native');
+  static const EventChannel _linkEvents = EventChannel(
+    'zh_cloud_todo/native_links',
+  );
 
   /// 注册 URL Scheme handler（iOS: CFBundleURLTypes；Android: intent-filter）。
   /// 协议：zhcloudtodo://task/add?title=xxx&due=2026-06-20
@@ -27,18 +96,38 @@ class NativeIntents {
       return Uri.tryParse(uri);
     } on PlatformException {
       return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  /// 监听应用已运行时收到的 URL Scheme。先通过 MethodChannel 确认平台
+  /// 已注册事件 handler；不支持时返回空流，避免 EventChannel 把激活失败
+  /// 直接上报为未处理的 FlutterError。
+  static Stream<Uri> incomingUris() async* {
+    try {
+      final supported = await _channel.invokeMethod<bool>('supportsLinkEvents');
+      if (supported != true) return;
+    } on PlatformException {
+      return;
+    } on MissingPluginException {
+      return;
+    }
+    await for (final event in _linkEvents.receiveBroadcastStream()) {
+      if (event is! String) continue;
+      final uri = Uri.tryParse(event);
+      if (uri != null) yield uri;
     }
   }
 
   /// 系统分享入口：把文本/链接转发到 Android Share / iOS UIActivityViewController。
   static Future<bool> shareText(String text, {String? subject}) async {
     try {
-      await _channel.invokeMethod('share', {
-        'text': text,
-        if (subject != null) 'subject': subject,
-      });
+      await _channel.invokeMethod('share', {'text': text, 'subject': ?subject});
       return true;
     } on PlatformException {
+      return false;
+    } on MissingPluginException {
       return false;
     }
   }
@@ -51,17 +140,54 @@ class NativeIntents {
       return true;
     } on PlatformException {
       return false;
+    } on MissingPluginException {
+      return false;
     }
   }
 
-  /// 锁屏重要任务：把任务 id 列表推送给系统（Android: KeyguardManager；iOS: Lock Screen widget）。
-  static Future<bool> pushLockScreenTasks(List<int> taskIds) async {
+  /// 控制前台专注会话期间是否保持屏幕常亮；不支持时安全返回 false。
+  static Future<bool> setKeepScreenAwake(bool enabled) async {
     try {
-      await _channel.invokeMethod('pushLockScreenTasks', {
-        'ids': taskIds,
-      });
-      return true;
+      final updated = await _channel.invokeMethod<Object?>(
+        'setKeepScreenAwake',
+        {'enabled': enabled},
+      );
+      return updated == true;
     } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
+  /// 锁屏重要任务：Android 以 ongoing 通知展示最多五项已同步任务；
+  /// 空快照会清除通知。iOS 未实现时安全返回 false。
+  static Future<bool> pushLockScreenTasks(
+    Iterable<NativeLockScreenTask> tasks,
+  ) async {
+    final candidates = tasks.take(5).toList(growable: false);
+    if (candidates.any(
+      (task) => task.serverId <= 0 || task.title.trim().isEmpty,
+    )) {
+      return false;
+    }
+    final snapshot = candidates
+        .map(
+          (task) => NativeLockScreenTask(
+            serverId: task.serverId,
+            title: task.title.trim(),
+          ).toJson(),
+        )
+        .toList(growable: false);
+    try {
+      final rendered = await _channel.invokeMethod<bool>(
+        'pushLockScreenTasks',
+        {'tasks': snapshot},
+      );
+      return rendered == true;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
       return false;
     }
   }
@@ -69,11 +195,35 @@ class NativeIntents {
   /// 小组件数据：返回今日任务的 JSON 序列化字符串（widget renderer 读取）。
   static Future<List<Map<String, dynamic>>> widgetTodaySnapshot() async {
     try {
-      final r = await _channel.invokeMethod<List<dynamic>>('widgetTodaySnapshot');
+      final r = await _channel.invokeMethod<List<dynamic>>(
+        'widgetTodaySnapshot',
+      );
       if (r == null) return const [];
       return r.map((e) => Map<String, dynamic>.from(e as Map)).toList();
     } on PlatformException {
       return const [];
+    } on MissingPluginException {
+      return const [];
+    }
+  }
+
+  /// 把 Flutter 当前账号 Drift 中的真实今日任务投影写入原生桌面小组件。
+  static Future<bool> updateTodayWidgetSnapshot(Iterable<String> titles) async {
+    final tasks = titles
+        .map((title) => title.trim())
+        .where((title) => title.isNotEmpty)
+        .take(5)
+        .map((title) => {'title': title})
+        .toList(growable: false);
+    try {
+      await _channel.invokeMethod('updateTodayWidgetSnapshot', {
+        'tasks': tasks,
+      });
+      return true;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
     }
   }
 }

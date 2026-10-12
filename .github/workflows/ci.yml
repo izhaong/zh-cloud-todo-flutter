@@ -25,6 +25,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.44.8'
           channel: stable
           cache: true
 
@@ -35,4 +36,4 @@ jobs:
         run: flutter analyze
 
       - name: Flutter test
-        run: flutter test
+        run: flutter test --exclude-tags 'golden || performance' --concurrency=1

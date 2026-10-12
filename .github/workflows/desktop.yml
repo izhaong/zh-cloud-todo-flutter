@@ -1,6 +1,8 @@
 name: Desktop
 
-# 桌面端（macOS / Linux / Windows）：构建、GitHub Release 与客户端自动更新。
+# 多端安装包（Linux / macOS / Windows / Android / iOS）：
+# 各端在对应 GitHub Runner 上构建。v* tag 把安装包挂到 GitHub Release，
+# 下载地址即 Release 附件，不再上传 MinIO。
 # 发版须推送 semver tag（vX.Y.Z），与 pubspec 版本对齐。
 # 权威仓库：https://github.com/izhaong/zh-cloud-todo-flutter
 
@@ -109,10 +111,12 @@ jobs:
         run: |
           sudo apt-get update -y
           sudo apt-get install -y \
-            clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+            clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev \
+            libsecret-1-dev
 
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.44.8'
           channel: stable
           cache: true
 
@@ -160,7 +164,7 @@ jobs:
           test -s "${OUT_DIR}/todo-flutter-${VERSION_NAME}-x86_64.deb"
           ls -la "$OUT_DIR"
 
-      - uses: actions/upload-artifact@v4
+      - uses: https://github.com/christopherHX/gitea-upload-artifact@81f940d004763f986ba3582c007fd842dd5cb0d7
         with:
           name: desktop-linux
           if-no-files-found: error
@@ -175,6 +179,7 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.44.8'
           channel: stable
           cache: true
 
@@ -209,7 +214,7 @@ jobs:
           test -s "$dmg"
           ls -la "$OUT_DIR"
 
-      - uses: actions/upload-artifact@v4
+      - uses: https://github.com/christopherHX/gitea-upload-artifact@81f940d004763f986ba3582c007fd842dd5cb0d7
         with:
           name: desktop-macos
           if-no-files-found: error
@@ -224,6 +229,7 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.44.8'
           channel: stable
           cache: true
 
@@ -290,11 +296,116 @@ jobs:
         shell: pwsh
         run: Get-ChildItem -Recurse .gha-dist/desktop
 
-      - uses: actions/upload-artifact@v4
+      - uses: https://github.com/christopherHX/gitea-upload-artifact@81f940d004763f986ba3582c007fd842dd5cb0d7
         with:
           name: desktop-windows
           if-no-files-found: error
           path: .gha-dist/desktop/*
+
+  desktop-android:
+    name: Android APK
+    needs: metadata
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.8"
+          channel: stable
+          cache: true
+
+      - name: Optional release keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ANDROID_KEYSTORE_BASE64:-}" ]; then
+            echo "未配置 ANDROID_KEYSTORE_BASE64，APK 使用 debug 签名，可以侧载，不能上架。"
+            exit 0
+          fi
+          test -n "${ANDROID_KEYSTORE_PASSWORD:-}"
+          test -n "${ANDROID_KEY_ALIAS:-}"
+          test -n "${ANDROID_KEY_PASSWORD:-}"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/ci-release.keystore
+          printf '%s\n' \
+            "storePassword=${ANDROID_KEYSTORE_PASSWORD}" \
+            "keyPassword=${ANDROID_KEY_PASSWORD}" \
+            "keyAlias=${ANDROID_KEY_ALIAS}" \
+            "storeFile=ci-release.keystore" \
+            > android/key.properties
+
+      - name: Build Android APK
+        env:
+          TODO_API_BASE_URL: ${{ needs.metadata.outputs.todo_api_base_url }}
+          TODO_TENANT_ID: ${{ needs.metadata.outputs.todo_tenant_id }}
+        run: |
+          set -euo pipefail
+          OUT_DIR=".gha-dist/desktop"
+          VERSION_LINE="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
+          VERSION_NAME="${VERSION_LINE%%+*}"
+          flutter pub get
+          flutter build apk --release \
+            --dart-define=TODO_API_BASE_URL="${TODO_API_BASE_URL}" \
+            --dart-define=TODO_TENANT_ID="${TODO_TENANT_ID}"
+          mkdir -p "$OUT_DIR"
+          cp build/app/outputs/flutter-apk/app-release.apk \
+            "${OUT_DIR}/todo-flutter-${VERSION_NAME}-android.apk"
+          test -s "${OUT_DIR}/todo-flutter-${VERSION_NAME}-android.apk"
+
+      - uses: https://github.com/christopherHX/gitea-upload-artifact@81f940d004763f986ba3582c007fd842dd5cb0d7
+        with:
+          name: desktop-android
+          if-no-files-found: error
+          path: .gha-dist/desktop/*android.apk
+
+  desktop-ios:
+    name: iOS unsigned IPA
+    needs: metadata
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.8"
+          channel: stable
+          cache: true
+
+      - name: Build unsigned iOS app
+        env:
+          TODO_API_BASE_URL: ${{ needs.metadata.outputs.todo_api_base_url }}
+          TODO_TENANT_ID: ${{ needs.metadata.outputs.todo_tenant_id }}
+        run: |
+          set -euo pipefail
+          OUT_DIR=".gha-dist/desktop"
+          VERSION_LINE="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
+          VERSION_NAME="${VERSION_LINE%%+*}"
+          flutter pub get
+          flutter build ios --release --no-codesign \
+            --dart-define=TODO_API_BASE_URL="${TODO_API_BASE_URL}" \
+            --dart-define=TODO_TENANT_ID="${TODO_TENANT_ID}"
+          test -d build/ios/iphoneos/Runner.app
+          rm -rf Payload
+          mkdir Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          mkdir -p "$OUT_DIR"
+          /usr/bin/zip -qry "${OUT_DIR}/todo-flutter-${VERSION_NAME}-ios-unsigned.ipa" Payload
+          test -s "${OUT_DIR}/todo-flutter-${VERSION_NAME}-ios-unsigned.ipa"
+
+      - uses: https://github.com/christopherHX/gitea-upload-artifact@81f940d004763f986ba3582c007fd842dd5cb0d7
+        with:
+          name: desktop-ios
+          if-no-files-found: error
+          path: .gha-dist/desktop/*ios-unsigned.ipa
 
   release:
     name: GitHub Release
@@ -303,25 +414,37 @@ jobs:
       - desktop-linux
       - desktop-macos
       - desktop-windows
-    if: needs.metadata.outputs.create_release == 'true' && !cancelled() && needs.desktop-linux.result == 'success' && needs.desktop-macos.result == 'success' && needs.desktop-windows.result == 'success'
+      - desktop-android
+      - desktop-ios
+    if: needs.metadata.outputs.create_release == 'true' && !cancelled() && needs.desktop-linux.result == 'success' && needs.desktop-macos.result == 'success' && needs.desktop-windows.result == 'success' && needs.desktop-android.result == 'success' && needs.desktop-ios.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/download-artifact@v4
+      - uses: https://github.com/christopherHX/gitea-download-artifact@75635f32b4c1c41c4b3d64e8f85210112ed4c9c7
         with:
           name: desktop-linux
           path: dist/desktop
 
-      - uses: actions/download-artifact@v4
+      - uses: https://github.com/christopherHX/gitea-download-artifact@75635f32b4c1c41c4b3d64e8f85210112ed4c9c7
         with:
           name: desktop-macos
           path: dist/desktop
 
-      - uses: actions/download-artifact@v4
+      - uses: https://github.com/christopherHX/gitea-download-artifact@75635f32b4c1c41c4b3d64e8f85210112ed4c9c7
         continue-on-error: true
         with:
           name: desktop-windows
+          path: dist/desktop
+
+      - uses: https://github.com/christopherHX/gitea-download-artifact@75635f32b4c1c41c4b3d64e8f85210112ed4c9c7
+        with:
+          name: desktop-android
+          path: dist/desktop
+
+      - uses: https://github.com/christopherHX/gitea-download-artifact@75635f32b4c1c41c4b3d64e8f85210112ed4c9c7
+        with:
+          name: desktop-ios
           path: dist/desktop
 
       - run: ls -la dist/desktop/
@@ -334,12 +457,13 @@ jobs:
           TAG="${{ needs.metadata.outputs.tag_name }}"
           BASE="https://github.com/izhaong/zh-cloud-todo-flutter/releases/download/${TAG}"
           printf '%s\n' \
-            "| Architecture | Windows | Ubuntu | Mac |" \
-            "| --- | --- | --- | --- |" \
-            "| x86-64 (64-bit) | [EXE](${BASE}/todo-flutter-${VERSION}-x86_64.exe) [MSI](${BASE}/todo-flutter-${VERSION}-x86_64.msi) | [Download](${BASE}/todo-flutter-${VERSION}-x86_64.deb) | |" \
-            "| AArch64 (ARM64) | | | [Download](${BASE}/todo-flutter-${VERSION}-aarch64.dmg) |" \
+            "| Architecture | Windows | Ubuntu | Mac | Android | iOS |" \
+            "| --- | --- | --- | --- | --- | --- |" \
+            "| x86-64 (64-bit) | [EXE](${BASE}/todo-flutter-${VERSION}-x86_64.exe) [MSI](${BASE}/todo-flutter-${VERSION}-x86_64.msi) | [Download](${BASE}/todo-flutter-${VERSION}-x86_64.deb) | | [APK](${BASE}/todo-flutter-${VERSION}-android.apk) | |" \
+            "| AArch64 (ARM64) | | | [Download](${BASE}/todo-flutter-${VERSION}-aarch64.dmg) | | [未签名 IPA](${BASE}/todo-flutter-${VERSION}-ios-unsigned.ipa) |" \
             "" \
             "桌面客户端自动更新读取本 Release（优先 EXE / DMG / DEB）。详见 \`docs/engineering/04-desktop-github-release-update.md\`。" \
+            "iOS 包未签名，不能直接装到手机。Android 未配置发布密钥时使用 debug 签名，可以侧载。" \
             > RELEASE_BODY.md
 
       - uses: softprops/action-gh-release@v2

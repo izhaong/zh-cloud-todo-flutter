@@ -10,7 +10,7 @@ class ResolvedDate {
 
 class NlpDateParser {
   NlpDateParser({DateTime Function()? nowProvider})
-      : _nowProvider = nowProvider ?? DateTime.now;
+    : _nowProvider = nowProvider ?? DateTime.now;
 
   final DateTime Function() _nowProvider;
 
@@ -40,33 +40,110 @@ class NlpDateParser {
     }
 
     // "明天 8 点" / "明天 8:30" / "tomorrow 8am"
-    final tomorrowRe = RegExp(r'(明天|后天|tomorrow)(?:\s*)?(\d{1,2})(?:[:：.](\d{1,2}))?(?:[\s]*([点时])|[\s]*(am|pm))?');
+    final tomorrowRe = RegExp(
+      r'(明天|后天|tomorrow)(?:\s*)?(\d{1,2})(?:[:：.](\d{1,2}))?'
+      r'(?:[\s]*([点时])(?:\s*(\d{1,2})分?)?|[\s]*(am|pm))?',
+    );
     final tm = tomorrowRe.firstMatch(lower);
     if (tm != null) {
-      final offset = lower.contains('后天') || lower.contains('day after') ? 2 : 1;
+      if (_halfFollows(lower, tm.end)) return null;
+      final offset = lower.contains('后天') || lower.contains('day after')
+          ? 2
+          : 1;
       final hour = int.parse(tm.group(2)!);
-      final minute = int.tryParse(tm.group(3) ?? '') ?? 0;
+      final minute =
+          int.tryParse(tm.group(3) ?? '') ??
+          int.tryParse(tm.group(5) ?? '') ??
+          0;
+      if (minute > 59) return null;
       final base = _todayAtMidnight(now).add(Duration(days: offset));
       return ResolvedDate(
-        DateTime(base.year, base.month, base.day, _adjustHour(hour, tm.group(5) ?? tm.group(4)), minute),
+        DateTime(
+          base.year,
+          base.month,
+          base.day,
+          _adjustHour(hour, tm.group(6) ?? tm.group(4)),
+          minute,
+        ),
         tm.group(0)!,
       );
     }
 
     // "今天 14:30" / "今天下午 3 点"
-    final todayRe = RegExp(r'(今天|今日|today)(?:\s*)?(\d{1,2})(?:[:：.](\d{1,2}))?');
+    final todayRe = RegExp(
+      r'(今天|今日|today)(?:\s*)?(\d{1,2})(?:[:：.](\d{1,2}))?'
+      r'(?:\s*[点时](?:\s*(\d{1,2})分?)?)?',
+    );
     final tdm = todayRe.firstMatch(lower);
     if (tdm != null) {
+      if (_halfFollows(lower, tdm.end)) return null;
       final base = _todayAtMidnight(now);
       final hour = int.parse(tdm.group(2)!);
-      final minute = int.tryParse(tdm.group(3) ?? '') ?? 0;
-      return ResolvedDate(DateTime(base.year, base.month, base.day, hour, minute), tdm.group(0)!);
+      final minute =
+          int.tryParse(tdm.group(3) ?? '') ??
+          int.tryParse(tdm.group(4) ?? '') ??
+          0;
+      if (minute > 59) return null;
+      return ResolvedDate(
+        DateTime(base.year, base.month, base.day, hour, minute),
+        tdm.group(0)!,
+      );
     }
 
+    return _parseBareTime(lower, input, now);
+  }
+
+  /// 「N点半」在判据源《05-智能识别》里没有任何规则，而这里每条正则都只吃到「N点」，
+  /// 照常返回就会给出 9:00 这种**自信的错值** ⇒ 命中处紧跟「半」就不认领，整条不识别。
+  ///
+  /// 只看**命中处之后紧跟**的「半」（可跨空格，不可跨标点/子句）：
+  /// 若改成全文扫 `\d\s*[点时]\s*半`，「明天9点开会，下午3点半」这种前半句本来能识别的
+  /// 输入会被整条毙掉——那是过度拒识，不是保守。
+  bool _halfFollows(String s, int end) =>
+      RegExp(r'^\s*[点时]?\s*半').hasMatch(s.substring(end));
+
+  /// 裸时间点：嘀嗒《03-特色功能/05-智能识别.md》:13 的例子「9点提醒我」不带日期词。
+  ///
+  /// 同一条原文给的是「统一识别成**最近有效**的日期和时间」，所以不猜上午下午：
+  /// 把 {h, h+12}（h<12 时）× {今天, 明天} 都当候选，取**严格晚于当前时刻**的最早一个。
+  /// 钟点提示只从**原文输入**里读——上面的预处理会把「上午 / 早上 / 晚上 」整段删掉。
+  ResolvedDate? _parseBareTime(String lowered, String raw, DateTime now) {
+    final bare = RegExp(
+      r'(\d{1,2})\s*[点时](?:\s*(\d{1,2})分?)?',
+    ).firstMatch(lowered);
+    if (bare == null) return null;
+    if (_halfFollows(lowered, bare.end)) return null;
+    final hour = int.parse(bare.group(1)!);
+    final minute = int.tryParse(bare.group(2) ?? '') ?? 0;
+    if (hour > 23 || minute > 59) return null;
+    final midnight = _todayAtMidnight(now);
+    final candidates = <DateTime>[];
+    for (final h in _hourReadings(hour, raw)) {
+      for (final offset in const [0, 1]) {
+        final base = midnight.add(Duration(days: offset));
+        candidates.add(DateTime(base.year, base.month, base.day, h, minute));
+      }
+    }
+    candidates.sort();
+    for (final dt in candidates) {
+      if (dt.isAfter(now)) return ResolvedDate(dt, bare.group(0)!);
+    }
     return null;
   }
 
-  DateTime _todayAtMidnight(DateTime now) => DateTime(now.year, now.month, now.day);
+  /// 中文 12 小时制提示：有提示就只留对应读法，没提示就两种都留给「最近有效」去挑。
+  List<int> _hourReadings(int hour, String raw) {
+    final pm = RegExp(r'下午|晚上|傍晚|夜里|半夜').hasMatch(raw);
+    final am = RegExp(r'早上|上午|中午|凌晨').hasMatch(raw);
+    if (pm && hour < 12) return [hour + 12];
+    if (am && hour == 12) return [0, 12];
+    if (am || pm) return [hour];
+    if (hour == 0 || hour > 12) return [hour];
+    return hour == 12 ? [12] : [hour, hour + 12];
+  }
+
+  DateTime _todayAtMidnight(DateTime now) =>
+      DateTime(now.year, now.month, now.day);
   int _defaultHour(DateTime now) => now.hour;
 
   int _adjustHour(int hour, String? suffix) {

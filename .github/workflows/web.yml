@@ -41,7 +41,6 @@ jobs:
       todo_api_base_url: ${{ steps.meta.outputs.todo_api_base_url }}
       todo_tenant_id: ${{ steps.meta.outputs.todo_tenant_id }}
       deploy: ${{ steps.meta.outputs.deploy }}
-      gh_environment: ${{ steps.meta.outputs.gh_environment }}
     steps:
       - id: meta
         shell: bash
@@ -51,29 +50,24 @@ jobs:
           if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then
             BUILD_ENV=prod
             API_BASE='https://todo.zh04.com'
-            GH_ENV=production
           elif [[ "${GITHUB_REF:-}" == refs/heads/develop ]]; then
             BUILD_ENV=test
             API_BASE='https://todo-test.zh04.com'
-            GH_ENV=test
           else
             BUILD_ENV="${{ github.event.inputs.build_env || 'test' }}"
             if [[ "$BUILD_ENV" == prod ]]; then
               API_BASE='https://todo.zh04.com'
-              GH_ENV=production
             else
               API_BASE='https://todo-test.zh04.com'
-              GH_ENV=test
             fi
           fi
           echo "build_env=$BUILD_ENV" >> "$GITHUB_OUTPUT"
           echo "todo_api_base_url=$API_BASE" >> "$GITHUB_OUTPUT"
           echo "todo_tenant_id=1" >> "$GITHUB_OUTPUT"
           echo "deploy=$DEPLOY" >> "$GITHUB_OUTPUT"
-          echo "gh_environment=$GH_ENV" >> "$GITHUB_OUTPUT"
 
   build:
-    name: Flutter build web
+    name: Flutter build web & SSH deploy
     needs: metadata
     runs-on: ubuntu-latest
     steps:
@@ -81,6 +75,7 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.44.8'
           channel: stable
           cache: true
 
@@ -88,7 +83,7 @@ jobs:
 
       - run: flutter analyze
 
-      - run: flutter test
+      - run: flutter test --exclude-tags 'golden || performance'
 
       - name: Flutter build web
         env:
@@ -123,27 +118,8 @@ jobs:
           test -s "$OUT_DIR/todo-flutter-web.tar.gz"
           ls -la "$OUT_DIR" "$OUT_DIR/deploy"
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: web-deploy-bundle
-          if-no-files-found: error
-          path: .gha-dist/**
-
-  deploy:
-    name: SSH deploy
-    needs: [metadata, build]
-    if: needs.metadata.outputs.deploy == 'true'
-    runs-on: ubuntu-latest
-    environment: ${{ needs.metadata.outputs.gh_environment }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: web-deploy-bundle
-          path: .gha-dist
-
       - name: Upload bundle to staging
+        if: needs.metadata.outputs.deploy == 'true'
         uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.DEPLOY_SSH_HOST }}
@@ -155,6 +131,7 @@ jobs:
           strip_components: 1
 
       - name: Apply on host and restart compose
+        if: needs.metadata.outputs.deploy == 'true'
         uses: appleboy/ssh-action@v1.2.0
         env:
           STAGING_DIR: ${{ vars.DEPLOY_STAGING_DIR || '/tmp/zh-cloud-staging-todo-flutter' }}

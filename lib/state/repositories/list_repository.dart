@@ -1,25 +1,32 @@
 import 'package:drift/drift.dart';
+import 'package:uuid/uuid.dart';
 
-import '../../db/app_database.dart';
-import '../sync_change_queue.dart';
+import '../../core/db/app_database.dart';
+import '../../core/sync/sync_change_queue.dart';
+import '../../core/sync/sync_entities.dart';
 
 /// M11-B2 清单 / 智能清单仓库。
 ///
-/// - 写操作入 drift（UI 真相源）
-/// - 同时 [SyncChangeQueue.enqueue] 把 mutation 投到 [TodoSyncChanges]
+/// - 写操作入 drift（UI 真相源）+ sync_queue
 /// - 智能清单（`smart:` 前缀的 list）由 [SmartListFilter] 解析
 class ListRepository {
-  ListRepository(this._db, this._queue);
+  ListRepository(this._db, this._queue, {Uuid? uuid})
+    : _uuid = uuid ?? const Uuid();
 
   final AppDatabase _db;
   final SyncChangeQueue _queue;
+  final Uuid _uuid;
 
-  /// 顶层非智能清单（不解析 smart 前缀），按 folderId / sortOrder 排序。
+  /// 顶层非智能清单（不解析 smart 前缀），置顶优先，再按本地 folder UUID / sortOrder 排序。
   Stream<List<TodoList>> watchAll() {
     return (_db.select(_db.todoLists)
-          ..where((t) => t.name.like('smart:%').not())
+          ..where(
+            (t) => t.name.like('smart:%').not() & t.id.equals('inbox').not(),
+          )
           ..orderBy([
-            (t) => OrderingTerm(expression: t.folderId),
+            (t) =>
+                OrderingTerm(expression: t.isPinned, mode: OrderingMode.desc),
+            (t) => OrderingTerm(expression: t.folderLocalId),
             (t) => OrderingTerm(expression: t.sortOrder),
             (t) => OrderingTerm(expression: t.createdAt),
           ]))
@@ -28,9 +35,13 @@ class ListRepository {
 
   Future<List<TodoList>> getAll() {
     return (_db.select(_db.todoLists)
-          ..where((t) => t.name.like('smart:%').not())
+          ..where(
+            (t) => t.name.like('smart:%').not() & t.id.equals('inbox').not(),
+          )
           ..orderBy([
-            (t) => OrderingTerm(expression: t.folderId),
+            (t) =>
+                OrderingTerm(expression: t.isPinned, mode: OrderingMode.desc),
+            (t) => OrderingTerm(expression: t.folderLocalId),
             (t) => OrderingTerm(expression: t.sortOrder),
           ]))
         .get();
@@ -52,41 +63,49 @@ class ListRepository {
 
   Future<TodoList> create({
     required String name,
-    int? folderId,
+    String? folderLocalId,
+    String? color,
     int sortOrder = 0,
   }) async {
-    final now = DateTime.now();
-    final id = await _db.into(_db.todoLists).insert(
-      TodoListsCompanion.insert(
-        name: name,
-        folderId: Value(folderId),
-        sortOrder: Value(sortOrder),
-        updatedAt: now,
-        createdAt: now,
-      ),
-    );
-    final row = await (_db.select(_db.todoLists)
-          ..where((t) => t.id.equals(id)))
-        .getSingle();
-    await _queue.enqueue(
-      entity: SyncEntities.list,
-      op: SyncOps.upsert,
-      localId: id,
-      payload: row.toJson(),
-    );
-    return row;
+    return _db.transaction(() async {
+      final folder = await _folderByLocalId(folderLocalId);
+      final now = DateTime.now();
+      final id = _uuid.v4();
+      await _db
+          .into(_db.todoLists)
+          .insert(
+            TodoListsCompanion.insert(
+              id: id,
+              name: name,
+              folderLocalId: Value(folderLocalId),
+              folderId: Value(folder?.serverId),
+              color: Value(color),
+              sortOrder: Value(sortOrder),
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      final row = await (_db.select(
+        _db.todoLists,
+      )..where((t) => t.id.equals(id))).getSingle();
+      await _queue.enqueue(
+        entity: SyncEntities.list,
+        op: SyncOps.upsert,
+        localId: id,
+        payload: row.toJson(),
+      );
+      return row;
+    });
   }
 
-  Future<TodoList> rename(int listId, String newName) async {
+  Future<TodoList> rename(String listId, String newName) async {
     final now = DateTime.now();
-    await (_db.update(_db.todoLists)..where((t) => t.id.equals(listId)))
-        .write(TodoListsCompanion(
-      name: Value(newName),
-      updatedAt: Value(now),
-    ));
-    final row = await (_db.select(_db.todoLists)
-          ..where((t) => t.id.equals(listId)))
-        .getSingle();
+    await (_db.update(_db.todoLists)..where((t) => t.id.equals(listId))).write(
+      TodoListsCompanion(name: Value(newName), updatedAt: Value(now)),
+    );
+    final row = await (_db.select(
+      _db.todoLists,
+    )..where((t) => t.id.equals(listId))).getSingle();
     await _queue.enqueue(
       entity: SyncEntities.list,
       op: SyncOps.upsert,
@@ -97,24 +116,141 @@ class ListRepository {
     return row;
   }
 
-  Future<void> reorder(List<int> orderedIds) async {
-    for (var i = 0; i < orderedIds.length; i++) {
-      await (_db.update(_db.todoLists)
-            ..where((t) => t.id.equals(orderedIds[i])))
-          .write(TodoListsCompanion(
-        sortOrder: Value(i),
-        updatedAt: Value(DateTime.now()),
-      ));
-    }
+  /// 置顶或取消置顶清单（嘀嗒《02-用清单管理任务》侧边栏左滑出现「置顶」）。
+  ///
+  /// 与 [rename] 同一条口径：本地写入与 list/upsert outbox 必须一起落，
+  /// payload 走 `toJson()`，服务端 `todo_list.is_pinned` 收同一字段名。
+  Future<TodoList> setPinned(String listId, bool pinned) async {
+    final now = DateTime.now();
+    await (_db.update(_db.todoLists)..where((t) => t.id.equals(listId))).write(
+      TodoListsCompanion(isPinned: Value(pinned), updatedAt: Value(now)),
+    );
+    final row = await (_db.select(
+      _db.todoLists,
+    )..where((t) => t.id.equals(listId))).getSingle();
+    await _queue.enqueue(
+      entity: SyncEntities.list,
+      op: SyncOps.upsert,
+      localId: listId,
+      serverId: row.serverId,
+      payload: row.toJson(),
+    );
+    return row;
   }
 
-  /// 删除清单：调用方应先 [countOpenTasksByList]，如有未完成任务需拦截。
-  Future<void> delete(int listId) async {
-    final row = await (_db.select(_db.todoLists)
-          ..where((t) => t.id.equals(listId)))
-        .getSingleOrNull();
-    await (_db.delete(_db.todoLists)..where((t) => t.id.equals(listId)))
-        .go();
+  /// 设置或清除清单颜色（嘀嗒《02-用清单管理任务》:73 清单属性含「颜色」）。
+  ///
+  /// 与 [setPinned] 同一条口径：本地写入与 list/upsert outbox 必须一起落，
+  /// payload 走 `toJson()`，服务端 `todo_list.color` 收同一字段名；
+  /// 传 null 即清色，显式 null 也会随 payload 出库让另一端回退默认色。
+  Future<TodoList> setColor(String listId, String? color) async {
+    final now = DateTime.now();
+    await (_db.update(_db.todoLists)..where((t) => t.id.equals(listId))).write(
+      TodoListsCompanion(color: Value(color), updatedAt: Value(now)),
+    );
+    final row = await (_db.select(
+      _db.todoLists,
+    )..where((t) => t.id.equals(listId))).getSingle();
+    await _queue.enqueue(
+      entity: SyncEntities.list,
+      op: SyncOps.upsert,
+      localId: listId,
+      serverId: row.serverId,
+      payload: row.toJson(),
+    );
+    return row;
+  }
+
+  /// 将普通清单移入本地 [folderLocalId]，或传 null 移到顶层。
+  ///
+  /// folder 是 REST 特例，但 list 仍是同步白名单实体：本地更新与 list/upsert
+  /// outbox 必须一起写入，才能让另一个设备经正常 pull 恢复组织关系。
+  Future<TodoList> moveToFolder(String listId, String? folderLocalId) async {
+    return _db.transaction(() async {
+      final existing = await (_db.select(
+        _db.todoLists,
+      )..where((row) => row.id.equals(listId))).getSingleOrNull();
+      if (existing == null) {
+        throw StateError('清单不存在');
+      }
+      if (existing.name.startsWith('smart:')) {
+        throw StateError('智能清单不支持移动到文件夹');
+      }
+      final folder = await _folderByLocalId(folderLocalId);
+      await (_db.update(
+        _db.todoLists,
+      )..where((row) => row.id.equals(listId))).write(
+        TodoListsCompanion(
+          folderLocalId: Value(folderLocalId),
+          folderId: Value(folder?.serverId),
+          updatedAt: Value(DateTime.now()),
+        ),
+      );
+      final moved = await (_db.select(
+        _db.todoLists,
+      )..where((row) => row.id.equals(listId))).getSingle();
+      await _queue.enqueue(
+        entity: SyncEntities.list,
+        op: SyncOps.upsert,
+        localId: listId,
+        serverId: moved.serverId,
+        payload: moved.toJson(),
+      );
+      return moved;
+    });
+  }
+
+  Future<TodoFolder?> _folderByLocalId(String? folderLocalId) async {
+    if (folderLocalId == null) return null;
+    final folder = await (_db.select(
+      _db.todoFolders,
+    )..where((row) => row.id.equals(folderLocalId))).getSingleOrNull();
+    if (folder == null) {
+      throw StateError('文件夹不存在');
+    }
+    return folder;
+  }
+
+  /// 按 [orderedIds] 的先后重写各清单的 `sortOrder`。
+  ///
+  /// 每条改动都要登记一行 `list/upsert`：清单是同步白名单实体，只写本地等于
+  /// "这台设备排好了、另一台 pull 回来还是旧顺序"。整批放在一个事务里
+  /// （先例 `moveToFolder`），半途失败时位次与登记行一起回滚。
+  /// 传入但已不存在的 id 跳过，位次按**实际写成的那批**连续排，不留空洞。
+  Future<void> reorder(List<String> orderedIds) async {
+    return _db.transaction(() async {
+      var position = 0;
+      for (final id in orderedIds) {
+        final exists = await (_db.select(
+          _db.todoLists,
+        )..where((t) => t.id.equals(id))).getSingleOrNull();
+        if (exists == null) continue;
+        await (_db.update(_db.todoLists)..where((t) => t.id.equals(id))).write(
+          TodoListsCompanion(
+            sortOrder: Value(position),
+            updatedAt: Value(DateTime.now()),
+          ),
+        );
+        final moved = await (_db.select(
+          _db.todoLists,
+        )..where((t) => t.id.equals(id))).getSingle();
+        await _queue.enqueue(
+          entity: SyncEntities.list,
+          op: SyncOps.upsert,
+          localId: id,
+          serverId: moved.serverId,
+          payload: moved.toJson(),
+        );
+        position++;
+      }
+    });
+  }
+
+  Future<void> delete(String listId) async {
+    final row = await (_db.select(
+      _db.todoLists,
+    )..where((t) => t.id.equals(listId))).getSingleOrNull();
+    await (_db.delete(_db.todoLists)..where((t) => t.id.equals(listId))).go();
     await _queue.enqueue(
       entity: SyncEntities.list,
       op: SyncOps.delete,
@@ -124,33 +260,33 @@ class ListRepository {
     );
   }
 
-  /// 把过滤条件物化为"智能清单"：name = `smart:<filterName>`，payloadJson 写进 description。
   Future<TodoList> saveSmart({
     required String filterName,
     required Map<String, dynamic> filter,
   }) async {
     final now = DateTime.now();
-    final id = await _db.into(_db.todoLists).insert(
-      TodoListsCompanion.insert(
-        name: 'smart:$filterName',
-        folderId: const Value(null),
-        sortOrder: const Value(0),
-        updatedAt: now,
-        createdAt: now,
-      ),
-    );
-    final row = await (_db.select(_db.todoLists)
-          ..where((t) => t.id.equals(id)))
-        .getSingle();
+    final id = _uuid.v4();
+    await _db
+        .into(_db.todoLists)
+        .insert(
+          TodoListsCompanion.insert(
+            id: id,
+            name: 'smart:$filterName',
+            folderLocalId: const Value(null),
+            folderId: const Value(null),
+            sortOrder: const Value(0),
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    final row = await (_db.select(
+      _db.todoLists,
+    )..where((t) => t.id.equals(id))).getSingle();
     await _queue.enqueue(
       entity: SyncEntities.list,
       op: SyncOps.upsert,
       localId: id,
-      payload: {
-        ...row.toJson(),
-        'isSmart': true,
-        'filter': filter,
-      },
+      payload: {...row.toJson(), 'isSmart': true, 'filter': filter},
     );
     return row;
   }
@@ -167,9 +303,9 @@ class SmartListFilter {
     this.completed,
   });
 
-  final int? listId;
+  final String? listId;
   final int? folderId;
-  final List<int> tagIds;
+  final List<String> tagIds;
   final int? priority;
   final String? dueRange;
   final bool? completed;
@@ -185,9 +321,9 @@ class SmartListFilter {
 
   factory SmartListFilter.fromJson(Map<String, dynamic> json) {
     return SmartListFilter(
-      listId: json['listId'] as int?,
+      listId: json['listId'] as String?,
       folderId: json['folderId'] as int?,
-      tagIds: (json['tagIds'] as List?)?.cast<int>() ?? const [],
+      tagIds: (json['tagIds'] as List?)?.cast<String>() ?? const [],
       priority: json['priority'] as int?,
       dueRange: json['dueRange'] as String?,
       completed: json['completed'] as bool?,
@@ -195,10 +331,7 @@ class SmartListFilter {
   }
 
   factory SmartListFilter.fromListName(String listName) {
-    // 解析 `smart:<filterName>` 中的 filterName 后回退到默认 = 全部
-    if (!listName.startsWith('smart:')) {
-      return SmartListFilter();
-    }
+    if (!listName.startsWith('smart:')) return SmartListFilter();
     final name = listName.substring('smart:'.length);
     switch (name) {
       case 'today':

@@ -1,140 +1,279 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/db/app_database.dart';
+import '../../core/time/task_time_formatter.dart';
+import '../../core/time/task_time_mode.dart';
 import '../../native/native_intents.dart';
+import '../../state/providers.dart';
 
-/// M11-B5 原生增强入口页：
-/// - 桌面便签
-/// - 快捷指令（URL Scheme）
-/// - 系统分享
-/// - 锁屏重要任务
-/// - 桌面小组件数据预览
-class NativeEntryPage extends StatefulWidget {
-  const NativeEntryPage({super.key});
+class NativeTaskProjection {
+  const NativeTaskProjection({
+    required this.todayTasks,
+    required this.importantTasks,
+    required this.lockScreenTasks,
+    required this.unsyncedImportantCount,
+    required this.shareText,
+    required this.stickyNoteText,
+  });
 
-  @override
-  State<NativeEntryPage> createState() => _NativeEntryPageState();
-}
+  final List<TodoTask> todayTasks;
+  final List<TodoTask> importantTasks;
+  final List<NativeLockScreenTask> lockScreenTasks;
+  final int unsyncedImportantCount;
+  final String shareText;
+  final String stickyNoteText;
 
-class _NativeEntryPageState extends State<NativeEntryPage> {
-  final TextEditingController _noteCtl = TextEditingController(text: '今日重点：…');
-  String _lastResult = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _bootstrapUri();
+  factory NativeTaskProjection.fromTasks(
+    Iterable<TodoTask> tasks, {
+    required DateTime now,
+  }) {
+    final today = DateTime(now.year, now.month, now.day);
+    final active = tasks
+        .where((task) => !task.completed && !task.cancelled)
+        .toList();
+    final todayTasks = active.where((task) {
+      final display = _taskDisplayDate(task);
+      return display != null &&
+          display.year == today.year &&
+          display.month == today.month &&
+          display.day == today.day;
+    }).toList()..sort(_compareBySchedule);
+    final importantTasks =
+        active.where((task) => task.priority >= 2 || task.isPinned).toList()
+          ..sort((left, right) {
+            final priority = right.priority.compareTo(left.priority);
+            if (priority != 0) return priority;
+            return _compareBySchedule(left, right);
+          });
+    final lockScreenTasks = importantTasks
+        .where((task) => task.serverId != null && task.title.trim().isNotEmpty)
+        .take(5)
+        .map(
+          (task) => NativeLockScreenTask(
+            serverId: task.serverId!,
+            title: task.title.trim(),
+          ),
+        )
+        .toList(growable: false);
+    final unsyncedImportantCount = importantTasks
+        .where((task) => task.serverId == null)
+        .length;
+    final dateLabel = '${today.month}月${today.day}日';
+    final shareText = todayTasks.isEmpty
+        ? '$dateLabel 今日暂无待办任务'
+        : [
+            '$dateLabel 今日任务',
+            for (var index = 0; index < todayTasks.length; index++)
+              '${index + 1}. ${todayTasks[index].title}',
+          ].join('\n');
+    final stickyNoteText = todayTasks.isEmpty
+        ? ''
+        : [
+            '今日重点',
+            for (final task in todayTasks.take(5)) '☐ ${task.title}',
+          ].join('\n');
+    return NativeTaskProjection(
+      todayTasks: List.unmodifiable(todayTasks),
+      importantTasks: List.unmodifiable(importantTasks),
+      lockScreenTasks: List.unmodifiable(lockScreenTasks),
+      unsyncedImportantCount: unsyncedImportantCount,
+      shareText: shareText,
+      stickyNoteText: stickyNoteText,
+    );
   }
 
-  Future<void> _bootstrapUri() async {
-    final uri = await NativeIntents.handleIncomingUri();
-    if (uri != null && mounted) {
-      setState(() => _lastResult = 'URI 入参: $uri');
+  static DateTime? _taskDisplayDate(TodoTask task) {
+    final instant = task.dueAt ?? task.endAt ?? task.startAt;
+    if (instant == null) return null;
+    return taskWallClockDateTime(
+      instant,
+      allDay: task.allDay,
+      mode: TaskTimeMode.fromWire(task.timeMode),
+      timeZone: task.timeZone,
+    );
+  }
+
+  static int _compareBySchedule(TodoTask left, TodoTask right) {
+    final leftDate = _taskDisplayDate(left);
+    final rightDate = _taskDisplayDate(right);
+    if (leftDate == null && rightDate != null) return 1;
+    if (leftDate != null && rightDate == null) return -1;
+    if (leftDate != null && rightDate != null) {
+      final byDate = leftDate.compareTo(rightDate);
+      if (byDate != 0) return byDate;
     }
+    return left.id.compareTo(right.id);
+  }
+}
+
+/// 原生增强入口页。页面只消费当前账号的 Drift 任务投影；锁屏平台通道仅接收
+/// 已同步任务的服务端 ID 与标题最小快照，不会为离线任务伪造 ID。
+class NativeEntryPage extends ConsumerStatefulWidget {
+  const NativeEntryPage({super.key, this.taskStream});
+
+  final Stream<List<TodoTask>>? taskStream;
+
+  @override
+  ConsumerState<NativeEntryPage> createState() => _NativeEntryPageState();
+}
+
+class _NativeEntryPageState extends ConsumerState<NativeEntryPage> {
+  final TextEditingController _noteCtl = TextEditingController();
+
+  @override
+  void dispose() {
+    _noteCtl.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('原生增强')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          if (_lastResult.isNotEmpty) Card(
-            color: Theme.of(context).colorScheme.secondaryContainer,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Text(_lastResult),
-            ),
+    final repository = ref.watch(taskRepositoryProvider);
+    final taskStream =
+        widget.taskStream ??
+        repository?.watchAll() ??
+        const Stream<List<TodoTask>>.empty();
+    final now = ref.watch(currentDateTimeProvider)();
+    return StreamBuilder<List<TodoTask>>(
+      stream: taskStream,
+      initialData: const [],
+      builder: (context, snapshot) {
+        final projection = NativeTaskProjection.fromTasks(
+          snapshot.data ?? const [],
+          now: now,
+        );
+        return Scaffold(
+          appBar: AppBar(title: const Text('原生增强')),
+          body: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              _SectionTitle('桌面便签'),
+              TextField(
+                controller: _noteCtl,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  hintText: '输入要显示在桌面便签的内容',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.today_outlined),
+                    label: const Text('填入今日任务'),
+                    onPressed: projection.stickyNoteText.isEmpty
+                        ? null
+                        : () => _noteCtl.text = projection.stickyNoteText,
+                  ),
+                  FilledButton.icon(
+                    icon: const Icon(Icons.sticky_note_2),
+                    label: const Text('写入桌面便签'),
+                    onPressed: () async {
+                      final content = _noteCtl.text.trim();
+                      if (content.isEmpty) {
+                        _toast('请先输入便签内容');
+                        return;
+                      }
+                      final ok = await NativeIntents.setStickyNote(content);
+                      _toast(ok ? '已写入桌面便签' : '不支持当前平台');
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              _SectionTitle('快捷指令 / URL Scheme'),
+              const Text('zhcloudtodo://task/add?title=任务标题&due=2026-07-30'),
+              const SizedBox(height: 8),
+              FilledButton.icon(
+                icon: const Icon(Icons.link),
+                label: const Text('复制 Scheme'),
+                onPressed: () async {
+                  await Clipboard.setData(
+                    const ClipboardData(
+                      text: 'zhcloudtodo://task/add?title=任务标题',
+                    ),
+                  );
+                  _toast('已复制到剪贴板');
+                },
+              ),
+              const SizedBox(height: 24),
+              _SectionTitle('系统分享'),
+              FilledButton.icon(
+                icon: const Icon(Icons.share),
+                label: Text('分享今日任务（${projection.todayTasks.length}）'),
+                onPressed: () async {
+                  final ok = await NativeIntents.shareText(
+                    projection.shareText,
+                    subject: 'ZH-CLOUD Todo',
+                  );
+                  _toast(ok ? '已打开系统分享面板' : '分享失败');
+                },
+              ),
+              const SizedBox(height: 24),
+              _SectionTitle('锁屏重要任务'),
+              Text(
+                projection.unsyncedImportantCount == 0
+                    ? '仅推送已同步的重要或置顶任务'
+                    : '另有 ${projection.unsyncedImportantCount} 项重要任务尚未同步，不会伪造任务 ID',
+              ),
+              const SizedBox(height: 8),
+              FilledButton.icon(
+                icon: const Icon(Icons.lock_outline),
+                label: Text(
+                  projection.lockScreenTasks.isEmpty
+                      ? '清除锁屏任务'
+                      : '推送 ${projection.lockScreenTasks.length} 项重要任务',
+                ),
+                onPressed: () async {
+                  final ok = await NativeIntents.pushLockScreenTasks(
+                    projection.lockScreenTasks,
+                  );
+                  _toast(
+                    ok
+                        ? projection.lockScreenTasks.isEmpty
+                              ? '已清除锁屏任务'
+                              : '已推送'
+                        : '不支持当前平台或通知权限未开启',
+                  );
+                },
+              ),
+              const SizedBox(height: 24),
+              _SectionTitle('桌面小组件数据预览'),
+              FilledButton.icon(
+                icon: const Icon(Icons.widgets_outlined),
+                label: Text('更新桌面小组件（${projection.todayTasks.length}）'),
+                onPressed: () async {
+                  final ok = await NativeIntents.updateTodayWidgetSnapshot(
+                    projection.todayTasks.map((task) => task.title),
+                  );
+                  _toast(ok ? '桌面小组件已更新' : '不支持当前平台');
+                },
+              ),
+              const SizedBox(height: 8),
+              if (projection.todayTasks.isEmpty)
+                const Padding(padding: EdgeInsets.all(8), child: Text('今天暂无任务'))
+              else
+                for (final task in projection.todayTasks)
+                  ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.task_alt),
+                    title: Text(task.title),
+                    subtitle: Text(
+                      NativeTaskProjection._taskDisplayDate(
+                            task,
+                          )?.toIso8601String() ??
+                          '',
+                    ),
+                  ),
+            ],
           ),
-          const SizedBox(height: 16),
-          _SectionTitle('桌面便签'),
-          TextField(
-            controller: _noteCtl,
-            maxLines: 4,
-            decoration: const InputDecoration(border: OutlineInputBorder()),
-          ),
-          const SizedBox(height: 8),
-          FilledButton.icon(
-            icon: const Icon(Icons.sticky_note_2),
-            label: const Text('写入桌面便签'),
-            onPressed: () async {
-              final ok = await NativeIntents.setStickyNote(_noteCtl.text);
-              _toast(ok ? '已写入桌面便签' : '不支持当前平台');
-            },
-          ),
-          const SizedBox(height: 24),
-          _SectionTitle('快捷指令 / URL Scheme'),
-          const Text('zhcloudtodo://task/add?title=…&due=2026-06-20'),
-          const SizedBox(height: 8),
-          FilledButton.icon(
-            icon: const Icon(Icons.link),
-            label: const Text('复制 Scheme'),
-            onPressed: () async {
-              await Clipboard.setData(
-                const ClipboardData(text: 'zhcloudtodo://task/add?title=…'),
-              );
-              _toast('已复制到剪贴板');
-            },
-          ),
-          const SizedBox(height: 24),
-          _SectionTitle('系统分享'),
-          FilledButton.icon(
-            icon: const Icon(Icons.share),
-            label: const Text('分享今日任务列表'),
-            onPressed: () async {
-              final ok = await NativeIntents.shareText(
-                '我的今日任务：…',
-                subject: 'ZH-CLOUD Todo',
-              );
-              _toast(ok ? '已打开系统分享面板' : '分享失败');
-            },
-          ),
-          const SizedBox(height: 24),
-          _SectionTitle('锁屏重要任务'),
-          const Text('把勾选了"重要"的任务同步到锁屏小组件'),
-          const SizedBox(height: 8),
-          FilledButton.icon(
-            icon: const Icon(Icons.lock_outline),
-            label: const Text('推送锁屏（演示 1/2/3）'),
-            onPressed: () async {
-              final ok = await NativeIntents.pushLockScreenTasks([1, 2, 3]);
-              _toast(ok ? '已推送' : '不支持当前平台');
-            },
-          ),
-          const SizedBox(height: 24),
-          _SectionTitle('桌面小组件数据预览'),
-          FutureBuilder<List<Map<String, dynamic>>>(
-            future: NativeIntents.widgetTodaySnapshot(),
-            builder: (ctx, snap) {
-              if (snap.connectionState != ConnectionState.done) {
-                return const Padding(
-                  padding: EdgeInsets.all(8),
-                  child: LinearProgressIndicator(),
-                );
-              }
-              final items = snap.data ?? const [];
-              if (items.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.all(8),
-                  child: Text('小组件暂未启用或无今日任务'),
-                );
-              }
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: items
-                    .map((t) => ListTile(
-                          dense: true,
-                          leading: const Icon(Icons.task_alt),
-                          title: Text(t['title']?.toString() ?? ''),
-                          subtitle: Text(t['dueAt']?.toString() ?? ''),
-                        ))
-                    .toList(),
-              );
-            },
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -147,9 +286,10 @@ class _NativeEntryPageState extends State<NativeEntryPage> {
 class _SectionTitle extends StatelessWidget {
   const _SectionTitle(this.text);
   final String text;
+
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Text(text, style: Theme.of(context).textTheme.titleMedium),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 8),
+    child: Text(text, style: Theme.of(context).textTheme.titleMedium),
+  );
 }

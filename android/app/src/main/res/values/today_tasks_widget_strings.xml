@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="today_tasks_widget_description">显示最多五项今日待办任务</string>
+    <string name="today_tasks_widget_title">今日任务</string>
+    <string name="today_tasks_widget_empty">今天暂无任务</string>
+</resources>

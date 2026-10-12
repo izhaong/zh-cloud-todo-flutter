@@ -1,99 +1,646 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:package_info_plus/package_info_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 
-import '../../github_release_update.dart';
-import '../../settings_page.dart';
+import '../../core/theme/app_theme.dart';
+import '../../core/theme/brand_colors.dart';
+import '../../core/time/week_start.dart';
+import '../../core/widgets/app_widgets.dart';
+import '../../state/providers.dart';
+import '../../state/repositories/task_capture_defaults_repository.dart';
+import '../../state/repositories/sidebar_visibility_repository.dart';
 import '../../state/session_state.dart';
+import '../achievement/achievement_page.dart';
+import '../account/account_security_page.dart';
+import '../calendar_sub/calendar_subscription_page.dart';
+import '../import/task_import_page.dart';
+import '../home/keyboard_shortcuts_dialog.dart';
+import '../native/native_entry_page.dart';
+import '../shell/app_theme_controller.dart';
 
-/// [TodoSettingsPage] 的状态容器：管理「检测更新」按钮的加载态与结果展示，
-/// 桌面自动更新逻辑迁移自旧版 main.dart（保持行为不变）；退出登录接入
-/// [sessionProvider]。
-class SettingsRoute extends ConsumerStatefulWidget {
+/// 设置页：分组列表（账号/任务/日期与时间/主题/关于）+ 账户安全与成就入口。
+class SettingsRoute extends ConsumerWidget {
   const SettingsRoute({super.key, this.signedInMobile});
 
   final String? signedInMobile;
 
   @override
-  ConsumerState<SettingsRoute> createState() => _SettingsRouteState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = brandColors(context);
+    // 读不到偏好时按默认档显示，不让设置页出现空副标题。
+    final weekStartLabel = WeekStart.labelOf(
+      resolveWeekStartFirstDay(ref.watch(weekStartProvider)),
+    );
+    return Scaffold(
+      appBar: AppBar(title: const Text('设置')),
+      body: ListView(
+        padding: const EdgeInsets.all(12),
+        children: [
+          _Section(title: '账号'),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                if (signedInMobile != null && signedInMobile!.isNotEmpty)
+                  _Tile(
+                    icon: Icons.phone_iphone_outlined,
+                    title: '当前账号',
+                    subtitle: signedInMobile,
+                    colors: colors,
+                  ),
+                _Tile(
+                  icon: Icons.verified_user_outlined,
+                  title: '账户安全',
+                  subtitle: '修改密码、双重验证（2FA）与数据导出',
+                  trailing: Icons.chevron_right,
+                  colors: colors,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const AccountSecurityPage(),
+                    ),
+                  ),
+                ),
+                _Tile(
+                  icon: Icons.emoji_events_outlined,
+                  title: '成就与勋章',
+                  subtitle: '成就值、等级与勋章墙；成就值每天凌晨更新',
+                  trailing: Icons.chevron_right,
+                  colors: colors,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const AchievementPage()),
+                  ),
+                ),
+                _Tile(
+                  icon: Icons.logout,
+                  title: '退出登录',
+                  colors: colors,
+                  destructive: true,
+                  onTap: () => _signOut(context, ref),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _Section(title: '任务'),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                _Tile(
+                  icon: Icons.playlist_add_check_outlined,
+                  title: '新任务默认值',
+                  subtitle: '默认清单与优先级；离线保存后自动同步',
+                  trailing: Icons.chevron_right,
+                  colors: colors,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const _TaskCaptureDefaultsPage(),
+                    ),
+                  ),
+                ),
+                _Tile(
+                  icon: Icons.calendar_month_outlined,
+                  title: '日历订阅',
+                  subtitle: '订阅外部 ICS，或导出自己的任务日历',
+                  trailing: Icons.chevron_right,
+                  colors: colors,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const CalendarSubscriptionPage(),
+                    ),
+                  ),
+                ),
+                _Tile(
+                  icon: Icons.upload_file_outlined,
+                  title: '任务导入',
+                  subtitle: '从 JSON 导入任务、查看批次并按批回滚',
+                  trailing: Icons.chevron_right,
+                  colors: colors,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const TaskImportPage()),
+                  ),
+                ),
+                _Tile(
+                  icon: Icons.widgets_outlined,
+                  title: '原生增强',
+                  subtitle: '桌面便签、系统分享、锁屏任务与小组件预览',
+                  trailing: Icons.chevron_right,
+                  colors: colors,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const NativeEntryPage()),
+                  ),
+                ),
+                _Tile(
+                  icon: Icons.keyboard_outlined,
+                  title: '键盘快捷键',
+                  subtitle: '查看当前可用的组合键（?）',
+                  colors: colors,
+                  onTap: () => showKeyboardShortcutsDialog(context),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _Section(title: '日期与时间'),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                _Tile(
+                  key: const Key('todo-settings-week-start'),
+                  icon: Icons.view_week_outlined,
+                  title: '星期开始于',
+                  subtitle: weekStartLabel,
+                  trailing: Icons.chevron_right,
+                  colors: colors,
+                  onTap: () => _pickWeekStart(context, ref),
+                ),
+                _TimezonePreferenceTile(),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _Section(title: '智能清单'),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                _Tile(
+                  icon: Icons.sell_outlined,
+                  title: '标签',
+                  key: const Key('todo-settings-show-tags'),
+                  subtitle: '控制标签条目是否出现在侧栏的清单下面',
+                  trailingText: _showTagsLabel(
+                    ref.watch(sidebarShowTagsProvider),
+                  ),
+                  colors: colors,
+                  onTap: () => _pickShowTags(context, ref),
+                ),
+                if (_showTagsStale(ref.watch(sidebarShowTagsProvider)))
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: Text(
+                      '读取偏好失败，显示的是上次读到的值',
+                      style: TextStyle(color: colors.mutedForeground),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                _Tile(
+                  icon: Icons.filter_alt_outlined,
+                  title: '过滤器',
+                  key: const Key('todo-settings-show-filters'),
+                  subtitle: '控制过滤器条目是否出现在侧栏',
+                  trailingText: _visibilityLabel(
+                    ref.watch(sidebarShowFiltersProvider),
+                  ),
+                  colors: colors,
+                  onTap: () => _pickShowFilters(context, ref),
+                ),
+                if (_visibilityStale(ref.watch(sidebarShowFiltersProvider)))
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: Text(
+                      '读取偏好失败，显示的是上次读到的值',
+                      style: TextStyle(color: colors.mutedForeground),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          _Section(title: '主题'),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                for (final mode in ThemeMode.values)
+                  _Tile(
+                    icon: mode == ThemeMode.system
+                        ? Icons.brightness_auto
+                        : (mode == ThemeMode.dark
+                              ? Icons.dark_mode_outlined
+                              : Icons.light_mode_outlined),
+                    title: themeModeLabel(mode),
+                    colors: colors,
+                    trailing: ref.watch(themeModeProvider) == mode
+                        ? Icons.check
+                        : null,
+                    onTap: () => ref.read(themeModeProvider.notifier).set(mode),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _Section(title: '关于'),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: _Tile(
+              icon: Icons.info_outline,
+              title: '版本号',
+              subtitle: 'zh-cloud todo（本地离线优先版）',
+              colors: colors,
+            ),
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  /// 嘀嗒《01-欢迎/03-常见问题.md:134》「点击「设置」-「日期与时间」-「星期开始于」，
+  /// 你可以选择“周日”、“周一”、或”周六“任意一天为一周的开始。」三档照抄，
+  /// 不自创「跟随系统」或第四档。
+  ///
+  /// 写入的是"点中的那个字面值"，不是从当前值取反 ⇒ 读到的当前值过期也只会
+  /// 让勾选标记画错一帧，不可能把更新的值盖回去（spec.md 四件套 ④）。
+  Future<void> _pickWeekStart(BuildContext context, WidgetRef ref) async {
+    final repo = ref.read(weekStartPreferenceRepositoryProvider);
+    if (repo == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('本地数据库尚未就绪，暂时无法修改星期开始于')));
+      return;
+    }
+    final current = resolveWeekStartFirstDay(ref.read(weekStartProvider));
+    final picked = await showModalBottomSheet<int>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final firstDay in WeekStart.allowedFirstDays)
+              ListTile(
+                key: Key('todo-settings-week-start-option-$firstDay'),
+                title: Text(WeekStart.labelOf(firstDay)),
+                trailing: firstDay == current
+                    ? Icon(
+                        Icons.check,
+                        color: brandColors(context).mutedForeground,
+                      )
+                    : null,
+                onTap: () => Navigator.of(sheetContext).pop(firstDay),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return;
+    try {
+      await repo.save(picked);
+    } catch (_) {
+      // 四件套 ③：保存失败只提示，不改当前生效的档位
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('保存失败，星期开始于仍为当前设置')));
+    }
+  }
+
+  Future<void> _signOut(BuildContext context, WidgetRef ref) async {
+    await ref.read(sessionProvider.notifier).signOut();
+    if (context.mounted) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
+  }
+
+  /// 嘀嗒《…04-用标签管理任务.md》:16/:27 的取值是「显示」/「隐藏」二选一，
+  /// 所以这里照抄成选项弹层，而不是自创一个 Switch。
+  ///
+  /// 写入的是"点中的那个字面值"，不是从当前值取反 ⇒ 读到的当前值过期也只会
+  /// 让勾选标记画错一帧，不可能把更新的值盖回去（spec.md 四件套 ④）。
+  Future<void> _pickShowTags(BuildContext context, WidgetRef ref) async {
+    final repo = ref.read(sidebarVisibilityRepositoryProvider);
+    if (repo == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('本地数据库尚未就绪，暂时无法修改显示标签')));
+      return;
+    }
+    final current =
+        ref.read(sidebarShowTagsProvider).valueOrNull ??
+        SidebarVisibilityRepository.defaultShowTags;
+    final picked = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final (value, label) in const [(true, '显示'), (false, '隐藏')])
+              ListTile(
+                key: Key('todo-settings-show-tags-option-$value'),
+                title: Text(label),
+                trailing: value == current
+                    ? Icon(
+                        Icons.check,
+                        color: brandColors(context).mutedForeground,
+                      )
+                    : null,
+                onTap: () => Navigator.of(sheetContext).pop(value),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return;
+    try {
+      await repo.save(showTags: picked);
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('保存失败，显示标签仍为当前设置')));
+    }
+  }
+
+  /// 嘀嗒《…05-过滤器…》:29/:33「确认侧边栏中是否已经开启显示过滤器」⇒ 同一份「显示/隐藏」形状。
+  /// 与 [_pickShowTags] 一样写"点中的那个字面值"，不从当前值取反（四件套 ④）。
+  Future<void> _pickShowFilters(BuildContext context, WidgetRef ref) async {
+    final repo = ref.read(sidebarVisibilityRepositoryProvider);
+    if (repo == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('本地数据库尚未就绪，暂时无法修改过滤器')));
+      return;
+    }
+    final current =
+        ref.read(sidebarShowFiltersProvider).valueOrNull ??
+        SidebarVisibilityRepository.defaultShowFilters;
+    final picked = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final (value, label) in const [(true, '显示'), (false, '隐藏')])
+              ListTile(
+                key: Key('todo-settings-show-filters-option-$value'),
+                title: Text(label),
+                trailing: value == current
+                    ? Icon(
+                        Icons.check,
+                        color: brandColors(context).mutedForeground,
+                      )
+                    : null,
+                onTap: () => Navigator.of(sheetContext).pop(value),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return;
+    try {
+      await repo.saveFilters(showFilters: picked);
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('保存失败，过滤器仍为当前设置')));
+    }
+  }
 }
 
-class _SettingsRouteState extends ConsumerState<SettingsRoute> {
-  GithubReleaseGateway? _releaseGateway;
-  bool _ownsReleaseGateway = false;
-  bool _checkingUpdate = false;
+class _TaskCaptureDefaultsPage extends ConsumerStatefulWidget {
+  const _TaskCaptureDefaultsPage();
 
-  bool get _canCheckUpdate => shouldCheckGithubReleaseUpdate();
+  @override
+  ConsumerState<_TaskCaptureDefaultsPage> createState() =>
+      _TaskCaptureDefaultsPageState();
+}
+
+class _TaskCaptureDefaultsPageState
+    extends ConsumerState<_TaskCaptureDefaultsPage> {
+  TaskCaptureDefaults? _defaults;
+  bool _saving = false;
 
   @override
   void initState() {
     super.initState();
-    if (_canCheckUpdate) {
-      _releaseGateway = GithubReleaseHttpClient(repo: githubReleaseRepo());
-      _ownsReleaseGateway = true;
-    }
-  }
-
-  @override
-  void dispose() {
-    if (_ownsReleaseGateway && _releaseGateway is GithubReleaseHttpClient) {
-      (_releaseGateway! as GithubReleaseHttpClient).close();
-    }
-    super.dispose();
-  }
-
-  Future<void> _checkForUpdate() async {
-    final gateway = _releaseGateway;
-    if (gateway == null || _checkingUpdate) return;
-    setState(() => _checkingUpdate = true);
-    try {
-      final info = await PackageInfo.fromPlatform();
-      final checker = GithubReleaseUpdateChecker(
-        gateway: gateway,
-        currentVersion: info.version,
-        includePrerelease: githubReleaseIncludePrerelease(),
-      );
-      final update = await checker.checkForUpdate();
-      if (!mounted) return;
-      if (update == null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('当前已是最新版本')));
-        return;
+    Future.microtask(() async {
+      final defaults = await ref
+          .read(taskCaptureDefaultsRepositoryProvider)
+          ?.get();
+      if (mounted) {
+        setState(() => _defaults = defaults ?? const TaskCaptureDefaults());
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('发现新版本 ${update.version}'),
-          action: SnackBarAction(
-            label: '下载',
-            onPressed: () => launchUrl(Uri.parse(update.downloadUrl)),
-          ),
-        ),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('检测更新失败，请稍后重试')));
-    } finally {
-      if (mounted) setState(() => _checkingUpdate = false);
-    }
+    });
   }
 
-  Future<void> _signOut() async {
-    await ref.read(sessionProvider.notifier).signOut();
-    if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
+  Future<void> _save() async {
+    final defaults = _defaults;
+    final repo = ref.read(taskCaptureDefaultsRepositoryProvider);
+    if (defaults == null || repo == null) return;
+    setState(() => _saving = true);
+    await repo.save(defaults);
+    if (!mounted) return;
+    setState(() => _saving = false);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('新任务默认值已保存，等待同步')));
   }
 
   @override
   Widget build(BuildContext context) {
-    return TodoSettingsPage(
-      canCheckUpdate: _canCheckUpdate,
-      checkingUpdate: _checkingUpdate,
-      onCheckUpdate: _canCheckUpdate ? _checkForUpdate : null,
-      signedInMobile: widget.signedInMobile,
-      onSignOut: _signOut,
+    final defaults = _defaults;
+    final lists = ref.watch(listsStreamProvider).valueOrNull ?? const [];
+    return Scaffold(
+      appBar: AppBar(title: const Text('新任务默认值')),
+      body: defaults == null
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                DropdownButtonFormField<String?>(
+                  key: ValueKey(defaults.defaultListId),
+                  initialValue: defaults.defaultListId,
+                  decoration: const InputDecoration(
+                    labelText: '默认清单',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    const DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text('收集箱'),
+                    ),
+                    ...lists.map(
+                      (list) => DropdownMenuItem<String?>(
+                        value: list.id,
+                        child: Text(list.name),
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) => setState(
+                    () => _defaults = TaskCaptureDefaults(
+                      defaultListId: value,
+                      defaultPriority: defaults.defaultPriority,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<int>(
+                  key: ValueKey(defaults.defaultPriority),
+                  initialValue: defaults.defaultPriority,
+                  decoration: const InputDecoration(
+                    labelText: '默认优先级',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 0, child: Text('无')),
+                    DropdownMenuItem(value: 1, child: Text('低')),
+                    DropdownMenuItem(value: 2, child: Text('中')),
+                    DropdownMenuItem(value: 3, child: Text('高')),
+                  ],
+                  onChanged: (value) => setState(
+                    () => _defaults = TaskCaptureDefaults(
+                      defaultListId: defaults.defaultListId,
+                      defaultPriority: value ?? 0,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                FilledButton(
+                  onPressed: _saving ? null : _save,
+                  child: Text(_saving ? '保存中…' : '保存默认值'),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+/// 「设置 → 日期与时间 → 时区」总开关（specs/055 / FL Issue #368）。
+///
+/// 值直接读仓储流的现值、不做乐观更新：写失败时本地状态没变，
+/// 开关因此**自动留在切换前**，这就是四件套里"失败保留已加载数据"的落法。
+class _TimezonePreferenceTile extends ConsumerWidget {
+  const _TimezonePreferenceTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = brandColors(context);
+    final enabled = ref.watch(timezoneEnabledProvider).valueOrNull ?? true;
+    return Material(
+      type: MaterialType.transparency,
+      child: SwitchListTile(
+        key: const ValueKey('settings-timezone-enabled'),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        title: Text('时区', style: TextStyle(color: colors.foreground)),
+        subtitle: Text(
+          '开启后可为任务选择「固定时区」',
+          style: TextStyle(color: colors.mutedForeground),
+        ),
+        value: enabled,
+        onChanged: (value) => _save(context, ref, value),
+      ),
+    );
+  }
+
+  Future<void> _save(BuildContext context, WidgetRef ref, bool value) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final repo = ref.read(timezonePreferenceRepositoryProvider);
+    if (repo == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('时区设置暂不可用')));
+      return;
+    }
+    try {
+      await repo.setEnabled(value);
+    } catch (_) {
+      messenger.showSnackBar(const SnackBar(content: Text('时区设置未保存')));
+    }
+  }
+}
+
+/// 侧栏可见性偏好的三态读法，「显示标签」与「过滤器」共用一份口径：
+/// 有值就用值 —— 包括"出过一次值之后流才失败"（四件套 ③ 失败保留已加载数据）；
+/// 没值且失败才显示「读取失败」；没值且未失败是加载中，显示「…」。
+/// 写成 `.when(error: …)` 会把第一态折进第三态（FL Issue #363）。
+String _visibilityLabel(AsyncValue<bool> state) {
+  final value = state.valueOrNull;
+  if (value != null) return value ? '显示' : '隐藏';
+  return state.hasError ? '读取失败' : '…';
+}
+
+/// 只在"留住旧值 + 流已失败"时出现：留住旧值不等于把失败藏起来。
+bool _visibilityStale(AsyncValue<bool> state) =>
+    state.valueOrNull != null && state.hasError;
+
+String _showTagsLabel(AsyncValue<bool> state) => _visibilityLabel(state);
+
+bool _showTagsStale(AsyncValue<bool> state) => _visibilityStale(state);
+
+class _Section extends StatelessWidget {
+  const _Section({required this.title});
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = brandColors(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: colors.mutedForeground,
+          letterSpacing: 0.3,
+        ),
+      ),
+    );
+  }
+}
+
+class _Tile extends StatelessWidget {
+  const _Tile({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.colors,
+    this.subtitle,
+    this.trailing,
+    this.trailingText,
+    this.onTap,
+    this.destructive = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final IconData? trailing;
+
+  /// 偏好当前值用文字而不是勾：读屏念到的是「标签 显示」，与嘀嗒设置页的取值同源。
+  final String? trailingText;
+  final AppColors colors;
+  final VoidCallback? onTap;
+  final bool destructive;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = destructive ? colors.destructive : colors.foreground;
+    return Material(
+      type: MaterialType.transparency,
+      child: ListTile(
+        leading: Icon(icon, color: fg),
+        title: Text(title, style: TextStyle(color: fg)),
+        subtitle: subtitle == null
+            ? null
+            : Text(subtitle!, style: TextStyle(color: colors.mutedForeground)),
+        trailing: trailingText != null
+            ? Text(
+                trailingText!,
+                style: TextStyle(
+                  color: colors.mutedForeground,
+                  fontWeight: FontWeight.w600,
+                ),
+              )
+            : trailing == null
+            ? null
+            : Icon(trailing, color: colors.mutedForeground),
+        onTap: onTap,
+      ),
     );
   }
 }

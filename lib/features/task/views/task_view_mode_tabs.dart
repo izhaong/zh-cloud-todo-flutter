@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/brand_colors.dart';
 import '../view_mode.dart';
 
 /// M11-B3 视图切换 5 tab。
@@ -7,6 +8,7 @@ import '../view_mode.dart';
 /// - 5 个 [TaskViewMode] 等宽分布
 /// - 选中态高亮 + 当前模式文本加粗
 /// - 移动端窄屏用 [shortLabel]，长于 5 字保留全称
+/// - 只上报选择；偏好持久化由父级 Repository/use-case 统一处理
 class TaskViewModeTabs extends StatelessWidget {
   const TaskViewModeTabs({
     super.key,
@@ -50,7 +52,7 @@ class _TabButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final colors = brandColors(context);
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -59,19 +61,15 @@ class _TabButton extends StatelessWidget {
           border: Border(
             bottom: BorderSide(
               width: 2,
-              color: selected
-                  ? theme.colorScheme.primary
-                  : Colors.transparent,
+              color: selected ? colors.accent : Colors.transparent,
             ),
           ),
         ),
         child: Text(
           label,
-          style: theme.textTheme.bodyMedium?.copyWith(
+          style: TextStyle(
             fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-            color: selected
-                ? theme.colorScheme.primary
-                : theme.colorScheme.onSurfaceVariant,
+            color: selected ? colors.accent : colors.mutedForeground,
           ),
         ),
       ),
