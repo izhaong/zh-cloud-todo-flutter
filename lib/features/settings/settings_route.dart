@@ -1,7 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/update/desktop_update.dart';
+import '../../core/update/github_apk_release.dart';
+import '../../core/update/update_feed.dart';
+import '../../core/update/update_surface.dart';
 import '../../core/theme/brand_colors.dart';
 import '../../core/time/week_start.dart';
 import '../../core/widgets/app_widgets.dart';
@@ -238,11 +243,44 @@ class SettingsRoute extends ConsumerWidget {
           _Section(title: '关于'),
           AppCard(
             padding: EdgeInsets.zero,
-            child: _Tile(
-              icon: Icons.info_outline,
-              title: '版本号',
-              subtitle: 'zh-cloud todo（本地离线优先版）',
-              colors: colors,
+            child: Column(
+              children: [
+                _Tile(
+                  icon: Icons.info_outline,
+                  title: '版本号',
+                  subtitle: 'zh-cloud todo（本地离线优先版）',
+                  colors: colors,
+                ),
+                if (kDesktopUpdateCheckEnabled &&
+                    _updateSurface() != UpdateSurface.none)
+                  _Tile(
+                    key: const Key('todo-settings-check-update'),
+                    icon: Icons.system_update_alt,
+                    title: '检查更新',
+                    subtitle: switch (_updateSurface()) {
+                      UpdateSurface.releasePage => '在浏览器打开 GitHub Release',
+                      UpdateSurface.apk => '下载 GitHub Release 的 APK 并安装',
+                      UpdateSurface.sparkle => '通过 GitHub Release 安装',
+                      UpdateSurface.none => '',
+                    },
+                    colors: colors,
+                    onTap: () async {
+                      try {
+                        await checkDesktopUpdateNow();
+                      } on UpdateAlreadyCurrent {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('已是最新版本')),
+                        );
+                      } catch (_) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('暂时无法检查更新，请稍后重试')),
+                        );
+                      }
+                    },
+                  ),
+              ],
             ),
           ),
           const SizedBox(height: 24),
@@ -570,6 +608,18 @@ bool _visibilityStale(AsyncValue<bool> state) =>
 String _showTagsLabel(AsyncValue<bool> state) => _visibilityLabel(state);
 
 bool _showTagsStale(AsyncValue<bool> state) => _visibilityStale(state);
+
+UpdateSurface _updateSurface() {
+  final operatingSystem = switch (defaultTargetPlatform) {
+    TargetPlatform.macOS => 'macos',
+    TargetPlatform.windows => 'windows',
+    TargetPlatform.linux => 'linux',
+    TargetPlatform.android => 'android',
+    TargetPlatform.iOS => 'ios',
+    TargetPlatform.fuchsia => 'fuchsia',
+  };
+  return updateSurfaceFor(isWeb: kIsWeb, operatingSystem: operatingSystem);
+}
 
 class _Section extends StatelessWidget {
   const _Section({required this.title});

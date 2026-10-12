@@ -164,7 +164,7 @@ jobs:
           test -s "${OUT_DIR}/todo-flutter-${VERSION_NAME}-x86_64.deb"
           ls -la "$OUT_DIR"
 
-      - uses: https://github.com/christopherHX/gitea-upload-artifact@81f940d004763f986ba3582c007fd842dd5cb0d7
+      - uses: christopherHX/gitea-upload-artifact@81f940d004763f986ba3582c007fd842dd5cb0d7
         with:
           name: desktop-linux
           if-no-files-found: error
@@ -214,7 +214,7 @@ jobs:
           test -s "$dmg"
           ls -la "$OUT_DIR"
 
-      - uses: https://github.com/christopherHX/gitea-upload-artifact@81f940d004763f986ba3582c007fd842dd5cb0d7
+      - uses: christopherHX/gitea-upload-artifact@81f940d004763f986ba3582c007fd842dd5cb0d7
         with:
           name: desktop-macos
           if-no-files-found: error
@@ -296,7 +296,7 @@ jobs:
         shell: pwsh
         run: Get-ChildItem -Recurse .gha-dist/desktop
 
-      - uses: https://github.com/christopherHX/gitea-upload-artifact@81f940d004763f986ba3582c007fd842dd5cb0d7
+      - uses: christopherHX/gitea-upload-artifact@81f940d004763f986ba3582c007fd842dd5cb0d7
         with:
           name: desktop-windows
           if-no-files-found: error
@@ -361,7 +361,7 @@ jobs:
             "${OUT_DIR}/todo-flutter-${VERSION_NAME}-android.apk"
           test -s "${OUT_DIR}/todo-flutter-${VERSION_NAME}-android.apk"
 
-      - uses: https://github.com/christopherHX/gitea-upload-artifact@81f940d004763f986ba3582c007fd842dd5cb0d7
+      - uses: christopherHX/gitea-upload-artifact@81f940d004763f986ba3582c007fd842dd5cb0d7
         with:
           name: desktop-android
           if-no-files-found: error
@@ -401,7 +401,7 @@ jobs:
           /usr/bin/zip -qry "${OUT_DIR}/todo-flutter-${VERSION_NAME}-ios-unsigned.ipa" Payload
           test -s "${OUT_DIR}/todo-flutter-${VERSION_NAME}-ios-unsigned.ipa"
 
-      - uses: https://github.com/christopherHX/gitea-upload-artifact@81f940d004763f986ba3582c007fd842dd5cb0d7
+      - uses: christopherHX/gitea-upload-artifact@81f940d004763f986ba3582c007fd842dd5cb0d7
         with:
           name: desktop-ios
           if-no-files-found: error
@@ -421,33 +421,44 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: https://github.com/christopherHX/gitea-download-artifact@75635f32b4c1c41c4b3d64e8f85210112ed4c9c7
+      - uses: christopherHX/gitea-download-artifact@75635f32b4c1c41c4b3d64e8f85210112ed4c9c7
         with:
           name: desktop-linux
           path: dist/desktop
 
-      - uses: https://github.com/christopherHX/gitea-download-artifact@75635f32b4c1c41c4b3d64e8f85210112ed4c9c7
+      - uses: christopherHX/gitea-download-artifact@75635f32b4c1c41c4b3d64e8f85210112ed4c9c7
         with:
           name: desktop-macos
           path: dist/desktop
 
-      - uses: https://github.com/christopherHX/gitea-download-artifact@75635f32b4c1c41c4b3d64e8f85210112ed4c9c7
+      - uses: christopherHX/gitea-download-artifact@75635f32b4c1c41c4b3d64e8f85210112ed4c9c7
         continue-on-error: true
         with:
           name: desktop-windows
           path: dist/desktop
 
-      - uses: https://github.com/christopherHX/gitea-download-artifact@75635f32b4c1c41c4b3d64e8f85210112ed4c9c7
+      - uses: christopherHX/gitea-download-artifact@75635f32b4c1c41c4b3d64e8f85210112ed4c9c7
         with:
           name: desktop-android
           path: dist/desktop
 
-      - uses: https://github.com/christopherHX/gitea-download-artifact@75635f32b4c1c41c4b3d64e8f85210112ed4c9c7
+      - uses: christopherHX/gitea-download-artifact@75635f32b4c1c41c4b3d64e8f85210112ed4c9c7
         with:
           name: desktop-ios
           path: dist/desktop
 
       - run: ls -la dist/desktop/
+
+      - name: Write appcast.xml
+        env:
+          SPARKLE_ED25519_KEY: ${{ secrets.SPARKLE_ED25519_KEY }}
+          WINSPARKLE_DSA_PRIVATE_KEY: ${{ secrets.WINSPARKLE_DSA_PRIVATE_KEY }}
+        run: |
+          python3 tool/write_appcast.py \
+            --dist dist/desktop \
+            --pubspec pubspec.yaml \
+            --tag "${{ needs.metadata.outputs.tag_name }}" \
+            --out dist/desktop/appcast.xml
 
       - name: Write RustDesk-style release notes
         id: notes
@@ -462,7 +473,7 @@ jobs:
             "| x86-64 (64-bit) | [EXE](${BASE}/todo-flutter-${VERSION}-x86_64.exe) [MSI](${BASE}/todo-flutter-${VERSION}-x86_64.msi) | [Download](${BASE}/todo-flutter-${VERSION}-x86_64.deb) | | [APK](${BASE}/todo-flutter-${VERSION}-android.apk) | |" \
             "| AArch64 (ARM64) | | | [Download](${BASE}/todo-flutter-${VERSION}-aarch64.dmg) | | [未签名 IPA](${BASE}/todo-flutter-${VERSION}-ios-unsigned.ipa) |" \
             "" \
-            "桌面客户端自动更新读取本 Release（优先 EXE / DMG / DEB）。详见 \`docs/engineering/04-desktop-github-release-update.md\`。" \
+            "macOS / Windows 用 auto_updater 读取本 Release 的 appcast.xml。Android 下载本 Release 的 APK。Linux 在设置页打开本页。详见 \`docs/engineering/04-desktop-github-release-update.md\`。" \
             "iOS 包未签名，不能直接装到手机。Android 未配置发布密钥时使用 debug 签名，可以侧载。" \
             > RELEASE_BODY.md
 

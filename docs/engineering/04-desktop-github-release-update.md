@@ -1,49 +1,39 @@
 # 桌面端自动更新（GitHub Release）
 
-> 仅 **macOS / Linux / Windows** 桌面客户端；Web / 移动端不检查。  
+> 仅 **macOS / Windows** 用 Sparkle 在应用内安装。**Android** 下载 Release 里的 APK 后交给系统安装器。**Linux** 在设置页打开 GitHub Release。Web / iOS 不检查。  
 > 安装包来源：[izhaong/zh-cloud-todo-flutter Releases](https://github.com/izhaong/zh-cloud-todo-flutter/releases)
 
 ## 机制
 
-1. 启动并登录后，应用请求 GitHub API 读取 Release。
-2. 将 Release **tag**（须为 `vX.Y.Z`）与当前 `pubspec` / `package_info` 版本比较。
-3. 若远端更新，按本机平台匹配 **RustDesk 风格**安装包并弹窗：
-   - macOS：`*-aarch64.dmg` / `*-x86_64.dmg`
-   - Linux：`*-x86_64.deb`
-   - Windows：`*-x86_64.exe`（优先）或 `*-x86_64.msi`
-4. 用户点「前往下载」用系统浏览器打开 GitHub 资产链接（**不**在应用内静默安装）。
+插件是 [`auto_updater`](https://pub.dev/packages/auto_updater)：macOS 用 Sparkle，Windows 用 WinSparkle。它不读 GitHub Release JSON，读 Release 里的 `appcast.xml`。Android 用 [`ota_update`](https://pub.dev/packages/ota_update) 下载同一个 Release 里的 `*-android.apk`，再拉起系统安装器。
 
-实现：`lib/github_release_update.dart`；UI 入口在 **设置 → 关于 → 检测更新**（`Ctrl+,` / `⌘+,` 打开设置），登录后启动时仍会静默检查。
+1. macOS / Windows 启动后调用 `setFeedURL`，每天检查一次。有新版本时由 Sparkle / WinSparkle 弹出安装界面。
+2. Android 启动后请求 GitHub `releases/latest`。版本更高时下载 APK 并打开安装界面。
+3. 设置 → 关于 → **检查更新**：macOS / Windows 立刻再查 appcast；Android 再查 APK；Linux 用浏览器打开 `releases/latest`。
+4. `desktop.yml` 在创建 GitHub Release 时，把 `dmg` / `exe` 写进 `appcast.xml` 并一起上传。APK 仍作为 Release 资产，不写进 appcast。`deb`、IPA 不进订阅。
 
-## 与 CI 的对应关系
+订阅地址：
 
-| 环境     | GitHub Release                                                 | 客户端检查 API                       |
-| -------- | -------------------------------------------------------------- | ------------------------------------ |
-| **prod** | 推送 `v*` tag → `desktop.yml` 创建正式 Release                 | `GET .../releases/latest`            |
-| **test** | 可选 prerelease（`TODO_UPDATE_CHANNEL=test` 或 test API 域名） | `GET .../releases` 取最新 semver tag |
+`https://github.com/izhaong/zh-cloud-todo-flutter/releases/latest/download/appcast.xml`
 
-**发版步骤（prod 桌面自动更新生效）**：
+实现：`lib/core/update/`。macOS 的 `SUFeedURL` / `SUPublicEDKey` 在 `macos/Runner/Info.plist`。Windows 的 `windows/dsa_pub.pem` 会装到 exe 旁边。
 
-```bash
-# pubspec.yaml version 与 tag 对齐，例如 1.0.1
-git tag v1.0.1
-git push github v1.0.1
-# desktop.yml 上传三端包并创建 GitHub Release
-```
+## 签名
+
+Sparkle 拒绝没有签名的更新包。私钥不入库，放在 GitHub Actions secrets：
+
+| Secret | 内容 |
+| --- | --- |
+| `SPARKLE_ED25519_KEY` | Ed25519 私钥 PEM |
+| `WINSPARKLE_DSA_PRIVATE_KEY` | 1024 位 DSA 私钥 PEM |
+
+本机已生成的对应文件在 `~/.config/zh-cloud-todo-flutter/updater-keys/`（`sparkle_ed25519.pem`、`dsa_priv.pem`）。仓库里只有公钥。没配这两个 secret 时，Release 仍会带上 `appcast.xml`，但安装包没有签名，更新装不上。
+
+macOS 安装还要求应用本身经过 Developer ID 签名。当前流水线打出的 DMG 未签名，Sparkle 在签名补上之前不能完成替换安装。
 
 ## 构建参数（`--dart-define`）
 
-| 参数                  | 默认                            | 说明                                    |
-| --------------------- | ------------------------------- | --------------------------------------- |
-| `TODO_GITHUB_REPO`    | `izhaong/zh-cloud-todo-flutter` | `owner/repo`                            |
-| `TODO_UPDATE_CHECK`   | `true`                          | 设为 `false` 关闭检查                   |
-| `TODO_UPDATE_CHANNEL` | 空（按 API 域名推断）           | `test` / `prod` 强制渠道                |
-| `TODO_API_BASE_URL`   | 本地默认                        | 含 `-test.` 时按 test 渠道含 prerelease |
-
-桌面 CI 构建时无需改以上参数；prod Release 使用 `https://todo.zh04.com` 即走 latest Release。
-
-## 安全说明
-
-- 仅访问 **公开** GitHub API，无 token、无任意 shell。
-- 下载链来自 GitHub Release **assets**，用户自行在浏览器完成安装。
-- 关闭检查：`--dart-define=TODO_UPDATE_CHECK=false`。
+| 参数 | 默认 | 说明 |
+| --- | --- | --- |
+| `TODO_UPDATE_FEED_URL` | 上面的 `appcast.xml` | 覆盖订阅地址 |
+| `TODO_UPDATE_CHECK` | `true` | `false` 时关闭检查，设置页不显示入口 |
