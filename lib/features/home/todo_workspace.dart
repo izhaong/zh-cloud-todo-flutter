@@ -57,6 +57,7 @@ class TodoWorkspace extends StatelessWidget {
     this.scaffoldKey,
     this.onDetailDrawerChanged,
     this.syncStatus = '同步尚未执行',
+    this.searchEnabled = true,
     this.companion,
     this.onSectionContextMenu,
   });
@@ -84,6 +85,10 @@ class TodoWorkspace extends StatelessWidget {
   final GlobalKey<ScaffoldState>? scaffoldKey;
   final TodoDetailDrawerChanged? onDetailDrawerChanged;
   final String syncStatus;
+
+  /// 嘀嗒《01-任务/09-如何管理海量任务/07-搜索任务》:12「在「设置」→「功能模块」中启用「搜索」」
+  /// ⇒ false 时搜索入口与快捷键都不再通向搜索页。默认 true 即今天的行为。
+  final bool searchEnabled;
 
   /// 与主区并列的第二模块；`null` 表示单模块视图。
   ///
@@ -116,6 +121,7 @@ class TodoWorkspace extends StatelessWidget {
         actions: {
           _OpenGlobalSearchIntent: CallbackAction<_OpenGlobalSearchIntent>(
             onInvoke: (_) {
+              if (!searchEnabled) return null;
               unawaited(_openSearch(context));
               return null;
             },
@@ -366,11 +372,14 @@ class TodoWorkspace extends StatelessWidget {
         ),
       ),
       actions: [
-        IconButton(
-          tooltip: '搜索',
-          icon: Icon(Icons.search, color: colors.mutedForeground),
-          onPressed: () => unawaited(_openSearch(context)),
-        ),
+        // 嘀嗒《01-任务/09-如何管理海量任务/07-搜索任务》:12「在「设置」→「功能模块」中启用
+        // 「搜索」后，即可通过底部 tab 栏进入搜索页面」⇒ 关掉这一档，搜索入口要一起消失。
+        if (searchEnabled)
+          IconButton(
+            tooltip: '搜索',
+            icon: Icon(Icons.search, color: colors.mutedForeground),
+            onPressed: () => unawaited(_openSearch(context)),
+          ),
         const SizedBox(width: 8),
       ],
     );

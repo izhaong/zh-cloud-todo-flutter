@@ -133,6 +133,13 @@ class Sidebar extends ConsumerWidget {
         SidebarVisibilityRepository.defaultShowFilters;
     // 智能清单三态（specs/103）：导航行口径与 showFilters 一致 ——
     // 晚一帧不出现比整列跳格可取；缺键 = 默认「显示」由消费侧兜底。
+    // 嘀嗒《01-欢迎/03-常见问题》:802「设置-功能模块-启用「番茄专注」」⇒ 关掉这一档，
+    // 侧栏底部 dock 里那枚番茄按钮不再出现；习惯/倒数日不受影响（源页没把它们列为模块）。
+    final pomodoroEnabled =
+        ref
+            .watch(featureModuleProvider(TodoFeatureModule.pomodoro))
+            .valueOrNull ??
+        true;
     final smartStates =
         ref.watch(sidebarSmartListStatesProvider).valueOrNull ??
         const <String, SmartListVisibility>{};
@@ -510,6 +517,7 @@ class Sidebar extends ConsumerWidget {
               ),
               _EfficiencyDock(
                 colors: colors,
+                pomodoroEnabled: pomodoroEnabled,
                 onOpenPomodoro: () {
                   onNavigationCommitted?.call();
                   onOpenPomodoro?.call();
@@ -1062,12 +1070,16 @@ class _SidebarRowState extends State<_SidebarRow> {
 class _EfficiencyDock extends StatelessWidget {
   const _EfficiencyDock({
     required this.colors,
+    this.pomodoroEnabled = true,
     required this.onOpenPomodoro,
     required this.onOpenHabit,
     required this.onOpenCountdown,
   });
 
   final AppColors colors;
+
+  /// false ⇒ 不渲染「番茄」那枚按钮（功能模块开关关闭）。默认 true 即今天的行为。
+  final bool pomodoroEnabled;
   final VoidCallback onOpenPomodoro;
   final VoidCallback onOpenHabit;
   final VoidCallback onOpenCountdown;
@@ -1083,15 +1095,16 @@ class _EfficiencyDock extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
         child: Row(
           children: [
-            Expanded(
-              child: _EfficiencyButton(
-                label: '番茄',
-                tooltip: '番茄专注',
-                icon: Icons.timer_outlined,
-                colors: colors,
-                onTap: onOpenPomodoro,
+            if (pomodoroEnabled)
+              Expanded(
+                child: _EfficiencyButton(
+                  label: '番茄',
+                  tooltip: '番茄专注',
+                  icon: Icons.timer_outlined,
+                  colors: colors,
+                  onTap: onOpenPomodoro,
+                ),
               ),
-            ),
             Expanded(
               child: _EfficiencyButton(
                 label: '习惯',

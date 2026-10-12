@@ -27,6 +27,11 @@ enum SmartListVisibility {
 /// ⇒ 跨端同步走既有通道，不新增表、不 bump `schemaVersion`。
 /// 不复用那个类是因为它的签名是 `(listId, TaskSort)`，硬塞全局布尔会让类名与签名一起说谎
 /// （spec.md 取舍 2）。
+/// 「设置 > 功能模块」那三档（嘀嗒《03-四象限/01-如何使用四象限》:24/:33 的「四象限」、
+/// 《01-欢迎/03-常见问题》:802 的「番茄专注」、《01-任务/09-如何管理海量任务/07-搜索任务》:12 的「搜索」）。
+/// 看板不在其中——《02-看板视图：分类管理任务》:14「看板并不是独立的功能模块，它是清单的一种显示方式」。
+enum TodoFeatureModule { quadrant, pomodoro, search }
+
 class SidebarVisibilityRepository {
   SidebarVisibilityRepository(this._db, this._queue, {Uuid? uuid})
     : _uuid = uuid ?? const Uuid();
@@ -129,6 +134,48 @@ class SidebarVisibilityRepository {
       '$_smartKeyPrefix$smartListName': state.name,
     });
   }
+
+  /// 功能模块三档的键前缀；键名 = `module.<枚举名>`，读法与 `smartList.` 同一套「缺键=默认」。
+  static const _moduleKeyPrefix = 'module.';
+
+  /// **默认「开」**：这三档在 develop 上一直是常驻可达的，默认关掉任何一档都会让既有账号
+  /// 一夜之间找不到入口，并且要重录黄金基线。
+  static const defaultFeatureEnabled = true;
+
+  Future<TodoViewPreference?> _preferenceRow() =>
+      (_db.select(_db.todoViewPreferences)..where(
+            (preference) =>
+                preference.sourceType.equals(sourceType) &
+                preference.sourceKey.equals(sourceKey),
+          ))
+          .getSingleOrNull();
+
+  /// 某一档功能模块是否开启；行不存在、坏 JSON、缺键都回默认「开」。
+  Future<bool> getFeature(TodoFeatureModule module) async => _decodeKey(
+    await _preferenceRow(),
+    _moduleKey(module),
+    defaultFeatureEnabled,
+  );
+
+  Stream<bool> watchFeature(TodoFeatureModule module) =>
+      (_db.select(_db.todoViewPreferences)..where(
+            (preference) =>
+                preference.sourceType.equals(sourceType) &
+                preference.sourceKey.equals(sourceKey),
+          ))
+          .watchSingleOrNull()
+          .map(
+            (row) => _decodeKey(row, _moduleKey(module), defaultFeatureEnabled),
+          );
+
+  /// 只 patch 这一档：与其它键共用同一行，整块覆盖会把别的档位顶回默认值。
+  Future<void> saveFeature({
+    required TodoFeatureModule module,
+    required bool enabled,
+  }) => _write(<String, Object>{_moduleKey(module): enabled});
+
+  static String _moduleKey(TodoFeatureModule module) =>
+      '$_moduleKeyPrefix${module.name}';
 
   /// 两个开关共用同一行偏好 ⇒ 每个写方法只 patch 自己那个键。
   /// 原先那种 `jsonEncode({'showTags': …})` 整块覆盖的写法，在加第二个键之后就是缺陷：

@@ -99,6 +99,10 @@ class TaskWorkspaceHeader extends StatelessWidget {
     this.onCreateSection,
     this.onEditQuadrantRules,
     this.onEditListBackground,
+
+    /// 嘀嗒《03-四象限/01-如何使用四象限》:24「设置 > 功能模块，开启「四象限」功能」：
+    /// 关掉这一档时视图菜单里不该再出现「四象限」。默认 true ⇒ 不传就是今天的行为。
+    this.showQuadrantView = true,
     this.hideCompleted,
     this.hideCompletedHint,
     this.onToggleHideCompleted,
@@ -134,6 +138,9 @@ class TaskWorkspaceHeader extends StatelessWidget {
   /// 嘀嗒《02-用清单管理任务》:96「进入你想设置的清单详情页，点击右上角的「...」-「背景」」。
   /// null ⇒ 不渲染该项（未选中具体清单、或选中的是不支持背景的清单）。
   final VoidCallback? onEditListBackground;
+
+  /// false ⇒ 视图档位菜单不出现「四象限」那一档（功能模块开关关闭）。
+  final bool showQuadrantView;
 
   /// 嘀嗒《02-功能指南/03-四象限/02-如何编辑四象限规则.md》`:132`
   /// 「在四象限页面，点击右上角「...」- 隐藏已完成。」
@@ -196,10 +203,12 @@ class TaskWorkspaceHeader extends StatelessWidget {
                 onSelected: onModeChanged,
                 itemBuilder: (context) => [
                   for (final candidate in TaskViewMode.values)
-                    PopupMenuItem(
-                      value: candidate,
-                      child: Text(candidate.label),
-                    ),
+                    if (showQuadrantView ||
+                        candidate != TaskViewMode.eisenhower)
+                      PopupMenuItem(
+                        value: candidate,
+                        child: Text(candidate.label),
+                      ),
                 ],
               ),
               if (onGroupingChanged != null)
