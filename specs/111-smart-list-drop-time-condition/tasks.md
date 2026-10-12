@@ -35,8 +35,9 @@
       P8 把 `taskDateTimeForDisplayDay` 的钟点基准从 `_storageLocation` 换成 `_displayLocation`（＝#587 的 A 案）
       ⇒ 只红在新加的那条「固定时区档挪的是锚点区日历日」，同文件其余 25 条仍绿
       ⇒ 这条用例锁住的正是那个"写哪一个日历日"的域选择；顺带量出 A 案的爆炸半径是四条入口共用一个 helper
-- [x] T006 门禁（全部跑在最后一笔代码提交 `61bcc3b8` 之后；其后的 `f13c73b0` 只动本目录两份 md，
-      `git diff --name-only 61bcc3b8..f13c73b0` 为证）：
+- [x] T006 门禁（最后一次三项门禁跑在最后一笔**代码/测试**提交 `fb7172b6` 之后；
+      `fb7172b6` 之后只有本目录的 md 提交（`git diff --name-only fb7172b6..HEAD` 只列 md ⇒ 结果承接）；
+      更早那一次门禁跑在 `61bcc3b8` 之后，读数 1805，与后来的 1807 差的就是 `fb7172b6` 加的两条）：
       `dart format` 只跑本轮四个改动文件 + 一个新文件，跑前逐文件证过它们在 `origin/develop` 字节上
       已是格式化干净的（`sidebar.dart`/`sidebar_task_drop.dart`/`task_view_action_repository.dart`/
       `sidebar_task_drop_test.dart`/`task_view_action_repository_test.dart` 五个全部 develop-clean）；
