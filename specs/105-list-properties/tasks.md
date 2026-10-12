@@ -6,3 +6,4 @@
 - [x] T004 变异探针 4 条各自红、还原 `cmp -s`（见 spec「测试与探针」）
 - [x] T005 门禁：`dart format`、analyze 0 issue、全量 `flutter test`（commit 后跑，日志 /tmp/fl-gate-282.log）
 - [x] T006 收口：push → PR（Refs #339 #340）→ 合并 → #339/#340 留言 → docs 矩阵 #19 追记（含「所属文件夹」格订正）→ 父仓 bump
+- [x] T007 入口形态补齐（嘀嗒 `:96` 详情页右上角「...」-「背景」）：`task_workspace_header.dart` 菜单项 + 独立路由 AppBar「…」，收集箱与未选中清单不出该项；`test/features/task/list_background_entry_test.dart` 3 例；探针 ⑤ 恒真 → 两条负向红
