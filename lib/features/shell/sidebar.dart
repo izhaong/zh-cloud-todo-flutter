@@ -21,6 +21,7 @@ import 'section.dart';
 import 'sidebar_hierarchy.dart';
 import 'sidebar_task_drop.dart';
 import 'smart_list_manager_sheet.dart';
+import 'smart_list_time_condition.dart';
 
 /// Compact Todo navigation for smart lists, browsing, user lists, and settings.
 class Sidebar extends ConsumerWidget {
@@ -207,60 +208,69 @@ class Sidebar extends ConsumerWidget {
                         },
                       ),
                     if (_smartRowVisible(SmartList.today, smartStates, stats))
-                      _SmartRow(
-                        rowKey: const Key('todo-sidebar-row-today'),
-                        icon: SmartList.today.icon,
-                        label: SmartList.today.label,
-                        badge: stats.today,
-                        selected:
-                            _isTasksSelected(selectedSection) &&
-                            selectedSmart == SmartList.today,
-                        colors: colors,
-                        onTap: () {
-                          onSelectSection(Section.tasks);
-                          onSelectSmart(SmartList.today);
-                          onNavigationCommitted?.call();
-                        },
+                      _SmartListDropZone(
+                        smart: SmartList.today,
+                        child: _SmartRow(
+                          rowKey: const Key('todo-sidebar-row-today'),
+                          icon: SmartList.today.icon,
+                          label: SmartList.today.label,
+                          badge: stats.today,
+                          selected:
+                              _isTasksSelected(selectedSection) &&
+                              selectedSmart == SmartList.today,
+                          colors: colors,
+                          onTap: () {
+                            onSelectSection(Section.tasks);
+                            onSelectSmart(SmartList.today);
+                            onNavigationCommitted?.call();
+                          },
+                        ),
                       ),
                     if (_smartRowVisible(
                       SmartList.tomorrow,
                       smartStates,
                       stats,
                     ))
-                      _SmartRow(
-                        rowKey: const Key('todo-sidebar-row-tomorrow'),
-                        icon: SmartList.tomorrow.icon,
-                        label: SmartList.tomorrow.label,
-                        badge: stats.tomorrow,
-                        selected:
-                            _isTasksSelected(selectedSection) &&
-                            selectedSmart == SmartList.tomorrow,
-                        colors: colors,
-                        onTap: () {
-                          onSelectSection(Section.tasks);
-                          onSelectSmart(SmartList.tomorrow);
-                          onNavigationCommitted?.call();
-                        },
+                      _SmartListDropZone(
+                        smart: SmartList.tomorrow,
+                        child: _SmartRow(
+                          rowKey: const Key('todo-sidebar-row-tomorrow'),
+                          icon: SmartList.tomorrow.icon,
+                          label: SmartList.tomorrow.label,
+                          badge: stats.tomorrow,
+                          selected:
+                              _isTasksSelected(selectedSection) &&
+                              selectedSmart == SmartList.tomorrow,
+                          colors: colors,
+                          onTap: () {
+                            onSelectSection(Section.tasks);
+                            onSelectSmart(SmartList.tomorrow);
+                            onNavigationCommitted?.call();
+                          },
+                        ),
                       ),
                     if (_smartRowVisible(
                       SmartList.upcoming,
                       smartStates,
                       stats,
                     ))
-                      _SmartRow(
-                        rowKey: const Key('todo-sidebar-row-upcoming'),
-                        icon: SmartList.upcoming.icon,
-                        label: SmartList.upcoming.label,
-                        badge: stats.upcoming,
-                        selected:
-                            _isTasksSelected(selectedSection) &&
-                            selectedSmart == SmartList.upcoming,
-                        colors: colors,
-                        onTap: () {
-                          onSelectSection(Section.tasks);
-                          onSelectSmart(SmartList.upcoming);
-                          onNavigationCommitted?.call();
-                        },
+                      _SmartListDropZone(
+                        smart: SmartList.upcoming,
+                        child: _SmartRow(
+                          rowKey: const Key('todo-sidebar-row-upcoming'),
+                          icon: SmartList.upcoming.icon,
+                          label: SmartList.upcoming.label,
+                          badge: stats.upcoming,
+                          selected:
+                              _isTasksSelected(selectedSection) &&
+                              selectedSmart == SmartList.upcoming,
+                          colors: colors,
+                          onTap: () {
+                            onSelectSection(Section.tasks);
+                            onSelectSmart(SmartList.upcoming);
+                            onNavigationCommitted?.call();
+                          },
+                        ),
                       ),
                     if (_smartRowVisible(SmartList.all, smartStates, stats))
                       _SmartRow(
@@ -654,6 +664,43 @@ class _SmartRow extends StatelessWidget {
       colors: colors,
       trailing: badge > 0 ? _Badge(text: '$badge', colors: colors) : null,
       onTap: onTap,
+    );
+  }
+}
+
+/// 嘀嗒《02-功能指南/02-日历/07-任务与日历同时显示.md》`:61`「拖动到智能清单上」
+/// `:63`「会为任务自动添加该智能清单关联的时间条件，例如“今天”、“本周”等。」
+///
+/// 只有谓词里带日期窗口的三档（今天 / 明天 / 最近七天）才是落点：其余五档没有
+/// 「关联的时间条件」这句话能落成的语义（判据见 `smartListTimeConditionOf`），
+/// 把它们做成落点等于替用户决定另一个动作。落点条件按**当次 build 的 now** 现算，
+/// 与清单行「落回原清单不算落点」同一口径：已经在窗口里的任务不是有效落点。
+class _SmartListDropZone extends ConsumerWidget {
+  const _SmartListDropZone({required this.smart, required this.child});
+
+  final SmartList smart;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final condition = smartListTimeConditionOf(smart, DateTime.now());
+    if (condition == null) return child;
+    final controller = ref.watch(sidebarTaskDropControllerProvider);
+    return SidebarDropZone(
+      key: ValueKey('todo-sidebar-drop-smart-${smart.name}'),
+      hoverLabel: '安排到「${smart.label}」',
+      accept: (task) => controller.acceptsSmartList(task, condition),
+      onDrop: (task) async {
+        final outcome = await controller.applySmartListTimeCondition(
+          task,
+          condition,
+        );
+        if (outcome != SidebarDropOutcome.failed || !context.mounted) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text('安排到「${smart.label}」失败')));
+      },
+      child: child,
     );
   }
 }

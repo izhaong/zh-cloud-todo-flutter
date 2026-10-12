@@ -358,6 +358,7 @@ void main() {
           SidebarTaskDropController(
             moveTask: (taskId, listId) async => throw StateError('故意写失败'),
             attachTag: (taskId, tagId) async {},
+            scheduleToDay: (taskId, targetDay) async {},
           ),
         ),
       ],
@@ -397,6 +398,7 @@ void main() {
       final controller = SidebarTaskDropController(
         moveTask: (taskId, listId) async => calls.add('$taskId->$listId'),
         attachTag: (taskId, tagId) async {},
+        scheduleToDay: (taskId, targetDay) async {},
       );
 
       final outcome = await controller.moveToList(
@@ -418,6 +420,7 @@ void main() {
           order.add('end:$listId');
         },
         attachTag: (taskId, tagId) async {},
+        scheduleToDay: (taskId, targetDay) async {},
       );
 
       final first = controller.moveToList(
@@ -448,6 +451,7 @@ void main() {
           if (listId == 'BAD') throw StateError('仓储未就绪');
         },
         attachTag: (taskId, tagId) async {},
+        scheduleToDay: (taskId, targetDay) async {},
       );
 
       final first = await controller.moveToList(
