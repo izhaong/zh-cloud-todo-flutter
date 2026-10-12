@@ -48,6 +48,15 @@ Finder _rowIcon(String listId) => find.descendant(
   matching: find.byIcon(Icons.list_alt_outlined),
 );
 
+/// 侧栏是懒渲染 ListView：智能清单多一行后清单行被挤出构建窗口，
+/// 不滚到位就直接 `tester.widget` 会抛 "Bad state: No element"（红在判据自己）。
+Future<void> revealRowIcon(WidgetTester tester, String listId) =>
+    tester.scrollUntilVisible(
+      _rowIcon(listId),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+
 void main() {
   testWidgets('有色清单：行首图标着成清单色', (tester) async {
     final fixture = await pumpTodoVisualScenario(
@@ -62,6 +71,7 @@ void main() {
             .write(const TodoListsCompanion(color: Value('#4772FA')));
     expect(rows, 1, reason: '前提：先给清单上色');
     await tester.pumpAndSettle();
+    await revealRowIcon(tester, TodoVisualFixture.personalListId);
 
     final icon = tester.widget<Icon>(
       _rowIcon(TodoVisualFixture.personalListId),
@@ -80,6 +90,7 @@ void main() {
       fixtureSet: TodoVisualFixtureSet.populated,
       child: const Align(alignment: Alignment.topLeft, child: _TestSidebar()),
     );
+    await revealRowIcon(tester, TodoVisualFixture.personalListId);
     final before = tester
         .widget<Icon>(_rowIcon(TodoVisualFixture.personalListId))
         .color;
