@@ -63,6 +63,59 @@ void main() {
       expect(created.listId, TodoVisualFixture.inboxListId);
     });
 
+    testWidgets('320px + 1.3 倍字号：拖「+」到行右下仍开表（落点是比例，不是固定像素）', (tester) async {
+      await pumpTodoVisualScenario(
+        tester,
+        viewport: const Size(320, 600),
+        fixtureSet: TodoVisualFixtureSet.populated,
+        child: Builder(
+          builder: (context) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(1.3)),
+            child: const HomeShell(),
+          ),
+        ),
+      );
+
+      final source = find.byKey(const Key('todo-mobile-add'));
+      final target = find.byKey(Key('task-row-surface-$rowTaskId'));
+      expect(source, findsOneWidget);
+      expect(target, findsOneWidget);
+      await tester.pumpAndSettle();
+      final bandPoint = _lowerRight(tester, target);
+      await _dragIntent(tester, from: tester.getCenter(source), to: bandPoint);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('todo-quick-add-title-field')),
+        findsOneWidget,
+        reason: '窄屏大字号下象限按比例缩，缩到点不动就是要红的地方',
+      );
+    });
+
+    testWidgets('「+」套上 Draggable 后按钮语义没丢（读屏仍报它是按钮）', (tester) async {
+      final handle = tester.ensureSemantics();
+      await pumpTodoVisualScenario(
+        tester,
+        viewport: TodoVisualViewports.mobile,
+        fixtureSet: TodoVisualFixtureSet.populated,
+        child: const HomeShell(),
+      );
+
+      // 判据用 getSemanticsData()，不是 getSemantics() 的裸 flagsCollection：
+      // 后者只看节点自己的位、不合并子节点（见 timezone_preference_test.dart:189 的实测注）。
+      final node = tester
+          .getSemantics(find.bySemanticsIdentifier('todo_mobile_quick_add'))
+          .getSemanticsData();
+      expect(
+        node.flagsCollection.isButton,
+        isTrue,
+        reason: 'Semantics(button: true) 包在 Draggable 外面，不能被拖拽层吃掉',
+      );
+      handle.dispose();
+    });
+
     testWidgets('点「+」仍是原来的主快速添加：建出来的是顶层任务', (tester) async {
       final fixture = await pumpTodoVisualScenario(
         tester,
