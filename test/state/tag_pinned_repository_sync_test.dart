@@ -210,8 +210,8 @@ void main() {
     addTearDown(db.close);
     expect(
       db.schemaVersion,
-      29,
-      reason: '标签置顶位需要一次迁移，拖拽位次又推了一格，推荐契约列再推一格，清单颜色列再推一格',
+      30,
+      reason: '标签置顶位需要一次迁移，拖拽位次又推了一格，推荐契约列再推一格，清单颜色列再推一格，清单图标/背景/显隐四列再推一格',
     );
     final cols = await db.customSelect('PRAGMA table_info(todo_tags)').get();
     final names = cols.map((r) => r.data['name'] as String).toSet();
