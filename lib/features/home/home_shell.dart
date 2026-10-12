@@ -745,6 +745,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
         return 'inbox';
       case SmartList.all:
         return _listId;
+      case SmartList.assignToMe:
       case SmartList.today:
       case SmartList.tomorrow:
       case SmartList.upcoming:
@@ -790,6 +791,10 @@ class _HomeShellState extends ConsumerState<HomeShell>
             initialDueRange: _dueRange,
             initialCompleted: _smart == SmartList.completed ? true : null,
             initialFilter: _appliedFilter,
+            // 「指派给我」是页面身份，不塞进 initialFilter：那一层用户可以点「全部」清掉。
+            lockedAssigneeUserId: _smart == SmartList.assignToMe
+                ? ref.watch(sessionProvider)?.userId
+                : null,
             selectedTaskId: _selectedTaskId,
             onTaskSelected: _selectTask,
             onSelectionInvalidated: _invalidateTaskSelection,

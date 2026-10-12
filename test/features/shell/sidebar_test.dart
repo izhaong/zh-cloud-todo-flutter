@@ -21,7 +21,7 @@ void main() {
     expect(find.text('收集箱'), findsOneWidget);
     expect(find.text('今天'), findsOneWidget);
     expect(find.text('明天'), findsOneWidget);
-    expect(find.text('未来7天'), findsOneWidget);
+    expect(find.text('最近七天'), findsOneWidget);
     expect(find.text('全部'), findsOneWidget);
     expect(find.text('已完成'), findsOneWidget);
     expect(find.text('垃圾桶'), findsOneWidget);

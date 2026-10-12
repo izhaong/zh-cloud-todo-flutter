@@ -33,11 +33,20 @@ void main() {
     return fixture;
   }
 
-  testWidgets('七行齐：本端全部智能清单都要能管理', (tester) async {
+  // 弹层是懒渲染的 ListView：不滚到位就断言 = 量不到第八行，红得没有信息量。
+  Future<void> scrollToRow(WidgetTester tester, String name) =>
+      tester.scrollUntilVisible(
+        row(name),
+        100,
+        scrollable: find.byType(Scrollable).last,
+      );
+
+  testWidgets('八行齐：本端全部智能清单都要能管理', (tester) async {
     await pumpSheet(tester);
 
     for (final name in [
       'inbox',
+      'assignToMe',
       'today',
       'tomorrow',
       'upcoming',
@@ -45,6 +54,7 @@ void main() {
       'completed',
       'trash',
     ]) {
+      await scrollToRow(tester, name);
       expect(row(name), findsOneWidget, reason: '管理页缺 $name 行');
     }
   });
@@ -64,10 +74,25 @@ void main() {
     );
   });
 
-  testWidgets('「有内容时显示」只给有内容判定的四行：今天/明天/未来7天/全部', (tester) async {
+  testWidgets('「有内容时显示」只给有内容判定的五行：指派给我/今天/明天/最近七天/全部', (tester) async {
     await pumpSheet(tester);
 
-    expect(find.text('有内容时显示'), findsNWidgets(4));
+    for (final name in ['assignToMe', 'today', 'tomorrow', 'upcoming', 'all']) {
+      await scrollToRow(tester, name);
+      expect(
+        find.descendant(of: row(name), matching: find.text('有内容时显示')),
+        findsOneWidget,
+        reason: '$name 该有第三档',
+      );
+    }
+    for (final name in ['completed', 'trash']) {
+      await scrollToRow(tester, name);
+      expect(
+        find.descendant(of: row(name), matching: find.text('有内容时显示')),
+        findsNothing,
+        reason: '$name 本端没有内容计数，不该给一个永远判定为没内容的档位',
+      );
+    }
   });
 
   testWidgets('把「今天」切成「隐藏」要落库', (tester) async {

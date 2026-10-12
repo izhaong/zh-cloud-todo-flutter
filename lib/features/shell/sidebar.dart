@@ -68,6 +68,7 @@ class Sidebar extends ConsumerWidget {
   /// null = 本端还没有这一行的内容计数（已完成/垃圾桶，FR-5）。
   int? _smartContentCount(SmartList smart, TaskStats stats) => switch (smart) {
     SmartList.inbox => stats.inbox,
+    SmartList.assignToMe => stats.assignToMe,
     SmartList.today => stats.today,
     SmartList.tomorrow => stats.tomorrow,
     SmartList.upcoming => stats.upcoming,
@@ -173,6 +174,27 @@ class Sidebar extends ConsumerWidget {
                           onSelectSection(Section.tasks);
                           onSelectSmart(SmartList.inbox);
                           onSelectList('inbox');
+                          onNavigationCommitted?.call();
+                        },
+                      ),
+                    // 嘀嗒《02-用清单管理任务》:21「指派给我」。
+                    if (_smartRowVisible(
+                      SmartList.assignToMe,
+                      smartStates,
+                      stats,
+                    ))
+                      _SmartRow(
+                        rowKey: const Key('todo-sidebar-row-assignToMe'),
+                        icon: SmartList.assignToMe.icon,
+                        label: SmartList.assignToMe.label,
+                        badge: stats.assignToMe,
+                        selected:
+                            _isTasksSelected(selectedSection) &&
+                            selectedSmart == SmartList.assignToMe,
+                        colors: colors,
+                        onTap: () {
+                          onSelectSection(Section.tasks);
+                          onSelectSmart(SmartList.assignToMe);
                           onNavigationCommitted?.call();
                         },
                       ),
