@@ -27,10 +27,19 @@
       **分层事实（不是遗漏）**：P3 只红在编排层、P5 只红在仓储层，控件层那两条各自被 P3b/P4/P6 咬住 ——
       落点侧 `accept` 与编排侧 `acceptsSmartList` 是两道闸，摘掉任意一道都还有另一道兜底，
       所以「+3 天已在窗口内」那条控件用例专门设计成仓储兜底拦不住的样子（注释写明）
-- [ ] T006 门禁（跑在最后一笔代码提交之后）：`dart format` 只跑本轮四个文件
-      （跑前证过它们在 develop 字节上已是格式化干净的）；`flutter analyze` ⇒ 待填；
-      全量 `flutter test` ⇒ 待填；`test/visual/todo_workspace_golden_test.dart` ⇒ 待填
-      （本轮只往侧栏树里套 `DragTarget`/`Semantics`，候选态之外不画任何边框 ⇒ 预期零重录，
-      但这句要用实测的 9 张全过来兑现，不靠推理）
+- [x] T006 门禁（全部跑在最后一笔代码提交 `61bcc3b8` 之后；其后的 `f13c73b0` 只动本目录两份 md，
+      `git diff --name-only 61bcc3b8..f13c73b0` 为证）：
+      `dart format` 只跑本轮四个改动文件 + 一个新文件，跑前逐文件证过它们在 `origin/develop` 字节上
+      已是格式化干净的（`sidebar.dart`/`sidebar_task_drop.dart`/`task_view_action_repository.dart`/
+      `sidebar_task_drop_test.dart`/`task_view_action_repository_test.dart` 五个全部 develop-clean）；
+      `flutter analyze --no-pub` ⇒ **No issues found**（/tmp/fl-291-analyze.log）；
+      全量 `flutter test --no-pub` ⇒ **1805 通过 / 26 跳过 / 1 失**（/tmp/fl-291-fulltest.log）。
+      那 1 失是主干存量红 `test/tooling/raw_error_text_gate_test.dart`，两条 Finding
+      （`lib/core/update/desktop_update_io.dart:24` 与 `:34` 的 `debugPrint('… $error')`）
+      都逐字存在于 `origin/develop`（`git grep -c "update check failed" origin/develop -- 同文件` ⇒ 2），
+      本分支一行没碰那两处 ⇒ 不顺手修，跟 FL #569 那单走。
+      通过数与上一轮（第 290 轮 1783）差 **22** = 本轮新增用例数 5+5+8+4，两条账对得上；
+      golden `flutter test test/visual/todo_workspace_golden_test.dart` ⇒ **9 张全过、零重录**
+      （套一层 `DragTarget` 在无候选时原样返回 child，这条预期由实测兑现，不是推理）
 - [ ] T007 收口：push → PR（Refs #400）→ 合并 → #400 关单 → 矩阵 #32 行「拖动排期」只剩的这一面翻「有」
       （六处数字同批同步）→ 父仓 bump
