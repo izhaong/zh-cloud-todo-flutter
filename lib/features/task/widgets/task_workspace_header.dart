@@ -19,6 +19,7 @@ enum _TaskWorkspaceHeaderCommand {
   batchEdit,
   createSection,
   editQuadrantRules,
+  editListBackground,
   directionNewestFirst,
   directionOldestFirst,
   hideCompleted,
@@ -36,6 +37,7 @@ extension on _TaskWorkspaceHeaderCommand {
     _TaskWorkspaceHeaderCommand.batchEdit => null,
     _TaskWorkspaceHeaderCommand.createSection => null,
     _TaskWorkspaceHeaderCommand.editQuadrantRules => null,
+    _TaskWorkspaceHeaderCommand.editListBackground => null,
     _TaskWorkspaceHeaderCommand.directionNewestFirst => null,
     _TaskWorkspaceHeaderCommand.directionOldestFirst => null,
     _TaskWorkspaceHeaderCommand.hideCompleted => null,
@@ -96,6 +98,7 @@ class TaskWorkspaceHeader extends StatelessWidget {
     this.onBatchPressed,
     this.onCreateSection,
     this.onEditQuadrantRules,
+    this.onEditListBackground,
     this.hideCompleted,
     this.hideCompletedHint,
     this.onToggleHideCompleted,
@@ -127,6 +130,10 @@ class TaskWorkspaceHeader extends StatelessWidget {
   final VoidCallback? onBatchPressed;
   final VoidCallback? onCreateSection;
   final VoidCallback? onEditQuadrantRules;
+
+  /// 嘀嗒《02-用清单管理任务》:96「进入你想设置的清单详情页，点击右上角的「...」-「背景」」。
+  /// null ⇒ 不渲染该项（未选中具体清单、或选中的是不支持背景的清单）。
+  final VoidCallback? onEditListBackground;
 
   /// 嘀嗒《02-功能指南/03-四象限/02-如何编辑四象限规则.md》`:132`
   /// 「在四象限页面，点击右上角「...」- 隐藏已完成。」
@@ -244,6 +251,8 @@ class TaskWorkspaceHeader extends StatelessWidget {
                       onCreateSection?.call();
                     case _TaskWorkspaceHeaderCommand.editQuadrantRules:
                       onEditQuadrantRules?.call();
+                    case _TaskWorkspaceHeaderCommand.editListBackground:
+                      onEditListBackground?.call();
                     case _TaskWorkspaceHeaderCommand.hideCompleted:
                       onToggleHideCompleted?.call();
                     case _TaskWorkspaceHeaderCommand.smart:
@@ -312,6 +321,15 @@ class TaskWorkspaceHeader extends StatelessWidget {
                       key: Key('todo-quadrant-rules-entry'),
                       value: _TaskWorkspaceHeaderCommand.editQuadrantRules,
                       child: Text('编辑象限规则'),
+                    ),
+                  // 嘀嗒《02-用清单管理任务》:96：详情页「...」里的「背景」，只在选中
+                  // 具体清单且该清单支持背景时出现（收集箱与智能清单都不支持）。
+                  if (onEditListBackground != null) const PopupMenuDivider(),
+                  if (onEditListBackground != null)
+                    const PopupMenuItem(
+                      key: Key('todo-list-background-entry'),
+                      value: _TaskWorkspaceHeaderCommand.editListBackground,
+                      child: Text('背景'),
                     ),
                   if (hideCompleted != null) const PopupMenuDivider(),
                   if (hideCompleted != null)

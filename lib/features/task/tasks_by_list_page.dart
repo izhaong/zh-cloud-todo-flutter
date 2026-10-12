@@ -267,6 +267,21 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         break;
       }
     }
+    // 嘀嗒《02-用清单管理任务》:96 的背景入口：只有"选中了具体清单、且该清单支持背景"才出现。
+    // 收集箱与智能清单按 :118 那条例外不给入口（仓储 setBackground 里还有一道显式拒绝）。
+    final backgroundList =
+        _mode == TaskViewMode.list &&
+            selectedList != null &&
+            selectedList.id != 'inbox' &&
+            !selectedList.name.startsWith('smart:')
+        ? selectedList
+        : null;
+    void openListBackground(BuildContext context) {
+      final target = backgroundList;
+      if (target == null) return;
+      _openListBackground(context, target);
+    }
+
     final tasksStream = _resolveTasksStream(taskRepo);
 
     final body = StreamBuilder<List<TodoTask>>(
@@ -343,6 +358,10 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 onEditQuadrantRules: _mode == TaskViewMode.eisenhower
                     ? _openQuadrantRules
                     : null,
+                // 嘀嗒《02-用清单管理任务》:96：详情页右上角「...」-「背景」。
+                onEditListBackground: backgroundList == null
+                    ? null
+                    : () => openListBackground(context),
                 hideCompleted: _mode == TaskViewMode.eisenhower
                     ? _hideCompletedInQuadrant
                     : null,
@@ -454,6 +473,22 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
               tooltip: '新建分组',
               onPressed: _createTaskSection,
               icon: const Icon(Icons.playlist_add),
+            ),
+          // 独立路由（非内嵌）下的详情层没有那枚「…」排序菜单，嘀嗒 :96 的「背景」
+          // 在这里同样要够得着 ⇒ 右上角补一个「…」，项与内嵌变体同名 key。
+          if (backgroundList != null)
+            PopupMenuButton<String>(
+              key: const Key('todo-list-more-appbar'),
+              tooltip: '清单',
+              icon: const Icon(Icons.more_vert),
+              onSelected: (_) => openListBackground(context),
+              itemBuilder: (context) => const [
+                PopupMenuItem(
+                  key: Key('todo-list-background-entry'),
+                  value: 'background',
+                  child: Text('背景'),
+                ),
+              ],
             ),
         ],
       ),
@@ -772,6 +807,11 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     Navigator.of(
       context,
     ).push(MaterialPageRoute<void>(builder: (_) => const QuadrantRulesPage()));
+  }
+
+  /// 嘀嗒《02-用清单管理任务》:96：详情页右上角「...」里选「背景」。
+  void _openListBackground(BuildContext context, TodoList list) {
+    ListBackgroundSheet.show(context, list);
   }
 
   Future<void> _changeMode(TaskViewMode mode) async {
