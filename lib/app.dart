@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'core/theme/app_theme.dart';
+import 'core/update/desktop_update.dart';
 import 'features/home/home_shell.dart';
 import 'features/shell/app_theme_controller.dart';
 import 'state/session_state.dart';
@@ -82,6 +83,7 @@ class _TodoFlutterAppState extends ConsumerState<TodoFlutterApp> {
   void initState() {
     super.initState();
     Future.microtask(() => ref.read(sessionProvider.notifier).bootstrap());
+    Future.microtask(prepareDesktopUpdate);
   }
 
   @override
