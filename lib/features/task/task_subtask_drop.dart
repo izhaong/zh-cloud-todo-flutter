@@ -5,29 +5,38 @@ import 'package:flutter/material.dart';
 import '../../core/api/error_text.dart';
 import '../../core/db/app_database.dart';
 
-/// 嘀嗒《02-功能指南/01-任务/09-如何管理海量任务/06-多级任务.md》两档拖动共用同一块落点：
+/// 清单行内的拖放落点。嘀嗒的原文分两页，落点也按句划成互不重叠的三块：
+///
+/// 《02-功能指南/01-任务/09-如何管理海量任务/06-多级任务.md》
 /// - mobile tab `:20`「通过拖动将现有的任务转化成子任务。」（FL #590）
-/// - desktop tab `:60-:61`「通过拖动将现有的任务转化成子任务。
-///   将光标覆盖在一个任务上，按住任务前的图标拖动到另一个任务**右下方**即可快速转化为子任务。」（FL #590）
+/// - desktop tab `:60-:61`「……拖动到另一个任务**右下方**即可快速转化为子任务。」（FL #590）
 /// - mobile tab `:24`「通过拖动「+」到任务下方偏右一点的位置来在这个任务下快速创建「子任务」。」（FL #591）
 ///
-/// 「右下方 / 下方偏右」用**几何**实现：这一行的右下象限单独是落点，其余区域不是。
-/// 命中判定因此是框架自己的命中测试，不是这里手算的坐标带 —— 手写坐标带在这个 SDK 上做不了：
-/// `DragTargetDetails.offset` 量的是 drag target 内部那句 `_lastOffset = globalPosition - dragStartPoint`，
-/// 源未设 `dragAnchorStrategy` 时 `dragStartPoint` 是 `centerDragAnchorStrategy` 的返回值，
-/// 不是全局指针位置，拿它当全局坐标算象限必然算错。
-/// 落点区域只占右下象限（`FractionallySizedBox` 0.5×0.5 + `Alignment.bottomRight`），
-/// 所以"同一次拖、不同落点 ⇒ 不同结果"是行本身的几何给的，左上落点那条用例咬得住它。
+/// 《02-功能指南/01-任务/08-不同的视图查看任务/01-列表视图.md》
+/// - 「拖动排序」一节：「你还可以自已手动拖动任务的顺序，让任务排序更灵活。」
+///   「按住任务，自由选择放置任务的位置。多种操作，一“指”搞定。」（FL #595）
+/// - 「拖动生成子任务」一节：「滴答清单不仅支持拖动调整任务排序，你还可以用拖动来实现
+///   「任务」➡️「子任务」的转换。」「长按任务，将其拖至另一个任务右下方，即可将这个任务转换成子任务。」
 ///
-/// 这一层不抢点击：`DragTarget.hitTestBehavior` 缺省 `translucent`，
-/// 它把自己挂进命中路径但不吞命中，行体的"点开这一行"与行首排序手柄照旧。
+/// ⇒ 一行被划成三格，"同一个手势、由放置位置决定结果"就是这么落的：
+/// **上半条＝排到该行之前**、**下半左＝排到该行之后**、**下半右＝转子任务**
+/// （右下那块里还叠着「+」的建子任务落点）。三块互不重叠 ⇒ 一次拖只有一块在指针下，
+/// 所以"同一次拖、不同落点 ⇒ 不同结果"能被一条用例量出来（三块对照就是它）。
 ///
-/// 两种拖出物共用同一块象限，靠**泛型参数**分流：SDK 找落点时先按类型过滤（`isExpectedDataType`），
-/// 所以 `DragTarget<TodoTask>`（转化父子）与 `DragTarget<QuickAddSubtaskIntent>`（在这行下建子任务）
-/// 各吃各的拖，不会互相截走，也不必为「+」另划一块区域。
+/// 为什么用几何而不是手算坐标带：SDK 交给落点的 `DragTargetDetails.offset` 是
+/// `globalPosition - dragStartPoint`（源未设 `dragAnchorStrategy` 时那个起点不是全局指针位置），
+/// 拿它当全局坐标算区域必错（FL #590 第一版就这么错过，那批用例读数 `+3 -7`）。
+/// 每块都是 `Positioned.fill` + `FractionallySizedBox`：`Stack` 给非 positioned 孩子 loose 约束，
+/// 不 fill 就按内容收缩成 0×0 —— 既画不出高亮也进不了命中路径（FL #591 实测踩过）。
 ///
-/// 任务侧的拖出源沿用清单行已有的 `LongPressDraggable<TodoTask>`（并列日历那一面用的就是它）：
-/// 原文给的是**一个**手势、由落点位置决定结果，所以这里只加落点，不再造第二个拖出源。
+/// 这一层不抢点击：`DragTarget.hitTestBehavior` 缺省 `translucent`，它挂进命中路径但不吞命中，
+/// 行体的"点开这一行"与行首排序手柄照旧（各有用例钉着）。
+///
+/// 两种拖出物按**泛型**分流：`DragTarget<TodoTask>`（转子任务/放置排序）与
+/// `DragTarget<QuickAddSubtaskIntent>`（建子任务）；SDK 找落点时先按类型过滤，互不截走。
+///
+/// 任务侧的拖出源沿用清单行已有的 `LongPressDraggable<TodoTask>`（并列日历那一面用的就是它，
+/// 嘀嗒原文写的也是「长按任务」）：这里只加落点，不再造第二个拖出源。
 class TaskSubtaskDropTarget extends StatefulWidget {
   const TaskSubtaskDropTarget({
     required this.task,
@@ -35,10 +44,11 @@ class TaskSubtaskDropTarget extends StatefulWidget {
     required this.onDrop,
     required this.child,
     this.onCreateParent,
+    this.onPlace,
     super.key,
   });
 
-  /// 这一行对应的任务 = 潜在的**父任务**。
+  /// 这一行对应的任务 = 潜在的**父任务**，也是放置排序时参照的那一行。
   final TodoTask task;
 
   /// 页身份闸门：嘀嗒 `:28`「这一功能在「今天」、「最近七天」等智能清单中不可用，
@@ -52,6 +62,10 @@ class TaskSubtaskDropTarget extends StatefulWidget {
   /// 「+」拖上去什么也不发生，而不是落进一块"看着能落、落下去没反应"的区域。
   final Future<void> Function(TodoTask parent)? onCreateParent;
 
+  /// 拖任务落到这一行的上半/左下 ⇒ 把 dragged 放到这一行**之前/之后**（《01-列表视图.md》拖动排序）。
+  /// null（智能清单、有分组、只读清单这些"手动排序本来就不可用"的场合）时这两块落点不建。
+  final Future<void> Function(TodoTask dragged, bool after)? onPlace;
+
   /// 读屏语义挂在带 key 的节点自己身上：测试读 `getSemantics(byKey).label`，
   /// 不用全树 `bySemanticsLabel`（那会被旁侧 `Text` 满足而恒真）。
   static Key zoneKey(String taskId) =>
@@ -60,9 +74,29 @@ class TaskSubtaskDropTarget extends StatefulWidget {
   static Key createZoneKey(String taskId) =>
       ValueKey<String>('todo-task-subtask-create-$taskId');
 
+  static Key beforeZoneKey(String taskId) =>
+      ValueKey<String>('todo-task-place-before-$taskId');
+
+  static Key afterZoneKey(String taskId) =>
+      ValueKey<String>('todo-task-place-after-$taskId');
+
+  /// 落点**本身**的 key（恒挂在 `DragTarget` 上，不随候选态开关）：
+  /// 上面那几个 `*ZoneKey` 是悬停时才建的高亮节点，静止态永远找不到 ——
+  /// 拿它们判"这一行是不是落点"就是恒过的假判据。闸门类断言（智能清单/有分组不该有落点）
+  /// 要量这一对。
+  static Key beforeDropKey(String taskId) =>
+      ValueKey<String>('todo-task-place-before-drop-$taskId');
+
+  static Key afterDropKey(String taskId) =>
+      ValueKey<String>('todo-task-place-after-drop-$taskId');
+
   static String hoverLabel(String parentTitle) => '成为「$parentTitle」的子任务';
 
   static String createHoverLabel(String parentTitle) => '在「$parentTitle」下新建子任务';
+
+  static String beforeHoverLabel(String rowTitle) => '排到「$rowTitle」之前';
+
+  static String afterHoverLabel(String rowTitle) => '排到「$rowTitle」之后';
 
   @override
   State<TaskSubtaskDropTarget> createState() => _TaskSubtaskDropTargetState();
@@ -73,9 +107,12 @@ class _TaskSubtaskDropTargetState extends State<TaskSubtaskDropTarget> {
 
   void _acceptCreate() => unawaited(_dropCreate());
 
-  /// 失败必须看得见：成环与五层上限都在仓储里抛 `StateError`，
-  /// 提示走 `describeError` 这条本仓统一通道 —— 直接把异常对象插进文案会被
-  /// `test/tooling/raw_error_text_gate_test.dart` 判红（上一面第一版就是这么写的）。
+  void _acceptPlace(TodoTask dragged, bool after) =>
+      unawaited(_dropPlace(dragged, after));
+
+  /// 失败必须看得见：仓储抛的 `StateError`（成环、五层上限、只读清单、排序保存失败）
+  /// 都经 `describeError` 这条本仓统一通道上屏 —— 直接把异常对象插进文案会被
+  /// `test/tooling/raw_error_text_gate_test.dart` 判失项（FL #590 第一版就是这么写的）。
   Future<void> _drop(TodoTask dragged) async {
     try {
       await widget.onDrop(dragged);
@@ -92,6 +129,15 @@ class _TaskSubtaskDropTargetState extends State<TaskSubtaskDropTarget> {
     }
   }
 
+  Future<void> _dropPlace(TodoTask dragged, bool after) async {
+    try {
+      await widget.onPlace?.call(dragged, after);
+    } catch (error) {
+      final where = after ? '之后' : '之前';
+      _showFailure('排到「${widget.task.title}」$where失败', error);
+    }
+  }
+
   void _showFailure(String prefix, Object error) {
     if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
@@ -100,15 +146,83 @@ class _TaskSubtaskDropTargetState extends State<TaskSubtaskDropTarget> {
     );
   }
 
-  /// 候选态（指针停在这一格的右下带）才画高亮与读屏文案；静止什么都不加。
-  Widget _hover({required String label, required Key key}) {
+  /// 候选态（指针停在这一格）才画高亮与读屏文案；静止什么都不加。
+  Widget _hover({
+    required String label,
+    required Key key,
+    _Highlight highlight = _Highlight.quad,
+  }) {
     final color = Theme.of(context).colorScheme.primary;
+    final line = BorderSide(color: color, width: 3);
     return DecoratedBox(
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.16),
-        border: Border.all(color: color),
-      ),
+      decoration: switch (highlight) {
+        // 转子任务那块：整圈描边 + 底色，形状是"这一格被吃掉"。
+        _Highlight.quad => BoxDecoration(
+          color: color.withValues(alpha: 0.16),
+          border: Border.all(color: color),
+        ),
+        // 放置那两块：只在**将要插入的那条边**画一条线（行顶＝排到之前、行底＝排到之后）。
+        // 交叉验证提的就是这点 —— 三格同色同形时"在排序"和"在建父子"只有读屏能分，
+        // 而最容易误触的恰是共边的左下／右下两格。
+        _Highlight.insertTop => BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          border: Border(top: line),
+        ),
+        _Highlight.insertBottom => BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          border: Border(bottom: line),
+        ),
+      },
       child: Semantics(key: key, label: label, child: const SizedBox.shrink()),
+    );
+  }
+
+  /// 三块吃任务的落点共用同一套接受条件：
+  /// ① 只接**同一张清单**里的任务 —— 清单页列表体外层还套着 `TaskListDropTarget`
+  ///    （嘀嗒《07-任务与日历同时显示.md》「将日历中的任务拖入清单详情区域」＝移入当前清单），
+  ///    它吃的也是 `TodoTask`；内层来者不拒会把异清单任务截走（FL #590 先跑出红才补的这条）。
+  /// ② 自己不是自己的目标：既不给自己当父任务，也不"排到自己前面/后面"。
+  bool _acceptsTask(TodoTask dragged) =>
+      dragged.listId == widget.task.listId && dragged.id != widget.task.id;
+
+  /// 一块任务落点：区域由分数与对齐决定（三块互不重叠即可），`nested` 是给「+」留的叠层。
+  Widget _taskZone({
+    required double widthFactor,
+    required double heightFactor,
+    required Alignment alignment,
+    required String label,
+    required Key hoverKey,
+    Key? dropKey,
+    _Highlight highlight = _Highlight.quad,
+    required void Function(TodoTask dragged) onAccept,
+    Widget? nested,
+  }) {
+    return Positioned.fill(
+      child: FractionallySizedBox(
+        widthFactor: widthFactor,
+        heightFactor: heightFactor,
+        alignment: alignment,
+        child: DragTarget<TodoTask>(
+          key: dropKey,
+          onWillAcceptWithDetails: (details) => _acceptsTask(details.data),
+          onAcceptWithDetails: (details) => onAccept(details.data),
+          builder: (context, candidates, _) => Stack(
+            children: [
+              // 高亮与叠层都要 Positioned.fill（见文件头那条 0×0 的教训）；
+              // 「+」那一层还要无条件挂着，不能"这一帧没候选就不建"。
+              if (candidates.isNotEmpty)
+                Positioned.fill(
+                  child: _hover(
+                    label: label,
+                    key: hoverKey,
+                    highlight: highlight,
+                  ),
+                ),
+              if (nested != null) Positioned.fill(child: nested),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -117,72 +231,66 @@ class _TaskSubtaskDropTargetState extends State<TaskSubtaskDropTarget> {
     // 闸门关掉时这一行连落点都不是：不建 DragTarget，也就不会在智能清单里
     // 抢下同一坐标的拖拽（外层 `TaskListDropTarget` 那一类落点照旧生效）。
     if (!widget.enabled) return widget.child;
+    final title = widget.task.title;
     return Stack(
       clipBehavior: Clip.none,
       children: [
         widget.child,
-        Positioned.fill(
-          child: FractionallySizedBox(
+        if (widget.onPlace != null)
+          _taskZone(
+            widthFactor: 1,
+            heightFactor: 0.5,
+            alignment: Alignment.topCenter,
+            label: TaskSubtaskDropTarget.beforeHoverLabel(title),
+            hoverKey: TaskSubtaskDropTarget.beforeZoneKey(widget.task.id),
+            dropKey: TaskSubtaskDropTarget.beforeDropKey(widget.task.id),
+            highlight: _Highlight.insertTop,
+            onAccept: (dragged) => _acceptPlace(dragged, false),
+          ),
+        if (widget.onPlace != null)
+          _taskZone(
             widthFactor: 0.5,
             heightFactor: 0.5,
-            alignment: Alignment.bottomRight,
-            child: DragTarget<TodoTask>(
-              // 只接**同一张清单**里的任务：清单页的整块列表体外层还套着
-              // `TaskListDropTarget`（嘀嗒《07-任务与日历同时显示.md》:55「将日历中的任务拖入清单详情区域」
-              // ＝移入当前清单），它吃的也是 `TodoTask`。内层来者不拒就会把异清单任务截走，
-              // 那一面当场失效（这条是先跑出红、再补的条件：
-              // test/features/task/task_subtask_drag_test.dart 的「异清单任务落到右下带」）。
-              // 自己不能当自己的父任务；成环与 5 层上限由仓储那条通道兜住（失败给可见提示）。
-              onWillAcceptWithDetails: (details) =>
-                  details.data.listId == widget.task.listId &&
-                  details.data.id != widget.task.id,
-              onAcceptWithDetails: (details) => _accept(details.data),
-              // 「+」那一层必须无条件挂在树上（不能"这一帧没候选就不建"），
-              // 否则任务拖进来时它被摘掉、「+」再拖进来就找不到落点。
-              builder: (context, candidates, _) => Stack(
-                children: [
-                  // 两块都要 `Positioned.fill`：Stack 给非 positioned 子节点的是 loose 约束，
-                  // 高亮与内层落点按内容收缩就成了 0×0 —— 0 尺寸既画不出高亮，
-                  // 也进不了命中路径（`DragTarget` 的盒子只在 `size.contains(position)` 时挂进路径，
-                  // 第一版「+」三条用例全红就是这么量出来的）。
-                  if (candidates.isNotEmpty)
-                    Positioned.fill(
-                      child: _hover(
-                        label: TaskSubtaskDropTarget.hoverLabel(
-                          widget.task.title,
-                        ),
-                        key: TaskSubtaskDropTarget.zoneKey(widget.task.id),
-                      ),
-                    ),
-                  if (widget.onCreateParent != null)
-                    Positioned.fill(
-                      child: DragTarget<QuickAddSubtaskIntent>(
-                        // 闸门已在外层 `enabled` 上判过页身份与可写；这里没有"哪个任务"要挑，
-                        // 落点要的就是"在这一行下建"，所以不再自设第二条过滤。
-                        onWillAcceptWithDetails: (_) => true,
-                        onAcceptWithDetails: (_) => _acceptCreate(),
-                        builder: (context, createCandidates, _) =>
-                            createCandidates.isEmpty
-                            ? const SizedBox.shrink()
-                            : _hover(
-                                label: TaskSubtaskDropTarget.createHoverLabel(
-                                  widget.task.title,
-                                ),
-                                key: TaskSubtaskDropTarget.createZoneKey(
-                                  widget.task.id,
-                                ),
-                              ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
+            alignment: Alignment.bottomLeft,
+            label: TaskSubtaskDropTarget.afterHoverLabel(title),
+            hoverKey: TaskSubtaskDropTarget.afterZoneKey(widget.task.id),
+            dropKey: TaskSubtaskDropTarget.afterDropKey(widget.task.id),
+            highlight: _Highlight.insertBottom,
+            onAccept: (dragged) => _acceptPlace(dragged, true),
           ),
+        // 下半右块：转子任务（FL #590），里面叠着「+」的建子任务落点（FL #591）。
+        _taskZone(
+          widthFactor: 0.5,
+          heightFactor: 0.5,
+          alignment: Alignment.bottomRight,
+          label: TaskSubtaskDropTarget.hoverLabel(title),
+          hoverKey: TaskSubtaskDropTarget.zoneKey(widget.task.id),
+          onAccept: _accept,
+          nested: widget.onCreateParent == null
+              ? null
+              : DragTarget<QuickAddSubtaskIntent>(
+                  // 闸门已在外层 `enabled` 上判过页身份与可写；这里没有"哪个任务"要挑，
+                  // 落点要的就是"在这一行下建"，所以不再自设第二条过滤。
+                  onWillAcceptWithDetails: (_) => true,
+                  onAcceptWithDetails: (_) => _acceptCreate(),
+                  builder: (context, createCandidates, _) =>
+                      createCandidates.isEmpty
+                      ? const SizedBox.shrink()
+                      : _hover(
+                          label: TaskSubtaskDropTarget.createHoverLabel(title),
+                          key: TaskSubtaskDropTarget.createZoneKey(
+                            widget.task.id,
+                          ),
+                        ),
+                ),
         ),
       ],
     );
   }
 }
+
+/// 候选态怎么画：转子任务那块是整圈描边，放置那两块只在插入边画一条线。
+enum _Highlight { quad, insertTop, insertBottom }
 
 /// 「+」被拖起来的载荷：它不代表某个已存在的任务，只代表"要在这个任务下建一个子任务"。
 /// 用独立类型而不是 `TodoTask`，是为了让 SDK 的类型过滤把两种拖分开（见本文件头）。
