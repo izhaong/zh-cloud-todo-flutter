@@ -49,3 +49,7 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 android/build/
+
+# Sparkle / WinSparkle 私钥。公钥 dsa_pub.pem 与 SUPublicEDKey 可以入库。
+dsa_priv.pem
+sparkle_ed25519.pem
