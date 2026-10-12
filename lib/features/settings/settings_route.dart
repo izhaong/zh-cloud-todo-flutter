@@ -217,6 +217,27 @@ class SettingsRoute extends ConsumerWidget {
               ],
             ),
           ),
+          _Section(title: '功能模块'),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                for (final module in TodoFeatureModule.values) ...[
+                  _Tile(
+                    icon: _featureModuleIcon(module),
+                    key: Key('todo-settings-module-${module.name}'),
+                    title: _featureModuleLabel(module),
+                    subtitle: _featureModuleHint(module),
+                    trailingText: _featureModuleStateLabel(
+                      ref.watch(featureModuleProvider(module)),
+                    ),
+                    colors: colors,
+                    onTap: () => _pickFeatureModule(context, ref, module),
+                  ),
+                ],
+              ],
+            ),
+          ),
           _Section(title: '主题'),
           AppCard(
             padding: EdgeInsets.zero,
@@ -269,9 +290,9 @@ class SettingsRoute extends ConsumerWidget {
                         await checkDesktopUpdateNow();
                       } on UpdateAlreadyCurrent {
                         if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('已是最新版本')),
-                        );
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(const SnackBar(content: Text('已是最新版本')));
                       } catch (_) {
                         if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -396,6 +417,84 @@ class SettingsRoute extends ConsumerWidget {
 
   /// 嘀嗒《…05-过滤器…》:29/:33「确认侧边栏中是否已经开启显示过滤器」⇒ 同一份「显示/隐藏」形状。
   /// 与 [_pickShowTags] 一样写"点中的那个字面值"，不从当前值取反（四件套 ④）。
+  /// 「设置 > 功能模块」那三档：命名照抄嘀嗒点名的三句原文（specs/107）。
+  /// 看板不在表里——《02-看板视图：分类管理任务》:14 写明它不是功能模块。
+  static String _featureModuleLabel(TodoFeatureModule module) =>
+      switch (module) {
+        TodoFeatureModule.quadrant => '四象限',
+        TodoFeatureModule.pomodoro => '番茄专注',
+        TodoFeatureModule.search => '搜索',
+      };
+
+  static IconData _featureModuleIcon(TodoFeatureModule module) =>
+      switch (module) {
+        TodoFeatureModule.quadrant => Icons.grid_view_outlined,
+        TodoFeatureModule.pomodoro => Icons.timer_outlined,
+        TodoFeatureModule.search => Icons.search,
+      };
+
+  static String _featureModuleHint(TodoFeatureModule module) =>
+      switch (module) {
+        TodoFeatureModule.quadrant => '按重要与紧急程度分类管理任务',
+        TodoFeatureModule.pomodoro => '专注计时与专注记录',
+        TodoFeatureModule.search => '通过侧栏与右上角入口进入搜索页面',
+      };
+
+  static String _featureModuleStateLabel(AsyncValue<bool> value) {
+    if (!value.hasValue) return value.isLoading ? '…' : '开启';
+    return value.value! ? '开启' : '关闭';
+  }
+
+  Future<void> _pickFeatureModule(
+    BuildContext context,
+    WidgetRef ref,
+    TodoFeatureModule module,
+  ) async {
+    final repo = ref.read(sidebarVisibilityRepositoryProvider);
+    if (repo == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('本地数据库尚未就绪，暂时无法修改${_featureModuleLabel(module)}'),
+        ),
+      );
+      return;
+    }
+    final current =
+        ref.read(featureModuleProvider(module)).valueOrNull ??
+        SidebarVisibilityRepository.defaultFeatureEnabled;
+    final picked = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final (value, label) in const [(true, '开启'), (false, '关闭')])
+              ListTile(
+                key: Key('todo-settings-module-${module.name}-option-$value'),
+                title: Text(label),
+                trailing: value == current
+                    ? Icon(
+                        Icons.check,
+                        color: brandColors(context).mutedForeground,
+                      )
+                    : null,
+                onTap: () => Navigator.of(sheetContext).pop(value),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return;
+    try {
+      await repo.saveFeature(module: module, enabled: picked);
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('保存失败，${_featureModuleLabel(module)}仍为当前设置')),
+      );
+    }
+  }
+
   Future<void> _pickShowFilters(BuildContext context, WidgetRef ref) async {
     final repo = ref.read(sidebarVisibilityRepositoryProvider);
     if (repo == null) {

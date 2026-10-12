@@ -16,6 +16,7 @@ import '../../native/native_intents.dart';
 import '../../state/nlp_date.dart';
 import '../../state/providers.dart';
 import '../../state/repositories/board_preference_repository.dart';
+import '../../state/repositories/sidebar_visibility_repository.dart';
 import '../../state/repositories/task_batch_edit_repository.dart';
 import '../../state/repositories/task_query_repository.dart';
 import '../../state/repositories/task_repository.dart';
@@ -282,6 +283,23 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       _openListBackground(context, target);
     }
 
+    // 嘀嗒《03-四象限/01-如何使用四象限》:24 的功能模块开关：关掉「四象限」这一档，
+    // 视图菜单不再出现该档；已经停在象限里的（偏好是异步读回来的）当场回落到列表。
+    final quadrantEnabled =
+        ref
+            .watch(featureModuleProvider(TodoFeatureModule.quadrant))
+            .valueOrNull ??
+        true;
+    ref.listen(featureModuleProvider(TodoFeatureModule.quadrant), (
+      previous,
+      next,
+    ) {
+      final enabled = next.valueOrNull ?? true;
+      if (!enabled && _mode == TaskViewMode.eisenhower) {
+        _changeMode(TaskViewMode.list);
+      }
+    });
+
     final tasksStream = _resolveTasksStream(taskRepo);
 
     final body = StreamBuilder<List<TodoTask>>(
@@ -362,6 +380,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 onEditListBackground: backgroundList == null
                     ? null
                     : () => openListBackground(context),
+                showQuadrantView: quadrantEnabled,
                 hideCompleted: _mode == TaskViewMode.eisenhower
                     ? _hideCompletedInQuadrant
                     : null,

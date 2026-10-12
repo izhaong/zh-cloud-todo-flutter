@@ -14,6 +14,7 @@ import '../../native/native_intents.dart';
 import '../../state/nlp_date.dart';
 import '../../state/providers.dart';
 import '../../state/repositories/task_query_repository.dart';
+import '../../state/repositories/sidebar_visibility_repository.dart';
 import '../../state/session_state.dart';
 import '../habit/habit_page.dart';
 import '../countdown/countdown_page.dart';
@@ -667,6 +668,12 @@ class _HomeShellState extends ConsumerState<HomeShell>
         final layoutSection = pairEligible
             ? (_companionPrimary(companion) ?? _section)
             : _section;
+        // 「设置 > 功能模块」的搜索档（嘀嗒《07-搜索任务》:12）：关掉后壳层搜索入口与快捷键都不通向搜索页。
+        final searchEnabled =
+            ref
+                .watch(featureModuleProvider(TodoFeatureModule.search))
+                .valueOrNull ??
+            true;
         return TodoWorkspace(
           width: width,
           section: layoutSection,
@@ -704,6 +711,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
           onSync: () => unawaited(_triggerSync()),
           onOpenReminders: _openReminders,
           syncStatus: _syncStatus,
+          searchEnabled: searchEnabled,
           onSelectSmart: _selectSmart,
           onSelectList: _selectList,
           onOpenTags: _openTags,

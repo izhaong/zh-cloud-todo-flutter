@@ -184,6 +184,21 @@ final sidebarShowFiltersProvider = StreamProvider<bool>((ref) {
   return repo.watchFilters();
 });
 
+/// 「设置 > 功能模块」某一档是否开启（specs/107 / FL #574）。
+///
+/// 读法与 `sidebarShowFiltersProvider` 同一条：仓储没就绪按默认「开」，消费侧
+/// `valueOrNull ?? default` 兜底 ⇒ 默认像素与今天一致，不动黄金基线。
+final featureModuleProvider = StreamProvider.family<bool, TodoFeatureModule>((
+  ref,
+  module,
+) {
+  final repo = ref.watch(sidebarVisibilityRepositoryProvider);
+  if (repo == null) {
+    return Stream.value(SidebarVisibilityRepository.defaultFeatureEnabled);
+  }
+  return repo.watchFeature(module);
+});
+
 /// 智能清单三态流（specs/103）。缺键 = 「显示」，消费侧兜底；
 /// 导航行口径与 showFilters 一致：晚一帧不出现比整列跳格可取。
 final sidebarSmartListStatesProvider =
