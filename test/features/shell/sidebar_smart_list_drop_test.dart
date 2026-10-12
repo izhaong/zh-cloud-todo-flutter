@@ -359,6 +359,31 @@ void main() {
       );
     });
 
+    testWidgets('截止已在「最近七天」窗口里（+3 天）⇒ 拖到这行同样不写', (tester) async {
+      // 与下一条不同：这一档的落点日（明天）与任务当前日（+3 天）**不是同一天**，
+      // 所以落点侧的条件判断一旦被摘掉，仓储那层「同一天不写」的兜底拦不住它，
+      // 任务会被真挪回明天 —— 只有这条用例咬得住那个变异。
+      final due = _dueAt(offsetDays: 3, hour: 11);
+      final fixture = await _pumpSeeded(tester, dueAt: due);
+      final db = fixture.database;
+      final outboxBefore = await _outboxCount(db);
+      expect(
+        _matchesFilter(due, 'next7days', DateTime.now()),
+        isTrue,
+        reason: '种子必须确实落在这一档窗口里，否则这条用例在测另一件事',
+      );
+
+      await _dragTo(tester, _smartZone(SmartList.upcoming));
+
+      final after = await _readTask(db);
+      expect(after.dueAt, due, reason: '条件已满足还挪回窗口首日 = 把用户排好的日子改了');
+      expect(
+        await _outboxCount(db),
+        outboxBefore,
+        reason: '已满足 = 不发同步变更（skipped 不是失败）',
+      );
+    });
+
     testWidgets('截止已在今天 ⇒ 拖到「今天」行不写、不入队、不报失败', (tester) async {
       final due = _dueAt(offsetDays: 0, hour: 8);
       final fixture = await _pumpSeeded(tester, dueAt: due);
