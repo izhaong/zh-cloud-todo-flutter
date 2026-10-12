@@ -2054,7 +2054,6 @@ class _ListBodyState extends State<_ListBody> {
     TodoTask target,
     bool after,
   ) async {
-    if (widget.batchSelectionActive) return;
     final ids = entries.whereType<TodoTask>().map((task) => task.id).toList();
     if (!ids.contains(dragged.id) || !ids.contains(target.id)) return;
     final without = [...ids]..remove(dragged.id);
@@ -2185,7 +2184,8 @@ class _ListBodyState extends State<_ListBody> {
               enabled: widget.subtaskDropEnabled,
               onDrop: (dragged) => widget.onReparentSubtask(dragged, task),
               onCreateParent: widget.onCreateSubtask,
-              onPlace: widget.onTasksReordered == null
+              onPlace:
+                  widget.onTasksReordered == null || widget.batchSelectionActive
                   ? null
                   : (dragged, after) =>
                         _placeTask(entries, dragged, task, after),
@@ -2233,7 +2233,8 @@ class _ListBodyState extends State<_ListBody> {
           enabled: widget.subtaskDropEnabled,
           onDrop: (dragged) => widget.onReparentSubtask(dragged, task),
           onCreateParent: widget.onCreateSubtask,
-          onPlace: widget.onTasksReordered == null
+          onPlace:
+              widget.onTasksReordered == null || widget.batchSelectionActive
               ? null
               : (dragged, after) => _placeTask(entries, dragged, task, after),
           child: _CalendarDragSource(

@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart' hide isNull;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -282,6 +283,50 @@ void main() {
       find.byKey(TaskSubtaskDropTarget.afterDropKey(firstId)),
       findsOneWidget,
     );
+  });
+
+  testWidgets('批量选择态下这两块落点不存在（不是"看着能落、落下去没反应"）', (tester) async {
+    late final _RecordingTaskViewActionRepository repository;
+    await _pumpList(
+      tester,
+      overridesBuilder: _recording((r) => repository = r),
+    );
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.tap(find.byKey(Key('task-row-surface-$secondId')));
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('todo-batch-actionbar')),
+      findsOneWidget,
+      reason: '前置条件：真的进了批量选择态，否则下面两个 findsNothing 是空页造成的',
+    );
+
+    expect(
+      find.byKey(TaskSubtaskDropTarget.beforeDropKey(firstId)),
+      findsNothing,
+      reason: '批量态要的是"勾哪几条"，放置排序这一刀此时不该有落点',
+    );
+    expect(
+      find.byKey(TaskSubtaskDropTarget.afterDropKey(firstId)),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(TaskSubtaskDropTarget),
+        matching: find.byType(DragTarget<TodoTask>),
+      ),
+      findsWidgets,
+      reason: '反向对照：批量态只关放置，不顺手把《06-多级任务.md》那块右下带也关掉',
+    );
+
+    await _dragBand(
+      tester,
+      sourceId: firstId,
+      targetId: secondId,
+      band: _Band.top,
+    );
+    expect(repository.requests, isEmpty);
   });
 
   testWidgets('异清单任务不被放置落点截走（三块共用同一条接受条件）', (tester) async {
