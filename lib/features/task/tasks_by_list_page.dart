@@ -47,6 +47,7 @@ class TasksByListPage extends ConsumerStatefulWidget {
     this.initialDueRange,
     this.initialCompleted,
     this.initialFilter,
+    this.lockedAssigneeUserId,
     this.lockedListId = false,
     this.hideAppBar = false,
     this.selectedTaskId,
@@ -62,6 +63,11 @@ class TasksByListPage extends ConsumerStatefulWidget {
 
   /// 从「筛选器」页套用进来的已保存条件；与 `initialDueRange` 同属外部播种。
   final TaskFilter? initialFilter;
+
+  /// 「指派给我」这类**页面身份**约束（嘀嗒《02-用清单管理任务》:21，specs/104）。
+  /// 故意不放进 `initialFilter`：那份滤镜用户可以点「全部」清空，而标题还写着
+  /// 「指派给我」时列表必须仍是分配给你的任务 ⇒ 它与 `selectedListId` 同层。
+  final int? lockedAssigneeUserId;
   final bool lockedListId;
   final bool hideAppBar;
   final String? selectedTaskId;
@@ -267,6 +273,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           now,
           taskTagIds: taskTagIds,
           listFolderIds: listFolderIds,
+          lockedAssigneeUserId: widget.lockedAssigneeUserId,
         );
         final listOrderedItems = _visibleTasksInListOrder(
           items,
@@ -901,6 +908,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   String get _viewPreferenceSourceKey {
     final listId = _selectedListId;
     if (listId != null) return 'list:$listId';
+    if (widget.lockedAssigneeUserId != null) return 'smart:assign';
     if (widget.initialCompleted == true) return 'smart:completed';
     final dueRange = widget.initialDueRange;
     if (dueRange != null && dueRange.isNotEmpty) return 'smart:due:$dueRange';
@@ -1761,6 +1769,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                     listFolderIds:
                         ref.read(listFolderIndexProvider) ??
                         const <String, Set<String>>{},
+                    lockedAssigneeUserId: widget.lockedAssigneeUserId,
                   ),
                   onChanged: (next) {
                     draft = next;
@@ -2364,8 +2373,13 @@ List<TodoTask> applyTaskFilter(
   DateTime now, {
   Map<String, Set<String>>? taskTagIds,
   Map<String, Set<String>>? listFolderIds,
+  int? lockedAssigneeUserId,
 }) {
-  if (filter.isEmpty && selectedListId == null) return source;
+  if (filter.isEmpty &&
+      selectedListId == null &&
+      lockedAssigneeUserId == null) {
+    return source;
+  }
   final startOfDay = DateTime(now.year, now.month, now.day);
   final todayEnd = startOfDay.add(const Duration(days: 1));
   final keyword = filter.keyword?.trim().toLowerCase();
@@ -2389,6 +2403,11 @@ List<TodoTask> applyTaskFilter(
     }
     if (filter.assigneeUserId != null &&
         task.assigneeUserId != filter.assigneeUserId) {
+      return false;
+    }
+    // 页面身份（specs/104）：与清单作用域同级，用户叠加的滤镜与「全部」档都清不掉它。
+    if (lockedAssigneeUserId != null &&
+        task.assigneeUserId != lockedAssigneeUserId) {
       return false;
     }
     return true;

@@ -557,13 +557,17 @@ final tagsStreamProvider = StreamProvider<List<TodoTag>>((ref) {
   return repo.watchAll();
 });
 
-/// 任务统计（all / inbox / today / tomorrow / upcoming），供 Sidebar 徽章计数。
+/// 任务统计（all / inbox / today / tomorrow / upcoming / assignToMe），供 Sidebar 徽章计数。
 /// 完全基于本地 Drift watchAll()，离线可用。
 final taskStatsProvider = StreamProvider<TaskStats>((ref) {
   final repo = ref.watch(taskRepositoryProvider);
   if (repo == null) return Stream.value(TaskStats.empty);
   final now = ref.watch(currentDateTimeProvider)();
-  return repo.watchAll().map((tasks) => TaskStats.fromTasks(tasks, now: now));
+  final currentUserId = ref.watch(sessionProvider)?.userId;
+  return repo.watchAll().map(
+    (tasks) =>
+        TaskStats.fromTasks(tasks, now: now, assigneeUserId: currentUserId),
+  );
 });
 
 /// 轻量任务计数集合（Sidebar 徽章用）。
@@ -571,6 +575,7 @@ final taskStatsProvider = StreamProvider<TaskStats>((ref) {
 /// - inbox: listId == kInboxListId 的未完成任务
 /// - today: 截止日 = 今天 的未完成任务
 /// - upcoming: 截止日在 (今天, +7天] 的未完成任务
+/// - assignToMe: 指派给当前用户的未完成任务（嘀嗒《02-用清单管理任务》:21）
 class TaskStats {
   const TaskStats(
     this.all,
@@ -578,17 +583,24 @@ class TaskStats {
     this.today,
     this.tomorrow,
     this.upcoming,
+    this.assignToMe,
   );
   final int all;
   final int inbox;
   final int today;
   final int tomorrow;
   final int upcoming;
+  final int assignToMe;
 
-  static const empty = TaskStats(0, 0, 0, 0, 0);
+  static const empty = TaskStats(0, 0, 0, 0, 0, 0);
 
-  static TaskStats fromTasks(List<TodoTask> tasks, {DateTime? now}) {
+  static TaskStats fromTasks(
+    List<TodoTask> tasks, {
+    DateTime? now,
+    int? assigneeUserId,
+  }) {
     var all = 0, inbox = 0, today = 0, tomorrow = 0, upcoming = 0;
+    var assignToMe = 0;
     final effectiveNow = now ?? DateTime.now();
     final todayStart = DateTime(
       effectiveNow.year,
@@ -602,6 +614,10 @@ class TaskStats {
       if (t.completed || t.cancelled) continue;
       all++;
       if (t.listId == 'inbox') inbox++;
+      // 没会话（assigneeUserId == null）时这一档恒 0：绝不把"未指派"当成"给我"。
+      if (assigneeUserId != null && t.assigneeUserId == assigneeUserId) {
+        assignToMe++;
+      }
       final dueAt = t.dueAt;
       final due = dueAt == null
           ? null
@@ -623,6 +639,6 @@ class TaskStats {
         }
       }
     }
-    return TaskStats(all, inbox, today, tomorrow, upcoming);
+    return TaskStats(all, inbox, today, tomorrow, upcoming, assignToMe);
   }
 }

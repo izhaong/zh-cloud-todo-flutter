@@ -74,6 +74,7 @@ class _SmartListManagerRow extends ConsumerWidget {
   /// 「有内容时显示」只给有内容判定的清单：垃圾桶本端还没有内容载体
   /// （specs/103 FR-5），不给一个永远判定为"没内容"的档位。
   static const _autoCapable = {
+    SmartList.assignToMe,
     SmartList.today,
     SmartList.tomorrow,
     SmartList.upcoming,

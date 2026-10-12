@@ -39,19 +39,33 @@ extension SectionX on Section {
 /// 智能清单（Sidebar 内嵌）。
 ///
 /// 选择后驱动任务页的过滤条件；[listId] 非空时等价于选中某清单。
-enum SmartList { inbox, today, tomorrow, upcoming, all, completed, trash }
+/// 次序照嘀嗒《02-用清单管理任务.md》:20→:21（指派给我紧跟收集箱），
+/// 本端多出的全部/已完成/垃圾桶排在后面。
+enum SmartList {
+  inbox,
+  assignToMe,
+  today,
+  tomorrow,
+  upcoming,
+  all,
+  completed,
+  trash,
+}
 
 extension SmartListX on SmartList {
   String get label {
     switch (this) {
       case SmartList.inbox:
         return '收集箱';
+      case SmartList.assignToMe:
+        return '指派给我';
       case SmartList.today:
         return '今天';
       case SmartList.tomorrow:
         return '明天';
       case SmartList.upcoming:
-        return '未来7天';
+        // 嘀嗒 `:16` 的术语是「最近七天」，不是「未来7天」。
+        return '最近七天';
       case SmartList.all:
         return '全部';
       case SmartList.completed:
@@ -65,6 +79,8 @@ extension SmartListX on SmartList {
     switch (this) {
       case SmartList.inbox:
         return Icons.inbox_outlined;
+      case SmartList.assignToMe:
+        return Icons.assignment_ind_outlined;
       case SmartList.today:
         return Icons.today_outlined;
       case SmartList.tomorrow:
