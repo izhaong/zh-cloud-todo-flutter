@@ -28,6 +28,7 @@ import '../tag/hash_tag_input.dart';
 import 'list_drop_target.dart';
 import '../list/list_properties.dart';
 import 'smart_grouping.dart';
+import 'subtask_flow.dart';
 import 'task_subtask_drop.dart';
 import 'task_view_mutation_feedback.dart';
 import 'view_mode.dart';
@@ -556,6 +557,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           onBatchSelectionRequested: _handleBatchSelectionRequest,
           subtaskDropEnabled: _subtaskDropEnabled,
           onReparentSubtask: _reparentAsSubtask,
+          onCreateSubtask: _createSubtaskByDrag,
         );
       case TaskViewMode.kanban:
         final listId = _selectedListId;
@@ -1034,6 +1036,12 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     if (repository == null) throw StateError('任务仓储未就绪');
     await repository.reparent(dragged.id, parent.id);
   }
+
+  /// 嘀嗒《06-多级任务.md》mobile `:24`「通过拖动「+」到任务下方偏右一点的位置
+  /// 来在这个任务下快速创建「子任务」」⇒ 落点开的是**同一张**快速添加表（`addSubtaskFlow`），
+  /// 不新造第二张子任务表，深度 ≤5 的守卫与那句提示也只在那一处。
+  Future<void> _createSubtaskByDrag(TodoTask parent) =>
+      addSubtaskFlow(context, ref, parent);
 
   void _toggleBatchSelection() {
     if (!_batchSelectionActive) {
@@ -1937,6 +1945,7 @@ class _ListBody extends StatefulWidget {
     required this.onBatchSelectionRequested,
     required this.subtaskDropEnabled,
     required this.onReparentSubtask,
+    required this.onCreateSubtask,
   });
 
   final List<TodoTask> items;
@@ -1971,6 +1980,11 @@ class _ListBody extends StatefulWidget {
   /// 把 dragged 变成 parent 的子任务；实现走 `TaskRepository.reparent`（页面的同名方法）。
   final Future<void> Function(TodoTask dragged, TodoTask parent)
   onReparentSubtask;
+
+  /// 拖「+」落到这一行 ⇒ 在这一行下建子任务（嘀嗒《06-多级任务.md》:24）。
+  /// 打开的还是同一张快速添加表、走的是 `addSubtaskFlow` 那一个入口：
+  /// 深度守卫与建表在 `lib` 里只存一份（详情层与右键那档上一轮已并进去）。
+  final Future<void> Function(TodoTask parent) onCreateSubtask;
 
   @override
   State<_ListBody> createState() => _ListBodyState();
@@ -2143,6 +2157,7 @@ class _ListBodyState extends State<_ListBody> {
               task: task,
               enabled: widget.subtaskDropEnabled,
               onDrop: (dragged) => widget.onReparentSubtask(dragged, task),
+              onCreateParent: widget.onCreateSubtask,
               child: _CalendarDragSource(
                 task: task,
                 child: TaskRowHost(
@@ -2186,6 +2201,7 @@ class _ListBodyState extends State<_ListBody> {
           task: task,
           enabled: widget.subtaskDropEnabled,
           onDrop: (dragged) => widget.onReparentSubtask(dragged, task),
+          onCreateParent: widget.onCreateSubtask,
           child: _CalendarDragSource(
             task: task,
             child: TaskRowHost(
