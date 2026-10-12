@@ -9,5 +9,7 @@
       无改动重跑零差异）与逐张 bbox 记在本目录 spec.md「黄金基线」那段
 - [x] T005 变异探针 ㉝–㊱ 四发各自红、红在期望的那条用例上、还原后与提交字节一致：㉝摘掉第四枚按钮 ⇒ 三条全红；㉞落库通道传 null ⇒ 红在「打开同一个界面且真的落库」；㉟生效键位传空表 ⇒ 只红在「显示的是生效键位」；㊱把按钮挂到 pomodoroEnabled 下 ⇒ 只红在「关掉番茄后这枚不许跟着消失」。
 - [x] T006 门禁：`dart format` 只跑本轮两个文件（跑前证过 `sidebar.dart` 在 develop 字节上是格式化干净的）；commit `3be78ddb` 之后 `flutter analyze` ⇒ 0 issue，全量 `flutter test` ⇒ **1783 通过 / 26 跳过 / 1 失**（/tmp/fl-gate-290.log；那 1 失仍是主干存量红 `raw_error_text_gate_test.dart`，FL #569），golden `flutter test test/visual/todo_workspace_golden_test.dart` ⇒ **9 张全过**（重录后的字节）。
-- [ ] T007 收口：push → PR（Refs #581）→ 合并 → #581 关单 → docs 矩阵 #86 那条差额注记订正 → 父仓 bump
+- [x] T007 收口：PR **!583** 已合并 FL develop `2a35d6ac64f6`；FL #581 已关（证据留言 13658）；
+      docs 矩阵 #86 差额订正＝PR **!194** develop `3a6008406614`；父仓 bump＝zh-cloud PR **!264**
+      develop `52dfdcede9`。（这格是第 292 轮回填的：收口当时已完成，但那几笔已合并的提交改不进去。）
 - [x] T008 顺手把 specs/109 的 T013 勾掉（上一轮的收口格，当时写不进已合并的那笔提交）
