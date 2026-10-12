@@ -201,6 +201,36 @@ void main() {
     );
   });
 
+  testWidgets('长按落在行最前的图标/勾选区也起拖：嘀嗒 desktop「按住任务前的图标」这条要能量到', (tester) async {
+    final fixture = await _pumpList(tester);
+
+    // 起点不是行中心，而是行首 14px 那一竖条（勾选框/图标所在的区域）。
+    final source = find.byKey(Key('task-row-surface-$draggedId'));
+    final target = find.byKey(Key('task-row-surface-$parentId'));
+    expect(source, findsOneWidget);
+    expect(target, findsOneWidget);
+    await tester.ensureVisible(source);
+    await tester.pumpAndSettle();
+    final sourceRect = tester.getRect(source);
+    final grabAt = Offset(sourceRect.left + 14, sourceRect.center.dy);
+    final bandPoint = _bandCenter(tester, target, _Band.lowerRight);
+
+    final gesture = await tester.startGesture(grabAt);
+    await tester.pump(const Duration(milliseconds: 400));
+    await gesture.moveTo(bandPoint);
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(
+      await _parentTaskIdOf(fixture.database, draggedId),
+      parentId,
+      reason:
+          'desktop :61 写的是「按住任务前的图标拖动到另一个任务右下方」；'
+          '整行长按要覆盖得住行首那一条，否则这句就不算落地',
+    );
+  });
+
   testWidgets('两个入口并存：长按拖出源在、hover 出的排序手柄也在', (tester) async {
     await _pumpList(tester);
     expect(
