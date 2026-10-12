@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../tag/hash_tag_input.dart';
+import '../task/task_subtask_drop.dart';
 import '../../core/theme/todo_layout_tokens.dart';
 
 class QuickAddRequest {
@@ -348,21 +349,37 @@ class MobileQuickAddButton extends StatelessWidget {
     return Semantics(
       identifier: 'todo_mobile_quick_add',
       button: true,
-      child: FloatingActionButton.small(
-        key: const Key('todo-mobile-add'),
-        heroTag: 'todo-mobile-add',
-        tooltip: '添加任务',
-        onPressed: () => showModalBottomSheet<void>(
-          context: context,
-          isScrollControlled: true,
-          useSafeArea: true,
-          builder: (_) => _MobileQuickAddSheet(
-            onSubmit: onSubmit,
-            tagOptions: tagOptions,
-            ensureTagIds: ensureTagIds,
+      // 嘀嗒《02-功能指南/01-任务/09-如何管理海量任务/06-多级任务.md》mobile `:24`
+      // 「通过拖动「+」到任务下方偏右一点的位置来在这个任务下快速创建「子任务」」
+      // ⇒ 「+」本身要是一条拖出源。拖与点两条通道并存：`Draggable` 认的是拖动，
+      // 不产生位移的点击仍归 `FloatingActionButton`（既有的点它开表用例不许弄红）。
+      child: Draggable<QuickAddSubtaskIntent>(
+        key: const Key('todo-mobile-add-drag-source'),
+        data: const QuickAddSubtaskIntent(),
+        feedback: Material(
+          color: Colors.transparent,
+          child: Icon(
+            Icons.add,
+            size: 22,
+            color: Theme.of(context).colorScheme.primary,
           ),
         ),
-        child: const Icon(Icons.add),
+        child: FloatingActionButton.small(
+          key: const Key('todo-mobile-add'),
+          heroTag: 'todo-mobile-add',
+          tooltip: '添加任务',
+          onPressed: () => showModalBottomSheet<void>(
+            context: context,
+            isScrollControlled: true,
+            useSafeArea: true,
+            builder: (_) => _MobileQuickAddSheet(
+              onSubmit: onSubmit,
+              tagOptions: tagOptions,
+              ensureTagIds: ensureTagIds,
+            ),
+          ),
+          child: const Icon(Icons.add),
+        ),
       ),
     );
   }
