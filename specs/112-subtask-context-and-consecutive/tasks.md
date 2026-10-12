@@ -32,5 +32,8 @@
       `test/tooling/raw_error_text_gate_test.dart`（两条 Finding 逐字在 `origin/develop` 上，FL #569 家族，本分支没碰）；
       通过数与上一轮 1807 差 **9** = 本轮新增用例数（复算 `grep -c "testWidgets(" test/features/task/subtask_context_and_consecutive_test.dart` ⇒ 9）；
       golden ⇒ **9 张全过**；门禁后 `git status --porcelain` 为空（没有 pub get 顺手改 lock 文件）
-- [ ] T009 收口：push → PR（Refs #589）→ 合并 → #589 关单 → 矩阵 #23 追记（四面减到两面，状态仍「部分」）
-      → docs 死锚订正 → 父仓 bump
+- [x] T009 收口：PR **!592** 已合并 FL develop `d6c88b09dad1`；FL #589 已关（收口留言 13734 回读为 closed）；
+      矩阵 #23 追记 + 判据源死锚订正＝docs PR **!198** develop `587b437f83c5`（docs Issue #197 已关，
+      四档数与剩余缺口 51 不变，`check_parity_matrix.py` PASS）；父仓 bump＝zh-cloud PR **!268**
+      develop `5fb2d8b550c8`（Issue #267 已关，两个 gitlink 现读为 FL `d6c88b09dad1` / docs `587b437f83c5`）。
+      本行仍「部分」：剩下两面（拖动转子任务＝FL #590、拖「+」建子任务＝#591）。
