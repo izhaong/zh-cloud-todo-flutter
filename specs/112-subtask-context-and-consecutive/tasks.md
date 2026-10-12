@@ -24,8 +24,13 @@
       九条全绿。第二版改成直接把回执置 null 才红。⇒ 每次变异先问"它到底改了哪一侧"，别把"跑完没红"当"测试无效"。
 - [x] T007 结构约束复算（守卫复制两份在控件层测不出来，只能这样钉）：
       `git grep -c 已达最大嵌套层数 -- lib` ⇒ 只有 `lib/features/task/subtask_flow.dart:1` 一处
-- [ ] T008 门禁（跑在最后一笔代码提交之后）：`dart format` 只跑本轮文件；`flutter analyze --no-pub`、
-      全量 `flutter test --no-pub`（基线 1807 通过 / 26 跳过 / 1 失，那 1 失是主干存量红
-      `test/tooling/raw_error_text_gate_test.dart`）、golden `flutter test test/visual/todo_workspace_golden_test.dart` ⇒ 待填
+- [x] T008 门禁（三项都跑在最后一笔**代码**提交 `c54aedef` 之后；其后 `9d2ad02d` 只动本目录两份 md，
+      `git diff --name-only c54aedef..HEAD` 为证）：`dart format` 只跑本轮文件，跑前逐文件证过
+      `task_detail_pane.dart`/`task_quick_add_sheet.dart`/`task_row_host.dart` 在 `origin/develop` 字节上已是
+      格式化干净的（`--set-exit-if-changed` rc=0、0 changed）；`flutter analyze --no-pub` ⇒ **No issues found**；
+      全量 `flutter test --no-pub` ⇒ **1816 通过 / 26 跳过 / 1 失**，那 1 失是主干存量红
+      `test/tooling/raw_error_text_gate_test.dart`（两条 Finding 逐字在 `origin/develop` 上，FL #569 家族，本分支没碰）；
+      通过数与上一轮 1807 差 **9** = 本轮新增用例数（复算 `grep -c "testWidgets(" test/features/task/subtask_context_and_consecutive_test.dart` ⇒ 9）；
+      golden ⇒ **9 张全过**；门禁后 `git status --porcelain` 为空（没有 pub get 顺手改 lock 文件）
 - [ ] T009 收口：push → PR（Refs #589）→ 合并 → #589 关单 → 矩阵 #23 追记（四面减到两面，状态仍「部分」）
       → docs 死锚订正 → 父仓 bump
