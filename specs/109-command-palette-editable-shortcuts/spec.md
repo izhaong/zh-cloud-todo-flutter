@@ -66,4 +66,4 @@
 - **第一版探针抓出的一处自欺**：`_run` 里那句 `if (!command.enabled) return;` 摘掉后全绿——
   点击那条路径本来就被 `ListTile.enabled`（onTap 置空）拦住，这句闸门拦不到任何走得到的路径。
   已删除该重复闸门，并补一条「首条禁用 ⇒ 回车执行下一条可用命令」的用例，
-  把判据压在真正各管一条路径的两处闸门上（`ListTile.enabled` 管点击、`where(enabled)` 管回车）。
+  把判据分别压在点击与回车这两条路径各自的闸门上：前者是 `ListTile.enabled`，后者是 `where(enabled)`。
