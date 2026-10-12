@@ -51,18 +51,32 @@
 
 ## 本轮自纠记录（错过三次，都留下读数）
 
-1. **坐标带手算**：第一版在落点里用 `details.offset` 算"右下"，14 条凡是要求命中的全红 ——
-   SDK 那个字段是 `globalPosition - dragStartPoint`（`drag_target.dart:893`），不是全局指针。
-   改成几何落点后同批用例转绿；结论写进 `spec.md` 需求 1。
+1. **坐标带手算**：第一版在落点里用 `details.offset` 算"右下"，实测读数 `+3 -7`（十个用例七个红）——
+   因为 SDK 那个字段是 `globalPosition - dragStartPoint`，不是全局指针（外部证据：本机 Flutter 3.44.8
+   stable 的 drag target 实现里那句 `_lastOffset` 赋值；它不在本仓 git 索引里，所以不当仓内锚点用）。
+   改成几何落点后同一批用例转绿；结论写进 `spec.md` 需求 1。
 2. **`findRenderObject` 拿错尺寸**：State 的 context 向上找的是祖先 RenderObject（整张列表的滚动容器），
    拿它当行尺寸会把象限算成"整屏右下"。第一版的象限判因此恒不命中。
 3. **两条用例的第一版各自测错**：窄屏那条没等 1.3 倍字号重排就量行矩形 ⇒ 落点掉到别行，读数
    `Expected: 'visual-task-today-primary' Actual: 'visual-task-today-secondary'`；五层那条只挂了四层
-   （`depthOf` 是 0 基，四层正好五级、合法不拒）⇒ 量出来是"拖成功了"而不是被拒。两处都已改正并在用例注释里写明。
+   （`depthOf` 是 0 基，四层正好五级、合法不拒）⇒ 量出来是"拖成功了"而不是被拒。
+      都已改正，注释分别写在对应用例自己的上方（「320px + 1.3 倍字号」与「真仓储的五层上限」）。
 4. **自己引入的门禁失项**：第一版把 `error.message` 插进文案，`raw_error_text_gate_test` 从 2 条失项变 3 条；
    改走 `describeError` 后回到那 2 条存量。
 
 ## 门禁读数（跑在最后一笔代码提交之后）
 
-复算：`flutter analyze --no-pub` 与 `flutter test --no-pub`（全量），失项清单以日志实际输出为准。
-本文件写完即把 `spec.md` 与 `tasks.md` 作为纯 markdown 提交，代码字节不再变，故下面的数字承接的正是这笔之后的树。
+| 门禁 | 实际输出 |
+| --- | --- |
+| `flutter analyze --no-pub` | `No issues found!`，退出码 0 |
+| `flutter test --no-pub`（不加 tag 过滤） | `+1834 ~26 -1: Some tests failed.` ⇒ 1834 通过、26 跳过、1 失 |
+| 那 1 失是哪条 | `test/tooling/raw_error_text_gate_test.dart: lib 下没有任何文案在插异常原文` |
+| 它的失项条数 | `Finding:` 行只有 2 条，都在 `lib/core/update/desktop_update_io.dart`（`:24`、`:34`），存量红由 FL **#569** 跟踪（本轮没并进去修）；本轮自己插进去的第 3 条已改走 `describeError` |
+| 黄金基线 | `flutter test --no-pub test/visual/todo_workspace_golden_test.dart` ⇒ `+9: All tests passed!`（未带 `--update-goldens`） |
+| 本轮新增用例 | `grep -c "testWidgets(" test/features/task/task_subtask_drag_test.dart` ⇒ 18 |
+| 探针跑完的工作树 | `git status --short` ⇒ 空（十四发每发都从 `cp` 备份还原并复验） |
+
+⚠️ 上面第 2 行与第 5 行是**两次不同的运行**：不加参数的全量 `flutter test` 里没有那 9 张黄金基线
+（`tags: ['golden']` 被排除，全量日志里 `follows the workspace visual contract` 出现 0 次，复算：
+`grep -c "follows the workspace visual contract" <全量日志>` ⇒ 0）⇒ "全量绿"这句话不含视觉契约，
+视觉类改动要按第 5 行单独点名跑。这条口径本身记在 `spec.md` 需求 8。

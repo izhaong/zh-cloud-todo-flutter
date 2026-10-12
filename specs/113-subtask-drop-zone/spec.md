@@ -35,10 +35,12 @@
 1. **「右下方」用几何实现，不用坐标手算。** 命中区是行自身的右下 `0.5×0.5` 象限
    （`Positioned.fill` + `FractionallySizedBox(widthFactor: 0.5, heightFactor: 0.5,
    alignment: Alignment.bottomRight)`，见 `lib/features/task/task_subtask_drop.dart`）。
-   这不是省事：本仓 SDK（Flutter 3.44.8 stable）的 `DragTargetDetails.offset` 量的是
-   `packages/flutter/lib/src/widgets/drag_target.dart:893` 那句 `_lastOffset = globalPosition - dragStartPoint`，
-   源没设 `dragAnchorStrategy` 时 `dragStartPoint` 是 `centerDragAnchorStrategy` 的返回值而非全局指针 ⇒
-   拿它当全局坐标算象限必错。第一版就这么写过，14 条用例里凡是"落点要命中"的全红。
+   这不是省事：本机 SDK（Flutter 3.44.8 stable）里 `DragTargetDetails.offset` 取的是 drag target
+   实现内部那句 `_lastOffset = globalPosition - dragStartPoint`，源没设 `dragAnchorStrategy` 时
+   `dragStartPoint` 是 `centerDragAnchorStrategy` 的返回值而不是全局指针位置 ⇒
+   拿它当全局坐标算象限必错。**这是外部证据（SDK 源码，不在本仓 git 索引里，故不写成仓内锚点）**，
+   本仓内的证据是第一版实测读数：那条实现跑全文件是 `+3 -7`（十个用例里七个红），
+   换成几何落点后同一批用例转绿。
 2. **命中区扩不扩得开要能测。** 「同一次拖、落在左上象限：不建立父子关系」这条就是象限判据的活证据；
    变异探针 P1 把象限扩成整行，只有这一条红（见 `tasks.md`）。
 3. **只加落点，不加第二个拖出源。** 沿用清单行已有的 `LongPressDraggable<TodoTask>`；
@@ -59,7 +61,12 @@
    `test/tooling/raw_error_text_gate_test.dart` 判成失项（第一版就被判过，见 `tasks.md` 的自纠记录）。
 8. **新视觉只在拖拽候选态出现。** 静止态一行都不变色 ⇒ 九张黄金基线一张都不用重录
    （`specs/112-subtask-context-and-consecutive` 与 `specs/032` T013 都记着"改可见列表布局需先申请重录"
-   这条前置；本轮没改静态布局，前置不适用，全量 `flutter test` 里 `test/visual/todo_workspace_golden_test.dart` 未更新基线即通过）。
+   这条前置）。**这句是量出来的**：`flutter test --no-pub test/visual/todo_workspace_golden_test.dart`
+   ⇒ `+9: All tests passed!`，没带 `--update-goldens`，基线字节一个字没动。
+   ⚠️ 顺带记一条测量口径的坑：这 9 条挂着 `tags: ['golden']`，**不在不加参数的全量 `flutter test` 里跑**
+   （本轮全量日志里 `follows the workspace visual contract` 出现 0 次；`ci.yml:39` 也是
+   `--exclude-tags 'golden || performance'`）⇒ 只看"全量绿"等于没看过黄金基线，
+   落点这类视觉改动必须单独点名跑一遍。
 
 ## 交付检查四件套（逐格落，不许写"本面不适用"）
 
