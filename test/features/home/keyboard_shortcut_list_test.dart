@@ -132,7 +132,7 @@ void main() {
             manager: TodoShortcutManager(
               todoShortcutActivators(
                 forKind: (kind) => switch (kind) {
-                  TodoShortcutKind.openSearch => _LocalIntentA(),
+                  TodoShortcutKind.openCommandPalette => _LocalIntentA(),
                   TodoShortcutKind.showShortcuts => _LocalIntentB(),
                 },
               ),
@@ -229,7 +229,7 @@ void main() {
     // 复核第二轮 NIT5：这条比下面的字符串去重更硬（不依赖 Diagnosticable.toString 的 debug 排版）。
     expect(
       todoShortcutActivators(
-        forKind: (kind) => kind == TodoShortcutKind.openSearch
+        forKind: (kind) => kind == TodoShortcutKind.openCommandPalette
             ? _LocalIntentA()
             : _LocalIntentB(),
       ).length,

@@ -8,6 +8,7 @@ import 'package:drift/drift.dart' show Value;
 
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/core/theme/app_theme.dart';
+import 'package:zh_cloud_todo_flutter/features/home/command_palette.dart';
 import 'package:zh_cloud_todo_flutter/features/home/home_shell.dart';
 import 'package:zh_cloud_todo_flutter/features/task/tasks_by_list_page.dart';
 import 'package:zh_cloud_todo_flutter/features/task/task_search_page.dart';
@@ -554,24 +555,36 @@ void main() {
     expect(find.text('回复设计反馈并确认下一步'), findsOneWidget);
   });
 
-  testWidgets('wide workspace opens local search with control K', (
-    tester,
-  ) async {
-    await pumpTodoVisualScenario(
-      tester,
-      viewport: TodoVisualViewports.wide,
-      fixtureSet: TodoVisualFixtureSet.populated,
-      child: const HomeShell(),
-    );
+  testWidgets(
+    'wide workspace reaches local search through the command palette',
+    (tester) async {
+      await pumpTodoVisualScenario(
+        tester,
+        viewport: TodoVisualViewports.wide,
+        fixtureSet: TodoVisualFixtureSet.populated,
+        child: const HomeShell(),
+      );
 
-    expect(find.byType(TaskSearchPage), findsNothing);
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-    await tester.pumpAndSettle();
+      expect(find.byType(TaskSearchPage), findsNothing);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
 
-    expect(find.byType(TaskSearchPage), findsOneWidget);
-  });
+      // 嘀嗒《08-桌面快捷键.md》:9 把 ⌘K 定给指令菜单 ⇒ 搜索不再是键位的直接落点，
+      // 而是面板里的一条命令。这里量的是"换语义没把搜索弄丢"。
+      expect(find.byType(CommandPalette), findsOneWidget);
+      await tester.enterText(
+        find.byKey(const Key('todo-command-palette-field')),
+        '全局搜索',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('todo-command-palette-item-全局搜索')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(TaskSearchPage), findsOneWidget);
+    },
+  );
 
   testWidgets('workspace sort selection persists an isolated view preference', (
     tester,

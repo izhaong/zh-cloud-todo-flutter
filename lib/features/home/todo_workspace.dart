@@ -10,6 +10,7 @@ import '../../core/shortcuts/todo_shortcut_registry.dart';
 import '../shell/section.dart';
 import '../shell/sidebar.dart';
 import '../task/task_search_page.dart';
+import 'command_palette.dart';
 import 'keyboard_shortcuts_dialog.dart';
 
 enum TodoWorkspaceProfile { wide, compact, tablet, mobile }
@@ -60,8 +61,12 @@ class TodoWorkspace extends StatelessWidget {
     this.searchEnabled = true,
     this.companion,
     this.onSectionContextMenu,
+    this.paletteCommands = const <TodoPaletteCommand>[],
   });
 
+  /// 指令菜单里「前往各模块」那批条目：只有持有导航回调的 `HomeShell` 拼得出来，
+  /// 面板本身不碰 provider 与路由（这样它能被单独测）。
+  final List<TodoPaletteCommand> paletteCommands;
   final double width;
   final Section section;
   final SmartList smart;
@@ -112,17 +117,37 @@ class TodoWorkspace extends StatelessWidget {
       manager: TodoShortcutManager(
         todoShortcutActivators(
           forKind: (kind) => switch (kind) {
-            TodoShortcutKind.openSearch => _OpenGlobalSearchIntent(),
+            TodoShortcutKind.openCommandPalette => _OpenCommandPaletteIntent(),
             TodoShortcutKind.showShortcuts => _ShowKeyboardShortcutsIntent(),
           },
         ),
       ),
       child: Actions(
         actions: {
-          _OpenGlobalSearchIntent: CallbackAction<_OpenGlobalSearchIntent>(
+          _OpenCommandPaletteIntent: CallbackAction<_OpenCommandPaletteIntent>(
             onInvoke: (_) {
-              if (!searchEnabled) return null;
-              unawaited(_openSearch(context));
+              unawaited(
+                showCommandPalette(
+                  context,
+                  commands: <TodoPaletteCommand>[
+                    ...paletteCommands,
+                    // 嘀嗒把 ⌘K 定给指令菜单，搜索就改作面板里的一条命令（AppBar 那枚按钮不变），
+                    // 而不是再占一个键位；功能模块关掉搜索时连这条都不列。
+                    if (searchEnabled)
+                      TodoPaletteCommand(
+                        label: '全局搜索',
+                        hint: '按名称或关键词搜索任务',
+                        run: () => unawaited(_openSearch(context)),
+                      ),
+                    TodoPaletteCommand(
+                      label: '显示键盘快捷键',
+                      hint: '列出现今生效的键位',
+                      run: () =>
+                          unawaited(showKeyboardShortcutsDialog(context)),
+                    ),
+                  ],
+                ),
+              );
               return null;
             },
           ),
@@ -489,9 +514,7 @@ class TodoRail extends StatelessWidget {
 
 class _ShowKeyboardShortcutsIntent extends Intent {}
 
-class _OpenGlobalSearchIntent extends Intent {
-  const _OpenGlobalSearchIntent();
-}
+class _OpenCommandPaletteIntent extends Intent {}
 
 class _RailButton extends StatefulWidget {
   const _RailButton({

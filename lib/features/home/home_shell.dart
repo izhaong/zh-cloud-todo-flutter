@@ -34,6 +34,7 @@ import 'workspace_companion.dart';
 import '../tag/tag_page.dart';
 import 'sync_recovery_banner.dart';
 import 'recommendation_panel.dart';
+import 'command_palette.dart';
 import 'todo_workspace.dart';
 import '../../features/task/quick_add_batch_reminders.dart';
 
@@ -712,6 +713,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
           onOpenReminders: _openReminders,
           syncStatus: _syncStatus,
           searchEnabled: searchEnabled,
+          paletteCommands: _paletteCommands(),
           onSelectSmart: _selectSmart,
           onSelectList: _selectList,
           onOpenTags: _openTags,
@@ -761,6 +763,46 @@ class _HomeShellState extends ConsumerState<HomeShell>
       case SmartList.trash:
         return null;
     }
+  }
+
+  /// 指令菜单的「前往各模块」条目（嘀嗒《08-桌面快捷键.md》:9「输入名称，轻松前往
+  /// 应用内各大功能模块」）。
+  ///
+  /// 只列**真的去得到**的目标：四象限/看板这些是任务模块里的视图，壳层没有切视图的通道，
+  /// 列出来就是一条点了不动的假命令 ⇒ 不列（偏差登记在 specs/109）。
+  /// 功能模块关掉的（番茄专注等）也不列，与第 285 轮那套开关同一口径。
+  List<TodoPaletteCommand> _paletteCommands() {
+    final pomodoroModuleEnabled =
+        ref
+            .watch(featureModuleProvider(TodoFeatureModule.pomodoro))
+            .valueOrNull ??
+        true;
+    return <TodoPaletteCommand>[
+      for (final section in Section.values)
+        TodoPaletteCommand(
+          label: '前往「${section.label}」',
+          run: () => _selectSection(section),
+        ),
+      for (final smart in SmartList.values)
+        TodoPaletteCommand(
+          label: '智能清单「${smart.label}」',
+          run: () => _selectSmart(smart),
+        ),
+      if (pomodoroModuleEnabled)
+        TodoPaletteCommand(label: '番茄专注', hint: '计时与专注记录', run: _openPomodoro),
+      TodoPaletteCommand(label: '习惯打卡', run: _openHabit),
+      TodoPaletteCommand(label: '倒数纪念日', run: _openCountdown),
+      TodoPaletteCommand(label: '笔记', run: _openNotes),
+      TodoPaletteCommand(label: '标签', run: _openTags),
+      TodoPaletteCommand(label: '过滤器', run: _openFilters),
+      TodoPaletteCommand(label: '提醒', run: _openReminders),
+      TodoPaletteCommand(label: '设置', run: _openSettings),
+      TodoPaletteCommand(
+        label: '立即同步',
+        hint: '推送本地改动并拉回服务端变更',
+        run: () => unawaited(_triggerSync()),
+      ),
+    ];
   }
 
   /// 单个模块的面。并列时主区与副栏都走这里，避免两份渲染分叉。
