@@ -4,7 +4,7 @@ import 'package:flutter/widgets.dart';
 /// 嘀嗒《03-特色功能/08-桌面快捷键.md》：`:18`「你可以输入「?」，方便的查看快捷键列表」。
 /// 这份注册表是**唯一事实源**：工作区的 `Shortcuts` 映射与对话框里的列表都由它生成，
 /// 这样界面永远不会列出一个其实没绑定的键位。
-enum TodoShortcutKind { openSearch, showShortcuts }
+enum TodoShortcutKind { openCommandPalette, showShortcuts }
 
 @immutable
 class TodoShortcutBinding {
@@ -26,14 +26,19 @@ class TodoShortcutBinding {
 
 const List<TodoShortcutBinding> todoShortcutBindings = [
   TodoShortcutBinding(
-    kind: TodoShortcutKind.openSearch,
-    label: '打开全局搜索',
+    kind: TodoShortcutKind.openCommandPalette,
+    // 嘀嗒《03-特色功能/08-桌面快捷键.md》:9「使用 ⌘+K 或者 Ctrl+K 打开「指令菜单」，
+    // 输入名称，轻松前往应用内各大功能模块」。原先这里绑的是全局搜索（语义不等），
+    // 本轮换成面板，搜索改作面板里的一条命令（specs/109 裁定）。
+    label: '打开指令菜单',
     display: 'Ctrl+K',
     activator: SingleActivator(LogicalKeyboardKey.keyK, control: true),
   ),
   TodoShortcutBinding(
-    kind: TodoShortcutKind.openSearch,
-    label: '打开全局搜索',
+    kind: TodoShortcutKind.openCommandPalette,
+    // 同一动作的第二种布局：`:9` 把 ⌘+K 与 Ctrl+K 并列，两条都要绑，
+    // 展示由 todoShortcutRows 去重后各留一行。
+    label: '打开指令菜单',
     display: '⌘K',
     activator: SingleActivator(LogicalKeyboardKey.keyK, meta: true),
   ),
