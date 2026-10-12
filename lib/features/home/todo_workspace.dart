@@ -62,11 +62,20 @@ class TodoWorkspace extends StatelessWidget {
     this.companion,
     this.onSectionContextMenu,
     this.paletteCommands = const <TodoPaletteCommand>[],
+    this.shortcutOverrides = const <String, String>{},
+    this.onSaveShortcut,
   });
 
   /// 指令菜单里「前往各模块」那批条目：只有持有导航回调的 `HomeShell` 拼得出来，
   /// 面板本身不碰 provider 与路由（这样它能被单独测）。
   final List<TodoPaletteCommand> paletteCommands;
+
+  /// 用户改过的键位覆盖表（嘀嗒《08-桌面快捷键.md》:26「可以修改」）。
+  /// 空表 = 全部用注册表默认 ⇒ `Shortcuts` 映射与快捷键界面都按这张表算，两边不会说两套话。
+  final Map<String, String> shortcutOverrides;
+
+  /// 改键的落库通道；null ⇒ 快捷键界面只读（本地数据库尚未就绪）。
+  final Future<void> Function(String kindName, String? spec)? onSaveShortcut;
   final double width;
   final Section section;
   final SmartList smart;
@@ -120,6 +129,7 @@ class TodoWorkspace extends StatelessWidget {
             TodoShortcutKind.openCommandPalette => _OpenCommandPaletteIntent(),
             TodoShortcutKind.showShortcuts => _ShowKeyboardShortcutsIntent(),
           },
+          overrides: shortcutOverrides,
         ),
       ),
       child: Actions(
@@ -142,8 +152,7 @@ class TodoWorkspace extends StatelessWidget {
                     TodoPaletteCommand(
                       label: '显示键盘快捷键',
                       hint: '列出现今生效的键位',
-                      run: () =>
-                          unawaited(showKeyboardShortcutsDialog(context)),
+                      run: () => unawaited(_showKeyboardShortcuts(context)),
                     ),
                   ],
                 ),
@@ -154,7 +163,7 @@ class TodoWorkspace extends StatelessWidget {
           _ShowKeyboardShortcutsIntent:
               CallbackAction<_ShowKeyboardShortcutsIntent>(
                 onInvoke: (_) {
-                  unawaited(showKeyboardShortcutsDialog(context));
+                  unawaited(_showKeyboardShortcuts(context));
                   return null;
                 },
               ),
@@ -415,6 +424,16 @@ class TodoWorkspace extends StatelessWidget {
       MaterialPageRoute(builder: (_) => const TaskSearchPage()),
     );
     if (result != null) onSearchResultSelected?.call(result);
+  }
+
+  /// 快捷键界面：`?`、指令菜单里那条命令、设置页那三项入口都走这里，
+  /// 所以"生效键位"与"落库通道"只能在这一处传，别在三处各写一遍（会写散）。
+  Future<void> _showKeyboardShortcuts(BuildContext context) {
+    return showKeyboardShortcutsDialog(
+      context,
+      overrides: shortcutOverrides,
+      onSave: onSaveShortcut,
+    );
   }
 }
 

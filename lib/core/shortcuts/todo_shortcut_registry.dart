@@ -1,9 +1,12 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import 'todo_shortcut_combo.dart';
+
 /// 嘀嗒《03-特色功能/08-桌面快捷键.md》：`:18`「你可以输入「?」，方便的查看快捷键列表」。
-/// 这份注册表是**唯一事实源**：工作区的 `Shortcuts` 映射与对话框里的列表都由它生成，
-/// 这样界面永远不会列出一个其实没绑定的键位。
+/// 这份注册表是**默认值**的唯一事实源：工作区的 `Shortcuts` 映射与对话框里的列表都由它生成，
+/// 这样界面永远不会列出一个其实没绑定的键位。`:26`「在设置里查看快捷键界面，可以修改」
+/// 的"改键"由覆盖表兑现：生效行见 [todoShortcutRowsFor]，生效映射见 [todoShortcutActivators]。
 enum TodoShortcutKind { openCommandPalette, showShortcuts }
 
 @immutable
@@ -73,36 +76,117 @@ class TodoShortcutRow {
   final List<String> displays;
 }
 
-List<TodoShortcutRow> get todoShortcutRows {
+/// 注册表里出现过的动作，按注册表顺序去重 ⇒ 行的顺序永远跟着默认值走，不由界面另数。
+List<TodoShortcutKind> get _kindsInRegistryOrder {
   final order = <TodoShortcutKind>[];
-  final labels = <TodoShortcutKind, String>{};
-  final displays = <TodoShortcutKind, List<String>>{};
   for (final binding in todoShortcutBindings) {
-    if (!displays.containsKey(binding.kind)) {
-      order.add(binding.kind);
-      labels[binding.kind] = binding.label;
-      displays[binding.kind] = <String>[];
-    }
-    if (!displays[binding.kind]!.contains(binding.display)) {
-      displays[binding.kind]!.add(binding.display);
-    }
+    if (!order.contains(binding.kind)) order.add(binding.kind);
   }
+  return order;
+}
+
+/// 某个动作的默认显示文案（去重后可能有多条，如 `Ctrl+K` 与 `⌘K`）。
+List<String> _defaultDisplays(TodoShortcutKind kind) {
+  final displays = <String>[];
+  for (final binding in todoShortcutBindings) {
+    if (binding.kind != kind) continue;
+    if (!displays.contains(binding.display)) displays.add(binding.display);
+  }
+  return displays;
+}
+
+/// 覆盖表里这一档是不是**真的生效**：形状要解析得出、键位要认得出，
+/// 而且必须带 Ctrl/⌘/Alt —— 手工写进库里的裸键覆盖一律当"没有覆盖"，
+/// 否则用户会被自己存的值坑到再也按不出这个功能。
+TodoShortcutCombo? _effectiveOverride(
+  TodoShortcutKind kind,
+  Map<String, String> overrides,
+) {
+  final combo = TodoShortcutCombo.parse(overrides[kind.name]);
+  if (combo == null || !combo.hasUsableModifier || combo.activator == null) {
+    return null;
+  }
+  return combo;
+}
+
+/// 这个动作**当前生效**的激活器集合：有覆盖就只认覆盖那一条，否则认注册表里的默认若干条。
+List<ShortcutActivator> effectiveShortcutActivators(
+  TodoShortcutKind kind,
+  Map<String, String> overrides,
+) {
+  final activator = _effectiveOverride(kind, overrides)?.activator;
+  if (activator != null) return [activator];
   return [
-    for (final kind in order)
+    for (final binding in todoShortcutBindings)
+      if (binding.kind == kind) binding.activator,
+  ];
+}
+
+/// 嘀嗒 :26 的"可以修改"要能在界面上说出**现在按什么键**，所以行内容由生效值算，
+/// 不是把注册表抄一遍。
+List<TodoShortcutRow> todoShortcutRowsFor(Map<String, String> overrides) {
+  final rows = <TodoShortcutRow>[];
+  for (final kind in _kindsInRegistryOrder) {
+    final display = _effectiveOverride(kind, overrides)?.display;
+    rows.add(
       TodoShortcutRow(
         kind: kind,
-        label: labels[kind]!,
-        displays: List.unmodifiable(displays[kind]!),
+        label: shortcutLabelOf(kind),
+        displays: List.unmodifiable(
+          display == null ? _defaultDisplays(kind) : <String>[display],
+        ),
       ),
-  ];
+    );
+  }
+  return rows;
+}
+
+/// 没有任何覆盖时的行（= 今天的行为）。
+List<TodoShortcutRow> get todoShortcutRows =>
+    todoShortcutRowsFor(const <String, String>{});
+
+/// 动作名取自注册表；注册表里没有这个动作的绑定时回枚举名（新增 kind 忘了配绑定
+/// 也不至于把界面弄崩）。
+String shortcutLabelOf(TodoShortcutKind kind) {
+  for (final binding in todoShortcutBindings) {
+    if (binding.kind == kind) return binding.label;
+  }
+  return kind.name;
+}
+
+/// 改键校验：能生效回 null，否则回一句"为什么不行"。
+/// 两条规则都是嘀嗒那句「显示为灰色的快捷键不能修改」（`:29`）在本端的兑现方式，
+/// 理由见 [TodoShortcutCombo.hasUsableModifier] 与撞键那支。
+String? validateShortcutOverride({
+  required TodoShortcutKind kind,
+  required TodoShortcutCombo? combo,
+  required Map<String, String> overrides,
+}) {
+  if (combo == null) return '这个组合键认不出来，请重新按';
+  if (!combo.hasUsableModifier) {
+    return '必须带上 Ctrl、⌘ 或 Alt：裸键和只按 Shift 的键在输入框里要让位给打字，'
+        '改到那种键等于把这个功能藏起来';
+  }
+  final spec = combo.spec;
+  for (final other in _kindsInRegistryOrder) {
+    if (other == kind) continue;
+    final taken = effectiveShortcutActivators(
+      other,
+      overrides,
+    ).any((activator) => TodoShortcutCombo.specOfActivator(activator) == spec);
+    if (taken) return '这个组合已经是「${shortcutLabelOf(other)}」的键位，先给它换一个';
+  }
+  return null;
 }
 
 Map<ShortcutActivator, Intent> todoShortcutActivators({
   required Intent Function(TodoShortcutKind kind) forKind,
+  Map<String, String> overrides = const <String, String>{},
 }) {
   return <ShortcutActivator, Intent>{
-    for (final binding in todoShortcutBindings)
-      binding.activator: forKind(binding.kind),
+    for (final kind in _kindsInRegistryOrder)
+      for (final activator in effectiveShortcutActivators(kind, overrides))
+        activator: forKind(kind),
   };
 }
 

@@ -35,6 +35,12 @@ class SettingsRoute extends ConsumerWidget {
     final weekStartLabel = WeekStart.labelOf(
       resolveWeekStartFirstDay(ref.watch(weekStartProvider)),
     );
+    // 嘀嗒《08-桌面快捷键.md》:26「在设置里查看快捷键界面，可以修改」：
+    // 设置页是这条的落点，所以要把生效键位与落库通道一起递给弹层。
+    final shortcutRepo = ref.watch(sidebarVisibilityRepositoryProvider);
+    final shortcutOverrides =
+        ref.watch(shortcutOverridesProvider).valueOrNull ??
+        const <String, String>{};
     return Scaffold(
       appBar: AppBar(title: const Text('设置')),
       body: ListView(
@@ -137,9 +143,21 @@ class SettingsRoute extends ConsumerWidget {
                 _Tile(
                   icon: Icons.keyboard_outlined,
                   title: '键盘快捷键',
-                  subtitle: '查看当前可用的组合键（?）',
+                  // 副标题不再写「（?）」：键位可以改之后，把某个默认字符印在这里就会说谎。
+                  subtitle: shortcutRepo == null
+                      ? '查看当前生效的组合键（本地数据库尚未就绪，暂时改不了）'
+                      : '查看与修改当前生效的组合键',
                   colors: colors,
-                  onTap: () => showKeyboardShortcutsDialog(context),
+                  onTap: () => showKeyboardShortcutsDialog(
+                    context,
+                    overrides: shortcutOverrides,
+                    onSave: shortcutRepo == null
+                        ? null
+                        : (kindName, spec) => shortcutRepo.saveShortcut(
+                            kindName: kindName,
+                            combo: spec,
+                          ),
+                  ),
                 ),
               ],
             ),

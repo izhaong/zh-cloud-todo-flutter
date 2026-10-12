@@ -675,6 +675,12 @@ class _HomeShellState extends ConsumerState<HomeShell>
                 .watch(featureModuleProvider(TodoFeatureModule.search))
                 .valueOrNull ??
             true;
+        // 改键覆盖（嘀嗒《08-桌面快捷键.md》:26「可以修改」）：工作区的 Shortcuts 映射与
+        // 快捷键界面都读这一份 ⇒ 存了却不生效的那种"样子货"不会出现。
+        final shortcutRepo = ref.watch(sidebarVisibilityRepositoryProvider);
+        final shortcutOverrides =
+            ref.watch(shortcutOverridesProvider).valueOrNull ??
+            const <String, String>{};
         return TodoWorkspace(
           width: width,
           section: layoutSection,
@@ -714,6 +720,11 @@ class _HomeShellState extends ConsumerState<HomeShell>
           syncStatus: _syncStatus,
           searchEnabled: searchEnabled,
           paletteCommands: _paletteCommands(),
+          shortcutOverrides: shortcutOverrides,
+          onSaveShortcut: shortcutRepo == null
+              ? null
+              : (kindName, spec) =>
+                    shortcutRepo.saveShortcut(kindName: kindName, combo: spec),
           onSelectSmart: _selectSmart,
           onSelectList: _selectList,
           onOpenTags: _openTags,
