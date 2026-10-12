@@ -1,6 +1,8 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/attachment_upload_api.dart';
 import '../../core/api/error_text.dart';
 import '../../core/db/app_database.dart';
 import '../../state/providers.dart';
@@ -106,9 +108,18 @@ Decoration? listBackgroundDecoration(TodoList? list) {
 
 /// 背景设置弹层：四样式单选 + 保存。
 class ListBackgroundSheet extends ConsumerStatefulWidget {
-  const ListBackgroundSheet({super.key, required this.list});
+  const ListBackgroundSheet({
+    super.key,
+    required this.list,
+    this.pickImage,
+    this.uploadImage,
+  });
 
   final TodoList list;
+
+  /// 图片档的选图与上传通道（测试注入用；不传走相册选择 + 文件服务上传）。
+  final Future<String?> Function()? pickImage;
+  final Future<String> Function(String localPath, String name)? uploadImage;
 
   static Future<void> show(BuildContext context, TodoList list) {
     return showModalBottomSheet<void>(
@@ -129,6 +140,7 @@ class _ListBackgroundSheetState extends ConsumerState<ListBackgroundSheet> {
   late String _gradient;
   late TextEditingController _imageUrl;
   String? _error;
+  bool _uploading = false;
 
   @override
   void initState() {
@@ -147,6 +159,57 @@ class _ListBackgroundSheetState extends ConsumerState<ListBackgroundSheet> {
   void dispose() {
     _imageUrl.dispose();
     super.dispose();
+  }
+
+  /// 相册选图 → 上传拿 URL → 填回「图片地址」那一格（保存仍走 `setBackground`）。
+  Future<void> _pickAndUpload() async {
+    final pick =
+        widget.pickImage ??
+        () async {
+          final result = await FilePicker.pickFiles(type: FileType.image);
+          if (result == null || result.files.isEmpty) return null;
+          return result.files.first.path;
+        };
+    setState(() {
+      _uploading = true;
+      _error = null;
+    });
+    String? localPath;
+    try {
+      localPath = await pick();
+    } on Object catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _uploading = false;
+        _error = '没能选好图片：${describeError(e)}，背景还是原来的';
+      });
+      return;
+    }
+    if (localPath == null || localPath.isEmpty) {
+      if (!mounted) return;
+      setState(() => _uploading = false);
+      return;
+    }
+    final name = localPath.split('/').last;
+    final upload =
+        widget.uploadImage ??
+        (path, fileName) => DioAttachmentUploadApi(
+          ref.read(apiClientProvider),
+        ).uploadFile(localPath: path, name: fileName);
+    try {
+      final url = await upload(localPath, name);
+      if (!mounted) return;
+      setState(() {
+        _uploading = false;
+        _imageUrl.text = url;
+      });
+    } on Object catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _uploading = false;
+        _error = '图片上传失败：${describeError(e)}，可以先粘别的地址或切回其它背景';
+      });
+    }
   }
 
   Future<void> _save() async {
@@ -265,13 +328,33 @@ class _ListBackgroundSheetState extends ConsumerState<ListBackgroundSheet> {
             if (_type == 'image')
               Padding(
                 padding: const EdgeInsets.only(left: 16, bottom: 8),
-                child: TextField(
-                  key: const Key('todo-list-background-image-url'),
-                  controller: _imageUrl,
-                  decoration: const InputDecoration(
-                    labelText: '图片地址',
-                    border: OutlineInputBorder(),
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextField(
+                      key: const Key('todo-list-background-image-url'),
+                      controller: _imageUrl,
+                      decoration: const InputDecoration(
+                        labelText: '图片地址',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    // 嘀嗒《02-用清单管理任务》:111 的图片档给的是相册选图，不是让用户
+                    // 手贴地址 ⇒ 选完上传拿到 URL 再填回同一格，保存路径不变。
+                    OutlinedButton.icon(
+                      key: const Key('todo-list-background-pick-image'),
+                      onPressed: _uploading ? null : _pickAndUpload,
+                      icon: _uploading
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.photo_library_outlined, size: 18),
+                      label: Text(_uploading ? '上传中…' : '从相册选择'),
+                    ),
+                  ],
                 ),
               ),
             if (_error != null)
