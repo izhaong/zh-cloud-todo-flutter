@@ -23,6 +23,9 @@ import '../../state/repositories/reminder_repository.dart';
 import '../../state/repositories/task_query_repository.dart';
 import '../shell/app_dialog.dart';
 import 'task_detail_page.dart';
+import 'subtask_flow.dart';
+// tagColorFromHex 是个定义在快速添加表文件里的顶层辅助（:370），详情层的标签色块用它。
+// 本轮不动这个摆放（挪进 tag_color.dart 属另一件事），只把这条依赖显式留住。
 import 'task_quick_add_sheet.dart';
 import '../collaboration/task_comments_page.dart';
 import 'task_assign_action.dart';
@@ -1222,22 +1225,12 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
 
   Future<void> _addSubtask(TodoTask t) async {
     final detailTaskId = widget.taskId;
-    final repo = ref.read(taskRepositoryProvider);
-    if (repo == null) return;
-    final messenger = ScaffoldMessenger.of(context);
-    final depth = await repo.depthOf(t.id);
-    if (!mounted || widget.taskId != detailTaskId) return;
-    // §2.2 子任务深度 ≤5 守卫：仅允许在深度 <5 的任务下继续添加子任务。
-    if (depth >= 5) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('已达最大嵌套层数（5），无法继续添加子任务')),
-      );
-      return;
-    }
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => TaskQuickAddSheet(listId: t.listId, parentTaskId: t.id),
+    await addSubtaskFlow(
+      context,
+      ref,
+      t,
+      // 详情面板可以切到别的任务：await 之后身份变了就不该再弹这张表。
+      stillCurrent: () => mounted && widget.taskId == detailTaskId,
     );
   }
 

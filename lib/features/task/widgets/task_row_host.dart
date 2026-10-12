@@ -8,9 +8,10 @@ import '../../../core/time/task_time_mode.dart';
 import '../../../state/providers.dart';
 import '../../pomodoro/pomodoro_page.dart';
 import '../../tag/batch_tag_picker_sheet.dart';
+import '../subtask_flow.dart';
 import 'task_row.dart';
 
-enum _TaskRowContextAction { startPomodoro, tags, more }
+enum _TaskRowContextAction { startPomodoro, tags, addChild, more }
 
 /// Provider-aware adapter that assembles row data and reports task actions.
 class TaskRowHost extends ConsumerStatefulWidget {
@@ -293,6 +294,13 @@ class _TaskRowHostState extends ConsumerState<TaskRowHost> {
           key: Key('todo-task-context-tags'),
           child: Text('标签'),
         ),
+        // 嘀嗒《02-功能指南/01-任务/09-如何管理海量任务/06-多级任务.md》:51
+        // 「右键单击任务，选择「添加子任务」。」
+        const PopupMenuItem(
+          value: _TaskRowContextAction.addChild,
+          key: Key('todo-task-context-add-child'),
+          child: Text('添加子任务'),
+        ),
         const PopupMenuItem(
           value: _TaskRowContextAction.more,
           child: Text('更多操作'),
@@ -306,6 +314,9 @@ class _TaskRowHostState extends ConsumerState<TaskRowHost> {
         return;
       case _TaskRowContextAction.tags:
         await _pickTags(context);
+        return;
+      case _TaskRowContextAction.addChild:
+        await addSubtaskFlow(context, ref, widget.task);
         return;
       case _TaskRowContextAction.more:
         await _showMoreMenu(context);
