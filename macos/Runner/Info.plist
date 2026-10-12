@@ -28,5 +28,9 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>SUFeedURL</key>
+	<string>https://github.com/izhaong/zh-cloud-todo-flutter/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>HDz/gEKmbDr1EYS5vyqmslAWBNY10r5KLGLg5Vn5AEo=</string>
 </dict>
 </plist>
