@@ -118,6 +118,35 @@ void main() {
       );
     });
 
+    testWidgets('回车跳过禁用项，执行下一条可用命令', (tester) async {
+      final ran = <String>[];
+      await openPalette(
+        tester,
+        commands: [
+          TodoPaletteCommand(
+            label: '番茄专注',
+            run: () => ran.add('番茄'),
+            enabled: false,
+            disabledHint: '功能模块里已关闭',
+          ),
+          TodoPaletteCommand(label: '番茄市集', run: () => ran.add('市集')),
+        ],
+      );
+
+      // 两条都含"番茄"，用同一个片段把它们都留在列表里，禁用那条排在首位。
+      await tester.enterText(find.byKey(field), '番茄');
+      await tester.pump();
+      expect(find.byKey(itemKey('番茄专注')), findsOneWidget);
+      expect(find.byKey(itemKey('番茄市集')), findsOneWidget);
+
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(ran, ['市集'], reason: '首条是禁用的 ⇒ 回车要跳到下一条可用的，不能点了不动就当没发生');
+      expect(find.byType(CommandPalette), findsNothing);
+    });
+
     testWidgets('无匹配给出明确空态；清空查询后列表要回来', (tester) async {
       await openPalette(
         tester,

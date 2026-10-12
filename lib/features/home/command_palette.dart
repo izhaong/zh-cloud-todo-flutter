@@ -82,7 +82,8 @@ class _CommandPaletteState extends State<CommandPalette> {
   }
 
   void _run(TodoPaletteCommand command) {
-    if (!command.enabled) return;
+    // 禁用项在这儿拦不住：点击那条路径由 `ListTile.enabled` 让 onTap 失效，
+    // 回车那条路径由 `_runFirstMatch` 的 `where(enabled)` 跳过。
     Navigator.of(context).pop();
     command.run();
   }
