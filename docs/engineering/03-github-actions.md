@@ -8,7 +8,7 @@
 | Workflow    | 文件          | 触发                                                    | 作用                                                     |
 | ----------- | ------------- | ------------------------------------------------------- | -------------------------------------------------------- |
 | **Web**     | `web.yml`     | 推 `develop`（test）/ tag `v*`（prod）/ 手动            | 构建 H5 + SSH 部署宿主机                                 |
-| **Desktop** | `desktop.yml` | 推 `develop`（test 包）/ tag `v*`（prod Release）/ 手动 | 三端 **EXE/MSI/DMG/DEB** 安装包（对齐 RustDesk Release） |
+| **Desktop** | `desktop.yml` | 推 `develop`（test 包）/ tag `v*`（prod Release）/ 手动 | Linux / macOS / Windows / Android / iOS 安装包，tag 挂到 GitHub Release |
 | **CI**      | `ci.yml`      | `develop`/`main` 的 PR 与 push                          | analyze + test（不部署）                                 |
 
 Jenkins（Gitea webhook）仅作备用，见 `01-ci-jenkins.md`。
@@ -24,7 +24,7 @@ GitHub：git push github develop
         ↓
 Actions 自动：
   · web.yml     → todo-test.zh04.com 更新
-  · desktop.yml → 测试环境三端 Artifacts（不建 Release）
+  · desktop.yml → 测试环境各端 Artifacts（不建 Release）
 ```
 
 **生产发版**（Web prod 部署 + 桌面 GitHub Release + 客户端自动更新）：
@@ -39,7 +39,7 @@ git push github v1.0.0
 触发：
 
 - `web.yml` → prod SSH 部署（须已配置 Secrets）
-- `desktop.yml` → 三端 **`.exe` / `.msi` / `.dmg` / `.deb`** + **GitHub Release**（Release 页含 RustDesk 风格下载表格）
+- `desktop.yml` → **`.deb` / `.dmg` / `.exe` / `.msi` / `.apk` / 未签名 `.ipa`**，全部作为 [GitHub Release](https://github.com/izhaong/zh-cloud-todo-flutter/releases) 附件。下载链接形如 `https://github.com/izhaong/zh-cloud-todo-flutter/releases/download/v1.0.0/todo-flutter-1.0.0-android.apk`。桌面客户端自动更新读同一页。
 
 **无本地 tag 时**：Actions → **Desktop** → Run workflow → `build_env=prod`、`create_release=true`、`release_version=1.0.0`。
 
@@ -62,6 +62,17 @@ git push -u github develop
 | `DEPLOY_SSH_USER` | SSH 用户                                      |
 | `DEPLOY_SSH_KEY`  | 私钥（`-----BEGIN OPENSSH PRIVATE KEY-----`） |
 
+仓库级 Secrets（可选，只影响 Android 签名；不配也能打出可侧载的 APK）：
+
+| Secret                       | 说明                                                    |
+| ---------------------------- | ------------------------------------------------------- |
+| `ANDROID_KEYSTORE_BASE64`    | 发布密钥库的 base64；未配置时 APK 使用 debug 签名       |
+| `ANDROID_KEYSTORE_PASSWORD`  | 与上面的密钥库一起配置                                  |
+| `ANDROID_KEY_ALIAS`          | 密钥别名                                                |
+| `ANDROID_KEY_PASSWORD`       | 密钥口令                                                |
+
+iOS 产物是未签名 IPA，不能直接装到手机。安装包下载走 GitHub Release，不经过 MinIO。
+
 ### Variables（按环境区分）
 
 | Variable             | test 示例                            | prod 示例                |
@@ -74,7 +85,7 @@ git push -u github develop
 
 ## 安全与可审阅性
 
-- **无 `scripts/` 目录**：构建、打包、SSH 部署均为 workflow / Jenkinsfile 内联步骤，在 PR 中可直接 diff 审阅。
+- **无 `scripts/` 目录**：构建、打包与 GitHub Release 均在 **`.github/workflows/desktop.yml`**。
 - **SSH 密钥**仅存放在 GitHub Environment Secrets（`DEPLOY_SSH_*`），不进仓库。
 - **部署范围**：仅更新 `DEPLOY_TARGET_DIR/todo-flutter/` 下 `dist/`、compose、nginx 模板；`env` 变更前会备份。
 
@@ -83,15 +94,15 @@ git push -u github develop
 | 场景                                   | 操作                                                                            |
 | -------------------------------------- | ------------------------------------------------------------------------------- |
 | 只部署 test Web                        | Actions → **Web** → Run workflow → `build_env=test`                             |
-| 只打 test 桌面包                       | Actions → **Desktop** → Run workflow → `build_env=test`，`create_release=false` |
-| prod 桌面包 + Release + 客户端自动更新 | `git push github vX.Y.Z`（tag 须 semver）                                       |
+| 只打 test 各端安装包                 | Actions → **Desktop** → Run workflow → `build_env=test`，`create_release=false` |
+| prod 各端安装包 + GitHub Release | `git push github vX.Y.Z`（tag 须 semver）                                   |
 
 ## 与 Gitea / Jenkins 的分工
 
 | 交付物                   | 推荐流水线               |
 | ------------------------ | ------------------------ |
 | Web H5 更新（test/prod） | **GitHub `web.yml`**     |
-| 桌面安装包               | **GitHub `desktop.yml`** |
+| 各端安装包（GitHub Release 附件） | **GitHub `desktop.yml`** |
 | PR 质量门禁              | GitHub `ci.yml`          |
 | Gitea 推送触发的 Jenkins | 备用（未推 GitHub 时）   |
 

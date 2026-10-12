@@ -34,14 +34,14 @@ Todo Flutter 使用一个根级 Gitea Multibranch Job `zh-cloud-todo-flutter`，
 | --- | --- |
 | 仓库 | https://github.com/izhaong/zh-cloud-todo-flutter |
 | Web 部署 | `.github/workflows/web.yml` |
-| 桌面打包 | `.github/workflows/desktop.yml` |
+| 各端安装包 | `.github/workflows/desktop.yml`（Linux / macOS / Windows / Android / 未签名 iOS；tag 挂到 GitHub Release） |
 | 说明 | `docs/engineering/03-github-actions.md` |
 
 ## 部署产物
 
 - **Web（Jenkins）**：`build/web` → `.jenkins-dist/todo-flutter-web.tar.gz` → `$DEPLOY_TARGET_DIR_TEST/todo-flutter/dist`；Compose、env 示例与 nginx 全部来自本仓 `deploy/`。
 - **Web（GitHub）**：`build/web` → `$DEPLOY_TARGET_DIR/todo-flutter/dist`（`web.yml` SSH）；不得与 Jenkins 对同一次 test 交付双活触发。
-- **桌面（GitHub）**：`.jenkins-dist/desktop/*` → Actions Artifacts / Release
+- **桌面与移动端（GitHub）**：`.gha-dist/desktop/*` → Actions Artifacts；`v*` tag 挂到 GitHub Release，下载地址就是 Release 附件
 - test 部署只由 `develop` 进入；`main` 与 tag 不使用生产部署参数或 SSH Publisher。
 
 ## 规范索引
