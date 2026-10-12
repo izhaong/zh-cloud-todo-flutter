@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
 import 'package:zh_cloud_todo_flutter/core/theme/app_theme.dart';
+import 'package:zh_cloud_todo_flutter/features/task/list_drop_target.dart';
 import 'package:zh_cloud_todo_flutter/features/task/task_subtask_drop.dart';
 import 'package:zh_cloud_todo_flutter/features/task/tasks_by_list_page.dart';
 import 'package:zh_cloud_todo_flutter/state/providers.dart';
@@ -218,6 +219,51 @@ void main() {
       reason: '长按拖出与行首排序手柄是两条既有通道，本面一条都不许弄没',
     );
     await mouse.removePointer();
+  });
+
+  testWidgets('异清单任务落到右下带：不截走「移入当前清单」那一层落点', (tester) async {
+    final reparents = <String>[];
+    final listMoves = <String>[];
+    await _pumpNestedTargets(
+      tester,
+      dragged: _bareTask(id: _foreignId, listId: TodoVisualFixture.workListId),
+      onReparent: reparents.add,
+      onListMove: listMoves.add,
+    );
+
+    await _dragSourceOntoQuadrant(tester);
+
+    expect(
+      reparents,
+      isEmpty,
+      reason:
+          '嘀嗒《07-任务与日历同时显示.md》:55「拖入清单详情区域＝移入当前清单」'
+          '是这一层的外层落点；右下带把异清单任务截走，那一面当场失效',
+    );
+    expect(listMoves, <String>[
+      _foreignId,
+    ], reason: '内层拒了外层要接住（这条同时证明手势确实落到过这一行）');
+  });
+
+  testWidgets('同清单任务落到右下带：内层先接受，不顺带走移清单', (tester) async {
+    final reparents = <String>[];
+    final listMoves = <String>[];
+    await _pumpNestedTargets(
+      tester,
+      dragged: _bareTask(
+        id: _sameListTaskId,
+        listId: TodoVisualFixture.inboxListId,
+      ),
+      onReparent: reparents.add,
+      onListMove: listMoves.add,
+    );
+
+    await _dragSourceOntoQuadrant(tester);
+
+    expect(reparents, <String>[
+      _sameListTaskId,
+    ], reason: '闸门收窄不能顺手把本面弄没：同清单任务仍要能落成子任务');
+    expect(listMoves, isEmpty);
   });
 
   testWidgets('智能清单里右下带落点不存在（嘀嗒 :28 的闸门）', (tester) async {
@@ -445,6 +491,114 @@ Future<void> _dragHandleToBelow(
   await mouse.up();
   await mouse.removePointer();
   await tester.pumpAndSettle();
+}
+
+const String _foreignId = 'fallthrough-foreign-task';
+const String _sameListTaskId = 'fallthrough-same-list-task';
+const String _rowTaskId = 'fallthrough-row-task';
+
+TodoTask _bareTask({required String id, required String listId}) {
+  final stamp = DateTime.utc(2026, 7, 11, 9);
+  return TodoTask(
+    id: id,
+    serverId: null,
+    listId: listId,
+    allDay: false,
+    fixedTimezone: false,
+    timeMode: 0,
+    title: id,
+    completed: false,
+    cancelled: false,
+    priority: 0,
+    isPinned: false,
+    sortOrder: 0,
+    dueAt: null,
+    updatedAt: stamp,
+    createdAt: stamp,
+  );
+}
+
+/// 右下带套在「清单详情落点」里面一层——这就是清单页里的真实嵌套：
+/// `tasks_by_list_page.dart` 用 `TaskListDropTarget` 包着整块列表体，行是它的后代。
+/// 两个落点吃同一种数据（`TodoTask`），所以内外不互相截走这件事要能量出来。
+Future<void> _pumpNestedTargets(
+  WidgetTester tester, {
+  required TodoTask dragged,
+  required void Function(String taskId) onReparent,
+  required void Function(String taskId) onListMove,
+}) async {
+  tester.view.physicalSize = const Size(900, 900);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        body: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              left: 0,
+              top: 0,
+              child: Draggable<TodoTask>(
+                key: const ValueKey('fallthrough-source'),
+                data: dragged,
+                feedback: const SizedBox(
+                  width: 120,
+                  height: 24,
+                  child: ColoredBox(color: Colors.black26),
+                ),
+                child: const SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: ColoredBox(color: Colors.blue),
+                ),
+              ),
+            ),
+            // 行占 x∈[0,600]、y∈[200,260] ⇒ 右下象限＝x∈[300,600]、y∈[230,260]。
+            Positioned(
+              left: 0,
+              top: 200,
+              child: SizedBox(
+                width: 600,
+                height: 60,
+                child: TaskListDropTarget(
+                  currentListId: TodoVisualFixture.inboxListId,
+                  onAccept: (task) => onListMove(task.id),
+                  child: TaskSubtaskDropTarget(
+                    task: _bareTask(
+                      id: _rowTaskId,
+                      listId: TodoVisualFixture.inboxListId,
+                    ),
+                    enabled: true,
+                    onDrop: (task) async => onReparent(task.id),
+                    child: const ColoredBox(
+                      color: Colors.grey,
+                      child: SizedBox(width: 600, height: 60),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+  await tester.pump();
+}
+
+Future<void> _dragSourceOntoQuadrant(WidgetTester tester) async {
+  final source = tester.getRect(
+    find.byKey(const ValueKey('fallthrough-source')),
+  );
+  final gesture = await tester.startGesture(source.center);
+  await tester.pump(const Duration(milliseconds: 600));
+  await gesture.moveTo(const Offset(450, 245));
+  await tester.pump();
+  await gesture.up();
+  await tester.pump();
 }
 
 Future<String?> _parentTaskIdOf(AppDatabase db, String taskId) async {

@@ -89,8 +89,14 @@ class _TaskSubtaskDropTargetState extends State<TaskSubtaskDropTarget> {
             heightFactor: 0.5,
             alignment: Alignment.bottomRight,
             child: DragTarget<TodoTask>(
+              // 只接**同一张清单**里的任务：清单页的整块列表体外层还套着
+              // `TaskListDropTarget`（嘀嗒《07-任务与日历同时显示.md》:55「将日历中的任务拖入清单详情区域」
+              // ＝移入当前清单），它吃的也是 `TodoTask`。内层来者不拒就会把异清单任务截走，
+              // 那一面当场失效（这条是先跑出红、再补的条件：
+              // test/features/task/task_subtask_drag_test.dart 的「异清单任务落到右下带」）。
               // 自己不能当自己的父任务；成环与 5 层上限由仓储那条通道兜住（失败给可见提示）。
               onWillAcceptWithDetails: (details) =>
+                  details.data.listId == widget.task.listId &&
                   details.data.id != widget.task.id,
               onAcceptWithDetails: (details) => _accept(details.data),
               builder: (context, candidates, _) {
