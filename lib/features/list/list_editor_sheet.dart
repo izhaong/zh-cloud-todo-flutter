@@ -5,6 +5,7 @@ import '../../core/db/app_database.dart';
 import '../../state/providers.dart';
 import 'list_actions.dart';
 import 'list_color.dart';
+import 'list_properties.dart';
 
 /// M11-B2 清单创建 / 重命名 / 删除 弹窗。
 ///
@@ -24,6 +25,8 @@ class _ListEditorSheetState extends ConsumerState<ListEditorSheet> {
   late final TextEditingController _name;
   late String? _folderLocalId;
   String? _color;
+  String? _icon;
+  bool _showInSmartList = true;
   String? _error;
 
   @override
@@ -33,6 +36,8 @@ class _ListEditorSheetState extends ConsumerState<ListEditorSheet> {
     // FR-3 编辑时预选当前归属；FR-5 从文件夹里点新建时沿用带入的归属。
     _folderLocalId = widget.existing?.folderLocalId ?? widget.folderLocalId;
     _color = widget.existing?.color;
+    _icon = widget.existing?.icon;
+    _showInSmartList = widget.existing?.showInSmartList ?? true;
   }
 
   @override
@@ -51,6 +56,9 @@ class _ListEditorSheetState extends ConsumerState<ListEditorSheet> {
       return;
     }
     setState(() => _error = null);
+    // 方式二（嘀嗒 :87）：名称最前面输入 Emoji 自动设为图标；
+    // 已显式选过图标（含显式清除）时不抢用户的决定。
+    var effectiveIcon = _icon ?? detectLeadingEmoji(text);
     try {
       // 先移动再改名再改色：前一步失败时后面还没发生，弹层里不会出现"半改好"的清单。
       if (existing == null) {
@@ -58,6 +66,8 @@ class _ListEditorSheetState extends ConsumerState<ListEditorSheet> {
           name: text,
           folderLocalId: _folderLocalId,
           color: _color,
+          icon: effectiveIcon,
+          showInSmartList: _showInSmartList,
         );
       } else {
         if (_folderLocalId != existing.folderLocalId) {
@@ -66,6 +76,12 @@ class _ListEditorSheetState extends ConsumerState<ListEditorSheet> {
         if (text != existing.name) await repo.rename(existing.id, text);
         if (_color != existing.color) {
           await repo.setColor(existing.id, _color);
+        }
+        if (effectiveIcon != existing.icon) {
+          await repo.setIcon(existing.id, effectiveIcon);
+        }
+        if (_showInSmartList != existing.showInSmartList) {
+          await repo.setShowInSmartList(existing.id, _showInSmartList);
         }
       }
     } on Object {
@@ -102,13 +118,86 @@ class _ListEditorSheetState extends ConsumerState<ListEditorSheet> {
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 12),
-            TextField(
-              controller: _name,
-              decoration: const InputDecoration(
-                labelText: '清单名',
-                border: OutlineInputBorder(),
+            // 嘀嗒 :86 方式一：名称前面的「图标」打开 Emoji 选择。
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                InkWell(
+                  key: const Key('todo-list-editor-icon'),
+                  customBorder: const CircleBorder(),
+                  // 图标位本身就当「无」用：点它清掉已选 Emoji（:86 的面板含清除）。
+                  onTap: () => setState(() {
+                    _icon = null;
+                    _error = null;
+                  }),
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Theme.of(context).dividerColor),
+                    ),
+                    child: _icon != null
+                        ? Text(_icon!, style: const TextStyle(fontSize: 24))
+                        : Icon(
+                            Icons.emoji_emotions_outlined,
+                            size: 24,
+                            color: Theme.of(context).hintColor,
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _name,
+                    decoration: const InputDecoration(
+                      labelText: '清单名',
+                      border: OutlineInputBorder(),
+                    ),
+                    autofocus: true,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            // Emoji 候选（方式一的展开面板）；长按上面的图标位清除回「无」。
+            SizedBox(
+              height: 44,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  for (final emoji in kListEmojiChoices)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: InkWell(
+                        key: Key(
+                          'todo-list-editor-emoji-${emoji.runes.first.toRadixString(16)}',
+                        ),
+                        customBorder: const CircleBorder(),
+                        onTap: () => setState(() {
+                          _icon = emoji;
+                          _error = null;
+                        }),
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: _icon == emoji
+                                ? Theme.of(context).colorScheme.primaryContainer
+                                : null,
+                          ),
+                          child: Text(
+                            emoji,
+                            style: const TextStyle(fontSize: 22),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
-              autofocus: true,
             ),
             const SizedBox(height: 12),
             // DropdownButton 自己的读屏节点只有当前值（实测 `label: "无"`），
@@ -157,6 +246,19 @@ class _ListEditorSheetState extends ConsumerState<ListEditorSheet> {
               ),
             ),
             const SizedBox(height: 12),
+            // 嘀嗒 :73 第四个属性「在智能清单中显示/隐藏」：关掉后该清单的任务
+            // 不进智能清单与徽章计数，但选中清单本身仍能看到。
+            SwitchListTile(
+              key: const Key('todo-list-editor-show-in-smart'),
+              contentPadding: EdgeInsets.zero,
+              title: const Text('在智能清单中显示'),
+              value: _showInSmartList,
+              onChanged: (value) => setState(() {
+                _showInSmartList = value;
+                _error = null;
+              }),
+            ),
+            const SizedBox(height: 4),
             KeyedSubtree(
               key: const Key('todo-list-editor-color-row'),
               child: Row(

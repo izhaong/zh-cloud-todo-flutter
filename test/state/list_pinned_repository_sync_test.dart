@@ -97,8 +97,8 @@ void main() {
       addTearDown(db.close);
       expect(
         db.schemaVersion,
-        29,
-        reason: '标签置顶位/位次列把 schema 推到 v27，推荐契约列再推到 v28，清单颜色列推到 v29，清单列不能被回退',
+        30,
+        reason: '标签置顶位/位次列把 schema 推到 v27，推荐契约列再推到 v28，清单颜色列推到 v29，清单图标/背景/显隐四列推到 v30，清单列不能被回退',
       );
       final cols = await db.customSelect('PRAGMA table_info(todo_lists)').get();
       final names = cols.map((r) => r.data['name'] as String).toSet();

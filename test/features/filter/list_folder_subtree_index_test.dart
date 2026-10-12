@@ -22,6 +22,8 @@ void main() {
         isPinned: false,
         accessRole: 'owner',
         writable: true,
+        backgroundType: 'theme',
+        showInSmartList: true,
         updatedAt: stamp,
         createdAt: stamp,
       );

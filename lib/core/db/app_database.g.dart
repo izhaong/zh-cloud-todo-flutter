@@ -96,6 +96,53 @@ class $TodoListsTable extends TodoLists
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _iconMeta = const VerificationMeta('icon');
+  @override
+  late final GeneratedColumn<String> icon = GeneratedColumn<String>(
+    'icon',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _backgroundTypeMeta = const VerificationMeta(
+    'backgroundType',
+  );
+  @override
+  late final GeneratedColumn<String> backgroundType = GeneratedColumn<String>(
+    'background_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('theme'),
+  );
+  static const VerificationMeta _backgroundValueMeta = const VerificationMeta(
+    'backgroundValue',
+  );
+  @override
+  late final GeneratedColumn<String> backgroundValue = GeneratedColumn<String>(
+    'background_value',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _showInSmartListMeta = const VerificationMeta(
+    'showInSmartList',
+  );
+  @override
+  late final GeneratedColumn<bool> showInSmartList = GeneratedColumn<bool>(
+    'show_in_smart_list',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("show_in_smart_list" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
   static const VerificationMeta _accessRoleMeta = const VerificationMeta(
     'accessRole',
   );
@@ -155,6 +202,10 @@ class $TodoListsTable extends TodoLists
     sortOrder,
     isPinned,
     color,
+    icon,
+    backgroundType,
+    backgroundValue,
+    showInSmartList,
     accessRole,
     writable,
     updatedAt,
@@ -222,6 +273,39 @@ class $TodoListsTable extends TodoLists
       context.handle(
         _colorMeta,
         color.isAcceptableOrUnknown(data['color']!, _colorMeta),
+      );
+    }
+    if (data.containsKey('icon')) {
+      context.handle(
+        _iconMeta,
+        icon.isAcceptableOrUnknown(data['icon']!, _iconMeta),
+      );
+    }
+    if (data.containsKey('background_type')) {
+      context.handle(
+        _backgroundTypeMeta,
+        backgroundType.isAcceptableOrUnknown(
+          data['background_type']!,
+          _backgroundTypeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('background_value')) {
+      context.handle(
+        _backgroundValueMeta,
+        backgroundValue.isAcceptableOrUnknown(
+          data['background_value']!,
+          _backgroundValueMeta,
+        ),
+      );
+    }
+    if (data.containsKey('show_in_smart_list')) {
+      context.handle(
+        _showInSmartListMeta,
+        showInSmartList.isAcceptableOrUnknown(
+          data['show_in_smart_list']!,
+          _showInSmartListMeta,
+        ),
       );
     }
     if (data.containsKey('access_role')) {
@@ -293,6 +377,22 @@ class $TodoListsTable extends TodoLists
         DriftSqlType.string,
         data['${effectivePrefix}color'],
       ),
+      icon: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}icon'],
+      ),
+      backgroundType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}background_type'],
+      )!,
+      backgroundValue: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}background_value'],
+      ),
+      showInSmartList: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}show_in_smart_list'],
+      )!,
       accessRole: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}access_role'],
@@ -337,6 +437,22 @@ class TodoList extends DataClass implements Insertable<TodoList> {
   /// 清单颜色（嘀嗒《02-用清单管理任务》:73，specs/102 / FL #339）。
   /// `#RRGGBB` 字符串；服务端同名列 `todo_list.color`，出库 payload 走 `toJson()`。
   final String? color;
+
+  /// 清单 Emoji 图标（嘀嗒同页 :86/:87「清单图标」两种方式，specs/105 / FL #339）。
+  /// 存 emoji 字符本身；服务端同名列 `todo_list.icon`。
+  final String? icon;
+
+  /// 清单背景（嘀嗒同页 :103-:111 四样式：theme/color/gradient/image，specs/105）。
+  /// 服务端同名列 `todo_list.background_type`，空串一律按 theme 处理。
+  final String backgroundType;
+
+  /// 背景取值：color/gradient 存 `#RRGGBB`（gradient 存 `hex1,hex2`），image 存 URL；
+  /// theme 恒 null。服务端同名列 `todo_list.background_value`。
+  final String? backgroundValue;
+
+  /// 「在智能清单中显示/隐藏」（嘀嗒同页 :73）。false 时该清单任务不进智能清单
+  /// 与徽章计数，但选中该清单本身仍能看到。服务端同名列 `todo_list.show_in_smart_list`。
+  final bool showInSmartList;
   final String accessRole;
   final bool writable;
   final DateTime updatedAt;
@@ -350,6 +466,10 @@ class TodoList extends DataClass implements Insertable<TodoList> {
     required this.sortOrder,
     required this.isPinned,
     this.color,
+    this.icon,
+    required this.backgroundType,
+    this.backgroundValue,
+    required this.showInSmartList,
     required this.accessRole,
     required this.writable,
     required this.updatedAt,
@@ -374,6 +494,14 @@ class TodoList extends DataClass implements Insertable<TodoList> {
     if (!nullToAbsent || color != null) {
       map['color'] = Variable<String>(color);
     }
+    if (!nullToAbsent || icon != null) {
+      map['icon'] = Variable<String>(icon);
+    }
+    map['background_type'] = Variable<String>(backgroundType);
+    if (!nullToAbsent || backgroundValue != null) {
+      map['background_value'] = Variable<String>(backgroundValue);
+    }
+    map['show_in_smart_list'] = Variable<bool>(showInSmartList);
     map['access_role'] = Variable<String>(accessRole);
     map['writable'] = Variable<bool>(writable);
     map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -399,6 +527,12 @@ class TodoList extends DataClass implements Insertable<TodoList> {
       color: color == null && nullToAbsent
           ? const Value.absent()
           : Value(color),
+      icon: icon == null && nullToAbsent ? const Value.absent() : Value(icon),
+      backgroundType: Value(backgroundType),
+      backgroundValue: backgroundValue == null && nullToAbsent
+          ? const Value.absent()
+          : Value(backgroundValue),
+      showInSmartList: Value(showInSmartList),
       accessRole: Value(accessRole),
       writable: Value(writable),
       updatedAt: Value(updatedAt),
@@ -420,6 +554,10 @@ class TodoList extends DataClass implements Insertable<TodoList> {
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
       isPinned: serializer.fromJson<bool>(json['isPinned']),
       color: serializer.fromJson<String?>(json['color']),
+      icon: serializer.fromJson<String?>(json['icon']),
+      backgroundType: serializer.fromJson<String>(json['backgroundType']),
+      backgroundValue: serializer.fromJson<String?>(json['backgroundValue']),
+      showInSmartList: serializer.fromJson<bool>(json['showInSmartList']),
       accessRole: serializer.fromJson<String>(json['accessRole']),
       writable: serializer.fromJson<bool>(json['writable']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
@@ -438,6 +576,10 @@ class TodoList extends DataClass implements Insertable<TodoList> {
       'sortOrder': serializer.toJson<int>(sortOrder),
       'isPinned': serializer.toJson<bool>(isPinned),
       'color': serializer.toJson<String?>(color),
+      'icon': serializer.toJson<String?>(icon),
+      'backgroundType': serializer.toJson<String>(backgroundType),
+      'backgroundValue': serializer.toJson<String?>(backgroundValue),
+      'showInSmartList': serializer.toJson<bool>(showInSmartList),
       'accessRole': serializer.toJson<String>(accessRole),
       'writable': serializer.toJson<bool>(writable),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
@@ -454,6 +596,10 @@ class TodoList extends DataClass implements Insertable<TodoList> {
     int? sortOrder,
     bool? isPinned,
     Value<String?> color = const Value.absent(),
+    Value<String?> icon = const Value.absent(),
+    String? backgroundType,
+    Value<String?> backgroundValue = const Value.absent(),
+    bool? showInSmartList,
     String? accessRole,
     bool? writable,
     DateTime? updatedAt,
@@ -469,6 +615,12 @@ class TodoList extends DataClass implements Insertable<TodoList> {
     sortOrder: sortOrder ?? this.sortOrder,
     isPinned: isPinned ?? this.isPinned,
     color: color.present ? color.value : this.color,
+    icon: icon.present ? icon.value : this.icon,
+    backgroundType: backgroundType ?? this.backgroundType,
+    backgroundValue: backgroundValue.present
+        ? backgroundValue.value
+        : this.backgroundValue,
+    showInSmartList: showInSmartList ?? this.showInSmartList,
     accessRole: accessRole ?? this.accessRole,
     writable: writable ?? this.writable,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -486,6 +638,16 @@ class TodoList extends DataClass implements Insertable<TodoList> {
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
       isPinned: data.isPinned.present ? data.isPinned.value : this.isPinned,
       color: data.color.present ? data.color.value : this.color,
+      icon: data.icon.present ? data.icon.value : this.icon,
+      backgroundType: data.backgroundType.present
+          ? data.backgroundType.value
+          : this.backgroundType,
+      backgroundValue: data.backgroundValue.present
+          ? data.backgroundValue.value
+          : this.backgroundValue,
+      showInSmartList: data.showInSmartList.present
+          ? data.showInSmartList.value
+          : this.showInSmartList,
       accessRole: data.accessRole.present
           ? data.accessRole.value
           : this.accessRole,
@@ -506,6 +668,10 @@ class TodoList extends DataClass implements Insertable<TodoList> {
           ..write('sortOrder: $sortOrder, ')
           ..write('isPinned: $isPinned, ')
           ..write('color: $color, ')
+          ..write('icon: $icon, ')
+          ..write('backgroundType: $backgroundType, ')
+          ..write('backgroundValue: $backgroundValue, ')
+          ..write('showInSmartList: $showInSmartList, ')
           ..write('accessRole: $accessRole, ')
           ..write('writable: $writable, ')
           ..write('updatedAt: $updatedAt, ')
@@ -524,6 +690,10 @@ class TodoList extends DataClass implements Insertable<TodoList> {
     sortOrder,
     isPinned,
     color,
+    icon,
+    backgroundType,
+    backgroundValue,
+    showInSmartList,
     accessRole,
     writable,
     updatedAt,
@@ -541,6 +711,10 @@ class TodoList extends DataClass implements Insertable<TodoList> {
           other.sortOrder == this.sortOrder &&
           other.isPinned == this.isPinned &&
           other.color == this.color &&
+          other.icon == this.icon &&
+          other.backgroundType == this.backgroundType &&
+          other.backgroundValue == this.backgroundValue &&
+          other.showInSmartList == this.showInSmartList &&
           other.accessRole == this.accessRole &&
           other.writable == this.writable &&
           other.updatedAt == this.updatedAt &&
@@ -556,6 +730,10 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
   final Value<int> sortOrder;
   final Value<bool> isPinned;
   final Value<String?> color;
+  final Value<String?> icon;
+  final Value<String> backgroundType;
+  final Value<String?> backgroundValue;
+  final Value<bool> showInSmartList;
   final Value<String> accessRole;
   final Value<bool> writable;
   final Value<DateTime> updatedAt;
@@ -570,6 +748,10 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
     this.sortOrder = const Value.absent(),
     this.isPinned = const Value.absent(),
     this.color = const Value.absent(),
+    this.icon = const Value.absent(),
+    this.backgroundType = const Value.absent(),
+    this.backgroundValue = const Value.absent(),
+    this.showInSmartList = const Value.absent(),
     this.accessRole = const Value.absent(),
     this.writable = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -585,6 +767,10 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
     this.sortOrder = const Value.absent(),
     this.isPinned = const Value.absent(),
     this.color = const Value.absent(),
+    this.icon = const Value.absent(),
+    this.backgroundType = const Value.absent(),
+    this.backgroundValue = const Value.absent(),
+    this.showInSmartList = const Value.absent(),
     this.accessRole = const Value.absent(),
     this.writable = const Value.absent(),
     required DateTime updatedAt,
@@ -603,6 +789,10 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
     Expression<int>? sortOrder,
     Expression<bool>? isPinned,
     Expression<String>? color,
+    Expression<String>? icon,
+    Expression<String>? backgroundType,
+    Expression<String>? backgroundValue,
+    Expression<bool>? showInSmartList,
     Expression<String>? accessRole,
     Expression<bool>? writable,
     Expression<DateTime>? updatedAt,
@@ -618,6 +808,10 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
       if (sortOrder != null) 'sort_order': sortOrder,
       if (isPinned != null) 'is_pinned': isPinned,
       if (color != null) 'color': color,
+      if (icon != null) 'icon': icon,
+      if (backgroundType != null) 'background_type': backgroundType,
+      if (backgroundValue != null) 'background_value': backgroundValue,
+      if (showInSmartList != null) 'show_in_smart_list': showInSmartList,
       if (accessRole != null) 'access_role': accessRole,
       if (writable != null) 'writable': writable,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -635,6 +829,10 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
     Value<int>? sortOrder,
     Value<bool>? isPinned,
     Value<String?>? color,
+    Value<String?>? icon,
+    Value<String>? backgroundType,
+    Value<String?>? backgroundValue,
+    Value<bool>? showInSmartList,
     Value<String>? accessRole,
     Value<bool>? writable,
     Value<DateTime>? updatedAt,
@@ -650,6 +848,10 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
       sortOrder: sortOrder ?? this.sortOrder,
       isPinned: isPinned ?? this.isPinned,
       color: color ?? this.color,
+      icon: icon ?? this.icon,
+      backgroundType: backgroundType ?? this.backgroundType,
+      backgroundValue: backgroundValue ?? this.backgroundValue,
+      showInSmartList: showInSmartList ?? this.showInSmartList,
       accessRole: accessRole ?? this.accessRole,
       writable: writable ?? this.writable,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -685,6 +887,18 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
     if (color.present) {
       map['color'] = Variable<String>(color.value);
     }
+    if (icon.present) {
+      map['icon'] = Variable<String>(icon.value);
+    }
+    if (backgroundType.present) {
+      map['background_type'] = Variable<String>(backgroundType.value);
+    }
+    if (backgroundValue.present) {
+      map['background_value'] = Variable<String>(backgroundValue.value);
+    }
+    if (showInSmartList.present) {
+      map['show_in_smart_list'] = Variable<bool>(showInSmartList.value);
+    }
     if (accessRole.present) {
       map['access_role'] = Variable<String>(accessRole.value);
     }
@@ -714,6 +928,10 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
           ..write('sortOrder: $sortOrder, ')
           ..write('isPinned: $isPinned, ')
           ..write('color: $color, ')
+          ..write('icon: $icon, ')
+          ..write('backgroundType: $backgroundType, ')
+          ..write('backgroundValue: $backgroundValue, ')
+          ..write('showInSmartList: $showInSmartList, ')
           ..write('accessRole: $accessRole, ')
           ..write('writable: $writable, ')
           ..write('updatedAt: $updatedAt, ')
@@ -11927,6 +12145,10 @@ typedef $$TodoListsTableCreateCompanionBuilder =
       Value<int> sortOrder,
       Value<bool> isPinned,
       Value<String?> color,
+      Value<String?> icon,
+      Value<String> backgroundType,
+      Value<String?> backgroundValue,
+      Value<bool> showInSmartList,
       Value<String> accessRole,
       Value<bool> writable,
       required DateTime updatedAt,
@@ -11943,6 +12165,10 @@ typedef $$TodoListsTableUpdateCompanionBuilder =
       Value<int> sortOrder,
       Value<bool> isPinned,
       Value<String?> color,
+      Value<String?> icon,
+      Value<String> backgroundType,
+      Value<String?> backgroundValue,
+      Value<bool> showInSmartList,
       Value<String> accessRole,
       Value<bool> writable,
       Value<DateTime> updatedAt,
@@ -11996,6 +12222,26 @@ class $$TodoListsTableFilterComposer
 
   ColumnFilters<String> get color => $composableBuilder(
     column: $table.color,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get icon => $composableBuilder(
+    column: $table.icon,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get backgroundType => $composableBuilder(
+    column: $table.backgroundType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get backgroundValue => $composableBuilder(
+    column: $table.backgroundValue,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get showInSmartList => $composableBuilder(
+    column: $table.showInSmartList,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -12069,6 +12315,26 @@ class $$TodoListsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get icon => $composableBuilder(
+    column: $table.icon,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get backgroundType => $composableBuilder(
+    column: $table.backgroundType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get backgroundValue => $composableBuilder(
+    column: $table.backgroundValue,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get showInSmartList => $composableBuilder(
+    column: $table.showInSmartList,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get accessRole => $composableBuilder(
     column: $table.accessRole,
     builder: (column) => ColumnOrderings(column),
@@ -12125,6 +12391,24 @@ class $$TodoListsTableAnnotationComposer
   GeneratedColumn<String> get color =>
       $composableBuilder(column: $table.color, builder: (column) => column);
 
+  GeneratedColumn<String> get icon =>
+      $composableBuilder(column: $table.icon, builder: (column) => column);
+
+  GeneratedColumn<String> get backgroundType => $composableBuilder(
+    column: $table.backgroundType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get backgroundValue => $composableBuilder(
+    column: $table.backgroundValue,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get showInSmartList => $composableBuilder(
+    column: $table.showInSmartList,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get accessRole => $composableBuilder(
     column: $table.accessRole,
     builder: (column) => column,
@@ -12176,6 +12460,10 @@ class $$TodoListsTableTableManager
                 Value<int> sortOrder = const Value.absent(),
                 Value<bool> isPinned = const Value.absent(),
                 Value<String?> color = const Value.absent(),
+                Value<String?> icon = const Value.absent(),
+                Value<String> backgroundType = const Value.absent(),
+                Value<String?> backgroundValue = const Value.absent(),
+                Value<bool> showInSmartList = const Value.absent(),
                 Value<String> accessRole = const Value.absent(),
                 Value<bool> writable = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -12190,6 +12478,10 @@ class $$TodoListsTableTableManager
                 sortOrder: sortOrder,
                 isPinned: isPinned,
                 color: color,
+                icon: icon,
+                backgroundType: backgroundType,
+                backgroundValue: backgroundValue,
+                showInSmartList: showInSmartList,
                 accessRole: accessRole,
                 writable: writable,
                 updatedAt: updatedAt,
@@ -12206,6 +12498,10 @@ class $$TodoListsTableTableManager
                 Value<int> sortOrder = const Value.absent(),
                 Value<bool> isPinned = const Value.absent(),
                 Value<String?> color = const Value.absent(),
+                Value<String?> icon = const Value.absent(),
+                Value<String> backgroundType = const Value.absent(),
+                Value<String?> backgroundValue = const Value.absent(),
+                Value<bool> showInSmartList = const Value.absent(),
                 Value<String> accessRole = const Value.absent(),
                 Value<bool> writable = const Value.absent(),
                 required DateTime updatedAt,
@@ -12220,6 +12516,10 @@ class $$TodoListsTableTableManager
                 sortOrder: sortOrder,
                 isPinned: isPinned,
                 color: color,
+                icon: icon,
+                backgroundType: backgroundType,
+                backgroundValue: backgroundValue,
+                showInSmartList: showInSmartList,
                 accessRole: accessRole,
                 writable: writable,
                 updatedAt: updatedAt,

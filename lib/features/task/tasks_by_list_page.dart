@@ -25,6 +25,7 @@ import '../shell/app_dialog.dart';
 import '../shell/quick_add_bar.dart';
 import '../tag/hash_tag_input.dart';
 import 'list_drop_target.dart';
+import '../list/list_properties.dart';
 import 'smart_grouping.dart';
 import 'task_view_mutation_feedback.dart';
 import 'view_mode.dart';
@@ -252,6 +253,20 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         list.id: list.name,
     };
     final listFolderIds = ref.watch(listFolderIndexProvider);
+    // 「在智能清单中显示」关掉的清单（specs/105）：智能清单浏览时排除它们。
+    final allLists =
+        ref.watch(listsStreamProvider).valueOrNull ?? const <TodoList>[];
+    final excludedListIds = {
+      for (final list in allLists)
+        if (!list.showInSmartList) list.id,
+    };
+    TodoList? selectedList;
+    for (final list in allLists) {
+      if (list.id == listId) {
+        selectedList = list;
+        break;
+      }
+    }
     final tasksStream = _resolveTasksStream(taskRepo);
 
     final body = StreamBuilder<List<TodoTask>>(
@@ -274,6 +289,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           taskTagIds: taskTagIds,
           listFolderIds: listFolderIds,
           lockedAssigneeUserId: widget.lockedAssigneeUserId,
+          excludedListIds: excludedListIds.isEmpty ? null : excludedListIds,
         );
         final listOrderedItems = _visibleTasksInListOrder(
           items,
@@ -363,7 +379,17 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                         ? 72
                         : 0,
                   ),
-                  child: modeBody,
+                  // 嘀嗒《02-用清单管理任务》:103-:111：清单背景铺在详情区域。
+                  // theme（或无效取值）回 null ⇒ 保持原样，不套一层装饰。
+                  child: Builder(
+                    builder: (context) {
+                      final decoration = listBackgroundDecoration(selectedList);
+                      final body = modeBody;
+                      return decoration == null
+                          ? body
+                          : DecoratedBox(decoration: decoration, child: body);
+                    },
+                  ),
                 ),
               ),
             ),
@@ -1757,20 +1783,29 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                   assigneeOptions: assigneeOptions,
                   // 预览与列表渲染同源：同一份原始列表、同一个 applyTaskFilter、
                   // 同一个清单口径 ⇒ 「命中 N 项」不会和套出来看到的数不一样。
-                  previewResolver: (next) => applyTaskFilter(
-                    tasks,
-                    next,
-                    _selectedListId,
-                    ref.read(currentDateTimeProvider)(),
-                    // 与列表同源；索引缺失时给空图 ⇒ 预览报 0 项，而不是把全量当命中。
-                    taskTagIds:
-                        ref.read(taskTagIndexProvider).valueOrNull ??
-                        const <String, Set<String>>{},
-                    listFolderIds:
-                        ref.read(listFolderIndexProvider) ??
-                        const <String, Set<String>>{},
-                    lockedAssigneeUserId: widget.lockedAssigneeUserId,
-                  ),
+                  previewResolver: (next) {
+                    final hidden = {
+                      for (final list
+                          in (ref.read(listsStreamProvider).valueOrNull ??
+                              const <TodoList>[]))
+                        if (!list.showInSmartList) list.id,
+                    };
+                    return applyTaskFilter(
+                      tasks,
+                      next,
+                      _selectedListId,
+                      ref.read(currentDateTimeProvider)(),
+                      // 与列表同源；索引缺失时给空图 ⇒ 预览报 0 项，而不是把全量当命中。
+                      taskTagIds:
+                          ref.read(taskTagIndexProvider).valueOrNull ??
+                          const <String, Set<String>>{},
+                      listFolderIds:
+                          ref.read(listFolderIndexProvider) ??
+                          const <String, Set<String>>{},
+                      lockedAssigneeUserId: widget.lockedAssigneeUserId,
+                      excludedListIds: hidden.isEmpty ? null : hidden,
+                    );
+                  },
                   onChanged: (next) {
                     draft = next;
                     setState(() => _filter = next);
@@ -2374,10 +2409,12 @@ List<TodoTask> applyTaskFilter(
   Map<String, Set<String>>? taskTagIds,
   Map<String, Set<String>>? listFolderIds,
   int? lockedAssigneeUserId,
+  Set<String>? excludedListIds,
 }) {
   if (filter.isEmpty &&
       selectedListId == null &&
-      lockedAssigneeUserId == null) {
+      lockedAssigneeUserId == null &&
+      (excludedListIds == null || excludedListIds.isEmpty)) {
     return source;
   }
   final startOfDay = DateTime(now.year, now.month, now.day);
@@ -2408,6 +2445,14 @@ List<TodoTask> applyTaskFilter(
     // 页面身份（specs/104）：与清单作用域同级，用户叠加的滤镜与「全部」档都清不掉它。
     if (lockedAssigneeUserId != null &&
         task.assigneeUserId != lockedAssigneeUserId) {
+      return false;
+    }
+    // 「在智能清单中显示/隐藏」（嘀嗒《02-用清单管理任务》:73，specs/105）：
+    // 只在智能清单浏览（没选中具体清单）时生效；用户点进该清单本身仍能看到全部任务。
+    if (excludedListIds != null &&
+        excludedListIds.isNotEmpty &&
+        selectedListId == null &&
+        excludedListIds.contains(task.listId)) {
       return false;
     }
     return true;
