@@ -1631,13 +1631,39 @@ class _PomodoroStatsSection extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           _FocusTrendChart(items: data.minutesTrend),
-          if (dataPeriod != 'year') ...[
+          if (dataPeriod == 'year' && data.yearlyDailyMinutes.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            Text('年度热力图', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text(
+              '总览一年的专注情况，色块深浅代表每天专注时间的长短',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            _FocusYearHeatmap(items: data.yearlyDailyMinutes),
+          ] else if (dataPeriod != 'year') ...[
             const SizedBox(height: 24),
             Text('专注日历', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 4),
             Text('颜色越深，专注时间越长', style: Theme.of(context).textTheme.bodySmall),
             const SizedBox(height: 12),
             _FocusCalendar(items: data.minutesTrend),
+          ],
+          // 老服务端没有 hourlyTrend 时这一块整块不出现（不画半张图）。
+          if (data.hourlyTrend.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            Text(
+              '最佳专注时间',
+              key: const Key('pomodoro-stats-hourly-title'),
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '按小时看这个区间的专注分钟，最深的几格是当前最佳时段',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            _FocusHourlyChart(items: data.hourlyTrend),
           ],
           const SizedBox(height: 24),
           Text('任务分布', style: Theme.of(context).textTheme.titleMedium),
@@ -1949,6 +1975,159 @@ class _FocusCalendar extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// 嘀嗒《04-番茄专注/04-专注数据统计》:27「按月统计你的最佳专注时间区域」⇒ 要的是 0-23 的分布，
+/// 不是 `bestHour` 那一格。峰值小时（分钟数等于最大值且 > 0）单独标出来。
+class _FocusHourlyChart extends StatelessWidget {
+  const _FocusHourlyChart({required this.items});
+
+  final List<PomodoroHourlyStatsDto> items;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) return const Text('当前周期暂无小时分布');
+    final colors = Theme.of(context).colorScheme;
+    final maxMinutes = items.fold<int>(
+      0,
+      (max, item) => item.minutes > max ? item.minutes : max,
+    );
+    final peakHours = maxMinutes == 0
+        ? const <int>[]
+        : items
+              .where((item) => item.minutes == maxMinutes)
+              .map((item) => item.hour)
+              .toList(growable: false);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          height: 72,
+          child: Semantics(
+            container: true,
+            label: '最佳专注时间按小时分布，最高 $maxMinutes 分钟',
+            child: ExcludeSemantics(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  for (final item in items)
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 1.5),
+                        child: Tooltip(
+                          message: '${item.hour}:00 · ${item.minutes} 分钟',
+                          child: DecoratedBox(
+                            key: Key('pomodoro-stats-hourly-bar-${item.hour}'),
+                            decoration: BoxDecoration(
+                              color: item.minutes == 0
+                                  ? colors.surfaceContainerHighest
+                                  : Color.lerp(
+                                      colors.surfaceContainerHighest,
+                                      peakHours.contains(item.hour)
+                                          ? colors.tertiary
+                                          : colors.primary,
+                                      item.minutes / maxMinutes,
+                                    ),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                            child: SizedBox(
+                              height: 8 + 60 * item.minutes / maxMinutes,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          peakHours.isEmpty
+              ? '当前周期还没有可比较的专注时段'
+              : '最佳时段 ${peakHours.map((hour) => '${hour.toString().padLeft(2, '0')}:00').join('、')}（各 $maxMinutes 分钟）',
+          key: const Key('pomodoro-stats-hourly-summary'),
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
+    );
+  }
+}
+
+/// 嘀嗒 :32「总览你一年的专注情况，色块深浅代表每天专注时间的长短」⇒ 按天的格子，
+/// 深浅按分钟数插值（不是习惯侧那种"打过卡/没打"的二值盘）。
+class _FocusYearHeatmap extends StatelessWidget {
+  const _FocusYearHeatmap({required this.items});
+
+  final List<PomodoroDailyStatsDto> items;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) return const Text('当前区间没有按天数据');
+    final colors = Theme.of(context).colorScheme;
+    final maxMinutes = items.fold<int>(
+      0,
+      (max, item) => item.count > max ? item.count : max,
+    );
+    final byMonth = <String, List<PomodoroDailyStatsDto>>{};
+    for (final item in items) {
+      // date 形如 yyyy-MM-dd；取不到月份的格子不硬塞进「1月」，直接跳过。
+      final monthKey = item.date.length >= 7 ? item.date.substring(0, 7) : null;
+      if (monthKey == null) continue;
+      byMonth.putIfAbsent(monthKey, () => <PomodoroDailyStatsDto>[]).add(item);
+    }
+    final months = byMonth.keys.toList()..sort();
+    return SizedBox(
+      height: 132,
+      child: Semantics(
+        container: true,
+        label: '年度热力图，共 ${months.length} 个月，单日最长 $maxMinutes 分钟',
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          children: [
+            for (final monthKey in months)
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      monthKey,
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 3,
+                      runSpacing: 3,
+                      children: [
+                        for (final day in byMonth[monthKey]!)
+                          Tooltip(
+                            message: '${day.date} · ${day.count} 分钟',
+                            child: Container(
+                              key: Key('pomodoro-stats-year-cell-${day.date}'),
+                              width: 11,
+                              height: 11,
+                              decoration: BoxDecoration(
+                                color: Color.lerp(
+                                  colors.surfaceContainerHighest,
+                                  colors.primary,
+                                  maxMinutes == 0 ? 0 : day.count / maxMinutes,
+                                ),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
