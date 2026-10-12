@@ -15,7 +15,7 @@
 
 | Workflow    | 文件                            | 触发                                              | 作用                               |
 | ----------- | ------------------------------- | ------------------------------------------------- | ---------------------------------- |
-| **Desktop** | `.github/workflows/desktop.yml` | 推 `develop`（test 包）；tag `v*`；手动           | 并行三端安装包                     |
+| **Desktop** | `.github/workflows/desktop.yml` | 推 `develop`（test 包）；tag `v*`；手动           | 并行桌面、Android、iOS 安装包      |
 | **Web**     | `.github/workflows/web.yml`     | 推 `develop`（test 部署）；tag `v*`（prod）；手动 | H5 构建 + SSH 部署                 |
 | **CI**      | `.github/workflows/ci.yml`      | `develop` / `main` 的 push 与 PR                  | `flutter analyze` + `flutter test` |
 
@@ -26,6 +26,8 @@
 | Linux x64   | `ubuntu-latest`  | `todo-flutter-{version}-x86_64.deb`                        |
 | macOS       | `macos-latest`   | `todo-flutter-{version}-aarch64.dmg`（Apple Silicon CI）   |
 | Windows x64 | `windows-latest` | `todo-flutter-{version}-x86_64.exe` + `-x86_64.msi`        |
+| Android     | `ubuntu-latest`  | `todo-flutter-{version}-android.apk`                       |
+| iOS         | `macos-latest`   | `todo-flutter-{version}-ios-unsigned.ipa`（未签名）        |
 
 **打包配置**
 
@@ -34,6 +36,8 @@
 | Linux   | `dpkg-deb` + `packaging/linux/todo-flutter.desktop` |
 | macOS   | `hdiutil create` → DMG                           |
 | Windows | Inno Setup `packaging/windows/todo_flutter.iss` + WiX `packaging/windows/wix/Product.wxs` |
+| Android | `flutter build apk`；有 `android/key.properties` 时用发布密钥，否则 debug 签名 |
+| iOS     | `flutter build ios --release --no-codesign`，再打成未签名 IPA                   |
 
 **环境（`build_env`）**
 
@@ -45,8 +49,8 @@
 | 手动 Run workflow → `prod` | `prod`      | `https://todo.zh04.com`      |
 
 产物目录：`.gha-dist/desktop/`。  
-推送 **`v*` tag** 会创建 **GitHub Release**（含 RustDesk 风格下载表格）并附三端安装包；桌面客户端**自动更新**读取该 Release（`04-desktop-github-release-update.md`）。  
-`develop` 推送仅上传 Actions Artifacts，不建 Release。
+推送 **`v*` tag** 会创建 **GitHub Release** 并附上各端安装包。下载地址是 Release 附件，客户端自动更新也读这里（`04-desktop-github-release-update.md`）。  
+`develop` 推送只上传 Actions Artifacts，不建 Release。
 
 详见 **`03-github-actions.md`**。
 
