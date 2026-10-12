@@ -1,0 +1,86 @@
+# 规格：拖动到智能清单上（FL #400，矩阵 #32 拖动排期 ④）
+
+## 判据源（嘀嗒原文，zh-cloud-docs 镜像）
+
+`todo/99_参考资料/dida365-help-center/02-功能指南/02-日历/07-任务与日历同时显示.md`：
+
+- `:47`「在任务与日历并列显示的视图中，你可以：」——四面（`:49`/`:53`/`:57`/`:61`）都挂在这个前提下；
+  并列视图本身已由 PR !380 合并进 develop（矩阵 #32 行「已合并 ①」那段），所以 #400 单正文里
+  「本单不排进 !380 合并之前的自主轮次」这条前置在 2026-10-12 已解除（现读 `pulls/380` ⇒ `merged: true`）。
+- `:61`「拖动到智能清单上：」
+- `:63`「会为任务自动添加该智能清单关联的时间条件，例如“今天”、“本周”等。」
+
+同段前三面已落地：`:49`＝FL !405、`:53`＝FL !406、`:57`＝FL !407（`lib/features/shell/sidebar_task_drop.dart`）。
+本规格只补第四面，且落点仍沿用同一套 `SidebarDropZone` + `SidebarTaskDropController`。
+
+## 需求与裁定
+
+1. **落点日不新造规则，取该档智能清单自己在用的日期窗口首日**。
+   本端「今天 / 明天 / 最近七天」三档的过滤谓词就是 `lib/features/task/tasks_by_list_page.dart`
+   的 `_dateConditionMatches`（`dueRange` = `today` / `tomorrow` / `next7days`）。
+   `lib/features/shell/smart_list_time_condition.dart` 把同一套窗口写成显式区间，
+   并要求**落完必须让任务真的出现在刚拖上去的那个清单里** —— 这是唯一被约束死的选法：
+   区间型清单只有窗口内的日子才命中，而窗口首日是不需要用户再输入任何东西的唯一确定值。
+   两侧一致性由 `test/features/shell/smart_list_time_condition_test.dart` 的「-10..+12 天逐日对账」钉住
+   （谓词侧走公开入口 `applyTaskFilter`，不是抄一份预期）。
+   **这句不变量只对「浮动」与「固定时间」成立**：`time_mode = 1`（固定时区）挪的是**锚点区日历日**
+   （`taskDateTimeForDisplayDay` 用 `_storageLocation`，其注释写明「固定时区的钟点取锚点区（北京 11:00
+   挪到今天仍是北京 11:00）」，依据嘀嗒《01-任务/07-固定时间与固定时区.md》`:48`），而列表读的是设备当地
+   展示墙钟（`_displayLocation` 对这一档返回 null）⇒ 设备与锚点跨午夜时展示日多一天，
+   任务**不会**出现在刚拖上去的那一档。2026-10-12 一次性探针实测（设备 `Asia/Shanghai`、
+   锚点 `America/Los_Angeles` 09:30、目标日 10-13）：
+   `stored=2026-10-13 16:30Z`、`display=2026-10-14 00:30`、`inDeviceLocalTodayWindow=false`。
+   本轮**不改这个行为**（它是四条「挪日」入口共用的既有语义），只把口径收窄成上面那句，
+   并补一条现状锁用例（`test/task_view_action_repository_test.dart`「固定时区档挪的是锚点区日历日」）。
+   反向探针 P8：把 `taskDateTimeForDisplayDay` 的基准从 `_storageLocation` 换成 `_displayLocation`
+   （＝#587 的 A 案）⇒ 只有那一条转红、同文件其余 25 条仍绿 ⇒ 它锁的正是这个域的选择。
+   A/B 两案的裁定另立 **FL Issue #587**，本轮不在此混做。
+2. **只有带日期窗口的三档是落点**，其余五档（收集箱 / 指派给我 / 全部 / 已完成 / 垃圾桶）
+   `smartListTimeConditionOf` 返回 null ⇒ 那几行根本不挂 `DragTarget`。
+   理由逐档写在代码注释里：收集箱是**清单归属**（`:57` 那一面早已覆盖），
+   指派给我按负责人、全部不限条件、已完成按完成态、垃圾桶按回收站，
+   都没有 `:63` 那句「关联的时间条件」可落成的语义。
+   「本端『最近七天』= 明天起 7 天（不含今天）」是谓词的既有口径（`_dateConditionMatches` 的
+   `next7days` 下界就是 `todayEnd`），所以它的落点日与「明天」相同 ——
+   这不是缺陷：两档不互斥，已在窗口后段的任务拖到「最近七天」按 3 跳过、拖到「明天」才会改日。
+3. **已在窗口内 ⇒ 不是有效落点**（`SidebarTaskDropController.acceptsSmartList`），
+   与 `acceptsList`「落回原清单不发写请求」、仓储「同一天不写不入队」同一口径，三层各自有用例。
+4. **只改截止日那一格**：时刻按**写入域的墙钟**保留（浮动与固定时区取锚点/设备当地那一侧的钟点、固定时间取锚点区钟点，见需求 1 那段）、清单归属、分组、标签一律不动；
+   无日期任务落成全天（不替用户编一个时刻）。写入通道复用 `TaskViewActionRepository.scheduleTaskToDay`
+   —— 它由 `addToToday`（推荐任务「+ 加入今天」）泛化而来，`addToToday` 只剩一层转调，
+   原三条用例仍是绿的，这就是这次泛化没改行为的对照。
+5. **成功不弹提示、失败在侧栏所在脚手架上弹「安排到「今天」失败」**，与清单行/标签行一致。
+
+## 已知偏差（本轮不修，另开单）
+
+`scheduleTaskToDay` 只挪 `dueAt`，**不动 `startAt`/`endAt`**。于是「有起止时段的任务」被拖到
+「今天」后，截止日在今天、时段仍在原日。这不是本面新造的口径：同一份仓库里
+`moveCalendarTask`（`:49` 那一面）与 `addToToday` 都是这个行为，且
+`test/task_view_action_repository_test.dart`「日历拖拽改期只更新截止时间」把这条约定钉着；
+本轮只是让第三条入口也走这条路。修法要一次覆盖三处（含跨 DST 的时段整体平移），
+属产品口径 ⇒ 已开 **FL Issue #584** 跟踪（三处入口、钉住现口径的那条用例、A/B 两个待定口径都写在那单里），
+PR 正文与本格互链。
+
+第二条偏差与「挪的是哪一个日历日」有关：`time_mode = 1` 固定时区**写锚点日、读展示日**，
+跨午夜时两者差一天 ⇒ **FL Issue #587**（本轮只加现状锁与收窄口径，不改行为；实测读数写在需求 1 那段）。
+
+## 测试与判据（本轮实测，不写推测）
+
+| 层 | 文件 | 用例数 |
+| --- | --- | --- |
+| 窗口/落点日与谓词对账 | `test/features/shell/smart_list_time_condition_test.dart` | 5 |
+| 编排（skip/落点日/无日期/失败） | `test/features/shell/sidebar_smart_list_drop_test.dart`（第一组） | 5 |
+| 真侧栏 + 真库 + 真手势 | `test/features/shell/sidebar_smart_list_drop_test.dart`（第二组） | 8 |
+| 仓储 `scheduleTaskToDay` | `test/task_view_action_repository_test.dart`（新增一组） | 6 |
+
+变异探针九发（P1–P8 + P3b）逐条红在期望用例上（P7 例外：那一发**应当不红**，理由记在 `tasks.md` T005），
+还原后工作树 clean；结果与「哪一层被谁咬住」也记在 T005。
+
+## 交付检查四件套
+
+| 项 | 结论 | 证据（本轮实测，不是叙述） |
+| --- | --- | --- |
+| ① 320px + 1.3 倍字号 | **满足** | `sidebar_smart_list_drop_test.dart` 最后一条：320×720、侧栏 320、字号 1.3 下拖到「最近七天」（三档里最长标签）行，悬停时 `takeException()` 为 null 且该行仍在 |
+| ② 独立读屏语义 | **部分满足** | 候选态文案「安排到「今天」」有专条用例（静止无 / 悬停有 / 落定无）。**没满足的那半**：拖拽本身不是读屏通道，本轮没给智能清单行加等效动作（清单行 !407、标签行 !406 同样是拖拽-only，本轮没有把它拉长）。详情页日期编辑是可达路径，但那是"另一次操作"，不等于这一刀的等价物 |
+| ③ 失败保留已加载数据 | **满足** | 仓储层「只读清单拒绝落点并原样抛出」用例断言行与 outbox 都无变化；控件层「写失败必须在侧栏脚手架上看得见」用例断言提示可见且不改数据 |
+| ④ 过期响应不覆盖新响应 | **未满足**（存量形状，本轮加了第三处实例，未把它拉长） | 落点的 skip 判定吃拖出快照（`lib/features/shell/sidebar.dart:692` `acceptsSmartList`、`:950` `acceptsList`），写库前才读当前行 ⇒ 快照与库分叉时这一拖被静默吞掉。已立 **FL Issue #585**，修法三种取舍写在那单里，本 PR 不顺手加闸门 |

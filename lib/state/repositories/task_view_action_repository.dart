@@ -404,13 +404,24 @@ class TaskViewActionRepository {
     });
   }
 
-  /// 将推荐任务安排到客户端本地“今天”。
+  /// 将推荐任务安排到客户端本地“今天”（推荐任务的「+」按钮）。
+  Future<void> addToToday(String taskId, {DateTime? today}) {
+    return scheduleTaskToDay(taskId, targetDay: today ?? DateTime.now());
+  }
+
+  /// 把任务的截止日挪到 [targetDay]（时刻/全天语义都不变）。
   ///
   /// 已有截止时间保留其展示墙钟时刻；无日期任务使用纯日期全天语义。
-  /// 已经属于今天时不重复写入，也不产生第二条 outbox mutation。
-  Future<void> addToToday(String taskId, {DateTime? today}) async {
-    final target = today ?? DateTime.now();
-    final targetDay = DateTime(target.year, target.month, target.day);
+  /// 已经属于那一天时不重复写入，也不产生第二条 outbox mutation。
+  ///
+  /// 「今天」与侧栏智能清单落点（嘀嗒《…07-任务与日历同时显示.md》`:63`「为任务自动添加
+  /// 该智能清单关联的时间条件」）走的是同一条写入路径，所以这里只认一个目标日，
+  /// 「哪一天」由调用方（`SmartListTimeCondition`）决定。
+  Future<void> scheduleTaskToDay(
+    String taskId, {
+    required DateTime targetDay,
+  }) async {
+    final day = DateTime(targetDay.year, targetDay.month, targetDay.day);
     await _db.transaction(() async {
       final task = await _requireWritableTask(taskId);
       final currentDisplay = task.dueAt == null
@@ -422,18 +433,18 @@ class TaskViewActionRepository {
               timeZone: task.timeZone,
             );
       if (currentDisplay != null &&
-          currentDisplay.year == targetDay.year &&
-          currentDisplay.month == targetDay.month &&
-          currentDisplay.day == targetDay.day) {
+          currentDisplay.year == day.year &&
+          currentDisplay.month == day.month &&
+          currentDisplay.day == day.day) {
         return;
       }
       final dueAt = task.dueAt == null
-          ? targetDay
+          ? day
           : task.allDay
-          ? targetDay
+          ? day
           : taskDateTimeForDisplayDay(
               task.dueAt!,
-              targetDay,
+              day,
               mode: TaskTimeMode.fromWire(task.timeMode),
               timeZone: task.timeZone,
             );

@@ -7,6 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_entities.dart';
+import 'package:zh_cloud_todo_flutter/core/time/task_time_formatter.dart';
+import 'package:zh_cloud_todo_flutter/core/time/task_time_mode.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_view_action_repository.dart';
 
 void main() {
@@ -711,6 +713,220 @@ void main() {
       await repository.getTaskWorkspaceViewMode(sourceKey: 'list:inbox'),
       'timeline',
     );
+  });
+
+  group('智能清单落点共用的 scheduleTaskToDay', () {
+    test('把截止日挪到指定日、保留展示墙钟时刻；时段留在原日（与日历拖拽改期同口径）', () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      await _seedViewActionList(db);
+      await (db.update(
+        db.todoTasks,
+      )..where((row) => row.id.equals('task-1'))).write(
+        TodoTasksCompanion(
+          dueAt: Value(DateTime.utc(2026, 3, 7, 17, 30)),
+          allDay: const Value(false),
+          fixedTimezone: const Value(true),
+          timeMode: const Value(2),
+          timeZone: const Value('America/Los_Angeles'),
+        ),
+      );
+      final repository = TaskViewActionRepository(db, SyncChangeQueue(db));
+
+      await repository.scheduleTaskToDay(
+        'task-1',
+        targetDay: DateTime(2026, 10, 20),
+      );
+
+      final task = await _taskById(db, 'task-1');
+      final queued = await db.select(db.todoSyncChanges).get();
+      expect(
+        task.dueAt?.toUtc(),
+        DateTime.utc(2026, 10, 20, 16, 30),
+        reason: '洛杉矶墙上 09:30 要跟着换日走（十月是 PDT，与三月的 PST 差一小时）',
+      );
+      expect(task.allDay, isFalse);
+      expect(task.timeZone, 'America/Los_Angeles');
+      expect(
+        task.startAt?.toUtc(),
+        DateTime.utc(2026, 7, 16, 9),
+        reason:
+            '本端「改日期」一律只挪截止时间，时段留在原日 —— 与 moveCalendarTask、addToToday 同一条约定，'
+            '不是这条落点漏了（登记为已知偏差见 specs/111，跨三处的修法另开单）',
+      );
+      expect(task.endAt?.toUtc(), DateTime.utc(2026, 7, 16, 10));
+      expect(queued, hasLength(1));
+      expect(queued.single.entity, SyncEntities.task);
+    });
+
+    test('无日期任务落成目标日全天并只入队一次', () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      await _seedViewActionList(db);
+      await (db.update(
+        db.todoTasks,
+      )..where((row) => row.id.equals('task-1'))).write(
+        const TodoTasksCompanion(
+          dueAt: Value(null),
+          startAt: Value(null),
+          endAt: Value(null),
+          allDay: Value(false),
+        ),
+      );
+      final repository = TaskViewActionRepository(db, SyncChangeQueue(db));
+      final targetDay = DateTime(2027, 1, 5);
+
+      await repository.scheduleTaskToDay('task-1', targetDay: targetDay);
+
+      final task = await _taskById(db, 'task-1');
+      expect(task.dueAt, targetDay);
+      expect(task.allDay, isTrue, reason: '无日期 = 只补日期，不替用户编一个时刻');
+      expect(await db.select(db.todoSyncChanges).get(), hasLength(1));
+    });
+
+    test('截止日已在目标日 ⇒ 一行都不写、一条 outbox 都不发', () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      await _seedViewActionList(db);
+      final dueAt = DateTime(2026, 12, 1, 10, 15);
+      await (db.update(
+        db.todoTasks,
+      )..where((row) => row.id.equals('task-1'))).write(
+        TodoTasksCompanion(dueAt: Value(dueAt), allDay: const Value(false)),
+      );
+      final repository = TaskViewActionRepository(db, SyncChangeQueue(db));
+
+      await repository.scheduleTaskToDay(
+        'task-1',
+        targetDay: DateTime(2026, 12, 1),
+      );
+
+      final task = await _taskById(db, 'task-1');
+      expect(task.dueAt, dueAt, reason: '同一天但时刻不同也不能被抹成 00:00 —— 那是改时刻，不是改日');
+      expect(
+        await db.select(db.todoSyncChanges).get(),
+        isEmpty,
+        reason: '没变化还入队 = 白发一次同步变更',
+      );
+    });
+
+    test('只读清单拒绝落点并原样抛出', () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      await _seedViewActionList(db, writable: false);
+      final before = await _taskById(db, 'task-1');
+      final repository = TaskViewActionRepository(db, SyncChangeQueue(db));
+
+      await expectLater(
+        repository.scheduleTaskToDay(
+          'task-1',
+          targetDay: DateTime(2026, 12, 1),
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            '当前清单为只读，无法修改任务',
+          ),
+        ),
+      );
+      expect(await _taskById(db, 'task-1'), before);
+      expect(await db.select(db.todoSyncChanges).get(), isEmpty);
+    });
+
+    test('浮动与固定时间：挪完之后「谓词读的那个日子」就是落点日，时刻不动', () async {
+      // 收窄后的不变量（specs/111 需求 1）：只有这两档成立。
+      // 断言走 taskWallClockDateTime —— 与 _dateConditionMatches 同一个读数口径，
+      // 不是「我以为写进去了」，而是「列表那一格真会这么判」。
+      for (final entry in <({int mode, String? zone})>[
+        (mode: 0, zone: null),
+        (mode: 2, zone: 'America/Los_Angeles'),
+      ]) {
+        final db = AppDatabase.forTesting(NativeDatabase.memory());
+        addTearDown(db.close);
+        await _seedViewActionList(db);
+        await (db.update(
+          db.todoTasks,
+        )..where((row) => row.id.equals('task-1'))).write(
+          TodoTasksCompanion(
+            dueAt: Value(
+              entry.mode == 0
+                  ? DateTime(2026, 10, 1, 9, 30)
+                  : DateTime.utc(2026, 10, 1, 16, 30),
+            ),
+            allDay: const Value(false),
+            fixedTimezone: Value(entry.mode != 0),
+            timeMode: Value(entry.mode),
+            timeZone: Value(entry.zone),
+          ),
+        );
+        final repository = TaskViewActionRepository(db, SyncChangeQueue(db));
+
+        await repository.scheduleTaskToDay(
+          'task-1',
+          targetDay: DateTime(2026, 10, 13),
+        );
+
+        final task = await _taskById(db, 'task-1');
+        final display = taskWallClockDateTime(
+          task.dueAt!,
+          allDay: task.allDay,
+          mode: TaskTimeMode.fromWire(task.timeMode),
+          timeZone: task.timeZone,
+        );
+        expect(
+          [display.year, display.month, display.day],
+          [2026, 10, 13],
+          reason: 'timeMode ${entry.mode} 挪日之后，读的那一侧必须落在 10-13',
+        );
+        expect(
+          [display.hour, display.minute],
+          [9, 30],
+          reason: 'timeMode ${entry.mode}：只换日，钟点留着',
+        );
+      }
+    });
+
+    test('固定时区档挪的是锚点区日历日：这条现状要钉住（跨午日的后果见 FL #587）', () async {
+      // 一次性探针实测读数（2026-10-12，设备 Asia/Shanghai）：
+      //   stored=2026-10-13 16:30:00.000Z  display=2026-10-14 00:30:00.000
+      //   ⇒ 展示日比落点日多一天，任务不会出现在刚拖上去的「今天」里。
+      // 这不是本轮造的口径：taskDateTimeForDisplayDay 的注释写明「固定时区的钟点取锚点区
+      // （北京 11:00 挪到今天仍是北京 11:00）」，依据是嘀嗒《01-任务/07-固定时间与固定时区.md》:48。
+      // 本条只锁「写进去的是锚点日 + 锚点钟点」，A/B 两个修法由 #587 那一轮裁。
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      await _seedViewActionList(db);
+      await (db.update(
+        db.todoTasks,
+      )..where((row) => row.id.equals('task-1'))).write(
+        TodoTasksCompanion(
+          dueAt: Value(DateTime.utc(2026, 10, 1, 16, 30)),
+          allDay: const Value(false),
+          fixedTimezone: const Value(true),
+          timeMode: const Value(1),
+          timeZone: const Value('America/Los_Angeles'),
+        ),
+      );
+      final repository = TaskViewActionRepository(db, SyncChangeQueue(db));
+
+      await repository.scheduleTaskToDay(
+        'task-1',
+        targetDay: DateTime(2026, 10, 13),
+      );
+
+      final task = await _taskById(db, 'task-1');
+      expect(
+        task.dueAt?.toUtc(),
+        DateTime.utc(2026, 10, 13, 16, 30),
+        reason:
+            '锚点区 10-13 09:30（十月是 PDT）——写成设备当地的 10-13 09:30 就是改了另一档语义，'
+            '要改也得连 calendarDueAtForDay 与时间线挪动一起改（FL #587）',
+      );
+      expect(task.timeZone, 'America/Los_Angeles');
+      expect(task.allDay, isFalse);
+      expect(await db.select(db.todoSyncChanges).get(), hasLength(1));
+    });
   });
 }
 

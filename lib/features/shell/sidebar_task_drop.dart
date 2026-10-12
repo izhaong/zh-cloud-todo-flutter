@@ -4,12 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/app_database.dart';
+import '../../core/time/task_time_formatter.dart';
+import '../../core/time/task_time_mode.dart';
 import '../../state/providers.dart';
+import 'smart_list_time_condition.dart';
 
 /// 嘀嗒《02-功能指南/02-日历/07-任务与日历同时显示.md》:57「拖动到清单或标签上」
 /// `:59`「任务会被移动到目标清单，或自动打上相应标签。」
+/// 与 `:61`「拖动到智能清单上」`:63`「会为任务自动添加该智能清单关联的时间条件，
+/// 例如“今天”、“本周”等。」
 ///
-/// 落点是侧栏的清单行与标签行；拖出源沿用既有的 `Draggable<TodoTask>`
+/// 落点是侧栏的清单行、标签行与「带时间条件」的智能清单行；拖出源沿用既有的
+/// `Draggable<TodoTask>`
 /// （看板、时间线、并列视图的清单行），所以这一面在双栏并列时才看得见，
 /// 但落点本身不挑视图 —— 嘀嗒那句原文也没有把落点限定在并列视图内。
 class SidebarDropZone extends StatefulWidget {
@@ -75,7 +81,11 @@ enum SidebarDropOutcome { applied, skipped, failed }
 /// 仓储通过函数接缝注入（不是 `TaskRepository` 本身）：这样「不发写请求」「串行」
 /// 「失败后链条不断」三件事能在不伪造整个仓储的前提下被测到。
 class SidebarTaskDropController {
-  SidebarTaskDropController({required this.moveTask, required this.attachTag});
+  SidebarTaskDropController({
+    required this.moveTask,
+    required this.attachTag,
+    required this.scheduleToDay,
+  });
 
   /// 换清单；实现侧负责清掉属于原清单的 `sectionId`。
   final Future<void> Function(String taskId, String listId) moveTask;
@@ -83,10 +93,18 @@ class SidebarTaskDropController {
   /// 「自动打上相应标签」= 追加；实现侧负责去重（已有就不写）。
   final Future<void> Function(String taskId, String tagId) attachTag;
 
+  /// 智能清单落点：把截止日挪到该清单时间条件窗口的首日。
+  final Future<void> Function(String taskId, DateTime targetDay) scheduleToDay;
+
   final Map<String, Future<void>> _chain = <String, Future<void>>{};
 
   /// 清单行只在「真的换清单」时才是有效落点：落回原清单不该发写请求。
   bool acceptsList(TodoTask task, String listId) => task.listId != listId;
+
+  /// 智能清单行同理：任务的截止日已经落在这一档的窗口里 ⇒ 条件已满足，不是落点
+  /// （与 [acceptsList]、`scheduleTaskToDay` 的「已是那天就不写」同一口径）。
+  bool acceptsSmartList(TodoTask task, SmartListTimeCondition condition) =>
+      !condition.satisfiedBy(_dueWallClockOf(task));
 
   Future<SidebarDropOutcome> moveToList(TodoTask task, String listId) {
     if (!acceptsList(task, listId)) {
@@ -94,6 +112,23 @@ class SidebarTaskDropController {
     }
     // :59「移动到目标清单」只提清单，没提时间 ⇒ 时间安排一毫秒都不动。
     return _serialize(task.id, () => moveTask(task.id, listId));
+  }
+
+  /// 嘀嗒 `:61`「拖动到智能清单上」`:63`「会为任务自动添加该智能清单关联的时间条件」。
+  ///
+  /// 只挪截止日那一格：时刻（有则保留）、清单归属、分组、标签都不动 ——
+  /// 原文这一句说的是「添加时间条件」，没说换清单。
+  Future<SidebarDropOutcome> applySmartListTimeCondition(
+    TodoTask task,
+    SmartListTimeCondition condition,
+  ) {
+    if (!acceptsSmartList(task, condition)) {
+      return Future.value(SidebarDropOutcome.skipped);
+    }
+    return _serialize(
+      task.id,
+      () => scheduleToDay(task.id, condition.targetDay),
+    );
   }
 
   Future<SidebarDropOutcome> addTagToTask(TodoTask task, String tagId) {
@@ -120,6 +155,19 @@ class SidebarTaskDropController {
     if (_chain[taskId] == current) _chain.remove(taskId);
     return outcome;
   }
+
+  /// 与 `_dateConditionMatches`（任务页的过滤谓词）同一套展示墙钟换算，
+  /// 否则「落点判据」与「这一档清单到底显示哪些任务」会各说各话。
+  DateTime? _dueWallClockOf(TodoTask task) {
+    final due = task.dueAt;
+    if (due == null) return null;
+    return taskWallClockDateTime(
+      due,
+      allDay: task.allDay,
+      mode: TaskTimeMode.fromWire(task.timeMode),
+      timeZone: task.timeZone,
+    );
+  }
 }
 
 /// 控制器挂在 provider 上而不是每次 build 新建：串行链要活得过重绘，
@@ -140,6 +188,11 @@ final sidebarTaskDropControllerProvider = Provider<SidebarTaskDropController>((
       final current = await repository.tagIdsOf(taskId);
       if (current.contains(tagId)) return;
       await repository.setTaskTags(taskId, <String>[...current, tagId]);
+    },
+    scheduleToDay: (taskId, targetDay) async {
+      final repository = ref.read(taskViewActionRepositoryProvider);
+      if (repository == null) throw StateError('任务视图操作仓储未就绪');
+      await repository.scheduleTaskToDay(taskId, targetDay: targetDay);
     },
   );
 });
