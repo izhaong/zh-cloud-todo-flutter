@@ -1616,6 +1616,135 @@ void main() {
     expect(find.bySemanticsLabel('2026-08-02 专注日历 45 分钟'), findsOneWidget);
   });
 
+  testWidgets('最佳专注时间：有 hourlyTrend 就出 24 格分布与峰值文案', (tester) async {
+    final api = _FakePomodoroApi()
+      ..statsByPeriod['week'] = const PomodoroStatsDto(
+        totalSessions: 4,
+        totalMinutes: 55,
+        bestHour: '09:00',
+        sessionTrend: [PomodoroDailyStatsDto(date: '2026-08-02', count: 4)],
+        // 两位数是刻意选的：`_FocusTrendChart` 的日柱标签在三位数（如 110）时会把
+        // 34px 宽的列挤成两行并溢出 4px —— 那是既有缺陷，另立单跟，不在本用例里撞它。
+        minutesTrend: [PomodoroDailyStatsDto(date: '2026-08-02', count: 55)],
+        hourlyTrend: [
+          PomodoroHourlyStatsDto(hour: 8, minutes: 0),
+          PomodoroHourlyStatsDto(hour: 9, minutes: 55),
+          PomodoroHourlyStatsDto(hour: 10, minutes: 40),
+          PomodoroHourlyStatsDto(hour: 11, minutes: 15),
+        ],
+      );
+    await _pumpPage(tester, api: api);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('pomodoro-stats-hourly-title')),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    expect(find.text('最佳专注时间'), findsOneWidget);
+    // 嘀嗒 :27 要的是"区域"：峰值那几格要被点名，而不是只有一个 bestHour 字符串。
+    expect(
+      find.byKey(const Key('pomodoro-stats-hourly-summary')),
+      findsOneWidget,
+    );
+    expect(
+      find.text('最佳时段 09:00（各 55 分钟）'),
+      findsOneWidget,
+      reason: '分钟数等于最大值的小时都算峰值',
+    );
+    expect(
+      find.byKey(const Key('pomodoro-stats-hourly-bar-8')),
+      findsOneWidget,
+      reason: '0 分钟的小时也出一格，柱状图才不缺位',
+    );
+    expect(find.bySemanticsLabel('最佳专注时间按小时分布，最高 55 分钟'), findsOneWidget);
+  });
+
+  testWidgets('老服务端没有 hourlyTrend 与按天数据时，两块都不出现（宁缺勿半张图）', (tester) async {
+    final api = _FakePomodoroApi()
+      ..statsByPeriod['week'] = const PomodoroStatsDto(
+        totalSessions: 1,
+        totalMinutes: 45,
+        bestHour: '09:00',
+        sessionTrend: [PomodoroDailyStatsDto(date: '2026-08-02', count: 1)],
+        minutesTrend: [PomodoroDailyStatsDto(date: '2026-08-02', count: 45)],
+      )
+      ..statsByPeriod['year'] = const PomodoroStatsDto(
+        totalSessions: 1,
+        totalMinutes: 45,
+        bestHour: null,
+        sessionTrend: [PomodoroDailyStatsDto(date: '2026-08', count: 1)],
+        minutesTrend: [PomodoroDailyStatsDto(date: '2026-08', count: 45)],
+      );
+    await _pumpPage(tester, api: api);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('pomodoro-stats-section')),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    // 正对照：week 期既有的两张图照旧在，说明页面渲染路径没断。
+    expect(find.text('专注节奏'), findsOneWidget);
+    expect(find.text('专注日历'), findsOneWidget);
+    expect(
+      find.text('最佳专注时间'),
+      findsNothing,
+      reason: '服务端没给 hourlyTrend ⇒ 不能凭空画一柱都没有的图',
+    );
+
+    await tester.tap(find.text('12 个月'));
+    await tester.pump();
+    expect(
+      find.text('年度热力图'),
+      findsNothing,
+      reason: 'year 期但服务端没给按天数据 ⇒ 不假装有年度盘',
+    );
+    expect(find.text('专注日历'), findsNothing, reason: 'year 期仍沿用旧行为：不渲染按天的专注日历');
+  });
+
+  testWidgets('年度热力图：year 期有按天数据就按天出格，深浅按分钟', (tester) async {
+    final api = _FakePomodoroApi()
+      ..statsByPeriod['year'] = const PomodoroStatsDto(
+        totalSessions: 3,
+        totalMinutes: 90,
+        bestHour: '09:00',
+        sessionTrend: [PomodoroDailyStatsDto(date: '2026-07', count: 1)],
+        minutesTrend: [PomodoroDailyStatsDto(date: '2026-07', count: 90)],
+        yearlyDailyMinutes: [
+          PomodoroDailyStatsDto(date: '2026-07-01', count: 30),
+          PomodoroDailyStatsDto(date: '2026-07-02', count: 60),
+        ],
+      );
+    await _pumpPage(tester, api: api);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('pomodoro-stats-section')),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('12 个月'));
+    await tester.pump();
+
+    expect(
+      find.text('年度热力图'),
+      findsOneWidget,
+      reason: '嘀嗒 :31 那一节要按天着色，year 期不能再整块不渲染',
+    );
+    expect(
+      find.byKey(const Key('pomodoro-stats-year-cell-2026-07-01')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('pomodoro-stats-year-cell-2026-07-02')),
+      findsOneWidget,
+    );
+    expect(
+      find.text('2026-07'),
+      findsOneWidget,
+      reason: '按月分组要有月份标，否则一年 300 多个格子没人看得懂',
+    );
+    expect(find.bySemanticsLabel('年度热力图，共 1 个月，单日最长 60 分钟'), findsOneWidget);
+    expect(find.text('专注日历'), findsNothing, reason: '同一屏不该同时出现按天专注日历与年度盘两套');
+  });
+
   testWidgets(
     'year statistics use month labels and task distribution semantics',
     (tester) async {

@@ -155,6 +155,21 @@ class PomodoroDailyStatsDto {
   }
 }
 
+/// 服务端 `hourlyTrend` 的一格：小时 + 该小时累计分钟。
+class PomodoroHourlyStatsDto {
+  const PomodoroHourlyStatsDto({required this.hour, required this.minutes});
+
+  final int hour;
+  final int minutes;
+
+  factory PomodoroHourlyStatsDto.fromJson(Map<String, dynamic> json) {
+    return PomodoroHourlyStatsDto(
+      hour: (json['hour'] as num?)?.toInt() ?? -1,
+      minutes: (json['minutes'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
 class PomodoroTaskDistributionDto {
   const PomodoroTaskDistributionDto({
     this.taskId,
@@ -224,6 +239,8 @@ class PomodoroStatsDto {
     required this.minutesTrend,
     this.bestHour,
     this.taskDistribution = const [],
+    this.hourlyTrend = const [],
+    this.yearlyDailyMinutes = const [],
   });
 
   const PomodoroStatsDto.empty()
@@ -232,7 +249,9 @@ class PomodoroStatsDto {
       bestHour = null,
       sessionTrend = const [],
       minutesTrend = const [],
-      taskDistribution = const [];
+      taskDistribution = const [],
+      hourlyTrend = const [],
+      yearlyDailyMinutes = const [];
 
   final int totalSessions;
   final int totalMinutes;
@@ -240,6 +259,15 @@ class PomodoroStatsDto {
   final List<PomodoroDailyStatsDto> sessionTrend;
   final List<PomodoroDailyStatsDto> minutesTrend;
   final List<PomodoroTaskDistributionDto> taskDistribution;
+
+  /// 0-23 每小时的专注分钟（服务端 `hourlyTrend`，长度恒 24）。嘀嗒《04-专注数据统计》
+  /// :27「按月统计你的最佳专注时间区域」要的是分布，不是 `bestHour` 那一格。
+  /// 老服务端不给这个键 ⇒ 空列表，消费侧据此退回今天的样子，不画半张图。
+  final List<PomodoroHourlyStatsDto> hourlyTrend;
+
+  /// `period=year` 才有的按天分钟数（服务端 `dailyMinutesTrend`，`yyyy-MM-dd`）。
+  /// 嘀嗒 :32「色块深浅代表**每天**专注时间的长短」⇒ 月聚合的 `minutesTrend` 不够用。
+  final List<PomodoroDailyStatsDto> yearlyDailyMinutes;
 
   double get averageMinutesPerDay =>
       minutesTrend.isEmpty ? 0 : totalMinutes / minutesTrend.length;
@@ -275,6 +303,17 @@ class PomodoroStatsDto {
       sessionTrend: parseTrend(json['trend']),
       minutesTrend: parseTrend(json['minutesTrend']),
       taskDistribution: parseDistribution(json['taskDistribution']),
+      hourlyTrend: (json['hourlyTrend'] is List)
+          ? (json['hourlyTrend'] as List)
+                .whereType<Map>()
+                .map(
+                  (item) => PomodoroHourlyStatsDto.fromJson(
+                    Map<String, dynamic>.from(item),
+                  ),
+                )
+                .toList(growable: false)
+          : const [],
+      yearlyDailyMinutes: parseTrend(json['dailyMinutesTrend']),
     );
   }
 }
