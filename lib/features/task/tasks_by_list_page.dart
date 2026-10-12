@@ -28,6 +28,7 @@ import '../tag/hash_tag_input.dart';
 import 'list_drop_target.dart';
 import '../list/list_properties.dart';
 import 'smart_grouping.dart';
+import 'task_subtask_drop.dart';
 import 'task_view_mutation_feedback.dart';
 import 'view_mode.dart';
 import 'views/calendar_view.dart';
@@ -553,6 +554,8 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           batchSelectedTaskIds: _batchSelectedTaskIds,
           onBatchSelectionChanged: _updateBatchSelection,
           onBatchSelectionRequested: _handleBatchSelectionRequest,
+          subtaskDropEnabled: _subtaskDropEnabled,
+          onReparentSubtask: _reparentAsSubtask,
         );
       case TaskViewMode.kanban:
         final listId = _selectedListId;
@@ -998,6 +1001,38 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     final dueRange = widget.initialDueRange;
     if (dueRange != null && dueRange.isNotEmpty) return 'smart:due:$dueRange';
     return 'smart:all';
+  }
+
+  /// 嘀嗒《…06-多级任务.md》`:28`「这一功能在「今天」、「最近七天」等智能清单中不可用，
+  /// 只可以在「收集箱」以及自己创建的普通清单中可用」⇒ 右下带落点的闸门。
+  ///
+  /// 页面身份复用 [_viewPreferenceSourceKey] 那一份判定，不另起一套"我在哪一页"的口径：
+  /// `list:` 前缀＝某个清单或收集箱（`list:inbox`），
+  /// `smart:` 前缀＝今天/明天/最近七天/已完成/指派给我/全部。
+  /// 后半句的「自己创建的普通清单」＝可写清单：订阅/共享来的清单 `TodoLists.writable` 为 false，
+  /// 仓储那条通道会抛「当前清单为只读，无法修改任务」（`task_repository.dart:653`），
+  /// 所以那一类清单上这一行根本不该是落点，而不是拖上去再报错。
+  bool get _subtaskDropEnabled {
+    if (!_viewPreferenceSourceKey.startsWith('list:')) return false;
+    final listId = _selectedListId;
+    if (listId == null) return false;
+    if (listId == kInboxListId) return true;
+    final lists =
+        ref.watch(listsStreamProvider).valueOrNull ?? const <TodoList>[];
+    for (final list in lists) {
+      if (list.id == listId) return list.writable;
+    }
+    // 流里读不到这一行 ⇒ 不给落点：拿不准时宁可没有，也别让人拖出一个只读报错。
+    return false;
+  }
+
+  /// 落点只走仓储那条既有通道：自引用、成环（`任务父子关系形成循环`）与五层上限
+  /// （`任务层级不能超过五级`）都在它里面，这里**不复制判定** —— 复制一份就会漂。
+  /// 抛出的 StateError 由落点组件转成可见提示。
+  Future<void> _reparentAsSubtask(TodoTask dragged, TodoTask parent) async {
+    final repository = ref.read(taskRepositoryProvider);
+    if (repository == null) throw StateError('任务仓储未就绪');
+    await repository.reparent(dragged.id, parent.id);
   }
 
   void _toggleBatchSelection() {
@@ -1900,6 +1935,8 @@ class _ListBody extends StatefulWidget {
     required this.batchSelectedTaskIds,
     required this.onBatchSelectionChanged,
     required this.onBatchSelectionRequested,
+    required this.subtaskDropEnabled,
+    required this.onReparentSubtask,
   });
 
   final List<TodoTask> items;
@@ -1925,6 +1962,15 @@ class _ListBody extends StatefulWidget {
     _TaskSelectionIntent intent,
   )
   onBatchSelectionRequested;
+
+  /// 嘀嗒《…06-多级任务.md》`:28`：右下带落点只在收集箱与自建普通清单里可用。
+  /// 由页面那一层算好传进来 —— 页面身份只有一把尺（`_viewPreferenceSourceKey`），
+  /// 列表体不再自己判一次"我在哪一页"。
+  final bool subtaskDropEnabled;
+
+  /// 把 dragged 变成 parent 的子任务；实现走 `TaskRepository.reparent`（页面的同名方法）。
+  final Future<void> Function(TodoTask dragged, TodoTask parent)
+  onReparentSubtask;
 
   @override
   State<_ListBody> createState() => _ListBodyState();
@@ -2029,9 +2075,13 @@ class _ListBodyState extends State<_ListBody> {
           bottom: TodoLayoutTokens.mainHorizontalInset,
         ),
         itemCount: entries.length,
-        // Flutter 3.41 (the local baseline) does not expose `onReorderItem`
-        // yet. Keep the established callback until the project baseline moves
-        // forward; the adjustment below preserves its pre-3.44 index contract.
+        // `onReorderItem` DOES exist in the SDK we build with (measured on
+        // Flutter 3.44.8: material/reorderable_list.dart exposes both callbacks
+        // and asserts exactly one is set; the claim this comment used to make --
+        // that the local baseline lacks it -- was stale). We keep `onReorder`
+        // deliberately: the index adjustment below is written against that
+        // callback's contract, and switching it is a behavior change this face
+        // does not need. What got fixed is the false claim, not the choice.
         // ignore: deprecated_member_use
         onReorder: (oldIndex, newIndex) async {
           if (widget.batchSelectionActive) return;
@@ -2089,21 +2139,26 @@ class _ListBodyState extends State<_ListBody> {
           final task = entry as TodoTask;
           return KeyedSubtree(
             key: rowKeys[index],
-            child: _CalendarDragSource(
+            child: TaskSubtaskDropTarget(
               task: task,
-              child: TaskRowHost(
+              enabled: widget.subtaskDropEnabled,
+              onDrop: (dragged) => widget.onReparentSubtask(dragged, task),
+              child: _CalendarDragSource(
                 task: task,
-                taskSections: widget.sections,
-                desktopMode: true,
-                enableSwipeGestures: false,
-                reorderIndex: widget.batchSelectionActive ? null : index,
-                selected: widget.selectedTaskId == task.id,
-                onTap: (taskId) =>
-                    _handleTaskActivation(taskId, visibleTaskIds),
-                batchSelectionActive: widget.batchSelectionActive,
-                batchSelected: widget.batchSelectedTaskIds.contains(task.id),
-                onBatchSelectionChanged: (selected) =>
-                    widget.onBatchSelectionChanged(task.id, selected),
+                child: TaskRowHost(
+                  task: task,
+                  taskSections: widget.sections,
+                  desktopMode: true,
+                  enableSwipeGestures: false,
+                  reorderIndex: widget.batchSelectionActive ? null : index,
+                  selected: widget.selectedTaskId == task.id,
+                  onTap: (taskId) =>
+                      _handleTaskActivation(taskId, visibleTaskIds),
+                  batchSelectionActive: widget.batchSelectionActive,
+                  batchSelected: widget.batchSelectedTaskIds.contains(task.id),
+                  onBatchSelectionChanged: (selected) =>
+                      widget.onBatchSelectionChanged(task.id, selected),
+                ),
               ),
             ),
           );
@@ -2127,20 +2182,25 @@ class _ListBodyState extends State<_ListBody> {
           );
         }
         final task = entry as TodoTask;
-        return _CalendarDragSource(
+        return TaskSubtaskDropTarget(
           task: task,
-          child: TaskRowHost(
+          enabled: widget.subtaskDropEnabled,
+          onDrop: (dragged) => widget.onReparentSubtask(dragged, task),
+          child: _CalendarDragSource(
             task: task,
-            taskSections: widget.sections,
-            desktopMode: widget.desktopMode,
-            enableSwipeGestures:
-                !widget.desktopMode && !widget.batchSelectionActive,
-            selected: widget.selectedTaskId == task.id,
-            onTap: (taskId) => _handleTaskActivation(taskId, visibleTaskIds),
-            batchSelectionActive: widget.batchSelectionActive,
-            batchSelected: widget.batchSelectedTaskIds.contains(task.id),
-            onBatchSelectionChanged: (selected) =>
-                widget.onBatchSelectionChanged(task.id, selected),
+            child: TaskRowHost(
+              task: task,
+              taskSections: widget.sections,
+              desktopMode: widget.desktopMode,
+              enableSwipeGestures:
+                  !widget.desktopMode && !widget.batchSelectionActive,
+              selected: widget.selectedTaskId == task.id,
+              onTap: (taskId) => _handleTaskActivation(taskId, visibleTaskIds),
+              batchSelectionActive: widget.batchSelectionActive,
+              batchSelected: widget.batchSelectedTaskIds.contains(task.id),
+              onBatchSelectionChanged: (selected) =>
+                  widget.onBatchSelectionChanged(task.id, selected),
+            ),
           ),
         );
       },
