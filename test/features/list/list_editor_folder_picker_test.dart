@@ -633,6 +633,10 @@ class _CreateFailingRepository extends ListRepository {
     required String name,
     String? folderLocalId,
     String? color,
+    String? icon,
+    String backgroundType = 'theme',
+    String? backgroundValue,
+    bool showInSmartList = true,
     int sortOrder = 0,
   }) {
     throw StateError('故意让新建失败');

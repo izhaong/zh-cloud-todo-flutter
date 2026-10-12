@@ -65,6 +65,10 @@ class ListRepository {
     required String name,
     String? folderLocalId,
     String? color,
+    String? icon,
+    String backgroundType = 'theme',
+    String? backgroundValue,
+    bool showInSmartList = true,
     int sortOrder = 0,
   }) async {
     return _db.transaction(() async {
@@ -80,6 +84,10 @@ class ListRepository {
               folderLocalId: Value(folderLocalId),
               folderId: Value(folder?.serverId),
               color: Value(color),
+              icon: Value(icon),
+              backgroundType: Value(backgroundType),
+              backgroundValue: Value(backgroundValue),
+              showInSmartList: Value(showInSmartList),
               sortOrder: Value(sortOrder),
               updatedAt: now,
               createdAt: now,
@@ -147,6 +155,90 @@ class ListRepository {
     final now = DateTime.now();
     await (_db.update(_db.todoLists)..where((t) => t.id.equals(listId))).write(
       TodoListsCompanion(color: Value(color), updatedAt: Value(now)),
+    );
+    final row = await (_db.select(
+      _db.todoLists,
+    )..where((t) => t.id.equals(listId))).getSingle();
+    await _queue.enqueue(
+      entity: SyncEntities.list,
+      op: SyncOps.upsert,
+      localId: listId,
+      serverId: row.serverId,
+      payload: row.toJson(),
+    );
+    return row;
+  }
+
+  /// 设置或清除清单 Emoji 图标（嘀嗒同页 :86/:87「清单图标」）。
+  /// 传 null 即清除，显式 null 随 payload 出库让另一端回退。
+  Future<TodoList> setIcon(String listId, String? icon) async {
+    final now = DateTime.now();
+    await (_db.update(_db.todoLists)..where((t) => t.id.equals(listId))).write(
+      TodoListsCompanion(icon: Value(icon), updatedAt: Value(now)),
+    );
+    final row = await (_db.select(
+      _db.todoLists,
+    )..where((t) => t.id.equals(listId))).getSingle();
+    await _queue.enqueue(
+      entity: SyncEntities.list,
+      op: SyncOps.upsert,
+      localId: listId,
+      serverId: row.serverId,
+      payload: row.toJson(),
+    );
+    return row;
+  }
+
+  /// 设置清单背景（嘀嗒同页 :103-:111 四样式）。
+  ///
+  /// [type] 取 `theme`/`color`/`gradient`/`image`；[value] 为 color/gradient
+  /// 的色值或 image 的 URL，theme 恒传 null。嘀嗒 :118：「已完成」「已放弃」
+  /// 「垃圾桶」不支持背景 —— 本端这三者是智能清单，同样在这里显式拒绝，
+  /// 不靠"没有入口"来保护。
+  Future<TodoList> setBackground(
+    String listId,
+    String type,
+    String? value,
+  ) async {
+    final existing = await (_db.select(
+      _db.todoLists,
+    )..where((t) => t.id.equals(listId))).getSingleOrNull();
+    if (existing == null) {
+      throw StateError('清单不存在');
+    }
+    if (existing.id == 'inbox' || existing.name.startsWith('smart:')) {
+      throw ArgumentError('该清单不支持设置背景');
+    }
+    final normalizedType = type.isEmpty ? 'theme' : type;
+    final now = DateTime.now();
+    await (_db.update(_db.todoLists)..where((t) => t.id.equals(listId))).write(
+      TodoListsCompanion(
+        backgroundType: Value(normalizedType),
+        backgroundValue: Value(normalizedType == 'theme' ? null : value),
+        updatedAt: Value(now),
+      ),
+    );
+    final row = await (_db.select(
+      _db.todoLists,
+    )..where((t) => t.id.equals(listId))).getSingle();
+    await _queue.enqueue(
+      entity: SyncEntities.list,
+      op: SyncOps.upsert,
+      localId: listId,
+      serverId: row.serverId,
+      payload: row.toJson(),
+    );
+    return row;
+  }
+
+  /// 设置「在智能清单中显示/隐藏」（嘀嗒同页 :73）。
+  Future<TodoList> setShowInSmartList(String listId, bool visible) async {
+    final now = DateTime.now();
+    await (_db.update(_db.todoLists)..where((t) => t.id.equals(listId))).write(
+      TodoListsCompanion(
+        showInSmartList: Value(visible),
+        updatedAt: Value(now),
+      ),
     );
     final row = await (_db.select(
       _db.todoLists,

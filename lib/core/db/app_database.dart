@@ -45,6 +45,24 @@ class TodoLists extends Table {
   /// 清单颜色（嘀嗒《02-用清单管理任务》:73，specs/102 / FL #339）。
   /// `#RRGGBB` 字符串；服务端同名列 `todo_list.color`，出库 payload 走 `toJson()`。
   TextColumn get color => text().nullable()();
+
+  /// 清单 Emoji 图标（嘀嗒同页 :86/:87「清单图标」两种方式，specs/105 / FL #339）。
+  /// 存 emoji 字符本身；服务端同名列 `todo_list.icon`。
+  TextColumn get icon => text().nullable()();
+
+  /// 清单背景（嘀嗒同页 :103-:111 四样式：theme/color/gradient/image，specs/105）。
+  /// 服务端同名列 `todo_list.background_type`，空串一律按 theme 处理。
+  TextColumn get backgroundType =>
+      text().withDefault(const Constant('theme'))();
+
+  /// 背景取值：color/gradient 存 `#RRGGBB`（gradient 存 `hex1,hex2`），image 存 URL；
+  /// theme 恒 null。服务端同名列 `todo_list.background_value`。
+  TextColumn get backgroundValue => text().nullable()();
+
+  /// 「在智能清单中显示/隐藏」（嘀嗒同页 :73）。false 时该清单任务不进智能清单
+  /// 与徽章计数，但选中该清单本身仍能看到。服务端同名列 `todo_list.show_in_smart_list`。
+  BoolColumn get showInSmartList =>
+      boolean().withDefault(const Constant(true))();
   TextColumn get accessRole =>
       text().withDefault(const Constant('owner'))(); // owner/editor/viewer
   BoolColumn get writable => boolean().withDefault(const Constant(true))();
@@ -461,7 +479,7 @@ class AppDatabase extends _$AppDatabase {
   }) : super(_open(_userDatabaseName(tenantId, userId, testNamespace)));
 
   @override
-  int get schemaVersion => 29;
+  int get schemaVersion => 30;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -768,6 +786,35 @@ class AppDatabase extends _$AppDatabase {
           // 不回填：存量清单本来就没有颜色，null 即真实状态；
           // 服务端 todo_list.color 已有值时下次成功 pull 会补上。
         }
+      }
+      if (from < 30) {
+        if (!await _columnExists(m, todoLists.actualTableName, 'icon')) {
+          await m.addColumn(todoLists, todoLists.icon);
+        }
+        if (!await _columnExists(
+          m,
+          todoLists.actualTableName,
+          'background_type',
+        )) {
+          await m.addColumn(todoLists, todoLists.backgroundType);
+        }
+        if (!await _columnExists(
+          m,
+          todoLists.actualTableName,
+          'background_value',
+        )) {
+          await m.addColumn(todoLists, todoLists.backgroundValue);
+        }
+        if (!await _columnExists(
+          m,
+          todoLists.actualTableName,
+          'show_in_smart_list',
+        )) {
+          await m.addColumn(todoLists, todoLists.showInSmartList);
+        }
+        // 不回填：icon/background_value 存量 null、background_type 默认
+        // theme、show_in_smart_list 默认 true 都等于改造前的真实行为；
+        // 服务端已有值时下次成功 pull 会补上。
       }
     },
   );

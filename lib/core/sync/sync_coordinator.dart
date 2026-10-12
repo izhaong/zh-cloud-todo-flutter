@@ -1532,6 +1532,30 @@ class SyncCoordinator {
             ? payload['color']?.toString()
             : existing?.color,
       ),
+      icon: Value(
+        // 同 color 口径：显式 null 是对端清图标，缺键保留本地值。
+        payload.containsKey('icon')
+            ? payload['icon']?.toString()
+            : existing?.icon,
+      ),
+      backgroundType: Value(
+        // 与服务端同一条口径：空串/缺省一律按 theme 处理，不猜。
+        payload.containsKey('backgroundType')
+            ? ((payload['backgroundType']?.toString() ?? '').isEmpty
+                  ? 'theme'
+                  : payload['backgroundType'].toString())
+            : existing?.backgroundType ?? 'theme',
+      ),
+      backgroundValue: Value(
+        payload.containsKey('backgroundValue')
+            ? payload['backgroundValue']?.toString()
+            : existing?.backgroundValue,
+      ),
+      showInSmartList: Value(
+        payload.containsKey('showInSmartList')
+            ? (payload['showInSmartList'] as bool? ?? true)
+            : existing?.showInSmartList ?? true,
+      ),
       sortOrder: Value((payload['sortOrder'] as num?)?.toInt() ?? 0),
       isPinned: Value(
         payload['isPinned'] as bool? ?? existing?.isPinned ?? false,

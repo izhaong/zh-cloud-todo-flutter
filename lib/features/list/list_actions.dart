@@ -6,6 +6,7 @@ import '../../core/db/app_database.dart';
 import '../../state/providers.dart';
 import '../collaboration/list_member_page.dart';
 import 'list_editor_sheet.dart';
+import 'list_properties.dart';
 
 /// 清单的「编辑 / 共享协作 / 删除」动作（条目命名照抄嘀嗒《01-如何共享清单》）。
 ///
@@ -140,6 +141,12 @@ Future<void> showListActions(
               },
             ),
             ListTile(
+              key: const Key('sidebar-list-action-background'),
+              leading: const Icon(Icons.wallpaper_outlined),
+              title: const Text('背景'),
+              onTap: () => Navigator.pop(sheetContext, _ListAction.background),
+            ),
+            ListTile(
               key: const Key('sidebar-list-action-edit'),
               leading: const Icon(Icons.edit_outlined),
               title: const Text('编辑'),
@@ -170,6 +177,8 @@ Future<void> showListActions(
         isScrollControlled: true,
         builder: (_) => ListEditorSheet(existing: list),
       );
+    case _ListAction.background:
+      await ListBackgroundSheet.show(context, list);
     case _ListAction.share:
       await openListCollaboration(context, ref, list);
     case _ListAction.delete:
@@ -177,4 +186,4 @@ Future<void> showListActions(
   }
 }
 
-enum _ListAction { edit, share, delete }
+enum _ListAction { edit, background, share, delete }

@@ -915,6 +915,9 @@ class _ListRow extends ConsumerWidget {
         child: _SidebarRow(
           rowKey: ValueKey('todo-sidebar-list-${list.id}'),
           icon: Icons.list_alt_outlined,
+          // 嘀嗒《02-用清单管理任务》:86：设置了 Emoji 图标的清单，
+          // 行首图标换成该 Emoji；没设的清单维持原语义不变。
+          emoji: list.icon,
           label: list.name,
           selected: selected,
           colors: colors,
@@ -933,6 +936,7 @@ class _SidebarRow extends StatefulWidget {
   const _SidebarRow({
     required this.rowKey,
     required this.icon,
+    this.emoji,
     required this.label,
     required this.selected,
     required this.colors,
@@ -945,6 +949,7 @@ class _SidebarRow extends StatefulWidget {
 
   final Key rowKey;
   final IconData icon;
+  final String? emoji;
   final String label;
   final bool selected;
   final AppColors colors;
@@ -1006,15 +1011,27 @@ class _SidebarRowState extends State<_SidebarRow> {
                 ),
                 child: Row(
                   children: [
-                    Icon(
-                      widget.icon,
-                      size: TodoLayoutTokens.sidebarIconSize,
-                      color:
-                          widget.iconColor ??
-                          (widget.selected
-                              ? widget.colors.accent
-                              : widget.colors.mutedForeground),
-                    ),
+                    // 嘀嗒《02-用清单管理任务》:86：设置了 Emoji 图标的清单，
+                    // 行首图标换成该 Emoji；没设的清单维持原语义不变。
+                    if (widget.emoji != null)
+                      SizedBox(
+                        width: TodoLayoutTokens.sidebarIconSize,
+                        child: Text(
+                          widget.emoji!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      )
+                    else
+                      Icon(
+                        widget.icon,
+                        size: TodoLayoutTokens.sidebarIconSize,
+                        color:
+                            widget.iconColor ??
+                            (widget.selected
+                                ? widget.colors.accent
+                                : widget.colors.mutedForeground),
+                      ),
                     const SizedBox(width: TodoLayoutTokens.sidebarIconGap),
                     Expanded(
                       child: Text(

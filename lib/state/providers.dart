@@ -559,15 +559,29 @@ final tagsStreamProvider = StreamProvider<List<TodoTag>>((ref) {
 
 /// 任务统计（all / inbox / today / tomorrow / upcoming / assignToMe），供 Sidebar 徽章计数。
 /// 完全基于本地 Drift watchAll()，离线可用。
+/// 「在智能清单中显示」关掉的清单（specs/105）不参与任何一档计数，
+/// 与智能清单页面的排除闸门同一口径。
 final taskStatsProvider = StreamProvider<TaskStats>((ref) {
   final repo = ref.watch(taskRepositoryProvider);
   if (repo == null) return Stream.value(TaskStats.empty);
   final now = ref.watch(currentDateTimeProvider)();
   final currentUserId = ref.watch(sessionProvider)?.userId;
-  return repo.watchAll().map(
-    (tasks) =>
-        TaskStats.fromTasks(tasks, now: now, assigneeUserId: currentUserId),
-  );
+  final hiddenListIds = ref.watch(listsStreamProvider).valueOrNull == null
+      ? const <String>{}
+      : {
+          for (final list in ref.watch(listsStreamProvider).valueOrNull!)
+            if (!list.showInSmartList) list.id,
+        };
+  return repo.watchAll().map((tasks) {
+    final visible = hiddenListIds.isEmpty
+        ? tasks
+        : tasks.where((t) => !hiddenListIds.contains(t.listId)).toList();
+    return TaskStats.fromTasks(
+      visible,
+      now: now,
+      assigneeUserId: currentUserId,
+    );
+  });
 });
 
 /// 轻量任务计数集合（Sidebar 徽章用）。
