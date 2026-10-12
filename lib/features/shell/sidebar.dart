@@ -19,6 +19,7 @@ import '../tag/tag_actions.dart';
 import 'section.dart';
 import 'sidebar_hierarchy.dart';
 import 'sidebar_task_drop.dart';
+import 'smart_list_manager_sheet.dart';
 
 /// Compact Todo navigation for smart lists, browsing, user lists, and settings.
 class Sidebar extends ConsumerWidget {
@@ -63,6 +64,34 @@ class Sidebar extends ConsumerWidget {
 
   bool _isTasksSelected(Section s) => s == Section.tasks;
 
+  /// 「有内容时显示」的内容判定与徽章用同一份 TaskStats（specs/103 FR-3）。
+  /// null = 本端还没有这一行的内容计数（已完成/垃圾桶，FR-5）。
+  int? _smartContentCount(SmartList smart, TaskStats stats) => switch (smart) {
+    SmartList.inbox => stats.inbox,
+    SmartList.today => stats.today,
+    SmartList.tomorrow => stats.tomorrow,
+    SmartList.upcoming => stats.upcoming,
+    SmartList.all => stats.all,
+    SmartList.completed || SmartList.trash => null,
+  };
+
+  bool _smartRowVisible(
+    SmartList smart,
+    Map<String, SmartListVisibility> states,
+    TaskStats stats,
+  ) {
+    switch (states[smart.name] ?? SmartListVisibility.show) {
+      case SmartListVisibility.show:
+        return true;
+      case SmartListVisibility.hide:
+        return false;
+      case SmartListVisibility.auto:
+        // 计数尚未就绪按「显示」处理：统计流没到不该把行藏掉。
+        final count = _smartContentCount(smart, stats);
+        return count == null || count > 0;
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = brandColors(context);
@@ -101,6 +130,11 @@ class Sidebar extends ConsumerWidget {
     final showFilters =
         ref.watch(sidebarShowFiltersProvider).valueOrNull ??
         SidebarVisibilityRepository.defaultShowFilters;
+    // 智能清单三态（specs/103）：导航行口径与 showFilters 一致 ——
+    // 晚一帧不出现比整列跳格可取；缺键 = 默认「显示」由消费侧兜底。
+    final smartStates =
+        ref.watch(sidebarSmartListStatesProvider).valueOrNull ??
+        const <String, SmartListVisibility>{};
     final tagEntries = !showTags
         ? const <SidebarHierarchyEntry<TodoTag>>[]
         : flattenSidebarHierarchy(
@@ -125,113 +159,132 @@ class Sidebar extends ConsumerWidget {
                   children: [
                     const SizedBox(height: TodoLayoutTokens.sidebarSectionGap),
                     _GroupTitle('智能清单', colors: colors),
-                    _SmartRow(
-                      rowKey: const Key('todo-sidebar-row-inbox'),
-                      icon: SmartList.inbox.icon,
-                      label: SmartList.inbox.label,
-                      badge: stats.inbox,
-                      selected:
-                          _isTasksSelected(selectedSection) &&
-                          selectedSmart == SmartList.inbox,
-                      colors: colors,
-                      onTap: () {
-                        onSelectSection(Section.tasks);
-                        onSelectSmart(SmartList.inbox);
-                        onSelectList('inbox');
-                        onNavigationCommitted?.call();
-                      },
-                    ),
-                    _SmartRow(
-                      rowKey: const Key('todo-sidebar-row-today'),
-                      icon: SmartList.today.icon,
-                      label: SmartList.today.label,
-                      badge: stats.today,
-                      selected:
-                          _isTasksSelected(selectedSection) &&
-                          selectedSmart == SmartList.today,
-                      colors: colors,
-                      onTap: () {
-                        onSelectSection(Section.tasks);
-                        onSelectSmart(SmartList.today);
-                        onNavigationCommitted?.call();
-                      },
-                    ),
-                    _SmartRow(
-                      rowKey: const Key('todo-sidebar-row-tomorrow'),
-                      icon: SmartList.tomorrow.icon,
-                      label: SmartList.tomorrow.label,
-                      badge: stats.tomorrow,
-                      selected:
-                          _isTasksSelected(selectedSection) &&
-                          selectedSmart == SmartList.tomorrow,
-                      colors: colors,
-                      onTap: () {
-                        onSelectSection(Section.tasks);
-                        onSelectSmart(SmartList.tomorrow);
-                        onNavigationCommitted?.call();
-                      },
-                    ),
-                    _SmartRow(
-                      rowKey: const Key('todo-sidebar-row-upcoming'),
-                      icon: SmartList.upcoming.icon,
-                      label: SmartList.upcoming.label,
-                      badge: stats.upcoming,
-                      selected:
-                          _isTasksSelected(selectedSection) &&
-                          selectedSmart == SmartList.upcoming,
-                      colors: colors,
-                      onTap: () {
-                        onSelectSection(Section.tasks);
-                        onSelectSmart(SmartList.upcoming);
-                        onNavigationCommitted?.call();
-                      },
-                    ),
-                    _SmartRow(
-                      rowKey: const Key('todo-sidebar-row-all'),
-                      icon: SmartList.all.icon,
-                      label: SmartList.all.label,
-                      badge: stats.all,
-                      selected:
-                          _isTasksSelected(selectedSection) &&
-                          selectedSmart == SmartList.all,
-                      colors: colors,
-                      onTap: () {
-                        onSelectSection(Section.tasks);
-                        onSelectSmart(SmartList.all);
-                        onSelectList(null);
-                        onNavigationCommitted?.call();
-                      },
-                    ),
-                    _SmartRow(
-                      rowKey: const Key('todo-sidebar-row-completed'),
-                      icon: SmartList.completed.icon,
-                      label: SmartList.completed.label,
-                      badge: 0,
-                      selected:
-                          _isTasksSelected(selectedSection) &&
-                          selectedSmart == SmartList.completed,
-                      colors: colors,
-                      onTap: () {
-                        onSelectSection(Section.tasks);
-                        onSelectSmart(SmartList.completed);
-                        onNavigationCommitted?.call();
-                      },
-                    ),
-                    _SmartRow(
-                      rowKey: const Key('todo-sidebar-row-trash'),
-                      icon: SmartList.trash.icon,
-                      label: SmartList.trash.label,
-                      badge: 0,
-                      selected:
-                          _isTasksSelected(selectedSection) &&
-                          selectedSmart == SmartList.trash,
-                      colors: colors,
-                      onTap: () {
-                        onSelectSection(Section.tasks);
-                        onSelectSmart(SmartList.trash);
-                        onNavigationCommitted?.call();
-                      },
-                    ),
+                    if (_smartRowVisible(SmartList.inbox, smartStates, stats))
+                      _SmartRow(
+                        rowKey: const Key('todo-sidebar-row-inbox'),
+                        icon: SmartList.inbox.icon,
+                        label: SmartList.inbox.label,
+                        badge: stats.inbox,
+                        selected:
+                            _isTasksSelected(selectedSection) &&
+                            selectedSmart == SmartList.inbox,
+                        colors: colors,
+                        onTap: () {
+                          onSelectSection(Section.tasks);
+                          onSelectSmart(SmartList.inbox);
+                          onSelectList('inbox');
+                          onNavigationCommitted?.call();
+                        },
+                      ),
+                    if (_smartRowVisible(SmartList.today, smartStates, stats))
+                      _SmartRow(
+                        rowKey: const Key('todo-sidebar-row-today'),
+                        icon: SmartList.today.icon,
+                        label: SmartList.today.label,
+                        badge: stats.today,
+                        selected:
+                            _isTasksSelected(selectedSection) &&
+                            selectedSmart == SmartList.today,
+                        colors: colors,
+                        onTap: () {
+                          onSelectSection(Section.tasks);
+                          onSelectSmart(SmartList.today);
+                          onNavigationCommitted?.call();
+                        },
+                      ),
+                    if (_smartRowVisible(
+                      SmartList.tomorrow,
+                      smartStates,
+                      stats,
+                    ))
+                      _SmartRow(
+                        rowKey: const Key('todo-sidebar-row-tomorrow'),
+                        icon: SmartList.tomorrow.icon,
+                        label: SmartList.tomorrow.label,
+                        badge: stats.tomorrow,
+                        selected:
+                            _isTasksSelected(selectedSection) &&
+                            selectedSmart == SmartList.tomorrow,
+                        colors: colors,
+                        onTap: () {
+                          onSelectSection(Section.tasks);
+                          onSelectSmart(SmartList.tomorrow);
+                          onNavigationCommitted?.call();
+                        },
+                      ),
+                    if (_smartRowVisible(
+                      SmartList.upcoming,
+                      smartStates,
+                      stats,
+                    ))
+                      _SmartRow(
+                        rowKey: const Key('todo-sidebar-row-upcoming'),
+                        icon: SmartList.upcoming.icon,
+                        label: SmartList.upcoming.label,
+                        badge: stats.upcoming,
+                        selected:
+                            _isTasksSelected(selectedSection) &&
+                            selectedSmart == SmartList.upcoming,
+                        colors: colors,
+                        onTap: () {
+                          onSelectSection(Section.tasks);
+                          onSelectSmart(SmartList.upcoming);
+                          onNavigationCommitted?.call();
+                        },
+                      ),
+                    if (_smartRowVisible(SmartList.all, smartStates, stats))
+                      _SmartRow(
+                        rowKey: const Key('todo-sidebar-row-all'),
+                        icon: SmartList.all.icon,
+                        label: SmartList.all.label,
+                        badge: stats.all,
+                        selected:
+                            _isTasksSelected(selectedSection) &&
+                            selectedSmart == SmartList.all,
+                        colors: colors,
+                        onTap: () {
+                          onSelectSection(Section.tasks);
+                          onSelectSmart(SmartList.all);
+                          onSelectList(null);
+                          onNavigationCommitted?.call();
+                        },
+                      ),
+                    if (_smartRowVisible(
+                      SmartList.completed,
+                      smartStates,
+                      stats,
+                    ))
+                      _SmartRow(
+                        rowKey: const Key('todo-sidebar-row-completed'),
+                        icon: SmartList.completed.icon,
+                        label: SmartList.completed.label,
+                        badge: 0,
+                        selected:
+                            _isTasksSelected(selectedSection) &&
+                            selectedSmart == SmartList.completed,
+                        colors: colors,
+                        onTap: () {
+                          onSelectSection(Section.tasks);
+                          onSelectSmart(SmartList.completed);
+                          onNavigationCommitted?.call();
+                        },
+                      ),
+                    if (_smartRowVisible(SmartList.trash, smartStates, stats))
+                      _SmartRow(
+                        rowKey: const Key('todo-sidebar-row-trash'),
+                        icon: SmartList.trash.icon,
+                        label: SmartList.trash.label,
+                        badge: 0,
+                        selected:
+                            _isTasksSelected(selectedSection) &&
+                            selectedSmart == SmartList.trash,
+                        colors: colors,
+                        onTap: () {
+                          onSelectSection(Section.tasks);
+                          onSelectSmart(SmartList.trash);
+                          onNavigationCommitted?.call();
+                        },
+                      ),
                     const SizedBox(height: TodoLayoutTokens.sidebarSectionGap),
                     _GroupTitle('浏览', colors: colors),
                     _NavRow(
@@ -323,32 +376,51 @@ class Sidebar extends ConsumerWidget {
                       ),
                       child: SizedBox(
                         height: TodoLayoutTokens.sidebarRowHeight,
-                        child: TextButton.icon(
-                          onPressed: () => _CreateListSheet.show(context),
-                          icon: Icon(
-                            Icons.add,
-                            size: TodoLayoutTokens.sidebarIconSize,
-                            color: colors.accent,
-                          ),
-                          label: Text(
-                            '新建清单',
-                            style: TextStyle(
-                              color: colors.accent,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          style: TextButton.styleFrom(
-                            alignment: Alignment.centerLeft,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal:
-                                  TodoLayoutTokens.sidebarRowContentInset,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(
-                                TodoLayoutTokens.selectedRowRadius,
+                        // 嘀嗒《02-用清单管理任务.md》:29「添加清单」右边的「设置」
+                        // ⇒ 智能清单管理入口钉在新建清单旁边。
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: TextButton.icon(
+                                onPressed: () => _CreateListSheet.show(context),
+                                icon: Icon(
+                                  Icons.add,
+                                  size: TodoLayoutTokens.sidebarIconSize,
+                                  color: colors.accent,
+                                ),
+                                label: Text(
+                                  '新建清单',
+                                  style: TextStyle(
+                                    color: colors.accent,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                style: TextButton.styleFrom(
+                                  alignment: Alignment.centerLeft,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal:
+                                        TodoLayoutTokens.sidebarRowContentInset,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(
+                                      TodoLayoutTokens.selectedRowRadius,
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
+                            IconButton(
+                              key: const Key('todo-sidebar-smart-list-manager'),
+                              tooltip: '智能清单管理',
+                              icon: Icon(
+                                Icons.settings_outlined,
+                                size: TodoLayoutTokens.sidebarIconSize,
+                                color: colors.mutedForeground,
+                              ),
+                              onPressed: () =>
+                                  SmartListManagerSheet.show(context),
+                            ),
+                          ],
                         ),
                       ),
                     ),

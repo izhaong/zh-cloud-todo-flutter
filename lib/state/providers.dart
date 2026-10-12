@@ -184,6 +184,17 @@ final sidebarShowFiltersProvider = StreamProvider<bool>((ref) {
   return repo.watchFilters();
 });
 
+/// 智能清单三态流（specs/103）。缺键 = 「显示」，消费侧兜底；
+/// 导航行口径与 showFilters 一致：晚一帧不出现比整列跳格可取。
+final sidebarSmartListStatesProvider =
+    StreamProvider<Map<String, SmartListVisibility>>((ref) {
+      final repo = ref.watch(sidebarVisibilityRepositoryProvider);
+      if (repo == null) {
+        return Stream.value(const <String, SmartListVisibility>{});
+      }
+      return repo.watchSmartListStates();
+    });
+
 final tagRepositoryProvider = Provider<TagRepository?>((ref) {
   final db = ref.watch(appDatabaseProvider);
   final queue = ref.watch(syncChangeQueueProvider);
