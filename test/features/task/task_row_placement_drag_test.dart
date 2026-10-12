@@ -339,21 +339,111 @@ void main() {
       onListMove: (task) => listMoves.add(task.id),
     );
 
-    // 上半条覆盖整行宽度，(300,215) 落在其中。
+    // 行占 x∈[0,600]、y∈[200,260]：上半条＝(300,215)、下半左＝(150,245)、
+    // 下半右＝(450,245)。三块各拖一次 —— 只测一块，另两块放宽条件没人会知道。
     await _dragFrom(
       tester,
       from: const Offset(20, 20),
       to: const Offset(300, 215),
+    );
+    await _dragFrom(
+      tester,
+      from: const Offset(20, 20),
+      to: const Offset(150, 245),
+    );
+    await _dragFrom(
+      tester,
+      from: const Offset(20, 20),
+      to: const Offset(450, 245),
     );
 
     expect(
       places,
       isEmpty,
       reason:
-          '上半格也是内层落点：来者不拒会把《07-任务与日历同时显示.md」那句'
+          '放置那两块也是内层落点：来者不拒会把《07-任务与日历同时显示.md」那句'
           '「将日历中的任务拖入清单详情区域」的移清单截走',
     );
-    expect(listMoves, <String>[_foreignId]);
+    expect(listMoves, <String>[
+      _foreignId,
+      _foreignId,
+      _foreignId,
+    ], reason: '内层拒了外层要接住：三次都被外层收到，才说明三块共用同一条接受条件');
+  });
+
+  testWidgets('放置那两块不抢点击：点上半/点左下都还是点开这一行', (tester) async {
+    final taps = <String>[];
+    await _pumpList(tester, onTaskSelected: taps.add);
+
+    // 《06-多级任务.md》那块右下带的"不抢点击"早有用例（task_subtask_drag_test.dart）；
+    // 本轮新加的两格吃的是同一个 translucent 缺省，但**断言要各量各的** ——
+    // 只测一块，另一块改成 opaque 命中即被吞，没人会知道。
+    for (final band in <_Band>[_Band.top, _Band.lowerLeft]) {
+      final row = find.byKey(Key('task-row-surface-$secondId'));
+      final point = _bandCenter(tester, row, band);
+      await tester.tapAt(point);
+      await tester.pumpAndSettle();
+      expect(
+        taps,
+        contains(secondId),
+        reason: '${band.name} 那格的点击要透给行体，不能被落点吃掉',
+      );
+      taps.clear();
+    }
+  });
+
+  testWidgets('三块的候选态画得不一样：插入线在将要插入的那条边上', (tester) async {
+    await _pumpList(tester);
+    final primary = Theme.of(
+      tester.element(find.byType(Scaffold)),
+    ).colorScheme.primary;
+
+    // 上半＝排到该行之前 ⇒ 线在**行顶**那条边；其余三边为空。
+    var gesture = await _startBandHover(
+      tester,
+      sourceId: firstId,
+      targetId: secondId,
+      band: _Band.top,
+    );
+    var border = _hoverBorder(
+      tester,
+      TaskSubtaskDropTarget.beforeZoneKey(secondId),
+    );
+    expect(border.top.color, primary, reason: '之前：插入线画在行顶，用户看得见插在哪');
+    expect(border.bottom, BorderSide.none);
+    expect(border.left, BorderSide.none);
+    expect(border.right, BorderSide.none);
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    // 左下＝排到该行之后 ⇒ 线在**行底**。
+    gesture = await _startBandHover(
+      tester,
+      sourceId: firstId,
+      targetId: secondId,
+      band: _Band.lowerLeft,
+    );
+    border = _hoverBorder(tester, TaskSubtaskDropTarget.afterZoneKey(secondId));
+    expect(border.bottom.color, primary, reason: '之后：插入线画在行底');
+    expect(border.top, BorderSide.none);
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    // 右下＝转子任务 ⇒ 仍整圈描边（那块不是"插到某条缝"，画插入线会误导）。
+    gesture = await _startBandHover(
+      tester,
+      sourceId: firstId,
+      targetId: secondId,
+      band: _Band.lowerRight,
+    );
+    border = _hoverBorder(tester, TaskSubtaskDropTarget.zoneKey(secondId));
+    expect(
+      <BorderSide>[border.top, border.right, border.bottom, border.left],
+      everyElement(isNot(BorderSide.none)),
+      reason: '三块要看得出区别：交叉验证提的就是"同色同形时只有读屏能分"',
+    );
+    await gesture.up();
+    await tester.pumpAndSettle();
   });
 
   testWidgets('候选态读屏语义：上半「排到之前」、左下「排到之后」各挂各的节点', (tester) async {
@@ -454,6 +544,7 @@ Future<TodoVisualFixture> _pumpList(
   WidgetTester tester, {
   String? initialListId = TodoVisualFixture.inboxListId,
   List<Override> Function(AppDatabase database)? overridesBuilder,
+  void Function(String taskId)? onTaskSelected,
   bool withSection = false,
   Size viewport = TodoVisualViewports.wide,
   double textScale = 1,
@@ -505,6 +596,7 @@ Future<TodoVisualFixture> _pumpList(
               initialListId: initialListId,
               lockedListId: true,
               hideAppBar: true,
+              onTaskSelected: onTaskSelected,
             ),
           ),
         ),
@@ -549,6 +641,42 @@ void _expectRowVisible(WidgetTester tester, Finder row, String taskId) {
         '$taskId 那一行没有整条落在视口里'
         '（top=${rect.top} bottom=${rect.bottom} 视口高=$viewportHeight）',
   );
+}
+
+/// 长按源行并把指针停在目标行的某一格，返回还没松手的手势（供语义/高亮那两条逐格读）。
+Future<TestGesture> _startBandHover(
+  WidgetTester tester, {
+  required String sourceId,
+  required String targetId,
+  required _Band band,
+}) async {
+  final source = find.byKey(Key('task-row-surface-$sourceId'));
+  final target = find.byKey(Key('task-row-surface-$targetId'));
+  await tester.pumpAndSettle();
+  _expectRowVisible(tester, source, sourceId);
+  _expectRowVisible(tester, target, targetId);
+  final startPoint = tester.getCenter(source);
+  final to = _bandCenter(tester, target, band);
+
+  final gesture = await tester.startGesture(startPoint);
+  await tester.pump(const Duration(milliseconds: 400));
+  await gesture.moveTo(to);
+  await tester.pump();
+  return gesture;
+}
+
+/// 悬停高亮那层 `DecoratedBox` 的描边：`find.ancestor` 由内向外列，
+/// 第一个就是本格的盒子（行体自己也带描边，取错就把这条判据量到别人身上了）。
+Border _hoverBorder(WidgetTester tester, Key hoverKey) {
+  final decorated = tester
+      .widgetList<DecoratedBox>(
+        find.ancestor(
+          of: find.byKey(hoverKey),
+          matching: find.byType(DecoratedBox),
+        ),
+      )
+      .first;
+  return (decorated.decoration as BoxDecoration).border as Border;
 }
 
 Offset _bandCenter(WidgetTester tester, Finder row, _Band band) {

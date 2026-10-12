@@ -147,13 +147,32 @@ class _TaskSubtaskDropTargetState extends State<TaskSubtaskDropTarget> {
   }
 
   /// 候选态（指针停在这一格）才画高亮与读屏文案；静止什么都不加。
-  Widget _hover({required String label, required Key key}) {
+  Widget _hover({
+    required String label,
+    required Key key,
+    _Highlight highlight = _Highlight.quad,
+  }) {
     final color = Theme.of(context).colorScheme.primary;
+    final line = BorderSide(color: color, width: 3);
     return DecoratedBox(
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.16),
-        border: Border.all(color: color),
-      ),
+      decoration: switch (highlight) {
+        // 转子任务那块：整圈描边 + 底色，形状是"这一格被吃掉"。
+        _Highlight.quad => BoxDecoration(
+          color: color.withValues(alpha: 0.16),
+          border: Border.all(color: color),
+        ),
+        // 放置那两块：只在**将要插入的那条边**画一条线（行顶＝排到之前、行底＝排到之后）。
+        // 交叉验证提的就是这点 —— 三格同色同形时"在排序"和"在建父子"只有读屏能分，
+        // 而最容易误触的恰是共边的左下／右下两格。
+        _Highlight.insertTop => BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          border: Border(top: line),
+        ),
+        _Highlight.insertBottom => BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          border: Border(bottom: line),
+        ),
+      },
       child: Semantics(key: key, label: label, child: const SizedBox.shrink()),
     );
   }
@@ -174,6 +193,7 @@ class _TaskSubtaskDropTargetState extends State<TaskSubtaskDropTarget> {
     required String label,
     required Key hoverKey,
     Key? dropKey,
+    _Highlight highlight = _Highlight.quad,
     required void Function(TodoTask dragged) onAccept,
     Widget? nested,
   }) {
@@ -192,7 +212,11 @@ class _TaskSubtaskDropTargetState extends State<TaskSubtaskDropTarget> {
               // 「+」那一层还要无条件挂着，不能"这一帧没候选就不建"。
               if (candidates.isNotEmpty)
                 Positioned.fill(
-                  child: _hover(label: label, key: hoverKey),
+                  child: _hover(
+                    label: label,
+                    key: hoverKey,
+                    highlight: highlight,
+                  ),
                 ),
               if (nested != null) Positioned.fill(child: nested),
             ],
@@ -220,6 +244,7 @@ class _TaskSubtaskDropTargetState extends State<TaskSubtaskDropTarget> {
             label: TaskSubtaskDropTarget.beforeHoverLabel(title),
             hoverKey: TaskSubtaskDropTarget.beforeZoneKey(widget.task.id),
             dropKey: TaskSubtaskDropTarget.beforeDropKey(widget.task.id),
+            highlight: _Highlight.insertTop,
             onAccept: (dragged) => _acceptPlace(dragged, false),
           ),
         if (widget.onPlace != null)
@@ -230,6 +255,7 @@ class _TaskSubtaskDropTargetState extends State<TaskSubtaskDropTarget> {
             label: TaskSubtaskDropTarget.afterHoverLabel(title),
             hoverKey: TaskSubtaskDropTarget.afterZoneKey(widget.task.id),
             dropKey: TaskSubtaskDropTarget.afterDropKey(widget.task.id),
+            highlight: _Highlight.insertBottom,
             onAccept: (dragged) => _acceptPlace(dragged, true),
           ),
         // 下半右块：转子任务（FL #590），里面叠着「+」的建子任务落点（FL #591）。
@@ -262,6 +288,9 @@ class _TaskSubtaskDropTargetState extends State<TaskSubtaskDropTarget> {
     );
   }
 }
+
+/// 候选态怎么画：转子任务那块是整圈描边，放置那两块只在插入边画一条线。
+enum _Highlight { quad, insertTop, insertBottom }
 
 /// 「+」被拖起来的载荷：它不代表某个已存在的任务，只代表"要在这个任务下建一个子任务"。
 /// 用独立类型而不是 `TodoTask`，是为了让 SDK 的类型过滤把两种拖分开（见本文件头）。
