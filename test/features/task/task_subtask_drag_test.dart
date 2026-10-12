@@ -253,6 +253,24 @@ void main() {
     );
   });
 
+  testWidgets('右下象限不抢点击：点这一行仍然选中它', (tester) async {
+    final taps = <String>[];
+    await _pumpList(tester, onTaskSelected: taps.add);
+    final row = find.byKey(Key('task-row-surface-$parentId'));
+    final point = _bandCenter(tester, row, _Band.lowerRight);
+
+    await tester.tapAt(point);
+    await tester.pumpAndSettle();
+
+    expect(
+      taps,
+      contains(parentId),
+      reason:
+          '落点层缺省 translucent：只参加拖拽命中，不许吞这一行的点击'
+          '（改成 opaque 命中即被抢，本条要红）',
+    );
+  });
+
   testWidgets('候选态读屏语义挂在落点节点：静止没有、悬停有、落定收走', (tester) async {
     final handle = tester.ensureSemantics();
     await _pumpList(tester);
@@ -312,6 +330,7 @@ Future<TodoVisualFixture> _pumpList(
   WidgetTester tester, {
   String? initialListId = TodoVisualFixture.inboxListId,
   List<Override> Function(AppDatabase database)? overridesBuilder,
+  void Function(String taskId)? onTaskSelected,
 }) async {
   final fixture = await TodoVisualFixture.create(
     set: TodoVisualFixtureSet.populated,
@@ -335,6 +354,7 @@ Future<TodoVisualFixture> _pumpList(
             initialListId: initialListId,
             lockedListId: true,
             hideAppBar: true,
+            onTaskSelected: onTaskSelected,
           ),
         ),
       ),
