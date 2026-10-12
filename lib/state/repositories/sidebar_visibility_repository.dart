@@ -177,10 +177,55 @@ class SidebarVisibilityRepository {
   static String _moduleKey(TodoFeatureModule module) =>
       '$_moduleKeyPrefix${module.name}';
 
+  /// 改键的键前缀（嘀嗒《03-特色功能/08-桌面快捷键.md》:26「在设置里查看快捷键界面，可以修改」）。
+  /// 键名 = `shortcut.<动作枚举名>`，值是 `todo_shortcut_combo.dart` 里的规范串；
+  /// 用 String 而不是 `TodoShortcutKind` 做参数，与 `smartList.` 同一套理由：
+  /// 仓储层不反向依赖 core/shortcuts 的枚举。
+  static const _shortcutKeyPrefix = 'shortcut.';
+
+  /// 缺键 = 「用注册表里的默认键位」⇒ 默认行为与今天逐字节一致。
+  Future<Map<String, String>> getShortcuts() async =>
+      _decodeShortcuts(await _preferenceRow());
+
+  Stream<Map<String, String>> watchShortcuts() =>
+      (_db.select(_db.todoViewPreferences)..where(
+            (preference) =>
+                preference.sourceType.equals(sourceType) &
+                preference.sourceKey.equals(sourceKey),
+          ))
+          .watchSingleOrNull()
+          .map(_decodeShortcuts);
+
+  /// 改键；`combo == null` 表示**删掉这一档的覆盖**（= 嘀嗒界面里的重置回默认）。
+  /// 删键要真的从 JSON 里去掉：留一个空串虽然读侧也当"没有覆盖"，但别的端拿到的
+  /// 就是一个含义不明的脏键。
+  Future<void> saveShortcut({required String kindName, String? combo}) {
+    final key = '$_shortcutKeyPrefix$kindName';
+    if (combo == null) {
+      return _write(<String, Object>{}, removeKeys: <String>[key]);
+    }
+    return _write(<String, Object>{key: combo});
+  }
+
+  /// 只收带 `shortcut.` 前缀且值是字符串的键；形状是否可用由 core/shortcuts 那侧判定。
+  Map<String, String> _decodeShortcuts(TodoViewPreference? row) {
+    final overrides = <String, String>{};
+    _jsonMap(row).forEach((key, value) {
+      if (!key.startsWith(_shortcutKeyPrefix)) return;
+      if (value is! String) return;
+      overrides[key.substring(_shortcutKeyPrefix.length)] = value;
+    });
+    return overrides;
+  }
+
   /// 两个开关共用同一行偏好 ⇒ 每个写方法只 patch 自己那个键。
   /// 原先那种 `jsonEncode({'showTags': …})` 整块覆盖的写法，在加第二个键之后就是缺陷：
   /// 用户改「过滤器」会被顺手把「标签」顶回默认值。
-  Future<void> _write(Map<String, Object> patch) async {
+  /// `removeKeys` 是给"重置回默认"用的：那一档要从 JSON 里真的删掉，不是留个空串。
+  Future<void> _write(
+    Map<String, Object> patch, {
+    Iterable<String> removeKeys = const <String>[],
+  }) async {
     final now = DateTime.now();
     await _db.transaction(() async {
       final existing =
@@ -190,10 +235,12 @@ class SidebarVisibilityRepository {
                     preference.sourceKey.equals(sourceKey),
               ))
               .getSingleOrNull();
-      final valueJson = jsonEncode(<String, Object>{
-        ..._jsonMap(existing),
-        ...patch,
-      });
+      final merged = <String, Object>{..._jsonMap(existing)};
+      for (final key in removeKeys) {
+        merged.remove(key);
+      }
+      merged.addAll(patch);
+      final valueJson = jsonEncode(merged);
       final id = existing?.id ?? _uuid.v4();
 
       final companion = TodoViewPreferencesCompanion(

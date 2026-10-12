@@ -199,6 +199,20 @@ final featureModuleProvider = StreamProvider.family<bool, TodoFeatureModule>((
   return repo.watchFeature(module);
 });
 
+/// 改键覆盖表（specs/109 / FL #579 面③，嘀嗒《08-桌面快捷键.md》:26「可以修改」）。
+///
+/// 键 = 动作枚举名，值 = 组合键规范串；仓储没就绪或没改过 ⇒ 空表 ⇒
+/// 全部走 `todo_shortcut_registry.dart` 里的默认键位，默认行为与今天一致。
+/// 兜底口径与 `featureModuleProvider` 同一套（`valueOrNull ?? 默认`），
+/// 因为这里"没读到"与"没改过"本来就是同一个意思：都用默认键位。
+final shortcutOverridesProvider = StreamProvider<Map<String, String>>((ref) {
+  final repo = ref.watch(sidebarVisibilityRepositoryProvider);
+  if (repo == null) {
+    return Stream.value(const <String, String>{});
+  }
+  return repo.watchShortcuts();
+});
+
 /// 智能清单三态流（specs/103）。缺键 = 「显示」，消费侧兜底；
 /// 导航行口径与 showFilters 一致：晚一帧不出现比整列跳格可取。
 final sidebarSmartListStatesProvider =
