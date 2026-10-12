@@ -12,6 +12,7 @@ import '../../core/theme/todo_layout_tokens.dart';
 import '../../state/providers.dart';
 import '../../state/repositories/sidebar_visibility_repository.dart';
 import '../folder/folder_actions.dart';
+import '../home/keyboard_shortcuts_dialog.dart';
 import '../list/list_actions.dart';
 import '../list/list_color.dart';
 import '../list/list_editor_sheet.dart';
@@ -530,10 +531,30 @@ class Sidebar extends ConsumerWidget {
                   onNavigationCommitted?.call();
                   onOpenCountdown?.call();
                 },
+                onOpenShortcuts: () => _openShortcuts(context, ref),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// 嘀嗒《03-特色功能/08-桌面快捷键.md》常见问题里那句「在侧边栏打开快捷键界面，可以修改」的落点。
+  /// 与设置页、指令菜单打开的是**同一个**界面、带同一份生效键位与落库通道
+  /// ⇒ 不会出现"从这个入口进去只能看不能改"。
+  void _openShortcuts(BuildContext context, WidgetRef ref) {
+    final repo = ref.read(sidebarVisibilityRepositoryProvider);
+    unawaited(
+      showKeyboardShortcutsDialog(
+        context,
+        overrides:
+            ref.read(shortcutOverridesProvider).valueOrNull ??
+            const <String, String>{},
+        onSave: repo == null
+            ? null
+            : (kindName, spec) =>
+                  repo.saveShortcut(kindName: kindName, combo: spec),
       ),
     );
   }
@@ -1074,6 +1095,7 @@ class _EfficiencyDock extends StatelessWidget {
     required this.onOpenPomodoro,
     required this.onOpenHabit,
     required this.onOpenCountdown,
+    required this.onOpenShortcuts,
   });
 
   final AppColors colors;
@@ -1083,6 +1105,9 @@ class _EfficiencyDock extends StatelessWidget {
   final VoidCallback onOpenPomodoro;
   final VoidCallback onOpenHabit;
   final VoidCallback onOpenCountdown;
+
+  /// 侧栏底部的「快捷键」入口（嘀嗒《08-桌面快捷键.md》常见问题「在侧边栏打开快捷键界面」）。
+  final VoidCallback onOpenShortcuts;
 
   @override
   Widget build(BuildContext context) {
@@ -1121,6 +1146,15 @@ class _EfficiencyDock extends StatelessWidget {
                 icon: Icons.event_available_outlined,
                 colors: colors,
                 onTap: onOpenCountdown,
+              ),
+            ),
+            Expanded(
+              child: _EfficiencyButton(
+                label: '快捷键',
+                tooltip: '键盘快捷键',
+                icon: Icons.keyboard_outlined,
+                colors: colors,
+                onTap: onOpenShortcuts,
               ),
             ),
           ],
