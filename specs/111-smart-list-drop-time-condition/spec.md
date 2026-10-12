@@ -23,6 +23,18 @@
    区间型清单只有窗口内的日子才命中，而窗口首日是不需要用户再输入任何东西的唯一确定值。
    两侧一致性由 `test/features/shell/smart_list_time_condition_test.dart` 的「-10..+12 天逐日对账」钉住
    （谓词侧走公开入口 `applyTaskFilter`，不是抄一份预期）。
+   **这句不变量只对「浮动」与「固定时间」成立**：`time_mode = 1`（固定时区）挪的是**锚点区日历日**
+   （`taskDateTimeForDisplayDay` 用 `_storageLocation`，其注释写明「固定时区的钟点取锚点区（北京 11:00
+   挪到今天仍是北京 11:00）」，依据嘀嗒《01-任务/07-固定时间与固定时区.md》`:48`），而列表读的是设备当地
+   展示墙钟（`_displayLocation` 对这一档返回 null）⇒ 设备与锚点跨午夜时展示日多一天，
+   任务**不会**出现在刚拖上去的那一档。2026-10-12 一次性探针实测（设备 `Asia/Shanghai`、
+   锚点 `America/Los_Angeles` 09:30、目标日 10-13）：
+   `stored=2026-10-13 16:30Z`、`display=2026-10-14 00:30`、`inDeviceLocalTodayWindow=false`。
+   本轮**不改这个行为**（它是四条「挪日」入口共用的既有语义），只把口径收窄成上面那句，
+   并补一条现状锁用例（`test/task_view_action_repository_test.dart`「固定时区档挪的是锚点区日历日」）。
+   反向探针 P8：把 `taskDateTimeForDisplayDay` 的基准从 `_storageLocation` 换成 `_displayLocation`
+   （＝#587 的 A 案）⇒ 只有那一条转红、同文件其余 25 条仍绿 ⇒ 它锁的正是这个域的选择。
+   A/B 两案的裁定另立 **FL Issue #587**，本轮不在此混做。
 2. **只有带日期窗口的三档是落点**，其余五档（收集箱 / 指派给我 / 全部 / 已完成 / 垃圾桶）
    `smartListTimeConditionOf` 返回 null ⇒ 那几行根本不挂 `DragTarget`。
    理由逐档写在代码注释里：收集箱是**清单归属**（`:57` 那一面早已覆盖），
@@ -33,7 +45,7 @@
    这不是缺陷：两档不互斥，已在窗口后段的任务拖到「最近七天」按 3 跳过、拖到「明天」才会改日。
 3. **已在窗口内 ⇒ 不是有效落点**（`SidebarTaskDropController.acceptsSmartList`），
    与 `acceptsList`「落回原清单不发写请求」、仓储「同一天不写不入队」同一口径，三层各自有用例。
-4. **只改截止日那一格**：时刻（有则按展示墙钟保留）、清单归属、分组、标签一律不动；
+4. **只改截止日那一格**：时刻按**写入域的墙钟**保留（浮动与固定时区取锚点/设备当地那一侧的钟点、固定时间取锚点区钟点，见需求 1 那段）、清单归属、分组、标签一律不动；
    无日期任务落成全天（不替用户编一个时刻）。写入通道复用 `TaskViewActionRepository.scheduleTaskToDay`
    —— 它由 `addToToday`（推荐任务「+ 加入今天」）泛化而来，`addToToday` 只剩一层转调，
    原三条用例仍是绿的，这就是这次泛化没改行为的对照。
@@ -49,6 +61,9 @@
 属产品口径 ⇒ 已开 **FL Issue #584** 跟踪（三处入口、钉住现口径的那条用例、A/B 两个待定口径都写在那单里），
 PR 正文与本格互链。
 
+第二条偏差与「挪的是哪一个日历日」有关：`time_mode = 1` 固定时区**写锚点日、读展示日**，
+跨午夜时两者差一天 ⇒ **FL Issue #587**（本轮只加现状锁与收窄口径，不改行为；实测读数写在需求 1 那段）。
+
 ## 测试与判据（本轮实测，不写推测）
 
 | 层 | 文件 | 用例数 |
@@ -56,10 +71,10 @@ PR 正文与本格互链。
 | 窗口/落点日与谓词对账 | `test/features/shell/smart_list_time_condition_test.dart` | 5 |
 | 编排（skip/落点日/无日期/失败） | `test/features/shell/sidebar_smart_list_drop_test.dart`（第一组） | 5 |
 | 真侧栏 + 真库 + 真手势 | `test/features/shell/sidebar_smart_list_drop_test.dart`（第二组） | 8 |
-| 仓储 `scheduleTaskToDay` | `test/task_view_action_repository_test.dart`（新增一组） | 4 |
+| 仓储 `scheduleTaskToDay` | `test/task_view_action_repository_test.dart`（新增一组） | 6 |
 
-变异探针七发（P1–P6 + P3b）逐条红在期望用例上、还原后工作树 clean，结果与「哪一层被谁咬住」
-记在 `tasks.md` T005。
+变异探针九发（P1–P8 + P3b）逐条红在期望用例上（P7 例外：那一发**应当不红**，理由记在 `tasks.md` T005），
+还原后工作树 clean；结果与「哪一层被谁咬住」也记在 T005。
 
 ## 交付检查四件套
 
