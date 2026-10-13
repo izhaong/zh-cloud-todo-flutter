@@ -2,14 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/app_database.dart';
+import '../../../core/task/task_swipe_preferences.dart';
 import '../../../core/theme/brand_colors.dart';
 import '../../../core/time/task_time_formatter.dart';
 import '../../../core/time/task_time_mode.dart';
 import '../../../state/providers.dart';
+import '../../../state/repositories/task_repository.dart';
 import '../../pomodoro/pomodoro_page.dart';
 import '../../tag/batch_tag_picker_sheet.dart';
 import '../subtask_flow.dart';
+import '../task_view_mutation_feedback.dart';
 import 'task_row.dart';
+import 'task_swipe_reveal.dart';
 
 enum _TaskRowContextAction { startPomodoro, tags, addChild, more }
 
@@ -57,6 +61,12 @@ class TaskRowHost extends ConsumerStatefulWidget {
 }
 
 class _TaskRowHostState extends ConsumerState<TaskRowHost> {
+  /// 收集箱的 id 与 `tasks_by_list_page.dart` 的 `kInboxListId` 同值。
+  /// 这里不 import 那份常量：清单页本来就 import 这一行的宿主组件，反向再 import 一次
+  /// 是个循环引用；仓里其余几处（`task_repository.dart` 的 `_inboxListId`、
+  /// `sync_coordinator.dart` 的 `_inboxListName`）也都是各自私有常量这个既有形状。
+  static const _inboxListId = 'inbox';
+
   late final FocusNode _focusNode;
   bool _hovered = false;
   bool _focused = false;
@@ -169,32 +179,23 @@ class _TaskRowHostState extends ConsumerState<TaskRowHost> {
 
                 Widget taskRow = row;
                 if (widget.enableSwipeGestures) {
-                  taskRow = Dismissible(
-                    key: ValueKey('task-${widget.task.id}'),
-                    direction: DismissDirection.horizontal,
-                    background: _SwipeBackground(
-                      alignment: Alignment.centerLeft,
-                      icon: widget.task.completed
-                          ? Icons.undo
-                          : Icons.check_circle,
-                      label: widget.task.completed ? '取消完成' : '完成',
-                      color: colors.success,
+                  final swipe = resolveTaskSwipePreferences(
+                    ref.watch(taskSwipePreferencesProvider),
+                  );
+                  taskRow = TaskSwipeRevealRow(
+                    key: ValueKey('task-swipe-${widget.task.id}'),
+                    // 「向右滑动分别为「完成」、「置顶」」⇒ 手指向右那一侧的档位
+                    startToEndActions: _swipeSpecs(
+                      context,
+                      swipe.swipeRight,
+                      taskRepo,
                     ),
-                    secondaryBackground: _SwipeBackground(
-                      alignment: Alignment.centerRight,
-                      icon: Icons.more_horiz,
-                      label: '更多',
-                      color: colors.accent,
+                    // 「将任务向左短滑，可以看到任务右侧出现了三个选项」
+                    endToStartActions: _swipeSpecs(
+                      context,
+                      swipe.swipeLeft,
+                      taskRepo,
                     ),
-                    confirmDismiss: (direction) async {
-                      if (direction == DismissDirection.startToEnd) {
-                        if (taskRepo == null) return false;
-                        await taskRepo.toggleComplete(widget.task.id);
-                        return false;
-                      }
-                      await _showMoreMenu(context);
-                      return false;
-                    },
                     child: row,
                   );
                 }
@@ -211,6 +212,221 @@ class _TaskRowHostState extends ConsumerState<TaskRowHost> {
           },
         ),
       ),
+    );
+  }
+
+  /// 把档位列表翻成钮。`taskRepo == null`（库没就绪）时钮禁用而不是消失：
+  /// 露出宽度是按档位数量算的，钮消失了位移就对不上，落点会落在一个不存在的格子上。
+  List<TaskSwipeActionSpec> _swipeSpecs(
+    BuildContext context,
+    List<TaskSwipeAction> actions,
+    TaskRepository? taskRepo,
+  ) {
+    final scheme = Theme.of(context).colorScheme;
+    return [
+      for (final action in actions)
+        TaskSwipeActionSpec(
+          action: action,
+          key: taskSwipeActionKey(action, widget.task.id),
+          background: _swipeBackgroundFor(action, scheme),
+          foreground: _swipeForegroundFor(action, scheme),
+          label: _swipeLabel(action),
+          onTap: taskRepo == null
+              ? null
+              : () => _runSwipeAction(action, taskRepo),
+        ),
+    ];
+  }
+
+  /// 成对取 `*Container` / `on*Container`：主题里这两色是保证对比度的组合，
+  /// 与倒数纪念日左滑那一面同一套取色。
+  Color _swipeBackgroundFor(TaskSwipeAction action, ColorScheme scheme) =>
+      switch (action) {
+        TaskSwipeAction.complete => scheme.primaryContainer,
+        TaskSwipeAction.pin => scheme.secondaryContainer,
+        TaskSwipeAction.moveTo => scheme.secondaryContainer,
+        TaskSwipeAction.changeDueDate => scheme.secondaryContainer,
+        TaskSwipeAction.delete => scheme.errorContainer,
+      };
+
+  Color _swipeForegroundFor(TaskSwipeAction action, ColorScheme scheme) =>
+      switch (action) {
+        TaskSwipeAction.complete => scheme.onPrimaryContainer,
+        TaskSwipeAction.pin => scheme.onSecondaryContainer,
+        TaskSwipeAction.moveTo => scheme.onSecondaryContainer,
+        TaskSwipeAction.changeDueDate => scheme.onSecondaryContainer,
+        TaskSwipeAction.delete => scheme.onErrorContainer,
+      };
+
+  /// 文案跟着状态说真话：勾掉之后那颗钮再叫「完成」就是骗人（嘀嗒原文把这一档
+  /// 写成「完成」，是描述未完成行的动作）。
+  String _swipeLabel(TaskSwipeAction action) => switch (action) {
+    TaskSwipeAction.complete => widget.task.completed ? '取消完成' : '完成',
+    TaskSwipeAction.pin => widget.task.isPinned ? '取消置顶' : '置顶',
+    _ => action.label,
+  };
+
+  Future<void> _runSwipeAction(
+    TaskSwipeAction action,
+    TaskRepository taskRepo,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    switch (action) {
+      case TaskSwipeAction.complete:
+        await _guardSwipeWrite(
+          () => taskRepo.toggleComplete(widget.task.id),
+          '操作失败，请重试',
+          messenger,
+        );
+      case TaskSwipeAction.pin:
+        await _guardSwipeWrite(
+          () => taskRepo.togglePin(widget.task.id),
+          '置顶失败，请重试',
+          messenger,
+        );
+      case TaskSwipeAction.delete:
+        await _confirmSwipeDelete(taskRepo, messenger);
+      case TaskSwipeAction.moveTo:
+        await _pickSwipeTargetList(taskRepo, messenger);
+      case TaskSwipeAction.changeDueDate:
+        await _pickSwipeDueDate(messenger);
+    }
+  }
+
+  Future<void> _guardSwipeWrite(
+    Future<Object?> Function() write,
+    String fallback,
+    ScaffoldMessengerState messenger,
+  ) async {
+    try {
+      await write();
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(taskViewMutationFailureMessage(error, fallback)),
+        ),
+      );
+    }
+  }
+
+  /// 「删除任务」是这一面上唯一不可逆的动作，先确认再删（与倒数纪念日左滑同一形状）。
+  Future<void> _confirmSwipeDelete(
+    TaskRepository taskRepo,
+    ScaffoldMessengerState messenger,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (sheetContext) => AlertDialog(
+        title: Text('删除「${widget.task.title}」？'),
+        content: const Text('删除后无法恢复，子任务会一起删除。'),
+        actions: [
+          TextButton(
+            key: const Key('todo-task-swipe-delete-cancel'),
+            onPressed: () => Navigator.pop(sheetContext, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            key: const Key('todo-task-swipe-delete-confirm'),
+            onPressed: () => Navigator.pop(sheetContext, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _guardSwipeWrite(
+      () => taskRepo.delete(widget.task.id),
+      '删除失败，请重试',
+      messenger,
+    );
+  }
+
+  /// 「移动任务」：目标只有可写清单（收集箱是合成的可写落点，`listsStreamProvider`
+  /// 按 `ListRepository.watchAll` 的口径不含它，所以单独补一行）。
+  /// 只读清单不在表里出现，仓储里那条 `_requireWritableList` 仍是兜底 —— 这里不复制判定。
+  Future<void> _pickSwipeTargetList(
+    TaskRepository taskRepo,
+    ScaffoldMessengerState messenger,
+  ) async {
+    final lists =
+        ref.read(listsStreamProvider).valueOrNull ?? const <TodoList>[];
+    final writable = lists.where((list) => list.writable).toList();
+    final targets = <(String, String)>[
+      if (widget.task.listId != _inboxListId) (_inboxListId, '收集箱'),
+      for (final list in writable)
+        if (list.id != _inboxListId && list.id != widget.task.listId)
+          (list.id, list.name),
+    ];
+    if (targets.isEmpty) {
+      messenger.showSnackBar(const SnackBar(content: Text('没有可移动到的清单，请先新建清单')));
+      return;
+    }
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            for (final (id, name) in targets)
+              ListTile(
+                key: Key('todo-task-swipe-move-target-$id'),
+                leading: Icon(
+                  id == _inboxListId
+                      ? Icons.inbox_outlined
+                      : Icons.list_alt_outlined,
+                ),
+                title: Text(name),
+                onTap: () => Navigator.pop(sheetContext, id),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return;
+    final nameOf = targets
+        .where((target) => target.$1 == picked)
+        .map((target) => target.$2)
+        .firstOrNull;
+    await _guardSwipeWrite(
+      () => taskRepo.moveToList(widget.task.id, picked),
+      '移动失败，请重试',
+      messenger,
+    );
+    if (nameOf == null) return;
+    messenger.showSnackBar(SnackBar(content: Text('已移动到「$nameOf」')));
+  }
+
+  /// 「修改日期」走「把截止日挪到某一天」那条既有通道（时刻/全天语义都不变），
+  /// 不在这里自己拼 dueAt —— 拼一份就会和日历拖动、「今天」清单落点漂开。
+  Future<void> _pickSwipeDueDate(ScaffoldMessengerState messenger) async {
+    final now = ref.read(currentDateTimeProvider)();
+    final dueAt = widget.task.dueAt;
+    final initial = dueAt == null
+        ? DateTime(now.year, now.month, now.day)
+        : taskWallClockDateTime(
+            dueAt,
+            allDay: widget.task.allDay,
+            mode: TaskTimeMode.fromWire(widget.task.timeMode),
+            timeZone: widget.task.timeZone,
+          );
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime(initial.year, initial.month, initial.day),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      helpText: '设置截止日期',
+    );
+    if (picked == null) return;
+    final actions = ref.read(taskViewActionRepositoryProvider);
+    if (actions == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('任务暂不可修改，请稍后重试')));
+      return;
+    }
+    await _guardSwipeWrite(
+      () => actions.scheduleTaskToDay(widget.task.id, targetDay: picked),
+      '日期修改失败，请重试',
+      messenger,
     );
   }
 
@@ -425,53 +641,4 @@ class _TaskRowHostState extends ConsumerState<TaskRowHost> {
       ).showSnackBar(const SnackBar(content: Text('任务移动分组失败，请重试')));
     }
   }
-}
-
-class _SwipeBackground extends StatelessWidget {
-  const _SwipeBackground({
-    required this.alignment,
-    required this.icon,
-    required this.label,
-    required this.color,
-  });
-
-  final Alignment alignment;
-  final IconData icon;
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final alignLeft = alignment == Alignment.centerLeft;
-    return Container(
-      color: color,
-      padding: EdgeInsets.only(
-        left: alignLeft ? 20 : 0,
-        right: alignLeft ? 0 : 20,
-      ),
-      alignment: alignment,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: alignLeft
-            ? MainAxisAlignment.start
-            : MainAxisAlignment.end,
-        children: [
-          if (alignLeft) ...[
-            Icon(icon, color: Colors.white, size: 22),
-            const SizedBox(width: 6),
-            _labelWidget(),
-          ] else ...[
-            _labelWidget(),
-            const SizedBox(width: 6),
-            Icon(icon, color: Colors.white, size: 22),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _labelWidget() => Text(
-    label,
-    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-  );
 }

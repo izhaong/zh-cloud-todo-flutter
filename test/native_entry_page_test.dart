@@ -279,8 +279,20 @@ void main() {
     );
 
     expect(find.text('原生增强'), findsOneWidget);
-    // 「账号」分组加了一行后，800x600 默认视口里该行已贴到折线外，tap 不会自己滚动。
-    await tester.ensureVisible(find.text('原生增强'));
+    // 「账号」分组与「任务」分组各加过行之后，800x600 默认视口里这一行已经掉到
+    // 折叠线以下；`ensureVisible` 在这条列表上不会真把它滚进来（实测中心还在
+    // y=662，视口只有 600），所以改成看得见地滚。
+    await tester.dragUntilVisible(
+      find.text('原生增强'),
+      find.byType(ListView),
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester.getCenter(find.text('原生增强')).dy,
+      lessThan(600),
+      reason: '正对照：这一行真的进了视口，下面那一次 tap 才有意义',
+    );
     await tester.tap(find.text('原生增强'));
     await tester.pumpAndSettle();
 

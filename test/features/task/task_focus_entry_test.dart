@@ -9,7 +9,9 @@ import 'package:zh_cloud_todo_flutter/core/api/efficiency_api.dart';
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/features/pomodoro/pomodoro_page.dart';
 import 'package:zh_cloud_todo_flutter/features/task/task_detail_pane.dart';
+import 'package:zh_cloud_todo_flutter/core/task/task_swipe_preferences.dart';
 import 'package:zh_cloud_todo_flutter/features/task/widgets/task_row_host.dart';
+import 'package:zh_cloud_todo_flutter/features/task/widgets/task_swipe_reveal.dart';
 import 'package:zh_cloud_todo_flutter/state/efficiency_providers.dart';
 import 'package:zh_cloud_todo_flutter/state/providers.dart';
 
@@ -40,6 +42,9 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
 
+    // 移动端行上不再挂「开始专注」：嘀嗒《01-列表视图.md》`:58` 把这一档写在
+    // 「任务详情页右上角「···」」（由本文件第二条用例守着），`:66` 的左滑只有
+    // 「移动任务/删除任务/修改日期」三件。行上再留一个专注入口就是第三套形状。
     await _pumpTaskRow(
       tester,
       task: _task(id: 'mobile-active', serverId: serverId),
@@ -48,15 +53,16 @@ void main() {
     );
     await tester.drag(find.byType(TaskRowHost), const Offset(-500, 0));
     await tester.pumpAndSettle();
-    expect(find.text('开始专注'), findsOneWidget);
-    await tester.tap(find.text('开始专注'));
-    await tester.pumpAndSettle();
+    expect(find.text('开始专注'), findsNothing);
     expect(
-      tester.widget<PomodoroPage>(find.byType(PomodoroPage)).taskId,
-      serverId,
+      find
+          .byKey(
+            taskSwipeActionKey(TaskSwipeAction.moveTo, 'mobile-active'),
+          )
+          .hitTestable(),
+      findsOneWidget,
+      reason: '正对照：这一行真的滑开了，否则上面那条 findsNothing 是空页造成的',
     );
-    await tester.pageBack();
-    await tester.pumpAndSettle();
 
     for (final task in [
       _task(id: 'local-task'),
@@ -67,9 +73,11 @@ void main() {
       await tester.drag(find.byType(TaskRowHost), const Offset(-500, 0));
       await tester.pumpAndSettle();
       expect(find.text('开始专注'), findsNothing);
-      expect(find.text('删除'), findsOneWidget);
-      await tester.tap(find.text('删除'));
-      await tester.pumpAndSettle();
+      expect(
+        find.text('删除任务'),
+        findsOneWidget,
+        reason: '正对照：这一行滑开了（按钮在），只是没有专注入口',
+      );
     }
   });
 

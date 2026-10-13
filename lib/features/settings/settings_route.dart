@@ -21,6 +21,7 @@ import '../import/task_import_page.dart';
 import '../home/keyboard_shortcuts_dialog.dart';
 import '../native/native_entry_page.dart';
 import '../shell/app_theme_controller.dart';
+import 'task_swipe_settings_page.dart';
 
 /// 设置页：分组列表（账号/任务/日期与时间/主题/关于）+ 账户安全与成就入口。
 class SettingsRoute extends ConsumerWidget {
@@ -105,6 +106,19 @@ class SettingsRoute extends ConsumerWidget {
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => const _TaskCaptureDefaultsPage(),
+                    ),
+                  ),
+                ),
+                _Tile(
+                  key: const Key('todo-settings-swipe-actions'),
+                  icon: Icons.swipe_outlined,
+                  title: '滑动操作',
+                  subtitle: '自定义任务行左右滑动各露出哪些动作',
+                  trailing: Icons.chevron_right,
+                  colors: colors,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const TaskSwipeSettingsPage(),
                     ),
                   ),
                 ),
