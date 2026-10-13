@@ -100,6 +100,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   double _timelineZoom = 1;
   TimelineScale _timelineScale = TimelineScale.week;
   TimelineColorBy _timelineColorBy = TimelineColorBy.priority;
+  Map<String, String> _quadrantTaskSort = const {};
   Set<String> _collapsedTimelineGroupIds = const {};
   TaskRepository? _streamRepository;
   String? _streamListId;
@@ -811,6 +812,8 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           tasks: items,
           showCompletedTasks: _quadrantShowCompleted,
           onTaskSelected: widget.onTaskSelected,
+          quadrantTaskSort: _quadrantTaskSort,
+          onQuadrantSortChanged: _changeQuadrantTaskSort,
         );
       case TaskViewMode.calendar:
         return CalendarView(
@@ -1054,6 +1057,36 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('看板布局保存失败，请重试')));
+    }
+  }
+
+  /// 四象限单象限的排序档（specs/127，矩阵 #36 面 ⑪）：嘀嗒 :135-:136
+  /// 「选择需要更改的象限，『…』-『排序』」。失败回退所选并给可见 SnackBar。
+  Future<void> _changeQuadrantTaskSort(String quadrant, TaskSort sort) async {
+    final sourceKey = _viewPreferenceSourceKey;
+    final previous = _quadrantTaskSort;
+    setState(() => _quadrantTaskSort = {...previous, quadrant: sort.name});
+    try {
+      await ref
+          .read(taskViewActionRepositoryProvider)
+          ?.saveQuadrantTaskSort(
+            sourceKey: sourceKey,
+            quadrant: quadrant,
+            sort: sort.name,
+            current: previous,
+          );
+    } on ArgumentError {
+      if (!mounted || sourceKey != _viewPreferenceSourceKey) return;
+      setState(() => _quadrantTaskSort = previous);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('排序档无效，请重试')));
+    } catch (_) {
+      if (!mounted || sourceKey != _viewPreferenceSourceKey) return;
+      setState(() => _quadrantTaskSort = previous);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('象限排序保存失败，请重试')));
     }
   }
 

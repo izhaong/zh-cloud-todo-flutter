@@ -8,7 +8,9 @@ import '../../../core/theme/brand_colors.dart';
 import '../../../state/efficiency_providers.dart';
 import '../../../state/providers.dart';
 import '../../../state/session_state.dart';
+import '../../../state/repositories/task_query_repository.dart';
 import '../task_detail_page.dart';
+import '../widgets/task_workspace_header.dart' show TaskSortX;
 
 /// M11-B3 四象限 (Eisenhower) 视图。
 ///
@@ -30,6 +32,8 @@ class EisenhowerView extends ConsumerStatefulWidget {
     DateTime? now,
     this.showCompletedTasks = false,
     this.onTaskSelected,
+    this.quadrantTaskSort = const {},
+    this.onQuadrantSortChanged,
   }) : _now = now;
 
   /// 用于分类的"当前时间"（测试可注入；缺省 `DateTime.now()`）。
@@ -37,6 +41,13 @@ class EisenhowerView extends ConsumerStatefulWidget {
 
   /// 已应用 list/filter 的任务集合。
   final List<TodoTask> tasks;
+
+  /// 每象限任务排序档（specs/127，矩阵 #36 面 ⑪）：key q1..q4，value
+  /// `TaskSort.name`；缺档保持分桶输入顺序（现状锁）。
+  final Map<String, String> quadrantTaskSort;
+
+  /// 象限排序档变化回调；null ⇒ 象限头「…」不给「排序」入口。
+  final void Function(String quadrant, TaskSort sort)? onQuadrantSortChanged;
 
   /// 已完成任务要不要进象限格子。缺省 `false` 就是 develop 现状的行为
   /// （嘀嗒《02-功能指南/03-四象限/02-如何编辑四象限规则.md》`:132`「隐藏已完成」默认隐藏）。
@@ -101,6 +112,30 @@ class _EisenhowerViewState extends ConsumerState<EisenhowerView> {
             remoteBoard,
             showCompletedTasks: widget.showCompletedTasks,
           );
+    // 每象限任务排序（specs/127，矩阵 #36 面 ⑪）：嘀嗒 :135-:136「选择需要
+    // 更改的象限，点击右上角『…』-『排序』，可选择排序方式」。缺档保持
+    // 分桶输入顺序（现状锁）；比较器复用列表视图同一把尺。
+    List<TodoTask> sortBucket(List<TodoTask> bucket, Quadrant quadrant) {
+      final wire = widget.quadrantTaskSort[quadrant.name];
+      if (wire == null) return bucket;
+      final sort = TaskSort.values
+          .where((candidate) => candidate.name == wire)
+          .firstOrNull;
+      if (sort == null) return bucket;
+      final sorted = [...bucket]..sort((a, b) => compareTodoTasks(a, b, sort));
+      return sorted;
+    }
+
+    for (final quadrant in Quadrant.values) {
+      final data = quadrants[quadrant]!;
+      quadrants[quadrant] = _QuadrantData(
+        quadrant: data.quadrant,
+        label: data.label,
+        hint: data.hint,
+        tasks: sortBucket(data.tasks, quadrant),
+      );
+    }
+
     // 回写式只由**生效规则**决定（`:25` 与 `:44` 讲的是规则，不是"看板数据到没到"）：
     // 组合1 的规则即使在看板未加载的降级态下也不该动 dueAt。
     // 自定义规则源页本节没给拖动脉络（specs/059 §三 4），该档一律不给拖。
@@ -128,6 +163,18 @@ class _EisenhowerViewState extends ConsumerState<EisenhowerView> {
         now: now,
         ruleType: effectiveRuleType,
         onDrop: _queueDrop,
+        currentSort: widget.quadrantTaskSort[quadrant.name] == null
+            ? null
+            : TaskSort.values
+                  .where(
+                    (candidate) =>
+                        candidate.name ==
+                        widget.quadrantTaskSort[quadrant.name],
+                  )
+                  .firstOrNull,
+        onSortChanged: widget.onQuadrantSortChanged == null
+            ? null
+            : (sort) => widget.onQuadrantSortChanged!(quadrant.name, sort),
       );
     }
 
@@ -469,6 +516,8 @@ class _QuadrantTile extends StatelessWidget {
     required this.now,
     required this.ruleType,
     required this.onDrop,
+    this.currentSort,
+    this.onSortChanged,
   });
 
   final _QuadrantData data;
@@ -479,6 +528,10 @@ class _QuadrantTile extends StatelessWidget {
   final DateTime now;
   final QuadrantRuleType? ruleType;
   final void Function(QuadrantDragMove move, QuadrantDropPatch patch) onDrop;
+
+  /// 当前象限的排序档（null = 未选过，按输入顺序）；非 null 才渲染「排序」入口。
+  final TaskSort? currentSort;
+  final ValueChanged<TaskSort>? onSortChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -524,6 +577,34 @@ class _QuadrantTile extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (onSortChanged != null)
+                  PopupMenuButton<TaskSort>(
+                    key: ValueKey('quadrant-sort-${data.quadrant.name}'),
+                    tooltip: '排序',
+                    icon: Icon(Icons.more_horiz, size: 16, color: accent),
+                    onSelected: onSortChanged,
+                    itemBuilder: (context) => [
+                      for (final candidate in TaskSort.values)
+                        PopupMenuItem(
+                          key: ValueKey(
+                            'quadrant-sort-${data.quadrant.name}-${candidate.name}',
+                          ),
+                          value: candidate,
+                          child: Row(
+                            children: [
+                              Expanded(child: Text(candidate.label)),
+                              if (candidate == currentSort)
+                                Icon(
+                                  Icons.check,
+                                  size: 14,
+                                  color: accent,
+                                  semanticLabel: '当前排序',
+                                ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
               ],
             ),
             Text(
