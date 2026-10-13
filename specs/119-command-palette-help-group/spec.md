@@ -1,5 +1,9 @@
 # 规格：指令菜单补「帮助」那一层（FL #606，矩阵 #86 最后一面）
 
+> 编号说明：本目录起初落在 `specs/118-command-palette-help-group`，与并行会话同一时段合入的
+> `specs/118-kanban-grouping-axis`（矩阵 #15 面⑦，FL !613）撞号 ⇒ 按取号规矩改到 **119**（`119` 在 develop 与
+> 所有远端分支上都没人用）。改名随 FL !615 落地，矩阵 #86 追记里那个旧路径另开一笔 docs 订正。
+
 ## 判据源（嘀嗒原文逐字，zh-cloud-docs 镜像）
 
 `todo/99_参考资料/dida365-help-center/03-特色功能/08-桌面快捷键.md`（整篇 30 行）：
@@ -48,8 +52,9 @@
   都能用 ⌘K ⇒ 记**超出原文**，不算缺口，也不因为"嘀嗒没有"而砍掉本端能力。
 - `:29`「显示为灰色的快捷键不能修改」是一条限制，不是功能。本端注册表里两档
   （打开指令菜单、显示键盘快捷键）**都可改**，所以没有"单行灰色"这个实例；
-  这条限制在本端的兑现方式是两道真闸门：整个对话框在落库通道未就绪时进只读态
-  （`keyboard-shortcuts-readonly`），以及 `validateShortcutOverride` 拒掉裸键/只带 Shift/撞键。
+  本端**没有**这句的对应实现，也不假装对应：整个对话框的只读态
+  （`keyboard-shortcuts-readonly`）说的是"落库通道未就绪"，`validateShortcutOverride`
+  说的是"提交时拒绝坏组合"，两者都不是"某一行灰掉且点不动"（交叉验证点破了这点，采纳）。
   证伪命令（量"没有灰色不可改的行"这件事本身）：
   `git grep -c "Key('keyboard-shortcuts-edit-" -- lib/features/home/keyboard_shortcuts_dialog.dart` ⇒ 1
   （改键控件只有一处生成，是否可改由 `_editable` 一个开关决定，不存在"某一行被单独涂灰"的代码路径）。

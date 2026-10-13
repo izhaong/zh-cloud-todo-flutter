@@ -117,7 +117,6 @@ class _CommandPaletteState extends State<CommandPalette> {
       final inGroup = matches
           .where((command) => command.group == group)
           .toList(growable: false);
-      if (inGroup.isEmpty) continue;
       rows.add(
         Padding(
           key: Key('todo-command-palette-group-$group'),
