@@ -400,6 +400,58 @@ class TaskRepository {
     return row;
   }
 
+  /// 「移动任务」（嘀嗒《02-功能指南/01-任务/08-不同的视图查看任务/01-列表视图.md》`:66`
+  /// 左滑三选项之一）。与 `update(listId:)` 差两处，都是那一面本来就欠的：
+  /// 1. **子树跟着走** —— 清单页把子级铺成行之后，只挪父行会让子级留在原清单：
+  ///    展开箭头还在，但子行不属于这一页，看上去像被删了。
+  /// 2. **目标清单必须可写** —— `update` 只校验分组归属，把任务移进只读清单
+  ///    （订阅/共享来的）会留下一行"看得见却改不动"的任务。
+  /// 跨清单后原清单的分组不属于目标清单，所以 `sectionId` 一律清空。
+  /// 已经在目标清单时是 no-op：不写库也不排第二条 outbox。
+  /// 子任务**不能单独换清单**：`_assertParentChainDoesNotContain` 要求父子同清单
+  /// （抛的就是「父任务必须属于同一清单」），只挪子行会当场造出那种状态 ⇒ 这一层先拒，
+  /// 界面上也给了"请随主任务一起移动"的说法。
+  Future<List<TodoTask>> moveToList(String taskId, String targetListId) =>
+      _db.transaction(() async {
+        final task = await _taskOrThrow(taskId);
+        if (task.listId == targetListId) return [task];
+        if (task.parentTaskId != null) {
+          throw StateError('子任务请随主任务一起移动');
+        }
+        final now = DateTime.now();
+        await _ensureInboxList(targetListId, now);
+        await _requireWritableList(targetListId);
+        final rows = [task, ...await _collectDescendants(taskId)];
+        final moved = <TodoTask>[];
+        for (final row in rows) {
+          // 写库走显式 companion：把 data class 直接交给 `write()` 时，drift 会按
+          // `nullToAbsent` 把 null 字段当成"没改"，分组就清不掉（本轮红测量到的）。
+          await (_db.update(
+            _db.todoTasks,
+          )..where((t) => t.id.equals(row.id))).write(
+            TodoTasksCompanion(
+              listId: Value(targetListId),
+              sectionId: const Value(null),
+              updatedAt: Value(now),
+            ),
+          );
+          final next = row.copyWith(
+            listId: targetListId,
+            sectionId: const Value(null),
+            updatedAt: now,
+          );
+          await _queue.enqueue(
+            entity: SyncEntities.task,
+            op: SyncOps.upsert,
+            localId: row.id,
+            serverId: next.serverId,
+            payload: _taskPayload(next),
+          );
+          moved.add(next);
+        }
+        return moved;
+      });
+
   /// 离线创建检查事项。服务端将其作为带 `isChecklistItem` 的 task 同步。
   Future<TodoChecklistItem> createChecklistItem({
     required String taskId,

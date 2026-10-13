@@ -9,6 +9,7 @@ import '../core/notification/local_notification_service.dart';
 import '../core/notification/reminder_notification_poller.dart';
 import '../core/sync/sync_change_queue.dart';
 import '../core/sync/sync_coordinator.dart';
+import '../core/task/task_swipe_preferences.dart';
 import '../core/time/task_time_formatter.dart';
 import '../core/time/task_time_mode.dart';
 import '../core/time/week_start.dart';
@@ -34,6 +35,7 @@ import 'repositories/task_repository.dart';
 import 'repositories/task_section_repository.dart';
 import 'repositories/task_grouping_preference_repository.dart';
 import 'repositories/task_sort_preference_repository.dart';
+import 'repositories/task_swipe_preference_repository.dart';
 import 'repositories/sidebar_visibility_repository.dart';
 import 'repositories/task_view_action_repository.dart';
 import 'repositories/timezone_preference_repository.dart';
@@ -454,6 +456,32 @@ final weekStartProvider = StreamProvider<int>((ref) {
   }
   return repository.watch();
 });
+
+/// 「设置 → 滑动操作」自定义配置的仓储（FL #601，矩阵 #14 面⑦）。
+final taskSwipePreferenceRepositoryProvider =
+    Provider<TaskSwipePreferenceRepository?>((ref) {
+      final db = ref.watch(appDatabaseProvider);
+      final queue = ref.watch(syncChangeQueueProvider);
+      if (db == null || queue == null) return null;
+      return TaskSwipePreferenceRepository(db, queue);
+    });
+
+/// 当前滑动档位。无库（未登录/未就绪）时给原文默认档，
+/// 与 `weekStartProvider` 同一口径：首屏不等库，读失败时 `valueOrNull` 兜默认。
+final taskSwipePreferencesProvider = StreamProvider<TaskSwipePreferences>((
+  ref,
+) {
+  final repository = ref.watch(taskSwipePreferenceRepositoryProvider);
+  if (repository == null) {
+    return Stream.value(TaskSwipePreferences.defaults);
+  }
+  return repository.watch();
+});
+
+/// 滑动档位的读法：首值未到或读失败退回默认档，与 `resolveWeekStartFirstDay` 同形。
+TaskSwipePreferences resolveTaskSwipePreferences(
+  AsyncValue<TaskSwipePreferences> value,
+) => value.valueOrNull ?? TaskSwipePreferences.defaults;
 
 final activityRepositoryProvider = Provider<ActivityRepository?>((ref) {
   final db = ref.watch(appDatabaseProvider);
