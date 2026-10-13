@@ -1,7 +1,10 @@
 # 执行记录：清单作用域偏好的跨设备键归一（FL #619，矩阵 #14 面⑨ 的前半）
 
-> 编号说明：本目录起初落在 `specs/121-list-scoped-preference-keys`，并进来时并行会话已把 **121** 用给
-> `specs/121-timeline-color-by`（矩阵 #16 面⑦，FL !621）⇒ 随本笔改到 **122**（扫过 develop 与全部远端分支，122 没人用）。
+> 编号说明：本目录起稿在 `specs/121-…`，提交期间并行会话把 121 用给了 `specs/121-timeline-color-by`
+> （FL !621）⇒ 改到 122；合并 `origin/develop@b5682baf` 时又撞上 `specs/122-timeline-smart-list-guard`
+> （FL !624）⇒ 最终 **123**。取号时扫过 develop 与全部 `refs/pull/*/head`，123 当时没人用；
+> 同一晚上两次撞号说明「扫 develop ∪ 未合并分支」在并行会话同时开工时仍然会输在时间差上，
+> 落盘前应当再扫一次（本笔就是这么发现的）。
 
 ## 落地的文件
 
