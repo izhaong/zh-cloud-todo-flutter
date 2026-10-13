@@ -56,9 +56,7 @@ void main() {
     expect(find.text('开始专注'), findsNothing);
     expect(
       find
-          .byKey(
-            taskSwipeActionKey(TaskSwipeAction.moveTo, 'mobile-active'),
-          )
+          .byKey(taskSwipeActionKey(TaskSwipeAction.moveTo, 'mobile-active'))
           .hitTestable(),
       findsOneWidget,
       reason: '正对照：这一行真的滑开了，否则上面那条 findsNothing 是空页造成的',

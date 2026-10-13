@@ -194,10 +194,10 @@ class TaskSwipeRevealRowState extends State<TaskSwipeRevealRow>
         return ClipRect(
           child: GestureDetector(
             behavior: HitTestBehavior.deferToChild,
-            onHorizontalDragUpdate:
-                (details) => _onDragUpdate(details.delta.dx),
-            onHorizontalDragEnd:
-                (details) => _onDragEnd(details.primaryVelocity ?? 0),
+            onHorizontalDragUpdate: (details) =>
+                _onDragUpdate(details.delta.dx),
+            onHorizontalDragEnd: (details) =>
+                _onDragEnd(details.primaryVelocity ?? 0),
             child: AnimatedBuilder(
               animation: _ctrl,
               child: widget.child,
