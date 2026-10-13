@@ -23,6 +23,7 @@ enum _TaskWorkspaceHeaderCommand {
   directionNewestFirst,
   directionOldestFirst,
   hideCompleted,
+  boardDisplaySettings,
 }
 
 extension on _TaskWorkspaceHeaderCommand {
@@ -41,6 +42,7 @@ extension on _TaskWorkspaceHeaderCommand {
     _TaskWorkspaceHeaderCommand.directionNewestFirst => null,
     _TaskWorkspaceHeaderCommand.directionOldestFirst => null,
     _TaskWorkspaceHeaderCommand.hideCompleted => null,
+    _TaskWorkspaceHeaderCommand.boardDisplaySettings => null,
   };
 
   TaskSortDirection? get direction => switch (this) {
@@ -105,6 +107,7 @@ class TaskWorkspaceHeader extends StatelessWidget {
     this.showQuadrantView = true,
     this.hideCompleted,
     this.hideCompletedHint,
+    this.onBoardDisplaySettings,
     this.onToggleHideCompleted,
   });
 
@@ -149,6 +152,10 @@ class TaskWorkspaceHeader extends StatelessWidget {
 
   /// 非 null ⇒ 这一项置灰，并把这句话原样显示在项里（读屏要念得出为什么不能点）。
   final String? hideCompletedHint;
+
+  /// 看板「显示设置」（宽度三档 + 显示输入框；嘀嗒 FAQ `:209`/`:213`，specs/119）。
+  /// null ⇒ 菜单项不渲染（非看板模式）。
+  final VoidCallback? onBoardDisplaySettings;
   final VoidCallback? onToggleHideCompleted;
 
   @override
@@ -264,6 +271,8 @@ class TaskWorkspaceHeader extends StatelessWidget {
                       onEditListBackground?.call();
                     case _TaskWorkspaceHeaderCommand.hideCompleted:
                       onToggleHideCompleted?.call();
+                    case _TaskWorkspaceHeaderCommand.boardDisplaySettings:
+                      onBoardDisplaySettings?.call();
                     case _TaskWorkspaceHeaderCommand.smart:
                     case _TaskWorkspaceHeaderCommand.priorityDesc:
                     case _TaskWorkspaceHeaderCommand.dueDate:
@@ -368,6 +377,12 @@ class TaskWorkspaceHeader extends StatelessWidget {
                             ),
                         ],
                       ),
+                    ),
+                  if (onBoardDisplaySettings != null)
+                    PopupMenuItem(
+                      key: const Key('todo-board-display-settings'),
+                      value: _TaskWorkspaceHeaderCommand.boardDisplaySettings,
+                      child: const Text('显示设置'),
                     ),
                 ],
               ),

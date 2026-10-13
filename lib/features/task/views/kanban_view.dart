@@ -8,6 +8,8 @@ import '../../../core/theme/brand_colors.dart';
 import '../../../core/time/task_time_formatter.dart';
 import '../../../core/time/task_time_mode.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../state/providers.dart';
+import '../../../state/repositories/board_preference_repository.dart';
 import '../smart_grouping.dart';
 import '../task_assign_action.dart';
 import '../task_detail_page.dart';
@@ -60,6 +62,8 @@ class KanbanView extends ConsumerWidget {
     this.onSectionDelete,
     this.smartGroups,
     this.onSmartGroupMove,
+    this.columnWidth = BoardColumnWidth.medium,
+    this.showColumnInput = false,
   });
 
   /// 渲染用的任务列表（已应用 list/filter 的客户端过滤结果）。
@@ -106,6 +110,10 @@ class KanbanView extends ConsumerWidget {
   /// byList→moveToList；byAssignee/byTag/byCreatedAt 这三轴不给拖）。
   final Future<void> Function(TodoTask task, String groupId)? onSmartGroupMove;
 
+  /// 列宽三档与「显示输入框」（嘀嗒 FAQ `:209`/`:213`；specs/119，矩阵 #15 面 ⑧）。
+  final BoardColumnWidth columnWidth;
+  final bool showColumnInput;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sectionMode = sections.isNotEmpty;
@@ -147,6 +155,20 @@ class KanbanView extends ConsumerWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: _KanbanColumn(
                       data: ordered[index],
+                      columnWidth: columnWidth,
+                      showColumnInput: showColumnInput,
+                      onQuickAddSubmit:
+                          showColumnInput && listId != null
+                          ? (title) => _quickAddInline(
+                              context,
+                              ref,
+                              listId!,
+                              title: title,
+                              priority: ordered[index].priority,
+                              completed: ordered[index].completed,
+                              sectionId: ordered[index].sectionId,
+                            )
+                          : null,
                       collapsed:
                           !sectionMode &&
                           collapsedColumnIds.contains(ordered[index].id),
@@ -481,6 +503,38 @@ class KanbanView extends ConsumerWidget {
       builder: (_) => TaskQuickAddSheet(listId: listId, sectionId: sectionId),
     );
   }
+
+  /// 「显示输入框」的行内提交（specs/119）：不弹全功能表单，
+  /// 只按列语义带上优先级档 / 分组归属。失败给可见提示（同 `_moveTask` 的口径）。
+  static Future<void> _quickAddInline(
+    BuildContext context,
+    WidgetRef ref,
+    String listId, {
+    required String title,
+    required int priority,
+    required bool completed,
+    String? sectionId,
+  }) async {
+    final repository = ref.read(taskRepositoryProvider);
+    if (repository == null) return;
+    try {
+      await repository.create(
+        listId: listId,
+        title: title,
+        priority: priority,
+        sectionId: sectionId,
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            taskViewMutationFailureMessage(error, '添加任务失败，请重试'),
+          ),
+        ),
+      );
+    }
+  }
 }
 
 class _KanbanColumnData {
@@ -517,6 +571,9 @@ class _KanbanColumn extends StatelessWidget {
     this.onTasksReordered,
     this.onCardMove,
     this.onAdd,
+    this.columnWidth = BoardColumnWidth.medium,
+    this.showColumnInput = false,
+    this.onQuickAddSubmit,
     this.sectionsManaged = false,
     this.onRenameSection,
     this.onCreateSection,
@@ -533,6 +590,14 @@ class _KanbanColumn extends StatelessWidget {
   final Future<void> Function(List<String> taskIds)? onTasksReordered;
   final Future<void> Function(TodoTask task)? onCardMove;
   final VoidCallback? onAdd;
+
+  /// 列宽三档与「显示输入框」（specs/119）。
+  final BoardColumnWidth columnWidth;
+  final bool showColumnInput;
+
+  /// 「显示输入框」的提交回调：标题非空时建任务到本列
+  /// （priority 列带档位、分组列带 sectionId；轴列不给输入框）。
+  final Future<void> Function(String title)? onQuickAddSubmit;
 
   /// 这一列是不是「按分组开列」那套分组方式；决定列头「···」要不要列分组管理三项。
   final bool sectionsManaged;
@@ -575,7 +640,7 @@ class _KanbanColumn extends StatelessWidget {
     final colors = brandColors(context);
     return SizedBox(
       key: data.key,
-      width: collapsed ? 72 : 260,
+      width: collapsed ? 72 : columnWidth.columnWidth,
       child: AppCard(
         margin: EdgeInsets.zero,
         padding: EdgeInsets.zero,
@@ -624,7 +689,7 @@ class _KanbanColumn extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              // 分组名由用户输入（长度不设视觉上限），列宽固定 260：
+              // 分组名由用户输入（长度不设视觉上限），列宽随显示设置三档：
               // 不给它 flex，长名字在 320px 面 + 1.3 倍字号下实测溢出过（短名字不溢出），
               // 所以只能省略号截断。
               Expanded(
@@ -707,6 +772,12 @@ class _KanbanColumn extends StatelessWidget {
           ),
         ),
         const Divider(height: 1),
+        if (showColumnInput && onQuickAddSubmit != null)
+          _KanbanInlineAddField(
+            key: ValueKey('kanban-inline-add-${data.id}'),
+            columnTitle: data.title,
+            onSubmit: onQuickAddSubmit!,
+          ),
         Expanded(
           child: DragTarget<TodoTask>(
             onWillAcceptWithDetails: (details) => onCardMove != null,
@@ -891,6 +962,64 @@ class _KanbanCard extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// 「显示输入框」的行内快速添加输入行（嘀嗒 FAQ `:213`
+/// 「在『显示设置』中，你还可以设置『显示输入框』，帮助你更快地在看板中添加新任务」；
+/// specs/119，矩阵 #15 面 ⑧）。
+class _KanbanInlineAddField extends StatefulWidget {
+  const _KanbanInlineAddField({
+    super.key,
+    required this.columnTitle,
+    required this.onSubmit,
+  });
+
+  final String columnTitle;
+  final Future<void> Function(String title) onSubmit;
+
+  @override
+  State<_KanbanInlineAddField> createState() => _KanbanInlineAddFieldState();
+}
+
+class _KanbanInlineAddFieldState extends State<_KanbanInlineAddField> {
+  final _controller = TextEditingController();
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final title = _controller.text.trim();
+    if (title.isEmpty || _submitting) return;
+    setState(() => _submitting = true);
+    try {
+      await widget.onSubmit(title);
+      _controller.clear();
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+      child: TextField(
+        controller: _controller,
+        enabled: !_submitting,
+        // 提交目标由所在列决定（优先级档/分组归属），语义跟列头那颗「+」一致。
+        decoration: InputDecoration(
+          isDense: true,
+          hintText: '在「${widget.columnTitle}」中添加任务…',
+          border: const OutlineInputBorder(),
+        ),
+        onSubmitted: (_) => _submit(),
+      ),
     );
   }
 }

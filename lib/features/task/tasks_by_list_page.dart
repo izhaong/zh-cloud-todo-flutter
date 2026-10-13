@@ -413,6 +413,10 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                     ? _quadrantHideCompletedHint
                     : null,
                 onToggleHideCompleted: _toggleQuadrantHideCompleted,
+                onBoardDisplaySettings:
+                    _mode == TaskViewMode.kanban && _selectedListId != null
+                    ? () => _openBoardDisplaySettings(_selectedListId!)
+                    : null,
               ),
             if (showQuickAdd && !_batchSelectionActive)
               QuickAddBar(
@@ -1779,6 +1783,35 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       ..showSnackBar(SnackBar(content: Text(reminderMessage)));
   }
 
+  /// 看板「显示设置」（嘀嗒《02-看板视图》FAQ `:209`/`:213`；specs/119，
+  /// 矩阵 #15 面 ⑧）：宽度三档 + 「显示输入框」。保存走 boardPreference，
+  /// 失败给可见 SnackBar（与列序保存同一口径）。
+  Future<void> _openBoardDisplaySettings(String listId) async {
+    final current = ref.read(boardViewPreferenceProvider(listId)).valueOrNull;
+    if (!mounted) return;
+    final saved = await showDialog<BoardViewPreference>(
+      context: context,
+      builder: (dialogContext) => _BoardDisplaySettingsDialog(
+        initial: current ?? const BoardViewPreference(),
+      ),
+    );
+    if (saved == null || !mounted) return;
+    try {
+      await ref
+          .read(boardPreferenceRepositoryProvider)
+          ?.saveDisplaySettings(
+            listId: listId,
+            columnWidth: saved.columnWidth,
+            showColumnInput: saved.showColumnInput,
+          );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('看板显示设置保存失败，请重试')));
+    }
+  }
+
   /// 看板「智能分组轴」列之间的拖拽写回（specs/118，矩阵 #15 面 ⑦）。
   ///
   /// 桶→字段的换算在 [kanbanAxisMove]（纯函数，可单测）；这里只负责
@@ -2945,6 +2978,93 @@ class _CalendarDragSource extends StatelessWidget {
       ),
       childWhenDragging: Opacity(opacity: 0.35, child: child),
       child: child,
+    );
+  }
+}
+
+/// 看板「显示设置」对话框（specs/119）：宽度三档 + 「显示输入框」。
+/// 确认才落库，取消不动；档位文案逐字取自嘀嗒 FAQ（小 / 中 / 大、「显示输入框」）。
+class _BoardDisplaySettingsDialog extends StatefulWidget {
+  const _BoardDisplaySettingsDialog({required this.initial});
+
+  final BoardViewPreference initial;
+
+  @override
+  State<_BoardDisplaySettingsDialog> createState() =>
+      _BoardDisplaySettingsDialogState();
+}
+
+class _BoardDisplaySettingsDialogState
+    extends State<_BoardDisplaySettingsDialog> {
+  late BoardColumnWidth _width = widget.initial.columnWidth;
+  late bool _showInput = widget.initial.showColumnInput;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('显示设置'),
+      content: SizedBox(
+        width: 320,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('宽度'),
+            RadioGroup<BoardColumnWidth>(
+              groupValue: _width,
+              onChanged: (picked) =>
+                  setState(() => _width = picked ?? BoardColumnWidth.medium),
+              child: const Row(
+                children: [
+                  Expanded(
+                    child: RadioListTile<BoardColumnWidth>(
+                      value: BoardColumnWidth.small,
+                      title: Text('小'),
+                    ),
+                  ),
+                  Expanded(
+                    child: RadioListTile<BoardColumnWidth>(
+                      value: BoardColumnWidth.medium,
+                      title: Text('中'),
+                    ),
+                  ),
+                  Expanded(
+                    child: RadioListTile<BoardColumnWidth>(
+                      value: BoardColumnWidth.large,
+                      title: Text('大'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SwitchListTile(
+              key: const Key('board-show-column-input'),
+              contentPadding: EdgeInsets.zero,
+              title: const Text('显示输入框'),
+              subtitle: const Text('更快地在看板中添加新任务'),
+              value: _showInput,
+              onChanged: (value) => setState(() => _showInput = value),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          key: const Key('board-display-settings-save'),
+          onPressed: () => Navigator.pop(
+            context,
+            BoardViewPreference(
+              columnWidth: _width,
+              showColumnInput: _showInput,
+            ),
+          ),
+          child: const Text('保存'),
+        ),
+      ],
     );
   }
 }
