@@ -62,6 +62,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // specs/132 后编辑器多一个「打卡日志」开关 ⇒ 表单加高，320x720 视口
+    // 装不下保存键（tap miss）⇒ 抬高视口。
+    tester.view.physicalSize = const Size(320, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     await tester.tap(find.byTooltip('新建习惯'));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('habit-editor-sheet')), findsOneWidget);
@@ -80,6 +85,9 @@ void main() {
   });
 
   testWidgets('编辑已有习惯：三档回显，改成「完成全部」后 update 带 recordType=3', (tester) async {
+    tester.view.physicalSize = const Size(320, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     final server = CaptureServer();
     final container = ProviderContainer(
       overrides: [

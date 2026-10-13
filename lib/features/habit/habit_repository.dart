@@ -20,6 +20,11 @@ class HabitDto {
   /// 《02-更好地完成习惯.md》打卡方式三档；存量/缺省按自动记录）。
   final int recordType;
 
+  /// 习惯级「打卡日志」开关（specs/132，矩阵 #45 面 ④ 收尾；嘀嗒
+  /// 《02-更好地完成习惯.md》:60-:62「编辑习惯中底部，可以将打卡日志关闭」；
+  /// 缺省 true——存量行/旧数据无键按开启）。
+  final bool journalEnabled;
+
   HabitDto({
     required this.id,
     required this.name,
@@ -31,6 +36,7 @@ class HabitDto {
     this.sortOrder = 0,
     this.archived = false,
     this.recordType = 1,
+    this.journalEnabled = true,
   });
 
   factory HabitDto.fromJson(Map<String, dynamic> j) {
@@ -48,6 +54,7 @@ class HabitDto {
       sortOrder: (j['sortOrder'] as num?)?.toInt() ?? 0,
       archived: j['archived'] == true,
       recordType: (j['recordType'] as num?)?.toInt() ?? 1,
+      journalEnabled: j['journalEnabled'] != false,
     );
   }
 }
@@ -68,6 +75,7 @@ Map<String, Object?> _habitBody({
   DateTime? reminderAt,
   int sortOrder = 0,
   int recordType = 1,
+  bool journalEnabled = true,
 }) {
   return {
     'name': name,
@@ -78,6 +86,8 @@ Map<String, Object?> _habitBody({
     'reminderAt': reminderAt?.millisecondsSinceEpoch,
     'sortOrder': sortOrder,
     'recordType': recordType,
+    // 习惯级「打卡日志」开关（specs/132，矩阵 #45 面 ④ 收尾）。
+    'journalEnabled': journalEnabled,
   };
 }
 
@@ -109,6 +119,7 @@ class HabitRepository {
     int targetCount = 1,
     DateTime? reminderAt,
     int recordType = 1,
+    bool journalEnabled = true,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '${ApiConfig.todoPrefix}/habit/create',
@@ -120,6 +131,7 @@ class HabitRepository {
         targetCount: targetCount,
         reminderAt: reminderAt,
         recordType: recordType,
+        journalEnabled: journalEnabled,
       ),
     );
     return _unwrapInt(response.data);
@@ -138,6 +150,7 @@ class HabitRepository {
     DateTime? reminderAt,
     int sortOrder = 0,
     int recordType = 1,
+    bool journalEnabled = true,
   }) async {
     final response = await _dio.put<Map<String, dynamic>>(
       '${ApiConfig.todoPrefix}/habit/update',
@@ -151,6 +164,7 @@ class HabitRepository {
           reminderAt: reminderAt,
           sortOrder: sortOrder,
           recordType: recordType,
+          journalEnabled: journalEnabled,
         ),
         'id': id,
       },
