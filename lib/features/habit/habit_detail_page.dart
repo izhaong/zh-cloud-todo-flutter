@@ -5,8 +5,10 @@ import '../../core/api/error_text.dart';
 import '../../core/theme/brand_colors.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../state/efficiency_providers.dart';
+import '../../state/providers.dart';
 import '../shell/app_dialog.dart';
 import 'habit_editor.dart';
+import 'habit_journal.dart';
 import 'habit_month_grid.dart';
 import 'habit_repository.dart';
 import 'habit_year_stats.dart';
@@ -73,7 +75,19 @@ class HabitDetailPage extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
           HabitStatsCard(habitId: habitId),
+          const SizedBox(height: 12),
+          HabitJournalSection(habitId: habitId),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        key: const Key('habit-detail-checkin'),
+        onPressed: () => showHabitCheckInSheet(
+          context,
+          habitId: habitId,
+          onDone: () => ref.invalidate(habitJournalFutureProvider(habitId)),
+        ),
+        icon: const Icon(Icons.check),
+        label: const Text('打卡'),
       ),
     );
   }

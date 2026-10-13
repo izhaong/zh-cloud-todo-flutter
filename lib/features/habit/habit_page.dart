@@ -192,15 +192,18 @@ class _HabitTile extends ConsumerWidget {
   final HabitDto habit;
 
   Future<void> _checkIn(BuildContext context, WidgetRef ref) async {
-    final repo = ref.read(habitRepositoryProvider);
     if (habit.recordType == 2) {
       // 手动记录档：嘀嗒打卡时可输入「本次完成的量」，不输入就是没打。
       final amount = await showHabitAmountSheet(context);
       if (amount == null) return;
-      await repo.checkIn(habit.id, amount: amount);
-    } else {
-      await repo.checkIn(habit.id);
+      await ref.read(habitRepositoryProvider).checkIn(habit.id, amount: amount);
+      ref.invalidate(myHabitsProvider);
+      ref.invalidate(habitStatsProvider);
+      return;
     }
+    // 自动档：直接完成（既有行为，specs/097 打卡方式档）。心情/日志弹层
+    // 挂在详情页的「打卡」按钮上（specs/131），列表行打卡保持一键直达。
+    await ref.read(habitRepositoryProvider).checkIn(habit.id);
     ref.invalidate(myHabitsProvider);
     ref.invalidate(habitStatsProvider);
   }

@@ -454,6 +454,12 @@ final habitSmartListVisibilityProvider = StreamProvider.autoDispose<bool>(
       const Stream<bool>.empty(),
 );
 
+/// 习惯打卡日志（specs/131，矩阵 #45 面 ④）：最近 30 条。
+final habitJournalFutureProvider = FutureProvider.autoDispose
+    .family<List<HabitCheckInEntry>, int>((ref, habitId) {
+      return ref.watch(habitRepositoryProvider).listCheckIns(habitId);
+    });
+
 /// 智能清单的习惯段数据（specs/130）：key 是 firstOfRange；把每个习惯的
 /// MONTH 档 dailyCounts 聚合成区间内 {日期: 次数}，并带上打卡周期判定
 /// （今天属于周期但还没打卡的习惯也在列——cursor-agent 交叉验证的收紧点）。

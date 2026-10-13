@@ -168,7 +168,14 @@ class HabitRepository {
 
   /// 打卡：返回当日累计打卡次数（后端计算）。
   /// `amount` 只在手动记录档（recordType=2）传入：本次完成量（嘀嗒打卡时可输入）。
-  Future<int> checkIn(int habitId, {DateTime? date, int? amount}) async {
+  /// `note` 携带心情/日志（specs/131，矩阵 #45 面 ④）：首行五档 emoji 或空，
+  /// 其余为日志正文——服务端透传，拆分约定在客户端。
+  Future<int> checkIn(
+    int habitId, {
+    DateTime? date,
+    int? amount,
+    String? note,
+  }) async {
     final d = date ?? DateTime.now();
     final r = await _dio.post<Map<String, dynamic>>(
       '${ApiConfig.todoPrefix}/habit/check-in',
@@ -176,9 +183,27 @@ class HabitRepository {
         'habitId': habitId,
         'checkedAt': d.millisecondsSinceEpoch,
         'amount': ?amount,
+        'note': ?note,
       },
     );
     return _unwrapInt(r.data);
+  }
+
+  /// 打卡日志（specs/131，矩阵 #45 面 ④）：最近 N 条（checkedAt 倒序）。
+  Future<List<HabitCheckInEntry>> listCheckIns(
+    int habitId, {
+    int limit = 30,
+  }) async {
+    final r = await _dio.get<Map<String, dynamic>>(
+      '${ApiConfig.todoPrefix}/habit/check-in/list',
+      queryParameters: {'habitId': habitId, 'limit': limit},
+    );
+    final data = _unwrapHabitData(r.data);
+    final rows = data is List ? data : const <dynamic>[];
+    return rows
+        .whereType<Map>()
+        .map((e) => HabitCheckInEntry.fromJson(Map<String, dynamic>.from(e)))
+        .toList(growable: false);
   }
 
   /// 统计：连续打卡天数 / 本周完成。
@@ -246,5 +271,60 @@ void _unwrapBool(Map<String, dynamic>? body) {
   if (body == null) return;
   if (body.containsKey('code') && body['code'] != 0) {
     throw envelopeFailure(body, path: ApiConfig.todoPrefix);
+  }
+}
+
+/// 打卡日志条目（`AppTodoHabitCheckInListRespVO`；specs/131）。
+class HabitCheckInEntry {
+  const HabitCheckInEntry({
+    required this.id,
+    required this.checkedAt,
+    this.note,
+    this.amount,
+  });
+
+  final int id;
+  final DateTime checkedAt;
+
+  /// 首行可能是心情 emoji（五档之一），其余为日志正文。
+  final String? note;
+  final int? amount;
+
+  factory HabitCheckInEntry.fromJson(Map<String, dynamic> json) {
+    final rawDate = json['checkedAt'];
+    DateTime parseDate() {
+      final v = rawDate;
+      if (v is num) return DateTime.fromMillisecondsSinceEpoch(v.toInt());
+      final parts = v?.toString().split('-') ?? const <String>[];
+      if (parts.length == 3) {
+        final y = int.tryParse(parts[0]);
+        final m = int.tryParse(parts[1]);
+        final d = int.tryParse(parts[2]);
+        if (y != null && m != null && d != null) return DateTime(y, m, d);
+      }
+      return DateTime.fromMillisecondsSinceEpoch(0);
+    }
+
+    return HabitCheckInEntry(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      checkedAt: parseDate(),
+      note: json['note']?.toString(),
+      amount: (json['amount'] as num?)?.toInt(),
+    );
+  }
+
+  /// (心情 emoji, 日志正文)；note 空时返回 null。
+  /// 心情约定：首行命中五档 emoji 之一时拆出，其余为正文；无心情但有日志
+  /// 时 mood 为 null；纯 emoji 时 journal 为 null。
+  (String?, String?)? get moodAndJournal {
+    final text = note ?? '';
+    if (text.isEmpty) return null;
+    final lines = text.split('\n');
+    const moods = ['😊', '😐', '😞', '🤩', '😤'];
+    if (moods.contains(lines.first.trim())) {
+      final journal = lines.length > 1 ? lines.sublist(1).join('\n') : null;
+      return (lines.first.trim(), journal);
+    }
+    return (null, text);
   }
 }
