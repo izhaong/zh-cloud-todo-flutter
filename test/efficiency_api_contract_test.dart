@@ -360,6 +360,7 @@ void main() {
           'reminderAt': null,
           'sortOrder': 0,
           'recordType': 1,
+          'journalEnabled': true,
         },
       );
       expect(

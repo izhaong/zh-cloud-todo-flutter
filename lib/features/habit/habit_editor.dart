@@ -69,6 +69,9 @@ class _HabitEditorFormState extends ConsumerState<_HabitEditorForm> {
   late int _recordType = widget.habit?.recordType ?? 1;
   late DateTime? _reminderAt = widget.habit?.reminderAt;
 
+  /// 「打卡日志」开关（specs/132，矩阵 #45 面 ④ 收尾）；缺省 true（现状锁）。
+  late bool _journalEnabled = widget.habit?.journalEnabled ?? true;
+
   String? _nameError;
   String? _targetError;
   String? _submitError;
@@ -106,6 +109,7 @@ class _HabitEditorFormState extends ConsumerState<_HabitEditorForm> {
           targetCount: target,
           reminderAt: _reminderAt,
           recordType: _recordType,
+          journalEnabled: _journalEnabled,
         );
       } else {
         await repo.update(
@@ -118,6 +122,7 @@ class _HabitEditorFormState extends ConsumerState<_HabitEditorForm> {
           reminderAt: _reminderAt,
           sortOrder: habit.sortOrder,
           recordType: _recordType,
+          journalEnabled: _journalEnabled,
         );
       }
       if (!mounted) return;
@@ -298,6 +303,17 @@ class _HabitEditorFormState extends ConsumerState<_HabitEditorForm> {
                     child: const Text('选择时间'),
                   ),
                 ],
+              ),
+              const Divider(height: 24),
+              // 嘀嗒《02-更好地完成习惯.md》:60-:62「在『编辑习惯』中底部，
+              // 可以将打卡日志关闭」（specs/132，矩阵 #45 面 ④ 收尾）。
+              SwitchListTile(
+                key: const Key('habit-editor-journal-toggle'),
+                contentPadding: EdgeInsets.zero,
+                title: const Text('打卡日志'),
+                subtitle: const Text('打卡时记录心情与日志'),
+                value: _journalEnabled,
+                onChanged: (value) => setState(() => _journalEnabled = value),
               ),
               if (_submitError != null)
                 Padding(

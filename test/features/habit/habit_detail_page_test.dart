@@ -242,6 +242,7 @@ void main() {
       'reminderAt': _reminderAt.millisecondsSinceEpoch,
       'sortOrder': 3,
       'recordType': 1,
+      'journalEnabled': true,
     });
   });
 
@@ -340,6 +341,14 @@ void main() {
     );
     await tester.tap(find.byKey(const Key('habit-editor-period-2')));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      inSurface(const Key('habit-editor-sheet'), find.text('保存')),
+      200,
+      scrollable: inSurface(
+        const Key('habit-editor-sheet'),
+        find.byType(Scrollable),
+      ).first,
+    );
     await tester.tap(
       inSurface(const Key('habit-editor-sheet'), find.text('保存')),
     );
@@ -426,6 +435,14 @@ void main() {
     final pagesBefore = server.requests
         .where((r) => r.path.endsWith(_pagePath))
         .length;
+    await tester.scrollUntilVisible(
+      inSurface(const Key('habit-editor-sheet'), find.text('保存')),
+      200,
+      scrollable: inSurface(
+        const Key('habit-editor-sheet'),
+        find.byType(Scrollable),
+      ).first,
+    );
     await tester.tap(
       inSurface(const Key('habit-editor-sheet'), find.text('保存')),
     );
@@ -498,6 +515,15 @@ void main() {
     final save = inSurface(
       const Key('habit-editor-sheet'),
       find.widgetWithText(FilledButton, '保存'),
+    );
+    // specs/132 后保存键在弹层可视区外，tap 前先滚到它。
+    await tester.scrollUntilVisible(
+      save,
+      200,
+      scrollable: inSurface(
+        const Key('habit-editor-sheet'),
+        find.byType(Scrollable),
+      ).first,
     );
     await tester.tap(save);
     await tester.pump();
@@ -636,6 +662,14 @@ void main() {
     await tester.tap(find.byKey(const Key('habit-editor-icon-run')));
     await tester.tap(find.byKey(const Key('habit-editor-color-#0EA5E9')));
     await tester.tap(find.byKey(const Key('habit-editor-period-2')));
+    await tester.scrollUntilVisible(
+      inSurface(const Key('habit-editor-sheet'), find.text('保存')),
+      200,
+      scrollable: inSurface(
+        const Key('habit-editor-sheet'),
+        find.byType(Scrollable),
+      ).first,
+    );
     await tester.tap(
       inSurface(const Key('habit-editor-sheet'), find.text('保存')),
     );
@@ -652,6 +686,7 @@ void main() {
         'reminderAt': null,
         'sortOrder': 0,
         'recordType': 1,
+        'journalEnabled': true,
       },
     );
     // 请求体对不等于"这一面走得通"：还得看得见成功。基线（`9032005`，本文件 18 条）上
@@ -683,6 +718,14 @@ void main() {
         find.byKey(const Key('habit-editor-name')),
       ),
       '   ',
+    );
+    await tester.scrollUntilVisible(
+      inSurface(const Key('habit-editor-sheet'), find.text('保存')),
+      200,
+      scrollable: inSurface(
+        const Key('habit-editor-sheet'),
+        find.byType(Scrollable),
+      ).first,
     );
     await tester.tap(
       inSurface(const Key('habit-editor-sheet'), find.text('保存')),
@@ -749,6 +792,13 @@ void main() {
       final server = await pumpNewHabitSheet(tester);
       await tester.enterText(sheetField('name'), '晨跑');
       await tester.enterText(sheetField('target'), input);
+      // specs/132 后表单多一个「打卡日志」开关 ⇒ 保存键在弹层可视区外，
+      // tap 前先滚到它（弹层自滚动；Too many elements 用 first 取主滚动）。
+      await tester.scrollUntilVisible(
+        sheetChild(find.text('保存')),
+        200,
+        scrollable: sheetChild(find.byType(Scrollable)).first,
+      );
       await tester.tap(sheetChild(find.text('保存')));
       await tester.pumpAndSettle();
 
@@ -774,6 +824,11 @@ void main() {
     await tester.tap(find.byKey(const Key('habit-editor-period-2')));
     await tester.enterText(sheetField('target'), '5');
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      sheetChild(find.text('保存')),
+      200,
+      scrollable: sheetChild(find.byType(Scrollable)).first,
+);
     await tester.tap(sheetChild(find.text('保存')));
     await tester.pumpAndSettle();
 
