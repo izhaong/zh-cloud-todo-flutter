@@ -13,21 +13,39 @@ import '../../core/sync/sync_entities.dart';
 /// `TASK_CAPTURE/defaults`。这避免和任务级 `/task-defaults`（B2 兼容 API）
 /// 混淆，也让离线保存与 outbox 具有相同的恢复语义。
 class TaskCaptureDefaults {
-  const TaskCaptureDefaults({this.defaultListId, this.defaultPriority = 0});
+  const TaskCaptureDefaults({
+    this.defaultListId,
+    this.defaultPriority = 0,
+    this.defaultReminderMinutes,
+  });
 
   final String? defaultListId;
   final int defaultPriority;
 
+  /// 「默认提醒」提前分钟数（嘀嗒《04-超强大的提醒功能.md》:33）。
+  ///
+  /// null 与 0 是两回事：null = 不提醒（不因默认值建任何提醒），0 = 准时提醒
+  /// （提醒时刻就是任务时间本身）。
+  final int? defaultReminderMinutes;
+
   Map<String, dynamic> toJson() => {
     'defaultListId': defaultListId,
     'defaultPriority': defaultPriority,
+    'defaultReminderMinutes': defaultReminderMinutes,
+    // null 也要进 JSON：`fromJson` 靠这个键区分「用户选了不提醒」和
+    // 「旧数据里根本没有这一档」——两者当前行为一致，但键丢了就会在
+    // 后续给这一档加新语义时静默变成默认值。
   };
 
   static TaskCaptureDefaults fromJson(Map<String, dynamic> json) {
     final priority = json['defaultPriority'];
+    final reminderMinutes = json['defaultReminderMinutes'];
     return TaskCaptureDefaults(
       defaultListId: json['defaultListId']?.toString(),
       defaultPriority: priority is num ? priority.toInt() : 0,
+      defaultReminderMinutes: reminderMinutes is num
+          ? reminderMinutes.toInt()
+          : null,
     );
   }
 
@@ -35,10 +53,12 @@ class TaskCaptureDefaults {
   bool operator ==(Object other) =>
       other is TaskCaptureDefaults &&
       other.defaultListId == defaultListId &&
-      other.defaultPriority == defaultPriority;
+      other.defaultPriority == defaultPriority &&
+      other.defaultReminderMinutes == defaultReminderMinutes;
 
   @override
-  int get hashCode => Object.hash(defaultListId, defaultPriority);
+  int get hashCode =>
+      Object.hash(defaultListId, defaultPriority, defaultReminderMinutes);
 }
 
 class TaskCaptureDefaultsRepository {
