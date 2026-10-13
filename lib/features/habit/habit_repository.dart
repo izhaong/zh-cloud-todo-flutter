@@ -25,6 +25,11 @@ class HabitDto {
   /// 缺省 true——存量行/旧数据无键按开启）。
   final bool journalEnabled;
 
+  /// 习惯提醒时间段列表（specs/134，矩阵 #45 面 ②；嘀嗒
+  /// 《02-更好地完成习惯.md》:40「提示时间可分在各个时间段」）。
+  /// null = 未设置（沿用单值 reminderAt）。
+  final List<String>? reminderTimes;
+
   HabitDto({
     required this.id,
     required this.name,
@@ -37,6 +42,7 @@ class HabitDto {
     this.archived = false,
     this.recordType = 1,
     this.journalEnabled = true,
+    this.reminderTimes,
   });
 
   factory HabitDto.fromJson(Map<String, dynamic> j) {
@@ -55,6 +61,9 @@ class HabitDto {
       archived: j['archived'] == true,
       recordType: (j['recordType'] as num?)?.toInt() ?? 1,
       journalEnabled: j['journalEnabled'] != false,
+      reminderTimes: j['reminderTimes'] != null
+          ? (j['reminderTimes'] as List).map((v) => v.toString()).toList()
+          : null,
     );
   }
 }
