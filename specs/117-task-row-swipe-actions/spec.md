@@ -50,12 +50,17 @@
    复算（新文件未入库，判据必须带 `--untracked`，否则 `git grep` 会给出假的 0）：
    `git grep -c --untracked "TASK_SWIPE" -- lib` ⇒ 仓储那份文件 2 处；
    `git grep -c --untracked "TASK_SWIPE" -- test` ⇒ 用例那份文件 4 处。
-4. **一侧上限 3（`maxActionsPerSide`）。** 依据是 `:66` 的"三个选项"；
-   窄屏 320px 上三块并排 216px，再挤就不是能点的东西了。
+4. **一侧上限 3（`maxActionsPerSide`）—— 这是本仓自己的布局取舍，不是原文的规定。**
+   `:66` 的"三个选项"是在点名左滑默认那三件动作，`:71` 右滑默认只有两件，
+   `:75` 也只说"可以进行自定义配置"，三处都没写过上限。
+   取 3 的理由是窄屏：320px 上三块并排 216px，第四块就不是能点的东西了。
    仓储与设置页各挡一道：界面把第四个按不动，仓储拒重复与超限（直接调仓储的调用方也兜得住）。
-5. **「移动任务」新造 `TaskRepository.moveToList`，与既有 `update(listId:, clearSectionId:)` 差两处。**
+5. **「移动任务」新造 `TaskRepository.moveToList`，与既有 `update(listId:, clearSectionId:)` 差三处。**
    一是子树跟着走：清单页已经把子级铺成行（`specs/116`），只挪父行会让子级留在原清单，
    展开箭头点开是空的。二是目标清单必须可写（旧通道不校验，挪进只读清单就是一行改不动的任务）。
+   三是**子任务不单独换清单**：同文件 `_assertParentChainDoesNotContain` 要求父子同清单
+   （抛「父任务必须属于同一清单」），只挪子行会当场造出那种状态 ⇒ `moveToList` 直接拒，
+   界面在开表之前就挡并说"请随主任务一起移动"。
    清分组这一条**不是新账** —— 侧栏拖放早就写着 `clearSectionId: true`，本轮照同一口径。
    详情面板的清单切换、侧栏拖放、批量「移至清单」仍走旧通道 ⇒ 本轮不改，另立工单（见 tasks.md"后续"）。
    复算：`git grep -n --untracked "moveToList" -- lib/features/task lib/state/repositories` ⇒ 定义 1 处 + 行宿主调用 1 处。

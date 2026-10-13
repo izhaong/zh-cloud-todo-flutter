@@ -293,19 +293,24 @@ class _TaskRowHostState extends ConsumerState<TaskRowHost> {
     }
   }
 
-  Future<void> _guardSwipeWrite(
+  /// 写入包一层：失败时给可见提示，并把"成没成"返回给调用方。
+  /// 不返回的话，调用方只能无条件弹成功条 —— 那样失败时会先看到失败条再看到
+  /// 一条"已移动到「X」"，而清单根本没变（交叉验证点名的就是这一处）。
+  Future<bool> _guardSwipeWrite(
     Future<Object?> Function() write,
     String fallback,
     ScaffoldMessengerState messenger,
   ) async {
     try {
       await write();
+      return true;
     } catch (error) {
       messenger.showSnackBar(
         SnackBar(
           content: Text(taskViewMutationFailureMessage(error, fallback)),
         ),
       );
+      return false;
     }
   }
 
@@ -348,6 +353,13 @@ class _TaskRowHostState extends ConsumerState<TaskRowHost> {
     TaskRepository taskRepo,
     ScaffoldMessengerState messenger,
   ) async {
+    if (widget.task.parentTaskId != null) {
+      // 子任务与父任务必须同清单（`task_repository.dart` 的
+      // `_assertParentChainDoesNotContain` 抛的就是「父任务必须属于同一清单」）。
+      // 单独挪一行子任务会当场造出那种状态，所以在开表之前就拒掉并说清该怎么做。
+      messenger.showSnackBar(const SnackBar(content: Text('子任务请随主任务一起移动')));
+      return;
+    }
     final lists =
         ref.read(listsStreamProvider).valueOrNull ?? const <TodoList>[];
     final writable = lists.where((list) => list.writable).toList();
@@ -388,12 +400,12 @@ class _TaskRowHostState extends ConsumerState<TaskRowHost> {
         .where((target) => target.$1 == picked)
         .map((target) => target.$2)
         .firstOrNull;
-    await _guardSwipeWrite(
+    final moved = await _guardSwipeWrite(
       () => taskRepo.moveToList(widget.task.id, picked),
       '移动失败，请重试',
       messenger,
     );
-    if (nameOf == null) return;
+    if (!moved || nameOf == null) return;
     messenger.showSnackBar(SnackBar(content: Text('已移动到「$nameOf」')));
   }
 

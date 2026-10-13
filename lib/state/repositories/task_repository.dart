@@ -408,10 +408,16 @@ class TaskRepository {
   ///    （订阅/共享来的）会留下一行"看得见却改不动"的任务。
   /// 跨清单后原清单的分组不属于目标清单，所以 `sectionId` 一律清空。
   /// 已经在目标清单时是 no-op：不写库也不排第二条 outbox。
+  /// 子任务**不能单独换清单**：`_assertParentChainDoesNotContain` 要求父子同清单
+  /// （抛的就是「父任务必须属于同一清单」），只挪子行会当场造出那种状态 ⇒ 这一层先拒，
+  /// 界面上也给了"请随主任务一起移动"的说法。
   Future<List<TodoTask>> moveToList(String taskId, String targetListId) =>
       _db.transaction(() async {
         final task = await _taskOrThrow(taskId);
         if (task.listId == targetListId) return [task];
+        if (task.parentTaskId != null) {
+          throw StateError('子任务请随主任务一起移动');
+        }
         final now = DateTime.now();
         await _ensureInboxList(targetListId, now);
         await _requireWritableList(targetListId);

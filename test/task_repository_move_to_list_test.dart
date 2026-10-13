@@ -101,6 +101,27 @@ void main() {
     expect(inbox!.writable, isTrue);
   });
 
+  test('子任务不能单独换清单：父子必须同清单，只挪子行会当场造出违规状态', () async {
+    await _seed(db);
+
+    await expectLater(
+      repo.moveToList('child-a', 'list-b'),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          '子任务请随主任务一起移动',
+        ),
+      ),
+      reason:
+          '同文件的 `_assertParentChainDoesNotContain` 会抛「父任务必须属于同一清单」，'
+          '所以这一层不收，写进去就是一条别的通道都不认的父子',
+    );
+
+    expect((await _row(db, 'child-a')).listId, 'list-a');
+    expect(await db.select(db.todoSyncChanges).get(), isEmpty);
+  });
+
   test('任务不存在时抛错，不静默造出一行', () async {
     await _seed(db);
 

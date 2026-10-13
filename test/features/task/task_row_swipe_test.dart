@@ -301,6 +301,35 @@ void main() {
     );
   });
 
+  testWidgets('子行点「移动任务」被拒并说清该怎么做（父子必须同清单）', (tester) async {
+    final fixture = await _pumpList(tester);
+    // 子行默认收起：先把 metadata 那一组展开，才有这一行可滑。
+    await tester.tap(find.byKey(Key('todo-task-expand-toggle-$parentTaskId')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(Key('task-row-surface-$childTaskId')), findsOneWidget);
+
+    await _swipe(tester, childTaskId, const Offset(-110, 0));
+    await tester.tap(
+      find.byKey(taskSwipeActionKey(TaskSwipeAction.moveTo, childTaskId)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('子任务请随主任务一起移动'),
+      findsOneWidget,
+      reason: '仓储那条「父任务必须属于同一清单」是既有不变量，界面要提前挡住并给做法',
+    );
+    expect(
+      find.byKey(const Key('todo-task-swipe-move-target-$workListId')),
+      findsNothing,
+      reason: '既然要拒，就不该再让人挑目标清单',
+    );
+    expect(
+      (await _row(fixture.database, childTaskId)).listId,
+      TodoVisualFixture.inboxListId,
+    );
+  });
+
   testWidgets('「移动任务」之后行不再属于当前这一页（收集箱页看不到挪走的行）', (tester) async {
     await _pumpList(tester);
 
@@ -475,16 +504,68 @@ void main() {
     );
   });
 
-  testWidgets('桌面端这一行不挂滑动条（桌面用右键菜单，原文也只写移动端）', (tester) async {
+  testWidgets('桌面端真的滑一下也不露出任何一档（桌面用右键菜单，原文只写移动端）', (tester) async {
     await _pumpList(tester, viewport: TodoVisualViewports.wide);
 
-    expect(
-      find.byKey(taskSwipeActionKey(TaskSwipeAction.delete, taskId)),
-      findsNothing,
-    );
+    // 静止态本来就不建动作带 ⇒ 只断"钮不在树里"证不出是桌面挡掉的，
+    // 必须真做一次滑动，让"移动端会建出来"的那条路径在桌面上也走一遍。
+    final box = tester.getRect(find.byKey(Key('task-row-surface-$taskId')));
+    final gesture = await tester.startGesture(box.center);
+    await gesture.moveTo(box.center + const Offset(-200, 0));
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    for (final action in TaskSwipeAction.values) {
+      expect(
+        find.byKey(taskSwipeActionKey(action, taskId)),
+        findsNothing,
+        reason: '$action 这一档在桌面端滑完之后也不该出现',
+      );
+    }
     expect(
       find.byKey(const Key('todo-task-swipe-collapse-barrier')),
       findsNothing,
+    );
+  });
+
+  testWidgets('移动写失败时只弹失败条，不再补一条"已移动到"', (tester) async {
+    late _ThrowingTaskRepository repository;
+    final fixture = await _pumpList(
+      tester,
+      overridesBuilder: (database) {
+        repository = _ThrowingTaskRepository(
+          database,
+          SyncChangeQueue(database),
+        )..moveFails = true;
+        return [taskRepositoryProvider.overrideWithValue(repository)];
+      },
+    );
+
+    await _swipe(tester, taskId, const Offset(-110, 0));
+    await tester.tap(
+      find.byKey(taskSwipeActionKey(TaskSwipeAction.moveTo, taskId)),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('todo-task-swipe-move-target-$workListId')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(repository.moveCalls, [taskId]);
+    expect(find.text('移动失败，请重试'), findsOneWidget);
+    // 失败条先退场再看有没有第二条：`ScaffoldMessenger` 是排队的，
+    // 不 pump 过超时，那条假的"已移动到"还压在队列里，断言就会假绿（P10 第一版就这样绿的）。
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('已移动到'),
+      findsNothing,
+      reason: '写都失败了还说"已移动到「工作」"，用户就会以为挪走了',
+    );
+    expect(
+      (await _row(fixture.database, taskId)).listId,
+      TodoVisualFixture.inboxListId,
     );
   });
 
@@ -561,10 +642,19 @@ class _ThrowingTaskRepository extends TaskRepository {
   _ThrowingTaskRepository(super.db, super.queue);
 
   final List<String> calls = [];
+  final List<String> moveCalls = [];
+  bool moveFails = false;
 
   @override
   Future<TodoTask> toggleComplete(String taskId) async {
     calls.add(taskId);
+    throw StateError('boom');
+  }
+
+  @override
+  Future<List<TodoTask>> moveToList(String taskId, String targetListId) async {
+    moveCalls.add(taskId);
+    if (!moveFails) return super.moveToList(taskId, targetListId);
     throw StateError('boom');
   }
 }
