@@ -602,6 +602,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
     final reminderMessage = await attachResolvedReminders(
       created: created,
       reminders: ref.read(reminderRepositoryProvider),
+      defaultReminderMinutes: defaults?.defaultReminderMinutes,
     );
     if (!mounted || created.isEmpty) return;
     // web 上带 action 的 SnackBar 不会按 duration 自己退场（FL #512，
