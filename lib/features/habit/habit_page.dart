@@ -8,6 +8,7 @@ import '../../state/efficiency_providers.dart';
 import 'habit_detail_page.dart';
 import 'habit_editor.dart';
 import 'habit_repository.dart';
+import 'habit_smart_list_visibility.dart';
 import 'habit_week_stats.dart';
 
 /// M11-B4 习惯列表 + 打卡
@@ -28,6 +29,9 @@ class HabitPage extends ConsumerWidget {
         actions: [
           // 嘀嗒《03-习惯数据统计》:29「点击习惯页面中的统计图标，就能够
           // 查看到所有习惯的打卡情况」——入口进周视图统计页（FL #542）。
+          // 嘀嗒《02-更好地完成习惯》:66「可在习惯页面右上角点击管理图标，
+          // 选择『在“今天”、“最近7天”中显示』」（specs/130，矩阵 #45 面 ⑤）。
+          const HabitSmartListVisibilityAction(),
           Semantics(
             label: '打卡统计',
             button: true,

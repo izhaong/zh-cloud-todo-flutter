@@ -39,6 +39,8 @@ import 'repositories/task_swipe_preference_repository.dart';
 import 'repositories/sidebar_visibility_repository.dart';
 import 'efficiency_providers.dart';
 import 'repositories/calendar_info_preference_repository.dart';
+import '../features/habit/habit_repository.dart';
+import 'repositories/habit_smart_list_preference_repository.dart';
 import 'repositories/task_view_action_repository.dart';
 import 'repositories/timezone_preference_repository.dart';
 import 'repositories/week_start_preference_repository.dart';
@@ -429,12 +431,101 @@ final timezoneEnabledProvider = StreamProvider<bool>((ref) {
   return repo.watch();
 });
 
+final habitSmartListPreferenceRepositoryProvider =
+    Provider<HabitSmartListPreferenceRepository?>((ref) {
+      final db = ref.watch(appDatabaseProvider);
+      final queue = ref.watch(syncChangeQueueProvider);
+      if (db == null || queue == null) return null;
+      return HabitSmartListPreferenceRepository(db, queue);
+    });
+
 final calendarInfoPreferenceRepositoryProvider =
     Provider<CalendarInfoPreferenceRepository?>((ref) {
       final db = ref.watch(appDatabaseProvider);
       final queue = ref.watch(syncChangeQueueProvider);
       if (db == null || queue == null) return null;
       return CalendarInfoPreferenceRepository(db, queue);
+    });
+
+/// 「在“今天”、“最近7天”中显示」习惯开关（specs/130，矩阵 #45 面 ⑤）。
+final habitSmartListVisibilityProvider = StreamProvider.autoDispose<bool>(
+  (ref) =>
+      ref.watch(habitSmartListPreferenceRepositoryProvider)?.watch() ??
+      const Stream<bool>.empty(),
+);
+
+/// 智能清单的习惯段数据（specs/130）：key 是 firstOfRange；把每个习惯的
+/// MONTH 档 dailyCounts 聚合成区间内 {日期: 次数}，并带上打卡周期判定
+/// （今天属于周期但还没打卡的习惯也在列——cursor-agent 交叉验证的收紧点）。
+final habitSmartListEntriesProvider = FutureProvider.autoDispose
+    .family<
+      List<({HabitDto habit, DateTime nextDue, int todayCount})>,
+      DateTime
+    >((ref, firstOfRange) async {
+      final habits = ref.watch(habitRepositoryProvider);
+      final visible = await ref
+          .watch(habitSmartListPreferenceRepositoryProvider)
+          ?.get();
+      if (visible != true) return const [];
+      final habitList = await habits.listMine();
+      final result = <({HabitDto habit, DateTime nextDue, int todayCount})>[];
+      final today = DateTime.now();
+      final todayKey = DateTime(today.year, today.month, today.day);
+      for (final habit in habitList) {
+        try {
+          final value = await habits.stats(habit.id, period: 'MONTH');
+          final dailyCounts = value['dailyCounts'];
+          var todayCount = 0;
+          final doneDates = <DateTime>{};
+          if (dailyCounts is List) {
+            for (final entry in dailyCounts) {
+              if (entry is! Map) continue;
+              final parts = entry['date']?.toString().split('-') ?? const [];
+              if (parts.length != 3) continue;
+              final y = int.tryParse(parts[0]);
+              final m = int.tryParse(parts[1]);
+              final d = int.tryParse(parts[2]);
+              if (y == null || m == null || d == null) continue;
+              final date = DateTime(y, m, d);
+              if (date == todayKey) {
+                todayCount = (entry['count'] as num?)?.toInt() ?? 0;
+              }
+              if ((entry['count'] as num?)?.toInt() != null) {
+                doneDates.add(date);
+              }
+            }
+          }
+          // 打卡周期判定：period 1=每天 → 今天就该打卡；2=每周 → 本周任意一天
+          // 算周期内；3=每月 → 本月。今天未打卡且属周期 ⇒ nextDue = 今天。
+          final inPeriod = switch (habit.period) {
+            2 =>
+              doneDates.isEmpty ||
+                  doneDates.any(
+                    (d) =>
+                        d.year == today.year &&
+                        d.month == today.month &&
+                        (d.day - today.day).abs() <= 6,
+                  ),
+            3 =>
+              doneDates.isEmpty ||
+                  doneDates.any(
+                    (d) => d.year == today.year && d.month == today.month,
+                  ),
+            _ => true,
+          };
+          if (todayCount > 0 || (inPeriod && habit.period == 1)) {
+            result.add((
+              habit: habit,
+              nextDue: todayKey,
+              todayCount: todayCount,
+            ));
+          }
+        } on Object {
+          // 单习惯统计失败跳过。
+          continue;
+        }
+      }
+      return result;
     });
 
 /// 一年节假日/调休表（`GET /todo/calendar/holidays`；specs/125）。
