@@ -39,6 +39,53 @@ class NlpDateParser {
       return ResolvedDate(dt, m.group(0)!);
     }
 
+    // specs/133（矩阵 #83 面②）：滴答《03-特色功能/05-智能识别.md》的
+    // 「周X」「下周X」「N天后」「大后天」「月底」本地正则覆盖。
+    // "下周三" / "周三" / "下周" —— 解析到本周/下周的星期几（周一只往前不往后）。
+    final weekdayNames = {
+      '一': 1,
+      '二': 2,
+      '三': 3,
+      '四': 4,
+      '五': 5,
+      '六': 6,
+      '日': 7,
+      '天': 7,
+    };
+    final weekRe = RegExp(r'(下?)周([一二三四五六日天])');
+    final wm = weekRe.firstMatch(lower);
+    if (wm != null) {
+      final target = weekdayNames[wm.group(2)!]!;
+      var delta = (target - now.weekday) % 7;
+      if (delta == 0) delta = 7;
+      final base = _todayAtMidnight(now).add(Duration(days: delta));
+      return ResolvedDate(base, wm.group(0)!);
+    }
+
+    // "3天后" / "30天后"
+    final daysLaterRe = RegExp(r'(\d{1,3})\s*天[后後]');
+    final dlm = daysLaterRe.firstMatch(lower);
+    if (dlm != null) {
+      final days = int.parse(dlm.group(1)!);
+      if (days > 0 && days <= 365) {
+        final base = _todayAtMidnight(now).add(Duration(days: days));
+        return ResolvedDate(base, dlm.group(0)!);
+      }
+    }
+
+    // "大后天" = 3 天后
+    if (lower.contains('大后天')) {
+      final base = _todayAtMidnight(now).add(const Duration(days: 3));
+      return ResolvedDate(base, '大后天');
+    }
+
+    // "月底" = 本月最后一天
+    if (lower.contains('月底')) {
+      final lastDay = DateTime(now.year, now.month + 1, 0).day;
+      final base = DateTime(now.year, now.month, lastDay);
+      return ResolvedDate(base, '月底');
+    }
+
     // "明天 8 点" / "明天 8:30" / "tomorrow 8am"
     final tomorrowRe = RegExp(
       r'(明天|后天|tomorrow)(?:\s*)?(\d{1,2})(?:[:：.](\d{1,2}))?'
