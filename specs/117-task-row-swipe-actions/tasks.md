@@ -31,6 +31,28 @@
 
 黄金基线：`test/visual/todo_workspace_golden_test.dart` ⇒ 18 条全绿，0 张重录。
 
+## 全量门禁读数订正（2026-10-13，第 298 轮补）
+
+本轮 PR !602 正文写的 `+1922 ~26 -1`（"唯一那 1 项红是 `raw_error_text_gate_test`"）**读少了**：
+`flutter test` 的 compact reporter 只在计数非零时才打 `~N`/`-N`，
+且末行经常是失败清单摘要或"还没并完"的那一拍 ⇒ 读末行必然偏小。
+尺子已经进仓：`bash tool/gate_counts.sh --selftest`（两条罐头样本，其中含被省略的 `~`/`-` 段）
+与 `bash tool/gate_counts.sh <日志>` 取整份日志 `+N ~N -N` 的最大值。
+
+现读数（`bash tool/gate_counts.sh` 量的日志）：
+
+- 产物全量：`flutter test --no-pub 2>&1 | tee /tmp/gate.log | tail -1 >/dev/null; bash tool/gate_counts.sh /tmp/gate.log`
+  ⇒ `pass=1935 skip=26 fail=5`（specs/118 分支并过 develop 之后）
+- develop 单独跑同一条命令（在 `git worktree add --detach /tmp/wt-fl-298dev origin/develop` 里）
+  ⇒ `pass=1931 skip=26 fail=5`
+
+- 5 项红的归属逐条点名：`raw_error_text_gate_test`（#569）、
+  `habit_year_stats_test`（#607，断言写死 `habit-heat-cell-2026-07-15`）、
+  `task_organize_search_repository_test`（#610，时区依赖：
+  `TZ=UTC flutter test --no-pub test/task_organize_search_repository_test.dart` ⇒ 全绿，本机美东红）
+- 与本笔改动的因果已切干净：`git worktree add --detach /tmp/wt-fl-298dev b2449a74`
+  （本 PR 合并后的 tip）后跑上面两个文件 ⇒ `fail=4`，说明这 4 项在本 PR 之前就红
+
 ## 变异探针（每处只改一个判据，要求对应测试必须红）
 
 驱动脚本 `/tmp/probe_round297.py`（逐条：备份 → 断言 needle 命中 1 次 → 改 → 跑 → 还原 → `cmp` 校还原）。

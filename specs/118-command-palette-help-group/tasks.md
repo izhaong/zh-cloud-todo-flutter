@@ -52,11 +52,12 @@
 再在产物上跑：
 
 - `flutter analyze` ⇒ `No issues found!`
-- 产物全量 `flutter test --no-pub` ⇒ 计数取日志里 `+N ~N -N` 的**最大值**
-  （`grep -o` 逐行取然后 max，不读末行）⇒ **pass 1935 / skip 26 / fail 5**，
-  日志 `/tmp/gate298.log`
-- develop 单独全量（`git worktree add --detach /tmp/wt-fl-298dev origin/develop`）
-  ⇒ 同一算法 **pass 1931 / skip 26 / fail 5**，日志 `/tmp/devfull298.log`
+- 产物全量 `flutter test --no-pub` ⇒ 计数取整份日志 `+N ~N -N` 的**最大值**，不读末行
+  （尺子随这笔进仓：`bash tool/gate_counts.sh --selftest` ⇒ `SELFTEST PASS`）
+  ⇒ 复算 `flutter test --no-pub 2>&1 | tee /tmp/gate.log | tail -1 >/dev/null; bash tool/gate_counts.sh /tmp/gate.log`
+  ⇒ **pass 1935 / skip 26 / fail 5**
+- develop 单独全量（`git worktree add --detach /tmp/wt-fl-298dev origin/develop` 后跑上面那命令）
+  ⇒ **pass 1931 / skip 26 / fail 5**
 - 对账：`1935 - 1931 = 4` ＝ 本轮新增的 4 条用例（`testWidgets(` 8→12 复算过）；
   五条红的**名字逐条相同** ⇒ 本轮净新增红 **0 条**
 - 黄金基线在那 1935 条里（`test/visual/`），五条红里没有一张是 golden ⇒ **0 张重录**
@@ -65,8 +66,10 @@
 develop 写成 `+1931`，差值 3 与新增 4 条对不上；改成"全日志取最大计数"后才对上。
 末行是 `Some tests failed` 那一拍，最后那条用例的通过计数还没并进那一拍。
 
-**顺带更正 117 台账的读数**：`specs/117-task-row-swipe-actions/tasks.md` 写的
-"全量门禁只剩 #569 那句异常文案判红"不成立 —— 在 117 合并后的 tip 上跑
+**顺带更正 117 那轮的读数**：PR !602 正文写的"全量 `+1922 ~26 -1`、唯一那 1 项红是
+`raw_error_text_gate_test`"不成立（117 的台账当时**根本没写全量门禁这一节**，
+所以尺子没兜住它 —— 这一节随本笔补进去）。在 117 合并后的 tip 上跑
+
 `git worktree add --detach /tmp/wt-fl-298dev b2449a74` 后
 `flutter test --no-pub test/features/habit/habit_year_stats_test.dart test/task_organize_search_repository_test.dart`
 ⇒ 失败清单为 `habit_year_stats_test` 2 项 + `task_organize_search_repository_test` 2 项（见下表），
