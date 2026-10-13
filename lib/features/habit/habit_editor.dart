@@ -71,6 +71,8 @@ class _HabitEditorFormState extends ConsumerState<_HabitEditorForm> {
 
   /// 「打卡日志」开关（specs/132，矩阵 #45 面 ④ 收尾）；缺省 true（现状锁）。
   late bool _journalEnabled = widget.habit?.journalEnabled ?? true;
+  /// 提醒时间段列表（specs/134，矩阵 #45 面 ②）；缺省空。
+  late List<String> _reminderTimes = List.from(widget.habit?.reminderTimes ?? const []);
 
   String? _nameError;
   String? _targetError;
@@ -145,6 +147,8 @@ class _HabitEditorFormState extends ConsumerState<_HabitEditorForm> {
     );
     if (picked == null) return;
     final base = _reminderAt ?? now;
+    final timeStr =
+        '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
     setState(() {
       _reminderAt = DateTime(
         base.year,
@@ -153,6 +157,26 @@ class _HabitEditorFormState extends ConsumerState<_HabitEditorForm> {
         picked.hour,
         picked.minute,
       );
+      if (!_reminderTimes.contains(timeStr)) {
+        _reminderTimes.add(timeStr);
+        _reminderTimes.sort();
+      }
+    });
+  }
+
+  Future<void> _addReminderTime() async {
+    final now = DateTime.now();
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(now),
+    );
+    if (picked == null) return;
+    final timeStr =
+        '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+    if (_reminderTimes.contains(timeStr)) return;
+    setState(() {
+      _reminderTimes.add(timeStr);
+      _reminderTimes.sort();
     });
   }
 
@@ -304,6 +328,27 @@ class _HabitEditorFormState extends ConsumerState<_HabitEditorForm> {
                   ),
                 ],
               ),
+               if (_reminderTimes.isNotEmpty)
+                 Padding(
+                   padding: const EdgeInsets.only(top: 4),
+                   child: Wrap(
+                     spacing: 6,
+                     children: [
+                       for (final (index, time) in _reminderTimes.indexed)
+                         Chip(
+                           key: Key('habit-editor-reminder-time-\${index}'),
+                           label: Text(time),
+                           onDeleted: () =>
+                               setState(() => _reminderTimes.removeAt(index)),
+                         ),
+                     ],
+                   ),
+                 ),
+               TextButton(
+                 key: const Key('habit-editor-reminder-add'),
+                 onPressed: _addReminderTime,
+                 child: const Text('添加时间段'),
+               ),
               const Divider(height: 24),
               // 嘀嗒《02-更好地完成习惯.md》:60-:62「在『编辑习惯』中底部，
               // 可以将打卡日志关闭」（specs/132，矩阵 #45 面 ④ 收尾）。
