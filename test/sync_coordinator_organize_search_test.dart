@@ -244,6 +244,21 @@ void main() {
     'sort preference pushes from A and B restores it from the sync feed',
     () async {
       final dbA = AppDatabase.forTesting(NativeDatabase.memory());
+      // FL #619：两端各自的清单本地 id 是 uuid，同一条服务端清单在 A 叫 list-a、
+      // 在 B 叫 list-b-on-b。旧断言把两端的 sourceKey 写成同一个字符串，
+      // 于是"每清单排序跨端"这件事它其实测不到（键从来对不上）。
+      final seededAt = DateTime.utc(2026, 7, 30, 9);
+      await dbA
+          .into(dbA.todoLists)
+          .insert(
+            TodoListsCompanion.insert(
+              id: 'list-a',
+              serverId: const Value(7),
+              name: '项目',
+              updatedAt: seededAt,
+              createdAt: seededAt,
+            ),
+          );
       final sortPreferencesA = TaskSortPreferenceRepository(
         dbA,
         SyncChangeQueue(dbA),
@@ -294,7 +309,7 @@ void main() {
       expect(pushedChange!['entityType'], 'view_preference');
       expect(pushedChange!['payload'], {
         'sourceType': 'TASK_SORT',
-        'sourceKey': 'list-a',
+        'sourceKey': 'list-server:7',
         'viewType': 'LIST',
         // 上行形状：本轮多带一个 direction 键。B 端是从这同一条 feed 恢复的，
         // 所以这条断言同时也是"方向会跟着同步到另一台设备"的判据。
@@ -309,6 +324,17 @@ void main() {
 
       final dbB = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(dbB.close);
+      await dbB
+          .into(dbB.todoLists)
+          .insert(
+            TodoListsCompanion.insert(
+              id: 'list-b-on-b',
+              serverId: const Value(7),
+              name: '项目',
+              updatedAt: seededAt,
+              createdAt: seededAt,
+            ),
+          );
       final dioB = Dio()
         ..interceptors.add(
           InterceptorsWrapper(
@@ -354,7 +380,7 @@ void main() {
       final restoredB = await TaskSortPreferenceRepository(
         dbB,
         SyncChangeQueue(dbB),
-      ).get('list-a');
+      ).get('list-b-on-b');
       expect(restoredB.sort, TaskSort.dueDate);
       expect(restoredB.direction, TaskSortDirection.newestFirst);
       final preferenceB = await dbB.select(dbB.todoViewPreferences).getSingle();
