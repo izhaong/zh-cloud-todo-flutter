@@ -52,20 +52,36 @@
 再在产物上跑：
 
 - `flutter analyze` ⇒ `No issues found!`
-- `flutter test --no-pub` ⇒ `+1934 ~26 -5`
-- 同 5 条红在 `origin/develop@0c6ef40b` 单独跑同样三个文件也红，名字逐条对得上
-  （复现命令：`git worktree add --detach /tmp/wt-fl-298dev origin/develop`
-  → `flutter test --no-pub test/features/habit/habit_year_stats_test.dart
-  test/task_organize_search_repository_test.dart test/tooling/raw_error_text_gate_test.dart`
-  ⇒ `+33 -5`，五条名称与本节列出的五条一致）⇒ 本轮净新增红 **0 条**。
-- 黄金基线在那 1934 条里（`test/visual/`），五条红里没有一张是 golden ⇒ **0 张重录**。
+- 产物全量 `flutter test --no-pub` ⇒ 计数取日志里 `+N ~N -N` 的**最大值**
+  （`grep -o` 逐行取然后 max，不读末行）⇒ **pass 1935 / skip 26 / fail 5**，
+  日志 `/tmp/gate298.log`
+- develop 单独全量（`git worktree add --detach /tmp/wt-fl-298dev origin/develop`）
+  ⇒ 同一算法 **pass 1931 / skip 26 / fail 5**，日志 `/tmp/devfull298.log`
+- 对账：`1935 - 1931 = 4` ＝ 本轮新增的 4 条用例（`testWidgets(` 8→12 复算过）；
+  五条红的**名字逐条相同** ⇒ 本轮净新增红 **0 条**
+- 黄金基线在那 1935 条里（`test/visual/`），五条红里没有一张是 golden ⇒ **0 张重录**
+
+**读数方法本身是一次自我更正**：先按"日志最后一行"读，产物写成 `-5/+1934`、
+develop 写成 `+1931`，差值 3 与新增 4 条对不上；改成"全日志取最大计数"后才对上。
+末行是 `Some tests failed` 那一拍，最后那条用例的通过计数还没并进那一拍。
+
+**顺带更正 117 台账的读数**：`specs/117-task-row-swipe-actions/tasks.md` 写的
+"全量门禁只剩 #569 那句异常文案判红"不成立 —— 在 117 合并后的 tip 上跑
+`git worktree add --detach /tmp/wt-fl-298dev b2449a74` 后
+`flutter test --no-pub test/features/habit/habit_year_stats_test.dart test/task_organize_search_repository_test.dart`
+⇒ 失败清单为 `habit_year_stats_test` 2 项 + `task_organize_search_repository_test` 2 项（见下表），
+说明那轮读的是末行计数而漏了这 4 项。117 的台账与 PR 正文按本节口径订正
+（另开一笔 docs(specs) 提交，见 PR 正文）。
+
+
 
 ## 存量红（本轮没碰、也没顺手修）
 
 | 红 | 判据 | 去处 |
 | --- | --- | --- |
 | `habit_year_stats_test.dart` 2 条 | 断言找 `habit-heat-cell-2026-07-15`，`Found 0 widgets` —— 种子写死一个绝对日期，热力窗口按今天算，跨了边界就没有那一格 | FL #607（上一轮已立） |
-| `task_organize_search_repository_test.dart` 2 条 | `Expected: ['task:task-search-17'] Actual: []`、`Expected ['task-1'] Actual ['task-2']、Expected: empty Actual: [...]` —— 也是按今天算的日期窗口/闭区间边界 | 本轮新立一张（见 PR 正文） |
+| `task_organize_search_repository_test.dart` 2 条 | `Expected: ['task:task-search-17'] Actual: []`、`Expected: ['task-1'] Actual: ['task-2']`、`Expected: empty Actual: [...]`。**测过不是时钟**：同一 HEAD 上 `TZ=Etc/GMT+12`（本机日期退回 10-12）仍红；过滤区间与种子都是绝对日期（`DateTime.utc(2026, 8, 10)`、`DateTime(2026, 7, 20)`）；在 117 那轮的 tip `b2449a74` 上跑同样红 ⇒ 存量，不是本轮也不是跨天引入 | 本轮新立一张（见 PR 正文） |
+
 | `tooling/raw_error_text_gate_test.dart` 1 条 | 「lib 下没有任何文案在插异常原文」的门禁判红 | FL #569（存量） |
 
 这三组都在 develop 上就红，本轮不顺手改：改法各不相同（前两组是把用例种子改成相对今天
