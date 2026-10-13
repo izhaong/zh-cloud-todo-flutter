@@ -25,7 +25,7 @@
 ## T4 存量更新
 
 - `calendar_display_settings_test` 「宿主自行决定已完成显隐」一条按新口径
-  改判：specs/123 后「显示设置」含颜色轴、任何上下文都有可见效果 ⇒ 入口
+  改判：specs/124 后「显示设置」含颜色轴、任何上下文都有可见效果 ⇒ 入口
   常显；宿主决定显隐的契约（日历不叠加过滤）保留钉住。
 - `calendar_year_heatmap_test` / `calendar_year_day_to_week_test` 的
   `_ThrowingRepository.saveCalendarDisplay` 签名加 `colorBy` 形参。

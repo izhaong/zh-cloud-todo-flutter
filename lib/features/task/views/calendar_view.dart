@@ -63,7 +63,7 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
   /// 年视图热力图（嘀嗒《03-年视图》:76 默认关闭）。
   bool _showHeatmap = false;
 
-  /// 任务块着色轴（specs/123，矩阵 #31）：默认按优先级（现状锁）。
+  /// 任务块着色轴（specs/124，矩阵 #31）：默认按优先级（现状锁）。
   TimelineColorBy _colorBy = TimelineColorBy.priority;
 
   /// 列表档「日历全景」展开态（嘀嗒《08-常见问题》:168）。同屏瞬时展开/收起，
@@ -105,7 +105,7 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
           onModeChanged: _changeMode,
           onPrev: () => setState(() => _shift(-1)),
           onNext: () => setState(() => _shift(1)),
-          // 「显示设置」现在含颜色轴（specs/123），在任何模式都有可见效果；
+          // 「显示设置」现在含颜色轴（specs/124），在任何模式都有可见效果；
           // 不再按 filterCompleted 隐藏入口（那是「显示已完成」一格的旧口径）。
           onOpenSettings: _showDisplaySettings,
           showTimelineToggle: _mode == CalendarMode.list,
@@ -404,7 +404,7 @@ Future<void> showExternalCalendarEventDialog(
 }
 
 /// 日历「显示设置」抽屉一次弹层要交回的整组值（分开交回会丢掉另一格的当前值；
-/// specs/123 加第三样：任务块着色轴）。
+/// specs/124 加第三样：任务块着色轴）。
 class CalendarDisplaySettings {
   const CalendarDisplaySettings({
     required this.showCompleted,
@@ -427,7 +427,7 @@ class _DisplaySettingsSheet extends StatelessWidget {
   final bool showCompleted;
   final bool showHeatmap;
 
-  /// 任务块着色轴（specs/123，矩阵 #31）：嘀嗒《08-常见问题》:58
+  /// 任务块着色轴（specs/124，矩阵 #31）：嘀嗒《08-常见问题》:58
   /// 「颜色-显示方式：按清单、优先级或标签显示」。
   final TimelineColorBy colorBy;
 
@@ -481,7 +481,7 @@ class _DisplaySettingsSheet extends StatelessWidget {
                 ),
               ),
             ),
-            // 嘀嗒《08-常见问题》:58「颜色-显示方式」；specs/123，矩阵 #31。
+            // 嘀嗒《08-常见问题》:58「颜色-显示方式」；specs/124，矩阵 #31。
             const Padding(
               padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
               child: Align(
@@ -712,7 +712,7 @@ class _MonthGrid extends StatelessWidget {
   final ValueChanged<DateTime> onDayTap;
   final Future<void> Function(TodoTask task, DateTime dueAt)? onTaskDateChanged;
 
-  /// 任务块着色轴（specs/123，矩阵 #31）：与时间线同一套解析
+  /// 任务块着色轴（specs/124，矩阵 #31）：与时间线同一套解析
   /// （[timelineTaskColor]），无色回退优先级轴。
   final TimelineColorBy colorBy;
   final String? Function(TodoTask task)? listColorHexOf;
@@ -808,7 +808,7 @@ class _DayCell extends StatelessWidget {
   final VoidCallback onTap;
   final Future<void> Function(TodoTask task, DateTime dueAt)? onTaskDateChanged;
 
-  /// 着色轴与两条 hex 解析闭包（specs/123）；null 取色回退优先级轴。
+  /// 着色轴与两条 hex 解析闭包（specs/124）；null 取色回退优先级轴。
   final TimelineColorBy colorBy;
   final String? Function(TodoTask task)? listColorHexOf;
   final String? Function(TodoTask task)? tagColorHexOf;

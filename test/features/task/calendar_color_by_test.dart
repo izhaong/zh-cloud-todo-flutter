@@ -9,7 +9,7 @@ import 'package:zh_cloud_todo_flutter/state/providers.dart';
 
 import '../../support/todo_visual_fixture.dart';
 
-/// specs/123 · 日历任务块按清单/标签/优先级着色（矩阵 #31「清单自定义颜色」档）。
+/// specs/124 · 日历任务块按清单/标签/优先级着色（矩阵 #31「清单自定义颜色」档）。
 ///
 /// 判据源《02-功能指南/02-日历/08-常见问题.md》:58——
 /// 「点击日历视图右上方『···』-『显示设置』-『颜色』-『显示方式』，

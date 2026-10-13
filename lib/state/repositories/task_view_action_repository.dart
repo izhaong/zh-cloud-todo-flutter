@@ -36,7 +36,7 @@ class TaskWorkspacePreference {
   /// `priority` | `list` | `tag`；null 读侧按「按优先级」处理（现状锁）。
   final String? timelineColorBy;
 
-  /// 日历任务块着色轴（嘀嗒《08-常见问题》:58；specs/123，矩阵 #31）。
+  /// 日历任务块着色轴（嘀嗒《08-常见问题》:58；specs/124，矩阵 #31）。
   /// 同 timelineColorBy 的三档；null 读侧按「按优先级」处理。
   final String? calendarColorBy;
 }
@@ -175,7 +175,7 @@ class TaskViewActionRepository {
         'showCompletedTasks': showCompletedTasks,
         'showHeatmap': showHeatmap,
         // 嘀嗒《08-常见问题》:58「颜色-显示方式：按清单、优先级或标签显示」
-        // （specs/123）；非法档归一化成 priority。
+        // （specs/124）；非法档归一化成 priority。
         'calendarColorBy': const {'priority', 'list', 'tag'}.contains(colorBy)
             ? colorBy
             : 'priority',
