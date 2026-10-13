@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../state/efficiency_providers.dart';
 import '../tag/batch_tag_picker_sheet.dart';
+import '../tag/tag_color.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -12,6 +14,7 @@ import '../../core/theme/todo_layout_tokens.dart';
 import '../../core/time/task_time_formatter.dart';
 import '../../core/time/task_time_mode.dart';
 import '../../core/widgets/app_widgets.dart';
+import '../../core/api/error_text.dart';
 import '../../native/native_intents.dart';
 import '../../state/nlp_date.dart';
 import '../../state/providers.dart';
@@ -56,6 +59,7 @@ class TasksByListPage extends ConsumerStatefulWidget {
     this.lockedAssigneeUserId,
     this.lockedListId = false,
     this.hideAppBar = false,
+    this.showSmartListHabits = true,
     this.selectedTaskId,
     this.onTaskSelected,
     this.onSelectionInvalidated,
@@ -76,6 +80,10 @@ class TasksByListPage extends ConsumerStatefulWidget {
   final int? lockedAssigneeUserId;
   final bool lockedListId;
   final bool hideAppBar;
+
+  /// 智能清单尾部是否显示习惯段（specs/130，矩阵 #45 面 ⑤）；直泵测试
+  /// 可关掉以隔离任务域断言。
+  final bool showSmartListHabits;
   final String? selectedTaskId;
   final ValueChanged<String>? onTaskSelected;
   final ValueChanged<String>? onSelectionInvalidated;
@@ -3205,5 +3213,107 @@ class _BoardDisplaySettingsDialogState
         ),
       ],
     );
+  }
+}
+
+/// 智能清单尾部的习惯段（specs/130，矩阵 #45 面 ⑤）。
+///
+/// 嘀嗒《02-更好地完成习惯.md》:66：开了「在“今天”、“最近7天”中显示」后，
+/// 习惯出现在这两个智能清单里。展示条件：今天属于打卡周期或已有打卡；
+/// 只读行 + 打卡按钮（打卡走既有 habit check-in 通道）。
+class _SmartListHabitSection extends ConsumerStatefulWidget {
+  const _SmartListHabitSection({required this.firstOfRange});
+
+  final DateTime firstOfRange;
+
+  @override
+  ConsumerState<_SmartListHabitSection> createState() =>
+      _SmartListHabitSectionState();
+}
+
+class _SmartListHabitSectionState
+    extends ConsumerState<_SmartListHabitSection> {
+  bool _checkingIn = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = ref.watch(
+      habitSmartListEntriesProvider(widget.firstOfRange),
+    );
+    return entries.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (list) {
+        if (list.isEmpty) return const SizedBox.shrink();
+        final colors = brandColors(context);
+        return Column(
+          key: const Key('smart-list-habit-section'),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+              child: Text(
+                '习惯',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: colors.mutedForeground,
+                ),
+              ),
+            ),
+            for (final entry in list)
+              ListTile(
+                key: Key('smart-list-habit-${entry.habit.id}'),
+                dense: true,
+                leading: Icon(
+                  Icons.repeat_rounded,
+                  size: 18,
+                  color: parseHexColor(entry.habit.color),
+                ),
+                title: Text(
+                  entry.habit.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: entry.todayCount > 0
+                    ? Text('今天已打卡 ×${entry.todayCount}')
+                    : const Text('今天待打卡'),
+                trailing: entry.todayCount > 0
+                    ? Icon(Icons.check_circle, color: colors.accent)
+                    : _checkingIn
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : IconButton(
+                        key: Key('smart-list-habit-checkin-${entry.habit.id}'),
+                        tooltip: '打卡',
+                        icon: const Icon(Icons.check_circle_outline),
+                        onPressed: () => _checkIn(entry.habit.id),
+                      ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _checkIn(int habitId) async {
+    final habits = ref.read(habitRepositoryProvider);
+    if (_checkingIn) return;
+    setState(() => _checkingIn = true);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    try {
+      await habits.checkIn(habitId, date: DateTime.now());
+      ref.invalidate(habitSmartListEntriesProvider(widget.firstOfRange));
+    } catch (error) {
+      messenger?.showSnackBar(
+        SnackBar(content: Text('打卡失败：${describeError(error)}')),
+      );
+    } finally {
+      if (mounted) setState(() => _checkingIn = false);
+    }
   }
 }
