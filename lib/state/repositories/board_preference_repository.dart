@@ -7,16 +7,43 @@ import '../../core/db/app_database.dart';
 import '../../core/sync/sync_change_queue.dart';
 import '../../core/sync/sync_entities.dart';
 
+/// 看板列宽三档（嘀嗒《02-看板视图：分类管理任务》FAQ `:209`
+/// 「有小、中、大三种尺寸供你选择」；specs/119，矩阵 #15 面 ⑧）。
+enum BoardColumnWidth {
+  small(200),
+  medium(260),
+  large(320);
+
+  const BoardColumnWidth(this.columnWidth);
+  final double columnWidth;
+
+  static BoardColumnWidth fromWire(String? wire) => switch (wire) {
+    'small' => BoardColumnWidth.small,
+    'large' => BoardColumnWidth.large,
+    _ => BoardColumnWidth.medium,
+  };
+
+  String get wire => name;
+}
+
 class BoardViewPreference {
   const BoardViewPreference({
     this.orderedColumnIds = defaultColumnIds,
     this.collapsedColumnIds = const {},
+    this.columnWidth = BoardColumnWidth.medium,
+    this.showColumnInput = false,
   });
 
   static const defaultColumnIds = ['todo', 'doing', 'urgent', 'archive'];
 
   final List<String> orderedColumnIds;
   final Set<String> collapsedColumnIds;
+
+  /// 「显示设置」里的列宽档（specs/119）。
+  final BoardColumnWidth columnWidth;
+
+  /// 「显示输入框」：列头下常驻快速添加输入框（FAQ `:213`）。
+  final bool showColumnInput;
 }
 
 /// B4 看板偏好本地优先写链路。
@@ -59,10 +86,42 @@ class BoardPreferenceRepository {
             .toSet()
             .toList()
           ..sort();
+    // 列序保存不得冲掉「显示设置」：读现值整体写回（specs/119）。
+    // 「显示设置」的唯一定期写入口是 [saveDisplaySettings]。
+    final current = _decodeLayout(existing?.columnsJson);
     await save(
       listId: listId,
       groupDimension: existing?.groupDimension ?? 'PRIORITY',
-      columnsJson: jsonEncode({'order': order, 'collapsed': collapsed}),
+      columnsJson: jsonEncode({
+        'order': order,
+        'collapsed': collapsed,
+        'columnWidth': current.columnWidth.wire,
+        'showColumnInput': current.showColumnInput,
+      }),
+    );
+  }
+
+  /// 「显示设置」只改列宽与「显示输入框」，不动列序/折叠
+  /// （嘀嗒 FAQ `:209`/`:213`；specs/119）。
+  Future<void> saveDisplaySettings({
+    required String listId,
+    required BoardColumnWidth columnWidth,
+    required bool showColumnInput,
+  }) async {
+    final current = await get(listId);
+    final existing =
+        await (_db.select(_db.todoBoardPreferences)
+              ..where((preference) => preference.listId.equals(listId)))
+            .getSingleOrNull();
+    await save(
+      listId: listId,
+      groupDimension: existing?.groupDimension ?? 'PRIORITY',
+      columnsJson: jsonEncode({
+        'order': current.orderedColumnIds,
+        'collapsed': current.collapsedColumnIds.toList()..sort(),
+        'columnWidth': columnWidth.wire,
+        'showColumnInput': showColumnInput,
+      }),
     );
   }
 
@@ -228,6 +287,10 @@ class BoardPreferenceRepository {
         return BoardViewPreference(
           orderedColumnIds: order,
           collapsedColumnIds: collapsed,
+          columnWidth: BoardColumnWidth.fromWire(
+            decoded['columnWidth']?.toString(),
+          ),
+          showColumnInput: decoded['showColumnInput'] == true,
         );
       }
       if (decoded is List) {
