@@ -6,8 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/db/app_database.dart';
 import '../../state/nlp_date.dart';
 import '../../state/providers.dart';
+import '../../state/repositories/task_capture_defaults_repository.dart';
 import '../../state/repositories/template_repository.dart';
 import '../tag/tag_color.dart';
+import 'default_reminder_fire_at.dart';
 
 /// M11-B2 任务快速添加 bottom sheet。
 class TaskQuickAddSheet extends ConsumerStatefulWidget {
@@ -100,6 +102,7 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
     // 所以"识别命中"与"有 dueAt"在这文件里是同一件事，不需要再引第二个标志位。
     final dueAt = _nlpResolvedDueAt;
     String? savedTitle;
+    TaskCaptureDefaults? defaults;
     if (_savedTaskId == null) {
       final text = _titleCtrl.text.trim();
       if (text.isEmpty) {
@@ -107,9 +110,7 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
         return;
       }
       try {
-        final defaults = await ref
-            .read(taskCaptureDefaultsRepositoryProvider)
-            ?.get();
+        defaults = await ref.read(taskCaptureDefaultsRepositoryProvider)?.get();
         final task = await repo.create(
           listId: widget.listId,
           parentTaskId: widget.parentTaskId,
@@ -140,7 +141,18 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
       return;
     }
     try {
-      await reminders.create(taskId: _savedTaskId!, fireAt: dueAt);
+      final fireAt = reminderFireAtFor(
+        dueAt,
+        defaultReminderMinutes: defaults?.defaultReminderMinutes,
+        now: DateTime.now(),
+      );
+      // 默认提醒把时刻推到过去（<= now）：不建提醒也不报错。给过期时刻建
+      // 提醒只会立刻响一次，不是「默认提醒」该有的行为；任务本身照建。
+      if (fireAt == null) {
+        _afterSaved(savedTitle);
+        return;
+      }
+      await reminders.create(taskId: _savedTaskId!, fireAt: fireAt);
       _afterSaved(savedTitle);
     } on StateError catch (error) {
       _report('任务已建，但提醒没建成：${error.message}');
