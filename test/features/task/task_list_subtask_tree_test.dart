@@ -315,26 +315,53 @@ void main() {
   });
 
   testWidgets('只读清单里箭头照旧可用：展开只是本地 UI，不写库', (tester) async {
+    // 用 workList 而不是收集箱：`_subtaskDropEnabled` 对收集箱是"页身份先判真"，
+    // 只有别的清单才会真的因 writable=false 关掉落点。这一条要量的正是
+    // "展开不写库 ⇒ 那道写操作的闸门不该管它"。
     final fixture = await _pumpList(
       tester,
-      initialListId: TodoVisualFixture.inboxListId,
+      initialListId: TodoVisualFixture.workListId,
       prepare: (db) async {
+        final stamp = DateTime.utc(2026, 7, 11, 9);
+        await db
+            .into(db.todoTasks)
+            .insert(
+              TodoTasksCompanion.insert(
+                id: 'readonly-parent',
+                listId: TodoVisualFixture.workListId,
+                title: '只读清单里的父',
+                updatedAt: stamp,
+                createdAt: stamp,
+              ),
+            );
+        await _insertChild(
+          db,
+          id: 'readonly-child',
+          title: '只读清单里的子',
+          parentTaskId: 'readonly-parent',
+          listId: TodoVisualFixture.workListId,
+        );
         await (db.update(db.todoLists)
-              ..where((row) => row.id.equals(TodoVisualFixture.inboxListId)))
+              ..where((row) => row.id.equals(TodoVisualFixture.workListId)))
             .write(TodoListsCompanion(writable: Value(false)));
       },
     );
-    final caret = find.byKey(Key('todo-task-expand-toggle-$parentId'));
-    expect(caret, findsOneWidget, reason: '展开不写库 ⇒ 只读清单没有理由不给入口');
+    expect(
+      find.byKey(Key('todo-task-expand-toggle-$parentId')),
+      findsNothing,
+      reason: '前置条件：这一页确实不是收集箱（metadata 那条不在这里）',
+    );
+    final caret = find.byKey(Key('todo-task-expand-toggle-readonly-parent'));
+    expect(caret, findsOneWidget, reason: 'writable=false 关的是写操作的落点，不是看树');
 
     await tester.tap(caret);
     await tester.pumpAndSettle();
-    expect(find.byKey(Key('task-row-surface-$secondChildId')), findsOneWidget);
+    expect(find.byKey(Key('task-row-surface-readonly-child')), findsOneWidget);
     expect(find.byType(SnackBar), findsNothing, reason: '一次展开不该弹"只读"错误');
     expect(
-      (await _taskRow(fixture.database, secondChildId)).parentTaskId,
-      parentId,
-      reason: '前置条件复核：这一刀真没写库',
+      (await _taskRow(fixture.database, 'readonly-child')).parentTaskId,
+      'readonly-parent',
+      reason: '复核：这一刀真没写库（父子关系是种子里就有的）',
     );
   });
 
@@ -459,6 +486,7 @@ Future<void> _insertChild(
   required String id,
   required String title,
   required String parentTaskId,
+  String listId = TodoVisualFixture.inboxListId,
 }) async {
   final stamp = DateTime.utc(2026, 7, 11, 9);
   await db
@@ -466,7 +494,7 @@ Future<void> _insertChild(
       .insert(
         TodoTasksCompanion.insert(
           id: id,
-          listId: TodoVisualFixture.inboxListId,
+          listId: listId,
           title: title,
           parentTaskId: Value(parentTaskId),
           updatedAt: stamp,
