@@ -504,6 +504,27 @@ final tasksByListProvider = StreamProvider.family<List<TodoTask>, String>((
   return repo.watchTopLevelByList(listId);
 });
 
+/// 同一张清单里**所有子级任务**（任意层级）。清单页的顶层流仍是 [tasksByListProvider]，
+/// 这条只用来把子任务铺成行（嘀嗒《…06-多级任务.md》:78/:86 的展开/收起）。
+/// 分成两条流而不是"一条流里再筛"：筛选、计数、看板/时间线那些面的既有口径都是
+/// 「顶层任务 = 列表项」，把子级混进那条流会顺带改掉它们的语义。
+final subtasksByListProvider = StreamProvider.family<List<TodoTask>, String>((
+  ref,
+  listId,
+) {
+  final repo = ref.watch(taskRepositoryProvider);
+  if (repo == null) return const Stream.empty();
+  return repo.watchSubtasksByList(listId);
+});
+
+/// 跨清单的全部子级任务：智能清单（「今天」「全部」……）的数据源是 [allTasksStreamProvider]
+/// （只看顶层），树要在那一面也成立就得配一条同形状的子级流。
+final allSubtasksStreamProvider = StreamProvider<List<TodoTask>>((ref) {
+  final repo = ref.watch(taskRepositoryProvider);
+  if (repo == null) return const Stream<List<TodoTask>>.empty();
+  return repo.watchAllSubtasks();
+});
+
 /// 全部顶层任务流。专注关联等跨清单选择器只读使用，不直接修改 outbox。
 final allTasksStreamProvider = StreamProvider<List<TodoTask>>((ref) {
   final repo = ref.watch(taskRepositoryProvider);

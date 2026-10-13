@@ -28,6 +28,8 @@ class TaskRowHost extends ConsumerStatefulWidget {
     this.batchSelected = false,
     this.onBatchSelectionChanged,
     this.taskSections = const [],
+    this.subtaskExpander,
+    this.indentLevel = 0,
   });
 
   final TodoTask task;
@@ -41,6 +43,14 @@ class TaskRowHost extends ConsumerStatefulWidget {
   final bool batchSelected;
   final ValueChanged<bool>? onBatchSelectionChanged;
   final List<TodoTaskSection> taskSections;
+
+  /// 展开/收起子任务那颗箭头（只有"真会展开出子行"的那一行才给）。
+  /// 由清单页构造、经 `TaskRow` 挂在这一行的某一头：desktop 右、mobile 左
+  /// （嘀嗒《…06-多级任务.md》:78 与 :86 给的位置不是一个方位）。
+  final Widget? subtaskExpander;
+
+  /// 这一行在树里的层级（顶层 0）。
+  final int indentLevel;
 
   @override
   ConsumerState<TaskRowHost> createState() => _TaskRowHostState();
@@ -142,6 +152,8 @@ class _TaskRowHostState extends ConsumerState<TaskRowHost> {
                   batchSelected: widget.batchSelected,
                   onBatchSelectionChanged: widget.onBatchSelectionChanged,
                   now: now,
+                  expander: widget.subtaskExpander,
+                  indentLevel: widget.indentLevel,
                   dragHandle: dragHandle,
                   onMore: widget.desktopMode
                       ? () => _showMoreMenu(context)

@@ -108,6 +108,19 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   String? _completionInvalidationTaskId;
   String? _reportedInvalidSelectionId;
   bool _batchSelectionActive = false;
+
+  /// 展开了子任务的父任务 id。**默认收起**（裁定与理由见 specs 台账：原文那一节标题就叫
+  /// 「展开子任务」、写的是"点击箭头来展开或者收起"，收起态是这一面的默认呈现）。
+  /// 本地 UI 态：不落库、不进同步队列（原文没说要跨设备记住这一态）。
+  final Set<String> _expandedSubtaskParentIds = <String>{};
+
+  void _toggleSubtaskExpansion(String taskId) {
+    setState(() {
+      if (!_expandedSubtaskParentIds.remove(taskId)) {
+        _expandedSubtaskParentIds.add(taskId);
+      }
+    });
+  }
   bool _batchApplying = false;
   String? _batchSelectionAnchorTaskId;
   final Set<String> _batchSelectedTaskIds = <String>{};
@@ -239,6 +252,14 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         ? const <TodoTaskSection>[]
         : ref.watch(taskSectionsByListProvider(listId)).valueOrNull ??
               const <TodoTaskSection>[];
+    // 子任务树的数据源（嘀嗒《…09-如何管理海量任务/06-多级任务.md》:78/:86 的展开/收起）。
+    // 顶层那条流一字不改、子级另走一条：筛选、计数、看板/时间线那些面的既有口径
+    // 都是「顶层任务 = 列表项」，把子级混进同一条流会顺带改掉它们的语义。
+    final subtasks = listId == null
+        ? ref.watch(allSubtasksStreamProvider).valueOrNull ??
+              const <TodoTask>[]
+        : ref.watch(subtasksByListProvider(listId)).valueOrNull ??
+              const <TodoTask>[];
 
     if (taskRepo == null) {
       return const Center(child: CircularProgressIndicator());
@@ -346,6 +367,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
             : _buildModeBody(
                 items,
                 taskSections: taskSections,
+                subtasks: subtasks,
                 desktopMode: desktopMode,
                 now: now,
                 taskTags: taskTagIds,
@@ -520,6 +542,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   Widget _buildModeBody(
     List<TodoTask> items, {
     required List<TodoTaskSection> taskSections,
+    required List<TodoTask> subtasks,
     required bool desktopMode,
     required DateTime now,
     required Map<String, Set<String>>? taskTags,
@@ -533,6 +556,9 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         return _ListBody(
           items: items,
           sections: taskSections,
+          subtasks: subtasks,
+          expandedParentIds: _expandedSubtaskParentIds,
+          onToggleSubtasks: _toggleSubtaskExpansion,
           sort: _sort,
           sortDirection: _sortDirection,
           taskTags: taskTags,
@@ -1938,6 +1964,9 @@ class _ListBody extends StatefulWidget {
     required this.now,
     required this.selectedTaskId,
     required this.onTaskSelected,
+    required this.subtasks,
+    required this.expandedParentIds,
+    required this.onToggleSubtasks,
     this.onTasksReordered,
     required this.batchSelectionActive,
     required this.batchSelectedTaskIds,
@@ -1950,6 +1979,15 @@ class _ListBody extends StatefulWidget {
 
   final List<TodoTask> items;
   final List<TodoTaskSection> sections;
+
+  /// 这一视图里的全部子级任务（任意层级），由页面那层按页身份取好传进来。
+  final List<TodoTask> subtasks;
+
+  /// **展开着**的父任务 id（默认不在集合里＝收起）。存在页面那层：切换清单不丢。
+  final Set<String> expandedParentIds;
+
+  /// 点某一行的箭头：展开或收起它下面的子任务。
+  final ValueChanged<String> onToggleSubtasks;
   final TaskSort sort;
   final TaskSortDirection sortDirection;
   final Map<String, Set<String>>? taskTags;
@@ -1997,7 +2035,86 @@ class _ListBodyState extends State<_ListBody> {
   @override
   void initState() {
     super.initState();
-    _orderedIds = _sortedItems(widget.items).map((task) => task.id).toList();
+    _orderedIds = _comparatorTreeIds();
+  }
+
+  /// 这一行的直接子级（未排序）。子级流由页面那层给，这里只按 parentTaskId 归堆。
+  List<TodoTask> _directChildrenOf(String parentId) =>
+      widget.subtasks
+          .where((task) => task.parentTaskId == parentId)
+          .toList(growable: false);
+
+  /// 同一父级下的兄弟序列。排序口径与顶层一致：
+  /// 手动顺序在场时按 `_orderedIds` 里的相对位次，否则走列头的比较器。
+  /// `_orderedIds` 里查不到的（刚建出来、或刚从别处收进这棵树）退回比较器位次并排在已知的后面，
+  /// 这样"新增一行"不会因为没手动位次而掉到列表最前。
+  List<TodoTask> _orderedSiblings(List<TodoTask> siblings) {
+    if (!_hasCustomOrder) return _sortedItems(siblings);
+    final comparatorOrder = _sortedItems(siblings);
+    final fallback = <String, int>{
+      for (var index = 0; index < comparatorOrder.length; index++)
+        comparatorOrder[index].id: index,
+    };
+    int rankOf(String id) {
+      final index = _orderedIds.indexOf(id);
+      if (index >= 0) return index;
+      return _orderedIds.length + (fallback[id] ?? fallback.length);
+    }
+
+    final sorted = [...siblings]..sort((a, b) => rankOf(a.id).compareTo(rankOf(b.id)));
+    return sorted;
+  }
+
+  /// 一行 + 它展开出来的子任务行（父在前、子紧跟）。没展开的父任务只给自己这一行。
+  List<_TaskRowNode> _subtreeOf(
+    TodoTask task, {
+    int depth = 0,
+    bool includeCollapsed = false,
+  }) {
+    final children = _orderedSiblings(_directChildrenOf(task.id));
+    if (children.isEmpty ||
+        (!includeCollapsed && !widget.expandedParentIds.contains(task.id))) {
+      return [_TaskRowNode(task, depth)];
+    }
+    return [
+      _TaskRowNode(task, depth),
+      for (final child in children)
+        ..._subtreeOf(
+          child,
+          depth: depth + 1,
+          includeCollapsed: includeCollapsed,
+        ),
+    ];
+  }
+
+  /// 按比较器排好的整棵树 id（含收起着的部分）：手动顺序要做"新增/消失"对账时用它，
+  /// 否则收起某一行会把那些子任务的位次从 `_orderedIds` 里无声删掉。
+  List<String> _comparatorTreeIds() => [
+    for (final task in _sortedItems(widget.items))
+      ..._subtreeOf(task, includeCollapsed: true).map((node) => node.task.id),
+  ];
+
+  /// 展开/收起那颗箭头。只给"真会展开出子行"的行 —— 没子级的行挂一个按了没反应的图标，
+  /// 比不挂更糟。位置由 `TaskRow` 按端决定（原文 desktop 写右侧、mobile 写左侧）。
+  Widget? _subtaskExpanderFor(TodoTask task) {
+    if (_directChildrenOf(task.id).isEmpty) return null;
+    final expanded = widget.expandedParentIds.contains(task.id);
+    final colors = brandColors(context);
+    return Tooltip(
+      message: expanded ? '收起子任务' : '展开子任务',
+      child: IconButton(
+        key: Key('todo-task-expand-toggle-${task.id}'),
+        onPressed: () => widget.onToggleSubtasks(task.id),
+        iconSize: 18,
+        visualDensity: VisualDensity.compact,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+        color: colors.mutedForeground,
+        icon: Icon(
+          expanded ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_right,
+        ),
+      ),
+    );
   }
 
   @override
@@ -2006,9 +2123,7 @@ class _ListBodyState extends State<_ListBody> {
     if (oldWidget.sort != widget.sort) {
       _hasCustomOrder = false;
     }
-    final currentIds = _sortedItems(
-      widget.items,
-    ).map((task) => task.id).toList();
+    final currentIds = _comparatorTreeIds();
     if (!_hasCustomOrder) {
       _orderedIds = currentIds;
       return;
@@ -2110,19 +2225,27 @@ class _ListBodyState extends State<_ListBody> {
         : widget.sections.isEmpty
         ? _groupTasks(ordered, widget.now)
         : _groupTasksBySection(ordered, widget.sections);
-    final entries = <Object>[
-      for (final group in groups) ...[group, ...group.tasks],
-    ];
+    // 分组头之后先铺本组的顶层行，每行后面紧跟它展开出来的子任务行。
+    // 子任务不能按自己的 dueAt 去别的组（那等于把树拆散），也不能因为父任务被筛掉还留着。
+    final entries = <Object>[];
+    final rowKeys = <Key>[];
+    final rowNodeByIndex = <int, _TaskRowNode>{};
     // 智能分组（按标签）会让同一任务出现在多个组里；桌面端 ReorderableListView
     // 会用子项 key 造 GlobalKey，裸 task.id 会撞车，行 key 必须带上组 id。
     final smartGrouped = smartGroups != null;
-    final rowKeys = <Key>[
-      for (final group in groups) ...[
-        const ValueKey(''),
-        for (final task in group.tasks)
-          ValueKey(smartGrouped ? '${group.id}:${task.id}' : task.id),
-      ],
-    ];
+    for (final group in groups) {
+      entries.add(group);
+      rowKeys.add(const ValueKey(''));
+      for (final task in group.tasks) {
+        for (final node in _subtreeOf(task)) {
+          rowNodeByIndex[entries.length] = node;
+          entries.add(node.task);
+          rowKeys.add(
+            ValueKey(smartGrouped ? '${group.id}:${node.task.id}' : node.task.id),
+          );
+        }
+      }
+    }
     final visibleTaskIds = entries
         .whereType<TodoTask>()
         .map((task) => task.id)
@@ -2195,6 +2318,8 @@ class _ListBodyState extends State<_ListBody> {
                   task: task,
                   taskSections: widget.sections,
                   desktopMode: true,
+                  indentLevel: rowNodeByIndex[index]?.depth ?? 0,
+                  subtaskExpander: _subtaskExpanderFor(task),
                   enableSwipeGestures: false,
                   reorderIndex: widget.batchSelectionActive ? null : index,
                   selected: widget.selectedTaskId == task.id,
@@ -2243,6 +2368,8 @@ class _ListBodyState extends State<_ListBody> {
               task: task,
               taskSections: widget.sections,
               desktopMode: widget.desktopMode,
+              indentLevel: rowNodeByIndex[index]?.depth ?? 0,
+              subtaskExpander: _subtaskExpanderFor(task),
               enableSwipeGestures:
                   !widget.desktopMode && !widget.batchSelectionActive,
               selected: widget.selectedTaskId == task.id,
@@ -2390,6 +2517,14 @@ class _TaskSectionManagerBar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 一行在树里的位置：任务本身 + 它相对顶层的层级（顶层 0）。
+class _TaskRowNode {
+  const _TaskRowNode(this.task, this.depth);
+
+  final TodoTask task;
+  final int depth;
 }
 
 class _TaskGroup {
