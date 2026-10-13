@@ -11,6 +11,7 @@ import '../../../core/time/task_time_formatter.dart';
 import '../../../core/time/task_time_mode.dart';
 import '../../../core/time/week_start.dart';
 import '../../../core/widgets/app_widgets.dart';
+import 'timeline_color.dart';
 import '../task_detail_page.dart';
 import '../task_view_mutation_feedback.dart';
 
@@ -51,6 +52,10 @@ class TimelineView extends ConsumerWidget {
     this.onZoomChanged,
     this.onScaleChanged,
     this.onGroupCollapsedChanged,
+    this.colorBy = TimelineColorBy.priority,
+    this.listColorHexOf,
+    this.tagColorHexOf,
+    this.onColorByChanged,
   }) : _now = now;
 
   final DateTime? _now;
@@ -67,6 +72,13 @@ class TimelineView extends ConsumerWidget {
   final Future<void> Function(TimelineScale scale)? onScaleChanged;
   final Future<void> Function(String groupId, bool collapsed)?
   onGroupCollapsedChanged;
+
+  /// 任务条着色轴与「显示设置」（嘀嗒《03-时间线视图》:95；specs/121，
+  /// 矩阵 #16 面 ⑦）。默认按优先级（现状锁）；轴回调 null ⇒ 入口不渲染。
+  final TimelineColorBy colorBy;
+  final String? Function(TodoTask task)? listColorHexOf;
+  final String? Function(TodoTask task)? tagColorHexOf;
+  final Future<void> Function(TimelineColorBy colorBy)? onColorByChanged;
   final Future<void> Function(
     TodoTask task, {
     required DateTime startAt,
@@ -100,6 +112,9 @@ class TimelineView extends ConsumerWidget {
           tasks: tasks,
           zoom: normalizedZoom,
           scale: scale,
+          colorBy: colorBy,
+          listColorHexOf: listColorHexOf,
+          tagColorHexOf: tagColorHexOf,
           onZoomChanged: onZoomChanged,
           onScaleChanged: onScaleChanged,
           onTaskTap: (task) => _openDetail(context, task),
@@ -111,6 +126,16 @@ class TimelineView extends ConsumerWidget {
               ? null
               : (task, slot) => _scheduleTaskAtSlot(context, task, slot),
         ),
+        if (onColorByChanged != null)
+          Align(
+            alignment: Alignment.centerRight,
+            child: IconButton(
+              key: const Key('timeline-display-settings'),
+              tooltip: '显示设置',
+              icon: const Icon(Icons.settings_outlined, size: 18),
+              onPressed: () => _showDisplaySettings(context),
+            ),
+          ),
         Expanded(
           child: empty
               ? const Center(child: Text('暂无任务'))
@@ -148,6 +173,49 @@ class TimelineView extends ConsumerWidget {
       return;
     }
     showTaskDetailSheet(context, t.id);
+  }
+
+  /// 时间线「显示设置」抽屉：着色轴三档（specs/121，矩阵 #16 面 ⑦）。
+  /// 即选即存由 [onColorByChanged] 承担，抽屉自己不持有状态。
+  Future<void> _showDisplaySettings(BuildContext context) async {
+    final picked = await showModalBottomSheet<TimelineColorBy>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('显示设置', style: TextStyle(fontSize: 16)),
+              ),
+            ),
+            RadioGroup<TimelineColorBy>(
+              groupValue: colorBy,
+              onChanged: (value) => Navigator.pop(sheetContext, value),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final mode in TimelineColorBy.values)
+                    RadioListTile<TimelineColorBy>(
+                      key: Key('timeline-color-by-${mode.name}'),
+                      title: Text(switch (mode) {
+                        TimelineColorBy.priority => '按优先级',
+                        TimelineColorBy.list => '按清单',
+                        TimelineColorBy.tag => '按标签',
+                      }),
+                      value: mode,
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null || picked == colorBy) return;
+    await onColorByChanged!(picked);
   }
 
   Future<void> _openCreateDialog(
@@ -409,6 +477,9 @@ class _TimelineWindow extends StatefulWidget {
     this.onSlotTap,
     this.onTaskDropped,
     this.onTaskTimeChange,
+    this.colorBy = TimelineColorBy.priority,
+    this.listColorHexOf,
+    this.tagColorHexOf,
   });
 
   final DateTime now;
@@ -416,6 +487,11 @@ class _TimelineWindow extends StatefulWidget {
   final List<TodoTask> tasks;
   final double zoom;
   final TimelineScale scale;
+
+  /// 着色轴与两条 hex 解析闭包（specs/121）。
+  final TimelineColorBy colorBy;
+  final String? Function(TodoTask task)? listColorHexOf;
+  final String? Function(TodoTask task)? tagColorHexOf;
   final ValueChanged<TodoTask> onTaskTap;
   final Future<void> Function(double zoom)? onZoomChanged;
   final Future<void> Function(TimelineScale scale)? onScaleChanged;
@@ -498,6 +574,9 @@ class _TimelineWindowState extends State<_TimelineWindow> {
             onTaskTimeChange: widget.onTaskTimeChange,
             onSlotTap: widget.onSlotTap,
             onTaskDropped: widget.onTaskDropped,
+            colorBy: widget.colorBy,
+            listColorHexOf: widget.listColorHexOf,
+            tagColorHexOf: widget.tagColorHexOf,
           ),
         ),
       ],
@@ -788,6 +867,9 @@ class _TimelineContinuousCanvas extends StatelessWidget {
     this.onSlotTap,
     this.onTaskDropped,
     this.onTaskTimeChange,
+    this.colorBy = TimelineColorBy.priority,
+    this.listColorHexOf,
+    this.tagColorHexOf,
   });
 
   final DateTime now;
@@ -795,6 +877,11 @@ class _TimelineContinuousCanvas extends StatelessWidget {
   final TimelineScale scale;
   final double zoom;
   final List<TodoTask> tasks;
+
+  /// 着色轴与两条 hex 解析闭包（specs/121）。
+  final TimelineColorBy colorBy;
+  final String? Function(TodoTask task)? listColorHexOf;
+  final String? Function(TodoTask task)? tagColorHexOf;
   final ValueChanged<TodoTask> onTaskTap;
   final ValueChanged<_TimelineSlot>? onSlotTap;
   final void Function(TodoTask task, _TimelineSlot slot)? onTaskDropped;
@@ -903,6 +990,9 @@ class _TimelineContinuousCanvas extends StatelessWidget {
                                       unitWidth: unitWidth,
                                       onTaskTap: onTaskTap,
                                       onTaskTimeChange: onTaskTimeChange,
+                                      colorBy: colorBy,
+                                      listColorHexOf: listColorHexOf,
+                                      tagColorHexOf: tagColorHexOf,
                                     ),
                                   ),
                                 ],
@@ -1030,6 +1120,9 @@ class _TimelineContinuousTaskBar extends StatefulWidget {
     required this.unitWidth,
     required this.onTaskTap,
     this.onTaskTimeChange,
+    this.colorBy = TimelineColorBy.priority,
+    this.listColorHexOf,
+    this.tagColorHexOf,
   });
 
   final TodoTask task;
@@ -1037,6 +1130,11 @@ class _TimelineContinuousTaskBar extends StatefulWidget {
   final double zoom;
   final double unitWidth;
   final ValueChanged<TodoTask> onTaskTap;
+
+  /// 着色轴与两条 hex 解析闭包（specs/121）；null 取色回退优先级轴。
+  final TimelineColorBy colorBy;
+  final String? Function(TodoTask task)? listColorHexOf;
+  final String? Function(TodoTask task)? tagColorHexOf;
   final Future<void> Function(
     TodoTask task, {
     required DateTime startAt,
@@ -1119,12 +1217,21 @@ class _TimelineContinuousTaskBarState
   @override
   Widget build(BuildContext context) {
     final colors = brandColors(context);
-    final accent = switch (widget.task.priority) {
+    // 着色轴（specs/121）：轴色取不到（清单没配色/没标签）就回退优先级轴。
+    final priorityAccent = switch (widget.task.priority) {
       3 => Colors.red,
       2 => Colors.orange,
       1 => Colors.blue,
       _ => Theme.of(context).colorScheme.primary,
     };
+    final accent =
+        timelineTaskColor(
+          widget.task,
+          colorBy: widget.colorBy,
+          listColorHexOf: widget.listColorHexOf,
+          tagColorHexOf: widget.tagColorHexOf,
+        ) ??
+        priorityAccent;
     return Semantics(
       label: '${widget.task.title}，拖动任务条调整时间，拖动右边缘调整时长',
       button: true,

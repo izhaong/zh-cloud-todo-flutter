@@ -17,6 +17,7 @@ class TaskWorkspacePreference {
     this.collapsedTimelineGroupIds = const {},
     this.showCompletedTasks,
     this.showHeatmap,
+    this.timelineColorBy,
   });
 
   final String? viewType;
@@ -28,6 +29,11 @@ class TaskWorkspacePreference {
   /// 年视图热力图（嘀嗒《03-年视图》:76「默认情况下，热力图为关闭状态」）。
   /// `null` 表示这条偏好从没写过，读取侧按「关闭」处理。
   final bool? showHeatmap;
+
+  /// 时间线任务条着色轴（嘀嗒《03-时间线视图》:95「在『显示设置』中根据
+  /// 清单、标签以及优先级的颜色显示」；specs/121，矩阵 #16 面 ⑦）。
+  /// `priority` | `list` | `tag`；null 读侧按「按优先级」处理（现状锁）。
+  final String? timelineColorBy;
 }
 
 /// B4 任务视图共享写操作。
@@ -121,6 +127,22 @@ class TaskViewActionRepository {
         'timelineScale': scale,
         'collapsedTimelineGroupIds': normalizedGroupIds,
       },
+    );
+  }
+
+  /// 时间线「显示设置」只写着色轴：patch 合并语义保留 zoom/scale/折叠组
+  /// （specs/121）。轴只认三档，别处传错就退回优先级，不抛错。
+  Future<void> saveTimelineColorBy({
+    required String sourceKey,
+    required String colorBy,
+  }) {
+    final normalized = const {'priority', 'list', 'tag'}.contains(colorBy)
+        ? colorBy
+        : 'priority';
+    return _saveViewPreference(
+      sourceType: 'task_view',
+      sourceKey: sourceKey,
+      preferencePatch: {'timelineColorBy': normalized},
     );
   }
 
@@ -275,6 +297,9 @@ class TaskViewActionRepository {
           : null,
       showHeatmap: value['showHeatmap'] is bool
           ? value['showHeatmap'] as bool
+          : null,
+      timelineColorBy: value['timelineColorBy'] is String
+          ? value['timelineColorBy'] as String
           : null,
     );
   }
