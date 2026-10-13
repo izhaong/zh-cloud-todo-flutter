@@ -48,10 +48,11 @@ void main() {
       expect(r!.date, DateTime(2026, 9, 29, 16, 0));
     });
 
-    test('没有钟点词仍是 null（不顺手扩面）', () {
+    test('买牛奶（无时间词）仍是 null；3天后再说已被 specs/133 覆盖', () {
       final p = at(DateTime(2026, 9, 28, 16, 0));
       expect(p.parse('买牛奶'), isNull);
-      expect(p.parse('3天后再说'), isNull);
+      // specs/133（矩阵 #83 面②）扩了 N天后/周X/月底——'3天后再说' 现在能识别了。
+      expect(p.parse('3天后再说'), isNotNull);
     });
 
     test('带日期词的仍走原分支：「明天9点」= 次日 09:00', () {
