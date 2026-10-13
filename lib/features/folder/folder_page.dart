@@ -42,31 +42,53 @@ class FolderPage extends ConsumerWidget {
                   itemBuilder: (_, i) {
                     final entry = entries[i];
                     final f = entry.node;
-                    return ListTile(
+                    // specs/135（矩阵 #18）：左滑解散 + 桌面右键解散 + 文案统一。
+                    return Dismissible(
                       key: ValueKey('folder-row-${f.id}'),
-                      contentPadding: EdgeInsets.only(
-                        left: 16 + entry.depth * 24,
-                        right: 8,
+                      direction: DismissDirection.startToEnd,
+                      background: Container(
+                        color: Colors.red,
+                        alignment: Alignment.centerLeft,
+                        padding: const EdgeInsets.only(left: 16),
+                        child: const Icon(
+                          Icons.delete_sweep,
+                          color: Colors.white,
+                        ),
                       ),
-                      leading: const Icon(Icons.folder),
-                      title: Text(f.name),
-                      subtitle: f.parentId == null
-                          ? null
-                          : Text(_folderPath(f, folders)),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            tooltip: '编辑文件夹',
-                            icon: const Icon(Icons.edit_outlined),
-                            onPressed: () => _edit(context, ref, f, folders),
+                      confirmDismiss: (_) =>
+                          confirmAndDisbandFolder(context, f),
+                      child: GestureDetector(
+                        onSecondaryTapDown: (details) =>
+                            _showContextMenu(context, details, f),
+                        child: ListTile(
+                          key: ValueKey('folder-row-${f.id}'),
+                          contentPadding: EdgeInsets.only(
+                            left: 16 + entry.depth * 24,
+                            right: 8,
                           ),
-                          IconButton(
-                            tooltip: '删除文件夹',
-                            icon: const Icon(Icons.delete_outline),
-                            onPressed: () => _delete(context, ref, f),
+                          leading: const Icon(Icons.folder),
+                          title: Text(f.name),
+                          subtitle: f.parentId == null
+                              ? null
+                              : Text(_folderPath(f, folders)),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: '编辑文件夹',
+                                icon: const Icon(Icons.edit_outlined),
+                                onPressed: () =>
+                                    _edit(context, ref, f, folders),
+                              ),
+                              IconButton(
+                                // 嘀嗒 :28「解散文件夹」——文案统一。
+                                tooltip: '解散文件夹',
+                                icon: const Icon(Icons.delete_sweep_outlined),
+                                onPressed: () => _delete(context, ref, f),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     );
                   },
@@ -74,6 +96,35 @@ class FolderPage extends ConsumerWidget {
         },
       ),
     );
+  }
+
+  void _showContextMenu(
+    BuildContext context,
+    TapDownDetails details,
+    TodoFolder f,
+  ) {
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final position = RelativeRect.fromLTRB(
+      details.globalPosition.dx,
+      details.globalPosition.dy,
+      overlay.size.width - details.globalPosition.dx,
+      0,
+    );
+    showMenu<String>(
+      context: context,
+      position: position,
+      items: [
+        const PopupMenuItem(
+          key: Key('folder-context-disband'),
+          value: 'disband',
+          child: Text('解散文件夹'),
+        ),
+      ],
+    ).then((action) {
+      if (action == 'disband' && context.mounted) {
+        confirmAndDisbandFolder(context, f);
+      }
+    });
   }
 
   Future<void> _create(
