@@ -70,3 +70,16 @@ P3 证了它现在是真的判据：把同步层退回修复前 ⇒ 这条用例
 `_resolvePayloadRefs` 的 null 是"延后"不是"丢弃"（本台账第 3 条需求照它写）；
 它另外给的"收集箱其实同步了""智能清单落进 inbox 行"两条我对着代码复验后并进了 FL #619；
 它建议"本轮不要顺手改归一"未采纳，理由与去处也写在 `spec.md`。
+
+## 合并状态（2026-10-13，本笔留言同步在 FL !622）
+
+`POST /pulls/622/merge` 连发九次都是 `405 Please try again later`，`mergeable` 恒 `False`；
+同一时刻本地四条判据都说明这是干净快进（下面逐条可复跑）：
+
+- `git merge-base --is-ancestor origin/develop HEAD` ⇒ rc=0
+- `git rev-list --count HEAD..origin/develop` ⇒ 0
+- `git merge-tree --write-tree origin/develop HEAD` ⇒ rc=0，输出里 `CONFLICT` 行数为 0
+- `git ls-remote origin refs/pull/622/head` ⇒ `21e55704a749`（PR 的 head ref 不是过期快照）
+
+⇒ 判 Gitea 侧的合并状态没算出来，不重复刷循环（先例是 !423 刷到二十五次仍 405）。
+处置：继续往本 PR 追加提交逼它重算；仍不行就留给下轮重试，台账与读数不因此改口径。
