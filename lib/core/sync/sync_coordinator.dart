@@ -11,6 +11,7 @@ import '../api/sync_api.dart';
 import '../db/app_database.dart';
 import 'repeat_frequency_wire.dart';
 import 'sync_entities.dart';
+import 'list_view_preference_scope.dart';
 import 'sync_retry_policy.dart';
 
 /// 离线优先双向同步协调器。
@@ -608,17 +609,23 @@ class SyncCoordinator {
       }
     }
     if (entity == SyncEntities.viewPreference &&
-        resolved['sourceType'] == 'task_view') {
-      final sourceKey = resolved['sourceKey']?.toString();
-      if (sourceKey != null &&
-          sourceKey.startsWith('list:') &&
-          sourceKey != 'list:inbox') {
-        final localListId = sourceKey.substring('list:'.length);
+        ListViewPreferenceScope.isListScopedType(
+          resolved['sourceType']?.toString(),
+        )) {
+      final sourceType = resolved['sourceType'].toString();
+      final localListId = ListViewPreferenceScope.localListId(
+        sourceType,
+        resolved['sourceKey']?.toString(),
+      );
+      if (localListId != null) {
         final list = await (db.select(
           db.todoLists,
         )..where((row) => row.id.equals(localListId))).getSingleOrNull();
+        // 清单还没上服务端：这条偏好发出去只是另一台设备认不出的脏键，先不发。
         if (list?.serverId == null) return null;
-        resolved['sourceKey'] = 'list-server:${list!.serverId}';
+        resolved['sourceKey'] = ListViewPreferenceScope.canonicalKey(
+          list!.serverId!,
+        );
       }
     }
     if (entity == SyncEntities.task && resolved.containsKey('parentTaskId')) {
@@ -1927,15 +1934,18 @@ class SyncCoordinator {
     var payloadSourceKey =
         payload['sourceKey']?.toString() ?? payload['source_key']?.toString();
     final localPayload = Map<String, dynamic>.from(payload);
-    if (payloadSourceType == 'task_view' &&
-        payloadSourceKey != null &&
-        payloadSourceKey.startsWith('list-server:')) {
-      final listServerId = int.tryParse(
-        payloadSourceKey.substring('list-server:'.length),
+    if (ListViewPreferenceScope.isListScopedType(payloadSourceType) &&
+        ListViewPreferenceScope.isCanonicalKey(payloadSourceKey)) {
+      final listServerId = ListViewPreferenceScope.canonicalServerId(
+        payloadSourceKey,
       );
       final localListId = await _localListIdForServerId(listServerId);
       if (localListId == null) return;
-      payloadSourceKey = 'list:$localListId';
+      payloadSourceKey = ListViewPreferenceScope.localKey(
+        payloadSourceType,
+        localListId,
+      );
+      if (payloadSourceKey == null) return;
       localPayload['sourceKey'] = payloadSourceKey;
       localPayload.remove('source_key');
     }
