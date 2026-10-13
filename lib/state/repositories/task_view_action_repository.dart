@@ -18,6 +18,7 @@ class TaskWorkspacePreference {
     this.showCompletedTasks,
     this.showHeatmap,
     this.timelineColorBy,
+    this.calendarColorBy,
   });
 
   final String? viewType;
@@ -34,6 +35,10 @@ class TaskWorkspacePreference {
   /// 清单、标签以及优先级的颜色显示」；specs/121，矩阵 #16 面 ⑦）。
   /// `priority` | `list` | `tag`；null 读侧按「按优先级」处理（现状锁）。
   final String? timelineColorBy;
+
+  /// 日历任务块着色轴（嘀嗒《08-常见问题》:58；specs/124，矩阵 #31）。
+  /// 同 timelineColorBy 的三档；null 读侧按「按优先级」处理。
+  final String? calendarColorBy;
 }
 
 /// B4 任务视图共享写操作。
@@ -160,6 +165,7 @@ class TaskViewActionRepository {
     required String viewMode,
     required bool showCompletedTasks,
     required bool showHeatmap,
+    String colorBy = 'priority',
   }) {
     return _saveViewPreference(
       sourceType: 'calendar_view',
@@ -168,6 +174,11 @@ class TaskViewActionRepository {
       preferencePatch: {
         'showCompletedTasks': showCompletedTasks,
         'showHeatmap': showHeatmap,
+        // 嘀嗒《08-常见问题》:58「颜色-显示方式：按清单、优先级或标签显示」
+        // （specs/124）；非法档归一化成 priority。
+        'calendarColorBy': const {'priority', 'list', 'tag'}.contains(colorBy)
+            ? colorBy
+            : 'priority',
       },
     );
   }
@@ -300,6 +311,9 @@ class TaskViewActionRepository {
           : null,
       timelineColorBy: value['timelineColorBy'] is String
           ? value['timelineColorBy'] as String
+          : null,
+      calendarColorBy: value['calendarColorBy'] is String
+          ? value['calendarColorBy'] as String
           : null,
     );
   }
