@@ -29,6 +29,7 @@ import 'list_drop_target.dart';
 import '../list/list_properties.dart';
 import 'kanban_axis_move.dart';
 import 'smart_grouping.dart';
+import 'views/timeline_color.dart';
 import 'subtask_flow.dart';
 import 'task_subtask_drop.dart';
 import 'task_view_mutation_feedback.dart';
@@ -98,6 +99,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   SmartGrouping _grouping = SmartGrouping.none;
   double _timelineZoom = 1;
   TimelineScale _timelineScale = TimelineScale.week;
+  TimelineColorBy _timelineColorBy = TimelineColorBy.priority;
   Set<String> _collapsedTimelineGroupIds = const {};
   TaskRepository? _streamRepository;
   String? _streamListId;
@@ -272,6 +274,15 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     final tagRank = {for (final (index, tag) in tags.indexed) tag.id: index};
     // 智能分组用的名称表：清单名（按清单分组）、标签名（按标签分组）。
     final tagNamesById = {for (final tag in tags) tag.id: tag.name};
+    final tagColorById = {
+      for (final tag in tags)
+        if (tag.color != null && tag.color!.isNotEmpty) tag.id: tag.color!,
+    };
+    final listColorById = {
+      for (final list
+          in (ref.watch(listsStreamProvider).valueOrNull ?? const <TodoList>[]))
+        if (list.color != null && list.color!.isNotEmpty) list.id: list.color!,
+    };
     final listNamesById = {
       for (final list
           in (ref.watch(listsStreamProvider).valueOrNull ?? const <TodoList>[]))
@@ -376,6 +387,8 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 grouping: _grouping,
                 tagNamesById: tagNamesById,
                 listNamesById: listNamesById,
+                tagColorById: tagColorById,
+                listColorById: listColorById,
               );
         final bareWorkspace = Column(
           children: [
@@ -555,6 +568,8 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     required SmartGrouping grouping,
     required Map<String, String> tagNamesById,
     required Map<String, String> listNamesById,
+    required Map<String, String> tagColorById,
+    required Map<String, String> listColorById,
   }) {
     switch (_mode) {
       case TaskViewMode.list:
@@ -725,6 +740,24 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           zoom: _timelineZoom,
           scale: _timelineScale,
           collapsedGroupIds: _collapsedTimelineGroupIds,
+          colorBy: _timelineColorBy,
+          listColorHexOf: (task) => listColorById[task.listId],
+          tagColorHexOf: (task) {
+            final ids = taskTags?[task.id];
+            if (ids == null || ids.isEmpty) return null;
+            // 多标签取位次最高的标签色（tagRank 与「按标签排序」同口径）。
+            String? best;
+            var bestRank = 1 << 30;
+            for (final id in ids) {
+              final r = tagRank[id] ?? (1 << 30);
+              if (tagColorById.containsKey(id) && r < bestRank) {
+                bestRank = r;
+                best = tagColorById[id];
+              }
+            }
+            return best;
+          },
+          onColorByChanged: _changeTimelineColorBy,
           onZoomChanged: _changeTimelineZoom,
           onScaleChanged: _changeTimelineScale,
           onGroupCollapsedChanged: _changeTimelineGroupCollapsed,
@@ -850,6 +883,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           TimelineScale.week;
       _collapsedTimelineGroupIds =
           preference?.collapsedTimelineGroupIds ?? const {};
+      _timelineColorBy = timelineColorByFromWire(preference?.timelineColorBy);
     });
   }
 
@@ -1013,6 +1047,25 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('看板布局保存失败，请重试')));
+    }
+  }
+
+  /// 时间线「显示设置」：着色轴即选即存（specs/121，矩阵 #16 面 ⑦）。
+  /// 失败回退所选并给可见 SnackBar（同缩放/比例的口径）。
+  Future<void> _changeTimelineColorBy(TimelineColorBy colorBy) async {
+    final sourceKey = _viewPreferenceSourceKey;
+    final previous = _timelineColorBy;
+    setState(() => _timelineColorBy = colorBy);
+    try {
+      await ref
+          .read(taskViewActionRepositoryProvider)
+          ?.saveTimelineColorBy(sourceKey: sourceKey, colorBy: colorBy.name);
+    } catch (_) {
+      if (!mounted || sourceKey != _viewPreferenceSourceKey) return;
+      setState(() => _timelineColorBy = previous);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('时间线显示设置保存失败，请重试')));
     }
   }
 
