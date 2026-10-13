@@ -23,6 +23,11 @@
   test/core/sync/list_view_preference_scope_test.dart` ⇒ `+20 All tests passed!`
   （声明数逐文件复算：同一条 `grep -c "  test("` 分别对三个文件跑 ⇒ 6、5、9 ⇒ 本轮新增的是前两处 11 条，第三个文件是改写那条契约钉、条数不变）
 - `flutter analyze` ⇒ `No issues found!`
+- 全量（跑在并过 develop 之后的最终产物 `7af77179` 上，尺子 `bash tool/gate_counts.sh /tmp/gate299c.log`）
+  ⇒ `last=1975/26/5 max=1975/26/5 complete=yes`；
+  develop `b5682baf` **单独实测**（`git worktree add --detach /tmp/wt-fl-299dev origin/develop` 后跑同一条命令）
+  ⇒ `last=1964/26/5 max=1964/26/5 complete=yes`
+  （对账 `1975 - 1964 = 11` ＝ 本轮新增的 11 条；5 项红与 develop 逐条同名，都是 #607/#610/#569 的存量 ⇒ 净新增红 0）
 - 黄金基线 0 张：`git diff --name-only cd57faf6 HEAD -- test/goldens test/visual` ⇒ 空输出
   （本笔不碰任何 widget，弹层/像素都不涉及）
 
