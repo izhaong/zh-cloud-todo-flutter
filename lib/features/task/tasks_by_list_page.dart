@@ -414,6 +414,8 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                 onEditQuadrantRules: _mode == TaskViewMode.eisenhower
                     ? _openQuadrantRules
                     : null,
+                // 嘀嗒《03-时间线视图》:10：智能清单不支持时间线（specs/122）。
+                showTimelineView: _selectedListId != null,
                 // 嘀嗒《02-用清单管理任务》:96：详情页右上角「...」-「背景」。
                 onEditListBackground: backgroundList == null
                     ? null
@@ -870,9 +872,14 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         revision != _viewRestoreRevision) {
       return;
     }
-    final restoredMode = TaskViewMode.values
+    var restoredMode = TaskViewMode.values
         .where((mode) => mode.name == preference?.viewType)
         .firstOrNull;
+    // 智能清单不支持时间线（specs/122）：跨端偏好把智能清单落在 timeline
+    // 时退回列表，不让用户停在一个原文不支持的档位。
+    if (restoredMode == TaskViewMode.timeline && _selectedListId == null) {
+      restoredMode = TaskViewMode.list;
+    }
     setState(() {
       _mode = restoredMode ?? TaskViewMode.list;
       _timelineZoom = preference?.timelineZoom ?? 1;
