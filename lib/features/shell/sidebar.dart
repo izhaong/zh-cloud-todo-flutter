@@ -19,6 +19,7 @@ import '../list/list_editor_sheet.dart';
 import '../tag/tag_actions.dart';
 import 'section.dart';
 import 'sidebar_hierarchy.dart';
+import 'sidebar_list_folder_merge.dart';
 import 'sidebar_task_drop.dart';
 import 'smart_list_manager_sheet.dart';
 import 'smart_list_time_condition.dart';
@@ -928,7 +929,7 @@ class _TagRow extends ConsumerWidget {
   }
 }
 
-class _ListRow extends ConsumerWidget {
+class _ListRow extends ConsumerStatefulWidget {
   const _ListRow({
     required this.list,
     required this.selected,
@@ -942,71 +943,102 @@ class _ListRow extends ConsumerWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ListRow> createState() => _ListRowState();
+}
+
+class _ListRowState extends ConsumerState<_ListRow> {
+  bool _hovering = false;
+
+  /// 手柄只在悬停或窄视口出现：手机宽度没有悬停可用，只留悬停那一条路就等于把
+  /// 嘀嗒方式一（原文挂在移动端 tab 下）删掉；宽屏既不悬停时保持零新增像素，
+  /// 9 张黄金基线因此一张都不用重录。
+  bool _wantsDragHandle(BuildContext context) =>
+      MediaQuery.sizeOf(context).width < _dragHandleNarrowWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final list = widget.list;
     final controller = ref.watch(sidebarTaskDropControllerProvider);
-    return SidebarDropZone(
-      key: ValueKey('todo-sidebar-drop-list-${list.id}'),
-      hoverLabel: '移入清单「${list.name}」',
-      accept: (task) => controller.acceptsList(task, list.id),
-      onDrop: (task) async {
-        final outcome = await controller.moveToList(task, list.id);
-        if (outcome != SidebarDropOutcome.failed || !context.mounted) return;
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(SnackBar(content: Text('移到「${list.name}」失败')));
-      },
-      child: Dismissible(
-        // 嘀嗒《02-用清单管理任务》：「在侧边栏左滑某个清单，会出现「置顶」、「编辑」和「删除」3个选项。」
-        // 左滑唤出动作表；长按这一入口保留（既有交互与桌面/读屏都靠它，删掉会倒退）。
-        key: ValueKey('todo-sidebar-list-swipe-${list.id}'),
-        direction: DismissDirection.endToStart,
-        resizeDuration: null,
-        movementDuration: const Duration(milliseconds: 120),
-        confirmDismiss: (direction) async {
-          if (!context.mounted) return false;
-          await showListActions(context, ref, list);
-          return false;
-        },
-        background: Container(color: colors.surface),
-        secondaryBackground: Semantics(
-          label: '左滑出现置顶、编辑、删除',
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: const [
-              Icon(Icons.push_pin, size: 18),
-              SizedBox(width: 4),
-              Text('置顶', style: TextStyle(fontSize: 13)),
-              SizedBox(width: 12),
-              Icon(Icons.edit_outlined, size: 18),
-              SizedBox(width: 4),
-              Text('编辑', style: TextStyle(fontSize: 13)),
-              SizedBox(width: 12),
-              Icon(Icons.delete_outline, size: 18),
-              SizedBox(width: 4),
-              Text('删除', style: TextStyle(fontSize: 13)),
-              SizedBox(width: 12),
-            ],
+    return SidebarListMergeTarget(
+      list: list,
+      ref: ref,
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovering = true),
+        onExit: (_) => setState(() => _hovering = false),
+        child: SidebarDropZone(
+          key: ValueKey('todo-sidebar-drop-list-${list.id}'),
+          hoverLabel: '移入清单「${list.name}」',
+          accept: (task) => controller.acceptsList(task, list.id),
+          onDrop: (task) async {
+            final outcome = await controller.moveToList(task, list.id);
+            if (outcome != SidebarDropOutcome.failed || !context.mounted) {
+              return;
+            }
+            ScaffoldMessenger.of(context)
+              ..hideCurrentSnackBar()
+              ..showSnackBar(SnackBar(content: Text('移到「${list.name}」失败')));
+          },
+          child: Dismissible(
+            // 嘀嗒《02-用清单管理任务》：「在侧边栏左滑某个清单，会出现「置顶」、「编辑」和「删除」3个选项。」
+            // 左滑唤出动作表；长按这一入口保留（既有交互与桌面/读屏都靠它，删掉会倒退）。
+            key: ValueKey('todo-sidebar-list-swipe-${list.id}'),
+            direction: DismissDirection.endToStart,
+            resizeDuration: null,
+            movementDuration: const Duration(milliseconds: 120),
+            confirmDismiss: (direction) async {
+              if (!context.mounted) return false;
+              await showListActions(context, ref, list);
+              return false;
+            },
+            background: Container(color: widget.colors.surface),
+            secondaryBackground: Semantics(
+              label: '左滑出现置顶、编辑、删除',
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: const [
+                  Icon(Icons.push_pin, size: 18),
+                  SizedBox(width: 4),
+                  Text('置顶', style: TextStyle(fontSize: 13)),
+                  SizedBox(width: 12),
+                  Icon(Icons.edit_outlined, size: 18),
+                  SizedBox(width: 4),
+                  Text('编辑', style: TextStyle(fontSize: 13)),
+                  SizedBox(width: 12),
+                  Icon(Icons.delete_outline, size: 18),
+                  SizedBox(width: 4),
+                  Text('删除', style: TextStyle(fontSize: 13)),
+                  SizedBox(width: 12),
+                ],
+              ),
+            ),
+            child: _SidebarRow(
+              rowKey: ValueKey('todo-sidebar-list-${list.id}'),
+              icon: Icons.list_alt_outlined,
+              // 嘀嗒《02-用清单管理任务》:86：设置了 Emoji 图标的清单，
+              // 行首图标换成该 Emoji；没设的清单维持原语义不变。
+              emoji: list.icon,
+              label: list.name,
+              selected: widget.selected,
+              colors: widget.colors,
+              // 嘀嗒《02-用清单管理任务》:73：清单颜色体现在行首图标上；
+              // 未设色保持选中 accent / 未选中 muted 的既有语义。
+              iconColor: listColorFromHex(list.color),
+              onTap: widget.onTap,
+              onLongPress: () => showListActions(context, ref, list),
+              trailing: SidebarListDragHandle(
+                list: list,
+                visible: _hovering || _wantsDragHandle(context),
+              ),
+            ),
           ),
-        ),
-        child: _SidebarRow(
-          rowKey: ValueKey('todo-sidebar-list-${list.id}'),
-          icon: Icons.list_alt_outlined,
-          // 嘀嗒《02-用清单管理任务》:86：设置了 Emoji 图标的清单，
-          // 行首图标换成该 Emoji；没设的清单维持原语义不变。
-          emoji: list.icon,
-          label: list.name,
-          selected: selected,
-          colors: colors,
-          // 嘀嗒《02-用清单管理任务》:73：清单颜色体现在行首图标上；
-          // 未设色保持选中 accent / 未选中 muted 的既有语义。
-          iconColor: listColorFromHex(list.color),
-          onTap: onTap,
-          onLongPress: () => showListActions(context, ref, list),
         ),
       ),
     );
   }
 }
+
+/// 窄于这个宽度就按「没有悬停」处理（手机与分屏窗口），手柄常驻。
+const _dragHandleNarrowWidth = 700.0;
 
 class _SidebarRow extends StatefulWidget {
   const _SidebarRow({

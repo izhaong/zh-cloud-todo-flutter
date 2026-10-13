@@ -5,6 +5,7 @@ import '../../core/api/error_text.dart';
 import '../../core/db/app_database.dart';
 import '../../state/providers.dart';
 import '../collaboration/list_member_page.dart';
+import '../folder/folder_page.dart';
 import 'list_editor_sheet.dart';
 import 'list_properties.dart';
 
@@ -97,74 +98,88 @@ Future<void> showListActions(
   String? pinError;
   final action = await showModalBottomSheet<_ListAction>(
     context: context,
+    // 动作表长到六档后，320px 宽 + 1.3 倍字号装不下整张表：让它按内容包裹并可滚动，
+    // 而不是把最后一档挤到屏幕外（既有溢出用例量的就是这件事）。
+    isScrollControlled: true,
     builder: (sheetContext) => StatefulBuilder(
       builder: (sheetContext, setSheetState) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (pinError != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: Text(
-                  pinError!,
-                  key: const Key('sidebar-list-pin-error'),
-                  style: const TextStyle(color: Colors.red),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (pinError != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: Text(
+                    pinError!,
+                    key: const Key('sidebar-list-pin-error'),
+                    style: const TextStyle(color: Colors.red),
+                  ),
                 ),
-              ),
-            ListTile(
-              key: const Key('sidebar-list-action-pin'),
-              leading: Icon(
-                list.isPinned ? Icons.push_pin_outlined : Icons.push_pin,
-              ),
-              title: Text(list.isPinned ? '取消置顶' : '置顶'),
-              // 置顶就地处理：失败时表还开着、错误就在眼前，不会像关掉表再弹条
-              // 谁也没看见的 SnackBar 那样把失败吞掉。
-              onTap: () async {
-                final repo = ref.read(listRepositoryProvider);
-                if (repo == null) {
-                  if (sheetContext.mounted) {
-                    setSheetState(() => pinError = '清单数据还没准备好，稍后再试');
+              ListTile(
+                key: const Key('sidebar-list-action-pin'),
+                leading: Icon(
+                  list.isPinned ? Icons.push_pin_outlined : Icons.push_pin,
+                ),
+                title: Text(list.isPinned ? '取消置顶' : '置顶'),
+                // 置顶就地处理：失败时表还开着、错误就在眼前，不会像关掉表再弹条
+                // 谁也没看见的 SnackBar 那样把失败吞掉。
+                onTap: () async {
+                  final repo = ref.read(listRepositoryProvider);
+                  if (repo == null) {
+                    if (sheetContext.mounted) {
+                      setSheetState(() => pinError = '清单数据还没准备好，稍后再试');
+                    }
+                    return;
                   }
-                  return;
-                }
-                try {
-                  await repo.setPinned(list.id, !list.isPinned);
-                } on Object catch (e) {
-                  if (sheetContext.mounted) {
-                    setSheetState(
-                      () => pinError = '置顶失败：${describeError(e)}，清单列表仍是原来的',
-                    );
+                  try {
+                    await repo.setPinned(list.id, !list.isPinned);
+                  } on Object catch (e) {
+                    if (sheetContext.mounted) {
+                      setSheetState(
+                        () => pinError = '置顶失败：${describeError(e)}，清单列表仍是原来的',
+                      );
+                    }
+                    return;
                   }
-                  return;
-                }
-                if (sheetContext.mounted) Navigator.pop(sheetContext);
-              },
-            ),
-            ListTile(
-              key: const Key('sidebar-list-action-background'),
-              leading: const Icon(Icons.wallpaper_outlined),
-              title: const Text('背景'),
-              onTap: () => Navigator.pop(sheetContext, _ListAction.background),
-            ),
-            ListTile(
-              key: const Key('sidebar-list-action-edit'),
-              leading: const Icon(Icons.edit_outlined),
-              title: const Text('编辑'),
-              onTap: () => Navigator.pop(sheetContext, _ListAction.edit),
-            ),
-            ListTile(
-              key: const Key('sidebar-list-action-share'),
-              leading: const Icon(Icons.people_outline),
-              title: const Text('共享协作'),
-              onTap: () => Navigator.pop(sheetContext, _ListAction.share),
-            ),
-            ListTile(
-              key: const Key('sidebar-list-action-delete'),
-              leading: const Icon(Icons.delete_outline),
-              title: const Text('删除'),
-              onTap: () => Navigator.pop(sheetContext, _ListAction.delete),
-            ),
-          ],
+                  if (sheetContext.mounted) Navigator.pop(sheetContext);
+                },
+              ),
+              ListTile(
+                key: const Key('sidebar-list-action-background'),
+                leading: const Icon(Icons.wallpaper_outlined),
+                title: const Text('背景'),
+                onTap: () =>
+                    Navigator.pop(sheetContext, _ListAction.background),
+              ),
+              ListTile(
+                key: const Key('sidebar-list-action-edit'),
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('编辑'),
+                onTap: () => Navigator.pop(sheetContext, _ListAction.edit),
+              ),
+              ListTile(
+                // 嘀嗒《01-任务/09-如何管理海量任务/01-用文件夹管理任务.md》把「创建/解散文件夹」
+                // 放在清单这一侧；`FolderPage` 过去只有零挂载的 `ListPage` 能进，这里补上可达入口。
+                key: const Key('sidebar-list-action-folders'),
+                leading: const Icon(Icons.folder_outlined),
+                title: const Text('文件夹管理'),
+                onTap: () => Navigator.pop(sheetContext, _ListAction.folders),
+              ),
+              ListTile(
+                key: const Key('sidebar-list-action-share'),
+                leading: const Icon(Icons.people_outline),
+                title: const Text('共享协作'),
+                onTap: () => Navigator.pop(sheetContext, _ListAction.share),
+              ),
+              ListTile(
+                key: const Key('sidebar-list-action-delete'),
+                leading: const Icon(Icons.delete_outline),
+                title: const Text('删除'),
+                onTap: () => Navigator.pop(sheetContext, _ListAction.delete),
+              ),
+            ],
+          ),
         ),
       ),
     ),
@@ -179,6 +194,11 @@ Future<void> showListActions(
       );
     case _ListAction.background:
       await ListBackgroundSheet.show(context, list);
+    case _ListAction.folders:
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const FolderPage()),
+      );
     case _ListAction.share:
       await openListCollaboration(context, ref, list);
     case _ListAction.delete:
@@ -186,4 +206,4 @@ Future<void> showListActions(
   }
 }
 
-enum _ListAction { edit, background, share, delete }
+enum _ListAction { edit, background, folders, share, delete }
