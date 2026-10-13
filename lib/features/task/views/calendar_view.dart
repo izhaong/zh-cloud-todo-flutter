@@ -9,6 +9,7 @@ import '../../../core/time/task_time_formatter.dart';
 import '../../../core/time/task_time_mode.dart';
 import '../../../core/time/week_start.dart';
 import '../../../core/widgets/app_widgets.dart';
+import 'timeline_color.dart';
 import '../../../state/providers.dart';
 import '../task_detail_page.dart';
 import '../task_view_mutation_feedback.dart';
@@ -62,6 +63,9 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
   /// 年视图热力图（嘀嗒《03-年视图》:76 默认关闭）。
   bool _showHeatmap = false;
 
+  /// 任务块着色轴（specs/123，矩阵 #31）：默认按优先级（现状锁）。
+  TimelineColorBy _colorBy = TimelineColorBy.priority;
+
   /// 列表档「日历全景」展开态（嘀嗒《08-常见问题》:168）。同屏瞬时展开/收起，
   /// 不进偏好 —— 嘀嗒没写跨启动保留。
   bool _panoramaExpanded = false;
@@ -101,7 +105,9 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
           onModeChanged: _changeMode,
           onPrev: () => setState(() => _shift(-1)),
           onNext: () => setState(() => _shift(1)),
-          onOpenSettings: widget.filterCompleted ? _showDisplaySettings : null,
+          // 「显示设置」现在含颜色轴（specs/123），在任何模式都有可见效果；
+          // 不再按 filterCompleted 隐藏入口（那是「显示已完成」一格的旧口径）。
+          onOpenSettings: _showDisplaySettings,
           showTimelineToggle: _mode == CalendarMode.list,
           timelineOn: _showListTimeline,
           onToggleTimeline: () =>
@@ -114,6 +120,33 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
               anchor: _anchor,
               firstDay: firstDay,
               tasks: _visibleTasks,
+              colorBy: _colorBy,
+              listColorHexOf: (task) => ref
+                  .watch(listsStreamProvider)
+                  .valueOrNull
+                  ?.where((list) => list.id == task.listId)
+                  .firstOrNull
+                  ?.color,
+              tagColorHexOf: (task) {
+                final ids = ref
+                    .watch(taskTagIndexProvider)
+                    .valueOrNull?[task.id];
+                if (ids == null || ids.isEmpty) return null;
+                final tags = ref.watch(tagsStreamProvider).valueOrNull;
+                if (tags == null) return null;
+                // 多标签取位次最高的标签色（与「按标签排序」同口径）。
+                String? best;
+                var bestRank = 1 << 30;
+                for (final (index, tag) in tags.indexed) {
+                  if (!ids.contains(tag.id)) continue;
+                  if (tag.color == null || tag.color!.isEmpty) continue;
+                  if (index < bestRank) {
+                    bestRank = index;
+                    best = tag.color;
+                  }
+                }
+                return best;
+              },
               onTaskDateChanged: widget.onTaskDateChanged,
               onDayTap: (day) {
                 setState(() => _anchor = day);
@@ -218,6 +251,7 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
       }
       _showCompleted = saved.showCompletedTasks ?? false;
       _showHeatmap = saved.showHeatmap ?? false;
+      _colorBy = timelineColorByFromWire(saved.calendarColorBy);
     });
   }
 
@@ -233,17 +267,19 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
 
   Future<void> _showDisplaySettings() async {
     _displayTouched = true;
-    final next = await showModalBottomSheet<CalendarDisplayFlags>(
+    final next = await showModalBottomSheet<CalendarDisplaySettings>(
       context: context,
       builder: (sheetContext) => _DisplaySettingsSheet(
         showCompleted: _showCompleted,
         showHeatmap: _showHeatmap,
+        colorBy: _colorBy,
       ),
     );
     if (next == null || !mounted) return;
     setState(() {
       _showCompleted = next.showCompleted;
       _showHeatmap = next.showHeatmap;
+      _colorBy = next.colorBy;
     });
     await _persistDisplay();
   }
@@ -257,6 +293,7 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
             viewMode: _mode.name,
             showCompletedTasks: _showCompleted,
             showHeatmap: _showHeatmap,
+            colorBy: _colorBy.name,
           );
     } catch (_) {
       if (!mounted) return;
@@ -366,59 +403,120 @@ Future<void> showExternalCalendarEventDialog(
   );
 }
 
-/// 日历「显示设置」抽屉：对应嘀嗒日历右上角 ··· → 显示设置。
-/// 显示设置一次弹层要交回的成对开关（分开交回会丢掉另一格的当前值）。
-typedef CalendarDisplayFlags = ({bool showCompleted, bool showHeatmap});
+/// 日历「显示设置」抽屉一次弹层要交回的整组值（分开交回会丢掉另一格的当前值；
+/// specs/123 加第三样：任务块着色轴）。
+class CalendarDisplaySettings {
+  const CalendarDisplaySettings({
+    required this.showCompleted,
+    required this.showHeatmap,
+    required this.colorBy,
+  });
+
+  final bool showCompleted;
+  final bool showHeatmap;
+  final TimelineColorBy colorBy;
+}
 
 class _DisplaySettingsSheet extends StatelessWidget {
   const _DisplaySettingsSheet({
     required this.showCompleted,
     required this.showHeatmap,
+    required this.colorBy,
   });
 
   final bool showCompleted;
   final bool showHeatmap;
 
+  /// 任务块着色轴（specs/123，矩阵 #31）：嘀嗒《08-常见问题》:58
+  /// 「颜色-显示方式：按清单、优先级或标签显示」。
+  final TimelineColorBy colorBy;
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text('显示设置', style: TextStyle(fontSize: 16)),
+      // 颜色轴进抽屉后总高超过一屏（-60px 溢出是 22 条存量用例一起红的根因）：
+      // 内容可滚动，开关/单选交互不受影响。
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('显示设置', style: TextStyle(fontSize: 16)),
+              ),
             ),
-          ),
-          SwitchListTile(
-            key: const Key('calendar-show-completed'),
-            title: const Text('显示已完成'),
-            value: showCompleted,
-            onChanged: (value) => Navigator.pop(context, (
-              showCompleted: value,
-              showHeatmap: showHeatmap,
-            )),
-          ),
-          // 嘀嗒《03-年视图》:80/:87「显示设置 → 样式 → 热力图」，分组名照抄。
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text('样式', style: TextStyle(fontSize: 13)),
+            SwitchListTile(
+              key: const Key('calendar-show-completed'),
+              title: const Text('显示已完成'),
+              value: showCompleted,
+              onChanged: (value) => Navigator.pop(
+                context,
+                CalendarDisplaySettings(
+                  showCompleted: value,
+                  showHeatmap: showHeatmap,
+                  colorBy: colorBy,
+                ),
+              ),
             ),
-          ),
-          SwitchListTile(
-            key: const Key('calendar-show-heatmap'),
-            title: const Text('热力图'),
-            value: showHeatmap,
-            onChanged: (value) => Navigator.pop(context, (
-              showCompleted: showCompleted,
-              showHeatmap: value,
-            )),
-          ),
-        ],
+            // 嘀嗒《03-年视图》:80/:87「显示设置 → 样式 → 热力图」，分组名照抄。
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('样式', style: TextStyle(fontSize: 13)),
+              ),
+            ),
+            SwitchListTile(
+              key: const Key('calendar-show-heatmap'),
+              title: const Text('热力图'),
+              value: showHeatmap,
+              onChanged: (value) => Navigator.pop(
+                context,
+                CalendarDisplaySettings(
+                  showCompleted: showCompleted,
+                  showHeatmap: value,
+                  colorBy: colorBy,
+                ),
+              ),
+            ),
+            // 嘀嗒《08-常见问题》:58「颜色-显示方式」；specs/123，矩阵 #31。
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('颜色', style: TextStyle(fontSize: 13)),
+              ),
+            ),
+            RadioGroup<TimelineColorBy>(
+              groupValue: colorBy,
+              onChanged: (value) => Navigator.pop(
+                context,
+                CalendarDisplaySettings(
+                  showCompleted: showCompleted,
+                  showHeatmap: showHeatmap,
+                  colorBy: value ?? TimelineColorBy.priority,
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final mode in TimelineColorBy.values)
+                    RadioListTile<TimelineColorBy>(
+                      key: Key('calendar-color-by-${mode.name}'),
+                      title: Text(switch (mode) {
+                        TimelineColorBy.priority => '按优先级',
+                        TimelineColorBy.list => '按清单',
+                        TimelineColorBy.tag => '按标签',
+                      }),
+                      value: mode,
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -603,6 +701,9 @@ class _MonthGrid extends StatelessWidget {
     required this.tasks,
     required this.onDayTap,
     this.onTaskDateChanged,
+    this.colorBy = TimelineColorBy.priority,
+    this.listColorHexOf,
+    this.tagColorHexOf,
   });
 
   final DateTime anchor;
@@ -610,6 +711,12 @@ class _MonthGrid extends StatelessWidget {
   final List<TodoTask> tasks;
   final ValueChanged<DateTime> onDayTap;
   final Future<void> Function(TodoTask task, DateTime dueAt)? onTaskDateChanged;
+
+  /// 任务块着色轴（specs/123，矩阵 #31）：与时间线同一套解析
+  /// （[timelineTaskColor]），无色回退优先级轴。
+  final TimelineColorBy colorBy;
+  final String? Function(TodoTask task)? listColorHexOf;
+  final String? Function(TodoTask task)? tagColorHexOf;
 
   @override
   Widget build(BuildContext context) {
@@ -647,6 +754,9 @@ class _MonthGrid extends StatelessWidget {
                             const [],
                         onTap: () => onDayTap(d),
                         onTaskDateChanged: onTaskDateChanged,
+                        colorBy: colorBy,
+                        listColorHexOf: listColorHexOf,
+                        tagColorHexOf: tagColorHexOf,
                       ),
                     ),
                 ],
@@ -688,12 +798,20 @@ class _DayCell extends StatelessWidget {
     required this.tasks,
     required this.onTap,
     this.onTaskDateChanged,
+    this.colorBy = TimelineColorBy.priority,
+    this.listColorHexOf,
+    this.tagColorHexOf,
   });
   final DateTime day;
   final DateTime anchor;
   final List<TodoTask> tasks;
   final VoidCallback onTap;
   final Future<void> Function(TodoTask task, DateTime dueAt)? onTaskDateChanged;
+
+  /// 着色轴与两条 hex 解析闭包（specs/123）；null 取色回退优先级轴。
+  final TimelineColorBy colorBy;
+  final String? Function(TodoTask task)? listColorHexOf;
+  final String? Function(TodoTask task)? tagColorHexOf;
 
   @override
   Widget build(BuildContext context) {
@@ -758,7 +876,14 @@ class _DayCell extends StatelessWidget {
                         final task = tasks[index];
                         return _CalendarTaskChip(
                           task: task,
-                          color: _priorityColor(task.priority, colors),
+                          color:
+                              timelineTaskColor(
+                                task,
+                                colorBy: colorBy,
+                                listColorHexOf: listColorHexOf,
+                                tagColorHexOf: tagColorHexOf,
+                              ) ??
+                              _priorityColor(task.priority, colors),
                           draggable:
                               onTaskDateChanged != null &&
                               !isExternalCalendarTask(task),
