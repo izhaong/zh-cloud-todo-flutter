@@ -105,6 +105,7 @@ class TaskWorkspaceHeader extends StatelessWidget {
     /// 嘀嗒《03-四象限/01-如何使用四象限》:24「设置 > 功能模块，开启「四象限」功能」：
     /// 关掉这一档时视图菜单里不该再出现「四象限」。默认 true ⇒ 不传就是今天的行为。
     this.showQuadrantView = true,
+    this.showTimelineView = true,
     this.hideCompleted,
     this.hideCompletedHint,
     this.onBoardDisplaySettings,
@@ -144,6 +145,11 @@ class TaskWorkspaceHeader extends StatelessWidget {
 
   /// false ⇒ 视图档位菜单不出现「四象限」那一档（功能模块开关关闭）。
   final bool showQuadrantView;
+
+  /// 时间线档对智能清单不可选（嘀嗒《03-时间线视图》:10「所有、收集箱、
+  /// 今天、最近7天 等智能清单不支持时间线视图」；specs/122，矩阵 #16 面 ⑧）。
+  /// 默认 true：调用方不传就保持既有行为（既有用例/时间线直泵不受影响）。
+  final bool showTimelineView;
 
   /// 嘀嗒《02-功能指南/03-四象限/02-如何编辑四象限规则.md》`:132`
   /// 「在四象限页面，点击右上角「...」- 隐藏已完成。」
@@ -210,8 +216,10 @@ class TaskWorkspaceHeader extends StatelessWidget {
                 onSelected: onModeChanged,
                 itemBuilder: (context) => [
                   for (final candidate in TaskViewMode.values)
-                    if (showQuadrantView ||
-                        candidate != TaskViewMode.eisenhower)
+                    if ((showQuadrantView ||
+                            candidate != TaskViewMode.eisenhower) &&
+                        (showTimelineView ||
+                            candidate != TaskViewMode.timeline))
                       PopupMenuItem(
                         value: candidate,
                         child: Text(candidate.label),
