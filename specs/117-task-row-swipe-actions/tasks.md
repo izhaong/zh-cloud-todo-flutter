@@ -15,11 +15,11 @@
 
 ## 测试与结果
 
-`flutter test --no-pub` 分文件跑，四条全绿：
+`flutter test --no-pub` 分文件跑，四个文件全绿（合计 48 条：10 + 7 + 23 + 8）：
 
 - `test/task_swipe_preference_repository_test.dart` ⇒ 10 条
-- `test/task_repository_move_to_list_test.dart` ⇒ 6 条
-- `test/features/task/task_row_swipe_test.dart` ⇒ 21 条
+- `test/task_repository_move_to_list_test.dart` ⇒ 7 条
+- `test/features/task/task_row_swipe_test.dart` ⇒ 23 条
 - `test/features/settings/task_swipe_settings_test.dart` ⇒ 8 条
 
 既有用例改了两条，各因本次改动而起：
