@@ -20,6 +20,7 @@ class TaskWorkspacePreference {
     this.timelineColorBy,
     this.calendarColorBy,
     this.quadrantTaskSort = const {},
+    this.quadrantOrder = const ['q1', 'q2', 'q3', 'q4'],
   });
 
   final String? viewType;
@@ -46,6 +47,11 @@ class TaskWorkspacePreference {
   /// 矩阵 #36 面 ⑪）。key 是象限名（q1..q4），value 是 `TaskSort.name`；
   /// 缺档读侧保持分桶输入顺序（现状锁）。
   final Map<String, String> quadrantTaskSort;
+
+  /// 四象限的显示顺序（嘀嗒同页 :64-:75「如何调整四象限顺序」；specs/128，
+  /// 矩阵 #36 面 ⑦）。q1..q4 的一个排列，缺省就是 Q1/Q2/Q3/Q4（现状锁）；
+  /// 非法排列（缺元素/重复）读侧回退默认。
+  final List<String> quadrantOrder;
 }
 
 /// B4 任务视图共享写操作。
@@ -170,6 +176,26 @@ class TaskViewActionRepository {
       preferencePatch: {
         'quadrantTaskSort': {...current, quadrant: sort},
       },
+    );
+  }
+
+  /// 四象限显示顺序（specs/128，矩阵 #36 面 ⑦）：patch 整键覆盖；
+  /// 非法排列（非 q1..q4 的四元排列）在写入前就被拒。
+  Future<void> saveQuadrantOrder({
+    required String sourceKey,
+    required List<String> order,
+  }) {
+    final normalized = order.toList();
+    const valid = {'q1', 'q2', 'q3', 'q4'};
+    if (normalized.length != 4 ||
+        normalized.toSet().length != 4 ||
+        normalized.any((q) => !valid.contains(q))) {
+      throw ArgumentError.value(order, 'order', '必须是 q1..q4 的一个排列');
+    }
+    return _saveViewPreference(
+      sourceType: 'task_view',
+      sourceKey: sourceKey,
+      preferencePatch: {'quadrantOrder': normalized},
     );
   }
 
@@ -358,6 +384,12 @@ class TaskViewActionRepository {
               (k, v) => MapEntry(k.toString(), v.toString()),
             )
           : const {},
+      quadrantOrder: value['quadrantOrder'] is List
+          ? (value['quadrantOrder'] as List)
+                .map((v) => v.toString())
+                .where(const {'q1', 'q2', 'q3', 'q4'}.contains)
+                .toList()
+          : const ['q1', 'q2', 'q3', 'q4'],
     );
   }
 
