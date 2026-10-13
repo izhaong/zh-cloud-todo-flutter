@@ -33,7 +33,10 @@
 
 ## 交叉验证
 
-`cursor-agent -p --trust`（提示词见 `tasks.md`）裁 Q1 选「小手柄单独起拖」，理由是清单行的长按与左滑都已被占用、标签分节那次「把长按让给拖拽」的做法在本行不许照搬；裁 Q2 选「入口进动作表，不新增标题行按钮」。Q1 与 Q2 的裁决都照此采纳。未采纳的是它顺带建议的「给读屏补自定义动作」——本轮只给手柄挂 `Semantics(label:)`，`CustomSemanticsAction` 需要动 `flutter/services` 导出且既有先例里 material 不导出该类，另轮处理（记在下文遗留）。
+`cursor-agent -p --trust`（提示词见 `tasks.md`）裁 Q1 选「小手柄单独起拖」，理由是清单行的长按与左滑都已被占用、标签分节那次「把长按让给拖拽」的做法在本行不许照搬；裁 Q2 选「入口进动作表，不新增标题行按钮」。Q1 与 Q2 的裁决都照此采纳。
+
+未采纳的是它顺带建议的「给读屏补自定义动作」。**这里先订正本台账初版写错的借口**：初版说 `CustomSemanticsAction` 要用到 `flutter/services` 的导出、material 不导出该类——不成立，本仓 `sidebar.dart` 早就 `import 'package:flutter/semantics.dart'` 并在标签行用了 `customSemanticsActions`（复算 `git -C zh-cloud-todo-flutter grep -c "CustomSemanticsAction\\|customSemanticsActions" origin/develop -- lib` 求和 = 2，全在 `sidebar.dart`）。不采纳的真实原因是**语义动作在这条路上没有落点**：自定义动作只能对当前这条清单发起动作，而嘀嗒方式一要的是「把这条并进另一条」，读屏路径上并没有「另一条」这个目标；硬加只会做出个名字与行为不符的按钮。要做就得先让读屏能选出目标清单，另轮处理（记在下文遗留）。
+
 
 ## 门禁读数
 
@@ -42,6 +45,7 @@
 
 ## 遗留（本轮不做，已记账）
 
-- 读屏只能念出手柄标签，念不到「拖」这个动作本身；要给读屏一条等价的「把这条清单并进文件夹」路径需要 `CustomSemanticsAction`。
+- 读屏只能念出手柄标签，念不到「拖」这个动作本身；要给读屏补等价的「把这条清单并进文件夹」路径，前置是先让读屏能选出目标清单（`CustomSemanticsAction` 本身不是障碍，标签行已用过）。
 - `ListPage` 仍是零挂载。面① 不再依赖它，但那一页自己的清单管理语义（智能清单区、上下移动按钮）还挂在那里，与侧栏并存，属于另一笔并轨。
 - 智能清单行不参与拖拽建夹：`ListRepository.moveToFolder` 对 `smart:` 前缀抛 `StateError`，本轮由失败回滚路径接住并给可见提示，没有专门放宽或专门拦截。
+- 同一篇原文「# 解散文件夹」那一节还缺两只手势与一处术语：文件夹行只有长按（`git -C zh-cloud-todo-flutter grep -n "Dismissible(" origin/develop -- lib/features/shell/sidebar.dart` 命中的是标签行与清单行，文件夹行没有 ⇒ 移动端「左滑解散」缺）；文件夹行也没有 `onSecondaryTapDown`（同命令现读只命中标签行 ⇒ 桌面端「右键解散」缺）；`folder_page.dart` 那颗按钮的 tooltip 仍写「删除文件夹」，而嘀嗒这一节叫「解散文件夹」。已立 FL #629，本轮不顺手改。
