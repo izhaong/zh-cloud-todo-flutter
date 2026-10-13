@@ -101,6 +101,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
   TimelineScale _timelineScale = TimelineScale.week;
   TimelineColorBy _timelineColorBy = TimelineColorBy.priority;
   Map<String, String> _quadrantTaskSort = const {};
+  List<String> _quadrantOrder = const ['q1', 'q2', 'q3', 'q4'];
   Set<String> _collapsedTimelineGroupIds = const {};
   TaskRepository? _streamRepository;
   String? _streamListId;
@@ -814,6 +815,8 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           onTaskSelected: widget.onTaskSelected,
           quadrantTaskSort: _quadrantTaskSort,
           onQuadrantSortChanged: _changeQuadrantTaskSort,
+          quadrantOrder: _quadrantOrder,
+          onQuadrantOrderChanged: _changeQuadrantOrder,
         );
       case TaskViewMode.calendar:
         return CalendarView(
@@ -1060,9 +1063,44 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     }
   }
 
+  /// 四象限显示顺序（specs/128，矩阵 #36 面 ⑦）：拖象限头换位 / 「…」上移
+  /// 下移，即存即生效；失败回退排列并给可见 SnackBar。
+  Future<void> _changeQuadrantOrder(List<String> order) async {
+    final revision = ++_viewRestoreRevision;
+    final sourceKey = _viewPreferenceSourceKey;
+    final previous = _quadrantOrder;
+    setState(() => _quadrantOrder = order);
+    try {
+      await ref
+          .read(taskViewActionRepositoryProvider)
+          ?.saveQuadrantOrder(sourceKey: sourceKey, order: order);
+    } on ArgumentError {
+      if (!mounted ||
+          sourceKey != _viewPreferenceSourceKey ||
+          revision != _viewRestoreRevision) {
+        return;
+      }
+      setState(() => _quadrantOrder = previous);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('象限排列无效，请重试')));
+    } catch (_) {
+      if (!mounted ||
+          sourceKey != _viewPreferenceSourceKey ||
+          revision != _viewRestoreRevision) {
+        return;
+      }
+      setState(() => _quadrantOrder = previous);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('象限顺序保存失败，请重试')));
+    }
+  }
+
   /// 四象限单象限的排序档（specs/127，矩阵 #36 面 ⑪）：嘀嗒 :135-:136
   /// 「选择需要更改的象限，『…』-『排序』」。失败回退所选并给可见 SnackBar。
   Future<void> _changeQuadrantTaskSort(String quadrant, TaskSort sort) async {
+    final revision = ++_viewRestoreRevision;
     final sourceKey = _viewPreferenceSourceKey;
     final previous = _quadrantTaskSort;
     setState(() => _quadrantTaskSort = {...previous, quadrant: sort.name});
@@ -1076,13 +1114,21 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
             current: previous,
           );
     } on ArgumentError {
-      if (!mounted || sourceKey != _viewPreferenceSourceKey) return;
+      if (!mounted ||
+          sourceKey != _viewPreferenceSourceKey ||
+          revision != _viewRestoreRevision) {
+        return;
+      }
       setState(() => _quadrantTaskSort = previous);
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('排序档无效，请重试')));
     } catch (_) {
-      if (!mounted || sourceKey != _viewPreferenceSourceKey) return;
+      if (!mounted ||
+          sourceKey != _viewPreferenceSourceKey ||
+          revision != _viewRestoreRevision) {
+        return;
+      }
       setState(() => _quadrantTaskSort = previous);
       ScaffoldMessenger.of(
         context,

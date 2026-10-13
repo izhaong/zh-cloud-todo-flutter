@@ -34,6 +34,8 @@ class EisenhowerView extends ConsumerStatefulWidget {
     this.onTaskSelected,
     this.quadrantTaskSort = const {},
     this.onQuadrantSortChanged,
+    this.quadrantOrder = const ['q1', 'q2', 'q3', 'q4'],
+    this.onQuadrantOrderChanged,
   }) : _now = now;
 
   /// 用于分类的"当前时间"（测试可注入；缺省 `DateTime.now()`）。
@@ -48,6 +50,13 @@ class EisenhowerView extends ConsumerStatefulWidget {
 
   /// 象限排序档变化回调；null ⇒ 象限头「…」不给「排序」入口。
   final void Function(String quadrant, TaskSort sort)? onQuadrantSortChanged;
+
+  /// 四象限显示顺序（specs/128，矩阵 #36 面 ⑦）：q1..q4 的排列，缺省
+  /// Q1/Q2/Q3/Q4（现状锁）。
+  final List<String> quadrantOrder;
+
+  /// 象限顺序变化回调；null ⇒ 拖动/上移下移入口不渲染。
+  final void Function(List<String> order)? onQuadrantOrderChanged;
 
   /// 已完成任务要不要进象限格子。缺省 `false` 就是 develop 现状的行为
   /// （嘀嗒《02-功能指南/03-四象限/02-如何编辑四象限规则.md》`:132`「隐藏已完成」默认隐藏）。
@@ -148,12 +157,9 @@ class _EisenhowerViewState extends ConsumerState<EisenhowerView> {
         ) !=
         null;
     final brightness = Theme.of(context).brightness;
-    final q1Palette = _quadrantPalette(Quadrant.q1, brightness);
-    final q2Palette = _quadrantPalette(Quadrant.q2, brightness);
-    final q3Palette = _quadrantPalette(Quadrant.q3, brightness);
-    final q4Palette = _quadrantPalette(Quadrant.q4, brightness);
 
     Widget tile(Quadrant quadrant, _QuadrantPalette palette) {
+      final orderedIndex = widget.quadrantOrder.indexOf(quadrant.name);
       return _QuadrantTile(
         data: quadrants[quadrant]!,
         color: palette.background,
@@ -175,6 +181,26 @@ class _EisenhowerViewState extends ConsumerState<EisenhowerView> {
         onSortChanged: widget.onQuadrantSortChanged == null
             ? null
             : (sort) => widget.onQuadrantSortChanged!(quadrant.name, sort),
+        onOrderSwap: widget.onQuadrantOrderChanged == null || orderedIndex < 0
+            ? null
+            : (incoming) {
+                final order = [...widget.quadrantOrder];
+                final from = order.indexOf(incoming.name);
+                order[from] = quadrant.name;
+                order[orderedIndex] = incoming.name;
+                widget.onQuadrantOrderChanged!(order);
+              },
+        onOrderMove: widget.onQuadrantOrderChanged == null || orderedIndex < 0
+            ? null
+            : (delta) {
+                final order = [...widget.quadrantOrder];
+                final target = orderedIndex + delta;
+                if (target < 0 || target >= order.length) return;
+                order[orderedIndex] = order[target];
+                order[target] = quadrant.name;
+                widget.onQuadrantOrderChanged!(order);
+              },
+        orderedPosition: orderedIndex,
       );
     }
 
@@ -204,9 +230,16 @@ class _EisenhowerViewState extends ConsumerState<EisenhowerView> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(child: tile(Quadrant.q1, q1Palette)),
-                const SizedBox(width: 8),
-                Expanded(child: tile(Quadrant.q2, q2Palette)),
+                for (final name in widget.quadrantOrder.take(2))
+                  Expanded(
+                    child: tile(
+                      Quadrant.values.firstWhere((q) => q.name == name),
+                      _quadrantPalette(
+                        Quadrant.values.firstWhere((q) => q.name == name),
+                        brightness,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -215,9 +248,16 @@ class _EisenhowerViewState extends ConsumerState<EisenhowerView> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(child: tile(Quadrant.q3, q3Palette)),
-                const SizedBox(width: 8),
-                Expanded(child: tile(Quadrant.q4, q4Palette)),
+                for (final name in widget.quadrantOrder.skip(2))
+                  Expanded(
+                    child: tile(
+                      Quadrant.values.firstWhere((q) => q.name == name),
+                      _quadrantPalette(
+                        Quadrant.values.firstWhere((q) => q.name == name),
+                        brightness,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -518,6 +558,9 @@ class _QuadrantTile extends StatelessWidget {
     required this.onDrop,
     this.currentSort,
     this.onSortChanged,
+    this.onOrderSwap,
+    this.onOrderMove,
+    this.orderedPosition,
   });
 
   final _QuadrantData data;
@@ -533,10 +576,20 @@ class _QuadrantTile extends StatelessWidget {
   final TaskSort? currentSort;
   final ValueChanged<TaskSort>? onSortChanged;
 
+  /// 象限换位（specs/128，矩阵 #36 面 ⑦ desktop 半面）：把 [incoming] 象限
+  /// 拖到本象限时两格交换显示位置。null ⇒ 不给拖动/接受入口。
+  final ValueChanged<Quadrant>? onOrderSwap;
+
+  /// mobile 半面：「…」-「编辑顺序」的上移/下移（delta -1/+1，阅读顺序换位）。
+  final void Function(int delta)? onOrderMove;
+
+  /// 本象限在当前排列里的位置（q1..q4 的索引）；上移/下移边界用。
+  final int? orderedPosition;
+
   @override
   Widget build(BuildContext context) {
     final colors = brandColors(context);
-    final tile = Material(
+    Widget tile = Material(
       key: ValueKey('quadrant-${data.quadrant.name}'),
       color: color,
       borderRadius: BorderRadius.circular(AppRadius.lg),
@@ -549,15 +602,61 @@ class _QuadrantTile extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: Text(
-                    data.label,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: accent,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  child: onOrderSwap == null
+                      ? Text(
+                          data.label,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: accent,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        )
+                      // 象限头拖动（specs/128 desktop 半面）：载荷是象限本身，
+                      // 与卡片上的「拖任务换象限」（LongPressDraggable<
+                      // QuadrantDragMove>）不同型不抢手势。
+                      : Draggable<Quadrant>(
+                          data: data.quadrant,
+                          feedback: Material(
+                            color: color.withValues(alpha: 0.9),
+                            borderRadius: BorderRadius.circular(AppRadius.lg),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              child: Text(
+                                data.label,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: accent,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                          childWhenDragging: Opacity(
+                            opacity: 0.4,
+                            child: Text(
+                              data.label,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: accent,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          child: Text(
+                            data.label,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: accent,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -577,13 +676,38 @@ class _QuadrantTile extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (onSortChanged != null)
-                  PopupMenuButton<TaskSort>(
+                if (onSortChanged != null || onOrderMove != null)
+                  PopupMenuButton<Object>(
                     key: ValueKey('quadrant-sort-${data.quadrant.name}'),
                     tooltip: '排序',
                     icon: Icon(Icons.more_horiz, size: 16, color: accent),
-                    onSelected: onSortChanged,
+                    onSelected: (value) {
+                      if (value is int) {
+                        onOrderMove?.call(value);
+                        return;
+                      }
+                      if (value is TaskSort) onSortChanged?.call(value);
+                    },
                     itemBuilder: (context) => [
+                      if (onOrderMove != null && orderedPosition != null) ...[
+                        PopupMenuItem(
+                          key: ValueKey(
+                            'quadrant-order-up-${data.quadrant.name}',
+                          ),
+                          value: -1,
+                          enabled: orderedPosition! > 0,
+                          child: const Text('上移'),
+                        ),
+                        PopupMenuItem(
+                          key: ValueKey(
+                            'quadrant-order-down-${data.quadrant.name}',
+                          ),
+                          value: 1,
+                          enabled: orderedPosition! < 3,
+                          child: const Text('下移'),
+                        ),
+                        const PopupMenuDivider(),
+                      ],
                       for (final candidate in TaskSort.values)
                         PopupMenuItem(
                           key: ValueKey(
@@ -674,26 +798,41 @@ class _QuadrantTile extends StatelessWidget {
         ),
       ),
     );
-    if (!draggable) return tile;
-    return DragTarget<QuadrantDragMove>(
-      onWillAcceptWithDetails: (details) =>
-          details.data.from != data.quadrant &&
-          quadrantDropPatch(
-                target: data.quadrant,
-                ruleType: ruleType,
-                now: now,
-              ) !=
-              null,
-      onAcceptWithDetails: (details) {
-        final patch = quadrantDropPatch(
-          target: data.quadrant,
-          ruleType: ruleType,
-          now: now,
-        );
-        if (patch == null || details.data.from == data.quadrant) return;
-        onDrop(details.data, patch);
-      },
-      builder: (context, candidate, rejected) => tile,
+    if (!draggable) return orderSwapWrap(tile);
+    return orderSwapWrap(
+      DragTarget<QuadrantDragMove>(
+        onWillAcceptWithDetails: (details) =>
+            details.data.from != data.quadrant &&
+            quadrantDropPatch(
+                  target: data.quadrant,
+                  ruleType: ruleType,
+                  now: now,
+                ) !=
+                null,
+        onAcceptWithDetails: (details) {
+          final patch = quadrantDropPatch(
+            target: data.quadrant,
+            ruleType: ruleType,
+            now: now,
+          );
+          if (patch == null || details.data.from == data.quadrant) return;
+          onDrop(details.data, patch);
+        },
+        builder: (context, candidate, rejected) => tile,
+      ),
+    );
+  }
+
+  /// 象限换位外层（specs/128）：`DragTarget<Quadrant>` 接受另一象限头拖入
+  /// ⇒ 交换两格显示位置。与任务拖换（内层 `QuadrantDragMove`）载荷不同型，
+  /// 不抢手势。
+  Widget orderSwapWrap(Widget child) {
+    final swap = onOrderSwap;
+    if (swap == null) return child;
+    return DragTarget<Quadrant>(
+      onWillAcceptWithDetails: (details) => details.data != data.quadrant,
+      onAcceptWithDetails: (details) => swap(details.data),
+      builder: (context, _, _) => child,
     );
   }
 }
