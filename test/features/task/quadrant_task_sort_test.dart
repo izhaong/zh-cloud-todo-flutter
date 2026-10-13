@@ -221,9 +221,8 @@ void main() {
           );
 
       // 「界面按 createdAt 重排」的矩形断言由上面的 widget 级用例确定性覆盖
-      // （直泵视图无网络型 provider 拖帧）；本页面级用例只钉偏好落库这一环——
-      // 全量连跑时冷启动的 habitDots/lunar 拉取拖帧会让矩形断言间歇失败，
-      // 那是测试基础设施时序，不是排序功能本身。
+      // （直泵视图无网络型 provider 拖帧）；本页面级用例钉偏好落库这一环。
+      expect(preference.quadrantTaskSort['q1'], 'createdAt');
     });
   });
 

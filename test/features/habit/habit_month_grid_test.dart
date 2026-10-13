@@ -526,7 +526,12 @@ class _FakeHabitRepository implements HabitRepository {
   }
 
   @override
-  Future<int> checkIn(int habitId, {DateTime? date, int? amount}) async {
+  Future<int> checkIn(
+    int habitId, {
+    int? amount,
+    DateTime? date,
+    String? note,
+  }) async {
     checkInCalls += 1;
     if (failCheckIn) throw StateError('boom');
     lastCheckInHabitId = habitId;
