@@ -55,6 +55,7 @@ class _ThrowingRepository extends TaskViewActionRepository {
     required String viewMode,
     required bool showCompletedTasks,
     required bool showHeatmap,
+    String colorBy = 'priority',
   }) async {
     throw Exception('离线写入失败');
   }

@@ -46,6 +46,7 @@ class _ThrowingRepository extends TaskViewActionRepository {
     required String viewMode,
     required bool showCompletedTasks,
     required bool showHeatmap,
+    String colorBy = 'priority',
   }) async {
     throw Exception('离线写入失败');
   }
@@ -238,9 +239,10 @@ void main() {
 
     // 已完成项没有被隐藏（否则清单筛「只看已完成」切到日历会被叠成空列表）。
     expect(find.text('2 项'), findsOneWidget);
-    // 「显示已完成」在这个上下文里改了也没有可见效果，入口不得渲染。
-    expect(find.byKey(const Key('calendar-display-settings')), findsNothing);
-    expect(find.bySemanticsLabel('显示设置'), findsNothing);
+    // specs/123 之后「显示设置」含颜色轴，在任何上下文都有可见效果 ⇒ 入口
+    // 常显（旧口径「显示已完成无效果就藏入口」随颜色轴一并取消）；
+    // 但宿主决定显隐的契约不变：日历自己不再叠加过滤（上行 2 项已钉）。
+    expect(find.byKey(const Key('calendar-display-settings')), findsOneWidget);
     handle.dispose();
   });
 
