@@ -37,6 +37,7 @@ import 'repositories/task_grouping_preference_repository.dart';
 import 'repositories/task_sort_preference_repository.dart';
 import 'repositories/task_swipe_preference_repository.dart';
 import 'repositories/sidebar_visibility_repository.dart';
+import 'efficiency_providers.dart';
 import 'repositories/calendar_info_preference_repository.dart';
 import 'repositories/task_view_action_repository.dart';
 import 'repositories/timezone_preference_repository.dart';
@@ -444,6 +445,48 @@ final calendarHolidaysProvider = FutureProvider.autoDispose
     });
 
 /// 一段日期区间的农历表（按天打 `/lunar-date`，调用方按月缓存）。
+/// 月视图的习惯打卡点（specs/129，矩阵 #45 面 ③）：把每个习惯的
+/// MONTH 档 `dailyCounts` 聚合成 {日期: [(习惯名, 颜色, 次数)]}。
+final calendarHabitDotsProvider = FutureProvider.autoDispose
+    .family<
+      Map<DateTime, List<({String name, String? color, int count})>>,
+      DateTime
+    >((ref, firstOfMonth) async {
+      final habits = ref.watch(habitRepositoryProvider);
+      final habitList = await habits.listMine();
+      final result =
+          <DateTime, List<({String name, String? color, int count})>>{};
+      for (final habit in habitList) {
+        try {
+          final value = await habits.stats(habit.id, period: 'MONTH');
+          final dailyCounts = value['dailyCounts'];
+          if (dailyCounts is! List) continue;
+          for (final entry in dailyCounts) {
+            if (entry is! Map) continue;
+            final raw = entry['date']?.toString() ?? '';
+            final parts = raw.split('-');
+            if (parts.length != 3) continue;
+            final y = int.tryParse(parts[0]);
+            final m = int.tryParse(parts[1]);
+            final d = int.tryParse(parts[2]);
+            if (y == null || m == null || d == null) continue;
+            if (y != firstOfMonth.year || m != firstOfMonth.month) continue;
+            final count = (entry['count'] as num?)?.toInt() ?? 0;
+            if (count <= 0) continue;
+            result.putIfAbsent(DateTime(y, m, d), () => []).add((
+              name: habit.name,
+              color: habit.color,
+              count: count,
+            ));
+          }
+        } on Object {
+          // 单个习惯统计失败不拖垮整月渲染。
+          continue;
+        }
+      }
+      return result;
+    });
+
 final calendarLunarMonthProvider = FutureProvider.autoDispose
     .family<Map<DateTime, CalendarLunarDate>, DateTime>((
       ref,
