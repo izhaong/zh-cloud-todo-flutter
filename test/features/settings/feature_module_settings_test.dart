@@ -37,7 +37,9 @@ void main() {
       set: TodoVisualFixtureSet.populated,
     );
     addTearDown(fixture.dispose);
-    tester.view.physicalSize = const Size(1000, 1400);
+    // specs/129 后「日期与时间」组多了「显示习惯打卡」一行，四象限弹层的
+    // 选项键被推到 1400px 视口之外 ⇒ 抬高视口（内容多一行）。
+    tester.view.physicalSize = const Size(1000, 1600);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);

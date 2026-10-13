@@ -51,6 +51,8 @@ class CalendarInfoPreferenceRepository {
     final valueJson = jsonEncode({
       'showLunar': flags.showLunar,
       'showHolidays': flags.showHolidays,
+      // 习惯打卡进日历（specs/129，矩阵 #45 面 ③）。
+      'showHabits': flags.showHabits,
     });
     await _db.transaction(() async {
       final existing = await (_db.select(
@@ -98,6 +100,7 @@ class CalendarInfoPreferenceRepository {
       return CalendarInfoFlags(
         showLunar: raw['showLunar'] == true,
         showHolidays: raw['showHolidays'] == true,
+        showHabits: raw['showHabits'] == true,
       );
     } on FormatException {
       return _default;
@@ -109,17 +112,22 @@ class CalendarInfoFlags {
   const CalendarInfoFlags({
     required this.showLunar,
     required this.showHolidays,
+    this.showHabits = false,
   });
 
   final bool showLunar;
   final bool showHolidays;
 
+  /// 日历显示习惯打卡点（specs/129，矩阵 #45 面 ③）；旧数据无此键按关处理。
+  final bool showHabits;
+
   @override
   bool operator ==(Object other) =>
       other is CalendarInfoFlags &&
       other.showLunar == showLunar &&
-      other.showHolidays == showHolidays;
+      other.showHolidays == showHolidays &&
+      other.showHabits == showHabits;
 
   @override
-  int get hashCode => Object.hash(showLunar, showHolidays);
+  int get hashCode => Object.hash(showLunar, showHolidays, showHabits);
 }

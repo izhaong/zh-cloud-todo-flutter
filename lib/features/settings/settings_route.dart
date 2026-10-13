@@ -202,6 +202,10 @@ class SettingsRoute extends ConsumerWidget {
                   key: const Key('todo-settings-show-holidays'),
                   title: '显示节假日调休',
                 ),
+                _CalendarInfoToggleTile(
+                  key: const Key('todo-settings-show-habits'),
+                  title: '显示习惯打卡',
+                ),
               ],
             ),
           ),
@@ -781,8 +785,14 @@ class _CalendarInfoToggleTileState
     final flags = ref.watch(calendarInfoFlagsProvider).valueOrNull;
     final showLunar = flags?.showLunar ?? false;
     final showHolidays = flags?.showHolidays ?? false;
+    final showHabits = flags?.showHabits ?? false;
     final isLunarTile = widget.title == '显示农历';
-    final value = isLunarTile ? showLunar : showHolidays;
+    final isHabitsTile = widget.title == '显示习惯打卡';
+    final value = isLunarTile
+        ? showLunar
+        : isHabitsTile
+        ? showHabits
+        : showHolidays;
     return Material(
       type: MaterialType.transparency,
       child: SwitchListTile(
@@ -797,13 +807,18 @@ class _CalendarInfoToggleTileState
           if (repo == null) return;
           final current =
               flags ??
-              const CalendarInfoFlags(showLunar: false, showHolidays: false);
+              const CalendarInfoFlags(
+                showLunar: false,
+                showHolidays: false,
+                showHabits: false,
+              );
           final messenger = ScaffoldMessenger.maybeOf(context);
           try {
             await repo.save(
               CalendarInfoFlags(
                 showLunar: isLunarTile ? next : current.showLunar,
-                showHolidays: isLunarTile ? current.showHolidays : next,
+                showHolidays: isHabitsTile ? current.showHolidays : next,
+                showHabits: isHabitsTile ? next : current.showHabits,
               ),
             );
           } catch (_) {

@@ -10,6 +10,7 @@ import '../../../core/time/task_time_mode.dart';
 import '../../../core/time/week_start.dart';
 import '../../../core/api/todo_api.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../tag/tag_color.dart';
 import 'timeline_color.dart';
 import '../../../state/providers.dart';
 import '../task_detail_page.dart';
@@ -103,6 +104,7 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
     final infoFlags = ref.watch(calendarInfoFlagsProvider).valueOrNull;
     final showLunar = infoFlags?.showLunar ?? false;
     final showHolidays = infoFlags?.showHolidays ?? false;
+    final showHabits = infoFlags?.showHabits ?? false;
     final lunarByDay = showLunar
         ? ref
                   .watch(
@@ -113,6 +115,19 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
                   .valueOrNull ??
               const <DateTime, CalendarLunarDate>{}
         : const <DateTime, CalendarLunarDate>{};
+    final habitDotsByDay = showHabits
+        ? ref
+                  .watch(
+                    calendarHabitDotsProvider(
+                      DateTime(_anchor.year, _anchor.month, 1),
+                    ),
+                  )
+                  .valueOrNull ??
+              const <
+                DateTime,
+                List<({String name, String? color, int count})>
+              >{}
+        : const <DateTime, List<({String name, String? color, int count})>>{};
     final holidaysByDay = showHolidays
         ? {
             for (final holiday
@@ -152,6 +167,8 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
               showHolidays: showHolidays,
               lunarByDay: lunarByDay,
               holidaysByDay: holidaysByDay,
+              habitDotsByDay: habitDotsByDay,
+              showHabits: showHabits,
               listColorHexOf: (task) => ref
                   .watch(listsStreamProvider)
                   .valueOrNull
@@ -739,6 +756,8 @@ class _MonthGrid extends StatelessWidget {
     this.showHolidays = false,
     this.lunarByDay = const {},
     this.holidaysByDay = const {},
+    this.habitDotsByDay = const {},
+    this.showHabits = false,
   });
 
   final DateTime anchor;
@@ -751,6 +770,14 @@ class _MonthGrid extends StatelessWidget {
   final bool showHolidays;
   final Map<DateTime, CalendarLunarDate> lunarByDay;
   final Map<DateTime, CalendarHoliday> holidaysByDay;
+
+  /// 习惯打卡点（specs/129，矩阵 #45 面 ③）：key 是日期，value 是
+  /// (习惯名, 颜色 hex, 次数)。
+  final Map<DateTime, List<({String name, String? color, int count})>>
+  habitDotsByDay;
+
+  /// 「显示习惯打卡」开关（与 habitDots 双重条件）。
+  final bool showHabits;
   final ValueChanged<DateTime> onDayTap;
   final Future<void> Function(TodoTask task, DateTime dueAt)? onTaskDateChanged;
 
@@ -804,6 +831,9 @@ class _MonthGrid extends StatelessWidget {
                         lunar: lunarByDay[DateTime(d.year, d.month, d.day)],
                         holiday:
                             holidaysByDay[DateTime(d.year, d.month, d.day)],
+                        habitDots:
+                            habitDotsByDay[DateTime(d.year, d.month, d.day)],
+                        showHabits: showHabits,
                       ),
                     ),
                 ],
@@ -852,11 +882,19 @@ class _DayCell extends StatelessWidget {
     this.showHolidays = false,
     this.lunar,
     this.holiday,
+    this.habitDots,
+    this.showHabits = false,
   });
   final DateTime day;
   final DateTime anchor;
   final List<TodoTask> tasks;
   final VoidCallback onTap;
+
+  /// 当日习惯打卡点（specs/129，矩阵 #45 面 ③）；null/空 = 不显示。
+  final List<({String name, String? color, int count})>? habitDots;
+
+  /// 「显示习惯打卡」开关（与 habitDots 双重条件：关了就不拉数据也不渲染）。
+  final bool showHabits;
 
   /// 农历/节假日当日数据（specs/125）。
   final bool showLunar;
@@ -960,6 +998,25 @@ class _DayCell extends StatelessWidget {
                       color: colors.mutedForeground,
                     ),
                   ),
+                if (showHabits &&
+                    habitDots != null &&
+                    habitDots!.isNotEmpty) ...[
+                  for (final (index, dot) in habitDots!.indexed)
+                    Text(
+                      // 嘀嗒把习惯以色点+名字列在日格上；格内空间小，
+                      // 一行一个：色点语义用名字，色块走 habit.color。
+                      '${dot.name}${dot.count > 1 ? ' ×${dot.count}' : ''}',
+                      key: ValueKey(
+                        'calendar-habit-${day.month}-${day.day}-$index',
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 8,
+                        color: parseHexColor(dot.color),
+                      ),
+                    ),
+                ],
                 if (tasks.isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Expanded(
