@@ -12,12 +12,18 @@ class TodoPaletteCommand {
     this.hint,
     this.enabled = true,
     this.disabledHint,
+    this.group,
   });
 
   final String label;
   final VoidCallback run;
   final String? hint;
   final bool enabled;
+
+  /// 分组名（null = 不分组）。嘀嗒《08-桌面快捷键.md》`:28` 给的路径是
+  /// 「指令菜单」-「帮助」-「显示键盘快捷键」，即面板里除了"前往各模块"还有一层
+  /// 叫得出名字的归类；平铺着列就只剩"有一条同名命令"，路径本身对不上。
+  final String? group;
 
   /// 灰掉时要说为什么灰着（嘀嗒在快捷键列表里对不可改项就是"灰色 + 有原因"）。
   final String? disabledHint;
@@ -93,6 +99,57 @@ class _CommandPaletteState extends State<CommandPalette> {
     if (first != null) _run(first);
   }
 
+  /// 按组渲染：未分组的命令保持原顺序排在最前，其后每个分组按"首次出现"的顺序出现，
+  /// 组内保持调用方给的顺序。组标题只在组内**至少有一条命中**时出现——
+  /// 输入把整组筛空了还顶一个标题，就是"看着有这一层、点进去什么都没有"。
+  List<Widget> _rowsWithHeaders(List<TodoPaletteCommand> matches) {
+    final ungrouped = matches
+        .where((command) => command.group == null)
+        .toList(growable: false);
+    final groupNames = <String?>[];
+    for (final command in matches) {
+      if (command.group != null && !groupNames.contains(command.group)) {
+        groupNames.add(command.group);
+      }
+    }
+    final rows = <Widget>[for (final command in ungrouped) _row(command)];
+    for (final group in groupNames) {
+      final inGroup = matches
+          .where((command) => command.group == group)
+          .toList(growable: false);
+      if (inGroup.isEmpty) continue;
+      rows.add(
+        Padding(
+          key: Key('todo-command-palette-group-$group'),
+          padding: const EdgeInsets.only(top: 8, bottom: 2, left: 4),
+          child: Text(
+            group!,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      );
+      rows.addAll(inGroup.map(_row));
+    }
+    return rows;
+  }
+
+  Widget _row(TodoPaletteCommand command) {
+    return ListTile(
+      key: Key('todo-command-palette-item-${command.label}'),
+      enabled: command.enabled,
+      title: Text(command.label),
+      subtitle: _subtitleFor(command) == null
+          ? null
+          : Text(
+              _subtitleFor(command)!,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+      onTap: () => _run(command),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final matches = _matches;
@@ -124,23 +181,7 @@ class _CommandPaletteState extends State<CommandPalette> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (final command in matches)
-                        ListTile(
-                          key: Key(
-                            'todo-command-palette-item-${command.label}',
-                          ),
-                          enabled: command.enabled,
-                          title: Text(command.label),
-                          subtitle: _subtitleFor(command) == null
-                              ? null
-                              : Text(
-                                  _subtitleFor(command)!,
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                          onTap: () => _run(command),
-                        ),
-                    ],
+                    children: _rowsWithHeaders(matches),
                   ),
                 ),
               ),

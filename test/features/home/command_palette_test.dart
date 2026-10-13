@@ -8,9 +8,11 @@ import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
 import 'package:zh_cloud_todo_flutter/core/theme/app_theme.dart';
 import 'package:zh_cloud_todo_flutter/features/home/command_palette.dart';
 import 'package:zh_cloud_todo_flutter/features/home/home_shell.dart';
+import 'package:zh_cloud_todo_flutter/features/home/keyboard_shortcuts_dialog.dart';
 import 'package:zh_cloud_todo_flutter/features/settings/settings_route.dart';
 import 'package:zh_cloud_todo_flutter/features/task/task_search_page.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/sidebar_visibility_repository.dart';
+import 'package:zh_cloud_todo_flutter/state/providers.dart';
 
 import '../../support/todo_visual_fixture.dart';
 import '../../support/todo_visual_test_harness.dart';
@@ -23,6 +25,10 @@ import '../../support/todo_visual_test_harness.dart';
 void main() {
   const field = Key('todo-command-palette-field');
   Key itemKey(String label) => Key('todo-command-palette-item-$label');
+
+  Finder item(String label) => find.byKey(itemKey(label));
+  Finder header(String name) =>
+      find.byKey(Key('todo-command-palette-group-$name'));
 
   ThemeData themed() => ThemeData.light().copyWith(
     extensions: const [AppThemeExtension(AppColors.light)],
@@ -218,6 +224,121 @@ void main() {
     });
   });
 
+  group('分组（嘀嗒《08-桌面快捷键.md》:28 那层「帮助」）', () {
+    Key groupKey(String name) => Key('todo-command-palette-group-$name');
+
+    testWidgets('未分组命令在前、组标题在其后、组命令紧跟自己的标题', (tester) async {
+      await openPalette(
+        tester,
+        commands: const [
+          TodoPaletteCommand(label: '前往「日历」', run: _paletteNoop),
+          TodoPaletteCommand(label: '全局搜索', run: _paletteNoop),
+          TodoPaletteCommand(label: '显示键盘快捷键', group: '帮助', run: _paletteNoop),
+        ],
+      );
+
+      expect(
+        find.byKey(groupKey('帮助')),
+        findsOneWidget,
+        reason: '原文那条路径要能在这张面板里走：指令菜单 → 帮助 → 显示键盘快捷键',
+      );
+      final headerY = tester.getRect(find.byKey(groupKey('帮助'))).top;
+      final commandY = tester.getRect(item('显示键盘快捷键')).top;
+      expect(
+        commandY,
+        greaterThan(headerY),
+        reason: '标题必须在自己那组命令的上方，不然"归到帮助"只是句空话',
+      );
+      for (final label in const ['前往「日历」', '全局搜索']) {
+        expect(
+          tester.getRect(item(label)).top,
+          lessThan(headerY),
+          reason: '$label 是"前往模块"那一类，不该被塞到帮助标题之下',
+        );
+      }
+      expect(find.text('帮助'), findsOneWidget);
+    });
+
+    testWidgets('输入把整组筛空时，组标题跟着消失；清空后又回来', (tester) async {
+      await openPalette(
+        tester,
+        commands: const [
+          TodoPaletteCommand(label: '前往「日历」', run: _paletteNoop),
+          TodoPaletteCommand(label: '显示键盘快捷键', group: '帮助', run: _paletteNoop),
+        ],
+      );
+      expect(find.byKey(groupKey('帮助')), findsOneWidget);
+
+      await tester.enterText(find.byKey(field), '日历');
+      await tester.pump();
+      expect(find.byKey(itemKey('显示键盘快捷键')), findsNothing);
+      expect(
+        find.byKey(groupKey('帮助')),
+        findsNothing,
+        reason: '组里一条都不剩还顶个标题，就是"看着有这层、点进去空的"',
+      );
+
+      await tester.enterText(find.byKey(field), '');
+      await tester.pump();
+      expect(
+        find.byKey(groupKey('帮助')),
+        findsOneWidget,
+        reason: '反向对照：标题是随命中算出来的，不是常驻控件',
+      );
+    });
+
+    testWidgets('只有分组命令命中时，回车执行的是命令本身（标题不是可执行项）', (tester) async {
+      final ran = <String>[];
+      await openPalette(
+        tester,
+        commands: [
+          TodoPaletteCommand(label: '前往「日历」', run: () => ran.add('日历')),
+          TodoPaletteCommand(
+            label: '显示键盘快捷键',
+            group: '帮助',
+            run: () => ran.add('快捷键'),
+          ),
+        ],
+      );
+
+      await tester.enterText(find.byKey(field), '键盘');
+      await tester.pump();
+      expect(find.byKey(itemKey('前往「日历」')), findsNothing);
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(ran, ['快捷键']);
+      expect(find.byType(CommandPalette), findsNothing);
+    });
+
+    testWidgets('多个分组按首次出现排序，组内保持调用方给的顺序', (tester) async {
+      await openPalette(
+        tester,
+        commands: const [
+          TodoPaletteCommand(label: '帮助甲', group: '帮助', run: _paletteNoop),
+          TodoPaletteCommand(label: '乙一', group: '清单', run: _paletteNoop),
+          TodoPaletteCommand(label: '帮助乙', group: '帮助', run: _paletteNoop),
+          TodoPaletteCommand(label: '平铺项', run: _paletteNoop),
+        ],
+      );
+
+      final tops = <String, double>{
+        '平铺项': tester.getRect(item('平铺项')).top,
+        '帮助': tester.getRect(header('帮助')).top,
+        '帮助甲': tester.getRect(item('帮助甲')).top,
+        '帮助乙': tester.getRect(item('帮助乙')).top,
+        '清单': tester.getRect(header('清单')).top,
+        '乙一': tester.getRect(item('乙一')).top,
+      };
+      expect(tops['平铺项']!, lessThan(tops['帮助']!));
+      expect(tops['帮助']!, lessThan(tops['帮助甲']!));
+      expect(tops['帮助甲']!, lessThan(tops['帮助乙']!));
+      expect(tops['帮助乙']!, lessThan(tops['清单']!));
+      expect(tops['清单']!, lessThan(tops['乙一']!));
+    });
+  });
+
   group('接进工作区（真实 ⌘K）', () {
     Future<TodoVisualFixture> pumpShell(WidgetTester tester) =>
         pumpTodoVisualScenario(
@@ -235,7 +356,7 @@ void main() {
     }
 
     testWidgets('⌘K 开的是指令菜单，不是直接跳搜索页；搜索仍在面板里', (tester) async {
-      await pumpShell(tester);
+      final fixture = await pumpShell(tester);
 
       expect(find.byType(CommandPalette), findsNothing);
       expect(find.byType(TaskSearchPage), findsNothing);
@@ -257,6 +378,74 @@ void main() {
         reason:
             '搜索不能因为换语义就丢掉入口（面板里得有一条；'
             '这条命令点得到搜索页由 task_organize_search_test.dart 量）',
+      );
+
+      // 嘀嗒 :28「在「指令菜单」-「帮助」-「显示键盘快捷键」打开快捷键界面，可以修改」：
+      // 真实 ⌘K 那条路径上，帮助这一层与"打开后能改"都要成立。
+      expect(
+        find.byKey(const Key('todo-command-palette-group-帮助')),
+        findsOneWidget,
+      );
+      expect(
+        tester.getRect(item('显示键盘快捷键')).top,
+        greaterThan(tester.getRect(header('帮助')).top),
+      );
+      expect(
+        find.byKey(const Key('keyboard-shortcuts-edit-showShortcuts')),
+        findsNothing,
+        reason: '前置条件：还没打开快捷键界面',
+      );
+      // 「帮助」在列表末尾，弹层里那条命令默认在视口外：直接 tap 会打在别处（实测就是这样空转）。
+      await tester.ensureVisible(item('显示键盘快捷键'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.getRect(item('显示键盘快捷键')).bottom,
+        lessThanOrEqualTo(900),
+        reason: '正对照：这条命令确实被滚进了视口（视口高 900）',
+      );
+      await tester.tap(item('显示键盘快捷键'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byType(KeyboardShortcutsDialog),
+        findsOneWidget,
+        reason: '点了帮助里那条命令，快捷键界面必须真的弹出来',
+      );
+      expect(
+        find.byKey(const Key('keyboard-shortcuts-edit-showShortcuts')),
+        findsOneWidget,
+        reason: '从帮助里进去的界面必须可改，否则 :28 那句"可以修改"落空',
+      );
+      expect(
+        find.byKey(const Key('keyboard-shortcuts-readonly')),
+        findsNothing,
+        reason: '反向对照：这条路径不该给只读态',
+      );
+
+      // 交叉验证点名的那半句：`:28` 说的是"打开快捷键界面，可以修改"，
+      // 光断"有修改按钮"不够 —— 要从这条路径真改一次，并量它落库。
+      await tester.tap(
+        find.byKey(const Key('keyboard-shortcuts-edit-showShortcuts')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('keyboard-shortcuts-capture-showShortcuts')),
+        findsOneWidget,
+        reason: '点「修改」要进入"等你按下新组合键"的捕获态',
+      );
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+
+      final stored = await fixture.container.read(
+        shortcutOverridesProvider.future,
+      );
+      expect(
+        stored['showShortcuts'],
+        'ctrl+alt+0x6a',
+        reason: '从帮助进去改的键必须落库，否则那句"可以修改"只活在这一次打开里',
       );
     });
 

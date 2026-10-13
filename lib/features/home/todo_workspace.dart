@@ -149,9 +149,13 @@ class TodoWorkspace extends StatelessWidget {
                         hint: '按名称或关键词搜索任务',
                         run: () => unawaited(_openSearch(context)),
                       ),
+                    // 嘀嗒《08-桌面快捷键.md》`:28`「在「指令菜单」-「帮助」-
+                    // 「显示键盘快捷键」打开快捷键界面，可以修改」⇒ 这条不属于"前往某模块"，
+                    // 要归在一层叫「帮助」的组里；平铺着列就只有同名命令、没有那条路径。
                     TodoPaletteCommand(
                       label: '显示键盘快捷键',
                       hint: '列出现今生效的键位',
+                      group: '帮助',
                       run: () => unawaited(_showKeyboardShortcuts(context)),
                     ),
                   ],
