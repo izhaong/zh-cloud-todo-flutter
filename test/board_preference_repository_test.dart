@@ -150,6 +150,9 @@ void main() {
     expect(jsonDecode(payload['columnsJson'] as String), {
       'order': ['urgent', 'doing', 'todo', 'archive'],
       'collapsed': ['archive', 'todo'],
+      // 显示设置两键随 layout JSON 走（specs/119）。
+      'columnWidth': 'medium',
+      'showColumnInput': false,
     });
   });
 }
