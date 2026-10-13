@@ -19,6 +19,7 @@ class TaskWorkspacePreference {
     this.showHeatmap,
     this.timelineColorBy,
     this.calendarColorBy,
+    this.quadrantTaskSort = const {},
   });
 
   final String? viewType;
@@ -39,6 +40,12 @@ class TaskWorkspacePreference {
   /// 日历任务块着色轴（嘀嗒《08-常见问题》:58；specs/124，矩阵 #31）。
   /// 同 timelineColorBy 的三档；null 读侧按「按优先级」处理。
   final String? calendarColorBy;
+
+  /// 四象限每象限的任务排序档（嘀嗒《02-如何编辑四象限规则.md》:135-:136
+  /// 「如何调整四象限的任务顺序？…『排序』，可选择排序方式」；specs/127，
+  /// 矩阵 #36 面 ⑪）。key 是象限名（q1..q4），value 是 `TaskSort.name`；
+  /// 缺档读侧保持分桶输入顺序（现状锁）。
+  final Map<String, String> quadrantTaskSort;
 }
 
 /// B4 任务视图共享写操作。
@@ -131,6 +138,37 @@ class TaskViewActionRepository {
         'timelineZoom': zoom,
         'timelineScale': scale,
         'collapsedTimelineGroupIds': normalizedGroupIds,
+      },
+    );
+  }
+
+  /// 四象限单象限的排序档（specs/127，矩阵 #36 面 ⑪）：patch 合并语义
+  /// 保留其它象限已存的档；档名不在 `TaskSort` 白名单的写入被拒。
+  Future<void> saveQuadrantTaskSort({
+    required String sourceKey,
+    required String quadrant,
+    required String sort,
+    required Map<String, String> current,
+  }) {
+    if (!const {
+      'smart',
+      'priorityDesc',
+      'dueDate',
+      'title',
+      'createdAt',
+      'updatedAt',
+      'tag',
+    }.contains(sort)) {
+      throw ArgumentError.value(sort, 'sort', '未知排序档');
+    }
+    if (!const {'q1', 'q2', 'q3', 'q4'}.contains(quadrant)) {
+      throw ArgumentError.value(quadrant, 'quadrant', '象限名必须是 q1..q4');
+    }
+    return _saveViewPreference(
+      sourceType: 'task_view',
+      sourceKey: sourceKey,
+      preferencePatch: {
+        'quadrantTaskSort': {...current, quadrant: sort},
       },
     );
   }
@@ -315,6 +353,11 @@ class TaskViewActionRepository {
       calendarColorBy: value['calendarColorBy'] is String
           ? value['calendarColorBy'] as String
           : null,
+      quadrantTaskSort: value['quadrantTaskSort'] is Map
+          ? (value['quadrantTaskSort'] as Map).map(
+              (k, v) => MapEntry(k.toString(), v.toString()),
+            )
+          : const {},
     );
   }
 
