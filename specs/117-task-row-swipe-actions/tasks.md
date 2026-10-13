@@ -35,9 +35,10 @@
 
 本轮 PR !602 正文写的 `+1922 ~26 -1`（"唯一那 1 项红是 `raw_error_text_gate_test`"）**读少了**：
 `flutter test` 的 compact reporter 只在计数非零时才打 `~N`/`-N`，
-且末行经常是失败清单摘要或"还没并完"的那一拍 ⇒ 读末行必然偏小。
-尺子已经进仓：`bash tool/gate_counts.sh --selftest`（两条罐头样本，其中含被省略的 `~`/`-` 段）
-与 `bash tool/gate_counts.sh <日志>` 取整份日志 `+N ~N -N` 的最大值。
+而"读最后一行"真正的坑是**读了进程还没写完的日志尾部**——完整日志的末行其实带的是全数。
+尺子已经进仓：`bash tool/gate_counts.sh <日志>` 一次报三件事
+（`last` 末条进度行、`max` 全日志峰值、`complete` 有无终止标记），
+复算 `bash tool/gate_counts.sh --selftest` ⇒ `SELFTEST PASS`（四条样本，含拼接日志与没写完的日志）。
 
 现读数（`bash tool/gate_counts.sh` 量的日志）：
 
