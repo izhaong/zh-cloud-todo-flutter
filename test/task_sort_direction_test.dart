@@ -487,7 +487,9 @@ void main() {
 
     // 验收③：切方向不许动其它视图的既有顺序。看板按优先级分列、时间线按日期分组，
     // 都不该读到这个方向参数（`compareTodoTasks` 在本仓只有列表铺平与仓储 filter 两处调用）。
-    for (final modeLabel in const ['看板', '时间线']) {
+    // specs/122 之后智能清单不再提供时间线档（嘀嗒 :10），本工作区只验看板；
+    // 时间线的等价断言由 timeline_smart_list_guard_test 在真实清单上覆盖。
+    for (final modeLabel in const ['看板']) {
       await tester.tap(find.byKey(const Key('todo-view-menu')));
       await tester.pumpAndSettle();
       await tester.tap(find.text(modeLabel));
