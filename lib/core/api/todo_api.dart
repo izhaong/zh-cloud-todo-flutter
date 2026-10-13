@@ -308,6 +308,129 @@ class TodoTaskReorderItem {
 }
 
 /// 任务动作：完成 / 取消完成 / 重排顺序（直接 REST）。
+
+/// 日历增强信息（农历 / 节假日；specs/125，矩阵 #31 ①）。
+///
+/// 判据源《02-日历/06-日历显示设置.md》:5-21——「在『设置』-『日期与时间』里
+/// 开启『显示农历』和『显示节假日调休』」。服务端端点已存在：
+/// `GET /todo/calendar/holidays?year&region`、`GET /todo/calendar/lunar-date?date`
+/// （`AppTodoCalendarController`）。
+class CalendarInfoApi {
+  CalendarInfoApi(this._client);
+
+  final ApiClient _client;
+
+  static const _holidaysPath = '/calendar/holidays';
+  static const _lunarPath = '/calendar/lunar-date';
+
+  String _formatDate(DateTime value) =>
+      '${value.year.toString().padLeft(4, '0')}-'
+      '${value.month.toString().padLeft(2, '0')}-'
+      '${value.day.toString().padLeft(2, '0')}';
+
+  dynamic _data(dynamic body) =>
+      body is Map<String, dynamic> && body.containsKey('code')
+      ? body['data']
+      : body;
+
+  /// 一年的节假日/调休表（含日期、名称、isHoliday/isWorkday）。
+  Future<List<CalendarHoliday>> holidays({
+    required int year,
+    String? region,
+  }) async {
+    final response = await _client.get<dynamic>(
+      _holidaysPath,
+      query: {
+        'year': year,
+        if (region != null && region.isNotEmpty) 'region': region,
+      },
+    );
+    final rows = _data(response.data);
+    return rows is List
+        ? rows
+              .whereType<Map>()
+              .map(
+                (row) =>
+                    CalendarHoliday.fromJson(Map<String, dynamic>.from(row)),
+              )
+              .toList(growable: false)
+        : const <CalendarHoliday>[];
+  }
+
+  /// 单日农历（含节气/干支）。月视图一格 42 天会打多次 —— 调用方按可见月缓存。
+  Future<CalendarLunarDate?> lunarDate(DateTime date) async {
+    final response = await _client.get<dynamic>(
+      _lunarPath,
+      query: {'date': _formatDate(date)},
+    );
+    final data = _data(response.data);
+    if (data is! Map) return null;
+    return CalendarLunarDate.fromJson(Map<String, dynamic>.from(data));
+  }
+}
+
+/// 节假日/调休一行（`AppTodoCalendarHolidayVO`）。
+class CalendarHoliday {
+  const CalendarHoliday({
+    required this.date,
+    this.name,
+    this.isHoliday = false,
+    this.isWorkday = false,
+  });
+
+  final DateTime date;
+  final String? name;
+
+  /// true = 休（放假）；false 且 isWorkday = 班（调休上班）。
+  final bool isHoliday;
+  final bool isWorkday;
+
+  static DateTime _parseDate(dynamic value) {
+    final raw = value?.toString() ?? '';
+    final parts = raw.split('-');
+    if (parts.length == 3) {
+      final y = int.tryParse(parts[0]);
+      final m = int.tryParse(parts[1]);
+      final d = int.tryParse(parts[2]);
+      if (y != null && m != null && d != null) {
+        return DateTime(y, m, d);
+      }
+    }
+    return DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  factory CalendarHoliday.fromJson(Map<String, dynamic> json) =>
+      CalendarHoliday(
+        date: _parseDate(json['date']),
+        name: json['name']?.toString(),
+        isHoliday: json['isHoliday'] == true,
+        isWorkday: json['isWorkday'] == true,
+      );
+}
+
+/// 单日农历（`AppTodoCalendarLunarRespVO`）。
+class CalendarLunarDate {
+  const CalendarLunarDate({
+    required this.date,
+    this.lunarDate,
+    this.solarTerm,
+    this.ganZhi,
+  });
+
+  final DateTime date;
+  final String? lunarDate;
+  final String? solarTerm;
+  final String? ganZhi;
+
+  factory CalendarLunarDate.fromJson(Map<String, dynamic> json) =>
+      CalendarLunarDate(
+        date: CalendarHoliday._parseDate(json['date']),
+        lunarDate: json['lunarDate']?.toString(),
+        solarTerm: json['solarTerm']?.toString(),
+        ganZhi: json['ganZhi']?.toString(),
+      );
+}
+
 class TaskRestApi {
   TaskRestApi(this._client);
 
@@ -1092,7 +1215,8 @@ class TodoRestApi {
       note = NoteApi(client),
       calSubscription = CalendarSubscriptionApi(client),
       taskImport = TodoTaskImportApi(client),
-      security = SecurityApi(client);
+      security = SecurityApi(client),
+      calendarInfo = CalendarInfoApi(client);
 
   final TaskRestApi task;
   final TodoTaskBatchApi taskBatch;
@@ -1110,6 +1234,7 @@ class TodoRestApi {
   final TaskCommentApi comment;
   final NoteApi note;
   final CalendarSubscriptionApi calSubscription;
+  final CalendarInfoApi calendarInfo;
   final TodoTaskImportApi taskImport;
   final SecurityApi security;
 }

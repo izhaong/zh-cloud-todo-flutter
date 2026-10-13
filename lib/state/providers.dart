@@ -37,6 +37,7 @@ import 'repositories/task_grouping_preference_repository.dart';
 import 'repositories/task_sort_preference_repository.dart';
 import 'repositories/task_swipe_preference_repository.dart';
 import 'repositories/sidebar_visibility_repository.dart';
+import 'repositories/calendar_info_preference_repository.dart';
 import 'repositories/task_view_action_repository.dart';
 import 'repositories/timezone_preference_repository.dart';
 import 'repositories/week_start_preference_repository.dart';
@@ -426,6 +427,48 @@ final timezoneEnabledProvider = StreamProvider<bool>((ref) {
   if (repo == null) return Stream.value(true);
   return repo.watch();
 });
+
+final calendarInfoPreferenceRepositoryProvider =
+    Provider<CalendarInfoPreferenceRepository?>((ref) {
+      final db = ref.watch(appDatabaseProvider);
+      final queue = ref.watch(syncChangeQueueProvider);
+      if (db == null || queue == null) return null;
+      return CalendarInfoPreferenceRepository(db, queue);
+    });
+
+/// 一年节假日/调休表（`GET /todo/calendar/holidays`；specs/125）。
+final calendarHolidaysProvider = FutureProvider.autoDispose
+    .family<List<CalendarHoliday>, int>((ref, year) async {
+      final api = ref.watch(todoApiProvider).calendarInfo;
+      return api.holidays(year: year);
+    });
+
+/// 一段日期区间的农历表（按天打 `/lunar-date`，调用方按月缓存）。
+final calendarLunarMonthProvider = FutureProvider.autoDispose
+    .family<Map<DateTime, CalendarLunarDate>, DateTime>((
+      ref,
+      firstOfMonth,
+    ) async {
+      final api = ref.watch(todoApiProvider).calendarInfo;
+      final daysInMonth = DateTime(
+        firstOfMonth.year,
+        firstOfMonth.month + 1,
+        0,
+      ).day;
+      final result = <DateTime, CalendarLunarDate>{};
+      for (var day = 1; day <= daysInMonth; day++) {
+        final date = DateTime(firstOfMonth.year, firstOfMonth.month, day);
+        final lunar = await api.lunarDate(date);
+        if (lunar != null) result[date] = lunar;
+      }
+      return result;
+    });
+
+final calendarInfoFlagsProvider = StreamProvider.autoDispose<CalendarInfoFlags>(
+  (ref) =>
+      ref.watch(calendarInfoPreferenceRepositoryProvider)?.watch() ??
+      const Stream<CalendarInfoFlags>.empty(),
+);
 
 final weekStartPreferenceRepositoryProvider =
     Provider<WeekStartPreferenceRepository?>((ref) {

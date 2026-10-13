@@ -8,6 +8,7 @@ import '../../../core/theme/brand_colors.dart';
 import '../../../core/time/task_time_formatter.dart';
 import '../../../core/time/task_time_mode.dart';
 import '../../../core/time/week_start.dart';
+import '../../../core/api/todo_api.dart';
 import '../../../core/widgets/app_widgets.dart';
 import 'timeline_color.dart';
 import '../../../state/providers.dart';
@@ -97,6 +98,32 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
     // FR-7：首值未到达或读失败都退回默认档（周一 = develop 既有行为）。
     // 这里不能用 when(error:)，那条分支会丢掉 AsyncError 里留存的旧值。
     final firstDay = resolveWeekStartFirstDay(ref.watch(weekStartProvider));
+    // 农历/节假日（specs/125）：开关读偏好仓；数据按锚点月/年拉取（autoDispose
+    // 缓存，月内重复进不出网）。拉取失败按无数据渲染（日历主体不受影响）。
+    final infoFlags = ref.watch(calendarInfoFlagsProvider).valueOrNull;
+    final showLunar = infoFlags?.showLunar ?? false;
+    final showHolidays = infoFlags?.showHolidays ?? false;
+    final lunarByDay = showLunar
+        ? ref
+                  .watch(
+                    calendarLunarMonthProvider(
+                      DateTime(_anchor.year, _anchor.month, 1),
+                    ),
+                  )
+                  .valueOrNull ??
+              const <DateTime, CalendarLunarDate>{}
+        : const <DateTime, CalendarLunarDate>{};
+    final holidaysByDay = showHolidays
+        ? {
+            for (final holiday
+                in ref
+                        .watch(calendarHolidaysProvider(_anchor.year))
+                        .valueOrNull ??
+                    const <CalendarHoliday>[])
+              DateTime(holiday.date.year, holiday.date.month, holiday.date.day):
+                  holiday,
+          }
+        : const <DateTime, CalendarHoliday>{};
     return Column(
       children: [
         _Toolbar(
@@ -121,6 +148,10 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
               firstDay: firstDay,
               tasks: _visibleTasks,
               colorBy: _colorBy,
+              showLunar: showLunar,
+              showHolidays: showHolidays,
+              lunarByDay: lunarByDay,
+              holidaysByDay: holidaysByDay,
               listColorHexOf: (task) => ref
                   .watch(listsStreamProvider)
                   .valueOrNull
@@ -704,11 +735,22 @@ class _MonthGrid extends StatelessWidget {
     this.colorBy = TimelineColorBy.priority,
     this.listColorHexOf,
     this.tagColorHexOf,
+    this.showLunar = false,
+    this.showHolidays = false,
+    this.lunarByDay = const {},
+    this.holidaysByDay = const {},
   });
 
   final DateTime anchor;
   final int firstDay;
   final List<TodoTask> tasks;
+
+  /// 农历/节假日（specs/125，矩阵 #31 面 ①）：开关在「设置-日期与时间」，
+  /// 数据由页面按可见月/年拉取后传入。
+  final bool showLunar;
+  final bool showHolidays;
+  final Map<DateTime, CalendarLunarDate> lunarByDay;
+  final Map<DateTime, CalendarHoliday> holidaysByDay;
   final ValueChanged<DateTime> onDayTap;
   final Future<void> Function(TodoTask task, DateTime dueAt)? onTaskDateChanged;
 
@@ -757,6 +799,11 @@ class _MonthGrid extends StatelessWidget {
                         colorBy: colorBy,
                         listColorHexOf: listColorHexOf,
                         tagColorHexOf: tagColorHexOf,
+                        showLunar: showLunar,
+                        showHolidays: showHolidays,
+                        lunar: lunarByDay[DateTime(d.year, d.month, d.day)],
+                        holiday:
+                            holidaysByDay[DateTime(d.year, d.month, d.day)],
                       ),
                     ),
                 ],
@@ -801,11 +848,21 @@ class _DayCell extends StatelessWidget {
     this.colorBy = TimelineColorBy.priority,
     this.listColorHexOf,
     this.tagColorHexOf,
+    this.showLunar = false,
+    this.showHolidays = false,
+    this.lunar,
+    this.holiday,
   });
   final DateTime day;
   final DateTime anchor;
   final List<TodoTask> tasks;
   final VoidCallback onTap;
+
+  /// 农历/节假日当日数据（specs/125）。
+  final bool showLunar;
+  final bool showHolidays;
+  final CalendarLunarDate? lunar;
+  final CalendarHoliday? holiday;
   final Future<void> Function(TodoTask task, DateTime dueAt)? onTaskDateChanged;
 
   /// 着色轴与两条 hex 解析闭包（specs/124）；null 取色回退优先级轴。
@@ -853,18 +910,56 @@ class _DayCell extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '${day.day}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isToday
-                        ? colors.accent
-                        : isCurrentMonth
-                        ? colors.foreground
-                        : colors.mutedForeground,
-                    fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${day.day}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isToday
+                            ? colors.accent
+                            : isCurrentMonth
+                            ? colors.foreground
+                            : colors.mutedForeground,
+                        fontWeight: isToday
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                      ),
+                    ),
+                    const Spacer(),
+                    if (showHolidays && holiday != null)
+                      Text(
+                        // 嘀嗒口径：休/班角标。holiday.name 已是「国庆节」等
+                        // 名称，格内空间小，取一字或「班」。
+                        holiday!.isHoliday ? '休' : '班',
+                        key: ValueKey(
+                          'calendar-holiday-${day.month}-${day.day}',
+                        ),
+                        style: TextStyle(
+                          fontSize: 8,
+                          fontWeight: FontWeight.w600,
+                          color: holiday!.isHoliday
+                              ? colors.destructive
+                              : colors.info,
+                        ),
+                      ),
+                  ],
                 ),
+                if (showLunar)
+                  Text(
+                    // 农历行：lunarDate 形如「六月初三」；节气优先展示。
+                    (lunar?.solarTerm?.isNotEmpty ?? false)
+                        ? lunar!.solarTerm!
+                        : (lunar?.lunarDate ?? ''),
+                    key: ValueKey('calendar-lunar-${day.month}-${day.day}'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 8,
+                      color: colors.mutedForeground,
+                    ),
+                  ),
                 if (tasks.isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Expanded(
