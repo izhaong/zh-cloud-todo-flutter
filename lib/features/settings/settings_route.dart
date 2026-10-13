@@ -11,6 +11,7 @@ import '../../core/theme/brand_colors.dart';
 import '../../core/time/week_start.dart';
 import '../../core/widgets/app_widgets.dart';
 import '../../state/providers.dart';
+import '../../state/repositories/calendar_info_preference_repository.dart';
 import '../../state/repositories/task_capture_defaults_repository.dart';
 import '../../state/repositories/sidebar_visibility_repository.dart';
 import '../../state/session_state.dart';
@@ -193,6 +194,14 @@ class SettingsRoute extends ConsumerWidget {
                   onTap: () => _pickWeekStart(context, ref),
                 ),
                 _TimezonePreferenceTile(),
+                _CalendarInfoToggleTile(
+                  key: const Key('todo-settings-show-lunar'),
+                  title: '显示农历',
+                ),
+                _CalendarInfoToggleTile(
+                  key: const Key('todo-settings-show-holidays'),
+                  title: '显示节假日调休',
+                ),
               ],
             ),
           ),
@@ -683,31 +692,13 @@ class _TaskCaptureDefaultsPageState
                     border: OutlineInputBorder(),
                   ),
                   items: const [
-                    DropdownMenuItem<int?>(
-                      value: null,
-                      child: Text('不提醒'),
-                    ),
+                    DropdownMenuItem<int?>(value: null, child: Text('不提醒')),
                     DropdownMenuItem<int?>(value: 0, child: Text('准时')),
-                    DropdownMenuItem<int?>(
-                      value: 5,
-                      child: Text('提前 5 分钟'),
-                    ),
-                    DropdownMenuItem<int?>(
-                      value: 15,
-                      child: Text('提前 15 分钟'),
-                    ),
-                    DropdownMenuItem<int?>(
-                      value: 30,
-                      child: Text('提前 30 分钟'),
-                    ),
-                    DropdownMenuItem<int?>(
-                      value: 60,
-                      child: Text('提前 1 小时'),
-                    ),
-                    DropdownMenuItem<int?>(
-                      value: 120,
-                      child: Text('提前 2 小时'),
-                    ),
+                    DropdownMenuItem<int?>(value: 5, child: Text('提前 5 分钟')),
+                    DropdownMenuItem<int?>(value: 15, child: Text('提前 15 分钟')),
+                    DropdownMenuItem<int?>(value: 30, child: Text('提前 30 分钟')),
+                    DropdownMenuItem<int?>(value: 60, child: Text('提前 1 小时')),
+                    DropdownMenuItem<int?>(value: 120, child: Text('提前 2 小时')),
                   ],
                   onChanged: (value) => setState(
                     () => _defaults = TaskCaptureDefaults(
@@ -767,6 +758,62 @@ class _TimezonePreferenceTile extends ConsumerWidget {
     } catch (_) {
       messenger.showSnackBar(const SnackBar(content: Text('时区设置未保存')));
     }
+  }
+}
+
+/// 「显示农历 / 显示节假日调休」开关（嘀嗒《06-日历显示设置》:5-21；
+/// specs/125，矩阵 #31 面 ①）。两个布尔位同仓一行偏好（CALENDAR_INFO/global）。
+class _CalendarInfoToggleTile extends ConsumerStatefulWidget {
+  const _CalendarInfoToggleTile({super.key, required this.title});
+
+  final String title;
+
+  @override
+  ConsumerState<_CalendarInfoToggleTile> createState() =>
+      _CalendarInfoToggleTileState();
+}
+
+class _CalendarInfoToggleTileState
+    extends ConsumerState<_CalendarInfoToggleTile> {
+  @override
+  Widget build(BuildContext context) {
+    final colors = brandColors(context);
+    final flags = ref.watch(calendarInfoFlagsProvider).valueOrNull;
+    final showLunar = flags?.showLunar ?? false;
+    final showHolidays = flags?.showHolidays ?? false;
+    final isLunarTile = widget.title == '显示农历';
+    final value = isLunarTile ? showLunar : showHolidays;
+    return Material(
+      type: MaterialType.transparency,
+      child: SwitchListTile(
+        secondary: Icon(
+          isLunarTile ? Icons.nights_stay_outlined : Icons.event_outlined,
+          color: colors.mutedForeground,
+        ),
+        title: Text(widget.title),
+        value: value,
+        onChanged: (next) async {
+          final repo = ref.read(calendarInfoPreferenceRepositoryProvider);
+          if (repo == null) return;
+          final current =
+              flags ??
+              const CalendarInfoFlags(showLunar: false, showHolidays: false);
+          final messenger = ScaffoldMessenger.maybeOf(context);
+          try {
+            await repo.save(
+              CalendarInfoFlags(
+                showLunar: isLunarTile ? next : current.showLunar,
+                showHolidays: isLunarTile ? current.showHolidays : next,
+              ),
+            );
+          } catch (_) {
+            messenger?.showSnackBar(
+              const SnackBar(content: Text('设置保存失败，请重试')),
+            );
+          }
+        },
+      ),
+    );
   }
 }
 
