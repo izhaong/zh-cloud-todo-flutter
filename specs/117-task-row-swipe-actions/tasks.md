@@ -43,7 +43,7 @@
 现读数（`bash tool/gate_counts.sh` 量的日志）：
 
 - 产物全量：`flutter test --no-pub 2>&1 | tee /tmp/gate.log | tail -1 >/dev/null; bash tool/gate_counts.sh /tmp/gate.log`
-  ⇒ `pass=1935 skip=26 fail=5`（specs/118 分支并过 develop 之后）
+  ⇒ `pass=1935 skip=26 fail=5`（specs/119 那笔并过 develop 之后；号原来与看板的 specs/118-kanban-grouping-axis 撞了，本笔改成 119）
 - develop 单独跑同一条命令（在 `git worktree add --detach /tmp/wt-fl-298dev origin/develop` 里）
   ⇒ `pass=1931 skip=26 fail=5`
 
