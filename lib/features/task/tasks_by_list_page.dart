@@ -27,6 +27,7 @@ import '../shell/quick_add_bar.dart';
 import '../tag/hash_tag_input.dart';
 import 'list_drop_target.dart';
 import '../list/list_properties.dart';
+import 'kanban_axis_move.dart';
 import 'smart_grouping.dart';
 import 'subtask_flow.dart';
 import 'task_subtask_drop.dart';
@@ -121,6 +122,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       }
     });
   }
+
   bool _batchApplying = false;
   String? _batchSelectionAnchorTaskId;
   final Set<String> _batchSelectedTaskIds = <String>{};
@@ -256,8 +258,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     // 顶层那条流一字不改、子级另走一条：筛选、计数、看板/时间线那些面的既有口径
     // 都是「顶层任务 = 列表项」，把子级混进同一条流会顺带改掉它们的语义。
     final subtasks = listId == null
-        ? ref.watch(allSubtasksStreamProvider).valueOrNull ??
-              const <TodoTask>[]
+        ? ref.watch(allSubtasksStreamProvider).valueOrNull ?? const <TodoTask>[]
         : ref.watch(subtasksByListProvider(listId)).valueOrNull ??
               const <TodoTask>[];
 
@@ -597,10 +598,36 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
                     .watch(boardPreferenceRecoveryAvailableProvider(listId))
                     .valueOrNull ??
                 false);
+        // 嘀嗒《02-看板视图：分类管理任务》:55/:59/:78「排序中选择 时间+优先级 /
+        // 清单+时间 / 指派人+时间」（specs/118，矩阵 #15 面 ⑦）：排序菜单选的
+        // 智能分组轴在看板里就是「列」。清单里建了分组（sections 非空）仍是
+        // 分组模式——轴列只在无分组清单与智能清单上生效。
+        final kanbanSmartGroups =
+            taskSections.isEmpty && grouping != SmartGrouping.none
+            ? groupTasksSmartly(
+                items,
+                grouping: grouping,
+                now: now,
+                listNameOf: (task) => listNamesById[task.listId],
+                tagNamesOf: (task) => (taskTags?[task.id] ?? const {})
+                    .map((tagId) => tagNamesById[tagId])
+                    .whereType<String>()
+                    .toSet(),
+              )
+            : null;
         return KanbanView(
           tasks: items,
           listId: listId,
           sections: taskSections,
+          smartGroups: kanbanSmartGroups,
+          onSmartGroupMove: kanbanSmartGroups == null
+              ? null
+              : (task, groupId) => _moveKanbanTaskToAxisGroup(
+                  task,
+                  groupId,
+                  grouping: grouping,
+                  now: now,
+                ),
           onTaskSectionMove: (task, sectionId) async {
             final repository = ref.read(taskViewActionRepositoryProvider);
             if (repository == null) return;
@@ -1752,6 +1779,41 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       ..showSnackBar(SnackBar(content: Text(reminderMessage)));
   }
 
+  /// 看板「智能分组轴」列之间的拖拽写回（specs/118，矩阵 #15 面 ⑦）。
+  ///
+  /// 桶→字段的换算在 [kanbanAxisMove]（纯函数，可单测）；这里只负责
+  /// 拿仓储与清单目录，把结果转成 `TaskRepository.update`。
+  Future<bool> _moveKanbanTaskToAxisGroup(
+    TodoTask task,
+    String groupId, {
+    required SmartGrouping grouping,
+    required DateTime now,
+  }) async {
+    final repository = ref.read(taskRepositoryProvider);
+    if (repository == null) {
+      throw StateError('任务功能当前不可用');
+    }
+    final result = kanbanAxisMove(
+      grouping: grouping,
+      groupId: groupId,
+      task: task,
+      lists: ref.read(listsStreamProvider).valueOrNull ?? const [],
+      now: now,
+    );
+    if (result is KanbanAxisUnsupportedError) {
+      throw StateError(result.message);
+    }
+    result as KanbanAxisUpdate;
+    await repository.update(
+      task.id,
+      dueAt: result.dueAt,
+      clearDueAt: result.clearDueAt,
+      priority: result.priority,
+      listId: result.listId,
+    );
+    return true;
+  }
+
   Future<void> _createTaskSection() async {
     final listId = _selectedListId;
     if (listId == null) return;
@@ -2040,10 +2102,9 @@ class _ListBodyState extends State<_ListBody> {
   }
 
   /// 这一行的直接子级（未排序）。子级流由页面那层给，这里只按 parentTaskId 归堆。
-  List<TodoTask> _directChildrenOf(String parentId) =>
-      widget.subtasks
-          .where((task) => task.parentTaskId == parentId)
-          .toList(growable: false);
+  List<TodoTask> _directChildrenOf(String parentId) => widget.subtasks
+      .where((task) => task.parentTaskId == parentId)
+      .toList(growable: false);
 
   /// 同一父级下的兄弟序列。排序口径与顶层一致：
   /// 手动顺序在场时按 `_orderedIds` 里的相对位次，否则走列头的比较器。
@@ -2062,7 +2123,8 @@ class _ListBodyState extends State<_ListBody> {
       return _orderedIds.length + (fallback[id] ?? fallback.length);
     }
 
-    final sorted = [...siblings]..sort((a, b) => rankOf(a.id).compareTo(rankOf(b.id)));
+    final sorted = [...siblings]
+      ..sort((a, b) => rankOf(a.id).compareTo(rankOf(b.id)));
     return sorted;
   }
 
@@ -2242,7 +2304,9 @@ class _ListBodyState extends State<_ListBody> {
           rowNodeByIndex[entries.length] = node;
           entries.add(node.task);
           rowKeys.add(
-            ValueKey(smartGrouped ? '${group.id}:${node.task.id}' : node.task.id),
+            ValueKey(
+              smartGrouped ? '${group.id}:${node.task.id}' : node.task.id,
+            ),
           );
         }
       }

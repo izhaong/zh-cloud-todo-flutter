@@ -8,6 +8,7 @@ import '../../../core/theme/brand_colors.dart';
 import '../../../core/time/task_time_formatter.dart';
 import '../../../core/time/task_time_mode.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../smart_grouping.dart';
 import '../task_assign_action.dart';
 import '../task_detail_page.dart';
 import '../task_quick_add_sheet.dart';
@@ -57,6 +58,8 @@ class KanbanView extends ConsumerWidget {
     this.onSectionRename,
     this.onSectionCreate,
     this.onSectionDelete,
+    this.smartGroups,
+    this.onSmartGroupMove,
   });
 
   /// 渲染用的任务列表（已应用 list/filter 的客户端过滤结果）。
@@ -90,14 +93,33 @@ class KanbanView extends ConsumerWidget {
   final VoidCallback? onSectionCreate;
   final void Function(TodoTaskSection section)? onSectionDelete;
 
+  /// 「智能分组」轴开列（嘀嗒《02-看板视图：分类管理任务》`:55`/`:59`/`:78`
+  /// 「排序中选择 时间+优先级 / 清单+时间 / 指派人+时间」；specs/118，矩阵 #15 面 ⑦）。
+  /// 非空即进入「按轴开列」模式，优先级高于 sections（嘀嗒把「自定义」作排序里
+  /// 的一档，但本端 sections 是清单级实体，两者并存时以显式选择的轴为先会丢
+  /// 分组管理入口 ⇒ 反过来：轴列只在 sections 为空时生效，清单里建了分组就
+  /// 仍是分组模式，与上一版行为一致）。
+  final List<SmartTaskGroup>? smartGroups;
+
+  /// 轴列之间的拖拽写回：把 [TodoTask] 挪进 `groupId` 那一列。
+  /// 写哪个字段由调用方按轴决定（byTime→dueAt 桶代表日、byPriority→priority、
+  /// byList→moveToList；byAssignee/byTag/byCreatedAt 这三轴不给拖）。
+  final Future<void> Function(TodoTask task, String groupId)? onSmartGroupMove;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sectionMode = sections.isNotEmpty;
     final sectionById = {for (final section in sections) section.id: section};
+    final smartMode =
+        !sectionMode && smartGroups != null && smartGroups!.isNotEmpty;
     final columns = sectionMode
         ? _sectionColumns(sections, tasks)
+        : smartMode
+        ? _smartColumns(smartGroups!)
         : _priorityColumns(tasks);
     final ordered = sectionMode
+        ? columns
+        : smartMode
         ? columns
         : _applyPreferredOrder(columns, orderedColumnIds);
 
@@ -138,6 +160,7 @@ class KanbanView extends ConsumerWidget {
                       onMoveLeft:
                           _canMoveColumn(
                             sectionMode: sectionMode,
+                            smartMode: smartMode,
                             ordered: ordered,
                             index: index,
                             delta: -1,
@@ -147,6 +170,7 @@ class KanbanView extends ConsumerWidget {
                       onMoveRight:
                           _canMoveColumn(
                             sectionMode: sectionMode,
+                            smartMode: smartMode,
                             ordered: ordered,
                             index: index,
                             delta: 1,
@@ -164,8 +188,29 @@ class KanbanView extends ConsumerWidget {
                         onSectionDelete,
                       ),
                       onCardTap: (t) => _openDetail(context, t),
-                      onCardMove: !sectionMode
-                          ? (onTaskMove == null
+                      onCardMove: sectionMode
+                          ? (onTaskSectionMove == null
+                                ? null
+                                : (task) => _moveTask(
+                                    context,
+                                    task,
+                                    write: () => onTaskSectionMove!(
+                                      task,
+                                      ordered[index].sectionId,
+                                    ),
+                                  ))
+                          : smartMode
+                          ? (onSmartGroupMove == null
+                                ? null
+                                : (task) => _moveTask(
+                                    context,
+                                    task,
+                                    write: () => onSmartGroupMove!(
+                                      task,
+                                      ordered[index].id,
+                                    ),
+                                  ))
+                          : (onTaskMove == null
                                 ? null
                                 : (task) => _moveTask(
                                     context,
@@ -175,33 +220,25 @@ class KanbanView extends ConsumerWidget {
                                       ordered[index].priority,
                                       ordered[index].completed,
                                     ),
-                                  ))
-                          : (onTaskSectionMove == null
-                                ? null
-                                : (task) => _moveTask(
-                                    context,
-                                    task,
-                                    write: () => onTaskSectionMove!(
-                                      task,
-                                      ordered[index].sectionId,
-                                    ),
                                   )),
                       onTasksReordered: onColumnTasksReordered == null
                           ? null
                           : (taskIds) => _reorderTasks(context, taskIds),
-                      onAdd: !sectionMode
-                          ? (ordered[index].key == const ValueKey('col-todo') &&
-                                    listId != null
-                                ? () => _quickAdd(context, ref, listId!)
-                                : null)
-                          : (listId == null
+                      onAdd: sectionMode
+                          ? (listId == null
                                 ? null
                                 : () => _quickAdd(
                                     context,
                                     ref,
                                     listId!,
                                     sectionId: ordered[index].sectionId,
-                                  )),
+                                  ))
+                          : smartMode
+                          ? null
+                          : (ordered[index].key == const ValueKey('col-todo') &&
+                                    listId != null
+                                ? () => _quickAdd(context, ref, listId!)
+                                : null),
                       onAssignCard: (task) =>
                           openTaskAssignAction(context, ref, task),
                     ),
@@ -216,6 +253,24 @@ class KanbanView extends ConsumerWidget {
 
   /// 「未分组」列的列 id：`TodoTaskSection.id` 是本地 UUID，不会与这个字面量相撞。
   static const unsectionedColumnId = 'unsectioned';
+
+  /// 按智能分组轴开列（specs/118）：一列一个 [SmartTaskGroup]。
+  ///
+  /// 列颜色统一用中性色——轴是动态桶（时间/清单/指派人…），没有像优先级四档
+  /// 那样的固定语义色；列 id 直接用组 id（`time-今天` / `prio-高优先级` /
+  /// `list-<清单名>`…），调用方按前缀分派写回字段。
+  static List<_KanbanColumnData> _smartColumns(List<SmartTaskGroup> groups) => [
+    for (final group in groups)
+      _KanbanColumnData(
+        id: group.id,
+        key: ValueKey('col-${group.id}'),
+        title: group.title,
+        color: Colors.blueGrey,
+        priority: 0,
+        completed: false,
+        tasks: group.tasks,
+      ),
+  ];
 
   /// 按 priority 分组的固定四列（清单没有分组时的默认分组方式）。
   static List<_KanbanColumnData> _priorityColumns(List<TodoTask> tasks) => [
@@ -312,12 +367,14 @@ class KanbanView extends ConsumerWidget {
   /// 既自己不可移动（它不在 `TodoTaskSection` 里），也不能被换进分组序列。
   bool _canMoveColumn({
     required bool sectionMode,
+    required bool smartMode,
     required List<_KanbanColumnData> ordered,
     required int index,
     required int delta,
   }) {
     final target = index + delta;
     if (target < 0 || target >= ordered.length) return false;
+    if (smartMode) return false;
     if (!sectionMode) return onColumnOrderChanged != null;
     if (onSectionOrderChanged == null) return false;
     return ordered[index].sectionId != null &&
