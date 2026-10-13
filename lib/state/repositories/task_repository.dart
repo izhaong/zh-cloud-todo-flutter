@@ -32,6 +32,26 @@ class TaskRepository {
         .watch();
   }
 
+  /// 本清单里**所有非顶层**的任务（子、孙……任意层级）。清单页把顶层流与这条流并起来
+  /// 才能渲染子任务树（嘀嗒《…06-多级任务.md》:78/:86「展开或者收起任务下的所有子任务」）。
+  /// 子孙任务的 `listId` 与父任务一致（`reparent` 不改清单），所以按 listId 取一次
+  /// 就够整棵树，不必逐父开一条 stream。
+  Stream<List<TodoTask>> watchSubtasksByList(String listId) {
+    return (_db.select(_db.todoTasks)
+          ..where((t) => t.listId.equals(listId) & t.parentTaskId.isNotNull())
+          ..orderBy([(t) => OrderingTerm(expression: t.createdAt)]))
+        .watch();
+  }
+
+  /// 全部任务里非顶层的那一半：智能清单（「今天」「全部」这些）的数据源是
+  /// [watchAll]（只看顶层），树要同样成立就得有一条跨清单的子级流。
+  Stream<List<TodoTask>> watchAllSubtasks() {
+    return (_db.select(_db.todoTasks)
+          ..where((t) => t.parentTaskId.isNotNull())
+          ..orderBy([(t) => OrderingTerm(expression: t.createdAt)]))
+        .watch();
+  }
+
   Stream<List<TodoTask>> watchChildrenOf(String parentTaskId) {
     return _db.watchChildrenOf(parentTaskId);
   }

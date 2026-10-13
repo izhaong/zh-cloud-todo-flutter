@@ -61,6 +61,8 @@ class TaskRow extends StatelessWidget {
     this.batchSelected = false,
     this.onBatchSelectionChanged,
     this.now,
+    this.expander,
+    this.indentLevel = 0,
   });
 
   final TaskRowData data;
@@ -77,6 +79,14 @@ class TaskRow extends StatelessWidget {
   final bool batchSelected;
   final ValueChanged<bool>? onBatchSelectionChanged;
   final DateTime? now;
+
+  /// 展开/收起子任务的箭头。嘀嗒《…06-多级任务.md》给的位置分两端：
+  /// desktop tab「点击主任务**右侧**的箭头」、mobile tab「点击主任务**左侧**的箭头」，
+  /// 所以同一颗箭头由 `desktopMode` 决定挂在这一行的哪一头。
+  final Widget? expander;
+
+  /// 子任务行按层级缩进（0 = 顶层）。缩进不是装饰：不缩就分不出"这行是谁家的"。
+  final int indentLevel;
 
   @override
   Widget build(BuildContext context) {
@@ -127,6 +137,11 @@ class TaskRow extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Row(
                   children: [
+                    if (!desktopMode && expander != null) ...[
+                      expander!,
+                      const SizedBox(width: 2),
+                    ],
+                    if (indentLevel > 0) SizedBox(width: indentLevel * 14.0),
                     if (data.listColor != null) ...[
                       Container(
                         width: 3,
@@ -245,6 +260,12 @@ class TaskRow extends StatelessWidget {
                           color: colors.mutedForeground,
                           onPressed: onMore!,
                         ),
+                    ],
+                    // desktop tab 那句写的是「主任务**右侧**的箭头」，所以这一头不能等 hover 才出现：
+                    // 收起态下没有箭头，用户就找不到"这里还有子任务"的入口。
+                    if (desktopMode && expander != null) ...[
+                      const SizedBox(width: 4),
+                      expander!,
                     ],
                   ],
                 ),

@@ -185,6 +185,14 @@ class _TaskSubtaskDropTargetState extends State<TaskSubtaskDropTarget> {
   bool _acceptsTask(TodoTask dragged) =>
       dragged.listId == widget.task.listId && dragged.id != widget.task.id;
 
+  /// 放置排序那两块还要多一道：**只接同一父级下的兄弟**。
+  /// 清单页把子任务铺成行之后（`tasks_by_list_page.dart` 的 `_subtreeOf`），
+  /// 渲染顺序是"父在前、其子紧跟"，跨父的插入位在那棵树里没有对应的位置 ——
+  /// 收下这一刀只会写出一个"归堆后被弹回原处"的顺序，就是"看着能落、落下去没反应"。
+  /// 换父本来也不是放置该管的事：《06-多级任务.md》:20/:49 给的是右下那块转子任务。
+  bool _acceptsPlacement(TodoTask dragged) =>
+      _acceptsTask(dragged) && dragged.parentTaskId == widget.task.parentTaskId;
+
   /// 一块任务落点：区域由分数与对齐决定（三块互不重叠即可），`nested` 是给「+」留的叠层。
   Widget _taskZone({
     required double widthFactor,
@@ -193,6 +201,7 @@ class _TaskSubtaskDropTargetState extends State<TaskSubtaskDropTarget> {
     required String label,
     required Key hoverKey,
     Key? dropKey,
+    bool placementZone = false,
     _Highlight highlight = _Highlight.quad,
     required void Function(TodoTask dragged) onAccept,
     Widget? nested,
@@ -204,7 +213,9 @@ class _TaskSubtaskDropTargetState extends State<TaskSubtaskDropTarget> {
         alignment: alignment,
         child: DragTarget<TodoTask>(
           key: dropKey,
-          onWillAcceptWithDetails: (details) => _acceptsTask(details.data),
+          onWillAcceptWithDetails: (details) => placementZone
+              ? _acceptsPlacement(details.data)
+              : _acceptsTask(details.data),
           onAcceptWithDetails: (details) => onAccept(details.data),
           builder: (context, candidates, _) => Stack(
             children: [
@@ -244,6 +255,7 @@ class _TaskSubtaskDropTargetState extends State<TaskSubtaskDropTarget> {
             label: TaskSubtaskDropTarget.beforeHoverLabel(title),
             hoverKey: TaskSubtaskDropTarget.beforeZoneKey(widget.task.id),
             dropKey: TaskSubtaskDropTarget.beforeDropKey(widget.task.id),
+            placementZone: true,
             highlight: _Highlight.insertTop,
             onAccept: (dragged) => _acceptPlace(dragged, false),
           ),
@@ -255,6 +267,7 @@ class _TaskSubtaskDropTargetState extends State<TaskSubtaskDropTarget> {
             label: TaskSubtaskDropTarget.afterHoverLabel(title),
             hoverKey: TaskSubtaskDropTarget.afterZoneKey(widget.task.id),
             dropKey: TaskSubtaskDropTarget.afterDropKey(widget.task.id),
+            placementZone: true,
             highlight: _Highlight.insertBottom,
             onAccept: (dragged) => _acceptPlace(dragged, true),
           ),
