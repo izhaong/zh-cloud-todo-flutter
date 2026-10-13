@@ -36,6 +36,8 @@ void main() {
       expect(jsonDecode(row.valueJson), {
         'defaultListId': 'personal',
         'defaultPriority': 2,
+        // 「默认提醒」那档（specs/105）：null 也进 JSON，见模型注释。
+        'defaultReminderMinutes': null,
       });
       final change = await db.select(db.todoSyncChanges).getSingle();
       expect(change.entity, 'view_preference');

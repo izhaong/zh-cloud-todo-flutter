@@ -1744,6 +1744,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     final reminderMessage = await attachResolvedReminders(
       created: created,
       reminders: ref.read(reminderRepositoryProvider),
+      defaultReminderMinutes: defaults?.defaultReminderMinutes,
     );
     if (reminderMessage == null || !mounted) return;
     ScaffoldMessenger.of(context)

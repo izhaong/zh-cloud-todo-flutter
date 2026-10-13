@@ -100,7 +100,7 @@ class SettingsRoute extends ConsumerWidget {
                 _Tile(
                   icon: Icons.playlist_add_check_outlined,
                   title: '新任务默认值',
-                  subtitle: '默认清单与优先级；离线保存后自动同步',
+                  subtitle: '默认清单、优先级与提醒；离线保存后自动同步',
                   trailing: Icons.chevron_right,
                   colors: colors,
                   onTap: () => Navigator.of(context).push(
@@ -646,6 +646,7 @@ class _TaskCaptureDefaultsPageState
                     () => _defaults = TaskCaptureDefaults(
                       defaultListId: value,
                       defaultPriority: defaults.defaultPriority,
+                      defaultReminderMinutes: defaults.defaultReminderMinutes,
                     ),
                   ),
                 ),
@@ -667,6 +668,52 @@ class _TaskCaptureDefaultsPageState
                     () => _defaults = TaskCaptureDefaults(
                       defaultListId: defaults.defaultListId,
                       defaultPriority: value ?? 0,
+                      defaultReminderMinutes: defaults.defaultReminderMinutes,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // 嘀嗒《04-超强大的提醒功能.md》:33「在…『任务默认值』-『默认提醒』中
+                // 选择常用的提醒」。null（「不提醒」）与 0（「准时」）是两档。
+                DropdownButtonFormField<int?>(
+                  key: const Key('task-default-reminder'),
+                  initialValue: defaults.defaultReminderMinutes,
+                  decoration: const InputDecoration(
+                    labelText: '默认提醒',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem<int?>(
+                      value: null,
+                      child: Text('不提醒'),
+                    ),
+                    DropdownMenuItem<int?>(value: 0, child: Text('准时')),
+                    DropdownMenuItem<int?>(
+                      value: 5,
+                      child: Text('提前 5 分钟'),
+                    ),
+                    DropdownMenuItem<int?>(
+                      value: 15,
+                      child: Text('提前 15 分钟'),
+                    ),
+                    DropdownMenuItem<int?>(
+                      value: 30,
+                      child: Text('提前 30 分钟'),
+                    ),
+                    DropdownMenuItem<int?>(
+                      value: 60,
+                      child: Text('提前 1 小时'),
+                    ),
+                    DropdownMenuItem<int?>(
+                      value: 120,
+                      child: Text('提前 2 小时'),
+                    ),
+                  ],
+                  onChanged: (value) => setState(
+                    () => _defaults = TaskCaptureDefaults(
+                      defaultListId: defaults.defaultListId,
+                      defaultPriority: defaults.defaultPriority,
+                      defaultReminderMinutes: value,
                     ),
                   ),
                 ),
