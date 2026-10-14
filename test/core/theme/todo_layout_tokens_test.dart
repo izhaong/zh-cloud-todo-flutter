@@ -34,11 +34,12 @@ void main() {
   });
 
   test('light semantic palette is neutral and product-owned', () {
-    expect(TodoLayoutTokens.lightCanvas, const Color(0xFFF7F7F7));
+    // A 路线视觉微调（specs/105）：画布 0xFFFAFAFA、分割线 0xFFEFEFEF。
+    expect(TodoLayoutTokens.lightCanvas, const Color(0xFFFAFAFA));
     expect(TodoLayoutTokens.lightSurface, const Color(0xFFFFFFFF));
     expect(TodoLayoutTokens.lightPrimaryText, const Color(0xFF242424));
     expect(TodoLayoutTokens.lightMutedText, const Color(0xFF8A8A8A));
-    expect(TodoLayoutTokens.lightDivider, const Color(0xFFECECEC));
+    expect(TodoLayoutTokens.lightDivider, const Color(0xFFEFEFEF));
     expect(TodoLayoutTokens.lightHoverRow, const Color(0xFFF7F7F7));
     expect(TodoLayoutTokens.lightSelectedRow, const Color(0xFFF2F2F2));
 

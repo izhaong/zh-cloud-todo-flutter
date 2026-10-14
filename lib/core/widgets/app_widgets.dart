@@ -34,15 +34,9 @@ class AppCard extends StatelessWidget {
           color: hovered
               ? colors.accent.withValues(alpha: 0.28)
               : colors.border,
-          width: hovered ? 0.9 : 0.5,
+          width: hovered ? 1 : 1,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: hovered ? 0.06 : 0.03),
-            blurRadius: hovered ? 10 : 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        boxShadow: AppShadows.card(context),
       ),
       child: Padding(
         padding: padding ?? const EdgeInsets.all(AppSpacing.lg),
@@ -293,18 +287,16 @@ class AppEmptyState extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
             Text(
               title,
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-                color: colors.ink,
-              ),
+              style: AppTextStyles.emptyTitle.copyWith(color: colors.ink),
             ),
             if (subtitle != null) ...[
               const SizedBox(height: AppSpacing.sm),
               Text(
                 subtitle!,
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: colors.mutedForeground),
+                style: AppTextStyles.emptySubtitle.copyWith(
+                  color: colors.mutedForeground,
+                ),
               ),
             ],
             if (action != null) ...[

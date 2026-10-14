@@ -75,11 +75,16 @@ Future<WeekStartPreferenceRepository> _pumpSettings(
     ),
   );
   await tester.pumpAndSettle();
+  // UI 美化后全局 textTheme 让各行略变高：320px+1.3x 下 tile 首屏不挂载，
+  // ensureVisible 找不到元素会抛。scrollUntilVisible 先滚到挂载，再
+  // ensureVisible 校正停点（scrollUntilVisible 可能停在视口边缘外 1-2px）。
   await tester.scrollUntilVisible(
     find.byKey(_tile),
     200,
     scrollable: find.byType(Scrollable).first,
   );
+  await tester.ensureVisible(find.byKey(_tile));
+  await tester.pumpAndSettle();
   return repository;
 }
 
@@ -101,6 +106,9 @@ Future<void> _settleUnmount(WidgetTester tester) async {
 void main() {
   testWidgets('设置页有「日期与时间」分组，里面有「星期开始于」并显示当前档位', (tester) async {
     await _pumpSettings(tester);
+    // _pumpSettings 会把 tile 滚进视口，分组标题可能已被回收；回页顶再断言。
+    await tester.drag(find.byType(ListView).first, const Offset(0, 400));
+    await tester.pumpAndSettle();
 
     expect(find.text('日期与时间'), findsOneWidget);
     expect(find.byKey(_tile), findsOneWidget);

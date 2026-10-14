@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -131,6 +132,16 @@ ThemeData _darkTheme() => ThemeData(
   scaffoldBackgroundColor: AppColors.dark.background,
   useMaterial3: true,
   extensions: const [AppThemeExtension(AppColors.dark)],
+  textTheme: _appTextTheme(AppColors.dark),
+  pageTransitionsTheme: const PageTransitionsTheme(
+    builders: {
+      TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+      TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+      TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+      TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
+      TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
+    },
+  ),
   appBarTheme: AppBarTheme(
     backgroundColor: AppColors.dark.background,
     foregroundColor: AppColors.dark.foreground,
@@ -142,7 +153,7 @@ ThemeData _darkTheme() => ThemeData(
     elevation: 0,
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(AppRadius.lg),
-      side: BorderSide(color: AppColors.dark.border, width: 0.5),
+      side: BorderSide(color: AppColors.dark.border, width: 1),
     ),
   ),
   inputDecorationTheme: InputDecorationTheme(
@@ -155,6 +166,72 @@ ThemeData _darkTheme() => ThemeData(
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(AppRadius.md),
       borderSide: BorderSide(color: AppColors.dark.border),
+    ),
+  ),
+  dialogTheme: DialogThemeData(
+    backgroundColor: AppColors.dark.surface,
+    elevation: 0,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(AppRadius.xl),
+      side: BorderSide(color: AppColors.dark.border, width: 1),
+    ),
+  ),
+  bottomSheetTheme: BottomSheetThemeData(
+    backgroundColor: AppColors.dark.surface,
+    elevation: 0,
+    modalElevation: 0,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+    ),
+    showDragHandle: true,
+  ),
+  popupMenuTheme: PopupMenuThemeData(
+    color: AppColors.dark.surface,
+    elevation: 0,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      side: BorderSide(color: AppColors.dark.border, width: 1),
+    ),
+    textStyle: TextStyle(fontSize: 13, color: AppColors.dark.foreground),
+  ),
+  snackBarTheme: SnackBarThemeData(
+    backgroundColor: AppColors.dark.ink,
+    contentTextStyle: TextStyle(
+      fontSize: 13,
+      color: AppColors.dark.background,
+    ),
+    behavior: SnackBarBehavior.floating,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(AppRadius.md),
+    ),
+  ),
+  checkboxTheme: CheckboxThemeData(
+    shape: const CircleBorder(),
+    side: BorderSide(color: AppColors.dark.mutedForeground, width: 1.5),
+    fillColor: WidgetStateProperty.resolveWith(
+      (states) => states.contains(WidgetState.selected)
+          ? AppColors.dark.accent
+          : Colors.transparent,
+    ),
+  ),
+  chipTheme: _chipTheme(AppColors.dark),
+  datePickerTheme: DatePickerThemeData(
+    backgroundColor: AppColors.dark.surface,
+    elevation: 0,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(AppRadius.xl),
+    ),
+  ),
+  switchTheme: SwitchThemeData(
+    thumbColor: WidgetStateProperty.resolveWith(
+      (states) => states.contains(WidgetState.selected)
+          ? AppColors.dark.accentForeground
+          : AppColors.dark.muted,
+    ),
+    trackColor: WidgetStateProperty.resolveWith(
+      (states) => states.contains(WidgetState.selected)
+          ? AppColors.dark.accent
+          : AppColors.dark.border,
     ),
   ),
 );
@@ -172,6 +249,16 @@ ThemeData _lightTheme() => ThemeData(
   scaffoldBackgroundColor: AppColors.light.background,
   useMaterial3: true,
   extensions: const [AppThemeExtension(AppColors.light)],
+  textTheme: _appTextTheme(AppColors.light),
+  pageTransitionsTheme: const PageTransitionsTheme(
+    builders: {
+      TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+      TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+      TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+      TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
+      TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
+    },
+  ),
   appBarTheme: AppBarTheme(
     backgroundColor: AppColors.light.background,
     foregroundColor: AppColors.light.foreground,
@@ -183,7 +270,7 @@ ThemeData _lightTheme() => ThemeData(
     elevation: 0,
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(AppRadius.lg),
-      side: BorderSide(color: AppColors.light.border, width: 0.5),
+      side: BorderSide(color: AppColors.light.border, width: 1),
     ),
   ),
   inputDecorationTheme: InputDecorationTheme(
@@ -197,5 +284,99 @@ ThemeData _lightTheme() => ThemeData(
       borderRadius: BorderRadius.circular(AppRadius.md),
       borderSide: BorderSide(color: AppColors.light.border),
     ),
+  ),
+  dialogTheme: DialogThemeData(
+    backgroundColor: AppColors.light.surface,
+    elevation: 0,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(AppRadius.xl),
+      side: BorderSide(color: AppColors.light.border, width: 0.5),
+    ),
+  ),
+  bottomSheetTheme: BottomSheetThemeData(
+    backgroundColor: AppColors.light.surface,
+    elevation: 0,
+    modalElevation: 0,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+    ),
+    showDragHandle: true,
+  ),
+  popupMenuTheme: PopupMenuThemeData(
+    color: AppColors.light.surface,
+    elevation: 8,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      side: BorderSide(color: AppColors.light.border, width: 0.5),
+    ),
+    textStyle: TextStyle(fontSize: 13, color: AppColors.light.foreground),
+  ),
+  snackBarTheme: SnackBarThemeData(
+    backgroundColor: AppColors.light.ink,
+    contentTextStyle: TextStyle(
+      fontSize: 13,
+      color: AppColors.light.background,
+    ),
+    behavior: SnackBarBehavior.floating,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(AppRadius.md),
+    ),
+  ),
+  checkboxTheme: CheckboxThemeData(
+    shape: const CircleBorder(),
+    side: BorderSide(color: AppColors.light.mutedForeground, width: 1.5),
+    fillColor: WidgetStateProperty.resolveWith(
+      (states) => states.contains(WidgetState.selected)
+          ? AppColors.light.accent
+          : Colors.transparent,
+    ),
+  ),
+  chipTheme: _chipTheme(AppColors.light),
+  datePickerTheme: DatePickerThemeData(
+    backgroundColor: AppColors.light.surface,
+    elevation: 0,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(AppRadius.xl),
+    ),
+  ),
+  switchTheme: SwitchThemeData(
+    thumbColor: WidgetStateProperty.resolveWith(
+      (states) => states.contains(WidgetState.selected)
+          ? AppColors.light.accentForeground
+          : AppColors.light.surface,
+    ),
+    trackColor: WidgetStateProperty.resolveWith(
+      (states) => states.contains(WidgetState.selected)
+          ? AppColors.light.accent
+          : AppColors.light.border,
+    ),
+  ),
+);
+
+/// 全局文字层级兜底：正文 13 / 小字 11 / 页面标题 15，随明暗配色。
+///
+/// 内嵌品牌字体暂缺（pubspec 无字体资源），先收敛字号层级；
+/// 后续接入 MiSans / HarmonyOS Sans 时只改这里。
+TextTheme _appTextTheme(AppColors colors) => TextTheme(
+  titleLarge: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: colors.ink),
+  titleMedium: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: colors.ink),
+  bodyLarge: TextStyle(fontSize: 15, color: colors.foreground),
+  bodyMedium: TextStyle(fontSize: 13, color: colors.foreground),
+  bodySmall: TextStyle(fontSize: 11, color: colors.mutedForeground),
+  labelLarge: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: colors.foreground),
+  labelMedium: TextStyle(fontSize: 11, color: colors.mutedForeground),
+  labelSmall: TextStyle(fontSize: 10, color: colors.mutedForeground),
+);
+
+/// 统一 chip 观感：细边框 + 小圆角，选中态交给业务侧 AppChip。
+ChipThemeData _chipTheme(AppColors colors) => ChipThemeData(
+  side: BorderSide(color: colors.border),
+  shape: RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(AppRadius.sm),
+  ),
+  labelStyle: TextStyle(fontSize: 12, color: colors.foreground),
+  padding: const EdgeInsets.symmetric(
+    horizontal: AppSpacing.sm,
+    vertical: 2,
   ),
 );
