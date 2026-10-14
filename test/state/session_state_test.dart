@@ -188,16 +188,25 @@ void main() {
     'sign out clears persisted native widget and lock screen snapshots',
     () async {
       const channel = MethodChannel('zh_cloud_todo/native');
+      const widgetChannel = MethodChannel('home_widget');
       final received = <MethodCall>[];
+      final widgetCalls = <MethodCall>[];
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (call) async {
             received.add(call);
             return call.method == 'pushLockScreenTasks' ? true : null;
           });
-      addTearDown(
-        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-            .setMockMethodCallHandler(channel, null),
-      );
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(widgetChannel, (call) async {
+            widgetCalls.add(call);
+            return true;
+          });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null);
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(widgetChannel, null);
+      });
       final container = ProviderContainer(
         overrides: [
           sessionStoreProvider.overrideWithValue(_MemorySessionStore()),
@@ -210,22 +219,16 @@ void main() {
           .read(sessionProvider.notifier)
           .setSession(persistedSession);
       await container.read(sessionProvider.notifier).signOut();
+      await pumpEventQueue();
 
+      expect(received.map((call) => call.method), ['pushLockScreenTasks']);
       expect(
-        received.map((call) => call.method),
-        containsAll(['updateTodayWidgetSnapshot', 'pushLockScreenTasks']),
-      );
-      expect(
-        received
-            .singleWhere((call) => call.method == 'updateTodayWidgetSnapshot')
-            .arguments,
+        received.single.arguments,
         {'tasks': <Object>[]},
       );
       expect(
-        received
-            .singleWhere((call) => call.method == 'pushLockScreenTasks')
-            .arguments,
-        {'tasks': <Object>[]},
+        widgetCalls.singleWhere((call) => call.method == 'saveWidgetData').arguments,
+        {'id': 'tasks', 'data': '[]'},
       );
     },
   );

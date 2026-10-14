@@ -72,12 +72,20 @@ class _HabitEditorFormState extends ConsumerState<_HabitEditorForm> {
   /// 「打卡日志」开关（specs/132，矩阵 #45 面 ④ 收尾）；缺省 true（现状锁）。
   late bool _journalEnabled = widget.habit?.journalEnabled ?? true;
   /// 提醒时间段列表（specs/134，矩阵 #45 面 ②）；缺省空。
-  late List<String> _reminderTimes = List.from(widget.habit?.reminderTimes ?? const []);
+  /// 内容可变（add/removeAt），列表引用本身不变，故 final；
+  /// 初始化在 initState 里完成（late 初始化器拿不到 widget）。
+  final List<String> _reminderTimes = [];
 
   String? _nameError;
   String? _targetError;
   String? _submitError;
   bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _reminderTimes.addAll(widget.habit?.reminderTimes ?? const []);
+  }
 
   @override
   void dispose() {

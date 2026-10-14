@@ -3,6 +3,8 @@ import 'package:zh_cloud_todo_flutter/core/time/task_time_mode.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:wakelock_plus_platform_interface/wakelock_plus_platform_interface.dart';
 
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/features/native/native_entry_page.dart';
@@ -79,55 +81,25 @@ void main() {
     expect(await NativeIntents.updateTodayWidgetSnapshot(['今日任务']), isFalse);
   });
 
-  test('常亮请求使用原生通道的精确方法和布尔参数', () async {
-    const channel = MethodChannel('zh_cloud_todo/native');
-    final received = <MethodCall>[];
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, (call) async {
-          received.add(call);
-          return true;
-        });
-    addTearDown(
-      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(channel, null),
-    );
+  test('常亮请求交给 wakelock_plus', () async {
+    final fake = _RecordingWakelock();
+    final previous = wakelockPlusPlatformInstance;
+    wakelockPlusPlatformInstance = fake;
+    addTearDown(() => wakelockPlusPlatformInstance = previous);
 
     expect(await NativeIntents.setKeepScreenAwake(true), isTrue);
     expect(await NativeIntents.setKeepScreenAwake(false), isTrue);
-    expect(received, [
-      isA<MethodCall>()
-          .having((call) => call.method, 'method', 'setKeepScreenAwake')
-          .having((call) => call.arguments, 'arguments', {'enabled': true}),
-      isA<MethodCall>()
-          .having((call) => call.method, 'method', 'setKeepScreenAwake')
-          .having((call) => call.arguments, 'arguments', {'enabled': false}),
-    ]);
+    expect(fake.calls, [true, false]);
   });
 
-  test('常亮请求对平台异常和非 true 返回值安全降级', () async {
-    const channel = MethodChannel('zh_cloud_todo/native');
-    final responses = <Object?>[
-      false,
-      null,
-      'unexpected',
-      PlatformException(code: 'unsupported'),
-    ].iterator;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, (call) async {
-          responses.moveNext();
-          final response = responses.current;
-          if (response is PlatformException) throw response;
-          return response;
-        });
-    addTearDown(
-      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(channel, null),
-    );
+  test('常亮请求在平台异常时安全降级', () async {
+    final fake = _RecordingWakelock()..throwOnToggle = true;
+    final previous = wakelockPlusPlatformInstance;
+    wakelockPlusPlatformInstance = fake;
+    addTearDown(() => wakelockPlusPlatformInstance = previous);
 
     expect(await NativeIntents.setKeepScreenAwake(true), isFalse);
-    expect(await NativeIntents.setKeepScreenAwake(true), isFalse);
-    expect(await NativeIntents.setKeepScreenAwake(true), isFalse);
-    expect(await NativeIntents.setKeepScreenAwake(true), isFalse);
+    expect(fake.calls, isEmpty);
   });
 
   test('锁屏快照只把显式空列表用于清除且拒绝无效任务', () async {
@@ -224,13 +196,13 @@ void main() {
   });
 
   testWidgets('原生增强页把真实今日任务快照更新到桌面小组件', (tester) async {
-    const channel = MethodChannel('zh_cloud_todo/native');
-    MethodCall? received;
+    const channel = MethodChannel('home_widget');
+    final received = <MethodCall>[];
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
       call,
     ) async {
-      received = call;
-      return null;
+      received.add(call);
+      return true;
     });
     addTearDown(
       () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -265,12 +237,11 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '更新桌面小组件（1）'));
     await tester.pumpAndSettle();
 
-    expect(received?.method, 'updateTodayWidgetSnapshot');
-    expect(received?.arguments, {
-      'tasks': [
-        {'title': '更新桌面小组件'},
-      ],
-    });
+    expect(received.map((call) => call.method), contains('saveWidgetData'));
+    expect(
+      received.singleWhere((call) => call.method == 'saveWidgetData').arguments,
+      {'id': 'tasks', 'data': '["更新桌面小组件"]'},
+    );
   });
 
   testWidgets('设置页提供可达的原生增强入口', (tester) async {
@@ -298,6 +269,22 @@ void main() {
 
     expect(find.byType(NativeEntryPage), findsOneWidget);
   });
+}
+
+class _RecordingWakelock extends WakelockPlusPlatformInterface {
+  final calls = <bool>[];
+  var throwOnToggle = false;
+
+  @override
+  Future<void> toggle({required bool enable}) async {
+    if (throwOnToggle) {
+      throw PlatformException(code: 'unsupported');
+    }
+    calls.add(enable);
+  }
+
+  @override
+  Future<bool> get enabled async => false;
 }
 
 TodoTask _task({

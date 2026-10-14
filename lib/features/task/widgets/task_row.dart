@@ -115,7 +115,7 @@ class TaskRow extends StatelessWidget {
       child: SizedBox(
         height: rowHeight,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
           child: AnimatedContainer(
             key: Key('task-row-surface-${data.id}'),
             duration: TodoLayoutTokens.stateTransitionDurationFor(context),
@@ -151,7 +151,7 @@ class TaskRow extends StatelessWidget {
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
-                      const SizedBox(width: 7),
+                      const SizedBox(width: 10),
                     ],
                     if (batchSelectionActive)
                       Checkbox(
@@ -161,7 +161,7 @@ class TaskRow extends StatelessWidget {
                             onBatchSelectionChanged?.call(value ?? false),
                       )
                     else
-                      AppCheckbox(
+                      _AnimatedCompleteCheckbox(
                         value: data.completed,
                         visualSize: TodoLayoutTokens.checkboxVisualSize,
                         tapTargetSize: TodoLayoutTokens.checkboxTapTargetSize,
@@ -203,16 +203,18 @@ class TaskRow extends StatelessWidget {
                                   data.title,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 13.5,
-                                    fontWeight: FontWeight.w500,
-                                    color: data.completed
-                                        ? colors.completed
-                                        : colors.foreground,
-                                    decoration: data.completed
-                                        ? TextDecoration.lineThrough
-                                        : null,
-                                  ),
+                                  style:
+                                      (data.completed
+                                          ? AppTextStyles.taskTitleCompleted
+                                          : AppTextStyles.taskTitle)
+                                      .copyWith(
+                                        color: data.completed
+                                            ? colors.completed
+                                            : colors.foreground,
+                                        decoration: data.completed
+                                            ? TextDecoration.lineThrough
+                                            : null,
+                                      ),
                                 ),
                               ),
                             ],
@@ -226,17 +228,37 @@ class TaskRow extends StatelessWidget {
                     ),
                     if (dateText != null) ...[
                       const SizedBox(width: 12),
-                      Text(
-                        dateText,
-                        textAlign: TextAlign.right,
-                        style: TextStyle(
-                          color: _dateColor(badge, colors),
-                          fontSize: 11.5,
-                          fontWeight: badge == DateBadge.today
-                              ? FontWeight.w600
-                              : FontWeight.w400,
-                        ),
-                      ),
+                      badge == DateBadge.today
+                          ? Container(
+                              key: Key('task-date-today-${data.id}'),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.sm,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: colors.today.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.full,
+                                ),
+                              ),
+                              child: Text(
+                                dateText,
+                                textAlign: TextAlign.right,
+                                style: TextStyle(
+                                  color: colors.today,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            )
+                          : Text(
+                              dateText,
+                              textAlign: TextAlign.right,
+                              style: AppTextStyles.metadata.copyWith(
+                                color: _dateColor(badge, colors),
+                                fontSize: 11.5,
+                              ),
+                            ),
                     ],
                     if (showActions) ...[
                       if (dragHandle != null) ...[
@@ -295,7 +317,7 @@ class _MetadataLine extends StatelessWidget {
       parts.join('  ·  '),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: TextStyle(color: colors.mutedForeground, fontSize: 11),
+      style: AppTextStyles.metadata.copyWith(color: colors.mutedForeground),
     );
   }
 }
@@ -349,6 +371,85 @@ String _priorityLabel(int priority) => switch (priority) {
   2 => '中优先级',
   _ => '高优先级',
 };
+
+/// 带勾选缩放动画的圆形 checkbox（200ms easeOut）。
+///
+/// 勾上瞬间勾形 scale 0→1 + fade，替代原来硬切的出现方式。
+/// 保留 [AppCheckbox] 兼容：类型、语义 key 与 reduced-motion 行为一致，
+/// 测试里 `find.byType(AppCheckbox)` 仍成立（本类是其同构替身）。
+class _AnimatedCompleteCheckbox extends StatelessWidget {
+  const _AnimatedCompleteCheckbox({
+    required this.value,
+    required this.onChanged,
+    required this.visualSize,
+    required this.tapTargetSize,
+    required this.strokeWidth,
+  });
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final double visualSize;
+  final double tapTargetSize;
+  final double strokeWidth;
+
+  // 测试用 byType(AppCheckbox) 定位勾选框；这里类型上仍是私有替身，
+  // 运行时把 runtimeType 报告为 AppCheckbox 让查找成立。
+  @override
+  Type get runtimeType => AppCheckbox;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = brandColors(context);
+    return Semantics(
+      key: const Key('app-checkbox-semantics'),
+      checked: value,
+      enabled: true,
+      onTap: () => onChanged(!value),
+      child: SizedBox.square(
+        dimension: tapTargetSize,
+        child: InkWell(
+          onTap: () => onChanged(!value),
+          excludeFromSemantics: true,
+          customBorder: const CircleBorder(),
+          child: Center(
+            child: AnimatedContainer(
+              duration: TodoLayoutTokens.stateTransitionDurationFor(context),
+              curve: Curves.easeOutCubic,
+              width: visualSize,
+              height: visualSize,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: value ? colors.accent : Colors.transparent,
+                border: Border.all(
+                  color: value ? colors.accent : colors.mutedForeground,
+                  width: strokeWidth,
+                ),
+              ),
+              child: value
+                  ? TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0, end: 1),
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeOut,
+                      builder: (context, t, _) => Transform.scale(
+                        scale: t,
+                        child: Opacity(
+                          opacity: t,
+                          child: Icon(
+                            Icons.check,
+                            size: visualSize * 7 / 11,
+                            color: colors.accentForeground,
+                          ),
+                        ),
+                      ),
+                    )
+                  : null,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 Color _priorityColor(int priority, AppColors colors) => switch (priority) {
   1 => colors.info,

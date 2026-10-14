@@ -1430,7 +1430,7 @@ void main() {
   testWidgets(
     'batch share preserves visible order and never writes tasks or outbox',
     (tester) async {
-      const channel = MethodChannel('zh_cloud_todo/native');
+      const channel = MethodChannel('dev.fluttercommunity.plus/share');
       MethodCall? received;
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
         call,
@@ -1507,7 +1507,7 @@ void main() {
   testWidgets('batch share reports unsupported platform and keeps selection', (
     tester,
   ) async {
-    const channel = MethodChannel('zh_cloud_todo/native');
+    const channel = MethodChannel('dev.fluttercommunity.plus/share');
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
       call,
     ) async {

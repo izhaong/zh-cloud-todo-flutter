@@ -49,22 +49,23 @@ abstract final class TodoLayoutTokens {
         : stateTransitionDuration;
   }
 
-  // Approved light semantic palette.
-  static const Color lightCanvas = Color(0xFFF7F7F7);
+  // Approved light semantic palette（A 路线微调：画布更净、分割线更浅）。
+  static const Color lightCanvas = Color(0xFFFAFAFA);
   static const Color lightSurface = Color(0xFFFFFFFF);
   static const Color lightPrimaryText = Color(0xFF242424);
   static const Color lightMutedText = Color(0xFF8A8A8A);
-  static const Color lightDivider = Color(0xFFECECEC);
+  static const Color lightDivider = Color(0xFFEFEFEF);
   static const Color lightHoverRow = Color(0xFFF7F7F7);
   static const Color lightSelectedRow = Color(0xFFF2F2F2);
 
   // Dark equivalents preserve the same hierarchy without copying a third-party
   // dark theme. They remain intentionally quiet and are resolved by brightness.
+  // Surface 取 M3 推荐对比（0xFF1F1F1F），暗色下层级靠 border 不靠阴影。
   static const Color darkCanvas = Color(0xFF1A1A1A);
-  static const Color darkSurface = Color(0xFF242424);
-  static const Color darkDivider = Color(0xFF3A3A3A);
-  static const Color darkHoverRow = Color(0xFF303030);
-  static const Color darkSelectedRow = Color(0xFF383838);
+  static const Color darkSurface = Color(0xFF1F1F1F);
+  static const Color darkDivider = Color(0x12FFFFFF);
+  static const Color darkHoverRow = Color(0xFF2A2A2A);
+  static const Color darkSelectedRow = Color(0xFF333333);
 
   static Color canvasFor(Brightness brightness) =>
       brightness == Brightness.dark ? darkCanvas : lightCanvas;

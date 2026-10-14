@@ -82,7 +82,7 @@ pubspec.yaml                    # 依赖与版本
 - **运行时**：Flutter（Dart SDK `^3.11.4`）；Material 3。
 - **状态/路由**：Riverpod、`go_router`。
 - **数据/网络**：Drift SQLite + outbox、dio + Bearer + `tenant-id`。
-- **系统能力**：`flutter_local_notifications`、`timezone`、`flutter_secure_storage`、文件与 URL launcher 插件。
+- **系统能力**：`share_plus`、`home_widget`、`wakelock_plus`、`table_calendar`、`flutter_local_notifications`、`timezone`、`flutter_secure_storage`、文件与 URL launcher 插件。深链、系统便签和锁屏通知仍走自有通道。
 - **模型/生成**：Drift generator、`freezed`、`json_serializable`、`build_runner`。
 - **测试**：`flutter_test`；外部依赖以 Fake / mock 替身注入（见 Testing Safety）。
 

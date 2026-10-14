@@ -1,11 +1,16 @@
-/// 原生增强的 Dart 侧 platform channel 契约与安全降级入口。
+/// 原生增强入口。
 ///
-/// Android 已实现冷/热启动 URL Scheme、系统分享、可用时创建系统便签、
-/// 锁屏重要任务通知与今日任务桌面小组件；iOS 已实现冷/热启动 URL Scheme
-/// 与系统分享，其余尚未接入的能力仍返回“不支持”或空结果。
+/// 系统分享、桌面今日任务小组件、专注常亮分别交给 `share_plus`、
+/// `home_widget`、`wakelock_plus`。深链、系统便签和锁屏通知仍走
+/// `zh_cloud_todo/native`，插件缺失或平台不支持时安全返回失败。
 library;
 
+import 'dart:convert';
+
 import 'package:flutter/services.dart';
+import 'package:home_widget/home_widget.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 class NativeLockScreenTask {
   const NativeLockScreenTask({required this.serverId, required this.title});
@@ -120,10 +125,20 @@ class NativeIntents {
     }
   }
 
-  /// 系统分享入口：把文本/链接转发到 Android Share / iOS UIActivityViewController。
+  /// 系统分享：交给 [SharePlus]，覆盖 Android / iOS / 桌面 / Web。
   static Future<bool> shareText(String text, {String? subject}) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return false;
+    final trimmedSubject = subject?.trim();
     try {
-      await _channel.invokeMethod('share', {'text': text, 'subject': ?subject});
+      await SharePlus.instance.share(
+        ShareParams(
+          text: trimmed,
+          subject: (trimmedSubject == null || trimmedSubject.isEmpty)
+              ? null
+              : trimmedSubject,
+        ),
+      );
       return true;
     } on PlatformException {
       return false;
@@ -145,14 +160,11 @@ class NativeIntents {
     }
   }
 
-  /// 控制前台专注会话期间是否保持屏幕常亮；不支持时安全返回 false。
+  /// 前台专注会话保持屏幕常亮。插件缺失或平台拒绝时返回 false。
   static Future<bool> setKeepScreenAwake(bool enabled) async {
     try {
-      final updated = await _channel.invokeMethod<Object?>(
-        'setKeepScreenAwake',
-        {'enabled': enabled},
-      );
-      return updated == true;
+      await WakelockPlus.toggle(enable: enabled);
+      return true;
     } on PlatformException {
       return false;
     } on MissingPluginException {
@@ -192,14 +204,15 @@ class NativeIntents {
     }
   }
 
-  /// 小组件数据：返回今日任务的 JSON 序列化字符串（widget renderer 读取）。
+  static const _widgetTasksKey = 'tasks';
+  static const _androidWidgetProvider =
+      'com.zh04.zh_cloud_todo_flutter.TodayTasksWidgetProvider';
+
+  /// 读回 [home_widget] 里保存的今日任务标题。
   static Future<List<Map<String, dynamic>>> widgetTodaySnapshot() async {
     try {
-      final r = await _channel.invokeMethod<List<dynamic>>(
-        'widgetTodaySnapshot',
-      );
-      if (r == null) return const [];
-      return r.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      final raw = await HomeWidget.getWidgetData<String>(_widgetTasksKey);
+      return _decodeWidgetTitles(raw);
     } on PlatformException {
       return const [];
     } on MissingPluginException {
@@ -207,23 +220,41 @@ class NativeIntents {
     }
   }
 
-  /// 把 Flutter 当前账号 Drift 中的真实今日任务投影写入原生桌面小组件。
+  /// 把当前账号的今日任务标题写入桌面小组件并刷新。
   static Future<bool> updateTodayWidgetSnapshot(Iterable<String> titles) async {
     final tasks = titles
         .map((title) => title.trim())
         .where((title) => title.isNotEmpty)
         .take(5)
-        .map((title) => {'title': title})
         .toList(growable: false);
     try {
-      await _channel.invokeMethod('updateTodayWidgetSnapshot', {
-        'tasks': tasks,
-      });
-      return true;
+      final saved = await HomeWidget.saveWidgetData<String>(
+        _widgetTasksKey,
+        jsonEncode(tasks),
+      );
+      if (saved != true) return false;
+      final updated = await HomeWidget.updateWidget(
+        qualifiedAndroidName: _androidWidgetProvider,
+      );
+      return updated == true;
     } on PlatformException {
       return false;
     } on MissingPluginException {
       return false;
+    }
+  }
+
+  static List<Map<String, dynamic>> _decodeWidgetTitles(String? raw) {
+    if (raw == null || raw.isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return const [];
+      return [
+        for (final item in decoded)
+          if (item is String && item.trim().isNotEmpty) {'title': item.trim()},
+      ];
+    } on FormatException {
+      return const [];
     }
   }
 }

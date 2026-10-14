@@ -2,9 +2,10 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:wakelock_plus_platform_interface/wakelock_plus_platform_interface.dart';
 
 import 'package:zh_cloud_todo_flutter/core/api/efficiency_api.dart';
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
@@ -216,7 +217,7 @@ void main() {
   testWidgets(
     'foreground running session requests keep-screen-awake only once across periodic sync',
     (tester) async {
-      final calls = _mockKeepScreenAwake(tester, result: false);
+      final calls = _mockKeepScreenAwake(tester);
       final storage = _FocusImmersionMemoryStorage();
       final store = FocusImmersionSettingsStore(storage: storage);
       await store.write(const FocusImmersionSettings(keepScreenAwake: true));
@@ -2055,32 +2056,26 @@ Future<void> _expectFinishToDisableKeepScreenAwake(
   }
 }
 
-List<MethodCall> _mockKeepScreenAwake(
-  WidgetTester tester, {
-  Object? result = true,
-}) {
-  const channel = MethodChannel('zh_cloud_todo/native');
-  final calls = <MethodCall>[];
-  tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
-    call,
-  ) async {
-    if (call.method == 'setKeepScreenAwake') calls.add(call);
-    return result;
-  });
-  addTearDown(
-    () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-      channel,
-      null,
-    ),
-  );
-  return calls;
+List<bool> _mockKeepScreenAwake(WidgetTester tester) {
+  final fake = _RecordingWakelock();
+  final previous = wakelockPlusPlatformInstance;
+  wakelockPlusPlatformInstance = fake;
+  addTearDown(() => wakelockPlusPlatformInstance = previous);
+  return fake.calls;
 }
 
-List<bool> _keepScreenAwakeValues(List<MethodCall> calls) {
-  return calls
-      .map((call) => (call.arguments as Map<Object?, Object?>)['enabled'])
-      .whereType<bool>()
-      .toList(growable: false);
+List<bool> _keepScreenAwakeValues(List<bool> calls) => calls;
+
+class _RecordingWakelock extends WakelockPlusPlatformInterface {
+  final calls = <bool>[];
+
+  @override
+  Future<void> toggle({required bool enable}) async {
+    calls.add(enable);
+  }
+
+  @override
+  Future<bool> get enabled async => false;
 }
 
 class _FocusImmersionMemoryStorage implements FocusImmersionSettingsStorage {

@@ -138,20 +138,80 @@ class AppSpacing {
   static const double xxl = 32;
 }
 
-/// 阴影令牌
+/// 文字层级令牌（A 路线排版收敛：任务标题 15/22 w500，元数据 11，空状态 18/14）。
+///
+/// 全局 [ThemeData.textTheme] 在 app.dart 接管兜底；业务内联 fontSize
+/// 应逐步收敛到这里，避免 10/11/13/13.5/15/17 散落漂移。
+abstract final class AppTextStyles {
+  /// 任务标题 / 页面标题正文（15px / 行高 22）。
+  static const TextStyle taskTitle = TextStyle(
+    fontSize: 15,
+    height: 22 / 15,
+    fontWeight: FontWeight.w500,
+  );
+
+  /// 完成态任务标题（同层级、灰化 + 划线）。
+  static const TextStyle taskTitleCompleted = TextStyle(
+    fontSize: 15,
+    height: 22 / 15,
+    fontWeight: FontWeight.w400,
+  );
+
+  /// 侧栏行 / 次级正文（13px）。
+  static const TextStyle body = TextStyle(fontSize: 13, height: 1.35);
+
+  /// 元数据 / 时间戳（11px）。
+  static const TextStyle metadata = TextStyle(
+    fontSize: 11,
+    height: 1.3,
+    fontWeight: FontWeight.w400,
+  );
+
+  /// 空状态标题。
+  static const TextStyle emptyTitle = TextStyle(
+    fontSize: 18,
+    height: 1.3,
+    fontWeight: FontWeight.w600,
+  );
+
+  /// 空状态副文案。
+  static const TextStyle emptySubtitle = TextStyle(
+    fontSize: 14,
+    height: 1.4,
+    fontWeight: FontWeight.w400,
+  );
+
+  /// 分组标题（中文小字，不加 letterSpacing / 大写化）。
+  static const TextStyle groupHeader = TextStyle(
+    fontSize: 12,
+    height: 1.3,
+    fontWeight: FontWeight.w600,
+  );
+}
+
+/// 阴影令牌（浅色下按层级给质感，暗色下由调用方降级为边框）。
 class AppShadows {
-  static List<BoxShadow> card(BuildContext context) => [
-    BoxShadow(
-      color: Colors.black.withValues(alpha: 0.04),
-      blurRadius: 8,
-      offset: const Offset(0, 2),
-    ),
-  ];
-  static List<BoxShadow> popup(BuildContext context) => [
-    BoxShadow(
-      color: Colors.black.withValues(alpha: 0.12),
-      blurRadius: 24,
-      offset: const Offset(0, 8),
-    ),
-  ];
+  static List<BoxShadow> card(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+      ? []
+      : [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 1),
+          ),
+        ];
+
+  static List<BoxShadow> elevated(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+      ? []
+      : [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.10),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ];
+
+  static List<BoxShadow> popup(BuildContext context) => elevated(context);
 }
