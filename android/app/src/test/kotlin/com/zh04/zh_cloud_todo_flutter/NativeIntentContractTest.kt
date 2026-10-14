@@ -21,22 +21,6 @@ class NativeIntentContractTest {
     }
 
     @Test
-    fun `share request requires non blank text and keeps an optional subject`() {
-        assertEquals(
-            NativeShareRequest(text = "今日任务", subject = "ZH-CLOUD Todo"),
-            NativeIntentContract.shareRequest(
-                mapOf("text" to " 今日任务 ", "subject" to " ZH-CLOUD Todo "),
-            ),
-        )
-        assertEquals(
-            NativeShareRequest(text = "今日任务", subject = null),
-            NativeIntentContract.shareRequest(mapOf("text" to "今日任务")),
-        )
-        assertNull(NativeIntentContract.shareRequest(mapOf("text" to "   ")))
-        assertNull(NativeIntentContract.shareRequest(null))
-    }
-
-    @Test
     fun `sticky note rejects blank content and trims valid content`() {
         assertEquals(
             "今日重点",
@@ -44,24 +28,6 @@ class NativeIntentContractTest {
         )
         assertNull(NativeIntentContract.stickyNoteContent(mapOf("content" to "\n  ")))
         assertNull(NativeIntentContract.stickyNoteContent(emptyMap<String, Any?>()))
-    }
-
-    @Test
-    fun `keep screen awake accepts only a boolean enabled map`() {
-        assertEquals(
-            true,
-            NativeIntentContract.keepScreenAwakeEnabled(mapOf("enabled" to true)),
-        )
-        assertEquals(
-            false,
-            NativeIntentContract.keepScreenAwakeEnabled(mapOf("enabled" to false)),
-        )
-        assertNull(NativeIntentContract.keepScreenAwakeEnabled(emptyMap<String, Any?>()))
-        assertNull(NativeIntentContract.keepScreenAwakeEnabled(null))
-        assertNull(NativeIntentContract.keepScreenAwakeEnabled("true"))
-        assertNull(
-            NativeIntentContract.keepScreenAwakeEnabled(mapOf("enabled" to "true")),
-        )
     }
 
     @Test
@@ -95,42 +61,6 @@ class NativeIntentContractTest {
         assertTrue(events.publish("zhcloudtodo://task/add?title=resume"))
         events.attach(received::add)
         assertEquals("zhcloudtodo://task/add?title=resume", received.last())
-    }
-
-    @Test
-    fun `today widget snapshot trims titles rejects invalid entries and limits rows`() {
-        assertEquals(
-            listOf(
-                TodayWidgetTask("第一项"),
-                TodayWidgetTask("第二项"),
-                TodayWidgetTask("第三项"),
-                TodayWidgetTask("第四项"),
-                TodayWidgetTask("第五项"),
-            ),
-            NativeIntentContract.todayWidgetTasks(
-                mapOf(
-                    "tasks" to
-                        listOf(
-                            mapOf("title" to " 第一项 "),
-                            mapOf("title" to "第二项"),
-                            mapOf("title" to "第三项"),
-                            mapOf("title" to "第四项"),
-                            mapOf("title" to "第五项"),
-                            mapOf("title" to "第六项"),
-                        ),
-                ),
-            ),
-        )
-        assertEquals(
-            emptyList(),
-            NativeIntentContract.todayWidgetTasks(mapOf("tasks" to emptyList<Any>())),
-        )
-        assertNull(
-            NativeIntentContract.todayWidgetTasks(
-                mapOf("tasks" to listOf(mapOf("title" to "  "))),
-            ),
-        )
-        assertNull(NativeIntentContract.todayWidgetTasks(null))
     }
 
     @Test

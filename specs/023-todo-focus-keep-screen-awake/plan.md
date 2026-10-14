@@ -5,9 +5,8 @@
 
 ## 不变条件
 
-- 只使用现有 `zh_cloud_todo/native` 通道；不新增依赖、服务端 API、Drift 或 outbox。
+- 常亮从 Issue #562 起交给 `wakelock_plus`，不再走 `zh_cloud_todo/native` 的 `setKeepScreenAwake`。缺失插件或不支持平台必须安全返回 false。
 - 常亮是本地系统展示副作用，所有会话事实仍由现有 Pomodoro API 和 15 秒同步决定。
-- 缺失通道/不支持平台必须安全降级，不能把“偏好已保存”叙述成“系统已启用”。
 
 ## Task 1: 本地偏好与旧 JSON 合同
 
