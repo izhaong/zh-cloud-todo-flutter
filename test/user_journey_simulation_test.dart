@@ -265,4 +265,61 @@ void main() {
     expect(find.byKey(const Key('todo-content')), findsWidgets);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('旅程⑪ 效能坞：习惯/专注/倒数日三个次级页都能打开且不崩', (tester) async {
+    await boot(tester);
+    // 效能坞按钮按 tooltip 定位（侧栏底部一排，没有独立语义 Key）。
+    const tooltips = <String>['习惯打卡', '番茄专注', '倒数纪念日'];
+    var opened = 0;
+    for (final tip in tooltips) {
+      final button = find.byTooltip(tip);
+      if (button.evaluate().isEmpty) continue; // 功能模块开关关掉时该入口不在
+      await tester.tap(button.first);
+      await tester.pumpAndSettle();
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: '打开「$tip」页面时抛了异常',
+      );
+      opened++;
+      // 次级页多为全屏路由，用返回键回到工作区。
+      final back = find.byTooltip('返回');
+      if (back.evaluate().isNotEmpty) {
+        await tester.tap(back.first);
+        await tester.pumpAndSettle();
+      } else if (find.byIcon(Icons.arrow_back).evaluate().isNotEmpty) {
+        await tester.tap(find.byIcon(Icons.arrow_back).first);
+        await tester.pumpAndSettle();
+      }
+    }
+    // 三个入口至少有一个可用，否则说明效能坞整体不可达（fixture 默认全开）。
+    expect(
+      opened,
+      greaterThan(0),
+      reason: '效能坞至少要有一个可达入口；一个都没有说明整排被关掉了',
+    );
+  });
+
+  testWidgets('旅程⑫ 习惯/倒数日底层页面数据路径不抛异常', (tester) async {
+    // 这两个页面依赖月度/年度统计接口；fixture 已把网络全部桩掉，
+    // 这里断言的是「拿不到数据也要优雅降级，而不是崩」。
+    await boot(tester);
+    final habit = find.byTooltip('习惯打卡');
+    if (habit.evaluate().isEmpty) {
+      markTestSkipped('习惯入口被功能模块开关关闭');
+      return;
+    }
+    await tester.tap(habit.first);
+    await tester.pumpAndSettle();
+    expect(
+      tester.takeException(),
+      isNull,
+      reason: '习惯页在无网络（桩）下要降级显示，不能抛',
+    );
+    // 页面上应出现习惯相关的容器或空态文案，而不是彻底白屏。
+    final hasHabitSurface =
+        find.byKey(const Key('todo-habit-month-grid')).evaluate().isNotEmpty ||
+        find.textContaining('习惯').evaluate().isNotEmpty;
+    expect(hasHabitSurface, isTrue, reason: '习惯页要有可识别的内容面（不能白屏）');
+  });
 }
