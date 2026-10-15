@@ -294,12 +294,78 @@ class SyncCoordinator {
     return succeeded;
   }
 
+  /// 同一实体在一批里只保留最后一条变更。
+  ///
+  /// 冲突根因：`enqueue` 不去重（同实体多次本地写会排多条 outbox），它们携带
+  /// **相同的 baseRevision**。服务端处理第一条后 revision +1，同批后续条目必然
+  /// `REVISION_CONFLICT`，界面弹「N 项同步需要处理 / 其中 M 项与其他设备冲突」；
+  /// 又因为 [push] 只取 queued|retryable，failed 行永不被重取，横幅永久挂着。
+  ///
+  /// 安全性依据：syncable 实体的 payload 都是**全量快照**（如 task 走
+  /// `_taskPayload` 带 parentTaskId/sortOrder/全部字段），后写完全覆盖前写；
+  /// 而**追加型动作**（reminder_dispatch_action、repeat_occurrence_action）与
+  /// `task_tag` 每次都生成新的 entityLocalId，天然落在不同分组，不会被误合并。
+  ///
+  /// 被合并掉的旧条目统一置 `resolved`（保留审计与幂等键，不物理删除，
+  /// 与 `BoardPreferenceRepository.recoverLatestFailed` 同一口径）。
+  ///
+  /// 返回被取代、已置 resolved 的 outbox 行 id，供调用方跳过不发送。
+  Future<Set<int>> _supersedeWithinBatch(
+    List<TodoSyncChange> changes,
+  ) async {
+    // 分组键：优先 serverId（已同步实体），否则 localId；两者都无则不参与合并。
+    final latestByKey = <String, TodoSyncChange>{};
+    for (final change in changes) {
+      final key = _batchSupersedeKey(change);
+      if (key == null) continue;
+      final existing = latestByKey[key];
+      if (existing == null || _isLaterThan(change, existing)) {
+        latestByKey[key] = change;
+      }
+    }
+    final superseded = <int>{};
+    for (final change in changes) {
+      final key = _batchSupersedeKey(change);
+      if (key == null) continue;
+      if (latestByKey[key]!.id == change.id) continue;
+      await (db.update(
+        db.todoSyncChanges,
+      )..where((row) => row.id.equals(change.id))).write(
+        const TodoSyncChangesCompanion(status: Value('resolved')),
+      );
+      superseded.add(change.id);
+    }
+    return superseded;
+  }
+
+  /// 同批合并的分组键；`null` 表示该条不参与合并（信息不足，宁可多发）。
+  String? _batchSupersedeKey(TodoSyncChange change) {
+    final serverId = change.entityServerId;
+    if (serverId != null) return '${change.entity}#s$serverId';
+    final localId = change.entityLocalId;
+    if (localId != null && localId.isNotEmpty) {
+      return '${change.entity}#l$localId';
+    }
+    return null;
+  }
+
+  /// 同组内判定谁更晚：createdAt 为主，id 为确定性兜底（同毫秒也能定序）。
+  bool _isLaterThan(TodoSyncChange candidate, TodoSyncChange current) {
+    final byTime = candidate.createdAt.compareTo(current.createdAt);
+    if (byTime != 0) return byTime > 0;
+    return candidate.id > current.id;
+  }
+
   Future<int> _pushSyncableChanges(List<TodoSyncChange> changes) async {
     if (changes.isEmpty) return 0;
     _prepareTemporaryEntityIds(changes);
+    // 先做批内合并：同实体多条会让除最后一条外全部撞 REVISION_CONFLICT。
+    final supersededIds = await _supersedeWithinBatch(changes);
     final dtos = <SyncChangeDto>[];
     final sentChanges = <TodoSyncChange>[];
     for (final change in changes) {
+      // 已被本批更新的同实体变更取代；它已置 resolved，不再发给服务端。
+      if (supersededIds.contains(change.id)) continue;
       try {
         final dto = await _toChangeDto(change);
         if (dto != null) {
