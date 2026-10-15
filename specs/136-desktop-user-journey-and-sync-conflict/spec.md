@@ -111,7 +111,7 @@ lib/features/task/widgets/task_row.dart
 | --- | --- |
 | `test/sync_batch_supersede_test.dart` | 模拟服务端「按 revision 只接受第一条」的真实语义：断言同实体只发 1 条、`conflicts` 为空；不同 localId 不互相取代。**变异验证**：注释掉合并逻辑后立刻变红 |
 | `test/e2e_real_db_conflict_test.dart` | 在本机真实库**副本**上验证入队行为与真机一致。路径按 macOS 沙箱动态解析，无库则 `skip`，不拖红 CI |
-| `test/user_journey_simulation_test.dart` | **15 条用户旅程**（见下） |
+| `test/user_journey_simulation_test.dart` | **16 条用户旅程**（见下，0 skip） |
 
 ### 用户旅程清单
 
@@ -124,7 +124,7 @@ lib/features/task/widgets/task_row.dart
 | ④ | 选中任务 → 详情区出真实内容 → 不再显示空态 |
 | ⑤ | 完成任务勾选框可点，状态切换不抛异常 |
 | ⑥ | 逐个切视图：列表 / 看板 / 时间线 / 四象限 / 日历 |
-| ⑦ | 搜索入口（无独立图标时 skip） |
+| ⑦ | 搜索：⌘K 指令菜单 →「全局搜索」→ 搜索页（断言面板真的关闭） |
 | ⑧ | 设置页可打开且「星期开始于」在 |
 | ⑨ | **暗色模式**四区齐全 + 选中态左色条存在 |
 | ⑩ | 空数据也进得去（空态不崩） |
