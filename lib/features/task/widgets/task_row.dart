@@ -114,25 +114,36 @@ class TaskRow extends StatelessWidget {
       button: true,
       child: SizedBox(
         height: rowHeight,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-          child: AnimatedContainer(
-            key: Key('task-row-surface-${data.id}'),
-            duration: TodoLayoutTokens.stateTransitionDurationFor(context),
-            curve: Curves.easeOutCubic,
-            decoration: BoxDecoration(
-              color: background,
-              border: focused ? Border.all(color: colors.accent) : null,
-              borderRadius: BorderRadius.circular(
-                TodoLayoutTokens.selectedRowRadius,
+        // 参照滴答：任务行之间有**很淡的分隔线**（行内边距处留白，线不顶到边缘）。
+        // 用 0.5px + divider 色，只在浅色下可见、不会把列表切成表格。
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: TodoLayoutTokens.dividerFor(brightness),
+                width: 0.5,
               ),
             ),
-            child: InkWell(
-              onTap: onTap,
-              hoverColor: Colors.transparent,
-              borderRadius: BorderRadius.circular(
-                TodoLayoutTokens.selectedRowRadius,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+            child: AnimatedContainer(
+              key: Key('task-row-surface-${data.id}'),
+              duration: TodoLayoutTokens.stateTransitionDurationFor(context),
+              curve: Curves.easeOutCubic,
+              decoration: BoxDecoration(
+                color: background,
+                border: focused ? Border.all(color: colors.accent) : null,
+                borderRadius: BorderRadius.circular(
+                  TodoLayoutTokens.selectedRowRadius,
+                ),
               ),
+              child: InkWell(
+                onTap: onTap,
+                hoverColor: Colors.transparent,
+                borderRadius: BorderRadius.circular(
+                  TodoLayoutTokens.selectedRowRadius,
+                ),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Row(
@@ -228,27 +239,18 @@ class TaskRow extends StatelessWidget {
                     ),
                     if (dateText != null) ...[
                       const SizedBox(width: 12),
+                      // 参照滴答：日期/时间是**纯色文字**（今天为品牌蓝），
+                      // 不是带底色的胶囊徽章。此前做的蓝底胶囊与参照图不符，
+                      // 这里回到文字形态；key 保留以免既有测试与语义断链。
                       badge == DateBadge.today
-                          ? Container(
+                          ? Text(
+                              dateText,
                               key: Key('task-date-today-${data.id}'),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: AppSpacing.sm,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: colors.today.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(
-                                  AppRadius.full,
-                                ),
-                              ),
-                              child: Text(
-                                dateText,
-                                textAlign: TextAlign.right,
-                                style: TextStyle(
-                                  color: colors.today,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                              textAlign: TextAlign.right,
+                              style: TextStyle(
+                                color: colors.today,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
                               ),
                             )
                           : Text(
@@ -295,6 +297,7 @@ class TaskRow extends StatelessWidget {
             ),
           ),
         ),
+      ),
       ),
     );
   }
