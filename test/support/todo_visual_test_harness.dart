@@ -108,5 +108,34 @@ Future<void> _ensureVisualFontsLoaded() {
     final iconLoader = FontLoader('MaterialIcons')
       ..addFont(Future.value(ByteData.sublistView(iconBytes)));
     await iconLoader.load();
+
+    // 清单图标用彩色 emoji（对齐滴答参照图）。测试环境默认字体不含 emoji 字形，
+    // 不加载就会拍成一排方块 —— 那样的 golden「绿」得毫无意义。
+    // 按平台探测系统 emoji 字体；本机找不到就跳过（CI 缺字体不该让用例红，
+    // 但本机必须能拍到真字形，见 [visualEmojiFontLoaded]）。
+    for (final path in const [
+      '/System/Library/Fonts/Apple Color Emoji.ttc', // macOS
+      '/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf', // Linux
+      r'C:\Windows\Fonts\seguiemj.ttf', // Windows
+    ]) {
+      final file = File(path);
+      if (!await file.exists()) continue;
+      try {
+        final bytes = await file.readAsBytes();
+        final emojiLoader = FontLoader('Apple Color Emoji')
+          ..addFont(Future.value(ByteData.sublistView(bytes)));
+        await emojiLoader.load();
+        _emojiFontLoaded = true;
+        break;
+      } on Object {
+        // 引擎不接受该格式（彩色位图字体）时跳过：此时 golden 会拍到方块，
+        // 由 golden 用例里的显式断言提示，而不是悄悄放过。
+        continue;
+      }
+    }
   }();
 }
+
+/// 是否成功加载了 emoji 字体（供 golden 用例决定能否断言 emoji 字形）。
+bool visualEmojiFontLoaded() => _emojiFontLoaded;
+bool _emojiFontLoaded = false;

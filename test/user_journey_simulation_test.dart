@@ -281,20 +281,38 @@ void main() {
     ]) {
       expect(find.byKey(Key(key)), findsWidgets, reason: '暗色下四区骨架缺 $key');
     }
-    // 暗色下选中行必须带品牌色左条（本次视觉改造的核心可见点）。
+    // 暗色下选中行必须有**可辨的背景底**（对齐滴答参照：浅灰/深灰底，无左色条）。
+    //
+    // 历史：这里原先是断言「选中行带品牌色左条」；对照 specs/002 的滴答公开参考图
+    // 后确认滴答的选中态就是浅灰底、没有左条，于是移除了左条，该断言随之更新为
+    // 「看底色差异」并明确禁止把左条加回来，而不是把这段删掉不测。
     final row = find.byKey(const Key('todo-sidebar-row-inbox'));
-    final decorated = tester
+    final selectedMaterials = tester
+        .widgetList<Material>(
+          find.descendant(of: row, matching: find.byType(Material)),
+        )
+        .where((m) => m.color != null && m.color!.a > 0)
+        .toList();
+    expect(
+      selectedMaterials,
+      isNotEmpty,
+      reason: '暗色下选中行要有可见底色（选中态不能只在浅色生效）',
+    );
+    final leftBorders = tester
         .widgetList<AnimatedContainer>(
           find.descendant(of: row, matching: find.byType(AnimatedContainer)),
         )
         .where((c) => c.decoration is BoxDecoration)
         .map((c) => c.decoration! as BoxDecoration)
-        .where((d) => d.border != null)
+        .where(
+          (d) =>
+              d.border is Border && ((d.border! as Border).left.width) > 0,
+        )
         .toList();
     expect(
-      decorated,
-      isNotEmpty,
-      reason: '暗色下选中行也要有左色条（不能只在浅色生效）',
+      leftBorders,
+      isEmpty,
+      reason: '参照图的选中态没有左色条，别再把这个元素加回来',
     );
     expect(tester.takeException(), isNull);
   });

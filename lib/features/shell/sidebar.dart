@@ -1082,18 +1082,15 @@ class _SidebarRowState extends State<_SidebarRow> {
         child: AnimatedContainer(
           duration: TodoLayoutTokens.stateTransitionDurationFor(context),
           decoration: BoxDecoration(
-            // 选中态左侧品牌色条：给"当前在哪"一个明确的视觉锚点，而不是
-            // 只靠整行淡淡变灰（在 FAFAFA 画布上几乎看不出来）。走 border
-            // 绘制而不是在 Row 里加子组件 —— 这一行的子树组件数被
+            // 选中态按滴答参照：**浅灰底、无左色条**（specs/002 参考图里
+            // 选中的「收集箱」就是浅灰圆角行）。
+            //
+            // 历史：本仓库曾一度加过「蓝底 + 3px 左蓝条」以求醒目，但那与参照
+            // 图的观感相反，用户对照参考图后判定「不太一样」。这里回到浅灰，
+            // 并把品牌色留给真正需要强调的位置（图标/计数/日期）。
+            //
+            // 不加子组件（走 decoration 绘制）：这一行的子树组件数被
             // test/features/list/list_share_entry_test.dart 的 ④ 判据钉死 47。
-            border: Border(
-              left: BorderSide(
-                color: widget.selected
-                    ? widget.colors.accent
-                    : Colors.transparent,
-                width: 3,
-              ),
-            ),
             borderRadius: BorderRadius.circular(
               TodoLayoutTokens.selectedRowRadius,
             ),
@@ -1108,7 +1105,7 @@ class _SidebarRowState extends State<_SidebarRow> {
               : null,
           child: Material(
             color: widget.selected
-                ? TodoLayoutTokens.selectedRowTintFor(brightness)
+                ? TodoLayoutTokens.selectedRowFor(brightness)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(
               TodoLayoutTokens.selectedRowRadius,
@@ -1137,12 +1134,27 @@ class _SidebarRowState extends State<_SidebarRow> {
                     // （见上），不在这里加子组件 —— 这一行的子树组件数被
                     // test/features/list/list_share_entry_test.dart 的 ④ 判据钉死。
                     if (widget.emoji != null)
+                      // 参照图里清单图标是**彩色 emoji 且比单色图标略大**
+                      // （🚀💼🏡💖 一眼可辨）。这里给 emoji 单独的槽位与字号，
+                      // 不沿用 sidebarIconSize（那是单色图标的 18px 光学尺寸）。
+                      //
+                      // fontFamilyFallback 显式带上系统 emoji 字体：golden 场景把
+                      // 主题字体设成精简的 TodoGoldenSans（不含 emoji 字形），
+                      // 不指定 fallback 就会拍成空白/方块，图看着「绿」其实没字形。
                       SizedBox(
                         width: TodoLayoutTokens.sidebarIconSize,
                         child: Text(
                           widget.emoji!,
                           textAlign: TextAlign.center,
-                          style: AppTextStyles.body.copyWith(fontSize: 16),
+                          style: AppTextStyles.body.copyWith(
+                            fontSize: 17,
+                            height: 1,
+                            fontFamilyFallback: const [
+                              'Apple Color Emoji',
+                              'Noto Color Emoji',
+                              'Segoe UI Emoji',
+                            ],
+                          ),
                         ),
                       )
                     else
