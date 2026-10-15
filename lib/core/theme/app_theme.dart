@@ -31,6 +31,8 @@ class AppColors {
     required this.today,
     required this.future,
     required this.completed,
+    required this.dangerSurface,
+    required this.dangerOnSurface,
   });
 
   final Color background; // 页面暖白底
@@ -54,6 +56,15 @@ class AppColors {
   final Color future; // 未来灰
   final Color completed; // 已完成绿/灰
 
+  /// 错误容器底（淡红）：用于错误提示块。
+  ///
+  /// 不直接用 [destructive] 铺底 —— Material 会把 errorContainer 当作
+  /// 「可承载文字的浅色容器」，填纯红会得到一块刺眼的大红（实测）。
+  final Color dangerSurface;
+
+  /// 错误容器上的文字（深红）：与 [dangerSurface] 成对，保证可读对比度。
+  final Color dangerOnSurface;
+
   /// 浅色品牌语义色。
   static const light = AppColors(
     background: TodoLayoutTokens.lightCanvas,
@@ -74,6 +85,8 @@ class AppColors {
     today: Color(0xFF1D5FD1), // 今天
     future: Color(0xFF5F6368), // 未来
     completed: Color(0xFF666666), // 已完成
+    dangerSurface: Color(0xFFFDECEC), // 错误块淡红底
+    dangerOnSurface: Color(0xFFB42318), // 错误块深红字
   );
 
   /// 暗色模式（后续解锁；Phase 0 先置 stub）
@@ -96,6 +109,8 @@ class AppColors {
     today: Color(0xFF4D8FFA),
     future: Color(0xFFA1A1A1),
     completed: Color(0xFFB0B0B0),
+    dangerSurface: Color(0xFF3A1D1F), // 暗色错误块：深红底
+    dangerOnSurface: Color(0xFFFFB4AB), // 暗色错误块：浅红字
   );
 }
 

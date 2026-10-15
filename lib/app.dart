@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'core/theme/app_theme.dart';
+import 'core/theme/todo_layout_tokens.dart';
 import 'core/update/desktop_update.dart';
 import 'features/home/home_shell.dart';
 import 'features/shell/app_theme_controller.dart';
@@ -125,13 +126,27 @@ class _TodoFlutterAppState extends ConsumerState<TodoFlutterApp> {
 /// 主题；此前测试各自 `ThemeData.light()`，测出来的观感与用户看到的不是一回事。
 ThemeData buildDarkTheme() => ThemeData(
   brightness: Brightness.dark,
+  // 角色补齐理由同 [buildLightTheme]：只填 6 个会让其余角色回落到 Material
+  // 兜底值（errorContainer 纯红、outlineVariant 纯黑等），观感立刻掉档。
   colorScheme: ColorScheme.dark(
     primary: AppColors.dark.accent,
     onPrimary: AppColors.dark.accentForeground,
+    primaryContainer: TodoLayoutTokens.darkSelectedRowTint,
+    onPrimaryContainer: AppColors.dark.accent,
     secondary: AppColors.dark.accent,
+    onSecondary: AppColors.dark.accentForeground,
+    secondaryContainer: TodoLayoutTokens.darkSelectedRowTint,
+    onSecondaryContainer: AppColors.dark.accent,
     surface: AppColors.dark.surface,
-    error: AppColors.dark.destructive,
     onSurface: AppColors.dark.foreground,
+    surfaceContainerHighest: AppColors.dark.muted,
+    onSurfaceVariant: AppColors.dark.mutedForeground,
+    outline: AppColors.dark.border,
+    outlineVariant: AppColors.dark.border,
+    error: AppColors.dark.destructive,
+    onError: AppColors.dark.destructiveForeground,
+    errorContainer: AppColors.dark.dangerSurface,
+    onErrorContainer: AppColors.dark.dangerOnSurface,
   ),
   scaffoldBackgroundColor: AppColors.dark.background,
   useMaterial3: true,
@@ -163,6 +178,23 @@ ThemeData buildDarkTheme() => ThemeData(
   inputDecorationTheme: InputDecorationTheme(
     filled: true,
     fillColor: AppColors.dark.surface,
+    labelStyle: TextStyle(
+      fontSize: 13,
+      color: AppColors.dark.mutedForeground,
+    ),
+    floatingLabelStyle: TextStyle(
+      fontSize: 12,
+      fontWeight: FontWeight.w500,
+      color: AppColors.dark.accent,
+    ),
+    hintStyle: TextStyle(
+      fontSize: 13,
+      color: AppColors.dark.mutedForeground,
+    ),
+    contentPadding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.md,
+      vertical: 14,
+    ),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(AppRadius.md),
       borderSide: BorderSide(color: AppColors.dark.border),
@@ -170,6 +202,10 @@ ThemeData buildDarkTheme() => ThemeData(
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(AppRadius.md),
       borderSide: BorderSide(color: AppColors.dark.border),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      borderSide: BorderSide(color: AppColors.dark.accent, width: 1.5),
     ),
   ),
   dialogTheme: DialogThemeData(
@@ -243,13 +279,34 @@ ThemeData buildDarkTheme() => ThemeData(
 /// 应用浅色主题（公开理由同 [buildDarkTheme]）。
 ThemeData buildLightTheme() => ThemeData(
   brightness: Brightness.light,
+  // 只填 6 个角色时，其余角色会回落到 Material 兜底值 —— 实测
+  // `errorContainer` 变成纯红、`outlineVariant` 变成**纯黑**、
+  // `surfaceContainerHighest` 变成纯白，界面就会「看着不像成品」
+  // （登录页的错误块刺眼、输入框边框发黑都是这个原因）。
+  // 所以这里把用得到的容器/描边角色一起按品牌色板补齐。
   colorScheme: ColorScheme.light(
     primary: AppColors.light.accent,
     onPrimary: AppColors.light.accentForeground,
+    // 容器色：淡品牌蓝底（用于选中态、模式切换器、提示块）。
+    primaryContainer: TodoLayoutTokens.lightSelectedRowTint,
+    onPrimaryContainer: AppColors.light.accent,
     secondary: AppColors.light.accent,
+    onSecondary: AppColors.light.accentForeground,
+    secondaryContainer: TodoLayoutTokens.lightSelectedRowTint,
+    onSecondaryContainer: AppColors.light.accent,
     surface: AppColors.light.surface,
-    error: AppColors.light.destructive,
     onSurface: AppColors.light.foreground,
+    // 三级表面：浅灰，供 chips / 次级分区使用。
+    surfaceContainerHighest: AppColors.light.muted,
+    onSurfaceVariant: AppColors.light.mutedForeground,
+    // 描边：浅灰分割线（此前回落到纯黑，输入框像描了黑边）。
+    outline: AppColors.light.border,
+    outlineVariant: AppColors.light.border,
+    error: AppColors.light.destructive,
+    onError: AppColors.light.destructiveForeground,
+    // 错误容器：淡红底 + 深红字，而不是 Material 兜底的纯红块。
+    errorContainer: AppColors.light.dangerSurface,
+    onErrorContainer: AppColors.light.dangerOnSurface,
   ),
   scaffoldBackgroundColor: AppColors.light.background,
   useMaterial3: true,
@@ -281,6 +338,26 @@ ThemeData buildLightTheme() => ThemeData(
   inputDecorationTheme: InputDecorationTheme(
     filled: true,
     fillColor: AppColors.light.surface,
+    // 输入框统一：淡灰描边 + 品牌蓝聚焦 + 浮起标签不压边线。
+    // labelStyle 显式给字号/颜色，避免默认 16px 黑字压在边框上显得「土」
+    // （Issue #650 用户截图反馈）。
+    labelStyle: TextStyle(
+      fontSize: 13,
+      color: AppColors.light.mutedForeground,
+    ),
+    floatingLabelStyle: TextStyle(
+      fontSize: 12,
+      fontWeight: FontWeight.w500,
+      color: AppColors.light.accent,
+    ),
+    hintStyle: TextStyle(
+      fontSize: 13,
+      color: AppColors.light.mutedForeground,
+    ),
+    contentPadding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.md,
+      vertical: 14,
+    ),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(AppRadius.md),
       borderSide: BorderSide(color: AppColors.light.border),
@@ -288,6 +365,10 @@ ThemeData buildLightTheme() => ThemeData(
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(AppRadius.md),
       borderSide: BorderSide(color: AppColors.light.border),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      borderSide: BorderSide(color: AppColors.light.accent, width: 1.5),
     ),
   ),
   dialogTheme: DialogThemeData(
