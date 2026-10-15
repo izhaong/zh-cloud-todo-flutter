@@ -234,6 +234,86 @@ void main() {
 
     expect(FocusManager.instance.primaryFocus, isNotNull);
   });
+
+  // -------------------------------------------------------------------------
+  // 模式切换的布局稳定性
+  //
+  // 用户反馈（Issue #650）：「切换密码或验证码时 登录高度会变 会弹」。
+  // 根因：密码/验证码两种模式的字段集合不同（验证码模式多一个验证码框、少一行
+  // 「注册 / 忘记密码」），条件渲染的 if 数量也不同，且 Column 直接换内容、
+  // 没有任何尺寸过渡 ⇒ 卡片高度阶跃。
+  //
+  // 契约：**同一视口下，密码 ↔ 验证码切换后表单高度必须一致**。
+  // -------------------------------------------------------------------------
+
+  testWidgets('切密码↔验证码时登录卡片高度不变（不再「弹」）', (tester) async {
+    await _setViewport(tester, const Size(1440, 900));
+    await _pumpAuthPage(tester);
+
+    final passwordHeight = tester.authCardHeight();
+
+    await tester.tap(find.text('验证码'));
+    await tester.pumpAndSettle();
+    final smsHeight = tester.authCardHeight();
+
+    expect(
+      smsHeight,
+      closeTo(passwordHeight, 1.0),
+      reason: '密码 → 验证码后卡片高度必须保持一致（用户看到的「弹一下」就在这里）',
+    );
+
+    await tester.tap(find.text('密码'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.authCardHeight(),
+      closeTo(passwordHeight, 1.0),
+      reason: '验证码 → 密码回来时高度也要还原',
+    );
+  });
+
+  testWidgets('窄屏同样保持模式切换高度稳定', (tester) async {
+    await _setViewport(tester, const Size(390, 844));
+    await _pumpAuthPage(tester);
+
+    final passwordHeight = tester.authCardHeight();
+    await tester.tap(find.text('验证码'));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.authCardHeight(),
+      closeTo(passwordHeight, 1.0),
+      reason: '窄屏是用户最常遇到的登录形态，切换同样不能跳',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('切换模式不得改变外层滚动区高度（不引起整页重排）', (tester) async {
+    await _setViewport(tester, const Size(1440, 900));
+    await _pumpAuthPage(tester);
+
+    final listFinder = find.byKey(const ValueKey('todo-auth-list'));
+    final before = tester.getSize(listFinder);
+
+    await tester.tap(find.text('验证码'));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getSize(listFinder).height,
+      closeTo(before.height, 1.0),
+      reason: '模式切换只应换字段内容，不应改变外层可用高度（否则整页重排）',
+    );
+  });
+}
+
+/// 取登录卡片（表单根 Material）的高度。
+extension on WidgetTester {
+  double authCardHeight() {
+    final card = find.ancestor(
+      of: find.byKey(const ValueKey('todo-auth-title')),
+      matching: find.byType(Material),
+    );
+    return getSize(card.first).height;
+  }
 }
 
 Future<void> _setViewport(WidgetTester tester, Size size) async {

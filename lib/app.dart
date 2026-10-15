@@ -98,8 +98,8 @@ class _TodoFlutterAppState extends ConsumerState<TodoFlutterApp> {
         locale: kLocale,
         supportedLocales: kSupportedLocales,
         localizationsDelegates: kLocalizationsDelegates,
-        theme: _lightTheme(),
-        darkTheme: _darkTheme(),
+        theme: buildLightTheme(),
+        darkTheme: buildDarkTheme(),
         themeMode: themeMode,
         home: const Scaffold(body: Center(child: CircularProgressIndicator())),
       );
@@ -111,15 +111,19 @@ class _TodoFlutterAppState extends ConsumerState<TodoFlutterApp> {
       locale: kLocale,
       supportedLocales: kSupportedLocales,
       localizationsDelegates: kLocalizationsDelegates,
-      theme: _lightTheme(),
-      darkTheme: _darkTheme(),
+      theme: buildLightTheme(),
+      darkTheme: buildDarkTheme(),
       themeMode: themeMode,
       routerConfig: router,
     );
   }
 }
 
-ThemeData _darkTheme() => ThemeData(
+/// 应用暗色主题。
+///
+/// 公开（去掉下划线）是为了让 golden / 视觉回归测试能渲染**与真实应用一致**的
+/// 主题；此前测试各自 `ThemeData.light()`，测出来的观感与用户看到的不是一回事。
+ThemeData buildDarkTheme() => ThemeData(
   brightness: Brightness.dark,
   colorScheme: ColorScheme.dark(
     primary: AppColors.dark.accent,
@@ -236,7 +240,8 @@ ThemeData _darkTheme() => ThemeData(
   ),
 );
 
-ThemeData _lightTheme() => ThemeData(
+/// 应用浅色主题（公开理由同 [buildDarkTheme]）。
+ThemeData buildLightTheme() => ThemeData(
   brightness: Brightness.light,
   colorScheme: ColorScheme.light(
     primary: AppColors.light.accent,
