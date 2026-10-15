@@ -322,4 +322,25 @@ void main() {
         find.textContaining('习惯').evaluate().isNotEmpty;
     expect(hasHabitSurface, isTrue, reason: '习惯页要有可识别的内容面（不能白屏）');
   });
+
+  testWidgets('旅程⑬ 成就与勋章页可从设置进入且不崩', (tester) async {
+    await boot(tester);
+    await tapSidebarRow(tester, 'todo-sidebar-row-settings');
+
+    final entry = find.text('成就与勋章');
+    expect(entry, findsWidgets, reason: '设置页要有「成就与勋章」入口');
+    await tester.tap(entry.first);
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.takeException(),
+      isNull,
+      reason: '成就页在无网络（桩）下要降级显示，不能抛',
+    );
+    expect(
+      find.textContaining('成就').evaluate(),
+      isNotEmpty,
+      reason: '成就页要有可识别内容面（不能白屏）',
+    );
+  });
 }
