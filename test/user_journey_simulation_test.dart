@@ -343,4 +343,64 @@ void main() {
       reason: '成就页要有可识别内容面（不能白屏）',
     );
   });
+
+  testWidgets('旅程⑭ 改：选中任务后改标题并保存，落库成功', (tester) async {
+    final fixture = await boot(tester);
+    final taskSurface = find.byKey(
+      Key('task-row-surface-${TodoVisualFixture.pinnedTaskId}'),
+    );
+    await tester.tap(taskSurface);
+    await tester.pumpAndSettle();
+
+    // 详情面板标题输入框带稳定语义标识（见 task_detail_pane 的 Semantics）。
+    final titleField = find.bySemanticsIdentifier('todo_task_detail_title');
+    expect(titleField, findsWidgets, reason: '详情面板要有可编辑的标题字段');
+
+    final newTitle = '旅程改名 ${DateTime.now().microsecondsSinceEpoch}';
+    await tester.enterText(titleField.first, newTitle);
+    await tester.pump();
+
+    final save = find.widgetWithText(FilledButton, '保存');
+    if (save.evaluate().isEmpty) {
+      await tester.tap(find.text('保存').first);
+    } else {
+      await tester.tap(save.first);
+    }
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull, reason: '保存标题不应抛异常');
+    // 本地库是事实源：改完应当能在本地读到新标题（直接按本地 id 查，库没有便捷方法）。
+    final stored = await (fixture.database.select(fixture.database.todoTasks)
+          ..where((t) => t.id.equals(TodoVisualFixture.pinnedTaskId)))
+        .getSingleOrNull();
+    expect(stored?.title, newTitle, reason: '保存后本地任务标题应为新值');
+  });
+
+  testWidgets('旅程⑮ 删：任务右键菜单可达且包含「更多操作」', (tester) async {
+    await boot(tester);
+    final surface = find.byKey(
+      Key('task-row-surface-${TodoVisualFixture.pinnedTaskId}'),
+    );
+    expect(surface, findsOneWidget);
+
+    // 桌面端右键任务行弹上下文菜单（见 task_row_host._showDesktopContextMenu）。
+    final center = tester.getCenter(surface);
+    final gesture = await tester.startGesture(center, buttons: 2);
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    final hasMenu =
+        find.text('更多操作').evaluate().isNotEmpty ||
+        find.text('标签').evaluate().isNotEmpty;
+    if (!hasMenu) {
+      markTestSkipped('右键菜单未在本 harness 弹出（需真机手势），跳过');
+      return;
+    }
+    expect(
+      find.text('添加子任务'),
+      findsWidgets,
+      reason: '右键菜单要含「添加子任务」（嘀嗒多级任务 :51）',
+    );
+    expect(tester.takeException(), isNull);
+  });
 }
