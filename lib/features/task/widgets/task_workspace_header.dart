@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/brand_colors.dart';
 import '../../../core/theme/todo_layout_tokens.dart';
 import '../../../state/repositories/task_query_repository.dart';
@@ -190,19 +191,16 @@ class TaskWorkspaceHeader extends StatelessWidget {
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
+                        style: AppTextStyles.display.copyWith(
                           color: colors.foreground,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       '$taskCount',
-                      style: TextStyle(
+                      style: AppTextStyles.fieldLabel.copyWith(
                         color: colors.mutedForeground,
-                        fontSize: 12,
                       ),
                     ),
                   ],
@@ -378,8 +376,7 @@ class TaskWorkspaceHeader extends StatelessWidget {
                           if (hideCompletedHint != null)
                             Text(
                               hideCompletedHint!,
-                              style: TextStyle(
-                                fontSize: 11,
+                              style: AppTextStyles.metadata.copyWith(
                                 color: colors.mutedForeground,
                               ),
                             ),

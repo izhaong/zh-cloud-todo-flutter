@@ -592,10 +592,8 @@ class _SidebarHeader extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: Text(
               '任务清单',
-              style: TextStyle(
+              style: AppTextStyles.panelTitle.copyWith(
                 color: colors.foreground,
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -623,11 +621,8 @@ class _GroupTitle extends StatelessWidget {
           alignment: Alignment.centerLeft,
           child: Text(
             title,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
+            style: AppTextStyles.groupHeader.copyWith(
               color: colors.mutedForeground,
-              letterSpacing: 0.2,
             ),
           ),
         ),
@@ -790,7 +785,7 @@ class _FolderGroup extends StatelessWidget {
           ),
           title: Text(
             folder.name,
-            style: TextStyle(fontSize: 13, color: colors.foreground),
+            style: AppTextStyles.body.copyWith(color: colors.foreground),
           ),
           iconColor: colors.mutedForeground,
           collapsedIconColor: colors.mutedForeground,
@@ -906,7 +901,7 @@ class _TagRow extends ConsumerWidget {
                 children: const [
                   Icon(Icons.push_pin, size: 18),
                   SizedBox(width: 4),
-                  Text('置顶', style: TextStyle(fontSize: 13)),
+                  Text('置顶', style: AppTextStyles.body),
                   SizedBox(width: 12),
                 ],
               ),
@@ -998,15 +993,15 @@ class _ListRowState extends ConsumerState<_ListRow> {
                 children: const [
                   Icon(Icons.push_pin, size: 18),
                   SizedBox(width: 4),
-                  Text('置顶', style: TextStyle(fontSize: 13)),
+                  Text('置顶', style: AppTextStyles.body),
                   SizedBox(width: 12),
                   Icon(Icons.edit_outlined, size: 18),
                   SizedBox(width: 4),
-                  Text('编辑', style: TextStyle(fontSize: 13)),
+                  Text('编辑', style: AppTextStyles.body),
                   SizedBox(width: 12),
                   Icon(Icons.delete_outline, size: 18),
                   SizedBox(width: 4),
-                  Text('删除', style: TextStyle(fontSize: 13)),
+                  Text('删除', style: AppTextStyles.body),
                   SizedBox(width: 12),
                 ],
               ),
@@ -1087,16 +1082,33 @@ class _SidebarRowState extends State<_SidebarRow> {
         child: AnimatedContainer(
           duration: TodoLayoutTokens.stateTransitionDurationFor(context),
           decoration: BoxDecoration(
-            border: _focused
-                ? Border.all(color: widget.colors.accent, width: 1.5)
-                : null,
+            // 选中态左侧品牌色条：给"当前在哪"一个明确的视觉锚点，而不是
+            // 只靠整行淡淡变灰（在 FAFAFA 画布上几乎看不出来）。走 border
+            // 绘制而不是在 Row 里加子组件 —— 这一行的子树组件数被
+            // test/features/list/list_share_entry_test.dart 的 ④ 判据钉死 47。
+            border: Border(
+              left: BorderSide(
+                color: widget.selected
+                    ? widget.colors.accent
+                    : Colors.transparent,
+                width: 3,
+              ),
+            ),
             borderRadius: BorderRadius.circular(
               TodoLayoutTokens.selectedRowRadius,
             ),
           ),
+          foregroundDecoration: _focused
+              ? BoxDecoration(
+                  border: Border.all(color: widget.colors.accent, width: 1.5),
+                  borderRadius: BorderRadius.circular(
+                    TodoLayoutTokens.selectedRowRadius,
+                  ),
+                )
+              : null,
           child: Material(
             color: widget.selected
-                ? TodoLayoutTokens.selectedRowFor(brightness)
+                ? TodoLayoutTokens.selectedRowTintFor(brightness)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(
               TodoLayoutTokens.selectedRowRadius,
@@ -1121,13 +1133,16 @@ class _SidebarRowState extends State<_SidebarRow> {
                   children: [
                     // 嘀嗒《02-用清单管理任务》:86：设置了 Emoji 图标的清单，
                     // 行首图标换成该 Emoji；没设的清单维持原语义不变。
+                    // 选中态左侧品牌色条走 AnimatedContainer 的 border 绘制
+                    // （见上），不在这里加子组件 —— 这一行的子树组件数被
+                    // test/features/list/list_share_entry_test.dart 的 ④ 判据钉死。
                     if (widget.emoji != null)
                       SizedBox(
                         width: TodoLayoutTokens.sidebarIconSize,
                         child: Text(
                           widget.emoji!,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 16),
+                          style: AppTextStyles.body.copyWith(fontSize: 16),
                         ),
                       )
                     else
@@ -1146,13 +1161,11 @@ class _SidebarRowState extends State<_SidebarRow> {
                         widget.label,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: widget.selected
-                              ? FontWeight.w600
-                              : FontWeight.w400,
-                          color: widget.colors.foreground,
-                        ),
+                        style:
+                            (widget.selected
+                                    ? AppTextStyles.bodySelected
+                                    : AppTextStyles.body)
+                                .copyWith(color: widget.colors.foreground),
                       ),
                     ),
                     ?widget.trailing,
@@ -1301,7 +1314,7 @@ class _EfficiencyButtonState extends State<_EfficiencyButton> {
                   widget.label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: AppTextStyles.badge.copyWith(
                     fontSize: 10,
                     color: widget.colors.mutedForeground,
                   ),
@@ -1331,11 +1344,7 @@ class _Badge extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: TextStyle(
-          fontSize: 11,
-          color: colors.mutedForeground,
-          fontWeight: FontWeight.w600,
-        ),
+        style: AppTextStyles.badge.copyWith(color: colors.mutedForeground),
       ),
     );
   }
