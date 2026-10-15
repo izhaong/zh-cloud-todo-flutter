@@ -138,12 +138,31 @@ class AppSpacing {
   static const double xxl = 32;
 }
 
-/// 文字层级令牌（A 路线排版收敛：任务标题 15/22 w500，元数据 11，空状态 18/14）。
+/// 文字层级令牌（A 路线排版收敛）。
 ///
 /// 全局 [ThemeData.textTheme] 在 app.dart 接管兜底；业务内联 fontSize
 /// 应逐步收敛到这里，避免 10/11/13/13.5/15/17 散落漂移。
+///
+/// 层级阶梯（一眼可辨，而不是挤在 11-13 之间）：
+/// - display 18/24：空状态大标题、页面主标题
+/// - title   15/22：任务标题、面板标题
+/// - subtitle 14/20：区块标题、弹层标题
+/// - body    13/18：正文、侧栏行、列表项
+/// - label   12/16：字段标签、分组标题（w600 拉开与正文的对比）
+/// - caption 11/15：元数据、时间戳、徽章文字
 abstract final class AppTextStyles {
-  /// 任务标题 / 页面标题正文（15px / 行高 22）。
+  // ---------- display ----------
+
+  /// 空状态大标题 / 页面主标题。
+  static const TextStyle display = TextStyle(
+    fontSize: 18,
+    height: 24 / 18,
+    fontWeight: FontWeight.w600,
+  );
+
+  // ---------- title ----------
+
+  /// 任务标题 / 面板标题（15px / 行高 22）。
   static const TextStyle taskTitle = TextStyle(
     fontSize: 15,
     height: 22 / 15,
@@ -157,28 +176,55 @@ abstract final class AppTextStyles {
     fontWeight: FontWeight.w400,
   );
 
-  /// 侧栏行 / 次级正文（13px）。
-  static const TextStyle body = TextStyle(fontSize: 13, height: 1.35);
-
-  /// 元数据 / 时间戳（11px）。
-  static const TextStyle metadata = TextStyle(
-    fontSize: 11,
-    height: 1.3,
-    fontWeight: FontWeight.w400,
-  );
-
-  /// 空状态标题。
-  static const TextStyle emptyTitle = TextStyle(
-    fontSize: 18,
-    height: 1.3,
+  /// 面板 / 弹层标题（w600，比正文明显重）。
+  static const TextStyle panelTitle = TextStyle(
+    fontSize: 15,
+    height: 22 / 15,
     fontWeight: FontWeight.w600,
   );
 
-  /// 空状态副文案。
+  /// 字段值（详情面板的输入框文字等），与正文同层但行高更舒朗。
+  static const TextStyle fieldValue = TextStyle(
+    fontSize: 14,
+    height: 20 / 14,
+    fontWeight: FontWeight.w400,
+  );
+
+  // ---------- subtitle ----------
+
+  /// 区块标题（详情面板「截止时间」「清单」这类分区名）。
+  static const TextStyle sectionTitle = TextStyle(
+    fontSize: 13,
+    height: 18 / 13,
+    fontWeight: FontWeight.w600,
+  );
+
+  /// 弹层 / 空状态副文案。
   static const TextStyle emptySubtitle = TextStyle(
     fontSize: 14,
     height: 1.4,
     fontWeight: FontWeight.w400,
+  );
+
+  // ---------- body ----------
+
+  /// 侧栏行 / 正文（13px）。
+  static const TextStyle body = TextStyle(fontSize: 13, height: 1.35);
+
+  /// 侧栏行选中态（w600 与未选中拉开）。
+  static const TextStyle bodySelected = TextStyle(
+    fontSize: 13,
+    height: 1.35,
+    fontWeight: FontWeight.w600,
+  );
+
+  // ---------- label ----------
+
+  /// 字段标签（详情面板「标题」「描述」这类小标签）。
+  static const TextStyle fieldLabel = TextStyle(
+    fontSize: 12,
+    height: 16 / 12,
+    fontWeight: FontWeight.w500,
   );
 
   /// 分组标题（中文小字，不加 letterSpacing / 大写化）。
@@ -187,6 +233,25 @@ abstract final class AppTextStyles {
     height: 1.3,
     fontWeight: FontWeight.w600,
   );
+
+  // ---------- caption ----------
+
+  /// 元数据 / 时间戳（11px）。
+  static const TextStyle metadata = TextStyle(
+    fontSize: 11,
+    height: 1.3,
+    fontWeight: FontWeight.w400,
+  );
+
+  /// 徽章 / 计数文字（11px w600，用于选中与未选中的数字对比）。
+  static const TextStyle badge = TextStyle(
+    fontSize: 11,
+    height: 1.3,
+    fontWeight: FontWeight.w600,
+  );
+
+  /// 空状态标题（保留旧名，等价于 [display]）。
+  static const TextStyle emptyTitle = display;
 }
 
 /// 阴影令牌（浅色下按层级给质感，暗色下由调用方降级为边框）。

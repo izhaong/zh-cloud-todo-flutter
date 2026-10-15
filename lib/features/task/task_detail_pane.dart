@@ -13,6 +13,7 @@ import '../../core/db/app_database.dart';
 import '../../core/sync/repeat_frequency_wire.dart';
 import '../../core/time/task_time_formatter.dart';
 import '../../core/time/task_time_mode.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/brand_colors.dart';
 import '../../core/theme/todo_layout_tokens.dart';
 import '../../core/widgets/app_widgets.dart';
@@ -1094,8 +1095,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                         parent.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
+                        style: AppTextStyles.body.copyWith(
                           color: colors.mutedForeground,
                         ),
                       ),
@@ -2486,16 +2486,28 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     }
 
     final colors = brandColors(context);
+    // 分区标题：加一枚品牌色小圆点做视觉锚，让「截止时间 / 清单 / 标签」
+    // 这些分区在长面板里一眼可分（原来只有一行 12px 灰字，几乎融进背景）。
     Widget sh(String s) => Padding(
-      padding: const EdgeInsets.only(top: 4, bottom: 6),
-      child: Text(
-        s,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          color: colors.mutedForeground,
-          letterSpacing: 0.3,
-        ),
+      padding: const EdgeInsets.only(top: 10, bottom: 6),
+      child: Row(
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: colors.accent,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            s,
+            style: AppTextStyles.sectionTitle.copyWith(
+              color: colors.mutedForeground,
+            ),
+          ),
+        ],
       ),
     );
 
@@ -2700,7 +2712,9 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
               Text(
                 '选择任务以查看详情',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: colors.mutedForeground, fontSize: 13),
+                style: AppTextStyles.body.copyWith(
+                  color: colors.mutedForeground,
+                ),
               ),
             ],
           ),
@@ -3012,7 +3026,7 @@ class _ParentTaskSheet extends StatelessWidget {
                 alignment: Alignment.centerLeft,
                 child: Text(
                   '关联主任务',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  style: AppTextStyles.panelTitle,
                 ),
               ),
             ),

@@ -58,6 +58,10 @@ abstract final class TodoLayoutTokens {
   static const Color lightHoverRow = Color(0xFFF7F7F7);
   static const Color lightSelectedRow = Color(0xFFF2F2F2);
 
+  // 选中态品牌着色：纯灰 F2F2F2 在 FAFAFA 画布上几乎看不出选中，
+  // 这里给一行淡淡的品牌蓝底 + 左侧色条，让"当前在哪"一眼可见。
+  static const Color lightSelectedRowTint = Color(0xFFE8F1FE);
+
   // Dark equivalents preserve the same hierarchy without copying a third-party
   // dark theme. They remain intentionally quiet and are resolved by brightness.
   // Surface 取 M3 推荐对比（0xFF1F1F1F），暗色下层级靠 border 不靠阴影。
@@ -66,6 +70,7 @@ abstract final class TodoLayoutTokens {
   static const Color darkDivider = Color(0x12FFFFFF);
   static const Color darkHoverRow = Color(0xFF2A2A2A);
   static const Color darkSelectedRow = Color(0xFF333333);
+  static const Color darkSelectedRowTint = Color(0xFF1B2A3F);
 
   static Color canvasFor(Brightness brightness) =>
       brightness == Brightness.dark ? darkCanvas : lightCanvas;
@@ -81,4 +86,10 @@ abstract final class TodoLayoutTokens {
 
   static Color selectedRowFor(Brightness brightness) =>
       brightness == Brightness.dark ? darkSelectedRow : lightSelectedRow;
+
+  /// 选中行的品牌着色（比 [selectedRowFor] 更醒目，用于"当前导航项"）。
+  static Color selectedRowTintFor(Brightness brightness) =>
+      brightness == Brightness.dark
+      ? darkSelectedRowTint
+      : lightSelectedRowTint;
 }

@@ -764,7 +764,9 @@ class _QuickAddBarState extends State<QuickAddBar> {
                     isDense: true,
                     contentPadding: EdgeInsets.zero,
                   ),
-                  style: TextStyle(fontSize: 13.5, color: colors.foreground),
+                  style: AppTextStyles.fieldValue.copyWith(
+                    color: colors.foreground,
+                  ),
                 ),
               ),
               _ToolIcon(
@@ -786,7 +788,12 @@ class _QuickAddBarState extends State<QuickAddBar> {
               if (_tagCount > 0)
                 // 桌面原来只有 tooltip 里的「标签」，而 tooltip 进不了读屏
                 // （实测见 task_quick_add_sheet.dart:203）⇒ 计数必须是看得见的文字。
-                Text('标签 $_tagCount', style: TextStyle(fontSize: 12)),
+                Text(
+                  '标签 $_tagCount',
+                  style: AppTextStyles.fieldLabel.copyWith(
+                    color: colors.mutedForeground,
+                  ),
+                ),
               _ToolIcon(
                 icon: Icons.label_outline,
                 tooltip: '标签',

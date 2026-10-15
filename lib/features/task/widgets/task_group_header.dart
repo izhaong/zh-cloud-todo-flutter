@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/brand_colors.dart';
 import '../../../core/theme/todo_layout_tokens.dart';
 
@@ -23,16 +24,16 @@ class TaskGroupHeader extends StatelessWidget {
           children: [
             Text(
               title,
-              style: TextStyle(
+              style: AppTextStyles.groupHeader.copyWith(
                 color: colors.foreground,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(width: 8),
             Text(
               '$count',
-              style: TextStyle(color: colors.mutedForeground, fontSize: 11),
+              style: AppTextStyles.metadata.copyWith(
+                color: colors.mutedForeground,
+              ),
             ),
           ],
         ),
