@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zh_cloud_todo_flutter/core/auth/auth_gateway.dart';
 import 'package:zh_cloud_todo_flutter/state/session_state.dart';
+import 'package:zh_cloud_todo_flutter/app.dart';
 import 'package:zh_cloud_todo_flutter/todo_auth_page.dart';
 
 void main() {
@@ -302,6 +303,68 @@ void main() {
       closeTo(before.height, 1.0),
       reason: '模式切换只应换字段内容，不应改变外层可用高度（否则整页重排）',
     );
+  });
+
+  // -------------------------------------------------------------------------
+  // 主题 colorScheme 完整性
+  //
+  // 用户反馈「登录表单样式还是之前的 / 看着不像成品」。根因不在登录页本身，
+  // 而在 `buildLightTheme/buildDarkTheme` 只填了 6 个 colorScheme 角色，
+  // 其余回落到 Material 兜底值 —— 实测：
+  //   errorContainer  → 纯红 rgb(229,72,77)（错误块刺眼）
+  //   outlineVariant  → **纯黑**（输入框像描了黑边）
+  //   primaryContainer→ 不透明品牌蓝（切换器变实心块）
+  //   surfaceContainerHighest → 纯白
+  //
+  // 契约：这些常用角色必须来自品牌色板，且彼此有可辨识的层级差。
+  // -------------------------------------------------------------------------
+
+  test('亮/暗主题的 colorScheme 关键角色不留 Material 兜底值', () {
+    for (final entry in {
+      'light': buildLightTheme().colorScheme,
+      'dark': buildDarkTheme().colorScheme,
+    }.entries) {
+      final name = entry.key;
+      final s = entry.value;
+
+      // 容器色不能等于「实心强调色」：否则容器会变成一块饱和色块。
+      expect(
+        s.primaryContainer,
+        isNot(s.primary),
+        reason: '$name：primaryContainer 不该等于 primary（会渲染成实心色块）',
+      );
+      expect(
+        s.errorContainer,
+        isNot(s.error),
+        reason: '$name：errorContainer 不该等于 error（错误块会变成刺眼纯红）',
+      );
+
+      // 错误容器上的文字必须与容器有对比（不能白字压浅红、也不能同色）。
+      expect(
+        s.onErrorContainer,
+        isNot(s.errorContainer),
+        reason: '$name：onErrorContainer 与 errorContainer 不能同色',
+      );
+
+      // outlineVariant 是输入框/分割线用色，纯黑/纯白都说明回落到了兜底值。
+      expect(
+        s.outlineVariant,
+        isNot(const Color(0xFF000000)),
+        reason: '$name：outlineVariant 回落到纯黑（输入框会像描黑边）',
+      );
+      expect(
+        s.outlineVariant,
+        isNot(const Color(0xFFFFFFFF)),
+        reason: '$name：outlineVariant 回落到纯白（描边会看不见）',
+      );
+
+      // 次级表面要与主表面有可辨差异，否则分区感消失。
+      expect(
+        s.surfaceContainerHighest,
+        isNot(s.surface),
+        reason: '$name：surfaceContainerHighest 与 surface 同色（分区无层级）',
+      );
+    }
   });
 }
 

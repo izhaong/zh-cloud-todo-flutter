@@ -27,5 +27,7 @@ AppColors brandColors(BuildContext context) {
     today: scheme.primary,
     future: Colors.grey,
     completed: Colors.green,
+    dangerSurface: scheme.errorContainer,
+    dangerOnSurface: scheme.onErrorContainer,
   );
 }
