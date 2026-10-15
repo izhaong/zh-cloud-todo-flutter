@@ -111,7 +111,7 @@ lib/features/task/widgets/task_row.dart
 | --- | --- |
 | `test/sync_batch_supersede_test.dart` | 模拟服务端「按 revision 只接受第一条」的真实语义：断言同实体只发 1 条、`conflicts` 为空；不同 localId 不互相取代。**变异验证**：注释掉合并逻辑后立刻变红 |
 | `test/e2e_real_db_conflict_test.dart` | 在本机真实库**副本**上验证入队行为与真机一致。路径按 macOS 沙箱动态解析，无库则 `skip`，不拖红 CI |
-| `test/user_journey_simulation_test.dart` | **12 条用户旅程**（见下） |
+| `test/user_journey_simulation_test.dart` | **13 条用户旅程**（见下） |
 
 ### 用户旅程清单
 
@@ -130,6 +130,7 @@ lib/features/task/widgets/task_row.dart
 | ⑩ | 空数据也进得去（空态不崩） |
 | ⑪ | 效能坞：习惯打卡 / 番茄专注 / 倒数纪念日逐个打开不崩 |
 | ⑫ | 习惯页在无网络（桩）下优雅降级，不白屏 |
+| ⑬ | 成就与勋章页可从设置进入，无网络下不白屏 |
 
 **边界（诚实声明）**：旅程用固定 fixture（内存 Drift + 网络全桩），
 **不连真实后端、不替代真机联调**；它能在无人值守下给出「主路径没断」的
