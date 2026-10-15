@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zh_cloud_todo_flutter/features/home/home_shell.dart';
@@ -202,17 +203,55 @@ void main() {
     }
   });
 
-  testWidgets('旅程⑦ 搜索入口可用（打开搜索页/面板不崩）', (tester) async {
+  testWidgets('旅程⑦ 搜索：⌘K 指令菜单含「全局搜索」，点开后搜索页可用', (tester) async {
     await boot(tester);
-    // 搜索按钮的 Key 随标题栏实现而定，这里按图标兜底找。
-    final search = find.byIcon(Icons.search);
-    if (search.evaluate().isEmpty) {
-      markTestSkipped('当前标题栏没有独立搜索图标，搜索入口走指令菜单');
+    // 宽屏标题栏**没有**独立搜索按钮（specs/109 裁定：⌘K 归指令菜单，
+    // 搜索降为面板里的一条命令），所以这里走真实入口而不是找图标。
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
+    await tester.pumpAndSettle();
+
+    final field = find.byKey(const Key('todo-command-palette-field'));
+    if (field.evaluate().isEmpty) {
+      markTestSkipped('本 harness 未触发 ⌘K（平台键映射差异），搜索入口由 '
+          'specs/109 的指令菜单用例覆盖');
       return;
     }
-    await tester.tap(search.first);
+
+    // 面板里应有「全局搜索」这条命令（搜索功能模块默认开启）。
+    // 用命令项的语义 Key 定位 —— 只按文案 find.text 会命中标题等其它节点，
+    // 且点不中时断言仍可能被面板自身的输入框满足（实测过这种"假绿"）。
+    final searchItem = find.byKey(
+      const Key('todo-command-palette-item-全局搜索'),
+    );
+    expect(
+      searchItem,
+      findsWidgets,
+      reason: '指令菜单要含「全局搜索」（搜索功能模块默认开启）',
+    );
+    // 命令列表在弹层里可滚动，目标项可能在折叠线以下 ⇒ 先滚到位再点，
+    // 否则 tap 会「未命中」而静默跳过（实测到过这种假绿）。
+    await tester.ensureVisible(searchItem.first);
     await tester.pumpAndSettle();
-    expect(tester.takeException(), isNull);
+    await tester.tap(searchItem.first);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull, reason: '打开搜索页不应抛异常');
+    // 关键：面板必须已关闭（_run 里 pop 后才 run），否则说明没真的点中，
+    // 断言会被面板自身满足而假绿。
+    expect(
+      find.byKey(const Key('todo-command-palette-field')),
+      findsNothing,
+      reason: '点命令后指令菜单要关闭并跳转，不能停在面板上',
+    );
+    // 搜索页要有可输入的搜索框（无网络桩下也要能渲染）。
+    expect(
+      find.byKey(const Key('task-search-filter')).evaluate().isNotEmpty ||
+          find.byType(TextField).evaluate().isNotEmpty,
+      isTrue,
+      reason: '搜索页要有可输入的搜索框或筛选入口（不能白屏）',
+    );
   });
 
   testWidgets('旅程⑧ 设置页可打开且分组齐全', (tester) async {
