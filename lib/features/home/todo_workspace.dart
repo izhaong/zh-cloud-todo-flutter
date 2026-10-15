@@ -334,7 +334,7 @@ class TodoWorkspace extends StatelessWidget {
       backgroundColor: colors.background,
       drawer: _sidebarDrawer(),
       appBar: _shellAppBar(context),
-      body: ColoredBox(
+      body: Material(
         key: const Key('todo-content'),
         color: colors.surface,
         child: content,
@@ -353,7 +353,13 @@ class TodoWorkspace extends StatelessWidget {
   }
 
   Widget _contentRegion(AppColors colors) {
-    return ColoredBox(
+    // 用 Material 而不是 ColoredBox 承载内容底色。
+    //
+    // 原因：ListTile 会把背景与水波纹画在**最近的 Material 祖先**上，中间夹一层
+    // 带底色的 ColoredBox 会把这些效果盖掉 —— Flutter 现在会直接抛
+    // 「ListTile background color or ink splashes may be invisible」。
+    // 日历日程视图的 ListTile 就踩在这个断言上（实测运行时报错）。
+    return Material(
       key: const Key('todo-content'),
       color: colors.surface,
       child: content,
