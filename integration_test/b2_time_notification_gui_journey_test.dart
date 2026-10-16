@@ -25,6 +25,33 @@ void main() {
       : Platform.environment['TODO_B1_E2E_PASSWORD'] ?? '';
 
   /// 由 runner 显式传入；不带这个 define 时（macOS / web）系统通知断言照常生效。
+  ///
+  /// ## iOS 这一腿为什么在本机只能跳过（FL #519，含补法）
+  ///
+  /// 不是产品缺陷，是**本机自动化能力边界**：同一断言在 Android（`shown=2`）与
+  /// macOS（`shown=6`）上都真的跑到了。两条路本机都实测走死：
+  ///
+  /// 1. `xcrun simctl privacy` 的 service 枚举里**没有 notifications**
+  ///    （只有 all / calendar / contacts[-limited] / location[-always] / photos[-add] /
+  ///    media-library / microphone / motion / reminders / siri）⇒ 命令行授权这条路不存在；
+  /// 2. 弹窗也没有可点的界面：本机 `xcode-select -p` 指向的 Xcode 其 `Applications/` 为空、
+  ///    `/Applications/Simulator.app` 不存在（`mdfind -name Simulator.app` 零命中），
+  ///    System Events 里也没有 `Simulator` 进程 ⇒ 模拟器只能 headless 跑，弹窗无法呈现更无法点。
+  ///
+  /// **在装了 `Simulator.app` 的机器上这样收掉这一腿**（授权对 bundle id 是持久的）：
+  ///
+  /// ```bash
+  /// # ① 起模拟器 UI
+  /// open -a Simulator --args -CurrentDeviceUDID <UDID>
+  /// # ② 让授权弹窗出现（带自己的 API 地址）
+  /// flutter run -d <UDID> --dart-define=TODO_API_BASE_URL=http://127.0.0.1:15808
+  /// # ③ 点「允许」（AppleScript 走 System Events 点 alert 按钮即可）
+  /// # ④ 重跑本文件，判据有两条：
+  /// #    那行 `system notification leg skipped` **不再出现**；且 `shown > 0`。
+  /// #    若仍 `shown=0`，那才是真缺陷（提醒没派发）。
+  /// ```
+  ///
+  /// 旅程侧不需要改代码：跳过这一腿时会打一行可见的 trace，不会出现「静默绿」。
   const skipSystemNotificationLeg = bool.fromEnvironment(
     'TODO_E2E_SKIP_SYSTEM_NOTIFICATION',
   );
