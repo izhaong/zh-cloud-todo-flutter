@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/api/error_text.dart';
 import '../../../core/db/app_database.dart';
 import '../../../core/task/task_swipe_preferences.dart';
 import '../../../core/theme/brand_colors.dart';
@@ -461,17 +462,29 @@ class _TaskRowHostState extends ConsumerState<TaskRowHost> {
                 },
               ),
             ListTile(
+              key: Key('todo-task-more-delete-${widget.task.id}'),
               leading: Icon(Icons.delete_outline, color: colors.destructive),
               title: const Text('删除'),
-              onTap: () => Navigator.pop(sheetContext),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _runMoreMenuAction(
+                  (repo, messenger) => _confirmSwipeDelete(repo, messenger),
+                );
+              },
             ),
             ListTile(
+              key: Key('todo-task-more-move-list-${widget.task.id}'),
               leading: Icon(
                 Icons.drive_file_move_outline,
                 color: colors.accent,
               ),
               title: const Text('移动到清单'),
-              onTap: () => Navigator.pop(sheetContext),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _runMoreMenuAction(
+                  (repo, messenger) => _pickSwipeTargetList(repo, messenger),
+                );
+              },
             ),
             if (widget.taskSections.isNotEmpty)
               ListTile(
@@ -484,19 +497,100 @@ class _TaskRowHostState extends ConsumerState<TaskRowHost> {
                 },
               ),
             ListTile(
+              key: Key('todo-task-more-reminder-${widget.task.id}'),
               leading: Icon(Icons.alarm_add_outlined, color: colors.accent),
               title: const Text('设置提醒'),
-              onTap: () => Navigator.pop(sheetContext),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _addReminderForTask();
+              },
             ),
             ListTile(
+              key: Key('todo-task-more-tags-${widget.task.id}'),
               leading: Icon(Icons.label_outline, color: colors.accent),
               title: const Text('编辑标签'),
-              onTap: () => Navigator.pop(sheetContext),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _runMoreMenuAction((_, _) => _pickTags(context));
+              },
             ),
           ],
         ),
       ),
     );
+  }
+
+  /// 右键/底部表那条「更多操作」的落库入口。
+  ///
+  /// 这张表原先有四颗只 `Navigator.pop`、不写库的死钮（FL #604）：
+  /// 「删除」「移动到清单」「设置提醒」「编辑标签」。它们要的行为在左滑动作表里
+  /// **已经各自实现过一遍**，所以这里只做「取仓储 + 取 messenger + 转调」，
+  /// 不再重造第二份口径 —— 删除的确认框文案、换清单的父子同清单校验、
+  /// 改日期的墙钟换算三处都只有一份实现。
+  ///
+  /// `taskRepo == null`（库未就绪）时给出可见反馈：死钮的原始症状正是「点了没反应」，
+  /// 静默 return 会复刻同一个症状。
+  Future<void> _runMoreMenuAction(
+    Future<void> Function(TaskRepository repo, ScaffoldMessengerState messenger)
+    action,
+  ) async {
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('本地数据还没准备好，请稍后再试')));
+      return;
+    }
+    if (!mounted) return;
+    await action(repo, ScaffoldMessenger.of(context));
+  }
+
+  /// 「设置提醒」：**新建一条提醒**，不是改截止时间。
+  ///
+  /// 详情页那份提醒编辑器是 `_TaskDetailPaneState` 的私有方法（还有 allDay /
+  /// timeMode / timeZone 三个表单态要读），在行卡片里重造一份就等于把「提醒」
+  /// 的口径分叉成两份。这里走仓储的最小写路径：选一个时间点 → 建 ABSOLUTE 提醒，
+  /// 与详情页「指定时间（ABSOLUTE）」档同语义。
+  Future<void> _addReminderForTask() async {
+    final reminders = ref.read(reminderRepositoryProvider);
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    if (reminders == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('提醒存储未就绪')));
+      return;
+    }
+    final now = ref.read(currentDateTimeProvider)();
+    final initial = widget.task.dueAt ?? now.add(const Duration(hours: 1));
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 5),
+    );
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+    if (time == null || !mounted) return;
+    final fireAt = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
+    try {
+      await reminders.create(taskId: widget.task.id, fireAt: fireAt);
+      if (!mounted) return;
+      messenger.showSnackBar(const SnackBar(content: Text('已添加提醒')));
+    } on Object catch (error) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('提醒添加失败：${describeError(error)}')),
+      );
+    }
   }
 
   bool get _canStartPomodoro {
