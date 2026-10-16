@@ -356,6 +356,8 @@ void main() {
       overridesBuilder: (database) => [
         sidebarTaskDropControllerProvider.overrideWithValue(
           SidebarTaskDropController(
+            // `null` = 这批用例的库里没有更新的一行 ⇒ 判据退回拖出快照（存量语义不变）。
+            loadTask: (taskId) async => null,
             moveTask: (taskId, listId) async => throw StateError('故意写失败'),
             attachTag: (taskId, tagId) async {},
             scheduleToDay: (taskId, targetDay) async {},
@@ -396,6 +398,8 @@ void main() {
     test('落回自己所在的清单 ⇒ skipped，一次写都不发', () async {
       final calls = <String>[];
       final controller = SidebarTaskDropController(
+        // `null` = 这批用例的库里没有更新的一行 ⇒ 判据退回拖出快照（存量语义不变）。
+        loadTask: (taskId) async => null,
         moveTask: (taskId, listId) async => calls.add('$taskId->$listId'),
         attachTag: (taskId, tagId) async {},
         scheduleToDay: (taskId, targetDay) async {},
@@ -414,6 +418,8 @@ void main() {
       final order = <String>[];
       final gate = Completer<void>();
       final controller = SidebarTaskDropController(
+        // `null` = 这批用例的库里没有更新的一行 ⇒ 判据退回拖出快照（存量语义不变）。
+        loadTask: (taskId) async => null,
         moveTask: (taskId, listId) async {
           order.add('start:$listId');
           await gate.future;
@@ -446,6 +452,8 @@ void main() {
     test('第一刀写失败 ⇒ 报 failed，第二刀照样执行（链条没被旧错误吃掉）', () async {
       final order = <String>[];
       final controller = SidebarTaskDropController(
+        // `null` = 这批用例的库里没有更新的一行 ⇒ 判据退回拖出快照（存量语义不变）。
+        loadTask: (taskId) async => null,
         moveTask: (taskId, listId) async {
           order.add(listId);
           if (listId == 'BAD') throw StateError('仓储未就绪');
@@ -466,6 +474,61 @@ void main() {
       expect(first, SidebarDropOutcome.failed);
       expect(second, SidebarDropOutcome.applied);
       expect(order, ['BAD', 'L2'], reason: '失败后链条必须续上，不是把后续写静默吞掉');
+    });
+  });
+
+  group('#585 落点判据按库里当前行算，不按拖出快照', () {
+    SidebarTaskDropController controllerWith({
+      required List<String> writes,
+      required TodoTask? Function(String taskId) row,
+    }) => SidebarTaskDropController(
+      loadTask: (taskId) async => row(taskId),
+      moveTask: (taskId, listId) async => writes.add('$taskId->$listId'),
+      attachTag: (taskId, tagId) async {},
+      scheduleToDay: (taskId, targetDay) async {},
+    );
+
+    test('快照说「已在目标清单」、库里已不在 ⇒ 必须写（原来被静默吞掉）', () async {
+      final writes = <String>[];
+      final controller = controllerWith(
+        writes: writes,
+        // 拖出到落下之间被一次 pull 覆盖：库里已经不是 L1 了。
+        row: (id) => _payload(id: id, listId: 'L2'),
+      );
+
+      final outcome = await controller.moveToList(
+        _payload(id: 't1', listId: 'L1'), // 快照：已在 L1 ⇒ 旧代码据此 skip
+        'L1',
+      );
+
+      expect(outcome, SidebarDropOutcome.applied);
+      expect(writes, ['t1->L1'], reason: '库里的行已不在 L1 ⇒ 这一次拖必须落库；按快照判就把它静默吞了');
+    });
+
+    test('库里确实已在目标清单 ⇒ skipped，一次写都不发（幂等照旧）', () async {
+      final writes = <String>[];
+      final controller = controllerWith(
+        writes: writes,
+        row: (id) => _payload(id: id, listId: 'L1'),
+      );
+
+      expect(
+        await controller.moveToList(_payload(id: 't1', listId: 'L1'), 'L1'),
+        SidebarDropOutcome.skipped,
+      );
+      expect(writes, isEmpty);
+    });
+
+    test('库里那一行没了（被删）⇒ 退回快照判据，不崩也不白发', () async {
+      final writes = <String>[];
+      final controller = controllerWith(writes: writes, row: (_) => null);
+
+      expect(
+        await controller.moveToList(_payload(id: 't1', listId: 'L1'), 'L1'),
+        SidebarDropOutcome.skipped,
+        reason: '读不到当前行时退回快照：快照说已在 L1 ⇒ 不写',
+      );
+      expect(writes, isEmpty);
     });
   });
 }

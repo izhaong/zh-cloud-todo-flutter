@@ -82,10 +82,20 @@ enum SidebarDropOutcome { applied, skipped, failed }
 /// 「失败后链条不断」三件事能在不伪造整个仓储的前提下被测到。
 class SidebarTaskDropController {
   SidebarTaskDropController({
+    required this.loadTask,
     required this.moveTask,
     required this.attachTag,
     required this.scheduleToDay,
   });
+
+  /// 按 id 重读**库里的当前行**（FL #585）。返回 null = 这一行已经没了
+  /// （被删 / 被 pull 掉了）⇒ 调用方退回拖出快照，让下游仓储去决定怎么写。
+  ///
+  /// 为什么必须重读：落点判断原来吃的是 `Draggable<TodoTask>` 的 data，
+  /// 也就是**拖出那一刻**的快照；而拖出到落下之间可能有一次 pull 覆盖本地行。
+  /// 快照与库分叉时，落点按旧数据判「已满足」而 skip —— 那一次拖动被**静默吞掉**：
+  /// 没有写入、没有提示、任务还在原地（复现见 specs/149）。
+  final Future<TodoTask?> Function(String taskId) loadTask;
 
   /// 换清单；实现侧负责清掉属于原清单的 `sectionId`。
   final Future<void> Function(String taskId, String listId) moveTask;
@@ -107,11 +117,15 @@ class SidebarTaskDropController {
       !condition.satisfiedBy(_dueWallClockOf(task));
 
   Future<SidebarDropOutcome> moveToList(TodoTask task, String listId) {
-    if (!acceptsList(task, listId)) {
-      return Future.value(SidebarDropOutcome.skipped);
-    }
-    // :59「移动到目标清单」只提清单，没提时间 ⇒ 时间安排一毫秒都不动。
-    return _serialize(task.id, () => moveTask(task.id, listId));
+    return _serialize(task.id, () async {
+      // 判据在**落下时**按库里当前行算，不按拖出快照（FL #585）。
+      if (!acceptsList(await _currentRow(task), listId)) {
+        return SidebarDropOutcome.skipped;
+      }
+      // :59「移动到目标清单」只提清单，没提时间 ⇒ 时间安排一毫秒都不动。
+      await moveTask(task.id, listId);
+      return SidebarDropOutcome.applied;
+    });
   }
 
   /// 嘀嗒 `:61`「拖动到智能清单上」`:63`「会为任务自动添加该智能清单关联的时间条件」。
@@ -122,22 +136,28 @@ class SidebarTaskDropController {
     TodoTask task,
     SmartListTimeCondition condition,
   ) {
-    if (!acceptsSmartList(task, condition)) {
-      return Future.value(SidebarDropOutcome.skipped);
-    }
-    return _serialize(
-      task.id,
-      () => scheduleToDay(task.id, condition.targetDay),
-    );
+    return _serialize(task.id, () async {
+      // 同上：与清单行一起改才对称（两处原来是同一形状的两份）。
+      if (!acceptsSmartList(await _currentRow(task), condition)) {
+        return SidebarDropOutcome.skipped;
+      }
+      await scheduleToDay(task.id, condition.targetDay);
+      return SidebarDropOutcome.applied;
+    });
   }
 
   Future<SidebarDropOutcome> addTagToTask(TodoTask task, String tagId) {
-    return _serialize(task.id, () => attachTag(task.id, tagId));
+    // 这一处**本来就没有** #585 那个问题：`attachTag` 现读 `tagIdsOf` 再决定加不加，
+    // 判据落在库里而不是快照上。三个落点、同一口径，这里保持不动只跟签名。
+    return _serialize(task.id, () async {
+      await attachTag(task.id, tagId);
+      return SidebarDropOutcome.applied;
+    });
   }
 
   Future<SidebarDropOutcome> _serialize(
     String taskId,
-    Future<void> Function() operation,
+    Future<SidebarDropOutcome> Function() operation,
   ) async {
     var outcome = SidebarDropOutcome.applied;
     final previous = _chain[taskId] ?? Future<void>.value();
@@ -145,7 +165,9 @@ class SidebarTaskDropController {
     final current = previous
         .then((_) => operation())
         .then<void>(
-          (_) {},
+          (result) {
+            outcome = result;
+          },
           onError: (Object error, StackTrace stackTrace) {
             outcome = SidebarDropOutcome.failed;
           },
@@ -155,6 +177,10 @@ class SidebarTaskDropController {
     if (_chain[taskId] == current) _chain.remove(taskId);
     return outcome;
   }
+
+  /// 判据用的当前行：读得到就用库里的，读不到（行已删）退回拖出快照。
+  Future<TodoTask> _currentRow(TodoTask snapshot) async =>
+      await loadTask(snapshot.id) ?? snapshot;
 
   /// 与 `_dateConditionMatches`（任务页的过滤谓词）同一套展示墙钟换算，
   /// 否则「落点判据」与「这一档清单到底显示哪些任务」会各说各话。
@@ -176,6 +202,11 @@ final sidebarTaskDropControllerProvider = Provider<SidebarTaskDropController>((
   ref,
 ) {
   return SidebarTaskDropController(
+    loadTask: (taskId) async {
+      final repository = ref.read(taskRepositoryProvider);
+      if (repository == null) throw StateError('任务仓储未就绪');
+      return repository.getById(taskId);
+    },
     moveTask: (taskId, listId) async {
       final repository = ref.read(taskRepositoryProvider);
       if (repository == null) throw StateError('任务仓储未就绪');
