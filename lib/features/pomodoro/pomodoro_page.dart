@@ -1829,9 +1829,21 @@ class _FocusTrendChart extends StatelessWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        Text(
-                          '${item.count}',
-                          style: Theme.of(context).textTheme.labelSmall,
+                        // 单日 110 分钟是正常量级（4 个 25 分钟番茄 = 100 分钟）。
+                        // 34px 宽的列放不下三位数时，默认换行会把这一列顶高 20px，
+                        // 于是整条柱状图 RenderFlex 溢出（FL #577）。用 scaleDown
+                        // 让标签自己缩到列宽内：一两位保持原字号，三位及以上才缩。
+                        SizedBox(
+                          height: 20,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              '${item.count}',
+                              style: Theme.of(context).textTheme.labelSmall,
+                              maxLines: 1,
+                              softWrap: false,
+                            ),
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Container(

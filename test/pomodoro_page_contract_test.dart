@@ -1660,6 +1660,62 @@ void main() {
     expect(find.bySemanticsLabel('最佳专注时间按小时分布，最高 55 分钟'), findsOneWidget);
   });
 
+  // FL #577：三位数的日柱标签在 34px 宽里换行成两行，柱状图整条 RenderFlex 溢出。
+  // 单日专注 110 分钟是正常量级（4 个 25 分钟番茄 = 100 分钟），不是挑出来的假数据。
+  testWidgets('专注趋势日柱标签三位数（110 分钟）不溢出', (tester) async {
+    final api = _FakePomodoroApi()
+      ..statsByPeriod['week'] = const PomodoroStatsDto(
+        totalSessions: 5,
+        totalMinutes: 110,
+        bestHour: '09:00',
+        sessionTrend: [PomodoroDailyStatsDto(date: '2026-08-02', count: 5)],
+        minutesTrend: [
+          PomodoroDailyStatsDto(date: '2026-08-01', count: 110),
+          PomodoroDailyStatsDto(date: '2026-08-02', count: 8),
+        ],
+        hourlyTrend: [PomodoroHourlyStatsDto(hour: 9, minutes: 110)],
+      );
+    await _pumpPage(tester, api: api);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('pomodoro-stats-section')),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    // 溢出会被 Flutter 记为异常；先断言读数，最后统一查异常，
+    // 避免中途抛出掩盖真正的失败原因。
+    // 读数用 Semantics 标签定位这一格，避免与「最佳专注时间」那条 110 撞名。
+    expect(
+      find.bySemanticsLabel('2026-08-01 专注 110 分钟'),
+      findsOneWidget,
+      reason: '三位数那一格要真的渲染出来，不能因为放不下就整格消失',
+    );
+    expect(find.text('110'), findsWidgets, reason: '三位数照旧显示，不因放不下被裁掉或改写');
+    expect(tester.takeException(), isNull, reason: '三位数标签不该把日柱挤到溢出');
+  });
+
+  testWidgets('专注趋势日柱标签四位数（1100 分钟）+ 最大柱高也不溢出', (tester) async {
+    final api = _FakePomodoroApi()
+      ..statsByPeriod['week'] = const PomodoroStatsDto(
+        totalSessions: 5,
+        totalMinutes: 1100,
+        bestHour: '09:00',
+        sessionTrend: [PomodoroDailyStatsDto(date: '2026-08-02', count: 5)],
+        minutesTrend: [PomodoroDailyStatsDto(date: '2026-08-01', count: 1100)],
+        hourlyTrend: [PomodoroHourlyStatsDto(hour: 9, minutes: 1100)],
+      );
+    await _pumpPage(tester, api: api);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('pomodoro-stats-section')),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    // 四位数 + 最大柱高（这是本列最高的一档），应仍不溢出。
+    expect(find.bySemanticsLabel('2026-08-01 专注 1100 分钟'), findsOneWidget);
+    expect(tester.takeException(), isNull, reason: '四位数是最坏一档，仍不该溢出');
+  });
+
   testWidgets('老服务端没有 hourlyTrend 与按天数据时，两块都不出现（宁缺勿半张图）', (tester) async {
     final api = _FakePomodoroApi()
       ..statsByPeriod['week'] = const PomodoroStatsDto(
