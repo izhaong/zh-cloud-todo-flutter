@@ -413,7 +413,9 @@ void main() {
             theme: ThemeData.light().copyWith(
               extensions: const [AppThemeExtension(AppColors.light)],
             ),
-            home: const Scaffold(body: TasksByListPage(hideAppBar: true)),
+            home: const Scaffold(
+              body: TasksByListPage(hideAppBar: true, initialListId: 'inbox'),
+            ),
           ),
         ),
       );
@@ -897,7 +899,9 @@ void main() {
             theme: ThemeData.light().copyWith(
               extensions: const [AppThemeExtension(AppColors.light)],
             ),
-            home: const Scaffold(body: TasksByListPage(hideAppBar: true)),
+            home: const Scaffold(
+              body: TasksByListPage(hideAppBar: true, initialListId: 'inbox'),
+            ),
           ),
         ),
       );

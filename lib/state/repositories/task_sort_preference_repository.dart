@@ -31,7 +31,13 @@ class TaskSortPreferenceRepository {
     : _uuid = uuid ?? const Uuid();
 
   static const _sourceType = 'TASK_SORT';
-  static const _inboxSourceKey = 'inbox';
+
+  /// 「没有清单上下文」的键（智能清单 / 四象限 / 全部等页面）。
+  ///
+  /// 收集箱不用常量占位：它的清单 id 本身就是字面量 `'inbox'`，原样作键即可。
+  /// `listId == null` 则表示**这个页面不属于任何清单**，与收集箱是两件事 ——
+  /// 以前两者都落成 `'inbox'`，于是在「今天」里改排序会连带改掉收集箱的档位（FL #619 后半）。
+  static const _noListSourceKey = 'no-list';
 
   final AppDatabase _db;
   final SyncChangeQueue _queue;
@@ -111,8 +117,10 @@ class TaskSortPreferenceRepository {
     });
   }
 
+  /// `null` / 空串 = 没有清单上下文（智能清单等）⇒ 独立一把键；
+  /// 其余（含真实清单 `'inbox'`）按清单 id 原样作键。
   String _sourceKey(String? listId) =>
-      listId == null || listId.isEmpty ? _inboxSourceKey : listId;
+      listId == null || listId.isEmpty ? _noListSourceKey : listId;
 
   TaskSortPreference _decode(String? valueJson) {
     if (valueJson == null) return TaskSortPreference.fallback;

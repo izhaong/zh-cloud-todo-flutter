@@ -599,7 +599,13 @@ void main() {
           theme: ThemeData.light().copyWith(
             extensions: const [AppThemeExtension(AppColors.light)],
           ),
-          home: const Scaffold(body: TasksByListPage(hideAppBar: true)),
+          // fixture 的任务都在收集箱，且断言要的正是收集箱那把键
+          // （`'inbox'` 是真实清单 id，生产里由 `home_shell._effectiveListId`
+          // 对 `SmartList.inbox` 显式给出）。不传 `initialListId` 就成了
+          // 「无清单上下文」，那条路上正确的键是 `'no-list'`（FL #619 后半）。
+          home: const Scaffold(
+            body: TasksByListPage(hideAppBar: true, initialListId: 'inbox'),
+          ),
         ),
       ),
     );

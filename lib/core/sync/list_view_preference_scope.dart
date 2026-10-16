@@ -12,7 +12,12 @@ abstract final class ListViewPreferenceScope {
   static const canonicalPrefix = 'list-server:';
 
   /// 与设备无关、不许被归一改写的键。
-  static const deviceNeutralKeys = <String>{'inbox', 'list:inbox'};
+  ///
+  /// - `inbox` / `list:inbox`：收集箱在每台设备上都是同一把键。
+  /// - **`no-list`**：没有清单上下文的页面（智能清单 / 四象限 / 全部等）用的键。
+  ///   它是**设备无关**的字面量，绝不能按清单 UUID 去归一 —— 否则会被当成
+  ///   「一个还没上服务端的清单」而延后发送，跨端就又各写各的（FL #619 后半）。
+  static const deviceNeutralKeys = <String>{'inbox', 'list:inbox', 'no-list'};
 
   static const _prefixByType = <String, String>{
     'task_view': 'list:',
