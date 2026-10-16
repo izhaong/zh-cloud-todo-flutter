@@ -18,6 +18,26 @@
 
 实现：`lib/core/update/`。macOS 的 `SUFeedURL` / `SUPublicEDKey` 在 `macos/Runner/Info.plist`。Windows 的 `windows/dsa_pub.pem` 会装到 exe 旁边。
 
+## macOS 沙盒接线（必读，否则更新必失败）
+
+本应用是**沙盒**档（`com.apple.security.app-sandbox`），而 Sparkle 要把更新装到沙盒外，必须靠它自带的 Installer XPC 服务。沙盒下少配任一项，都会在下载完 DMG 后弹：
+
+```
+Update Error!
+An error occurred while launching the installer. Please try again later.
+```
+
+这句来自 Sparkle 的 `SPUInstallerDriver`。两处缺一不可（见 [Sparkle 沙盒文档](https://sparkle-project.org/documentation/sandboxing/)）：
+
+| 位置 | 键 |
+| --- | --- |
+| `macos/Runner/Info.plist` | `SUEnableInstallerLauncherService` = `true` |
+| `macos/Runner/Release.entitlements`、`DebugProfile.entitlements` | `com.apple.security.temporary-exception.mach-lookup.global-name` = `[$(PRODUCT_BUNDLE_IDENTIFIER)-spks, $(PRODUCT_BUNDLE_IDENTIFIER)-spki]` |
+
+不打开 `SUEnableDownloaderService`：本应用已声明 `com.apple.security.network.client`，按官方文档不该再开 Downloader。
+
+这两处是纯配置，删掉后 `flutter analyze` 与全部单测照样全绿，只有真正点更新才炸 —— 所以由 `test/macos_update_sandbox_contract_test.dart` 用文件判据钉住。
+
 ## 签名
 
 Sparkle 拒绝没有签名的更新包。私钥不入库，放在 GitHub Actions secrets：
@@ -29,7 +49,7 @@ Sparkle 拒绝没有签名的更新包。私钥不入库，放在 GitHub Actions
 
 本机已生成的对应文件在 `~/.config/zh-cloud-todo-flutter/updater-keys/`（`sparkle_ed25519.pem`、`dsa_priv.pem`）。仓库里只有公钥。没配这两个 secret 时，Release 仍会带上 `appcast.xml`，但安装包没有签名，更新装不上。
 
-macOS 安装还要求应用本身经过 Developer ID 签名。当前流水线打出的 DMG 未签名，Sparkle 在签名补上之前不能完成替换安装。
+appcast 的签名只覆盖安装包本身；**应用自身**的签名是另一件事。当前流水线打出的 DMG 是 ad-hoc 签名（本机 `security find-identity -v -p codesigning` 为 0 个有效身份）、未公证。Sparkle 在 ad-hoc 签名下会走「同 team ID 校验」的例外分支：沙盒接线正确时能完成替换安装，但首次仍会被 Gatekeeper 拦一次「未验证的开发者」，需要用户手动放行。要给他人分发免放行，仍需补 Developer ID 签名 + 公证。
 
 ## 构建参数（`--dart-define`）
 

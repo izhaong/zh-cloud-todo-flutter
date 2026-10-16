@@ -75,10 +75,11 @@ pubspec.yaml
 
 ### 4.1 登录（todo-member）
 
-- `AuthGatewayImpl`（实现 `AuthGateway`，复用 dio `ApiClient`）支持：密码登录、发送短信验证码、短信登录、重置密码、登出与会话校验。
+- `AuthGatewayImpl`（实现 `AuthGateway`，复用 dio `ApiClient`）支持：密码登录、发送短信验证码、短信登录、重置密码、登出、会话校验与刷新令牌。
 - 请求头：`Content-Type: application/json`、`tenant-id`、登录时附 `terminal: 30`，鉴权接口附 `Authorization: Bearer <token>`。
 - 响应信封 `{code,msg,data}`，`code != 0` 抛 `TodoMemberAuthException`；登录成功解析出 `TodoAuthSession`（userId / accessToken / refreshToken / expiresTime / mobile）。
 - 会话通过 `SessionStore` 持久化并由 Riverpod 会话控制器恢复；业务 Drift 数据库按 tenant/user 隔离，已登录不重复弹登录表单。
+- **访问令牌到期不等于登录失效**：后端 `default` 客户端 access token 仅 1800 秒、refresh token 2592000 秒，因此启动校验不过或业务请求被判 401 时，先用 `POST /app-api/todo-member/auth/refresh-token?refreshToken=…` 续签并落盘，只有服务端明确拒绝刷新（信封/HTTP 401、其它 4xx）才清会话并提示「登录状态已失效」；网络不可确认（连接失败、超时、5xx）保留本地会话与 Drift 数据。并发 401 共用同一次刷新。见 [`specs/137-desktop-update-and-session-refresh/`](specs/137-desktop-update-and-session-refresh/)。
 - 登录表现层按 900px 断点适配：宽屏使用“今日节奏 + 表单”双栏并垂直居中，窄屏使用表单优先单栏；密码、验证码、注册与重置密码四种模式保持同一卡片层级。
 - 表单支持密码显示/隐藏、手机号/密码/验证码自动填充提示、键盘焦点、动态错误播报，以及 320px / 200% 文本缩放 / 深色主题无溢出回归。设计与验收见 [`specs/003-todo-auth-visual-polish/`](specs/003-todo-auth-visual-polish/)。
 - 账号启用 RFC 6238 TOTP 后，密码与短信登录会根据后端业务码展示独立的 6 位动态码字段并保留原表单内容；账户安全页通过 `setup → confirm` 完成认证器绑定，关闭时必须提交当前动态码。
@@ -142,6 +143,7 @@ pubspec.yaml
 - Web 发布工作流复用同一共享 runner 测试门禁，并在同一个 Linux job 内完成构建、打包与可选 SSH 部署，直接复用 `.gha-dist`，不依赖 runner 当前不可达的 Gitea artifact blob endpoint；Desktop 跨平台制品传递仍使用固定完整提交 SHA 的 Gitea artifact v4 兼容 action，Linux 桌面 runner 需安装 Flutter secure storage CMake 配置依赖 `libsecret-1-dev`。
 - Jenkins 只维护一个根级 `zh-cloud-todo-flutter` Gitea Multibranch Job，并由 `zh-cloud` List View 展示；Jenkinsfile 不依赖 Generic Webhook Trigger 或 Folder Properties。`develop` 构建并可部署 test，`main` 只归档候选，SemVer tag 在同 digest promotion 尚未实现时 fail-closed；Flutter 运行时由仓库声明的容器提供，不依赖 Jenkins 全局构建工具。
 - 修改 Drift 表或生成模型后，运行 `dart run build_runner build --delete-conflicting-outputs` 并提交生成文件。
+- 桌面端应用内更新：macOS / Windows 用 Sparkle / WinSparkle 读 GitHub Release 的 `appcast.xml`，Android 下载 Release 里的 APK，Linux 打开 Release 页。macOS 是**沙盒**档，必须同时配 `SUEnableInstallerLauncherService` 与 entitlements 里的 `-spks` / `-spki` mach-lookup 例外，否则下载完更新会弹「launching the installer」失败——这两项是纯配置，删掉后 analyze 与全部单测照样绿，故由文件判据常驻钉住。见 [`specs/137-desktop-update-and-session-refresh/`](specs/137-desktop-update-and-session-refresh/) 与 `docs/engineering/04-desktop-github-release-update.md`。
 - 分支：`develop` 集成、`main` 发布；合并只走 PR，禁止直推主干；commit 用中文 Conventional Commits。
 
 ## 7. 相关文档入口
