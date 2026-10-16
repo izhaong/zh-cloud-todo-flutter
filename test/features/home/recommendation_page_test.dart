@@ -112,7 +112,7 @@ void main() {
           rescheduleCount: null,
           unfinishedDays: null,
           dueAt: null,
-          score:700,
+          score: 700,
         ),
         (
           id: 2,
@@ -123,7 +123,7 @@ void main() {
           rescheduleCount: null,
           unfinishedDays: null,
           dueAt: null,
-          score:1003,
+          score: 1003,
         ),
         (
           id: 4,
@@ -134,7 +134,7 @@ void main() {
           rescheduleCount: null,
           unfinishedDays: null,
           dueAt: DateTime(2026, 9, 24, 10),
-          score:900,
+          score: 900,
         ),
       ]);
 
@@ -177,7 +177,7 @@ void main() {
           rescheduleCount: null,
           unfinishedDays: null,
           dueAt: DateTime(2026, 9, 24, 9),
-          score:900,
+          score: 900,
         ),
         (
           id: 12,
@@ -190,7 +190,7 @@ void main() {
           rescheduleCount: null,
           unfinishedDays: null,
           dueAt: DateTime(2026, 9, 25, 9),
-          score:910,
+          score: 910,
         ),
         (
           id: 13,
@@ -201,7 +201,7 @@ void main() {
           rescheduleCount: null,
           unfinishedDays: null,
           dueAt: DateTime(2026, 9, 26, 9),
-          score:900,
+          score: 900,
         ),
       ]);
 
@@ -486,7 +486,9 @@ void main() {
       await settleDown(tester);
     });
 
-    testWidgets('「长时间未完成」按 unfinishedDays 拆三档，档内天数多在前且档头是 header', (tester) async {
+    testWidgets('「长时间未完成」按 unfinishedDays 拆三档，档内天数多在前且档头是 header', (
+      tester,
+    ) async {
       final semantics = tester.ensureSemantics();
       try {
         final db = await seedDb(tester, [
@@ -630,7 +632,7 @@ void main() {
           rescheduleCount: null,
           unfinishedDays: null,
           dueAt: null,
-          score:1003,
+          score: 1003,
         ),
       ]);
       int? selected;
@@ -654,7 +656,7 @@ void main() {
           rescheduleCount: null,
           unfinishedDays: null,
           dueAt: null,
-          score:700,
+          score: 700,
         ),
       ]);
       final completion = Completer<void>();
@@ -708,7 +710,7 @@ void main() {
           rescheduleCount: null,
           unfinishedDays: null,
           dueAt: null,
-          score:700,
+          score: 700,
         ),
       ]);
       final completion = Completer<void>();
@@ -746,7 +748,7 @@ void main() {
           rescheduleCount: null,
           unfinishedDays: null,
           dueAt: null,
-          score:800,
+          score: 800,
         ),
       ]);
       await pumpPage(
@@ -778,7 +780,7 @@ void main() {
           rescheduleCount: null,
           unfinishedDays: null,
           dueAt: DateTime(2026, 9, 24, 9),
-          score:900,
+          score: 900,
         ),
       ]);
       await pumpPage(tester, db: db, api: _OfflineRecommendationApi());
@@ -802,7 +804,7 @@ void main() {
           rescheduleCount: null,
           unfinishedDays: null,
           dueAt: null,
-          score:700,
+          score: 700,
         ),
       ]);
       final repository = RecommendationRepository(
@@ -866,7 +868,7 @@ void main() {
           rescheduleCount: null,
           unfinishedDays: null,
           dueAt: DateTime(2026, 9, 24, 9),
-          score:1099,
+          score: 1099,
         ),
       ]);
       tester.platformDispatcher.textScaleFactorTestValue = 1.3;

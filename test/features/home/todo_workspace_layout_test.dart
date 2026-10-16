@@ -74,26 +74,27 @@ void main() {
     }
   });
 
-  testWidgets('sync status announcement does not cover the workspace hit area', (
-    tester,
-  ) async {
-    await pumpTodoVisualScenario(
-      tester,
-      viewport: TodoVisualViewports.wide,
-      fixtureSet: TodoVisualFixtureSet.populated,
-      child: const HomeShell(),
-    );
+  testWidgets(
+    'sync status announcement does not cover the workspace hit area',
+    (tester) async {
+      await pumpTodoVisualScenario(
+        tester,
+        viewport: TodoVisualViewports.wide,
+        fixtureSet: TodoVisualFixtureSet.populated,
+        child: const HomeShell(),
+      );
 
-    final announcement = find.bySemanticsIdentifier('todo_sync_status');
-    expect(announcement, findsOneWidget);
-    // 播报锚点挂在 StackFit.expand 的 Stack 里：若不给松弛约束，
-    // SizedBox 会被撑满整个工作区，Web 无障碍层随之铺满视口并吞掉全部点击。
-    expect(
-      tester.getSize(announcement),
-      TodoSyncStatusAnnouncement.anchorSize,
-      reason: '同步状态播报锚点必须保持最小尺寸，不能覆盖工作区命中区域',
-    );
-  });
+      final announcement = find.bySemanticsIdentifier('todo_sync_status');
+      expect(announcement, findsOneWidget);
+      // 播报锚点挂在 StackFit.expand 的 Stack 里：若不给松弛约束，
+      // SizedBox 会被撑满整个工作区，Web 无障碍层随之铺满视口并吞掉全部点击。
+      expect(
+        tester.getSize(announcement),
+        TodoSyncStatusAnnouncement.anchorSize,
+        reason: '同步状态播报锚点必须保持最小尺寸，不能覆盖工作区命中区域',
+      );
+    },
+  );
 
   for (final scenario in const [
     (name: 'wide', viewport: TodoVisualViewports.wide),

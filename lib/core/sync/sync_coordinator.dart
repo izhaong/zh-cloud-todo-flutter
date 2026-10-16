@@ -315,9 +315,7 @@ class SyncCoordinator {
   /// 与 `BoardPreferenceRepository.recoverLatestFailed` 同一口径）。
   ///
   /// 返回被取代、已置 resolved 的 outbox 行 id，供调用方跳过不发送。
-  Future<Set<int>> _supersedeWithinBatch(
-    List<TodoSyncChange> changes,
-  ) async {
+  Future<Set<int>> _supersedeWithinBatch(List<TodoSyncChange> changes) async {
     // 分组键：优先 serverId（已同步实体），否则 localId；两者都无则不参与合并。
     final latestByKey = <String, TodoSyncChange>{};
     for (final change in changes) {
@@ -333,11 +331,9 @@ class SyncCoordinator {
       final key = _batchSupersedeKey(change);
       if (key == null) continue;
       if (latestByKey[key]!.id == change.id) continue;
-      await (db.update(
-        db.todoSyncChanges,
-      )..where((row) => row.id.equals(change.id))).write(
-        const TodoSyncChangesCompanion(status: Value('resolved')),
-      );
+      await (db.update(db.todoSyncChanges)
+            ..where((row) => row.id.equals(change.id)))
+          .write(const TodoSyncChangesCompanion(status: Value('resolved')));
       superseded.add(change.id);
     }
     return superseded;
@@ -553,9 +549,10 @@ class SyncCoordinator {
         final tagLocalIds = (payload['tagIds'] as List? ?? const [])
             .map((tag) => tag.toString())
             .toList();
-        final previousTagLocalIds = (payload['previousTagIds'] as List? ?? const [])
-            .map((tag) => tag.toString())
-            .toList();
+        final previousTagLocalIds =
+            (payload['previousTagIds'] as List? ?? const [])
+                .map((tag) => tag.toString())
+                .toList();
 
         final task = await (db.select(
           db.todoTasks,
@@ -616,7 +613,10 @@ class SyncCoordinator {
 
   /// REST 通道复用 `{code,msg,data}` 信封：`code != 0` 必须当失败重试，
   /// 否则会像 task_tag 塞进 /sync 那样被静默吞掉。
-  void _throwIfEnvelopeFailed(Response<Map<String, dynamic>> response, String message) {
+  void _throwIfEnvelopeFailed(
+    Response<Map<String, dynamic>> response,
+    String message,
+  ) {
     final code = response.data?['code'];
     if (code != null && code != 0) {
       throw DioException(

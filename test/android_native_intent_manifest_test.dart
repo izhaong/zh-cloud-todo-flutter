@@ -20,9 +20,6 @@ void main() {
     );
     expect(manifest, contains('android:path="/add"'));
     expect(manifest, isNot(contains('android:pathPrefix="/add"')));
-    expect(
-      activity,
-      contains('"supportsLinkEvents" -> result.success(true)'),
-    );
+    expect(activity, contains('"supportsLinkEvents" -> result.success(true)'));
   });
 }

@@ -828,7 +828,7 @@ void main() {
       sheetChild(find.text('保存')),
       200,
       scrollable: sheetChild(find.byType(Scrollable)).first,
-);
+    );
     await tester.tap(sheetChild(find.text('保存')));
     await tester.pumpAndSettle();
 

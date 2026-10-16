@@ -15,27 +15,27 @@ void main() {
   final stamp = DateTime(2026, 10, 11);
 
   TodoList list(String id, {String? folderLocalId}) => TodoList(
-        id: id,
-        name: id,
-        folderLocalId: folderLocalId,
-        sortOrder: 0,
-        isPinned: false,
-        accessRole: 'owner',
-        writable: true,
-        backgroundType: 'theme',
-        showInSmartList: true,
-        updatedAt: stamp,
-        createdAt: stamp,
-      );
+    id: id,
+    name: id,
+    folderLocalId: folderLocalId,
+    sortOrder: 0,
+    isPinned: false,
+    accessRole: 'owner',
+    writable: true,
+    backgroundType: 'theme',
+    showInSmartList: true,
+    updatedAt: stamp,
+    createdAt: stamp,
+  );
 
   TodoFolder folder(String id, {String? parentId}) => TodoFolder(
-        id: id,
-        name: id,
-        parentId: parentId,
-        sortOrder: 0,
-        updatedAt: stamp,
-        createdAt: stamp,
-      );
+    id: id,
+    name: id,
+    parentId: parentId,
+    sortOrder: 0,
+    updatedAt: stamp,
+    createdAt: stamp,
+  );
 
   group('folderAndAncestors：清单所在文件夹要连同全部祖先', () {
     test('三层链：孙级的清单同时属于子与父', () {
@@ -99,19 +99,17 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           listsStreamProvider.overrideWith(
-            (ref) => Stream<List<TodoList>>.value(
-              [list('list-in-leaf', folderLocalId: 'leaf')],
-            ),
+            (ref) => Stream<List<TodoList>>.value([
+              list('list-in-leaf', folderLocalId: 'leaf'),
+            ]),
           ),
           foldersStreamProvider.overrideWith(
-            (ref) => Stream<List<TodoFolder>>.value(
-              [
-                folder('root'),
-                folder('mid', parentId: 'root'),
-                folder('leaf', parentId: 'mid'),
-                folder('elsewhere'),
-              ],
-            ),
+            (ref) => Stream<List<TodoFolder>>.value([
+              folder('root'),
+              folder('mid', parentId: 'root'),
+              folder('leaf', parentId: 'mid'),
+              folder('elsewhere'),
+            ]),
           ),
         ],
       );

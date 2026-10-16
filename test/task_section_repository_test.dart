@@ -55,21 +55,17 @@ void main() {
     expect(section.name, '本周');
     expect(task.sectionId, section.id);
     final changes = await db.select(db.todoSyncChanges).get();
-    expect(
-      changes.map((change) => change.entity),
-      [SyncEntities.taskSection, SyncEntities.task],
-    );
+    expect(changes.map((change) => change.entity), [
+      SyncEntities.taskSection,
+      SyncEntities.task,
+    ]);
   });
 
   test('分组只允许关联同一清单的任务', () async {
     final section = await sections.create(listId: 'list-a', name: '本周');
 
     await expectLater(
-      tasks.create(
-        listId: 'list-b',
-        sectionId: section.id,
-        title: '错误归组',
-      ),
+      tasks.create(listId: 'list-b', sectionId: section.id, title: '错误归组'),
       throwsArgumentError,
     );
   });
@@ -101,11 +97,7 @@ void main() {
     expect(
       changes.last,
       isA<TodoSyncChange>()
-          .having(
-            (change) => change.entity,
-            'entity',
-            SyncEntities.taskSection,
-          )
+          .having((change) => change.entity, 'entity', SyncEntities.taskSection)
           .having((change) => change.op, 'op', SyncOps.delete),
     );
   });

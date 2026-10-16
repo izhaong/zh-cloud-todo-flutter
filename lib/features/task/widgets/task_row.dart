@@ -144,160 +144,161 @@ class TaskRow extends StatelessWidget {
                 borderRadius: BorderRadius.circular(
                   TodoLayoutTokens.selectedRowRadius,
                 ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Row(
-                  children: [
-                    if (!desktopMode && expander != null) ...[
-                      expander!,
-                      const SizedBox(width: 2),
-                    ],
-                    if (indentLevel > 0) SizedBox(width: indentLevel * 14.0),
-                    if (data.listColor != null) ...[
-                      Container(
-                        width: 3,
-                        height: hasMetadata ? 30 : 24,
-                        decoration: BoxDecoration(
-                          color: data.listColor,
-                          borderRadius: BorderRadius.circular(2),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Row(
+                    children: [
+                      if (!desktopMode && expander != null) ...[
+                        expander!,
+                        const SizedBox(width: 2),
+                      ],
+                      if (indentLevel > 0) SizedBox(width: indentLevel * 14.0),
+                      if (data.listColor != null) ...[
+                        Container(
+                          width: 3,
+                          height: hasMetadata ? 30 : 24,
+                          decoration: BoxDecoration(
+                            color: data.listColor,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                    ],
-                    if (batchSelectionActive)
-                      Checkbox(
-                        key: Key('task-batch-select-${data.id}'),
-                        value: batchSelected,
-                        onChanged: (value) =>
-                            onBatchSelectionChanged?.call(value ?? false),
-                      )
-                    else
-                      _AnimatedCompleteCheckbox(
-                        value: data.completed,
-                        visualSize: TodoLayoutTokens.checkboxVisualSize,
-                        tapTargetSize: TodoLayoutTokens.checkboxTapTargetSize,
-                        strokeWidth: TodoLayoutTokens.checkboxStrokeWidth,
-                        onChanged: (_) => onToggleComplete(),
-                      ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              if (data.priority > 0) ...[
-                                Semantics(
-                                  label: _priorityLabel(data.priority),
-                                  child: Icon(
-                                    Icons.flag_rounded,
-                                    size: 13,
-                                    color: _priorityColor(
-                                      data.priority,
-                                      colors,
+                        const SizedBox(width: 10),
+                      ],
+                      if (batchSelectionActive)
+                        Checkbox(
+                          key: Key('task-batch-select-${data.id}'),
+                          value: batchSelected,
+                          onChanged: (value) =>
+                              onBatchSelectionChanged?.call(value ?? false),
+                        )
+                      else
+                        _AnimatedCompleteCheckbox(
+                          value: data.completed,
+                          visualSize: TodoLayoutTokens.checkboxVisualSize,
+                          tapTargetSize: TodoLayoutTokens.checkboxTapTargetSize,
+                          strokeWidth: TodoLayoutTokens.checkboxStrokeWidth,
+                          onChanged: (_) => onToggleComplete(),
+                        ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                if (data.priority > 0) ...[
+                                  Semantics(
+                                    label: _priorityLabel(data.priority),
+                                    child: Icon(
+                                      Icons.flag_rounded,
+                                      size: 13,
+                                      color: _priorityColor(
+                                        data.priority,
+                                        colors,
+                                      ),
                                     ),
                                   ),
+                                  const SizedBox(width: 4),
+                                ],
+                                if (data.isPinned) ...[
+                                  Icon(
+                                    Icons.push_pin,
+                                    size: 12,
+                                    color: colors.accent,
+                                  ),
+                                  const SizedBox(width: 4),
+                                ],
+                                Expanded(
+                                  child: Text(
+                                    data.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style:
+                                        (data.completed
+                                                ? AppTextStyles
+                                                      .taskTitleCompleted
+                                                : AppTextStyles.taskTitle)
+                                            .copyWith(
+                                              color: data.completed
+                                                  ? colors.completed
+                                                  : colors.foreground,
+                                              decoration: data.completed
+                                                  ? TextDecoration.lineThrough
+                                                  : null,
+                                            ),
+                                  ),
                                 ),
-                                const SizedBox(width: 4),
                               ],
-                              if (data.isPinned) ...[
-                                Icon(
-                                  Icons.push_pin,
-                                  size: 12,
-                                  color: colors.accent,
-                                ),
-                                const SizedBox(width: 4),
-                              ],
-                              Expanded(
-                                child: Text(
-                                  data.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style:
-                                      (data.completed
-                                          ? AppTextStyles.taskTitleCompleted
-                                          : AppTextStyles.taskTitle)
-                                      .copyWith(
-                                        color: data.completed
-                                            ? colors.completed
-                                            : colors.foreground,
-                                        decoration: data.completed
-                                            ? TextDecoration.lineThrough
-                                            : null,
-                                      ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (hasMetadata) ...[
-                            const SizedBox(height: 2),
-                            _MetadataLine(data: data),
-                          ],
-                        ],
-                      ),
-                    ),
-                    if (dateText != null) ...[
-                      const SizedBox(width: 12),
-                      // 参照滴答：日期/时间是**纯色文字**（今天为品牌蓝），
-                      // 不是带底色的胶囊徽章。此前做的蓝底胶囊与参照图不符，
-                      // 这里回到文字形态；key 保留以免既有测试与语义断链。
-                      badge == DateBadge.today
-                          ? Text(
-                              dateText,
-                              key: Key('task-date-today-${data.id}'),
-                              textAlign: TextAlign.right,
-                              style: TextStyle(
-                                color: colors.today,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            )
-                          : Text(
-                              dateText,
-                              textAlign: TextAlign.right,
-                              style: AppTextStyles.metadata.copyWith(
-                                color: _dateColor(badge, colors),
-                                fontSize: 11.5,
-                              ),
                             ),
-                    ],
-                    if (showActions) ...[
-                      if (dragHandle != null) ...[
-                        const SizedBox(width: 4),
-                        dragHandle!,
-                      ],
-                      _RowAction(
-                        tooltip: data.isPinned ? '取消置顶' : '置顶',
-                        icon: data.isPinned
-                            ? Icons.push_pin
-                            : Icons.push_pin_outlined,
-                        color: data.isPinned
-                            ? colors.accent
-                            : colors.mutedForeground,
-                        onPressed: onPin,
-                      ),
-                      if (onMore != null)
-                        _RowAction(
-                          tooltip: '更多',
-                          icon: Icons.more_horiz,
-                          color: colors.mutedForeground,
-                          onPressed: onMore!,
+                            if (hasMetadata) ...[
+                              const SizedBox(height: 2),
+                              _MetadataLine(data: data),
+                            ],
+                          ],
                         ),
+                      ),
+                      if (dateText != null) ...[
+                        const SizedBox(width: 12),
+                        // 参照滴答：日期/时间是**纯色文字**（今天为品牌蓝），
+                        // 不是带底色的胶囊徽章。此前做的蓝底胶囊与参照图不符，
+                        // 这里回到文字形态；key 保留以免既有测试与语义断链。
+                        badge == DateBadge.today
+                            ? Text(
+                                dateText,
+                                key: Key('task-date-today-${data.id}'),
+                                textAlign: TextAlign.right,
+                                style: TextStyle(
+                                  color: colors.today,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              )
+                            : Text(
+                                dateText,
+                                textAlign: TextAlign.right,
+                                style: AppTextStyles.metadata.copyWith(
+                                  color: _dateColor(badge, colors),
+                                  fontSize: 11.5,
+                                ),
+                              ),
+                      ],
+                      if (showActions) ...[
+                        if (dragHandle != null) ...[
+                          const SizedBox(width: 4),
+                          dragHandle!,
+                        ],
+                        _RowAction(
+                          tooltip: data.isPinned ? '取消置顶' : '置顶',
+                          icon: data.isPinned
+                              ? Icons.push_pin
+                              : Icons.push_pin_outlined,
+                          color: data.isPinned
+                              ? colors.accent
+                              : colors.mutedForeground,
+                          onPressed: onPin,
+                        ),
+                        if (onMore != null)
+                          _RowAction(
+                            tooltip: '更多',
+                            icon: Icons.more_horiz,
+                            color: colors.mutedForeground,
+                            onPressed: onMore!,
+                          ),
+                      ],
+                      // desktop tab 那句写的是「主任务**右侧**的箭头」，所以这一头不能等 hover 才出现：
+                      // 收起态下没有箭头，用户就找不到"这里还有子任务"的入口。
+                      if (desktopMode && expander != null) ...[
+                        const SizedBox(width: 4),
+                        expander!,
+                      ],
                     ],
-                    // desktop tab 那句写的是「主任务**右侧**的箭头」，所以这一头不能等 hover 才出现：
-                    // 收起态下没有箭头，用户就找不到"这里还有子任务"的入口。
-                    if (desktopMode && expander != null) ...[
-                      const SizedBox(width: 4),
-                      expander!,
-                    ],
-                  ],
+                  ),
                 ),
               ),
             ),
           ),
         ),
-      ),
       ),
     );
   }

@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:zh_cloud_todo_flutter/core/db/app_database.dart' show TodoFolder;
+import 'package:zh_cloud_todo_flutter/core/db/app_database.dart'
+    show TodoFolder;
 import 'package:zh_cloud_todo_flutter/core/theme/app_theme.dart';
 import 'package:zh_cloud_todo_flutter/features/task/tasks_by_list_page.dart';
 import 'package:zh_cloud_todo_flutter/features/task/widgets/task_row.dart';
@@ -113,25 +114,13 @@ void main() {
     await _enablePreview(tester);
 
     final before = _previewHits(tester);
-    expect(
-      before,
-      greaterThan(1),
-      reason: '夹具里跨多个清单有不止一条任务，未加条件时不该只有 1 项',
-    );
+    expect(before, greaterThan(1), reason: '夹具里跨多个清单有不止一条任务，未加条件时不该只有 1 项');
 
     await _tapFolder(tester, '项目');
-    expect(
-      _previewHits(tester),
-      1,
-      reason: '「项目」文件夹只有「工作」这一张清单，里面 1 条任务',
-    );
+    expect(_previewHits(tester), 1, reason: '「项目」文件夹只有「工作」这一张清单，里面 1 条任务');
 
     await _tapFolder(tester, '项目');
-    expect(
-      _previewHits(tester),
-      before,
-      reason: '再点一次要清空这条条件，回到未加文件夹条件时的结果',
-    );
+    expect(_previewHits(tester), before, reason: '再点一次要清空这条条件，回到未加文件夹条件时的结果');
   });
 
   testWidgets('应用文件夹条件后，筛选条上能看见它已生效', (tester) async {

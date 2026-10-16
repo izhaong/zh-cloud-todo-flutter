@@ -269,40 +269,40 @@ class AppEmptyState extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
-          children: [
-            // 抽象品牌插画（.CustomPainter 圆环 + 勾选占位）
-            Container(
-              width: 88,
-              height: 88,
-              decoration: BoxDecoration(
-                color: colors.muted,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.check_circle_outline,
-                size: 40,
-                color: colors.mutedForeground,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            Text(
-              title,
-              style: AppTextStyles.emptyTitle.copyWith(color: colors.ink),
-            ),
-            if (subtitle != null) ...[
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                subtitle!,
-                textAlign: TextAlign.center,
-                style: AppTextStyles.emptySubtitle.copyWith(
-                  color: colors.mutedForeground,
+              children: [
+                // 抽象品牌插画（.CustomPainter 圆环 + 勾选占位）
+                Container(
+                  width: 88,
+                  height: 88,
+                  decoration: BoxDecoration(
+                    color: colors.muted,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.check_circle_outline,
+                    size: 40,
+                    color: colors.mutedForeground,
+                  ),
                 ),
-              ),
-            ],
-            if (action != null) ...[
-              const SizedBox(height: AppSpacing.lg),
-              action!,
-            ],
+                const SizedBox(height: AppSpacing.lg),
+                Text(
+                  title,
+                  style: AppTextStyles.emptyTitle.copyWith(color: colors.ink),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    subtitle!,
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.emptySubtitle.copyWith(
+                      color: colors.mutedForeground,
+                    ),
+                  ),
+                ],
+                if (action != null) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  action!,
+                ],
               ],
             ),
           ),

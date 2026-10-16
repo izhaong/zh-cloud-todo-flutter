@@ -157,8 +157,7 @@ class KanbanView extends ConsumerWidget {
                       data: ordered[index],
                       columnWidth: columnWidth,
                       showColumnInput: showColumnInput,
-                      onQuickAddSubmit:
-                          showColumnInput && listId != null
+                      onQuickAddSubmit: showColumnInput && listId != null
                           ? (title) => _quickAddInline(
                               context,
                               ref,
@@ -528,9 +527,7 @@ class KanbanView extends ConsumerWidget {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            taskViewMutationFailureMessage(error, '添加任务失败，请重试'),
-          ),
+          content: Text(taskViewMutationFailureMessage(error, '添加任务失败，请重试')),
         ),
       );
     }

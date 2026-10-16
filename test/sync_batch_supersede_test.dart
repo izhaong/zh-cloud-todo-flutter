@@ -130,9 +130,9 @@ void main() {
       );
     }
     expect(
-      await (db.select(db.todoSyncChanges)
-            ..where((r) => r.status.equals('queued')))
-          .get(),
+      await (db.select(
+        db.todoSyncChanges,
+      )..where((r) => r.status.equals('queued'))).get(),
       hasLength(3),
       reason: '前提：enqueue 不去重，真实库里确实排出 3 条',
     );
@@ -158,16 +158,8 @@ void main() {
       hasLength(1),
       reason: '同实体只应发一条；发多条会让后续条目撞 REVISION_CONFLICT',
     );
-    expect(
-      conflicts,
-      isEmpty,
-      reason: '这正是用户看到的「与其他设备冲突」横幅来源，必须为空',
-    );
-    expect(
-      received.single['baseRevision'],
-      24,
-      reason: '发出去的那条带当前基线',
-    );
+    expect(conflicts, isEmpty, reason: '这正是用户看到的「与其他设备冲突」横幅来源，必须为空');
+    expect(received.single['baseRevision'], 24, reason: '发出去的那条带当前基线');
 
     // 最后一条（showLunar=true）胜出；被取代的两条留痕但不再是待发送态。
     final all = await db.select(db.todoSyncChanges).get();
@@ -218,11 +210,7 @@ void main() {
     );
     await coordinator.push();
 
-    expect(
-      received,
-      hasLength(2),
-      reason: '不同实体行的变更都要送达，不能被合并逻辑吞掉',
-    );
+    expect(received, hasLength(2), reason: '不同实体行的变更都要送达，不能被合并逻辑吞掉');
     expect(now.year, 2026);
   });
 }

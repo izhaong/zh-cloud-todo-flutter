@@ -49,9 +49,7 @@ class TaskGroupHeader extends StatelessWidget {
         const SizedBox(width: 8),
         Text(
           '$count',
-          style: AppTextStyles.metadata.copyWith(
-            color: colors.mutedForeground,
-          ),
+          style: AppTextStyles.metadata.copyWith(color: colors.mutedForeground),
         ),
       ],
     );

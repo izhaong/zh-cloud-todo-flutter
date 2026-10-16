@@ -29,15 +29,13 @@ void main() {
   File? findAnyUserDb() {
     final dir = documentsDir();
     if (!dir.existsSync()) return null;
-    final candidates = dir
-        .listSync()
-        .whereType<File>()
-        .where((f) {
+    final candidates =
+        dir.listSync().whereType<File>().where((f) {
           final name = f.uri.pathSegments.last;
           return name.startsWith('todo_t') && name.endsWith('.sqlite');
-        })
-        .toList()
-      ..sort((a, b) => b.statSync().modified.compareTo(a.statSync().modified));
+        }).toList()..sort(
+          (a, b) => b.statSync().modified.compareTo(a.statSync().modified),
+        );
     return candidates.isEmpty ? null : candidates.first;
   }
 
@@ -57,9 +55,9 @@ void main() {
     final db = AppDatabase.forTesting(NativeDatabase(copy));
     addTearDown(db.close);
 
-    final before = await (db.select(db.todoSyncChanges)
-          ..where((r) => r.status.equals('failed')))
-        .get();
+    final before = await (db.select(
+      db.todoSyncChanges,
+    )..where((r) => r.status.equals('failed'))).get();
     // ignore: avoid_print
     print('SOURCE=${src.path} baseline_failed=${before.length}');
 
@@ -83,14 +81,18 @@ void main() {
     // 关键断言：**入队不去重是既有设计**（本地审计要留痕），
     // 但待发送态必须能被 push 侧收敛成一条。这里先锁住入队行为不变，
     // 批内收敛由 sync_batch_supersede_test 覆盖。
-    final queued = await (db.select(db.todoSyncChanges)
-          ..where((r) =>
-              r.entity.equals('view_preference') &
-              (r.status.equals('queued') | r.status.equals('failed'))))
-        .get();
+    final queued =
+        await (db.select(db.todoSyncChanges)..where(
+              (r) =>
+                  r.entity.equals('view_preference') &
+                  (r.status.equals('queued') | r.status.equals('failed')),
+            ))
+            .get();
     // ignore: avoid_print
-    print('AFTER_3_CLICKS queued_or_failed=${queued.length} '
-        'serverIds=${queued.map((r) => r.entityServerId).toSet()}');
+    print(
+      'AFTER_3_CLICKS queued_or_failed=${queued.length} '
+      'serverIds=${queued.map((r) => r.entityServerId).toSet()}',
+    );
     expect(
       queued.where((r) => r.entityServerId == 4).length,
       greaterThanOrEqualTo(1),

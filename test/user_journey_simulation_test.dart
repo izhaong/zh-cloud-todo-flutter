@@ -20,8 +20,10 @@ import 'support/todo_visual_test_harness.dart';
 /// - 日历/看板/四象限/时间线等视图按现有入口逐个可达性验证。
 void main() {
   /// 把整棵 HomeShell 起来（wide 视口，已登录、有数据）。
-  Future<TodoVisualFixture> boot(WidgetTester tester,
-      {TodoVisualFixtureSet set = TodoVisualFixtureSet.populated}) {
+  Future<TodoVisualFixture> boot(
+    WidgetTester tester, {
+    TodoVisualFixtureSet set = TodoVisualFixtureSet.populated,
+  }) {
     return pumpTodoVisualScenario(
       tester,
       viewport: TodoVisualViewports.wide,
@@ -102,11 +104,7 @@ void main() {
       if (finder.evaluate().isEmpty) continue;
       await tester.tap(finder.first);
       await tester.pumpAndSettle();
-      expect(
-        tester.takeException(),
-        isNull,
-        reason: '打开 $key 对应页面时抛了异常',
-      );
+      expect(tester.takeException(), isNull, reason: '打开 $key 对应页面时抛了异常');
       // 独立页会盖住工作区；返回键（或再点一次侧栏）回到工作区。
       final back = find.byTooltip('返回');
       if (back.evaluate().isNotEmpty) {
@@ -190,11 +188,7 @@ void main() {
       await tester.tap(item.last);
       await tester.pumpAndSettle();
 
-      expect(
-        tester.takeException(),
-        isNull,
-        reason: '切到「$label」视图时抛了异常',
-      );
+      expect(tester.takeException(), isNull, reason: '切到「$label」视图时抛了异常');
       expect(
         find.byKey(const Key('todo-content')),
         findsWidgets,
@@ -214,22 +208,18 @@ void main() {
 
     final field = find.byKey(const Key('todo-command-palette-field'));
     if (field.evaluate().isEmpty) {
-      markTestSkipped('本 harness 未触发 ⌘K（平台键映射差异），搜索入口由 '
-          'specs/109 的指令菜单用例覆盖');
+      markTestSkipped(
+        '本 harness 未触发 ⌘K（平台键映射差异），搜索入口由 '
+        'specs/109 的指令菜单用例覆盖',
+      );
       return;
     }
 
     // 面板里应有「全局搜索」这条命令（搜索功能模块默认开启）。
     // 用命令项的语义 Key 定位 —— 只按文案 find.text 会命中标题等其它节点，
     // 且点不中时断言仍可能被面板自身的输入框满足（实测过这种"假绿"）。
-    final searchItem = find.byKey(
-      const Key('todo-command-palette-item-全局搜索'),
-    );
-    expect(
-      searchItem,
-      findsWidgets,
-      reason: '指令菜单要含「全局搜索」（搜索功能模块默认开启）',
-    );
+    final searchItem = find.byKey(const Key('todo-command-palette-item-全局搜索'));
+    expect(searchItem, findsWidgets, reason: '指令菜单要含「全局搜索」（搜索功能模块默认开启）');
     // 命令列表在弹层里可滚动，目标项可能在折叠线以下 ⇒ 先滚到位再点，
     // 否则 tap 会「未命中」而静默跳过（实测到过这种假绿）。
     await tester.ensureVisible(searchItem.first);
@@ -293,11 +283,7 @@ void main() {
         )
         .where((m) => m.color != null && m.color!.a > 0)
         .toList();
-    expect(
-      selectedMaterials,
-      isNotEmpty,
-      reason: '暗色下选中行要有可见底色（选中态不能只在浅色生效）',
-    );
+    expect(selectedMaterials, isNotEmpty, reason: '暗色下选中行要有可见底色（选中态不能只在浅色生效）');
     final leftBorders = tester
         .widgetList<AnimatedContainer>(
           find.descendant(of: row, matching: find.byType(AnimatedContainer)),
@@ -305,15 +291,10 @@ void main() {
         .where((c) => c.decoration is BoxDecoration)
         .map((c) => c.decoration! as BoxDecoration)
         .where(
-          (d) =>
-              d.border is Border && ((d.border! as Border).left.width) > 0,
+          (d) => d.border is Border && ((d.border! as Border).left.width) > 0,
         )
         .toList();
-    expect(
-      leftBorders,
-      isEmpty,
-      reason: '参照图的选中态没有左色条，别再把这个元素加回来',
-    );
+    expect(leftBorders, isEmpty, reason: '参照图的选中态没有左色条，别再把这个元素加回来');
     expect(tester.takeException(), isNull);
   });
 
@@ -333,11 +314,7 @@ void main() {
       if (button.evaluate().isEmpty) continue; // 功能模块开关关掉时该入口不在
       await tester.tap(button.first);
       await tester.pumpAndSettle();
-      expect(
-        tester.takeException(),
-        isNull,
-        reason: '打开「$tip」页面时抛了异常',
-      );
+      expect(tester.takeException(), isNull, reason: '打开「$tip」页面时抛了异常');
       opened++;
       // 次级页多为全屏路由，用返回键回到工作区。
       final back = find.byTooltip('返回');
@@ -350,11 +327,7 @@ void main() {
       }
     }
     // 三个入口至少有一个可用，否则说明效能坞整体不可达（fixture 默认全开）。
-    expect(
-      opened,
-      greaterThan(0),
-      reason: '效能坞至少要有一个可达入口；一个都没有说明整排被关掉了',
-    );
+    expect(opened, greaterThan(0), reason: '效能坞至少要有一个可达入口；一个都没有说明整排被关掉了');
   });
 
   testWidgets('旅程⑫ 习惯/倒数日底层页面数据路径不抛异常', (tester) async {
@@ -368,11 +341,7 @@ void main() {
     }
     await tester.tap(habit.first);
     await tester.pumpAndSettle();
-    expect(
-      tester.takeException(),
-      isNull,
-      reason: '习惯页在无网络（桩）下要降级显示，不能抛',
-    );
+    expect(tester.takeException(), isNull, reason: '习惯页在无网络（桩）下要降级显示，不能抛');
     // 页面上应出现习惯相关的容器或空态文案，而不是彻底白屏。
     final hasHabitSurface =
         find.byKey(const Key('todo-habit-month-grid')).evaluate().isNotEmpty ||
@@ -389,11 +358,7 @@ void main() {
     await tester.tap(entry.first);
     await tester.pumpAndSettle();
 
-    expect(
-      tester.takeException(),
-      isNull,
-      reason: '成就页在无网络（桩）下要降级显示，不能抛',
-    );
+    expect(tester.takeException(), isNull, reason: '成就页在无网络（桩）下要降级显示，不能抛');
     expect(
       find.textContaining('成就').evaluate(),
       isNotEmpty,
@@ -427,9 +392,10 @@ void main() {
 
     expect(tester.takeException(), isNull, reason: '保存标题不应抛异常');
     // 本地库是事实源：改完应当能在本地读到新标题（直接按本地 id 查，库没有便捷方法）。
-    final stored = await (fixture.database.select(fixture.database.todoTasks)
-          ..where((t) => t.id.equals(TodoVisualFixture.pinnedTaskId)))
-        .getSingleOrNull();
+    final stored =
+        await (fixture.database.select(fixture.database.todoTasks)
+              ..where((t) => t.id.equals(TodoVisualFixture.pinnedTaskId)))
+            .getSingleOrNull();
     expect(stored?.title, newTitle, reason: '保存后本地任务标题应为新值');
   });
 

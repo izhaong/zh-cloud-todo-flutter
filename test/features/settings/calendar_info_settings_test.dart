@@ -178,11 +178,7 @@ void main() {
       final flags = await repository.get();
       expect(flags.showLunar, isTrue);
       // 三个开关共用一行偏好，但每个只能改自己那一位。
-      expect(
-        flags.showHolidays,
-        isFalse,
-        reason: '「显示农历」不能顺带把「显示节假日调休」也改掉',
-      );
+      expect(flags.showHolidays, isFalse, reason: '「显示农历」不能顺带把「显示节假日调休」也改掉');
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump(const Duration(milliseconds: 1));

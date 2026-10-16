@@ -58,9 +58,9 @@ void main() {
           onRequest: (options, handler) {
             if (options.path.contains('/sync/push')) {
               pushedEntities.addAll(
-                ((options.data as Map)['changes'] as List)
-                    .cast<Map>()
-                    .map((change) => change['entityType'].toString()),
+                ((options.data as Map)['changes'] as List).cast<Map>().map(
+                  (change) => change['entityType'].toString(),
+                ),
               );
               handler.resolve(
                 Response(
@@ -81,10 +81,7 @@ void main() {
               bindBodies.add((options.data as Map).cast<String, dynamic>());
             }
             handler.resolve(
-              Response(
-                requestOptions: options,
-                data: {'code': 0, 'data': 1},
-              ),
+              Response(requestOptions: options, data: {'code': 0, 'data': 1}),
             );
           },
         ),
@@ -165,10 +162,7 @@ void main() {
               bindBodies.add((options.data as Map).cast<String, dynamic>());
             }
             handler.resolve(
-              Response(
-                requestOptions: options,
-                data: {'code': 0, 'data': 1},
-              ),
+              Response(requestOptions: options, data: {'code': 0, 'data': 1}),
             );
           },
         ),

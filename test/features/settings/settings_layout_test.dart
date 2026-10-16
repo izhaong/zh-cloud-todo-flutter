@@ -67,9 +67,7 @@ void main() {
     final trailingTexts = <double>[
       for (final label in const ['显示', '开启'])
         for (final element in find.text(label).evaluate())
-          (element.renderObject! as RenderBox).localToGlobal(
-            Offset.zero,
-          ).dx +
+          (element.renderObject! as RenderBox).localToGlobal(Offset.zero).dx +
               (element.renderObject! as RenderBox).size.width,
     ];
     expect(trailingTexts, isNotEmpty);

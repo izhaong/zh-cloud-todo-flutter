@@ -37,20 +37,19 @@ void main() {
     'c': <String>{},
   };
 
-  List<String> hit(TaskFilter filter) =>
-      applyTaskFilter(
-        tasks,
-        filter,
-        null,
-        now,
-        taskTagIds: tagIdsByTask,
-      ).map((t) => t.id).toList();
+  List<String> hit(TaskFilter filter) => applyTaskFilter(
+    tasks,
+    filter,
+    null,
+    now,
+    taskTagIds: tagIdsByTask,
+  ).map((t) => t.id).toList();
 
   test('「或」档：只含其一的任务也算命中', () {
-    expect(
-      hit(const TaskFilter(tagIds: ['work', 'urgent'], tagLogic: 'or')),
-      ['a', 'b'],
-    );
+    expect(hit(const TaskFilter(tagIds: ['work', 'urgent'], tagLogic: 'or')), [
+      'a',
+      'b',
+    ]);
   });
 
   test('缺省与显式 and 都是「且」，两者结果逐字相同', () {
@@ -64,10 +63,10 @@ void main() {
 
   test('大写「OR」按或服务端 equalsIgnoreCase 同口径，不当成未知值退回且', () {
     // 同样要选两个标签：一个标签时 AND/OR 同结果，测不出大小写有没有被认下来。
-    expect(
-      hit(const TaskFilter(tagIds: ['work', 'urgent'], tagLogic: 'OR')),
-      ['a', 'b'],
-    );
+    expect(hit(const TaskFilter(tagIds: ['work', 'urgent'], tagLogic: 'OR')), [
+      'a',
+      'b',
+    ]);
   });
 
   test('零标签时「或」不参与求值，不能把全量拦成零命中', () {
@@ -76,7 +75,9 @@ void main() {
 
   test('未知逻辑词按缺省「且」求值（不在求值层猜新词表）', () {
     // 必须选两个标签：只选一个时「且」与「或」结果相同，这条断言就没有区分度了。
-    expect(hit(const TaskFilter(tagIds: ['work', 'urgent'], tagLogic: 'xor')), ['a']);
+    expect(hit(const TaskFilter(tagIds: ['work', 'urgent'], tagLogic: 'xor')), [
+      'a',
+    ]);
   });
 
   test('索引未就位时求值层不动作：「等不等」是调用方的责任，不在这里放行或拦死', () {
