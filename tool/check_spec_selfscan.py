@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -52,6 +53,26 @@ BRANCH_REF = re.compile(
     r"(?<![\w/:])((?:refs/heads/|origin/)?[A-Za-z0-9._-]+/[A-Za-z0-9._/-]+):"
     r"([A-Za-z0-9._/-]+\.(?:log|md|dart|txt|py)):(\d+)"
 )
+
+# 跨仓锚点（Issue #394）：`<repo>@<ref>:<path>:<line>`。
+# 不带 ref 的 `<repo>/<path>:<line>` 不用单独扫 —— REF 的捕获组本来就能吃到这个形状，
+# 差别只在「首段是不是兄弟仓名」，那个在匹配后判，省一次全文正则。
+CROSS_AT = re.compile(
+    r"(?<![\w/])([A-Za-z0-9_.-]+)@([A-Za-z0-9_./-]+):([A-Za-z0-9_./-]+):(\d+)")
+
+# 什么样的首段算「跨仓意图」。**只在缺兄弟仓时**才用它决定判红（要求 2）：
+# 不设这条，`lib/features/x.dart:120` 这种普通相对路径的首段 `lib` 也会被当成仓名，
+# 于是每次都因为「没有 lib 这个兄弟仓」而红 —— 那不是本单要的。
+# 本工作区的仓一律叫 `zh-cloud-*`（见父仓 .gitmodules），按这个前缀认。
+SIBLING_NAME = re.compile(r"^zh-cloud-[a-z0-9-]+$")
+
+# 锚点分类计数（要求 3）：把豁免摆到台面上，别让覆盖率靠沉默撑起来。
+ANCHOR_STATS = {"local": 0, "cross": 0, "cross_missing": 0, "dead": 0}
+
+
+def reset_anchor_stats() -> None:
+    for k in ANCHOR_STATS:
+        ANCHOR_STATS[k] = 0
 # 「X 由脚本产出 / 脚本已断言」：必须点名一个**仓内存在**的脚本。
 # ⚠️ 别只列固定词组：台账的自然写法是「由 `tool/xxx.py` 产出」（脚本名与"由"被路径隔开），
 # 上一版只认「由脚本」四字连着 ⇒ 自测里那条"命令跑不出命中"的语料直接跳过整条判据、假绿
@@ -222,6 +243,74 @@ def branch_blob_lines(repo_root: Path, ref: str, path: str) -> int | None:
     return _BRANCH_LINES[key]
 
 
+_SIBLING_CACHE: dict[tuple[str, str], Path | None] = {}
+
+
+def sibling_repo_root(repo_root: Path, name: str) -> Path | None:
+    """工作区里的兄弟仓：`<repo_root 的父目录>/<name>`，且它真是个 git 仓。
+
+    Issue #394：台账会出现指向**另一个仓**的真实引用（`zh-cloud-todo-flutter/lib/…:120`）。
+    旧版只在「绝对路径 / 本仓根 / 本仓 `git ls-files`」三处查 ⇒ 这类引用**结构上**永远
+    解析不到，被一律判成死锚点。误伤的后果比漏报更糟：写台账的人会去删**真证据**来让它变绿
+    （脚本 docstring 第 8 轮复核 F12 记的正是这个失败模式）。
+
+    `.git` 在普通仓是目录、在 worktree / submodule 里是文件，故用 exists() 而非 is_dir()。
+    返回 None = 这台机器上没有这个兄弟仓 ⇒ 调用方按「跨仓缺仓」判红（要求 2）。
+    """
+    key = (str(repo_root), name)
+    if key in _SIBLING_CACHE:
+        return _SIBLING_CACHE[key]
+    # ① 工作区兄弟目录（标准布局：`zh-cloud/zh-cloud-service` 旁边就是 `zh-cloud-todo-flutter`）；
+    # ② `ZH_CLOUD_ROOT` 指的父目录 —— 在 /tmp 或 `todo-worktrees/` 这类**非标准布局**里跑时，
+    #    兄弟仓的名字不是 `zh-cloud-*`，只有这个口子能指回真仓（同 `check_parity_matrix.py` 的先例）。
+    # 两处都没有 ⇒ None ⇒ 由调用方按「跨仓缺仓」判红（要求 2，绝不静默放过）。
+    cands = [repo_root.parent / name]
+    env_root = os.environ.get("ZH_CLOUD_ROOT")
+    if env_root:
+        cands.append(Path(env_root) / name)
+    found = next((c for c in cands if (c / ".git").exists()), None)
+    _SIBLING_CACHE[key] = found
+    return found
+
+
+_CROSS_LINES: dict[tuple[str, str, str], int | None] = {}
+
+
+def cross_blob_lines(sib: Path, ref: str | None, path: str) -> int | None:
+    """跨仓锚点取对象（要求 1：**显式标基准 ref**）。
+
+    给了 `@<ref>` 就按它（并试 `origin/<ref>`，与 `branch_blob_lines` 同口径：
+    判据不该看谁的机器上有没有那根本地 ref）。没给就按该仓的集成线 `origin/develop`，
+    再退 `develop` / `HEAD`，最后才回落到它工作树上的实际文件 —— 顺序是「规范 ref 优先」，
+    免得同一份台账在「有 worktree」和「只有克隆」的机器上给出两个数。
+
+    返回 None = 该仓里真没有这条路径 ⇒ 才允许判死锚点。
+    """
+    key = (str(sib), ref or "", path)
+    if key in _CROSS_LINES:
+        return _CROSS_LINES[key]
+    total: int | None = None
+    for cand in (ref_candidates(ref) if ref else ["origin/develop", "develop", "HEAD"]):
+        probe = subprocess.run(
+            ["git", "-C", str(sib), "cat-file", "-e", f"{cand}:{path}"],
+            capture_output=True,
+        )
+        if probe.returncode != 0:
+            continue
+        shown = subprocess.run(
+            ["git", "-C", str(sib), "show", f"{cand}:{path}"],
+            capture_output=True, text=True,
+        )
+        total = len(shown.stdout.splitlines())
+        break
+    if total is None:
+        local = sib / path
+        if local.exists():
+            total = len(local.read_text(encoding="utf-8", errors="replace").splitlines())
+    _CROSS_LINES[key] = total
+    return total
+
+
 def grep_hits(repo_root: Path, pattern: str, rel: str) -> int:
     """把台账自己写的那条 `grep -n "X" tool/….py` 真的跑一遍（只用 argv，不进 shell）。
 
@@ -246,13 +335,46 @@ def grep_hits(repo_root: Path, pattern: str, rel: str) -> int:
 def check(text: str, repo_root: Path) -> list[str]:
     errs: list[str] = []
     lines = text.splitlines()
+    reset_anchor_stats()
 
     # ① 锚点必须指得到；被称作「末行」的那个行号必须真等于全文行数
     for n, line in enumerate(lines, 1):
         # 先看 `分支:文件:行`：这类锚点在文件系统上必然找不到，得走 git。
         # 处理过的位置打码，免得下面按文件系统再扫一遍、报一条假死锚点。
         scan = line
-        for bm in BRANCH_REF.finditer(line):
+        # 跨仓 + 显式 ref 的形态先处理，免得下面 REF 只吃到后半截（`lib/x.dart:120`）
+        for cm in CROSS_AT.finditer(scan):
+            sib_name, cref, cpath, cwant = (cm.group(1), cm.group(2),
+                                            cm.group(3), int(cm.group(4)))
+            sib = sibling_repo_root(repo_root, sib_name)
+            if sib is None:
+                if SIBLING_NAME.match(sib_name):
+                    ANCHOR_STATS["cross_missing"] += 1
+                    errs.append(
+                        f":{n} 跨仓锚点 `{cm.group(0)}` 的仓 `{sib_name}` 不在工作区里"
+                        f"（判据：`ls -d ../{sib_name}`）⇒ 缺兄弟仓时判红："
+                        f"依赖工作树的校验器静默绿，在 CI 上等于这条判据根本不存在"
+                    )
+                scan = scan.replace(cm.group(0), " " * len(cm.group(0)), 1)
+                continue
+            ctotal = cross_blob_lines(sib, cref, cpath)
+            if ctotal is None:
+                ANCHOR_STATS["dead"] += 1
+                errs.append(
+                    f":{n} 跨仓锚点 `{cm.group(0)}` 指不到 —— "
+                    f"`git -C ../{sib_name} cat-file -e {cref}:{cpath}` 无命中"
+                    f"（基准 ref 显式取自 `@` 后面那个）⇒ 死锚点等于没证据"
+                )
+            elif cwant > ctotal:
+                ANCHOR_STATS["cross"] += 1
+                errs.append(
+                    f":{n} 跨仓锚点 `{cm.group(0)}` 越界：`{sib_name}` 的 `{cref}:{cpath}` "
+                    f"只有 {ctotal} 行（判据：`git -C ../{sib_name} show {cref}:{cpath} | wc -l`）"
+                )
+            else:
+                ANCHOR_STATS["cross"] += 1
+            scan = scan.replace(cm.group(0), " " * len(cm.group(0)), 1)
+        for bm in BRANCH_REF.finditer(scan):
             ref, bpath, want = bm.group(1), bm.group(2), int(bm.group(3))
             total = branch_blob_lines(repo_root, ref, bpath)
             if total is None:
@@ -289,13 +411,48 @@ def check(text: str, repo_root: Path) -> list[str]:
                     )
                     continue
             if target is None:
+                # 跨仓形态（Issue #394）：首段是兄弟仓名 ⇒ 走 `git -C <兄弟仓>` 取对象。
+                # 不先试这一下，跨仓的真实引用会被下面判成死锚点，逼人去删真证据。
+                sib_name = raw.split("/", 1)[0] if "/" in raw else ""
+                sib = sibling_repo_root(repo_root, sib_name) if sib_name else None
+                if sib is not None:
+                    cpath = raw.split("/", 1)[1]
+                    ctotal = cross_blob_lines(sib, None, cpath)
+                    if ctotal is None:
+                        ANCHOR_STATS["dead"] += 1
+                        errs.append(
+                            f":{n} 跨仓锚点 `{raw}:{want}` 指不到 —— "
+                            f"`git -C ../{sib_name} cat-file -e origin/develop:{cpath}` 无命中"
+                            f"（未写 `@ref` ⇒ 基准取该仓集成线 `origin/develop`，再退 develop / HEAD / 工作树）"
+                            f"⇒ 死锚点等于没证据"
+                        )
+                    elif want > ctotal:
+                        ANCHOR_STATS["cross"] += 1
+                        errs.append(
+                            f":{n} 跨仓锚点 `{raw}:{want}` 越界：`{sib_name}` 的 `{cpath}` "
+                            f"只有 {ctotal} 行（判据：`git -C ../{sib_name} show origin/develop:{cpath} | wc -l`）"
+                        )
+                    else:
+                        ANCHOR_STATS["cross"] += 1
+                    continue
+                if sib_name and SIBLING_NAME.match(sib_name):
+                    # 要求 2：缺兄弟仓时判红。静默放过 = 在 CI 上这条判据根本不存在。
+                    ANCHOR_STATS["cross_missing"] += 1
+                    errs.append(
+                        f":{n} 跨仓锚点 `{raw}:{want}` 的仓 `{sib_name}` 不在工作区里"
+                        f"（判据：`ls -d ../{sib_name}`）⇒ 缺兄弟仓时判红："
+                        f"依赖工作树的校验器静默绿，在 CI 上等于这条判据根本不存在"
+                    )
+                    continue
                 # 只有当这行确实在"引用一份日志/文件"时才判死锚点（sha 之类不误伤）
                 if re.search(r"\.(log|md|dart|txt|py)$", raw):
+                    ANCHOR_STATS["dead"] += 1
                     errs.append(
                         f":{n} 锚点 `{raw}:{want}` 指不到 —— 绝对路径、仓库根、git 索引三处都查过"
                         f"（判据：`git ls-files \"*{raw}\"` 无命中）⇒ 死锚点等于没证据"
                     )
                 continue
+            ANCHOR_STATS["local"] += 1
             total = len(target.read_text(encoding="utf-8", errors="replace").splitlines())
             if want > total:
                 errs.append(
@@ -505,6 +662,25 @@ CORPUS: list[tuple[str, str, str, bool]] = [
     # ① 的 URL 假阳性（第 10 轮复核 F-12：反引号里的 http 链接被切成 `//example.com/…:12` 死锚点）
     ("锚点·整串是 URL 不当死锚点查", "①",
      "见 `https://example.com/logs/a.md:12` 的原文。\n", False),
+
+    # ---------- 跨仓锚点（Issue #394）：绿红必须成对，否则新判据可能恒真 ----------
+    # 绿：`<兄弟仓>/<路径>:<行>` 打得到 —— 那份文件只存在于兄弟仓里。
+    ("跨仓锚点·兄弟仓里真有这个文件", "①",
+     "跨仓判据见 `zh-cloud-sibling-fixture/lib/only-remote.dart:2` 那一行。\n", False),
+    # 红：把仓名去掉（要求 4 的变异）。同一条路径在本仓里不存在 ⇒ 必须红。
+    # 这一对是「新判据有判别力、不是恒绿」的证明：同一份内容，带仓名绿、不带仓名红。
+    ("跨仓锚点·去掉仓名就变成本仓死锚点（要求 4 的变异）", "①",
+     "跨仓判据见 `lib/only-remote.dart:2` 那一行。\n", True),
+    # 红：缺兄弟仓（要求 2）。静默放过 = 在 CI 上这条判据根本不存在。
+    ("跨仓锚点·缺兄弟仓判红（要求 2）", "①",
+     "见 `zh-cloud-absent-repo/lib/x.dart:1` 的统计行。\n", True),
+    # 红：跨仓锚点越界（兄弟仓那份文件只有 3 行）。
+    ("跨仓锚点·行号越界", "①",
+     "见 `zh-cloud-sibling-fixture/lib/only-remote.dart:99` 的统计行。\n", True),
+    # 绿：`@ref` 形态（基准 ref 显式写在 `@` 后面）。兄弟仓没有 git 对象 ⇒
+    # 走「回落到工作树文件」那一支，仍应判绿。
+    ("跨仓锚点·@ref 形态", "①",
+     "见 `zh-cloud-sibling-fixture@origin/develop:lib/only-remote.dart:1` 那一行。\n", False),
 ]
 
 
@@ -516,7 +692,16 @@ def selftest(_unused: Path | None = None) -> int:
     """
     import tempfile
     with tempfile.TemporaryDirectory() as td:
-        root = Path(td)
+        # 本仓放进一层工作区目录里，好让**兄弟仓**能落在它旁边（跨仓判据要用，Issue #394）。
+        workspace = Path(td)
+        root = workspace / "repo"
+        root.mkdir()
+        # 兄弟仓用一个**只有工作树、没有 git 对象**的目录：`cross_blob_lines` 的
+        # 「git 取不到就回落到工作树文件」那一支因此被真的走到，且不依赖本机有没有 git。
+        sibling = workspace / "zh-cloud-sibling-fixture"
+        (sibling / "lib").mkdir(parents=True)
+        (sibling / ".git").write_text("gitdir: nowhere\n", encoding="utf-8")
+        (sibling / "lib" / "only-remote.dart").write_text("a\nb\nc\n", encoding="utf-8")
         (root / "logs").mkdir()
         (root / "logs" / "gates.log").write_text("h\ni\nj\nk\nl\nm\nn\no\np\n", encoding="utf-8")
         (root / "logs" / "ok.md").write_text("one\ntwo\nthree\n", encoding="utf-8")
@@ -613,6 +798,13 @@ def main() -> int:
     for e in errs:
         print(f"  ! {e}")
     print(f"{a.target}: 失项 {len(errs)} 条（仓库根按 {repo_root.name} 解析）")
+    # 要求 3：把锚点分类计数打出来。豁免不计数就会变成免死金牌，
+    # 下一轮没人知道覆盖率是不是靠"没跑"撑起来的。
+    st = ANCHOR_STATS
+    print(
+        f"  锚点分类：本仓可比对 {st['local']} / 跨仓可比对 {st['cross']}"
+        f" / 跨仓缺兄弟仓（判红）{st['cross_missing']} / 判成不成立 {st['dead']}"
+    )
     rc = 1 if errs else 0
     if a.selftest:
         print("自检（自带语料，不碰 /tmp；该红的必须红、该绿的必须绿）：")
