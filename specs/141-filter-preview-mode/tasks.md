@@ -1,4 +1,4 @@
-# 045 执行台账
+# 141 执行台账
 
 ## 状态：本轮完工，只读复核 `VERDICT: PASS`（唯一失项 F-1 已修，六门禁在终态字节重跑全绿）
 
@@ -97,7 +97,7 @@
 | `lib/features/filter/filter_bar.dart` | `FilterBar` 多一个可选入参 `previewResolver`；新增私有 `_draftFilter`；「高级筛选」对话框加「预览模式」开关（`Key('task-filter-advanced-preview')`，默认关）与预览区（`Key('task-filter-advanced-preview-panel')`，念「命中 N 项」+ 最多三条标题）；三个输入框补 `onChanged` 触发重算；`应用高级筛选` 的 `onChanged` 改走 `_draftFilter` |
 | `lib/features/task/tasks_by_list_page.dart` | `FilterBar(...)` 注入 `previewResolver`，闭包用 `_openFilterPanel(raw)` 那份未过滤列表 + `_selectedListId` + `currentDateTimeProvider` ⇒ 与列表渲染同一口径 |
 | `test/features/filter/filter_advanced_preview_test.dart` | 新增用例逐条点名见「二、三节」（历史计数 3，日志已不可取） |
-| `specs/045-filter-preview-mode/{spec,plan,tasks}.md` | 本台账 |
+| `specs/141-filter-preview-mode/{spec,plan,tasks}.md` | 本台账 |
 
 ## 七、下一轮入口
 
@@ -109,5 +109,5 @@
 2. 只读复核（`claude -p` 门禁）拿 `VERDICT`，通过后 push → 开 PR 指向 `develop`，正文 `Refs #335`。
 3. 台账自扫判据：本分支不含 `tool/check_spec_selfscan.py`（它在 FL PR !364 的分支上），
    取法同第 86 轮：`git show origin/feat/361-calendar-list-timeline:tool/check_spec_selfscan.py`，
-   跑 `python3 <该脚本> specs/045-filter-preview-mode/tasks.md` 现读到「失项 0 条」才算改完。
+   跑 `python3 <该脚本> specs/141-filter-preview-mode/tasks.md` 现读到「失项 0 条」才算改完。
 4. `:61`/`:71` 的「或/且」布尔组合与同条件内标签且/或 —— FL #334，未排期。

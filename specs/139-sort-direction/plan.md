@@ -1,4 +1,4 @@
-# 045 · 实施计划
+# 139 · 实施计划
 
 基准：`zh-cloud-todo-flutter origin/develop@9032005`；被改面 `lib/features/task/`、`lib/state/repositories/`。
 
@@ -11,7 +11,7 @@
 | 5 | 页面接上：状态字段、回读、`_changeSortDirection`、`_visibleTasksInListOrder` 与 `_ListBody` 都吃方向 | `lib/features/task/tasks_by_list_page.dart` |
 | 6 | 反向探针 PA–PG（每条先跑未打补丁的对照组） | `/tmp/g64/{patch.py,probes.sh}` |
 | 7 | 六道门禁跑在最终字节上 | `/tmp/g64/gates*` |
-| 8 | 回写本 `tasks.md`；矩阵 #20 只标「已实现待合并」，合并后再动状态与证据列 | `specs/045-sort-direction/tasks.md` |
+| 8 | 回写本 `tasks.md`；矩阵 #20 只标「已实现待合并」，合并后再动状态与证据列 | `specs/139-sort-direction/tasks.md` |
 
 ## 不做
 

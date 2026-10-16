@@ -1,4 +1,4 @@
-# tasks：specs/090 侧栏标签桌面右键
+# tasks：specs/142 侧栏标签桌面右键
 
 - [x] 现读：`d2d96bdfb254` 上侧栏标签行无次键（判据 0 命中 + task_row_host/kanban 正向对照）、
       左滑表只有置顶；TagPage `_edit`/`_delete` 是真流程但私有。
@@ -25,7 +25,7 @@
 
 ## 台账自扫
 
-- [x] `python3 tool/check_spec_selfscan.py specs/090-tag-rightclick/spec.md` 与 `.../tasks.md` 各自单独成命令跑（spec 失项 0、tasks 失项 0；tasks 曾因「全量」+量词无同行复算命令红过一条，已补）。
+- [x] `python3 tool/check_spec_selfscan.py specs/142-tag-rightclick/spec.md` 与 `.../tasks.md` 各自单独成命令跑（spec 失项 0、tasks 失项 0；tasks 曾因「全量」+量词无同行复算命令红过一条，已补）。
 
 ## 复核
 
