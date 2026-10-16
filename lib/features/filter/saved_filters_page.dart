@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/app_database.dart';
 import '../../state/providers.dart';
+import '../../core/widgets/app_widgets.dart';
 import 'saved_filter_mapping.dart';
 
 /// 侧栏「筛选器」入口的落地页：列出已保存过滤器、一键套用、二次确认删除。
@@ -14,20 +15,33 @@ class SavedFiltersPage extends ConsumerWidget {
     final filters = ref.watch(savedFiltersStreamProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('筛选器')),
-      body: filters.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => const Center(child: Text('过滤器加载失败')),
-        data: (rows) {
-          if (rows.isEmpty) {
-            return const Center(child: Text('还没有保存的过滤器'));
-          }
-          return ListView.separated(
-            padding: const EdgeInsets.all(12),
-            itemCount: rows.length,
-            separatorBuilder: (_, _) => const Divider(height: 1),
-            itemBuilder: (context, index) => _row(context, ref, rows[index]),
-          );
-        },
+      body: Column(
+        children: [
+          if (filters.hasError && filters.hasValue)
+            AppRefreshFailedHint(
+              message: '过滤器刷新失败，仍显示上一次的数据',
+              onRetry: () => ref.invalidate(savedFiltersStreamProvider),
+            ),
+          Expanded(
+            child: filters.when(
+              skipError: true,
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (_, _) => const Center(child: Text('过滤器加载失败')),
+              data: (rows) {
+                if (rows.isEmpty) {
+                  return const Center(child: Text('还没有保存的过滤器'));
+                }
+                return ListView.separated(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: rows.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (context, index) =>
+                      _row(context, ref, rows[index]),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

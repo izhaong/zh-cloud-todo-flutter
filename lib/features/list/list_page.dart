@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/error_text.dart';
 import '../../core/db/app_database.dart';
 import '../../state/providers.dart';
+import '../../core/widgets/app_widgets.dart';
 import 'list_actions.dart';
 import 'list_editor_sheet.dart';
 import '../folder/folder_page.dart';
@@ -94,38 +95,56 @@ class _ListPageState extends ConsumerState<ListPage> {
           ),
         ],
       ),
-      body: listsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('加载清单失败: ${describeError(e)}')),
-        data: (lists) {
-          final folders = foldersAsync.valueOrNull ?? const <TodoFolder>[];
-          return ListView(
-            padding: const EdgeInsets.all(12),
-            children: [
-              _SmartListSection(),
-              const SizedBox(height: 12),
-              _SectionTitle('文件夹'),
-              ...folders.map(
-                (f) => _FolderGroup(
-                  folder: f,
-                  lists: lists.where((l) => l.folderLocalId == f.id).toList(),
-                  onCreate: () => _openCreateSheet(folderLocalId: f.id),
-                  onTap: (l) => _openCreateSheet(existing: l),
-                  onDelete: _deleteList,
-                  onMove: _move,
-                ),
-              ),
-              const SizedBox(height: 8),
-              _SectionTitle('未分组清单'),
-              _UngroupedGroup(
-                lists: lists.where((l) => l.folderLocalId == null).toList(),
-                onTap: (l) => _openCreateSheet(existing: l),
-                onDelete: _deleteList,
-                onMove: _move,
-              ),
-            ],
-          );
-        },
+      body: Column(
+        children: [
+          if (listsAsync.hasError && listsAsync.hasValue)
+            AppRefreshFailedHint(
+              message: '清单刷新失败，仍显示上一次的数据',
+              onRetry: () => ref.invalidate(listsStreamProvider),
+            ),
+          Expanded(
+            child: listsAsync.when(
+              skipError: true,
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) =>
+                  Center(child: Text('加载清单失败: ${describeError(e)}')),
+              data: (lists) {
+                final folders =
+                    foldersAsync.valueOrNull ?? const <TodoFolder>[];
+                return ListView(
+                  padding: const EdgeInsets.all(12),
+                  children: [
+                    _SmartListSection(),
+                    const SizedBox(height: 12),
+                    _SectionTitle('文件夹'),
+                    ...folders.map(
+                      (f) => _FolderGroup(
+                        folder: f,
+                        lists: lists
+                            .where((l) => l.folderLocalId == f.id)
+                            .toList(),
+                        onCreate: () => _openCreateSheet(folderLocalId: f.id),
+                        onTap: (l) => _openCreateSheet(existing: l),
+                        onDelete: _deleteList,
+                        onMove: _move,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _SectionTitle('未分组清单'),
+                    _UngroupedGroup(
+                      lists: lists
+                          .where((l) => l.folderLocalId == null)
+                          .toList(),
+                      onTap: (l) => _openCreateSheet(existing: l),
+                      onDelete: _deleteList,
+                      onMove: _move,
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
