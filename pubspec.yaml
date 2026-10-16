@@ -80,8 +80,7 @@ dependencies:
   home_widget: ^0.9.0
   wakelock_plus: ^1.3.2
 
-  # 月视图网格（周列 / 年 / 日程 / 列表全景仍是产品视图）
-  table_calendar: ^3.3.0
+  # 月视图网格是自绘的（见下方「为什么不引 table_calendar」），不引第三方日历。
   timezone: ^0.10.1
 
 dev_dependencies:
@@ -108,10 +107,15 @@ dev_dependencies:
   freezed: ^2.5.7
   json_serializable: ^6.9.0
 
-# table_calendar 3.3 要求 intl ^0.20.3，当前 Flutter SDK 的
-# flutter_localizations 仍钉死 intl 0.20.2。0.20.3 是补丁，API 兼容。
-dependency_overrides:
-  intl: 0.20.3
+# 为什么不引 table_calendar（FL #562）：
+# 1) 它在本仓**从未被引用**（`grep -rn "package:table_calendar/" lib test` 命中 0），
+#    却因为要求 intl ^0.20.3 而逼出一条 `dependency_overrides: intl`——那是本仓唯一一条
+#    依赖覆盖，纯负债；
+# 2) 月网格 `_MonthGrid`/`_DayCell` 只有「周首 + 周行 + 月内/月外」这点通用骨架（约 100 行），
+#    真正的逻辑（拖拽改期、农历/节假日、习惯打卡点、按优先级/清单/标签着色）都在自绘的
+#    `_DayCell` 里，换库只能替掉骨架、这些仍要写 `calendarBuilders` 粘回去；
+# 3) 另一处月网格（`habit_month_grid.dart`）本就不在 table_calendar 的覆盖范围内。
+# ⇒ 引入的收益抵不上改造与回归风险，故**删依赖**而不是**换实现**。
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
