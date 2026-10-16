@@ -124,8 +124,18 @@ class ApiClient {
 
   // --- /app-api/todo-member/** 认证 -----------------------------------------
 
-  Future<Response<T>> memberPost<T>(String path, {Object? data}) {
-    return _dio.post<T>('${ApiConfig.memberPrefix}$path', data: data);
+  Future<Response<T>> memberPost<T>(
+    String path, {
+    Object? data,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+  }) {
+    return _dio.post<T>(
+      '${ApiConfig.memberPrefix}$path',
+      data: data,
+      queryParameters: queryParameters,
+      options: options,
+    );
   }
 
   Future<Response<T>> memberPut<T>(String path, {Object? data}) {

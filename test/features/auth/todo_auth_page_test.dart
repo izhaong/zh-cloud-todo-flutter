@@ -486,6 +486,10 @@ class _FakeAuthGateway implements AuthGateway {
   Future<bool> validateSession(String accessToken) async => true;
 
   @override
+  Future<TodoAuthSession> refreshSession(TodoAuthSession current) async =>
+      current;
+
+  @override
   Future<void> logout(String accessToken) async {}
 
   @override

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/api/api_client.dart';
 import '../core/api/api_config.dart';
+import '../core/api/envelope.dart';
 import '../core/auth/auth_gateway.dart';
 import '../core/storage/session_store.dart';
 import '../native/native_intents.dart';
@@ -51,9 +52,66 @@ final sessionValidationTimeoutProvider = Provider<Duration>(
   (ref) => const Duration(seconds: 1),
 );
 
+/// 续签访问令牌的最长等待；同样只为弱网设上限，超时按「网络不可确认」处理。
+final sessionRefreshTimeoutProvider = Provider<Duration>(
+  (ref) => const Duration(seconds: 5),
+);
+
 class SessionController extends Notifier<TodoAuthSession?> {
   @override
   TodoAuthSession? build() => null;
+
+  /// 同时只允许一次刷新在飞：401 常常成批到来，各刷一次会白白多签发令牌。
+  Future<TodoAuthSession>? _refreshing;
+
+  /// 用 refreshToken 续签并落盘；并发调用共用同一次尝试。
+  ///
+  /// 失败原样抛出，由调用方按 [_refreshWasRejected] 分辨「服务端拒绝」与
+  /// 「网络不可确认」——两者的处置完全相反。落盘失败不算刷新失败：内存里的新
+  /// 令牌本次运行仍可用，写钥匙串出错不该把用户踢回登录页（落盘问题由
+  /// [setSession] 那条路径显式暴露）。
+  Future<TodoAuthSession> _tryRefresh(
+    AuthGateway gateway,
+    TodoAuthSession current,
+  ) {
+    final inFlight = _refreshing;
+    if (inFlight != null) return inFlight;
+    return _refreshing = _refresh(gateway, current).whenComplete(() {
+      _refreshing = null;
+    });
+  }
+
+  Future<TodoAuthSession> _refresh(
+    AuthGateway gateway,
+    TodoAuthSession current,
+  ) async {
+    final renewed = await gateway
+        .refreshSession(current)
+        .timeout(ref.read(sessionRefreshTimeoutProvider));
+    try {
+      await ref.read(sessionStoreProvider).writeSession(renewed);
+    } catch (_) {
+      // 落盘失败不影响本次运行，下次启动会再走一遍 refresh。
+    }
+    return renewed;
+  }
+
+  /// 业务请求被判 401 后的自愈入口：先续签，续不上才真结束会话。
+  ///
+  /// 直接清会话会让「令牌到期」等同于「登录失效」——访问令牌只有 30 分钟，
+  /// 用户开着应用半小时后任何一个请求都会把人踢回登录页。
+  Future<void> refreshOrExpire() async {
+    final current = state;
+    if (current == null) return;
+    try {
+      state = await _tryRefresh(ref.read(authGatewayProvider), current);
+    } catch (error) {
+      if (_refreshWasRejected(error)) {
+        await expireSession();
+      }
+      // 网络不可确认则保留本地会话与已加载数据，不做任何清理。
+    }
+  }
 
   /// 应用启动时读取本地 secure 会话，并向后端校验是否仍然有效。
   ///
@@ -83,11 +141,24 @@ class SessionController extends Notifier<TodoAuthSession?> {
       }
       if (valid) {
         state = session;
-      } else {
-        ref.read(sessionExpiredNoticeProvider.notifier).state = true;
-        await store.clearSession();
-        _clearNativeTaskProjections();
+        return;
       }
+      // 访问令牌过期不等于登录失效：后端 default 客户端的 access token 只有
+      // 1800 秒，refresh token 有 2592000 秒。以前这里直接清会话，用户于是
+      // 「每次启动都要重新登录」。先续一次，只有刷新也被拒才算登录失效。
+      try {
+        state = await _tryRefresh(gateway, session);
+        return;
+      } catch (error) {
+        if (!_refreshWasRejected(error)) {
+          // 网络不可确认：保留会话与本地 Drift 数据。
+          state = session;
+          return;
+        }
+      }
+      ref.read(sessionExpiredNoticeProvider.notifier).state = true;
+      await store.clearSession();
+      _clearNativeTaskProjections();
     } catch (_) {
       // 走到这里是读本地会话或校验过程本身异常，无法断定服务端拒绝过令牌，
       // 所以既不标「已失效」、也不清已存项：钥匙串这次读不到（用户拒绝授权、
@@ -141,4 +212,29 @@ class SessionController extends Notifier<TodoAuthSession?> {
     unawaited(NativeIntents.updateTodayWidgetSnapshot(const []));
     unawaited(NativeIntents.pushLockScreenTasks(const []));
   }
+}
+
+/// 刷新失败到底是「服务端说这个刷新令牌不认」还是「这次网络没确认」。
+///
+/// 两者处置相反：判成拒绝要清会话（本地 Drift 数据随之不可达），判成网络问题
+/// 必须原样保留。芋道的「刷新令牌已过期」是 HTTP 200 + 信封 `code:401`，
+/// 在网络层被包成 [envelopeFailure] 的 [DioException]，所以不能只看异常类型，
+/// 要连同信封码 / HTTP 状态码 / `badResponse` 一起判。
+bool _refreshWasRejected(Object error) {
+  if (error is TodoAuthException) return true;
+  if (error is! DioException) return false;
+  // 服务端答了「不行」：401，或信封里的 401（刷新令牌过期 / 无效）。
+  final code = envelopeCode(error.response?.data);
+  if (code == 401) return true;
+  if (error.response?.statusCode == 401) return true;
+  // 其它 4xx 也是服务端明确拒绝（如刷新令牌参数不合法），不该留着死循环重试。
+  final status = error.response?.statusCode;
+  if (error.type == DioExceptionType.badResponse &&
+      status != null &&
+      status >= 400 &&
+      status < 500) {
+    return true;
+  }
+  // connectionError / 各类 timeout / 5xx：网络或服务端临时不可用，保留会话。
+  return false;
 }

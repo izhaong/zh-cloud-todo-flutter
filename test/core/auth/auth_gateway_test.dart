@@ -140,4 +140,60 @@ void main() {
       );
     },
   );
+
+  // 后端签名是 `@RequestParam("refreshToken")`，不是请求体；放错地方会 400，
+  // 表现为「刷新永远失败 ⇒ 又变成每次启动重新登录」。
+  test('刷新令牌走查询参数，并保留响应里没有的 mobile / tenantId', () async {
+    final captured = <RequestOptions>[];
+    final dio = Dio()
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            captured.add(options);
+            handler.resolve(
+              Response<Map<String, dynamic>>(
+                requestOptions: options,
+                data: const {
+                  'code': 0,
+                  'data': {
+                    'userId': 7,
+                    'accessToken': 'brand-new-access',
+                    'refreshToken': 'persisted-refresh-token',
+                    'expiresTime': '2026-10-14T12:00:00',
+                  },
+                },
+              ),
+            );
+          },
+        ),
+      );
+    final gateway = AuthGatewayImpl(
+      ApiClient(dio: dio, tokenProvider: () => 'expired-token'),
+      tenantId: '1',
+    );
+
+    final renewed = await gateway.refreshSession(
+      const TodoAuthSession(
+        userId: 7,
+        accessToken: 'expired-token',
+        refreshToken: 'persisted-refresh-token',
+        tenantId: '1',
+        mobile: '18800000000',
+      ),
+    );
+
+    expect(captured.single.path, '/app-api/todo-member/auth/refresh-token');
+    expect(captured.single.queryParameters, {
+      'refreshToken': 'persisted-refresh-token',
+    });
+    expect(captured.single.data, isNull, reason: '刷新令牌不能放进请求体');
+    expect(renewed.accessToken, 'brand-new-access');
+    expect(
+      renewed.mobile,
+      '18800000000',
+      reason: '刷新响应不含 mobile，丢了会让「我的」页显示空号',
+    );
+    expect(renewed.tenantId, '1', reason: '刷新响应不含租户，丢了会串本地库');
+    expect(renewed.isValid, isTrue);
+  });
 }
