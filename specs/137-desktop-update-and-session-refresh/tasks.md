@@ -81,15 +81,16 @@
 | 定向测试（7 个文件，含本切片全部判据） | `+43 All tests passed!` |
 | 反向探针 1（删 plist 键） | 红（按预期） |
 | 反向探针 2（去掉续签分支） | `+10 -2`（按预期） |
-| `flutter build macos --release` | `✓ Built … zh_cloud_todo_flutter.app`（见「已知未重跑」） |
-| 产物复核：`codesign -d --entitlements :-` | `com.zh04.zhCloudTodoFlutter-spks` / `-spki`（变量已展开） |
+| `flutter build macos --release` | `✓ Built … zh_cloud_todo_flutter.app (65.7MB)`（重放后重跑） |
+| 产物复核：`plutil -p Info.plist` | `"SUEnableInstallerLauncherService" => true` |
+| 产物复核：`codesign -d --entitlements :-` | `com.zh04.zhCloudTodoFlutter-spks` / `-spki`（**变量已展开**） |
 
-### 已知未重跑 / 另立账
+构建产物复核在重放后的 develop 上重跑，两项读数与首次一致 ⇒ 配置确实进了签名产物，
+不是只写在源文件里。构建会顺带改写 `macos/Podfile.lock` 与 `Runner.xcscheme`
+（Flutter 3.44.8 的 SwiftPM 迁移噪声，与本切片无关），已在提交前还原。
 
-- `flutter build macos --release` 与产物 entitlements 复核是**首次**在一次性 worktree
-  上量的读数（本机 `~/development/flutter` 3.44.8）。本轮重放后未再跑一次完整构建
-  （耗时长且会顺带改写 `macos/Podfile.lock` 等 SwiftPM 迁移噪声文件）；本项保留为
-  发版前复核项，不因重放而失效——配置本身逐字未变。
+### 另立账
+
 - 端到端「点更新真的装上」未验：需先发一个带本修复的新版 DMG，再由旧版拉取。
 - Developer ID 签名 + 公证：本机 0 个有效签名身份，属发版链路。
 - FL #568（去掉 auto_updater、改手动打开 Release 页）与本切片方向相反，
