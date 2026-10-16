@@ -685,7 +685,12 @@ class _SmartListDropZone extends ConsumerWidget {
     return SidebarDropZone(
       key: ValueKey('todo-sidebar-drop-smart-${smart.name}'),
       hoverLabel: '安排到「${smart.label}」',
-      accept: (task) => controller.acceptsSmartList(task, condition),
+      // 悬停这一层**只做指示、不做闸门**（FL #585）：`onWillAccept` 是同步的，
+      // 只能看拖出快照；一旦它按快照判「已满足」而返回 false，`onAccept` 根本不会触发，
+      // 落点里那次「按库里当前行重判」就没机会跑 —— 拖动被吞在悬停这一步。
+      // 判据统一交给落下时的 `applySmartListTimeCondition`（它现读库）。
+      // 与标签落点 `accept: (_) => true` 同口径。
+      accept: (_) => true,
       onDrop: (task) async {
         final outcome = await controller.applySmartListTimeCondition(
           task,
@@ -963,7 +968,8 @@ class _ListRowState extends ConsumerState<_ListRow> {
         child: SidebarDropZone(
           key: ValueKey('todo-sidebar-drop-list-${list.id}'),
           hoverLabel: '移入清单「${list.name}」',
-          accept: (task) => controller.acceptsList(task, list.id),
+          // 同上：悬停不做闸门，判据交给落下时的 `moveToList`（它现读库）。
+          accept: (_) => true,
           onDrop: (task) async {
             final outcome = await controller.moveToList(task, list.id);
             if (outcome != SidebarDropOutcome.failed || !context.mounted) {

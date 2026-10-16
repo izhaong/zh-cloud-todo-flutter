@@ -224,6 +224,8 @@ void main() {
       bool fail = false,
     }) {
       return SidebarTaskDropController(
+        // `null` = 这批用例的库里没有更新的一行 ⇒ 判据退回拖出快照（存量语义不变）。
+        loadTask: (taskId) async => null,
         moveTask: (taskId, listId) async {},
         attachTag: (taskId, tagId) async {},
         scheduleToDay: (taskId, targetDay) async {
@@ -246,6 +248,49 @@ void main() {
       );
       expect(
         await controller.applySmartListTimeCondition(task, condition),
+        SidebarDropOutcome.skipped,
+      );
+      expect(writes, isEmpty);
+    });
+
+    test('#585 快照说「已满足」、库里已挪出窗口 ⇒ 必须写（原来被悬停那一步吞掉）', () async {
+      final writes = <DateTime>[];
+      final condition = smartListTimeConditionOf(SmartList.today, now)!;
+      final controller = SidebarTaskDropController(
+        // 拖出到落下之间被一次 pull 覆盖：库里已经挪到窗口外（10-12 的窗口之外）。
+        loadTask: (taskId) async => _payload(DateTime(2026, 10, 20, 9, 0)),
+        moveTask: (taskId, listId) async {},
+        attachTag: (taskId, tagId) async {},
+        scheduleToDay: (taskId, targetDay) async => writes.add(targetDay),
+      );
+
+      final snapshot = _payload(DateTime(2026, 10, 12, 9, 0)); // 快照：已在今天
+      final outcome = await controller.applySmartListTimeCondition(
+        snapshot,
+        condition,
+      );
+
+      expect(outcome, SidebarDropOutcome.applied);
+      expect(writes, [
+        condition.targetDay,
+      ], reason: '库里已不在窗口内 ⇒ 这一次拖必须落到目标日；按快照判就静默 skip 了');
+    });
+
+    test('#585 库里确实已满足 ⇒ skipped，一次写都不发（幂等照旧）', () async {
+      final writes = <DateTime>[];
+      final condition = smartListTimeConditionOf(SmartList.today, now)!;
+      final controller = SidebarTaskDropController(
+        loadTask: (taskId) async => _payload(DateTime(2026, 10, 12, 9, 0)),
+        moveTask: (taskId, listId) async {},
+        attachTag: (taskId, tagId) async {},
+        scheduleToDay: (taskId, targetDay) async => writes.add(targetDay),
+      );
+
+      expect(
+        await controller.applySmartListTimeCondition(
+          _payload(DateTime(2026, 10, 12, 9, 0)),
+          condition,
+        ),
         SidebarDropOutcome.skipped,
       );
       expect(writes, isEmpty);
@@ -447,6 +492,8 @@ void main() {
         dueAt: _dueAt(offsetDays: 3),
         withScaffold: true,
         controller: SidebarTaskDropController(
+          // `null` = 这批用例的库里没有更新的一行 ⇒ 判据退回拖出快照（存量语义不变）。
+          loadTask: (taskId) async => null,
           moveTask: (taskId, listId) async {},
           attachTag: (taskId, tagId) async {},
           scheduleToDay: (taskId, targetDay) async => throw StateError('故意写失败'),
