@@ -32,5 +32,10 @@
 	<string>https://github.com/izhaong/zh-cloud-todo-flutter/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>HDz/gEKmbDr1EYS5vyqmslAWBNY10r5KLGLg5Vn5AEo=</string>
+	<!-- 沙盒应用必须显式打开 Sparkle 的 Installer XPC 服务：否则更新下完后
+	     Installer 起不来，界面停在「An error occurred while launching the installer」。
+	     Downloader 服务不打开——本应用已声明 network.client，按官方文档不该开。 -->
+	<key>SUEnableInstallerLauncherService</key>
+	<true/>
 </dict>
 </plist>
