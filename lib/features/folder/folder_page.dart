@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/error_text.dart';
 import '../../core/db/app_database.dart';
 import '../../state/providers.dart';
+import '../../core/widgets/app_widgets.dart';
 import 'folder_actions.dart';
 import '../shell/sidebar_hierarchy.dart';
 
@@ -26,74 +27,89 @@ class FolderPage extends ConsumerWidget {
           ),
         ],
       ),
-      body: foldersAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('加载文件夹失败: ${describeError(e)}')),
-        data: (folders) {
-          final entries = flattenSidebarHierarchy(
-            folders,
-            idOf: (folder) => folder.id,
-            parentIdOf: (folder) => folder.parentId,
-          );
-          return folders.isEmpty
-              ? const Center(child: Text('暂无文件夹'))
-              : ListView.builder(
-                  itemCount: entries.length,
-                  itemBuilder: (_, i) {
-                    final entry = entries[i];
-                    final f = entry.node;
-                    // specs/135（矩阵 #18）：左滑解散 + 桌面右键解散 + 文案统一。
-                    return Dismissible(
-                      key: ValueKey('folder-row-${f.id}'),
-                      direction: DismissDirection.startToEnd,
-                      background: Container(
-                        color: Colors.red,
-                        alignment: Alignment.centerLeft,
-                        padding: const EdgeInsets.only(left: 16),
-                        child: const Icon(
-                          Icons.delete_sweep,
-                          color: Colors.white,
-                        ),
-                      ),
-                      confirmDismiss: (_) =>
-                          confirmAndDisbandFolder(context, f),
-                      child: GestureDetector(
-                        onSecondaryTapDown: (details) =>
-                            _showContextMenu(context, details, f),
-                        child: ListTile(
-                          key: ValueKey('folder-row-${f.id}'),
-                          contentPadding: EdgeInsets.only(
-                            left: 16 + entry.depth * 24,
-                            right: 8,
-                          ),
-                          leading: const Icon(Icons.folder),
-                          title: Text(f.name),
-                          subtitle: f.parentId == null
-                              ? null
-                              : Text(_folderPath(f, folders)),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                tooltip: '编辑文件夹',
-                                icon: const Icon(Icons.edit_outlined),
-                                onPressed: () =>
-                                    _edit(context, ref, f, folders),
-                              ),
-                              IconButton(
-                                // 嘀嗒 :28「解散文件夹」——文案统一。
-                                tooltip: '解散文件夹',
-                                icon: const Icon(Icons.delete_sweep_outlined),
-                                onPressed: () => _delete(context, ref, f),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
+      body: Column(
+        children: [
+          if (foldersAsync.hasError && foldersAsync.hasValue)
+            AppRefreshFailedHint(
+              message: '文件夹刷新失败，仍显示上一次的数据',
+              onRetry: () => ref.invalidate(foldersStreamProvider),
+            ),
+          Expanded(
+            child: foldersAsync.when(
+              skipError: true,
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) =>
+                  Center(child: Text('加载文件夹失败: ${describeError(e)}')),
+              data: (folders) {
+                final entries = flattenSidebarHierarchy(
+                  folders,
+                  idOf: (folder) => folder.id,
+                  parentIdOf: (folder) => folder.parentId,
                 );
-        },
+                return folders.isEmpty
+                    ? const Center(child: Text('暂无文件夹'))
+                    : ListView.builder(
+                        itemCount: entries.length,
+                        itemBuilder: (_, i) {
+                          final entry = entries[i];
+                          final f = entry.node;
+                          // specs/135（矩阵 #18）：左滑解散 + 桌面右键解散 + 文案统一。
+                          return Dismissible(
+                            key: ValueKey('folder-row-${f.id}'),
+                            direction: DismissDirection.startToEnd,
+                            background: Container(
+                              color: Colors.red,
+                              alignment: Alignment.centerLeft,
+                              padding: const EdgeInsets.only(left: 16),
+                              child: const Icon(
+                                Icons.delete_sweep,
+                                color: Colors.white,
+                              ),
+                            ),
+                            confirmDismiss: (_) =>
+                                confirmAndDisbandFolder(context, f),
+                            child: GestureDetector(
+                              onSecondaryTapDown: (details) =>
+                                  _showContextMenu(context, details, f),
+                              child: ListTile(
+                                key: ValueKey('folder-row-${f.id}'),
+                                contentPadding: EdgeInsets.only(
+                                  left: 16 + entry.depth * 24,
+                                  right: 8,
+                                ),
+                                leading: const Icon(Icons.folder),
+                                title: Text(f.name),
+                                subtitle: f.parentId == null
+                                    ? null
+                                    : Text(_folderPath(f, folders)),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      tooltip: '编辑文件夹',
+                                      icon: const Icon(Icons.edit_outlined),
+                                      onPressed: () =>
+                                          _edit(context, ref, f, folders),
+                                    ),
+                                    IconButton(
+                                      // 嘀嗒 :28「解散文件夹」——文案统一。
+                                      tooltip: '解散文件夹',
+                                      icon: const Icon(
+                                        Icons.delete_sweep_outlined,
+                                      ),
+                                      onPressed: () => _delete(context, ref, f),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

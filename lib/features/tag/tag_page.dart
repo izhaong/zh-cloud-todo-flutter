@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/error_text.dart';
 import '../../core/db/app_database.dart';
 import '../../state/providers.dart';
+import '../../core/widgets/app_widgets.dart';
 import 'tag_actions.dart';
 import 'tag_color.dart';
 
@@ -27,40 +28,53 @@ class TagPage extends ConsumerWidget {
           ),
         ],
       ),
-      body: tagsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('加载标签失败: ${describeError(e)}')),
-        data: (tags) => tags.isEmpty
-            ? const Center(child: Text('暂无标签'))
-            : ListView.builder(
-                itemCount: tags.length,
-                itemBuilder: (_, i) {
-                  final t = tags[i];
-                  final selected = t.id == initialTagId;
-                  return ListTile(
-                    key: Key('tag-search-result-${t.id}'),
-                    leading: _ColorDot(colorHex: t.color),
-                    title: Text(tagPath(t, tags)),
-                    subtitle: selected ? const Text('搜索定位的标签') : null,
-                    selected: selected,
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          tooltip: '编辑标签',
-                          icon: const Icon(Icons.edit_outlined),
-                          onPressed: () => _edit(context, ref, t),
-                        ),
-                        IconButton(
-                          tooltip: '删除标签',
-                          icon: const Icon(Icons.delete_outline),
-                          onPressed: () => _delete(context, ref, t),
-                        ),
-                      ],
+      body: Column(
+        children: [
+          if (tagsAsync.hasError && tagsAsync.hasValue)
+            AppRefreshFailedHint(
+              message: '标签刷新失败，仍显示上一次的数据',
+              onRetry: () => ref.invalidate(tagsStreamProvider),
+            ),
+          Expanded(
+            child: tagsAsync.when(
+              skipError: true,
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) =>
+                  Center(child: Text('加载标签失败: ${describeError(e)}')),
+              data: (tags) => tags.isEmpty
+                  ? const Center(child: Text('暂无标签'))
+                  : ListView.builder(
+                      itemCount: tags.length,
+                      itemBuilder: (_, i) {
+                        final t = tags[i];
+                        final selected = t.id == initialTagId;
+                        return ListTile(
+                          key: Key('tag-search-result-${t.id}'),
+                          leading: _ColorDot(colorHex: t.color),
+                          title: Text(tagPath(t, tags)),
+                          subtitle: selected ? const Text('搜索定位的标签') : null,
+                          selected: selected,
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: '编辑标签',
+                                icon: const Icon(Icons.edit_outlined),
+                                onPressed: () => _edit(context, ref, t),
+                              ),
+                              IconButton(
+                                tooltip: '删除标签',
+                                icon: const Icon(Icons.delete_outline),
+                                onPressed: () => _delete(context, ref, t),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
+            ),
+          ),
+        ],
       ),
     );
   }
