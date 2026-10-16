@@ -396,7 +396,7 @@ void main() {
     await tester.tap(
       find.descendant(
         of: find.byKey(const ValueKey('folder-row-$projectsFolderId')),
-        matching: find.byIcon(Icons.delete_outline),
+        matching: find.byTooltip('解散文件夹'),
       ),
     );
     await tester.pumpAndSettle();

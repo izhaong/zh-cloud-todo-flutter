@@ -8,6 +8,7 @@ import 'package:ota_update/ota_update.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../api/error_text.dart';
 import 'github_apk_release.dart';
 import 'update_feed.dart';
 import 'update_surface.dart';
@@ -21,7 +22,7 @@ Future<void> prepareDesktopUpdate() async {
       } on UpdateAlreadyCurrent {
         // 启动时已经是最新版，不打扰用户。
       } catch (error) {
-        debugPrint('android update check failed: $error');
+        debugPrint('android update check failed: ${describeError(error)}');
       }
     }
     return;
@@ -31,7 +32,7 @@ Future<void> prepareDesktopUpdate() async {
     await autoUpdater.setScheduledCheckInterval(86400);
     await autoUpdater.checkForUpdates(inBackground: true);
   } catch (error) {
-    debugPrint('desktop update check failed: $error');
+    debugPrint('desktop update check failed: ${describeError(error)}');
   }
 }
 

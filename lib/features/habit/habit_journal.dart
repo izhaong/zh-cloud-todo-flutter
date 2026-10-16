@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/api/error_text.dart';
 import '../../core/theme/brand_colors.dart';
 import '../../state/efficiency_providers.dart';
 import '../../state/providers.dart';
@@ -67,7 +68,7 @@ class _HabitCheckInSheetState extends ConsumerState<_HabitCheckInSheet> {
       Navigator.pop(context, true);
     } catch (error) {
       messenger?.showSnackBar(
-        SnackBar(content: Text('打卡失败：${error.toString()}')),
+        SnackBar(content: Text('打卡失败：${describeError(error)}')),
       );
       if (mounted) setState(() => _saving = false);
     }

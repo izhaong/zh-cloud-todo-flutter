@@ -42,9 +42,14 @@ class FakeHabitServer {
       };
     }
     // 2026-01-01 .. 2026-07-15：196 天（31+28+31+30+31+30+15），测试注入的「服务端今天」。
+    //
+    // 必须按**日历日**推进，不能用 `DateTime(...).add(Duration(days: 1))`：
+    // 后者是「+24 小时」，遇到夏令时开始那天（本机美东 2026-03-08 只有 23 小时）
+    // 会整体前移一小时，累积到年中就少产出一天（实测只出 195 天、末格变 07-14），
+    // 于是「末格是窗口最后一天」这条断言在任何有 DST 的机器上必然失败。
     final days = <Map<String, dynamic>>[];
-    var date = DateTime(2026, 1, 1);
-    final end = DateTime(2026, 7, 15);
+    var date = DateTime.utc(2026, 1, 1);
+    final end = DateTime.utc(2026, 7, 15);
     var checkIns = 0;
     while (!date.isAfter(end)) {
       final count = date.day % 5 == 0 ? 2 : (date.day % 7 == 0 ? 1 : 0);
