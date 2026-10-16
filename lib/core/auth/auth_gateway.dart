@@ -32,6 +32,16 @@ abstract class AuthGateway {
   /// 校验 accessToken 是否仍被后端认可；网络异常向调用方抛出以保留离线会话。
   Future<bool> validateSession(String accessToken);
 
+  /// 用 refreshToken 换一个新的 accessToken（后端 `POST /auth/refresh-token`）。
+  ///
+  /// 后端 `default` 客户端的访问令牌只有 1800 秒，刷新令牌有 2592000 秒；不用刷新
+  /// 令牌就等于「每 30 分钟必须重新登录一次」。刷新令牌本身不轮换，响应里的
+  /// refreshToken 与传入值相同（`createOAuth2AccessToken` 直接复用 refreshTokenDO）。
+  ///
+  /// [current] 用来补齐响应里没有的 `mobile` / `tenantId`：后端登录响应只回
+  /// userId / accessToken / refreshToken / expiresTime，不含租户。
+  Future<TodoAuthSession> refreshSession(TodoAuthSession current);
+
   void close();
 }
 
@@ -162,6 +172,25 @@ class AuthGatewayImpl implements AuthGateway {
     } on TodoAuthException {
       return false;
     }
+  }
+
+  @override
+  Future<TodoAuthSession> refreshSession(TodoAuthSession current) async {
+    // refreshToken 走查询参数：后端签名是 @RequestParam，不是请求体。
+    final resp = await _client.memberPost<Map<String, dynamic>>(
+      '/auth/refresh-token',
+      queryParameters: {'refreshToken': current.refreshToken},
+    );
+    final data = _unwrap(resp);
+    if (data is! Map) {
+      throw const TodoAuthException('刷新登录态响应缺少用户凭证');
+    }
+    // 刷新响应不含 mobile / tenantId，用本机已有会话补齐。
+    return TodoAuthSession.fromResponse(
+      Map<String, dynamic>.from(data),
+      mobile: current.mobile,
+      tenantId: current.tenantId,
+    );
   }
 
   @override

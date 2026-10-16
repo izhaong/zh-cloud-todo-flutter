@@ -74,8 +74,10 @@ final apiClientProvider = Provider<ApiClient>((ref) {
     tenantIdProvider: () =>
         ref.read(sessionProvider)?.tenantId ?? ApiConfig.defaultTenantId,
     onUnauthorized: () {
+      // 先续签再决定是否结束会话：访问令牌只有 30 分钟，「到期」不该等于
+      // 「登录失效」。刷新被服务端拒绝才真的清会话跳登录页。
       Future.microtask(
-        () => ref.read(sessionProvider.notifier).expireSession(),
+        () => ref.read(sessionProvider.notifier).refreshOrExpire(),
       );
     },
   );

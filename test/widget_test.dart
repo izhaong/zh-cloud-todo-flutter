@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zh_cloud_todo_flutter/app.dart';
 import 'package:zh_cloud_todo_flutter/core/api/error_text.dart';
+import 'package:zh_cloud_todo_flutter/core/auth/auth_gateway.dart';
 import 'package:zh_cloud_todo_flutter/state/session_state.dart';
 
 void main() {
@@ -152,6 +153,13 @@ class _FakeAuthClient implements AuthGateway {
   @override
   Future<bool> validateSession(String accessToken) async {
     return validateSessionResult && accessToken.isNotEmpty;
+  }
+
+  @override
+  Future<TodoAuthSession> refreshSession(TodoAuthSession current) async {
+    // 默认当「刷新令牌也被服务端拒了」：这些用例量的是「确认失效 ⇒ 清会话跳登录」，
+    // 「续签成功 ⇒ 不掉登录」是另一条独立判据。
+    throw const TodoAuthException('刷新令牌已过期');
   }
 
   @override
