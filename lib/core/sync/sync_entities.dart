@@ -12,7 +12,6 @@ class SyncEntities {
   static const viewPreference = 'view_preference';
   static const boardPreference = 'board_preference';
   static const tag = 'tag';
-  static const taskTag = 'task_tag';
   static const filter = 'filter';
   static const attachment = 'attachment';
   static const template = 'template';
@@ -25,7 +24,15 @@ class SyncEntities {
   /// 不在后端 `/sync` 白名单内、由 [SyncCoordinator] 路由到普通 REST 的实体。
   static const folder = 'folder';
 
-  /// 走 `/app-api/todo/sync/push` 的实体集合（folder 例外）。
+  /// 任务-标签关联同样走 REST，不能进 `/sync/push`。
+  ///
+  /// 后端 `TodoSyncServiceImpl` 对 `ENTITY_TASK_TAG` 直接
+  /// `throw exception(TODO_SYNC_INVALID_ARGUMENT)`（注释：「task_tag 关联表不支持
+  /// 客户端 push：所有变更走 `/app-api/todo/tag/{task-bind,task-unbind}`」）。
+  /// 放进 `/sync/push` 会让**整批**被拒——同批的检查事项、新建任务一起丢。
+  static const taskTag = 'task_tag';
+
+  /// 走 `/app-api/todo/sync/push` 的实体集合（folder / task_tag 例外）。
   static const syncable = {
     list,
     taskSection,
@@ -38,7 +45,6 @@ class SyncEntities {
     viewPreference,
     boardPreference,
     tag,
-    taskTag,
     filter,
     template,
   };

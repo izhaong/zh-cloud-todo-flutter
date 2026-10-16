@@ -18,111 +18,121 @@ import 'package:zh_cloud_todo_flutter/state/repositories/task_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_sort_preference_repository.dart';
 
 void main() {
-  test(
-    'push resolves task-tag task and tag dependencies to server IDs',
-    () async {
-      final db = AppDatabase.forTesting(NativeDatabase.memory());
-      addTearDown(db.close);
-      final now = DateTime.utc(2026, 7, 16, 9);
-      await db
-          .into(db.todoTasks)
-          .insert(
-            TodoTasksCompanion.insert(
-              id: 'task-local',
-              serverId: const Value(101),
-              listId: 'inbox',
-              title: '整理项目标签',
-              updatedAt: now,
-              createdAt: now,
-            ),
-          );
-      await db
-          .into(db.todoTags)
-          .insert(
-            TodoTagsCompanion.insert(
-              id: 'tag-local',
-              serverId: const Value(201),
-              name: '项目',
-              updatedAt: now,
-              createdAt: now,
-            ),
-          );
-      await TagRepository(
-        db,
-        SyncChangeQueue(db),
-      ).setTaskTags('task-local', ['tag-local']);
+  test('task-tag 走 REST /tag/task-bind，不再进 /sync/push（服务端会整批拒绝）', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final now = DateTime.utc(2026, 7, 16, 9);
+    await db
+        .into(db.todoTasks)
+        .insert(
+          TodoTasksCompanion.insert(
+            id: 'task-local',
+            serverId: const Value(101),
+            listId: 'inbox',
+            title: '整理项目标签',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    await db
+        .into(db.todoTags)
+        .insert(
+          TodoTagsCompanion.insert(
+            id: 'tag-local',
+            serverId: const Value(201),
+            name: '项目',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    await TagRepository(
+      db,
+      SyncChangeQueue(db),
+    ).setTaskTags('task-local', ['tag-local']);
 
-      List<Map<String, dynamic>> sentChanges = const [];
-      final dio = Dio();
-      dio.interceptors.add(
+    final bindBodies = <Map<String, dynamic>>[];
+    final pushedEntities = <String>[];
+    final dio = Dio()
+      ..interceptors.add(
         InterceptorsWrapper(
           onRequest: (options, handler) {
-            sentChanges = ((options.data as Map)['changes'] as List)
-                .cast<Map>()
-                .map((entry) => entry.cast<String, dynamic>())
-                .toList();
+            if (options.path.contains('/sync/push')) {
+              pushedEntities.addAll(
+                ((options.data as Map)['changes'] as List)
+                    .cast<Map>()
+                    .map((change) => change['entityType'].toString()),
+              );
+              handler.resolve(
+                Response(
+                  requestOptions: options,
+                  data: {
+                    'code': 0,
+                    'data': {
+                      'ok': true,
+                      'accepted': <Map<String, dynamic>>[],
+                      'conflicts': <Map<String, dynamic>>[],
+                    },
+                  },
+                ),
+              );
+              return;
+            }
+            if (options.path == '/app-api/todo/tag/task-bind') {
+              bindBodies.add((options.data as Map).cast<String, dynamic>());
+            }
             handler.resolve(
               Response(
                 requestOptions: options,
-                data: {
-                  'code': 0,
-                  'data': {
-                    'ok': true,
-                    'accepted': [
-                      for (final change in sentChanges)
-                        {
-                          'entityType': change['entityType'],
-                          'entityId': change['entityId'],
-                          'operation': change['operation'],
-                          'clientMutationId': change['clientMutationId'],
-                        },
-                    ],
-                    'conflicts': const [],
-                  },
-                },
+                data: {'code': 0, 'data': 1},
               ),
             );
           },
         ),
       );
-      final client = ApiClient(dio: dio);
-      final coordinator = SyncCoordinator(
-        db: db,
-        api: SyncApi(client, clientId: 'test', deviceId: 'device-1'),
-        todoApi: client,
-      );
+    final client = ApiClient(dio: dio);
+    final coordinator = SyncCoordinator(
+      db: db,
+      api: SyncApi(client, clientId: 'test', deviceId: 'device-1'),
+      todoApi: client,
+    );
 
-      expect(await coordinator.push(), 1);
-      final change = sentChanges.single;
-      expect(change['entityType'], 'task_tag');
-      expect(change['payload']?['taskId'], 101);
-      expect(change['payload']?['tagIds'], [201]);
-    },
-  );
+    expect(await coordinator.push(), 1);
+    expect(bindBodies, hasLength(1));
+    expect(bindBodies.single['taskId'], 101);
+    expect(bindBodies.single['tagIds'], [201]);
+    expect(
+      pushedEntities,
+      isNot(contains('task_tag')),
+      reason: 'task_tag 进了 /sync/push 会让整批被拒（后端 ENTITY_TASK_TAG 直接抛错）',
+    );
+  });
 
-  test(
-    'same batch task-tag reuses unsynced task and tag temporary IDs',
-    () async {
-      final db = AppDatabase.forTesting(NativeDatabase.memory());
-      addTearDown(db.close);
-      final queue = SyncChangeQueue(db);
-      final list = await ListRepository(db, queue).create(name: '项目');
-      final task = await TaskRepository(
-        db,
-        queue,
-      ).create(listId: list.id, title: '整理项目标签');
-      final tag = await TagRepository(db, queue).create(name: '工作');
-      await TagRepository(db, queue).setTaskTags(task.id, [tag.id]);
+  test('同批新建的任务与标签先拿到服务端 ID，task-tag 再用真 ID 走 REST', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final queue = SyncChangeQueue(db);
+    final list = await ListRepository(db, queue).create(name: '项目');
+    final task = await TaskRepository(
+      db,
+      queue,
+    ).create(listId: list.id, title: '整理项目标签');
+    final tag = await TagRepository(db, queue).create(name: '工作');
+    await TagRepository(db, queue).setTaskTags(task.id, [tag.id]);
 
-      List<Map<String, dynamic>> sentChanges = const [];
-      final dio = Dio()
-        ..interceptors.add(
-          InterceptorsWrapper(
-            onRequest: (options, handler) {
-              sentChanges = ((options.data as Map)['changes'] as List)
+    final pushedEntities = <String>[];
+    final bindBodies = <Map<String, dynamic>>[];
+    final dio = Dio()
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            if (options.path.contains('/sync/push')) {
+              final changes = ((options.data as Map)['changes'] as List)
                   .cast<Map>()
                   .map((entry) => entry.cast<String, dynamic>())
                   .toList();
+              pushedEntities.addAll(
+                changes.map((change) => change['entityType'].toString()),
+              );
               handler.resolve(
                 Response<Map<String, dynamic>>(
                   requestOptions: options,
@@ -131,7 +141,7 @@ void main() {
                     'data': {
                       'ok': true,
                       'accepted': [
-                        for (final change in sentChanges)
+                        for (final change in changes)
                           {
                             'entityType': change['entityType'],
                             'entityId': switch (change['entityType']) {
@@ -149,30 +159,34 @@ void main() {
                   },
                 ),
               );
-            },
-          ),
-        );
-      final client = ApiClient(dio: dio);
-      final coordinator = SyncCoordinator(
-        db: db,
-        api: SyncApi(client, clientId: 'device-a', deviceId: 'device-a'),
-        todoApi: client,
+              return;
+            }
+            if (options.path == '/app-api/todo/tag/task-bind') {
+              bindBodies.add((options.data as Map).cast<String, dynamic>());
+            }
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                data: {'code': 0, 'data': 1},
+              ),
+            );
+          },
+        ),
       );
+    final client = ApiClient(dio: dio);
+    final coordinator = SyncCoordinator(
+      db: db,
+      api: SyncApi(client, clientId: 'device-a', deviceId: 'device-a'),
+      todoApi: client,
+    );
 
-      expect(await coordinator.push(), 4);
-      final taskChange = sentChanges.singleWhere(
-        (change) => change['entityType'] == 'task',
-      );
-      final tagChange = sentChanges.singleWhere(
-        (change) => change['entityType'] == 'tag',
-      );
-      final taskTagChange = sentChanges.singleWhere(
-        (change) => change['entityType'] == 'task_tag',
-      );
-      expect(taskTagChange['payload']['taskId'], taskChange['entityId']);
-      expect(taskTagChange['payload']['tagIds'], [tagChange['entityId']]);
-    },
-  );
+    expect(await coordinator.push(), 4);
+    expect(pushedEntities, isNot(contains('task_tag')));
+    // 临时 ID 不能泄漏到 REST：绑的一定是同批刚换回来的 301 / 201。
+    expect(bindBodies, hasLength(1));
+    expect(bindBodies.single['taskId'], 301);
+    expect(bindBodies.single['tagIds'], [201]);
+  });
 
   test('pushes child reparent before deleting its former parent tag', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());

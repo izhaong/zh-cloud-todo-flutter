@@ -32,9 +32,11 @@ void main() {
       );
       final tagChange = (await db.select(db.todoSyncChanges).get()).last;
       expect(tagChange.entity, 'task_tag');
+      // previousTagIds 是给 REST 推送端算「要解绑哪些」的，不参与 /sync 协议。
       expect(jsonDecode(tagChange.payloadJson), {
         'taskId': task.id,
         'tagIds': [focus.id, review.id],
+        'previousTagIds': <String>[],
       });
     },
   );
