@@ -27,9 +27,12 @@ void main() {
     await repository.save('list-b', SmartGrouping.byTime);
     expect(await repository.get('list-a'), SmartGrouping.byPriority);
     expect(await repository.get('list-b'), SmartGrouping.byTime);
-    // null（收集箱/智能清单视角）独立一份。
-    await repository.save(null, SmartGrouping.byList);
-    expect(await repository.get(null), SmartGrouping.byList);
+    // 收集箱是**真实清单**（id 就是字面量 `inbox`），与 `null`（智能清单等
+    // 「无清单上下文」的页面）是两把键，FL #619 后半把它们分开了。
+    await repository.save('inbox', SmartGrouping.byList);
+    await repository.save(null, SmartGrouping.byTag);
+    expect(await repository.get('inbox'), SmartGrouping.byList);
+    expect(await repository.get(null), SmartGrouping.byTag);
     expect(await repository.get('list-a'), SmartGrouping.byPriority);
 
     final changes = await db.select(db.todoSyncChanges).get();

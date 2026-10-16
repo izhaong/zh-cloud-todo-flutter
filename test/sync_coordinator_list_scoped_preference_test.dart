@@ -137,10 +137,13 @@ void main() {
   test('收集箱的排序偏好与设备无关，出站保持固定串、也不许被吞掉', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
+    // 收集箱传的是**它自己的清单 id** `'inbox'`（`home_shell.dart` 的
+    // `_effectiveListId` 对 `SmartList.inbox` 就返回这个字面量）。
+    // `null` 是另一回事：智能清单等「无清单上下文」的页面（FL #619 后半）。
     await TaskSortPreferenceRepository(
       db,
       SyncChangeQueue(db),
-    ).save(null, TaskSort.dueDate);
+    ).save('inbox', TaskSort.dueDate);
 
     final sent = <Map<String, dynamic>>[];
     final coordinator = coordinatorFor(

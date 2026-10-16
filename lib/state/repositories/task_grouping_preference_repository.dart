@@ -22,7 +22,13 @@ class TaskGroupingPreferenceRepository {
     : _uuid = uuid ?? const Uuid();
 
   static const _sourceType = 'TASK_GROUP';
-  static const _inboxSourceKey = 'inbox';
+
+  /// 「没有清单上下文」的键（智能清单 / 四象限 / 全部等页面）。
+  ///
+  /// 同 `TaskSortPreferenceRepository`：`null` 表示**这个页面不属于任何清单**，
+  /// 与真实清单收集箱（其 id 本身就是 `'inbox'`）是两件事，
+  /// 落成同一把键会让改智能清单连带改收集箱（FL #619 后半）。
+  static const _noListSourceKey = 'no-list';
 
   final AppDatabase _db;
   final SyncChangeQueue _queue;
@@ -95,8 +101,10 @@ class TaskGroupingPreferenceRepository {
     });
   }
 
+  /// `null` / 空串 = 没有清单上下文（智能清单等）⇒ 独立一把键；
+  /// 其余（含真实清单 `'inbox'`）按清单 id 原样作键。
   String _sourceKey(String? listId) =>
-      listId == null || listId.isEmpty ? _inboxSourceKey : listId;
+      listId == null || listId.isEmpty ? _noListSourceKey : listId;
 
   SmartGrouping _decode(String? valueJson) {
     if (valueJson == null) return smartGroupingFallback;
