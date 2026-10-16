@@ -20,48 +20,52 @@ void main() {
   setUpAll(() => driftRuntimeOptions.dontWarnAboutMultipleDatabases = true);
   tearDownAll(() => driftRuntimeOptions.dontWarnAboutMultipleDatabases = false);
 
-  test('later batches must not hand an already-used temporary id to another local row', () async {
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(db.close);
-    final server = _TempIdServer();
-    final queue = SyncChangeQueue(db);
-    final tasks = TaskRepository(db, queue);
-    final coordinator = _coordinator(db, server.client());
+  test(
+    'later batches must not hand an already-used temporary id to another local row',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final server = _TempIdServer();
+      final queue = SyncChangeQueue(db);
+      final tasks = TaskRepository(db, queue);
+      final coordinator = _coordinator(db, server.client());
 
-    final first = await tasks.create(listId: 'inbox', title: '甲');
-    expect(await coordinator.push(), 1);
-    final boundFirst = await (db.select(
-      db.todoTasks,
-    )..where((row) => row.id.equals(first.id))).getSingle();
-    expect(boundFirst.serverId, isNotNull);
-    final tempIdOfFirst = server.seenEntityIds.single;
+      final first = await tasks.create(listId: 'inbox', title: '甲');
+      expect(await coordinator.push(), 1);
+      final boundFirst = await (db.select(
+        db.todoTasks,
+      )..where((row) => row.id.equals(first.id))).getSingle();
+      expect(boundFirst.serverId, isNotNull);
+      final tempIdOfFirst = server.seenEntityIds.single;
 
-    // 第二条未同步的本地任务：不能把甲用过的临时 ID 再发一遍（那个号在服务端已绑到甲的行）
-    final second = await tasks.create(listId: 'inbox', title: '乙');
-    expect(await coordinator.push(), 1);
-    final boundSecond = await (db.select(
-      db.todoTasks,
-    )..where((row) => row.id.equals(second.id))).getSingle();
+      // 第二条未同步的本地任务：不能把甲用过的临时 ID 再发一遍（那个号在服务端已绑到甲的行）
+      final second = await tasks.create(listId: 'inbox', title: '乙');
+      expect(await coordinator.push(), 1);
+      final boundSecond = await (db.select(
+        db.todoTasks,
+      )..where((row) => row.id.equals(second.id))).getSingle();
 
-    expect(server.seenEntityIds, hasLength(2));
-    expect(
-      server.seenEntityIds.last,
-      isNot(tempIdOfFirst),
-      reason: '批次之间重新分配临时 ID，会让第二条任务复用第一条的号',
-    );
-    expect(
-      boundSecond.serverId,
-      isNot(boundFirst.serverId),
-      reason: '乙复用甲用过的临时 ID，会被服务端 (device,temp) 映射认成甲那一行',
-    );
-  });
+      expect(server.seenEntityIds, hasLength(2));
+      expect(
+        server.seenEntityIds.last,
+        isNot(tempIdOfFirst),
+        reason: '批次之间重新分配临时 ID，会让第二条任务复用第一条的号',
+      );
+      expect(
+        boundSecond.serverId,
+        isNot(boundFirst.serverId),
+        reason: '乙复用甲用过的临时 ID，会被服务端 (device,temp) 映射认成甲那一行',
+      );
+    },
+  );
 }
 
-SyncCoordinator _coordinator(AppDatabase db, ApiClient client) => SyncCoordinator(
-  db: db,
-  api: SyncApi(client, clientId: 'temp-id-test', deviceId: 'temp-id-test'),
-  todoApi: client,
-);
+SyncCoordinator _coordinator(AppDatabase db, ApiClient client) =>
+    SyncCoordinator(
+      db: db,
+      api: SyncApi(client, clientId: 'temp-id-test', deviceId: 'temp-id-test'),
+      todoApi: client,
+    );
 
 /// 只覆盖本用例需要的两个端点：push 按「临时 ID 首次出现即分配服务端 ID」应答，
 /// pull 永远为空。分配规则与 service !331 的 `todo_sync_temp_id` 一致。

@@ -36,9 +36,7 @@ void main() {
     await tester.tap(find.byKey(const Key('todo-batch-edit')));
     await tester.pumpAndSettle();
     await tester.tap(
-      find.byKey(
-        Key('task-batch-select-${TodoVisualFixture.metadataTaskId}'),
-      ),
+      find.byKey(Key('task-batch-select-${TodoVisualFixture.metadataTaskId}')),
     );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('todo-batch-more')));
@@ -60,11 +58,10 @@ void main() {
     await tester.tap(find.byKey(const Key('todo-batch-create-tag')));
     await tester.pumpAndSettle();
 
-    final created = (await fixture.database
-        .select(fixture.database.todoTags)
-        .get())
-        .where((tag) => tag.name == '批量新建-判据')
-        .toList();
+    final created =
+        (await fixture.database.select(fixture.database.todoTags).get())
+            .where((tag) => tag.name == '批量新建-判据')
+            .toList();
     expect(created, hasLength(1), reason: '同名只应有一条，且确实落库');
     // 不断言这一行在树里：弹窗的 ListView 是懒建的，第 5 行可能在屏幕外，
     // 用「应用后是否挂上」来量「建了即选中」，才不依赖滚动位置。

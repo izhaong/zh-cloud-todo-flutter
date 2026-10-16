@@ -102,29 +102,31 @@ void main() {
   for (final goldenCase in todoWorkspaceGoldenCases.where(
     (candidate) => activeScenarios.contains(candidate.scenario),
   )) {
-    testWidgets('${goldenCase.id} follows the workspace visual contract', (
-      tester,
-    ) async {
-      await pumpTodoVisualScenario(
-        tester,
-        viewport: goldenCase.viewport,
-        fixtureSet: goldenCase.fixtureSet,
-        child: const HomeShell(),
-      );
+    testWidgets(
+      '${goldenCase.id} follows the workspace visual contract',
+      (tester) async {
+        await pumpTodoVisualScenario(
+          tester,
+          viewport: goldenCase.viewport,
+          fixtureSet: goldenCase.fixtureSet,
+          child: const HomeShell(),
+        );
 
-      final selectedTaskId = goldenCase.selectedTaskId;
-      if (selectedTaskId != null) {
-        await _selectTaskAndSettle(tester, selectedTaskId);
-      }
+        final selectedTaskId = goldenCase.selectedTaskId;
+        if (selectedTaskId != null) {
+          await _selectTaskAndSettle(tester, selectedTaskId);
+        }
 
-      _assertScenarioStructure(tester, goldenCase);
-      expect(find.textContaining('加载失败'), findsNothing);
+        _assertScenarioStructure(tester, goldenCase);
+        expect(find.textContaining('加载失败'), findsNothing);
 
-      await expectLater(
-        _goldenTarget(goldenCase.scenario),
-        matchesGoldenFile(todoGoldenPath(goldenCase.id)),
-      );
-    }, tags: const ['golden']);
+        await expectLater(
+          _goldenTarget(goldenCase.scenario),
+          matchesGoldenFile(todoGoldenPath(goldenCase.id)),
+        );
+      },
+      tags: const ['golden'],
+    );
   }
 }
 

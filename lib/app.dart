@@ -178,19 +178,13 @@ ThemeData buildDarkTheme() => ThemeData(
   inputDecorationTheme: InputDecorationTheme(
     filled: true,
     fillColor: AppColors.dark.surface,
-    labelStyle: TextStyle(
-      fontSize: 13,
-      color: AppColors.dark.mutedForeground,
-    ),
+    labelStyle: TextStyle(fontSize: 13, color: AppColors.dark.mutedForeground),
     floatingLabelStyle: TextStyle(
       fontSize: 12,
       fontWeight: FontWeight.w500,
       color: AppColors.dark.accent,
     ),
-    hintStyle: TextStyle(
-      fontSize: 13,
-      color: AppColors.dark.mutedForeground,
-    ),
+    hintStyle: TextStyle(fontSize: 13, color: AppColors.dark.mutedForeground),
     contentPadding: const EdgeInsets.symmetric(
       horizontal: AppSpacing.md,
       vertical: 14,
@@ -236,10 +230,7 @@ ThemeData buildDarkTheme() => ThemeData(
   ),
   snackBarTheme: SnackBarThemeData(
     backgroundColor: AppColors.dark.ink,
-    contentTextStyle: TextStyle(
-      fontSize: 13,
-      color: AppColors.dark.background,
-    ),
+    contentTextStyle: TextStyle(fontSize: 13, color: AppColors.dark.background),
     behavior: SnackBarBehavior.floating,
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(AppRadius.md),
@@ -341,19 +332,13 @@ ThemeData buildLightTheme() => ThemeData(
     // 输入框统一：淡灰描边 + 品牌蓝聚焦 + 浮起标签不压边线。
     // labelStyle 显式给字号/颜色，避免默认 16px 黑字压在边框上显得「土」
     // （Issue #650 用户截图反馈）。
-    labelStyle: TextStyle(
-      fontSize: 13,
-      color: AppColors.light.mutedForeground,
-    ),
+    labelStyle: TextStyle(fontSize: 13, color: AppColors.light.mutedForeground),
     floatingLabelStyle: TextStyle(
       fontSize: 12,
       fontWeight: FontWeight.w500,
       color: AppColors.light.accent,
     ),
-    hintStyle: TextStyle(
-      fontSize: 13,
-      color: AppColors.light.mutedForeground,
-    ),
+    hintStyle: TextStyle(fontSize: 13, color: AppColors.light.mutedForeground),
     contentPadding: const EdgeInsets.symmetric(
       horizontal: AppSpacing.md,
       vertical: 14,
@@ -444,12 +429,24 @@ ThemeData buildLightTheme() => ThemeData(
 /// 内嵌品牌字体暂缺（pubspec 无字体资源），先收敛字号层级；
 /// 后续接入 MiSans / HarmonyOS Sans 时只改这里。
 TextTheme _appTextTheme(AppColors colors) => TextTheme(
-  titleLarge: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: colors.ink),
-  titleMedium: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: colors.ink),
+  titleLarge: TextStyle(
+    fontSize: 17,
+    fontWeight: FontWeight.w600,
+    color: colors.ink,
+  ),
+  titleMedium: TextStyle(
+    fontSize: 15,
+    fontWeight: FontWeight.w600,
+    color: colors.ink,
+  ),
   bodyLarge: TextStyle(fontSize: 15, color: colors.foreground),
   bodyMedium: TextStyle(fontSize: 13, color: colors.foreground),
   bodySmall: TextStyle(fontSize: 11, color: colors.mutedForeground),
-  labelLarge: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: colors.foreground),
+  labelLarge: TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.w500,
+    color: colors.foreground,
+  ),
   labelMedium: TextStyle(fontSize: 11, color: colors.mutedForeground),
   labelSmall: TextStyle(fontSize: 10, color: colors.mutedForeground),
 );
@@ -461,8 +458,5 @@ ChipThemeData _chipTheme(AppColors colors) => ChipThemeData(
     borderRadius: BorderRadius.circular(AppRadius.sm),
   ),
   labelStyle: TextStyle(fontSize: 12, color: colors.foreground),
-  padding: const EdgeInsets.symmetric(
-    horizontal: AppSpacing.sm,
-    vertical: 2,
-  ),
+  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 2),
 );

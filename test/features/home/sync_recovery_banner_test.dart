@@ -86,13 +86,8 @@ void main() {
       );
 
       expect(
-        tester.getSemantics(
-          find.text('其中 1 项与其他设备冲突，已采用服务器版本'),
-        ),
-        matchesSemantics(
-          label: '其中 1 项与其他设备冲突，已采用服务器版本',
-          isLiveRegion: true,
-        ),
+        tester.getSemantics(find.text('其中 1 项与其他设备冲突，已采用服务器版本')),
+        matchesSemantics(label: '其中 1 项与其他设备冲突，已采用服务器版本', isLiveRegion: true),
       );
     } finally {
       semantics.dispose();

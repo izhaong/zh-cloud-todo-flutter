@@ -222,12 +222,11 @@ void main() {
       await pumpEventQueue();
 
       expect(received.map((call) => call.method), ['pushLockScreenTasks']);
+      expect(received.single.arguments, {'tasks': <Object>[]});
       expect(
-        received.single.arguments,
-        {'tasks': <Object>[]},
-      );
-      expect(
-        widgetCalls.singleWhere((call) => call.method == 'saveWidgetData').arguments,
+        widgetCalls
+            .singleWhere((call) => call.method == 'saveWidgetData')
+            .arguments,
         {'id': 'tasks', 'data': '[]'},
       );
     },

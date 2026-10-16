@@ -38,9 +38,7 @@ void main() {
     expect(mobileAdd.hitTestable(), findsOneWidget);
   });
 
-  testWidgets('移动端快速添加写入当前收集箱', (
-    tester,
-  ) async {
+  testWidgets('移动端快速添加写入当前收集箱', (tester) async {
     final fixture = await _pumpMobile(
       tester,
       viewport: TodoVisualViewports.mobile,

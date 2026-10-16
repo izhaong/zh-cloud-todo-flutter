@@ -69,9 +69,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final start = _withinDetail(
-      find.widgetWithText(OutlinedButton, '设置开始时间'),
-    );
+    final start = _withinDetail(find.widgetWithText(OutlinedButton, '设置开始时间'));
     final end = _withinDetail(find.widgetWithText(OutlinedButton, '设置结束时间'));
     expect(start, findsOneWidget);
     expect(end, findsOneWidget);

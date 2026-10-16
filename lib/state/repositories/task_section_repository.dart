@@ -112,9 +112,10 @@ class TaskSectionRepository {
         _db.todoTaskSections,
       )..where((row) => row.listId.equals(listId))).get();
       if (sections.length != orderedSectionIds.length ||
-          !sections.map((row) => row.id).toSet().containsAll(
-            orderedSectionIds,
-          )) {
+          !sections
+              .map((row) => row.id)
+              .toSet()
+              .containsAll(orderedSectionIds)) {
         throw ArgumentError.value(
           orderedSectionIds,
           'orderedSectionIds',

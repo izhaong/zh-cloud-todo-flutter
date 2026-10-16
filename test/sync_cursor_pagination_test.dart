@@ -45,11 +45,7 @@ void main() {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
     final api = _PagingSyncApi();
-    final coordinator = SyncCoordinator(
-      db: db,
-      api: api,
-      todoApi: ApiClient(),
-    );
+    final coordinator = SyncCoordinator(db: db, api: api, todoApi: ApiClient());
 
     await coordinator.pull();
     expect(api.seenCursors, [null], reason: '首轮从空游标开始是对的');
@@ -62,10 +58,9 @@ void main() {
     );
 
     await coordinator.pull();
-    expect(
-      api.seenCursors,
-      [null, 'todo-core:237'],
-      reason: '第二轮不能再从 changeId 起点重放同一页',
-    );
+    expect(api.seenCursors, [
+      null,
+      'todo-core:237',
+    ], reason: '第二轮不能再从 changeId 起点重放同一页');
   });
 }

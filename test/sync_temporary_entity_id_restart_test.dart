@@ -21,48 +21,51 @@ void main() {
   setUpAll(() => driftRuntimeOptions.dontWarnAboutMultipleDatabases = true);
   tearDownAll(() => driftRuntimeOptions.dontWarnAboutMultipleDatabases = false);
 
-  test('temp id survives a process restart instead of being re-handed to another row',
-      () async {
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(db.close);
-    final server = _Server();
-    final queue = SyncChangeQueue(db);
-    final tasks = TaskRepository(db, queue);
+  test(
+    'temp id survives a process restart instead of being re-handed to another row',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final server = _Server();
+      final queue = SyncChangeQueue(db);
+      final tasks = TaskRepository(db, queue);
 
-    final a = await tasks.create(listId: 'inbox', title: '甲');
-    expect(await _coordinator(db, server.client()).push(), isPositive);
-    final boundA = await (db.select(
-      db.todoTasks,
-    )..where((row) => row.id.equals(a.id))).getSingle();
-    expect(boundA.serverId, isNotNull);
-    final idUsedByA = server.seenEntityIds.single;
+      final a = await tasks.create(listId: 'inbox', title: '甲');
+      expect(await _coordinator(db, server.client()).push(), isPositive);
+      final boundA = await (db.select(
+        db.todoTasks,
+      )..where((row) => row.id.equals(a.id))).getSingle();
+      expect(boundA.serverId, isNotNull);
+      final idUsedByA = server.seenEntityIds.single;
 
-    // 新建 coordinator == 进程重启：实例内序号与映射都已清空。
-    final b = await tasks.create(listId: 'inbox', title: '乙');
-    expect(await _coordinator(db, server.client()).push(), isPositive);
-    final boundB = await (db.select(
-      db.todoTasks,
-    )..where((row) => row.id.equals(b.id))).getSingle();
+      // 新建 coordinator == 进程重启：实例内序号与映射都已清空。
+      final b = await tasks.create(listId: 'inbox', title: '乙');
+      expect(await _coordinator(db, server.client()).push(), isPositive);
+      final boundB = await (db.select(
+        db.todoTasks,
+      )..where((row) => row.id.equals(b.id))).getSingle();
 
-    final idUsedByB = server.seenEntityIds.last;
-    expect(
-      idUsedByB,
-      isNot(idUsedByA),
-      reason: '重启后把甲用过的临时 ID 发给乙，服务端会按 (device,temp) 映射把乙写成甲那一行',
-    );
-    expect(
-      boundB.serverId,
-      isNot(boundA.serverId),
-      reason: '乙必须物化成自己的服务端行，不能覆盖甲',
-    );
-  });
+      final idUsedByB = server.seenEntityIds.last;
+      expect(
+        idUsedByB,
+        isNot(idUsedByA),
+        reason: '重启后把甲用过的临时 ID 发给乙，服务端会按 (device,temp) 映射把乙写成甲那一行',
+      );
+      expect(
+        boundB.serverId,
+        isNot(boundA.serverId),
+        reason: '乙必须物化成自己的服务端行，不能覆盖甲',
+      );
+    },
+  );
 }
 
-SyncCoordinator _coordinator(AppDatabase db, ApiClient client) => SyncCoordinator(
-  db: db,
-  api: SyncApi(client, clientId: 'restart-test', deviceId: 'restart-test'),
-  todoApi: client,
-);
+SyncCoordinator _coordinator(AppDatabase db, ApiClient client) =>
+    SyncCoordinator(
+      db: db,
+      api: SyncApi(client, clientId: 'restart-test', deviceId: 'restart-test'),
+      todoApi: client,
+    );
 
 /// 模拟 service !331 的映射语义：同一 (entityType, deviceId, tempEntityId) 永远返回同一服务端 ID。
 class _Server {
@@ -103,8 +106,8 @@ class _Server {
               if (change['entityType'] != SyncEntities.task) continue;
               final requested = (change['entityId'] as num).toInt();
               seenEntityIds.add(requested);
-              final title =
-                  ((change['payload'] as Map?)?['title'] ?? '').toString();
+              final title = ((change['payload'] as Map?)?['title'] ?? '')
+                  .toString();
               final key = '${change['entityType']}|$title';
               final serverId = _byKey.putIfAbsent(key, () => _next++);
               accepted.add({

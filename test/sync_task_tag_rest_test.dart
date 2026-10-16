@@ -92,10 +92,7 @@ void main() {
               return;
             }
             handler.resolve(
-              Response(
-                requestOptions: options,
-                data: {'code': 0, 'data': 1},
-              ),
+              Response(requestOptions: options, data: {'code': 0, 'data': 1}),
             );
           },
         ),
@@ -120,8 +117,7 @@ void main() {
     expect(
       pushedEntities,
       isNot(contains('task_tag')),
-      reason:
-          'task_tag 不在后端 /sync 白名单，塞进去会被整批拒绝（同批的检查事项一起丢）',
+      reason: 'task_tag 不在后端 /sync 白名单，塞进去会被整批拒绝（同批的检查事项一起丢）',
     );
   });
 }

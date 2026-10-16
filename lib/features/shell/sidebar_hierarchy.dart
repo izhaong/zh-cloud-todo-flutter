@@ -59,10 +59,7 @@ List<SidebarHierarchyEntry<T>> flattenSidebarHierarchy<T>(
 ///
 /// The walk stops at the first unknown id (kept as-is) and `visited` bounds it,
 /// so a malformed parent chain degrades to a finite set instead of looping.
-Set<String> folderAndAncestors(
-  String folderId,
-  Map<String, String?> parentOf,
-) {
+Set<String> folderAndAncestors(String folderId, Map<String, String?> parentOf) {
   final chain = <String>{folderId};
   String? current = parentOf[folderId];
   while (current != null && chain.add(current)) {

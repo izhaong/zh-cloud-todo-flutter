@@ -124,56 +124,66 @@ void main() {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(db.close);
       final now = DateTime(2026, 7, 13);
-      await db.into(db.todoLists).insert(
-        TodoListsCompanion.insert(
-          id: 'list-local',
-          serverId: const Value(10),
-          name: '工作',
-          updatedAt: now,
-          createdAt: now,
-        ),
-      );
-      await db.into(db.todoTasks).insert(
-        TodoTasksCompanion.insert(
-          id: 'task-new',
-          listId: 'list-local',
-          title: '带附件的新任务',
-          updatedAt: now,
-          createdAt: now,
-        ),
-      );
-      await db.into(db.todoAttachments).insert(
-        TodoAttachmentsCompanion.insert(
-          id: 'attachment-new',
-          taskId: 'task-new',
-          name: 'brief.txt',
-          localPath: const Value('/tmp/brief.txt'),
-          mimeType: 'text/plain',
-          size: 12,
-          updatedAt: now,
-          createdAt: now,
-        ),
-      );
-      await db.into(db.todoSyncChanges).insert(
-        TodoSyncChangesCompanion.insert(
-          clientMutationId: 'task-new-mutation',
-          entity: 'task',
-          op: 'upsert',
-          entityLocalId: const Value('task-new'),
-          payloadJson: '{"listId":"list-local","title":"带附件的新任务"}',
-          createdAt: now,
-        ),
-      );
-      await db.into(db.todoSyncChanges).insert(
-        TodoSyncChangesCompanion.insert(
-          clientMutationId: 'attachment-new-mutation',
-          entity: 'attachment',
-          op: 'upsert',
-          entityLocalId: const Value('attachment-new'),
-          payloadJson: '{}',
-          createdAt: now.add(const Duration(milliseconds: 1)),
-        ),
-      );
+      await db
+          .into(db.todoLists)
+          .insert(
+            TodoListsCompanion.insert(
+              id: 'list-local',
+              serverId: const Value(10),
+              name: '工作',
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      await db
+          .into(db.todoTasks)
+          .insert(
+            TodoTasksCompanion.insert(
+              id: 'task-new',
+              listId: 'list-local',
+              title: '带附件的新任务',
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      await db
+          .into(db.todoAttachments)
+          .insert(
+            TodoAttachmentsCompanion.insert(
+              id: 'attachment-new',
+              taskId: 'task-new',
+              name: 'brief.txt',
+              localPath: const Value('/tmp/brief.txt'),
+              mimeType: 'text/plain',
+              size: 12,
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      await db
+          .into(db.todoSyncChanges)
+          .insert(
+            TodoSyncChangesCompanion.insert(
+              clientMutationId: 'task-new-mutation',
+              entity: 'task',
+              op: 'upsert',
+              entityLocalId: const Value('task-new'),
+              payloadJson: '{"listId":"list-local","title":"带附件的新任务"}',
+              createdAt: now,
+            ),
+          );
+      await db
+          .into(db.todoSyncChanges)
+          .insert(
+            TodoSyncChangesCompanion.insert(
+              clientMutationId: 'attachment-new-mutation',
+              entity: 'attachment',
+              op: 'upsert',
+              entityLocalId: const Value('attachment-new'),
+              payloadJson: '{}',
+              createdAt: now.add(const Duration(milliseconds: 1)),
+            ),
+          );
       final attachmentApi = _CapturingAttachmentUploadApi();
       final coordinator = SyncCoordinator(
         db: db,
@@ -189,7 +199,9 @@ void main() {
       expect(attachment.status, 'uploaded');
       expect(attachment.serverId, 52);
       expect(
-        (await db.select(db.todoSyncChanges).get()).map((change) => change.status),
+        (await db.select(db.todoSyncChanges).get()).map(
+          (change) => change.status,
+        ),
         everyElement('synced'),
       );
     },

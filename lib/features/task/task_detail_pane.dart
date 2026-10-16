@@ -2666,9 +2666,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                 // 图标已经表达了「开始 / 结束」，文案里不再重复前缀，
                 // 把宽度留给时间本身（窄屏靠省略号兜底，完整值在弹层里）。
                 label: Text(
-                  _startAt == null
-                      ? '设置开始时间'
-                      : _formatScheduleTime(_startAt!),
+                  _startAt == null ? '设置开始时间' : _formatScheduleTime(_startAt!),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -3041,10 +3039,7 @@ class _ParentTaskSheet extends StatelessWidget {
               padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Text(
-                  '关联主任务',
-                  style: AppTextStyles.panelTitle,
-                ),
+                child: Text('关联主任务', style: AppTextStyles.panelTitle),
               ),
             ),
             if (currentParent != null)

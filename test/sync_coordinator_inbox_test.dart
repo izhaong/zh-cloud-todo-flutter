@@ -164,29 +164,32 @@ void main() {
     },
   );
 
-  test('moving an existing task to inbox creates the collection list first', () async {
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(db.close);
-    final now = DateTime.utc(2026, 7, 13);
-    await db
-        .into(db.todoTasks)
-        .insert(
-          TodoTasksCompanion.insert(
-            id: 'existing-task',
-            listId: 'ordinary-list',
-            title: '移动到收集箱',
-            updatedAt: now,
-            createdAt: now,
-          ),
-        );
-    final repository = TaskRepository(db, SyncChangeQueue(db));
+  test(
+    'moving an existing task to inbox creates the collection list first',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final now = DateTime.utc(2026, 7, 13);
+      await db
+          .into(db.todoTasks)
+          .insert(
+            TodoTasksCompanion.insert(
+              id: 'existing-task',
+              listId: 'ordinary-list',
+              title: '移动到收集箱',
+              updatedAt: now,
+              createdAt: now,
+            ),
+          );
+      final repository = TaskRepository(db, SyncChangeQueue(db));
 
-    await repository.update('existing-task', listId: 'inbox');
+      await repository.update('existing-task', listId: 'inbox');
 
-    final changes = await (db.select(db.todoSyncChanges)
-          ..orderBy([(change) => OrderingTerm(expression: change.id)]))
-        .get();
-    expect(changes.map((change) => change.entity), ['list', 'task']);
-    expect(await db.listByLocalId('inbox'), isNotNull);
-  });
+      final changes = await (db.select(
+        db.todoSyncChanges,
+      )..orderBy([(change) => OrderingTerm(expression: change.id)])).get();
+      expect(changes.map((change) => change.entity), ['list', 'task']);
+      expect(await db.listByLocalId('inbox'), isNotNull);
+    },
+  );
 }

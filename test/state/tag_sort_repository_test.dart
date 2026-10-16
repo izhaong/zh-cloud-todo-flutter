@@ -82,11 +82,11 @@ void main() {
     await repo.reorder([a.id, b.id, c.id]);
 
     final added = await addedAfter(db, before);
-    expect(
-      added.map((r) => r.entityLocalId).toSet(),
-      {a.id, b.id, c.id},
-      reason: '组内每行都登记，payload 才能整体表达新序',
-    );
+    expect(added.map((r) => r.entityLocalId).toSet(), {
+      a.id,
+      b.id,
+      c.id,
+    }, reason: '组内每行都登记，payload 才能整体表达新序');
     final byPayload = <int, String>{
       for (final r in added)
         (jsonDecode(r.payloadJson) as Map<String, dynamic>)['sortOrder']!

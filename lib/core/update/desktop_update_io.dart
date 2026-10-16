@@ -90,7 +90,10 @@ Future<void> installAndroidApkUpdate() async {
   }
   final done = Completer<void>();
   OtaUpdate()
-      .execute(latest.downloadUrl, destinationFilename: 'todo-flutter-android.apk')
+      .execute(
+        latest.downloadUrl,
+        destinationFilename: 'todo-flutter-android.apk',
+      )
       .listen(
         (event) {
           if (done.isCompleted) return;
