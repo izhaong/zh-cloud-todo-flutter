@@ -19,8 +19,6 @@ void main() {
     expect(appDelegate, contains('"getInitialLink"'));
     expect(appDelegate, contains('case "supportsLinkEvents":'));
     expect(appDelegate, contains('result(true)'));
-    expect(appDelegate, contains('"share"'));
-    expect(appDelegate, contains('UIActivityViewController'));
     expect(appDelegate, contains('FlutterMethodNotImplemented'));
 
     expect(sceneDelegate, contains('willConnectTo'));

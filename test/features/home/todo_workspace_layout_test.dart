@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zh_cloud_todo_flutter/core/widgets/app_widgets.dart';
 import 'package:zh_cloud_todo_flutter/features/home/home_shell.dart';
+import 'package:zh_cloud_todo_flutter/features/home/todo_workspace.dart';
 
 import '../../support/todo_visual_fixture.dart';
 import '../../support/todo_visual_test_harness.dart';
@@ -71,6 +73,62 @@ void main() {
       expect(find.byKey(key), findsOneWidget);
     }
   });
+
+  testWidgets('sync status announcement does not cover the workspace hit area', (
+    tester,
+  ) async {
+    await pumpTodoVisualScenario(
+      tester,
+      viewport: TodoVisualViewports.wide,
+      fixtureSet: TodoVisualFixtureSet.populated,
+      child: const HomeShell(),
+    );
+
+    final announcement = find.bySemanticsIdentifier('todo_sync_status');
+    expect(announcement, findsOneWidget);
+    // 播报锚点挂在 StackFit.expand 的 Stack 里：若不给松弛约束，
+    // SizedBox 会被撑满整个工作区，Web 无障碍层随之铺满视口并吞掉全部点击。
+    expect(
+      tester.getSize(announcement),
+      TodoSyncStatusAnnouncement.anchorSize,
+      reason: '同步状态播报锚点必须保持最小尺寸，不能覆盖工作区命中区域',
+    );
+  });
+
+  for (final scenario in const [
+    (name: 'wide', viewport: TodoVisualViewports.wide),
+    (name: 'compact', viewport: TodoVisualViewports.compact),
+  ]) {
+    testWidgets('${scenario.name} 垃圾桶空态在内容区水平居中', (tester) async {
+      await pumpTodoVisualScenario(
+        tester,
+        viewport: scenario.viewport,
+        fixtureSet: TodoVisualFixtureSet.populated,
+        child: const HomeShell(),
+      );
+
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const Key('todo-sidebar')),
+          matching: find.text('垃圾桶'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final empty = find.byType(AppEmptyState);
+      expect(empty, findsOneWidget);
+
+      final content = find.byKey(const Key('todo-content'));
+      expect(content, findsOneWidget);
+      // 内容区被 Stack 包着，默认 StackFit.loose 会给子节点松弛约束：
+      // 空态会缩成「内容宽度」贴在左边，而不是铺满内容区后居中。
+      expect(
+        tester.getCenter(empty).dx,
+        closeTo(tester.getCenter(content).dx, 1),
+        reason: '空态必须铺满内容区后居中，不能缩成内容宽度靠左显示',
+      );
+    });
+  }
 
   for (final scenario in const [
     (name: 'desktop', viewport: TodoVisualViewports.wide),

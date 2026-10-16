@@ -82,6 +82,9 @@ class SyncCoordinator {
     final attachmentChanges = pending
         .where((c) => c.entity == SyncEntities.attachment)
         .toList();
+    final taskTagChanges = pending
+        .where((c) => c.entity == SyncEntities.taskTag)
+        .toList();
     final syncableChanges =
         pending.where((c) => SyncEntities.syncable.contains(c.entity)).toList()
           ..sort(_compareSyncChanges);
@@ -91,6 +94,8 @@ class SyncCoordinator {
     // 附件登记依赖任务刚回写的 serverId，必须在 task/list 等同步实体
     // 成功映射后执行，避免网络恢复后的首轮同步遗留 queued 附件。
     succeeded += await _pushSyncableChanges(syncableChanges);
+    // 标签绑定要走 REST，且依赖任务与标签都已经有 serverId，放在最后。
+    succeeded += await _pushTaskTagChanges(taskTagChanges);
     succeeded += await _pushAttachmentChanges(attachmentChanges);
     return succeeded;
   }
@@ -530,6 +535,95 @@ class SyncCoordinator {
       }
     }
     return count;
+  }
+
+  /// `task_tag` 走普通 REST，不进入 `/sync` 协议。
+  ///
+  /// 后端明确拒绝 `task_tag` 的 push（整批一个事务，一条非法就全部回滚），
+  /// 所以这里按「先解绑、再绑定」把 outbox 里的全量快照落到
+  /// `/app-api/todo/tag/{task-bind,task-unbind}`——这正是服务端注释指定的通道。
+  Future<int> _pushTaskTagChanges(List<TodoSyncChange> changes) async {
+    var count = 0;
+    for (final change in changes) {
+      try {
+        final payload = jsonDecode(change.payloadJson) as Map<String, dynamic>;
+        final taskLocalId =
+            payload['taskId']?.toString() ?? change.entityLocalId;
+        if (taskLocalId == null) throw StateError('标签绑定缺少任务标识');
+        final tagLocalIds = (payload['tagIds'] as List? ?? const [])
+            .map((tag) => tag.toString())
+            .toList();
+        final previousTagLocalIds = (payload['previousTagIds'] as List? ?? const [])
+            .map((tag) => tag.toString())
+            .toList();
+
+        final task = await (db.select(
+          db.todoTasks,
+        )..where((row) => row.id.equals(taskLocalId))).getSingleOrNull();
+        final taskServerId = task?.serverId;
+        if (taskServerId == null) {
+          throw StateError('任务尚未同步，标签绑定留待下一轮');
+        }
+        final tagServerIds = await _tagServerIdsOf(tagLocalIds);
+        if (tagServerIds.length != tagLocalIds.length) {
+          throw StateError('标签尚未同步，标签绑定留待下一轮');
+        }
+        // 先解绑已被移除的，再绑定目标集合。
+        final previousServerIds = await _tagServerIdsOf(previousTagLocalIds);
+        for (final tagServerId in previousServerIds) {
+          if (tagServerIds.contains(tagServerId)) continue;
+          final response = await todoApi.delete<Map<String, dynamic>>(
+            '/tag/task-unbind',
+            data: {'taskId': taskServerId, 'tagId': tagServerId},
+          );
+          _throwIfEnvelopeFailed(response, '标签解绑失败');
+        }
+        if (tagServerIds.isNotEmpty) {
+          final response = await todoApi.post<Map<String, dynamic>>(
+            '/tag/task-bind',
+            data: {'taskId': taskServerId, 'tagIds': tagServerIds},
+          );
+          _throwIfEnvelopeFailed(response, '标签绑定失败');
+        }
+        await (db.update(db.todoSyncChanges)
+              ..where((t) => t.id.equals(change.id)))
+            .write(const TodoSyncChangesCompanion(status: Value('synced')));
+        count++;
+      } catch (_) {
+        await (db.update(
+          db.todoSyncChanges,
+        )..where((t) => t.id.equals(change.id))).write(
+          TodoSyncChangesCompanion(
+            status: const Value('retryable'),
+            attemptCount: Value(change.attemptCount + 1),
+            nextAttemptAt: Value(
+              DateTime.now().add(syncRetryDelay(change.attemptCount + 1)),
+            ),
+          ),
+        );
+      }
+    }
+    return count;
+  }
+
+  Future<List<int>> _tagServerIdsOf(List<String> tagLocalIds) async {
+    if (tagLocalIds.isEmpty) return const [];
+    final rows = await (db.select(
+      db.todoTags,
+    )..where((row) => row.id.isIn(tagLocalIds))).get();
+    return rows.map((row) => row.serverId).whereType<int>().toList();
+  }
+
+  /// REST 通道复用 `{code,msg,data}` 信封：`code != 0` 必须当失败重试，
+  /// 否则会像 task_tag 塞进 /sync 那样被静默吞掉。
+  void _throwIfEnvelopeFailed(Response<Map<String, dynamic>> response, String message) {
+    final code = response.data?['code'];
+    if (code != null && code != 0) {
+      throw DioException(
+        requestOptions: response.requestOptions,
+        error: response.data?['msg'] ?? message,
+      );
+    }
   }
 
   Future<List<TodoSyncChange>> _orderFolderChanges(

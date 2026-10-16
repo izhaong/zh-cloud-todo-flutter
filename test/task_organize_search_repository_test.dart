@@ -147,7 +147,10 @@ void main() {
               listId: 'list-target',
               title: '专题检索 $padded',
               priority: Value(index == 17 ? 3 : 1),
-              dueAt: Value(index == 17 ? DateTime.utc(2026, 8, 10) : null),
+              // 浮动模式的任务 dueAt 语义是**设备本地墙钟**（生产写入走
+              // taskDateTimeFromWallClock），过滤边界也走 _parseLocalDate → 本地。
+              // 这里若用 DateTime.utc，在 UTC-4 会被读成前一天而恒不过滤命中。
+              dueAt: Value(index == 17 ? DateTime(2026, 8, 10) : null),
               updatedAt: now,
               createdAt: now,
             ),
@@ -212,8 +215,8 @@ void main() {
             listId: 'list-target',
             tagIds: const ['tag-target', 'tag-search-extra'],
             priority: 3,
-            dueAtFrom: DateTime.utc(2026, 8, 10),
-            dueAtTo: DateTime.utc(2026, 8, 10),
+            dueAtFrom: DateTime(2026, 8, 10),
+            dueAtTo: DateTime(2026, 8, 10),
           ),
         ),
       );
@@ -599,7 +602,7 @@ void main() {
     )..where((row) => row.id.equals('task-1'))).write(
       TodoTasksCompanion(
         title: const Value('规划发布'),
-        dueAt: Value(DateTime.utc(2026, 7, 20, 0)),
+        dueAt: Value(DateTime(2026, 7, 20)),
       ),
     );
     await (db.update(
@@ -607,15 +610,15 @@ void main() {
     )..where((row) => row.id.equals('task-2'))).write(
       TodoTasksCompanion(
         title: const Value('规划复盘'),
-        dueAt: Value(DateTime.utc(2026, 7, 21, 0)),
+        dueAt: Value(DateTime(2026, 7, 21)),
       ),
     );
 
     final results = await repository.filter(
       TaskQueryFilter(
         keyword: '规划',
-        dueAtFrom: DateTime.utc(2026, 7, 20, 0),
-        dueAtTo: DateTime.utc(2026, 7, 20, 0),
+        dueAtFrom: DateTime(2026, 7, 20),
+        dueAtTo: DateTime(2026, 7, 20),
       ),
     );
 

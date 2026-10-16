@@ -243,6 +243,10 @@ class TagRepository {
   Future<void> setTaskTags(String taskId, List<String> tagIds) async {
     final normalizedTagIds = tagIds.toSet().toList();
     await _db.transaction(() async {
+      final previousRows = await (_db.select(
+        _db.todoTaskTags,
+      )..where((t) => t.taskId.equals(taskId))).get();
+      final previousTagIds = previousRows.map((r) => r.tagId).toList();
       await (_db.delete(
         _db.todoTaskTags,
       )..where((t) => t.taskId.equals(taskId))).go();
@@ -258,7 +262,13 @@ class TagRepository {
         entity: SyncEntities.taskTag,
         op: SyncOps.upsert,
         localId: taskId,
-        payload: {'taskId': taskId, 'tagIds': normalizedTagIds},
+        // previousTagIds 只给推送端算「要解绑哪些」用：task_tag 不走 /sync，
+        // 走 /tag/task-bind（全量替换）+ /tag/task-unbind（逐个移除）。
+        payload: {
+          'taskId': taskId,
+          'tagIds': normalizedTagIds,
+          'previousTagIds': previousTagIds,
+        },
       );
     });
   }

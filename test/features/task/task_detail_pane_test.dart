@@ -54,6 +54,92 @@ void main() {
     _expectTodoDetailIdentity(selected: true);
   });
 
+  testWidgets('时间段两个入口并排且有间距，不是上下紧贴的一整块', (tester) async {
+    await _pumpWideHome(tester);
+    await _selectFixtureTask(tester);
+
+    await tester.scrollUntilVisible(
+      find.text('时间段（可选）'),
+      300,
+      // 必须锁到详情区自己的 ListView：宽屏下第一个 Scrollable 是侧栏的，
+      // 拖它到不了时间段，finder 永远解析不出来。
+      scrollable: find
+          .descendant(of: _detailRegion, matching: find.byType(Scrollable))
+          .first,
+    );
+    await tester.pumpAndSettle();
+
+    final start = _withinDetail(
+      find.widgetWithText(OutlinedButton, '设置开始时间'),
+    );
+    final end = _withinDetail(find.widgetWithText(OutlinedButton, '设置结束时间'));
+    expect(start, findsOneWidget);
+    expect(end, findsOneWidget);
+
+    final startRect = tester.getRect(start);
+    final endRect = tester.getRect(end);
+    // 并排：同一水平中线，且两者之间留出可见间距（原来上下堆叠、描边直接相接）。
+    expect(startRect.center.dy, closeTo(endRect.center.dy, 0.5));
+    expect(
+      endRect.left - startRect.right,
+      greaterThanOrEqualTo(8),
+      reason: '两个入口之间必须有间距，不能连成一块',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('窄屏 390 下时间段两个入口仍并排、已设置的长值不溢出', (tester) async {
+    final fixture = await TodoVisualFixture.create();
+    addTearDown(fixture.dispose);
+    // 把两个时刻都设上：并排后每格只有 ~170px，长值必须靠省略号收住而不是溢出。
+    await (fixture.database.update(
+      fixture.database.todoTasks,
+    )..where((row) => row.id.equals(_taskId))).write(
+      TodoTasksCompanion(
+        startAt: Value(DateTime(2026, 7, 11, 9, 30)),
+        endAt: Value(DateTime(2026, 7, 11, 10, 30)),
+      ),
+    );
+    tester.view.physicalSize = const Size(390, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: fixture.container,
+        child: MaterialApp(
+          theme: ThemeData.light().copyWith(
+            extensions: const [AppThemeExtension(AppColors.light)],
+          ),
+          home: const Scaffold(
+            body: TaskDetailPane(taskId: _taskId, embedded: true),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('时间段（可选）'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    final start = find.widgetWithIcon(
+      OutlinedButton,
+      Icons.play_circle_outline,
+    );
+    final end = find.widgetWithIcon(OutlinedButton, Icons.stop_circle_outlined);
+    expect(start, findsOneWidget);
+    expect(end, findsOneWidget);
+    final first = tester.getRect(start);
+    final second = tester.getRect(end);
+    expect(first.center.dy, closeTo(second.center.dy, 0.5));
+    expect(second.left - first.right, greaterThanOrEqualTo(8));
+    expect(tester.takeException(), isNull, reason: '390 宽并排不能溢出');
+  });
+
   testWidgets('closing detail clears only the selected task', (tester) async {
     await _pumpWideHome(tester);
     await _selectFixtureTask(tester);

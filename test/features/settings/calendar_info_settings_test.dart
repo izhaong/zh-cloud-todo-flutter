@@ -144,5 +144,49 @@ void main() {
       expect(flags.showLunar, isTrue);
       expect(flags.showHolidays, isFalse);
     });
+
+    testWidgets('点「显示农历」不会顺带改「显示节假日调休」', (tester) async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final repository = CalendarInfoPreferenceRepository(
+        db,
+        SyncChangeQueue(db),
+      );
+      tester.view.physicalSize = const Size(390, 3200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            appDatabaseProvider.overrideWithValue(db),
+            syncChangeQueueProvider.overrideWithValue(SyncChangeQueue(db)),
+          ],
+          child: MaterialApp(
+            theme: ThemeData(
+              extensions: const [AppThemeExtension(AppColors.light)],
+            ),
+            home: const SettingsRoute(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('todo-settings-show-lunar')));
+      await tester.pumpAndSettle();
+
+      final flags = await repository.get();
+      expect(flags.showLunar, isTrue);
+      // 三个开关共用一行偏好，但每个只能改自己那一位。
+      expect(
+        flags.showHolidays,
+        isFalse,
+        reason: '「显示农历」不能顺带把「显示节假日调休」也改掉',
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+      await tester.pump(const Duration(milliseconds: 1));
+    });
   });
 }
