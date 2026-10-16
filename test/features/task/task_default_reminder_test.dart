@@ -332,5 +332,31 @@ void main() {
       );
       expect(dropdown.initialValue, 60);
     });
+
+    testWidgets('1440 宽桌面端表单限宽，下拉不拉满整屏', (tester) async {
+      final fixture = await TodoVisualFixture.create();
+      addTearDown(fixture.dispose);
+      tester.view.physicalSize = const Size(1440, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: fixture.container,
+          child: const MaterialApp(home: SettingsRoute()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('新任务默认值'));
+      await tester.pumpAndSettle();
+
+      final field = find.byKey(const Key('task-default-reminder'));
+      expect(field, findsOneWidget);
+      final width = tester.getSize(field).width;
+      // 限宽 420：既不能拉满 1440，也不能窄到读不出档位文案。
+      expect(width, lessThanOrEqualTo(420));
+      expect(width, greaterThanOrEqualTo(280));
+      expect(tester.takeException(), isNull);
+    });
   });
 }

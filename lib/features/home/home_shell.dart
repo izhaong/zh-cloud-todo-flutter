@@ -688,6 +688,9 @@ class _HomeShellState extends ConsumerState<HomeShell>
           smart: _smart,
           listId: _listId,
           content: Stack(
+            // 必须 expand：默认的 StackFit.loose 会给内容页松弛约束，
+            // 让空态之类「自撑宽」的页面缩成内容宽度贴在左边，而不是铺满内容区。
+            fit: StackFit.expand,
             children: [
               _buildPane(layoutSection),
               if (failedChanges.isNotEmpty)

@@ -178,8 +178,14 @@ class TodoWorkspace extends StatelessWidget {
             fit: StackFit.expand,
             children: [
               workspace,
-              IgnorePointer(
-                child: TodoSyncStatusAnnouncement(status: syncStatus),
+              // 必须用 Positioned 给松弛约束：Stack 的 fit 是 expand，
+              // SizedBox.shrink() 会被撑满整个工作区，Web 无障碍层随之铺满视口并吞掉点击。
+              Positioned(
+                left: 0,
+                top: 0,
+                child: IgnorePointer(
+                  child: TodoSyncStatusAnnouncement(status: syncStatus),
+                ),
               ),
             ],
           ),
@@ -618,6 +624,14 @@ class _RailButtonState extends State<_RailButton> {
 class TodoSyncStatusAnnouncement extends StatelessWidget {
   const TodoSyncStatusAnnouncement({super.key, required this.status});
 
+  /// 播报锚点的占位边长。
+  ///
+  /// 留 1 像素而不是 0：Web 只为非空矩形生成无障碍 DOM 节点，纯零尺寸会让
+  /// `aria-live` 播报整条丢掉；同时它必须远小于工作区，否则会盖住命中区域。
+  static const double anchorExtent = 1;
+
+  static const Size anchorSize = Size(anchorExtent, anchorExtent);
+
   final String status;
 
   @override
@@ -626,7 +640,7 @@ class TodoSyncStatusAnnouncement extends StatelessWidget {
     label: status,
     liveRegion: true,
     container: true,
-    child: const SizedBox.shrink(),
+    child: const SizedBox.square(dimension: anchorExtent),
   );
 }
 

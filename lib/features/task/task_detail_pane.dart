@@ -2655,14 +2655,38 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
         const Divider(height: 32),
         sh('时间段（可选）'),
         const SizedBox(height: 8),
-        OutlinedButton.icon(
-          onPressed: () => _pickSchedule(t, isStart: true),
-          icon: const Icon(Icons.play_circle_outline),
-          label: Text(
-            _startAt == null
-                ? '设置开始时间'
-                : '开始：${_formatScheduleTime(_startAt!)}',
-          ),
+        // 两个入口并排而不是上下紧贴：上下堆叠时两个描边按钮会连成一块，
+        // 看起来像一个被劈开的控件。并排后各自独立，也更省纵向空间。
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _pickSchedule(t, isStart: true),
+                icon: const Icon(Icons.play_circle_outline),
+                // 图标已经表达了「开始 / 结束」，文案里不再重复前缀，
+                // 把宽度留给时间本身（窄屏靠省略号兜底，完整值在弹层里）。
+                label: Text(
+                  _startAt == null
+                      ? '设置开始时间'
+                      : _formatScheduleTime(_startAt!),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _pickSchedule(t, isStart: false),
+                icon: const Icon(Icons.stop_circle_outlined),
+                label: Text(
+                  _endAt == null ? '设置结束时间' : _formatScheduleTime(_endAt!),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+          ],
         ),
         if (_startAt != null)
           Align(
@@ -2672,13 +2696,6 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
               child: const Text('清除开始时间'),
             ),
           ),
-        OutlinedButton.icon(
-          onPressed: () => _pickSchedule(t, isStart: false),
-          icon: const Icon(Icons.stop_circle_outlined),
-          label: Text(
-            _endAt == null ? '设置结束时间' : '结束：${_formatScheduleTime(_endAt!)}',
-          ),
-        ),
         if (_endAt != null)
           Align(
             alignment: Alignment.centerLeft,

@@ -197,69 +197,86 @@ class SettingsRoute extends ConsumerWidget {
                 _CalendarInfoToggleTile(
                   key: const Key('todo-settings-show-lunar'),
                   title: '显示农历',
+                  field: _CalendarInfoField.lunar,
                 ),
                 _CalendarInfoToggleTile(
                   key: const Key('todo-settings-show-holidays'),
                   title: '显示节假日调休',
+                  field: _CalendarInfoField.holidays,
                 ),
                 _CalendarInfoToggleTile(
                   key: const Key('todo-settings-show-habits'),
                   title: '显示习惯打卡',
+                  field: _CalendarInfoField.habits,
                 ),
               ],
             ),
           ),
           const SizedBox(height: 16),
           _Section(title: '智能清单'),
+          // 标签与过滤器同属「智能清单」一组，必须落在同一张卡里：
+          // 拆成两张卡时中间会多出卡间距，比同卡内的行距大一截，
+          // 与「日期与时间」「功能模块」「主题」的分组观感对不上。
           AppCard(
             padding: EdgeInsets.zero,
             child: Column(
               children: [
-                _Tile(
-                  icon: Icons.sell_outlined,
-                  title: '标签',
-                  key: const Key('todo-settings-show-tags'),
-                  subtitle: '控制标签条目是否出现在侧栏的清单下面',
-                  trailingText: _showTagsLabel(
-                    ref.watch(sidebarShowTagsProvider),
+                // 每行连同它自己的失败提示显式 MergeSemantics：
+                // 拆成两张卡时这是 Flutter 的默认结果，并成一张卡后
+                // 每个 ListTile 会各成一个节点、提示被挤成独立节点，
+                // 读屏就不再「取值 + 失败原因」一起念（既有用例锁过这条契约）。
+                MergeSemantics(
+                  child: Column(
+                    children: [
+                      _Tile(
+                        icon: Icons.sell_outlined,
+                        title: '标签',
+                        key: const Key('todo-settings-show-tags'),
+                        subtitle: '控制标签条目是否出现在侧栏的清单下面',
+                        trailingText: _showTagsLabel(
+                          ref.watch(sidebarShowTagsProvider),
+                        ),
+                        colors: colors,
+                        onTap: () => _pickShowTags(context, ref),
+                      ),
+                      if (_showTagsStale(ref.watch(sidebarShowTagsProvider)))
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                          child: Text(
+                            '读取偏好失败，显示的是上次读到的值',
+                            style: TextStyle(color: colors.mutedForeground),
+                          ),
+                        ),
+                    ],
                   ),
-                  colors: colors,
-                  onTap: () => _pickShowTags(context, ref),
                 ),
-                if (_showTagsStale(ref.watch(sidebarShowTagsProvider)))
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                    child: Text(
-                      '读取偏好失败，显示的是上次读到的值',
-                      style: TextStyle(color: colors.mutedForeground),
-                    ),
+                MergeSemantics(
+                  child: Column(
+                    children: [
+                      _Tile(
+                        icon: Icons.filter_alt_outlined,
+                        title: '过滤器',
+                        key: const Key('todo-settings-show-filters'),
+                        subtitle: '控制过滤器条目是否出现在侧栏',
+                        trailingText: _visibilityLabel(
+                          ref.watch(sidebarShowFiltersProvider),
+                        ),
+                        colors: colors,
+                        onTap: () => _pickShowFilters(context, ref),
+                      ),
+                      if (_visibilityStale(
+                        ref.watch(sidebarShowFiltersProvider),
+                      ))
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                          child: Text(
+                            '读取偏好失败，显示的是上次读到的值',
+                            style: TextStyle(color: colors.mutedForeground),
+                          ),
+                        ),
+                    ],
                   ),
-              ],
-            ),
-          ),
-          AppCard(
-            padding: EdgeInsets.zero,
-            child: Column(
-              children: [
-                _Tile(
-                  icon: Icons.filter_alt_outlined,
-                  title: '过滤器',
-                  key: const Key('todo-settings-show-filters'),
-                  subtitle: '控制过滤器条目是否出现在侧栏',
-                  trailingText: _visibilityLabel(
-                    ref.watch(sidebarShowFiltersProvider),
-                  ),
-                  colors: colors,
-                  onTap: () => _pickShowFilters(context, ref),
                 ),
-                if (_visibilityStale(ref.watch(sidebarShowFiltersProvider)))
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                    child: Text(
-                      '读取偏好失败，显示的是上次读到的值',
-                      style: TextStyle(color: colors.mutedForeground),
-                    ),
-                  ),
               ],
             ),
           ),
@@ -636,86 +653,118 @@ class _TaskCaptureDefaultsPageState
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                DropdownButtonFormField<String?>(
-                  key: ValueKey(defaults.defaultListId),
-                  initialValue: defaults.defaultListId,
-                  decoration: const InputDecoration(
-                    labelText: '默认清单',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: [
-                    const DropdownMenuItem<String?>(
-                      value: null,
-                      child: Text('收集箱'),
+                // 桌面端别把三个下拉和主按钮拉满整屏：表单限宽居中。
+                // 下拉展开层的宽度跟字段走，字段收窄后菜单也不再是一整屏宽的板子。
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 420),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        DropdownButtonFormField<String?>(
+                          key: ValueKey(defaults.defaultListId),
+                          initialValue: defaults.defaultListId,
+                          decoration: const InputDecoration(
+                            labelText: '默认清单',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: [
+                            const DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text('收集箱'),
+                            ),
+                            ...lists.map(
+                              (list) => DropdownMenuItem<String?>(
+                                value: list.id,
+                                child: Text(list.name),
+                              ),
+                            ),
+                          ],
+                          onChanged: (value) => setState(
+                            () => _defaults = TaskCaptureDefaults(
+                              defaultListId: value,
+                              defaultPriority: defaults.defaultPriority,
+                              defaultReminderMinutes:
+                                  defaults.defaultReminderMinutes,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        DropdownButtonFormField<int>(
+                          key: ValueKey(defaults.defaultPriority),
+                          initialValue: defaults.defaultPriority,
+                          decoration: const InputDecoration(
+                            labelText: '默认优先级',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: 0, child: Text('无')),
+                            DropdownMenuItem(value: 1, child: Text('低')),
+                            DropdownMenuItem(value: 2, child: Text('中')),
+                            DropdownMenuItem(value: 3, child: Text('高')),
+                          ],
+                          onChanged: (value) => setState(
+                            () => _defaults = TaskCaptureDefaults(
+                              defaultListId: defaults.defaultListId,
+                              defaultPriority: value ?? 0,
+                              defaultReminderMinutes:
+                                  defaults.defaultReminderMinutes,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        // 嘀嗒《04-超强大的提醒功能.md》:33「在…『任务默认值』-『默认提醒』中
+                        // 选择常用的提醒」。null（「不提醒」）与 0（「准时」）是两档。
+                        DropdownButtonFormField<int?>(
+                          key: const Key('task-default-reminder'),
+                          initialValue: defaults.defaultReminderMinutes,
+                          decoration: const InputDecoration(
+                            labelText: '默认提醒',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: const [
+                            DropdownMenuItem<int?>(
+                              value: null,
+                              child: Text('不提醒'),
+                            ),
+                            DropdownMenuItem<int?>(value: 0, child: Text('准时')),
+                            DropdownMenuItem<int?>(
+                              value: 5,
+                              child: Text('提前 5 分钟'),
+                            ),
+                            DropdownMenuItem<int?>(
+                              value: 15,
+                              child: Text('提前 15 分钟'),
+                            ),
+                            DropdownMenuItem<int?>(
+                              value: 30,
+                              child: Text('提前 30 分钟'),
+                            ),
+                            DropdownMenuItem<int?>(
+                              value: 60,
+                              child: Text('提前 1 小时'),
+                            ),
+                            DropdownMenuItem<int?>(
+                              value: 120,
+                              child: Text('提前 2 小时'),
+                            ),
+                          ],
+                          onChanged: (value) => setState(
+                            () => _defaults = TaskCaptureDefaults(
+                              defaultListId: defaults.defaultListId,
+                              defaultPriority: defaults.defaultPriority,
+                              defaultReminderMinutes: value,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        FilledButton(
+                          onPressed: _saving ? null : _save,
+                          child: Text(_saving ? '保存中…' : '保存默认值'),
+                        ),
+                      ],
                     ),
-                    ...lists.map(
-                      (list) => DropdownMenuItem<String?>(
-                        value: list.id,
-                        child: Text(list.name),
-                      ),
-                    ),
-                  ],
-                  onChanged: (value) => setState(
-                    () => _defaults = TaskCaptureDefaults(
-                      defaultListId: value,
-                      defaultPriority: defaults.defaultPriority,
-                      defaultReminderMinutes: defaults.defaultReminderMinutes,
-                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<int>(
-                  key: ValueKey(defaults.defaultPriority),
-                  initialValue: defaults.defaultPriority,
-                  decoration: const InputDecoration(
-                    labelText: '默认优先级',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: 0, child: Text('无')),
-                    DropdownMenuItem(value: 1, child: Text('低')),
-                    DropdownMenuItem(value: 2, child: Text('中')),
-                    DropdownMenuItem(value: 3, child: Text('高')),
-                  ],
-                  onChanged: (value) => setState(
-                    () => _defaults = TaskCaptureDefaults(
-                      defaultListId: defaults.defaultListId,
-                      defaultPriority: value ?? 0,
-                      defaultReminderMinutes: defaults.defaultReminderMinutes,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                // 嘀嗒《04-超强大的提醒功能.md》:33「在…『任务默认值』-『默认提醒』中
-                // 选择常用的提醒」。null（「不提醒」）与 0（「准时」）是两档。
-                DropdownButtonFormField<int?>(
-                  key: const Key('task-default-reminder'),
-                  initialValue: defaults.defaultReminderMinutes,
-                  decoration: const InputDecoration(
-                    labelText: '默认提醒',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: const [
-                    DropdownMenuItem<int?>(value: null, child: Text('不提醒')),
-                    DropdownMenuItem<int?>(value: 0, child: Text('准时')),
-                    DropdownMenuItem<int?>(value: 5, child: Text('提前 5 分钟')),
-                    DropdownMenuItem<int?>(value: 15, child: Text('提前 15 分钟')),
-                    DropdownMenuItem<int?>(value: 30, child: Text('提前 30 分钟')),
-                    DropdownMenuItem<int?>(value: 60, child: Text('提前 1 小时')),
-                    DropdownMenuItem<int?>(value: 120, child: Text('提前 2 小时')),
-                  ],
-                  onChanged: (value) => setState(
-                    () => _defaults = TaskCaptureDefaults(
-                      defaultListId: defaults.defaultListId,
-                      defaultPriority: defaults.defaultPriority,
-                      defaultReminderMinutes: value,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                FilledButton(
-                  onPressed: _saving ? null : _save,
-                  child: Text(_saving ? '保存中…' : '保存默认值'),
                 ),
               ],
             ),
@@ -738,7 +787,8 @@ class _TimezonePreferenceTile extends ConsumerWidget {
       type: MaterialType.transparency,
       child: SwitchListTile(
         key: const ValueKey('settings-timezone-enabled'),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        // 不覆写 contentPadding：同一张卡里的「显示农历」等开关与其它卡片的
+        // trailing 文案都走 ListTile 默认内边距，这里一写死就会让这枚开关错开一条竖线。
         title: Text('时区', style: TextStyle(color: colors.foreground)),
         subtitle: Text(
           '开启后可为任务选择「固定时区」',
@@ -765,12 +815,23 @@ class _TimezonePreferenceTile extends ConsumerWidget {
   }
 }
 
+/// 「显示农历 / 显示节假日调休 / 显示习惯打卡」三个开关各管一位。
+///
+/// 用枚举而不是拿标题字符串比对：三者共用同一行偏好，靠
+/// `widget.title == '…'` 分支时漏写一路，就会把隔壁那位一起改掉（实际踩过）。
+enum _CalendarInfoField { lunar, holidays, habits }
+
 /// 「显示农历 / 显示节假日调休」开关（嘀嗒《06-日历显示设置》:5-21；
 /// specs/125，矩阵 #31 面 ①）。两个布尔位同仓一行偏好（CALENDAR_INFO/global）。
 class _CalendarInfoToggleTile extends ConsumerStatefulWidget {
-  const _CalendarInfoToggleTile({super.key, required this.title});
+  const _CalendarInfoToggleTile({
+    super.key,
+    required this.title,
+    required this.field,
+  });
 
   final String title;
+  final _CalendarInfoField field;
 
   @override
   ConsumerState<_CalendarInfoToggleTile> createState() =>
@@ -783,21 +844,18 @@ class _CalendarInfoToggleTileState
   Widget build(BuildContext context) {
     final colors = brandColors(context);
     final flags = ref.watch(calendarInfoFlagsProvider).valueOrNull;
-    final showLunar = flags?.showLunar ?? false;
-    final showHolidays = flags?.showHolidays ?? false;
-    final showHabits = flags?.showHabits ?? false;
-    final isLunarTile = widget.title == '显示农历';
-    final isHabitsTile = widget.title == '显示习惯打卡';
-    final value = isLunarTile
-        ? showLunar
-        : isHabitsTile
-        ? showHabits
-        : showHolidays;
+    final value = switch (widget.field) {
+      _CalendarInfoField.lunar => flags?.showLunar ?? false,
+      _CalendarInfoField.holidays => flags?.showHolidays ?? false,
+      _CalendarInfoField.habits => flags?.showHabits ?? false,
+    };
     return Material(
       type: MaterialType.transparency,
       child: SwitchListTile(
         secondary: Icon(
-          isLunarTile ? Icons.nights_stay_outlined : Icons.event_outlined,
+          widget.field == _CalendarInfoField.lunar
+              ? Icons.nights_stay_outlined
+              : Icons.event_outlined,
           color: colors.mutedForeground,
         ),
         title: Text(widget.title),
@@ -816,9 +874,15 @@ class _CalendarInfoToggleTileState
           try {
             await repo.save(
               CalendarInfoFlags(
-                showLunar: isLunarTile ? next : current.showLunar,
-                showHolidays: isHabitsTile ? current.showHolidays : next,
-                showHabits: isHabitsTile ? next : current.showHabits,
+                showLunar: widget.field == _CalendarInfoField.lunar
+                    ? next
+                    : current.showLunar,
+                showHolidays: widget.field == _CalendarInfoField.holidays
+                    ? next
+                    : current.showHolidays,
+                showHabits: widget.field == _CalendarInfoField.habits
+                    ? next
+                    : current.showHabits,
               ),
             );
           } catch (_) {
