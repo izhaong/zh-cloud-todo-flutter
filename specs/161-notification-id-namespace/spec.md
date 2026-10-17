@@ -40,6 +40,11 @@
 是**两个端点、两个类型**，`ReminderNotificationPoller` 只读前者。
 这条作为**结构判据**钉住（不是"我记得没接"，而是**两条流不共用入口**）。
 
+## 切片三：通知列表 UI
+
+`NotificationListPage`：读 `unread` 渲染；提及点进任务；点击即标已读。
+**源码级判据**：页面不引用 `LocalNotificationService` / `schedule(`（提及只展示）。
+
 ## 边界（下一刀）
 
 - **通知列表 UI**（客户端）：读 `TodoNotificationApi.unread` 渲染，提及点进评论；

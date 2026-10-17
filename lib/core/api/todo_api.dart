@@ -1222,6 +1222,7 @@ class TodoRestApi {
       listCollaboration = ListCollaborationApi(client),
       taskAssign = TaskAssignApi(client),
       comment = TaskCommentApi(client),
+      notification = TodoNotificationApi(client),
       note = NoteApi(client),
       calSubscription = CalendarSubscriptionApi(client),
       taskImport = TodoTaskImportApi(client),
@@ -1242,6 +1243,7 @@ class TodoRestApi {
   final ListCollaborationApi listCollaboration;
   final TaskAssignApi taskAssign;
   final TaskCommentApi comment;
+  final TodoNotificationApi notification;
   final NoteApi note;
   final CalendarSubscriptionApi calSubscription;
   final CalendarInfoApi calendarInfo;
