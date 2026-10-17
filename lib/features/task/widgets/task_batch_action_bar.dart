@@ -14,6 +14,9 @@ enum TaskBatchAction {
   linkToParent,
   share,
   setTags,
+
+  /// 批量指派执行人（FL #357，嘀嗒《02-团队如何协作》:17）。
+  assign,
   clearDueAt,
   clearTags,
   priorityNone,
@@ -32,6 +35,8 @@ extension TaskBatchActionX on TaskBatchAction {
     TaskBatchAction.linkToParent => '关联主任务…',
     TaskBatchAction.share => '分享所选',
     TaskBatchAction.setTags => '设置标签…',
+    // 术语照抄嘀嗒 :17「选择「分配给」进行指派」
+    TaskBatchAction.assign => '分配给…',
     TaskBatchAction.setDueAt => '设置截止日期…',
     TaskBatchAction.clearDueAt => '清空截止日期',
     TaskBatchAction.clearTags => '清空所选标签',
@@ -198,6 +203,7 @@ class TaskBatchActionBar extends StatelessWidget {
                           TaskBatchAction.linkToParent,
                           TaskBatchAction.share,
                           TaskBatchAction.setTags,
+                          TaskBatchAction.assign,
                           TaskBatchAction.clearDueAt,
                           TaskBatchAction.clearTags,
                           TaskBatchAction.pin,

@@ -35,6 +35,7 @@ class TaskBatchEditCommand {
     this.priority,
     this.completed,
     this.isPinned,
+    this.assigneeUserId,
   });
 
   final List<String> taskIds;
@@ -43,10 +44,17 @@ class TaskBatchEditCommand {
   final bool clearDueAt;
   final List<String>? tagIds;
   final int? priority;
+
+  /// 批量指派执行人（FL #357，嘀嗒《02-团队如何协作》:17）。`null` = 这一档不改。
+  ///
+  /// 传 `null` 与"指派给 nobody"是两件事：**这一档不做**不能表达成"清空执行人"
+  /// （清空要走另一个语义，本单没做）。
+  final int? assigneeUserId;
   final bool? completed;
   final bool? isPinned;
 
   bool get hasChanges =>
+      assigneeUserId != null ||
       listId != null ||
       dueAt != null ||
       clearDueAt ||
@@ -260,6 +268,10 @@ class TaskBatchEditRepository {
             isPinned: command.isPinned == null
                 ? const Value.absent()
                 : Value(command.isPinned!),
+            // FL #357：与其它字段同一约定 —— `null` = 这一档不改（不是"清空执行人"）。
+            assigneeUserId: command.assigneeUserId == null
+                ? const Value.absent()
+                : Value(command.assigneeUserId!),
             updatedAt: Value(DateTime.now()),
           ),
         );

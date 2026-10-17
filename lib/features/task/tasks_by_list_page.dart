@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../collaboration/list_member_page.dart';
 
 import '../../state/efficiency_providers.dart';
 import '../tag/batch_tag_picker_sheet.dart';
@@ -1349,6 +1350,10 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       await _shareBatchSelection(visibleTasks);
       return;
     }
+    if (action == TaskBatchAction.assign) {
+      await _assignBatchSelection(visibleTasks);
+      return;
+    }
     if (action == TaskBatchAction.setTags) {
       final tagIds = await _selectBatchTagIds();
       if (tagIds == null || !mounted) return;
@@ -1400,6 +1405,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       TaskBatchAction.linkToParent => throw StateError('主任务需要先选择目标'),
       TaskBatchAction.share => throw StateError('分享动作已提前处理'),
       TaskBatchAction.setTags => throw StateError('标签需要先选择目标'),
+      TaskBatchAction.assign => throw StateError('指派需要先选择目标'),
       TaskBatchAction.setDueAt => throw StateError('截止日期需要先选择目标'),
       TaskBatchAction.clearDueAt => const TaskBatchEditCommand(
         taskIds: [],
@@ -1686,6 +1692,101 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
     );
   }
 
+  /// 批量指派（FL #357）：嘀嗒《02-团队如何协作》`:17`
+  /// 「多选任务，点击右下角「···」- 选择「分配给」进行指派」。
+  ///
+  /// **未同步任务整批拒绝并说明**（与单条 `openTaskAssignAction` 同一句口径、
+  /// 同一个理由：指派要走服务端，本地没有 serverId 就无从指派）——
+  /// **不许静默跳过**：静默跳过会让用户以为"都指派了"，而实际少了几条。
+  Future<void> _assignBatchSelection(List<TodoTask> visibleTasks) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final selected = visibleTasks
+        .where((task) => _batchSelectedTaskIds.contains(task.id))
+        .toList(growable: false);
+    if (selected.isEmpty) return;
+    final unsynced = selected.where((task) => task.serverId == null).length;
+    if (unsynced > 0) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            unsynced == selected.length
+                ? '任务尚未同步，无法指派'
+                : '所选 $unsynced 条尚未同步，无法指派（请先同步后再试）',
+          ),
+        ),
+      );
+      return;
+    }
+    final assignee = await _selectBatchAssignee(selected.first);
+    if (assignee == null || !mounted) return;
+    await _applyBatchEdit(
+      TaskBatchEditCommand(taskIds: [], assigneeUserId: assignee.userId),
+      successVerb: '已指派给${assignee.name}',
+    );
+  }
+
+  /// 选执行人。候选来自**第一条所选任务所在清单**的成员 ——
+  /// 服务端会**逐条按每条任务自己的清单**再校验一次，所以跨清单选择时
+  /// 有些条目会以「不是该清单成员」失败，这由逐项结果如实报出来。
+  Future<TaskAssigneeOption?> _selectBatchAssignee(TodoTask sample) async {
+    final db = ref.read(appDatabaseProvider);
+    final list = db == null ? null : await db.listByLocalId(sample.listId);
+    final listServerId = list?.serverId;
+    if (listServerId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('清单尚未同步，无法选择执行人')));
+      }
+      return null;
+    }
+    final state = ref.read(listMembersProvider(listServerId)).valueOrNull;
+    if (state == null) {
+      // 成员还没取回来：**不猜**（"空列表"与"还没取到"是两件事）。
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('成员还没取回来，请稍后重试')));
+      }
+      return null;
+    }
+    // 只列**在用**的成员（`active`）：被邀请未接受 / 已退出的不能当执行人，
+    // 列出来点了也只会被服务端拒 —— 那属于"给了个选不了的人"。
+    final members = [
+      for (final member in state.members)
+        if (member.status == 'active')
+          TaskAssigneeOption(
+            userId: member.userId,
+            name: member.displayName ?? member.mobile ?? '用户 ${member.userId}',
+          ),
+    ];
+    if (members.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('这个清单还没有其他成员，无法指派')));
+      }
+      return null;
+    }
+    if (!mounted) return null;
+    return showModalBottomSheet<TaskAssigneeOption>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            for (final member in members)
+              ListTile(
+                key: Key('todo-batch-assignee-${member.userId}'),
+                title: Text(member.name),
+                onTap: () => Navigator.pop(ctx, member),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _applyBatchEdit(
     TaskBatchEditCommand baseCommand, {
     required String successVerb,
@@ -1711,6 +1812,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         priority: baseCommand.priority,
         completed: baseCommand.completed,
         isPinned: baseCommand.isPinned,
+        assigneeUserId: baseCommand.assigneeUserId,
       ),
     );
     if (!mounted) return;
@@ -1727,6 +1829,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           priority: baseCommand.priority,
           completed: baseCommand.completed,
           isPinned: baseCommand.isPinned,
+          assigneeUserId: baseCommand.assigneeUserId,
         ),
         successVerb: '已重试',
       ),

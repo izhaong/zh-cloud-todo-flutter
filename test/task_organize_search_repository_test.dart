@@ -1030,6 +1030,48 @@ void main() {
       expect(row.listId, isNot('list-target'));
     });
 
+    test('FL #357：批量指派写到**每一条**，不是只第一条', () async {
+      final queue = SyncChangeQueue(db);
+      final batch = TaskBatchEditRepository(db, queue);
+
+      final results = await batch.apply(
+        TaskBatchEditCommand(
+          taskIds: const ['task-1', 'task-2'],
+          assigneeUserId: 200,
+        ),
+      );
+
+      expect(results.map((r) => r.status), [
+        TaskBatchEditStatus.success,
+        TaskBatchEditStatus.success,
+      ]);
+      final rows = await (db.select(
+        db.todoTasks,
+      )..where((r) => r.id.isIn(['task-1', 'task-2']))).get();
+      expect(
+        rows.map((r) => r.assigneeUserId).toList(),
+        [200, 200],
+        reason: '只写第一条 = 用户以为都指派了，实际少了几条（静默少做）',
+      );
+    });
+
+    test('FL #357：`assigneeUserId` 为 null 时**不动**这一档（不是"清空"）', () async {
+      final queue = SyncChangeQueue(db);
+      final batch = TaskBatchEditRepository(db, queue);
+      await (db.update(db.todoTasks)..where((r) => r.id.equals('task-1')))
+          .write(const TodoTasksCompanion(assigneeUserId: Value(77)));
+
+      await batch.apply(
+        TaskBatchEditCommand(taskIds: const ['task-1'], priority: 3),
+      );
+
+      final row = await (db.select(
+        db.todoTasks,
+      )..where((r) => r.id.equals('task-1'))).getSingle();
+      expect(row.assigneeUserId, 77, reason: '"这一档不改"不能被表达成"清空执行人" —— 那是两件事');
+      expect(row.priority, 3);
+    });
+
     test('FL #603：子树跟着走（与其余四个入口同源）', () async {
       final queue = SyncChangeQueue(db);
       final batch = TaskBatchEditRepository(db, queue);
