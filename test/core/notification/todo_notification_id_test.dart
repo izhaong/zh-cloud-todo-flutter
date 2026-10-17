@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zh_cloud_todo_flutter/core/api/todo_api.dart';
@@ -54,5 +56,24 @@ void main() {
       const TodoNotificationItem(id: 1, type: 'REMINDER').isMention,
       isFalse,
     );
+  });
+
+  /// 列表页对提及的处理是**跳转 + 标已读**，绝不调用 `LocalNotificationService`。
+  ///
+  /// 这是"提及只展示"的**落地判据**：判据源是那一页的实现里
+  /// `LocalNotificationService` 的**零调用**（提醒专用链路在 poller，不在页面）。
+  test('通知列表页不引用 OS 调度器（提及只展示）', () {
+    // 判据用**源码级**断言：页面文件里不出现 LocalNotificationService。
+    // （widget 级断言要 mock 整条导航栈，成本不成比例；结构事实用结构判据钉。）
+    // ignore: avoid_dynamic_calls
+    final pageSource = File(
+      'lib/features/collaboration/notification_list_page.dart',
+    ).readAsStringSync();
+    expect(
+      pageSource.contains('LocalNotificationService'),
+      isFalse,
+      reason: '通知列表页一旦引用 OS 调度器，提及就会被"到点弹出"——那是提醒专用链路',
+    );
+    expect(pageSource.contains('schedule('), isFalse, reason: '同上：调度动作属于提醒链路');
   });
 }
