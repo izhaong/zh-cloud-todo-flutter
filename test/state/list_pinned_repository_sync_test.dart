@@ -95,7 +95,7 @@ void main() {
     addTearDown(db.close);
     expect(
       db.schemaVersion,
-      30,
+      31,
       reason:
           '标签置顶位/位次列把 schema 推到 v27，推荐契约列再推到 v28，清单颜色列推到 v29，清单图标/背景/显隐四列推到 v30，清单列不能被回退',
     );

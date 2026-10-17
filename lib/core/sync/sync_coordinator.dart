@@ -1763,6 +1763,15 @@ class SyncCoordinator {
       writable: Value(
         payload['writable'] as bool? ?? existing?.writable ?? true,
       ),
+      // FL #559：判「这个清单是不是共享的」。服务端不带这个键时**保留旧值**，
+      // 不退回 1 —— 退回 1 会让"共享清单"在旧服务端下被误判成"个人清单"，
+      // 那是**静默丢掉**用户该看到的任务（比多显示几条更错）。
+      memberCount: Value(
+        (payload['memberCount'] as num?)?.toInt() ??
+            (payload['member_count'] as num?)?.toInt() ??
+            existing?.memberCount ??
+            1,
+      ),
       updatedAt: Value(now),
       createdAt: Value(existing?.createdAt ?? now),
     );

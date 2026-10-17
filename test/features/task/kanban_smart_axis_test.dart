@@ -45,6 +45,7 @@ void main() {
     isPinned: false,
     accessRole: 'owner',
     writable: true,
+    memberCount: 1,
     backgroundType: 'theme',
     showInSmartList: true,
     updatedAt: now,

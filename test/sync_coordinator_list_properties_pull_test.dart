@@ -145,4 +145,89 @@ void main() {
     row = await rowByServer(101);
     expect(row!['backgroundType'], 'theme');
   });
+
+  test('FL #559：pull 带下「在用成员数」；缺键时**保留旧值**而不是退回 1', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+
+    List<Map<String, dynamic>>? nextChanges;
+    final dio = Dio(BaseOptions(baseUrl: 'https://todo.test'))
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            if (options.path.endsWith('/folder/list')) {
+              handler.resolve(
+                Response<Map<String, dynamic>>(
+                  requestOptions: options,
+                  data: {'code': 0, 'data': []},
+                ),
+              );
+              return;
+            }
+            handler.resolve(
+              Response<Map<String, dynamic>>(
+                requestOptions: options,
+                data: {
+                  'code': 0,
+                  'data': {
+                    'changes': nextChanges ?? const [],
+                    'tombstones': [],
+                    'nextCursor': 'todo-core:0',
+                    'hasMore': false,
+                  },
+                },
+              ),
+            );
+          },
+        ),
+      );
+    final client = ApiClient(dio: dio);
+    final coordinator = SyncCoordinator(
+      db: db,
+      api: SyncApi(client, clientId: 'member-count', deviceId: 'member-count'),
+      todoApi: client,
+    );
+
+    Map<String, dynamic> change(Map<String, dynamic> payload, int revision) => {
+      'changeId': revision,
+      'entityType': 'list',
+      'entityId': 101,
+      'operation': 'upsert',
+      'revision': revision,
+      'tombstone': false,
+      'payload': payload,
+    };
+
+    // 1) 服务端带 `memberCount` ⇒ 落库。
+    nextChanges = [
+      change({
+        'id': 101,
+        'name': '我建的共享清单',
+        'accessRole': 'owner',
+        'memberCount': 3,
+      }, 1),
+    ];
+    await coordinator.pull();
+    var rows = await db.select(db.todoLists).get();
+    expect(rows.single.accessRole, 'owner');
+    expect(
+      rows.single.memberCount,
+      3,
+      reason: '判「是不是共享清单」只能用这个数 —— accessRole=owner 时它才是唯一线索',
+    );
+
+    // 2) 服务端**不带**这个键（旧版本）⇒ 保留旧值，**不许退回 1**。
+    //    退回 1 会把"共享清单"误判成"个人清单"，那是**静默丢掉**用户该看到的任务，
+    //    比多显示几条更错。
+    nextChanges = [
+      change({'id': 101, 'name': '我建的共享清单'}, 2),
+    ];
+    await coordinator.pull();
+    rows = await db.select(db.todoLists).get();
+    expect(
+      rows.single.memberCount,
+      3,
+      reason: '缺键保留旧值；退回 1 = 静默丢掉共享清单里指派给我的任务',
+    );
+  });
 }
