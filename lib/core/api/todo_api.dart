@@ -203,6 +203,7 @@ class TodoTaskBatchUpdateRequest {
     this.completed,
     this.isPinned,
     this.tagIds,
+    this.assigneeUserId,
     this.deviceId,
     this.clientMutationId,
   });
@@ -215,6 +216,13 @@ class TodoTaskBatchUpdateRequest {
   final bool? completed;
   final bool? isPinned;
   final List<int>? tagIds;
+
+  /// 批量指派执行人（FL #357）。`null` = 这一档不改，与其它字段同一约定。
+  ///
+  /// 服务端**逐条按每条任务自己的清单**校验"这个人能不能当执行人"，
+  /// 所以同一批里可能有的成功、有的以 `TODO_TASK_ASSIGNEE_INVALID` 失败 ——
+  /// 调用方要按**逐项结果**处理，不能假定整批同命。
+  final int? assigneeUserId;
   final String? deviceId;
   final String? clientMutationId;
 
@@ -225,7 +233,8 @@ class TodoTaskBatchUpdateRequest {
       clearDueAt == true ||
       completed != null ||
       isPinned != null ||
-      tagIds != null;
+      tagIds != null ||
+      assigneeUserId != null;
 
   Map<String, dynamic> toJson() => {
     'taskIds': taskIds,
@@ -236,6 +245,7 @@ class TodoTaskBatchUpdateRequest {
     'completed': ?completed,
     'isPinned': ?isPinned,
     'tagIds': ?tagIds,
+    'assigneeUserId': ?assigneeUserId,
     'deviceId': ?deviceId,
     'clientMutationId': ?clientMutationId,
   };
