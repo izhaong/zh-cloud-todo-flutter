@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
+import 'features/task/clipboard_add_task_flow.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -86,6 +87,11 @@ class _TodoFlutterAppState extends ConsumerState<TodoFlutterApp> {
     super.initState();
     Future.microtask(() => ref.read(sessionProvider.notifier).bootstrap());
     Future.microtask(prepareDesktopUpdate);
+    // FL #343：冷启动读剪贴板（默认关，见 `ClipboardAddTaskSetting`）。
+    // 放在 post-frame 里：要等第一帧有 Scaffold 才弹得出提示。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) runClipboardAddTaskFlow(context, ref);
+    });
   }
 
   @override
