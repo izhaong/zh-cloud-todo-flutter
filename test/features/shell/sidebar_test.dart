@@ -28,7 +28,7 @@ void main() {
     expect(find.text('浏览'), findsOneWidget);
     expect(find.text('日历'), findsOneWidget);
     expect(find.text('标签'), findsOneWidget);
-    expect(find.text('筛选器'), findsOneWidget);
+    expect(find.text('过滤器'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('新建清单'),
       300,

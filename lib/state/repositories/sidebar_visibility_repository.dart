@@ -43,7 +43,7 @@ class SidebarVisibilityRepository {
   static const defaultShowTags = true;
 
   /// 「过滤器」也默认「显示」：侧栏那行入口在 develop 上一直是常驻的，
-  /// 默认改成隐藏等于让既有账号一夜之间找不到筛选器（FL Issue #336）。
+  /// 默认改成隐藏等于让既有账号一夜之间找不到过滤器（FL Issue #336）。
   static const defaultShowFilters = true;
 
   final AppDatabase _db;

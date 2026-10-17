@@ -6,7 +6,7 @@ import '../../state/providers.dart';
 import '../../core/widgets/app_widgets.dart';
 import 'saved_filter_mapping.dart';
 
-/// 侧栏「筛选器」入口的落地页：列出已保存过滤器、一键套用、二次确认删除。
+/// 侧栏「过滤器」入口的落地页：列出已保存过滤器、一键套用、二次确认删除。
 class SavedFiltersPage extends ConsumerWidget {
   const SavedFiltersPage({super.key});
 
@@ -14,7 +14,7 @@ class SavedFiltersPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final filters = ref.watch(savedFiltersStreamProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('筛选器')),
+      appBar: AppBar(title: const Text('过滤器')),
       body: Column(
         children: [
           if (filters.hasError && filters.hasValue)
