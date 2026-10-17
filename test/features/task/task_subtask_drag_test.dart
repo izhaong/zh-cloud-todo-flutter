@@ -619,6 +619,18 @@ Finder _rowDropZones() => find.descendant(
   matching: find.byType(DragTarget<TodoTask>),
 );
 
+/// 清单里的那一行（**不含**拖拽 feedback 的那份副本）。
+///
+/// 拖动期间 `task-row-surface-<id>` 会匹配**两个**（FL #600 实测）：
+/// 清单里那一行（16→1424）与 `LongPressDraggable` 的 feedback 副本（16→304，跟着指针跑）。
+/// 量落点只能用前者 —— 用 `find.byKey` 裸取会在自拖那次抛 `Too many elements`，
+/// 或者量到副本上让落点整个错位。feedback 挂在 `Overlay` 里，**不在** `Scrollable` 内，
+/// 故按 `Scrollable` 收窄即可（实测收窄后恰好 1 个）。
+Finder _rowInList(String taskId) => find.descendant(
+  of: find.byType(Scrollable),
+  matching: find.byKey(Key('task-row-surface-$taskId')),
+);
+
 Offset _bandCenter(WidgetTester tester, Finder row, _Band band) {
   expect(row, findsOneWidget);
   final size = tester.getSize(row);
@@ -634,19 +646,24 @@ Future<TestGesture> _startBandHover(
   required String targetId,
   _Band band = _Band.lowerRight,
 }) async {
-  final source = find.byKey(Key('task-row-surface-$sourceId'));
-  final target = find.byKey(Key('task-row-surface-$targetId'));
+  final source = _rowInList(sourceId);
+  final target = _rowInList(targetId);
   expect(source, findsOneWidget);
   expect(target, findsOneWidget);
   await tester.ensureVisible(source);
   // 字号放大那一档在起手势之前还会再排一次版；不等完就量，量到的是上一帧的行矩形，
   // 落点会掉到别的行上（窄屏那条用例第一版就是这么错的）。
   await tester.pumpAndSettle();
-  final bandPoint = _bandCenter(tester, target, band);
   final startPoint = tester.getCenter(source);
 
   final gesture = await tester.startGesture(startPoint);
   await tester.pump(const Duration(milliseconds: 400));
+  // #600：落点要在**拖起来之后**再量。起手势那一刻行集会重排（展开态下源行的子级本来就是行、
+  // 收起态下悬停会插占位），目标行随之位移 ⇒ 起手势前量的点已经指不到目标行的象限了，
+  // 这一刀会落到别的行上（表现成"提示没上屏"）。
+  // 本条纪律本文件 `_dragHandleToBelow` 早就写下（「目标行中心要等拖起来之后再量」），
+  // 只是没补到象限这一刀上。
+  final bandPoint = _bandCenter(tester, target, band);
   await gesture.moveTo(bandPoint);
   await tester.pump();
   return gesture;
