@@ -413,44 +413,71 @@ class TaskRepository {
   /// 界面上也给了"请随主任务一起移动"的说法。
   Future<List<TodoTask>> moveToList(String taskId, String targetListId) =>
       _db.transaction(() async {
-        final task = await _taskOrThrow(taskId);
-        if (task.listId == targetListId) return [task];
-        if (task.parentTaskId != null) {
-          throw StateError('子任务请随主任务一起移动');
+        final moved = await moveRowsToList(taskId, targetListId);
+        if (moved.isEmpty) {
+          // no-op（已经在目标清单）：**不排 outbox**，返回值沿用"被点的那一行"。
+          return [await _taskOrThrow(taskId)];
         }
-        final now = DateTime.now();
-        await _ensureInboxList(targetListId, now);
-        await _requireWritableList(targetListId);
-        final rows = [task, ...await _collectDescendants(taskId)];
-        final moved = <TodoTask>[];
-        for (final row in rows) {
-          // 写库走显式 companion：把 data class 直接交给 `write()` 时，drift 会按
-          // `nullToAbsent` 把 null 字段当成"没改"，分组就清不掉（本轮红测量到的）。
-          await (_db.update(
-            _db.todoTasks,
-          )..where((t) => t.id.equals(row.id))).write(
-            TodoTasksCompanion(
-              listId: Value(targetListId),
-              sectionId: const Value(null),
-              updatedAt: Value(now),
-            ),
-          );
-          final next = row.copyWith(
-            listId: targetListId,
-            sectionId: const Value(null),
-            updatedAt: now,
-          );
+        for (final row in moved) {
           await _queue.enqueue(
             entity: SyncEntities.task,
             op: SyncOps.upsert,
             localId: row.id,
-            serverId: next.serverId,
-            payload: _taskPayload(next),
+            serverId: row.serverId,
+            payload: _taskPayload(row),
           );
-          moved.add(next);
         }
         return moved;
       });
+
+  /// 换清单的**落库部分**：校验 + 子树 + 清分组，**不开事务、不入队**。
+  ///
+  /// 拆出来是给「**自己已经会入队**」的调用方复用的（FL #603 的批量「移至清单」）：
+  /// 那条命令一次写多个字段、每个任务只该产生**一条** outbox ——
+  /// 直接在它里面调 [moveToList] 会各自**再入队一次**（实测 2 个任务 4 条），
+  /// 破坏批量「逐项各一条」的既有约定。
+  ///
+  /// **外部不要直接用它**：要换清单请用 [moveToList]（它包事务并负责入队）。
+  /// 本方法只负责把行改对，事务边界与同步入队由调用方自己拿主意。
+  Future<List<TodoTask>> moveRowsToList(
+    String taskId,
+    String targetListId,
+  ) async {
+    {
+      final task = await _taskOrThrow(taskId);
+      // 空列表 = **什么都没挪**（no-op）。调用方据此决定要不要入队 ——
+      // 返回 `[task]` 会让"已经在目标清单"也排出一条 outbox（本重构踩到的）。
+      if (task.listId == targetListId) return const <TodoTask>[];
+      if (task.parentTaskId != null) {
+        throw StateError('子任务请随主任务一起移动');
+      }
+      final now = DateTime.now();
+      await _ensureInboxList(targetListId, now);
+      await _requireWritableList(targetListId);
+      final rows = [task, ...await _collectDescendants(taskId)];
+      final moved = <TodoTask>[];
+      for (final row in rows) {
+        // 写库走显式 companion：把 data class 直接交给 `write()` 时，drift 会按
+        // `nullToAbsent` 把 null 字段当成"没改"，分组就清不掉（本轮红测量到的）。
+        await (_db.update(
+          _db.todoTasks,
+        )..where((t) => t.id.equals(row.id))).write(
+          TodoTasksCompanion(
+            listId: Value(targetListId),
+            sectionId: const Value(null),
+            updatedAt: Value(now),
+          ),
+        );
+        final next = row.copyWith(
+          listId: targetListId,
+          sectionId: const Value(null),
+          updatedAt: now,
+        );
+        moved.add(next);
+      }
+      return moved;
+    }
+  }
 
   /// 离线创建检查事项。服务端将其作为带 `isChecklistItem` 的 task 同步。
   Future<TodoChecklistItem> createChecklistItem({
