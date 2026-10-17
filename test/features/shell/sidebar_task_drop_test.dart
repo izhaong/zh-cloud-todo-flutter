@@ -214,6 +214,44 @@ void main() {
       expect(after.endAt, before.endAt, reason: '原文只提清单，结束时间不该动');
     });
 
+    testWidgets('FL #603：拖父任务换清单时整棵子树一起走（原来只有父行挪过去）', (tester) async {
+      final fixture = await _pumpShell(
+        tester,
+        task: _payload(
+          id: TodoVisualFixture.metadataTaskId,
+          listId: TodoVisualFixture.inboxListId,
+        ),
+      );
+      final db = fixture.database;
+      final seededAt = DateTime(2026, 6, 20, 8);
+      // 造一条子任务挂在这条父任务下。并轨到 `moveToList` 之前，这条子行会**留在收集箱** ——
+      // 而清单页已经把子级铺成了行（specs/116），于是父行上的展开箭头点开是空的，
+      // 看起来像子任务被删了（FL #603 写的第二条最尖锐的症状）。
+      await db
+          .into(db.todoTasks)
+          .insert(
+            TodoTasksCompanion.insert(
+              id: 'child-of-dragged',
+              listId: TodoVisualFixture.inboxListId,
+              title: '子任务',
+              parentTaskId: const Value(TodoVisualFixture.metadataTaskId),
+              updatedAt: seededAt,
+              createdAt: seededAt,
+            ),
+          );
+
+      await _dragTo(tester, _listZone(TodoVisualFixture.personalListId));
+
+      final parent = await _readTask(db, TodoVisualFixture.metadataTaskId);
+      final child = await _readTask(db, 'child-of-dragged');
+      expect(parent.listId, TodoVisualFixture.personalListId);
+      expect(
+        child.listId,
+        TodoVisualFixture.personalListId,
+        reason: '子树必须跟着走；只挪父行会让子级留在原清单（父行展开后是空的）',
+      );
+    });
+
     testWidgets('拖到标签行 ⇒ 自动打上该标签，且原有标签一个不丢', (tester) async {
       final fixture = await _pumpShell(
         tester,

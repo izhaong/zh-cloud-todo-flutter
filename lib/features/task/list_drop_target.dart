@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_repository.dart';
 
+import 'task_view_mutation_feedback.dart';
+
 /// 嘀嗒《02-功能指南/02-日历/07-任务与日历同时显示.md》`:53`「将日历中的任务拖入清单详情区域」。
 ///
 /// 原句 `:55`「任务会从原所属清单迁移到当前查看的清单中，并保留其原有的时间安排。」
@@ -100,20 +102,23 @@ class TaskListMoveController {
 
     final previous = _chain[task.id] ?? Future<void>.value();
     final operation = previous.then(
-      (_) => repository.update(
-        // 只改所属清单；时间安排沿用仓储里 `Value.absent()` 的不写语义。
-        task.id,
-        listId: targetListId,
-        clearSectionId: true,
-      ),
+      // FL #603：并轨到 `moveToList`。原来这条是
+      // `update(taskId, listId:, clearSectionId: true)` —— 只清分组、**子树不跟着走**，
+      // 于是拖到另一份清单之后，父行上的展开箭头点开是空的（子级还留在原清单）。
+      // `moveToList` 一次把「子树跟着走 + 清分组 + 目标必须可写 + 子任务不许单独换清单」做掉；
+      // 时间安排的 `Value.absent()` 不写语义由它自己保证（它只动 listId 与 sectionId）。
+      (_) => repository.moveToList(task.id, targetListId),
     );
     _chain[task.id] = operation;
     try {
       await operation;
-    } catch (_) {
+    } on Object catch (error) {
       // 失败不碰本地数据：Drift 里仍是原清单，已加载的任务继续显示。
       // 这条提示也只在用户还在看当初那个清单时才弹 —— 切走了就不拿旧清单的失败盖新界面。
-      if (currentListIdOf() == targetListId) onFailure(failureMessage);
+      if (currentListIdOf() == targetListId) {
+        // 只读是**可解释的拒绝**，与"失败"要说的话不同（FL #603 的验收之一）。
+        onFailure(taskViewMutationFailureMessage(error, failureMessage));
+      }
     } finally {
       if (_chain[task.id] == operation) _chain.remove(task.id);
     }

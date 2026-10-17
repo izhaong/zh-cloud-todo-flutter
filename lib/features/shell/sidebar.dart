@@ -20,9 +20,38 @@ import '../tag/tag_actions.dart';
 import 'section.dart';
 import 'sidebar_hierarchy.dart';
 import 'sidebar_list_folder_merge.dart';
+import '../task/task_view_mutation_feedback.dart';
 import 'sidebar_task_drop.dart';
 import 'smart_list_manager_sheet.dart';
 import 'smart_list_time_condition.dart';
+
+/// 落点没落成时给一句**人话**（FL #603）。
+///
+/// `applied` / `skipped` 不提示：`skipped` 是「本来就满足、无需写」的正常结果
+/// （落回原清单、截止日已在该档窗口内），给它弹一句"失败"是谎报。
+/// `readOnly` 与 `failed` 分开说：只读是**可解释的拒绝**，说成"失败"会让用户以为重试就好。
+void _showDropFailure(
+  BuildContext context,
+  SidebarDropOutcome outcome,
+  String fallback,
+) {
+  if (outcome != SidebarDropOutcome.failed &&
+      outcome != SidebarDropOutcome.readOnly) {
+    return;
+  }
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        content: Text(
+          outcome == SidebarDropOutcome.readOnly
+              ? taskViewReadOnlyMessage
+              : fallback,
+        ),
+      ),
+    );
+}
 
 /// Compact Todo navigation for smart lists, browsing, user lists, and settings.
 class Sidebar extends ConsumerWidget {
@@ -696,10 +725,8 @@ class _SmartListDropZone extends ConsumerWidget {
           task,
           condition,
         );
-        if (outcome != SidebarDropOutcome.failed || !context.mounted) return;
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(SnackBar(content: Text('安排到「${smart.label}」失败')));
+        if (!context.mounted) return;
+        _showDropFailure(context, outcome, '安排到「${smart.label}」失败');
       },
       child: child,
     );
@@ -877,12 +904,8 @@ class _TagRow extends ConsumerWidget {
           accept: (_) => true,
           onDrop: (task) async {
             final outcome = await controller.addTagToTask(task, tag.id);
-            if (outcome != SidebarDropOutcome.failed || !context.mounted) {
-              return;
-            }
-            ScaffoldMessenger.of(context)
-              ..hideCurrentSnackBar()
-              ..showSnackBar(SnackBar(content: Text('打上「${tag.name}」失败')));
+            if (!context.mounted) return;
+            _showDropFailure(context, outcome, '打上「${tag.name}」失败');
           },
           child: Dismissible(
             // 嘀嗒《04-用标签管理任务》:79「在侧边栏左滑某个标签，会出现「置顶」、「编辑」和「删除」3个选项。」
@@ -972,12 +995,8 @@ class _ListRowState extends ConsumerState<_ListRow> {
           accept: (_) => true,
           onDrop: (task) async {
             final outcome = await controller.moveToList(task, list.id);
-            if (outcome != SidebarDropOutcome.failed || !context.mounted) {
-              return;
-            }
-            ScaffoldMessenger.of(context)
-              ..hideCurrentSnackBar()
-              ..showSnackBar(SnackBar(content: Text('移到「${list.name}」失败')));
+            if (!context.mounted) return;
+            _showDropFailure(context, outcome, '移到「${list.name}」失败');
           },
           child: Dismissible(
             // 嘀嗒《02-用清单管理任务》：「在侧边栏左滑某个清单，会出现「置顶」、「编辑」和「删除」3个选项。」
