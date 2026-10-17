@@ -54,7 +54,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
   Section _section = Section.tasks;
   SmartList _smart = SmartList.inbox;
 
-  /// 从「筛选器」页套用进来的已保存条件；切换侧栏选择时清空。
+  /// 从「过滤器」页套用进来的已保存条件；切换侧栏选择时清空。
   TaskFilter? _appliedFilter;
   String? _listId;
   String? _selectedTaskId;

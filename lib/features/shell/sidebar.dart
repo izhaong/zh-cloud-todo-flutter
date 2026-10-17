@@ -418,7 +418,7 @@ class Sidebar extends ConsumerWidget {
                       _NavRow(
                         rowKey: const Key('todo-sidebar-row-filters'),
                         icon: Icons.filter_alt_outlined,
-                        label: '筛选器',
+                        label: '过滤器',
                         selected: false,
                         colors: colors,
                         onTap: () {

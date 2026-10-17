@@ -88,7 +88,7 @@ void main() {
     expect(find.text('指派给我'), findsWidgets);
   });
   // 交叉验证推翻掉的初版设计（"把身份塞进 initialFilter"）留下的判据：
-  // 筛选器「全部」档换成空 TaskFilter，页面身份必须照样生效。
+  // 过滤器「全部」档换成空 TaskFilter，页面身份必须照样生效。
   test('lockedAssigneeUserId 是硬闸门：空滤镜也清不掉它', () {
     final tasks = [_task('mine', 7), _task('other', 8), _task('free', null)];
 

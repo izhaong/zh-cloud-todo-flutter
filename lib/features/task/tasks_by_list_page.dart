@@ -71,7 +71,7 @@ class TasksByListPage extends ConsumerStatefulWidget {
   final String? initialDueRange;
   final bool? initialCompleted;
 
-  /// 从「筛选器」页套用进来的已保存条件；与 `initialDueRange` 同属外部播种。
+  /// 从「过滤器」页套用进来的已保存条件；与 `initialDueRange` 同属外部播种。
   final TaskFilter? initialFilter;
 
   /// 「指派给我」这类**页面身份**约束（嘀嗒《02-用清单管理任务》:21，specs/104）。

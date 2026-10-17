@@ -18,16 +18,16 @@ import '../../support/todo_visual_test_harness.dart';
 /// `:33`「如果过滤器未在侧边栏中显示，点击头像进入「设置」-「智能清单」，找到「过滤器」设置为「显示」即可。」
 /// ⇒ 「过滤器」在侧栏的显隐是**用户偏好**，且开关落在「设置」-「智能清单」里。
 ///
-/// FL Issue #336：develop 上侧栏的「筛选器」是常驻行（`sidebar.dart` 的
+/// FL Issue #336：develop 上侧栏的「过滤器」是常驻行（`sidebar.dart` 的
 /// `todo-sidebar-row-filters`），设置页「智能清单」分组里只有「标签」一行 ⇒ 这个开关整面缺。
 void main() {
   final filtersRow = find.byKey(const Key('todo-sidebar-row-filters'));
   final tagsRow = find.byKey(const Key('todo-sidebar-row-tags'));
 
-  testWidgets('侧栏「筛选器」入口跟着「显示过滤器」走：默认在、关掉就没、再打开又回来', (tester) async {
+  testWidgets('侧栏「过滤器」入口跟着「显示过滤器」走：默认在、关掉就没、再打开又回来', (tester) async {
     final fixture = await _pumpSidebar(tester);
 
-    expect(filtersRow, findsOneWidget, reason: '没存过偏好时按默认「显示」，侧栏要有「筛选器」那一行');
+    expect(filtersRow, findsOneWidget, reason: '没存过偏好时按默认「显示」，侧栏要有「过滤器」那一行');
 
     await _saveFilters(tester, fixture, showFilters: false);
     expect(filtersRow, findsNothing, reason: '关掉后这一行不该再画出来');

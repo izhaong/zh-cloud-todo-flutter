@@ -144,7 +144,7 @@ void main() {
     expect(conditions['priorities'], [2]);
   });
 
-  testWidgets('筛选器页列出真保存的过滤器并给出可读条件摘要，假条目不再出现', (tester) async {
+  testWidgets('过滤器页列出真保存的过滤器并给出可读条件摘要，假条目不再出现', (tester) async {
     final fixture = await _pump(tester, home: const SizedBox.shrink());
     await _repo(fixture).save(
       name: '高优先级英语',
@@ -220,7 +220,7 @@ void main() {
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
 
     final fixture = await _pump(tester, home: const SizedBox.shrink());
-    final longName = '高优先级英语与数学作业筛选器名称故意拉得很长很长';
+    final longName = '高优先级英语与数学作业过滤器名称故意拉得很长很长';
     await _repo(fixture).save(
       name: longName,
       conditions: const TodoFilterConditions(
