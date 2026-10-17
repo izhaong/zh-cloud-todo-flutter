@@ -43,3 +43,13 @@
 | `flutter analyze` | `No issues found!` |
 | 全量（exclude golden/performance） | `+2106 ~26`，**0 失败** |
 | 相关复跑（详情+批量+收集箱入口） | `+72 All tests passed!` |
+
+
+## 收口轮（批量子树）
+
+- [x] `TaskRepository` 拆出 `moveRowsToList`（落库，不入队）；`moveToList` 包事务 + 入队。
+- [x] 批量改调 `moveRowsToList` + 自行补入队子级。
+- [x] no-op 返回空列表（否则白排一条 outbox）—— `moveToList` 翻译回"被点的那一行"。
+- [x] 新判据：批量移父任务 ⇒ 子任务也在新清单 + 两条 outbox 都在。
+- [x] **反向探针**：去掉那处调用 ⇒ 子任务留在 `list-inbox`，转红。
+- [x] `task_repository_move_to_list_test` 既有 7 条 + 批量 33 条 + 详情 27 条全绿。

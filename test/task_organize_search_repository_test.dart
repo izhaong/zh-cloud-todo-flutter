@@ -1030,6 +1030,37 @@ void main() {
       expect(row.listId, isNot('list-target'));
     });
 
+    test('FL #603：子树跟着走（与其余四个入口同源）', () async {
+      final queue = SyncChangeQueue(db);
+      final batch = TaskBatchEditRepository(db, queue);
+      // task-2 变成 task-1 的子任务。
+      await TaskRepository(db, queue).reparent('task-2', 'task-1');
+
+      final results = await batch.apply(
+        TaskBatchEditCommand(taskIds: const ['task-1'], listId: 'list-target'),
+      );
+
+      expect(results.single.status, TaskBatchEditStatus.success);
+      final parent = await (db.select(
+        db.todoTasks,
+      )..where((r) => r.id.equals('task-1'))).getSingle();
+      final child = await (db.select(
+        db.todoTasks,
+      )..where((r) => r.id.equals('task-2'))).getSingle();
+      expect(parent.listId, 'list-target');
+      expect(
+        child.listId,
+        'list-target',
+        reason: '批量移父任务时子树必须跟着走；只挪父行会让子级留在原清单',
+      );
+      // 子级也是这一刀的真实副作用 ⇒ 必须各自有条 outbox，否则对端收不到。
+      final queued = await db.select(db.todoSyncChanges).get();
+      expect(
+        queued.map((c) => c.entityLocalId).toSet(),
+        containsAll(<String>['task-1', 'task-2']),
+      );
+    });
+
     test('换清单时清掉属于原清单的分组（原来会留下一行违规数据）', () async {
       final queue = SyncChangeQueue(db);
       final batch = TaskBatchEditRepository(db, queue);

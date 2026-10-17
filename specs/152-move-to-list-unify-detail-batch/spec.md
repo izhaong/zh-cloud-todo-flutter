@@ -72,3 +72,31 @@ grep -rn "listId:" --include=*.dart lib/ | grep -E "\.update\("
 - 批量「子树跟着走」未做（见上，需先拆 `moveToList` 的落库/入队两半）。
 - `_pumpDirectPane` 新增了 `prepare` 接缝（在 pump 前写种子），本批用它做诊断；
   最终那条判据改走**接缝**而不是 UI 点击，因为 UI 路径在"带分组"时不容易稳定驱动。
+
+
+---
+
+## 收口（本轮补做）：批量的「子树跟着走」已落地
+
+`specs/152` 当时把批量的**子树**记为遗留，理由是"要复用 `moveToList` 的子一半，得先把它的
+落库部分与入队部分拆开 —— 那是独立一刀"。**这一刀本轮做了**（用户裁定「按推荐的来：拆」）：
+
+- `TaskRepository` 拆出 **`moveRowsToList(taskId, targetListId)`**：校验 + 子树 + 清分组，
+  **不开事务、不入队**；`moveToList` = `transaction { rows = moveRowsToList(...); 逐行入队 }`。
+- 批量的 `listId` 分支改调 `moveRowsToList`，并**自己补入队被挪的子级**
+  （它们是这一刀的真实副作用，不补就不同步）；本任务那条仍由批量原来的 enqueue 统一带上其它字段。
+- 副作用：`moveRowsToList` 对 no-op（已在目标清单）返回**空列表**，由 `moveToList` 翻译回
+  「被点的那一行」—— 若照旧返回 `[task]`，no-op 会**白排一条 outbox**（重构时踩到，既有用例当场红）。
+
+**现在五个入口全部「子树跟着走」**：
+
+| 入口 | 子树 | 入口级用例 |
+| --- | --- | --- |
+| 行左滑 | ✅ | ✅ |
+| 拖到侧栏清单 | ✅ | ✅ |
+| `list_drop_target` | ✅ | ✅ |
+| 详情面板 | ✅ | ✅ |
+| 批量「移至清单」 | ✅ | ✅（本轮补） |
+
+判据：批量移父任务 ⇒ **子任务也在新清单**，且 `task-1`/`task-2` 各有 outbox。
+**反向探针**：把批量那处 `moveRowsToList` 调用去掉 ⇒ 子任务留在 `list-inbox`，判据转红。

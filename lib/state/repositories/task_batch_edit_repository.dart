@@ -218,19 +218,34 @@ class TaskBatchEditRepository {
           }
         }
 
+        // FL #603：换清单走**仓储的落库核心**（`moveRowsToList`：子树跟着走 + 清分组 +
+        // 可写校验 + 子任务守卫），而**不是**在这里只写一个 `listId`。
+        // 用落库核心而不是 `moveToList`：后者会**各自再入队一次** ⇒
+        // 批量 2 个任务产生 4 条 outbox，破坏「逐项各一条」的既有约定。
+        // 被挪的**子级**由本方法补入队（它们是这一刀的真实副作用，不补就不同步）。
+        List<TodoTask> movedRows = const <TodoTask>[];
+        if (command.listId != null) {
+          movedRows = await TaskRepository(
+            _db,
+            _queue,
+          ).moveRowsToList(taskId, command.listId!);
+          for (final row in movedRows) {
+            if (row.id == taskId) continue; // 本任务那条由下面统一入队（带着其它字段）
+            await _queue.enqueue(
+              entity: SyncEntities.task,
+              op: SyncOps.upsert,
+              localId: row.id,
+              serverId: row.serverId,
+              payload: row.toJson(),
+            );
+          }
+        }
         await (_db.update(
           _db.todoTasks,
         )..where((row) => row.id.equals(taskId))).write(
           TodoTasksCompanion(
-            listId: command.listId == null
-                ? const Value.absent()
-                : Value(command.listId!),
-            // FL #603：换清单时**必须一起清掉 `sectionId`** —— 分组属于原清单。
-            // 原来这里只写 `listId`、不清分组，于是批量换清单会留下一行
-            // 「listId 在新清单、sectionId 还是旧清单的」违规数据。
-            sectionId: command.listId == null
-                ? const Value.absent()
-                : const Value<String?>(null),
+            // `listId` / `sectionId` 由上面的 `moveRowsToList` 写（换清单是它的活）；
+            // 这里只负责本条命令的其它字段。
             dueAt: command.clearDueAt
                 ? const Value<DateTime?>(null)
                 : command.dueAt == null
