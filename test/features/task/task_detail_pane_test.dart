@@ -379,6 +379,36 @@ void main() {
     },
   );
 
+  testWidgets('FL #603：换清单不再走 update(listId:)，而是走 moveToList', (tester) async {
+    // 改前 `_save` 把 `listId` 一起交给 `update`，而仓储的 `_requireSectionInList`
+    // 拿**旧清单的 sectionId** 去校验**新清单** ⇒ 带分组换清单当场抛错，
+    // 用户看到的是"改不动"。修法是把换清单交给 `moveToList`（它清分组、子树跟着走、校验可写）。
+    // 这条在**接缝**上钉：`update` 不许再收到 `listId`，且必须有一次 `moveToList`。
+    late final _RecordingMoveRepository repository;
+    await _pumpDirectPane(
+      tester,
+      taskId: _taskId,
+      repositoryBuilder: (fixture) =>
+          repository = _RecordingMoveRepository(fixture),
+    );
+
+    await tester.tap(find.byKey(const Key('task-list-$_taskId')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('生活').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    expect(
+      repository.updateListIds,
+      isEmpty,
+      reason: '换清单不许再借 update(listId:) —— 那条路会拿旧分组的 id 去校验新清单',
+    );
+    expect(repository.moves, [
+      (_taskId, TodoVisualFixture.personalListId),
+    ], reason: '换清单必须走 moveToList（子树、清分组、可写校验都在它身上）');
+  });
+
   testWidgets(
     'detail moves a task to another list through the offline repository',
     (tester) async {
@@ -908,10 +938,13 @@ Future<TodoVisualFixture> _pumpDirectPane(
   VoidCallback? onClose,
   ValueChanged<String>? onUnavailable,
   _RepositoryBuilder? repositoryBuilder,
+  Future<void> Function(AppDatabase database)? prepare,
 }) async {
   assert(taskId != null || selectedTaskId != null);
   final fixture = await TodoVisualFixture.create();
   addTearDown(fixture.dispose);
+  // 种子必须在 pump 之前写：详情面板一 pump 就把这一行读进来并建好表单态。
+  if (prepare != null) await prepare(fixture.database);
 
   tester.view.physicalSize = const Size(760, 900);
   tester.view.devicePixelRatio = 1;
@@ -1016,5 +1049,67 @@ class _RecordingChecklistRepository extends TaskRepository {
     final error = failure;
     if (error != null) throw error;
     await super.reorderChecklistItems(taskId, orderedItemIds);
+  }
+}
+
+/// 记录「换清单」走的是哪条通道（FL #603 的接缝判据）。
+class _RecordingMoveRepository extends TaskRepository {
+  _RecordingMoveRepository(TodoVisualFixture fixture)
+    : super(fixture.database, SyncChangeQueue(fixture.database));
+
+  /// `update` 每次收到的非空 `listId`（改前这里会有值，改后必须为空）。
+  final List<String> updateListIds = [];
+
+  /// `moveToList(taskId, targetListId)` 的调用记录。
+  final List<(String, String)> moves = [];
+
+  @override
+  Future<TodoTask> update(
+    String taskId, {
+    String? title,
+    String? description,
+    int? priority,
+    DateTime? startAt,
+    DateTime? endAt,
+    bool clearStartAt = false,
+    bool clearEndAt = false,
+    DateTime? dueAt,
+    bool clearDueAt = false,
+    bool? allDay,
+    String? timeZone,
+    bool? fixedTimezone,
+    int? timeMode,
+    String? listId,
+    String? sectionId,
+    bool clearSectionId = false,
+    bool? isPinned,
+  }) {
+    if (listId != null) updateListIds.add(listId);
+    return super.update(
+      taskId,
+      title: title,
+      description: description,
+      priority: priority,
+      startAt: startAt,
+      endAt: endAt,
+      clearStartAt: clearStartAt,
+      clearEndAt: clearEndAt,
+      dueAt: dueAt,
+      clearDueAt: clearDueAt,
+      allDay: allDay,
+      timeZone: timeZone,
+      fixedTimezone: fixedTimezone,
+      timeMode: timeMode,
+      listId: listId,
+      sectionId: sectionId,
+      clearSectionId: clearSectionId,
+      isPinned: isPinned,
+    );
+  }
+
+  @override
+  Future<List<TodoTask>> moveToList(String taskId, String targetListId) {
+    moves.add((taskId, targetListId));
+    return super.moveToList(taskId, targetListId);
   }
 }

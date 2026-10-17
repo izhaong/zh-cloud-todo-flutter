@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import '../../core/db/app_database.dart';
 import '../../core/sync/sync_change_queue.dart';
 import '../../core/sync/sync_entities.dart';
+import '../../features/task/task_view_mutation_feedback.dart';
 import 'task_repository.dart';
 
 /// B3 任务批量编辑的逐项结果。
@@ -182,6 +183,25 @@ class TaskBatchEditRepository {
               reason: '清单不存在',
             );
           }
+          // FL #603：子任务不许单独换清单，与左滑那条同一口径。
+          // 批量里选中一条子任务就把它单独挪走，会当场造出「父子不同清单」的违规状态
+          // （`moveToList` 在别处也是这么拒的）。**先拒并说明**，别让它走到写库那一步。
+          if (task.parentTaskId != null) {
+            return TaskBatchEditResult(
+              taskId: taskId,
+              status: TaskBatchEditStatus.failed,
+              reason: '子任务请随主任务一起移动',
+            );
+          }
+          // 目标清单必须**可写**：只读清单（订阅来的）不该被批量写进去。
+          // 原来这里只校验"清单存在"，于是往只读清单搬会静默成功。
+          if (!list.writable) {
+            return TaskBatchEditResult(
+              taskId: taskId,
+              status: TaskBatchEditStatus.failed,
+              reason: taskViewReadOnlyMessage,
+            );
+          }
         }
 
         final tagIds = command.tagIds?.toSet().toList(growable: false);
@@ -205,6 +225,12 @@ class TaskBatchEditRepository {
             listId: command.listId == null
                 ? const Value.absent()
                 : Value(command.listId!),
+            // FL #603：换清单时**必须一起清掉 `sectionId`** —— 分组属于原清单。
+            // 原来这里只写 `listId`、不清分组，于是批量换清单会留下一行
+            // 「listId 在新清单、sectionId 还是旧清单的」违规数据。
+            sectionId: command.listId == null
+                ? const Value.absent()
+                : const Value<String?>(null),
             dueAt: command.clearDueAt
                 ? const Value<DateTime?>(null)
                 : command.dueAt == null
@@ -256,6 +282,14 @@ class TaskBatchEditRepository {
           status: TaskBatchEditStatus.success,
         );
       });
+    } on StateError catch (error) {
+      // 落点类拒绝（目标清单只读、子任务不许单独换清单）要**原样上报**：
+      // 兜底成「本地写入失败」是一句没有下一步的句子，用户不知道该怎么办。
+      return TaskBatchEditResult(
+        taskId: taskId,
+        status: TaskBatchEditStatus.failed,
+        reason: error.message,
+      );
     } catch (_) {
       return TaskBatchEditResult(
         taskId: taskId,

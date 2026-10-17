@@ -1128,6 +1128,11 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     // 「创建任务时输入「#」或在任务详情中输入「#」快速创建标签」：
     // 标题里的「#名称」剥成标签，落库的标题不留井号原文。
     final hashDraft = parseHashTagInput(_title.text);
+    // FL #603：换清单**不在这笔 `update` 里带** `listId` —— 带上它会让
+    // `_requireSectionInList` 拿**旧清单的 `sectionId`** 去校验新清单，直接抛错
+    // （用户看到的是"改不动"，而不是"要先移分组"）。换清单交给下面第二笔 `moveToList`：
+    // 它清分组、子树跟着走、目标清单必须可写（三条 `update(listId:)` 都没有）。
+    final targetListId = _selectedListId == t.listId ? null : _selectedListId;
     TodoTask updated;
     try {
       updated = await repo.update(
@@ -1146,7 +1151,6 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
             ? (_timeZone ?? 'Asia/Shanghai')
             : _timeZone,
         timeMode: _timeMode.wire,
-        listId: _selectedListId == t.listId ? null : _selectedListId,
       );
     } on ArgumentError catch (error) {
       if (_isCurrentTask(t.id)) {
@@ -1155,6 +1159,29 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
         );
       }
       return;
+    }
+    // 换清单是**第二次写**（与下面的标签同形）：失败不能带走已保存的主体，也不能静默早退。
+    // 走 `moveToList` 而不是 `update(listId:)`，见本函数开头那条注释。
+    if (targetListId != null) {
+      try {
+        final moved = await repo.moveToList(t.id, targetListId);
+        updated = moved.firstWhere(
+          (row) => row.id == t.id,
+          orElse: () => updated,
+        );
+      } on Object catch (error) {
+        if (mounted && widget.taskId == t.id) {
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(
+                // 只读清单是**可解释的拒绝**，说成"失败"会让用户以为重试就好。
+                taskViewMutationFailureMessage(error, '任务已保存，但没能移到目标清单，请重试'),
+              ),
+            ),
+          );
+        }
+        return;
+      }
     }
     if (mounted && widget.taskId == updated.id) {
       setState(() {
@@ -1239,7 +1266,20 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     final repo = ref.read(taskRepositoryProvider);
     if (repo == null) return;
     final messenger = ScaffoldMessenger.of(context);
-    await repo.update(t.id, listId: kInboxListId);
+    // FL #603：与详情面板保存那条同口径 —— 走 `moveToList` 而不是 `update(listId:)`。
+    // `update(listId:)` 不清分组（搬进收集箱后 `sectionId` 还是原清单的 ⇒ 违规数据），
+    // 子树也不会跟着走。收集箱是合成的可写落点，`moveToList` 自己会补出来。
+    try {
+      await repo.moveToList(t.id, kInboxListId);
+    } on Object catch (error) {
+      if (!_isCurrentTask(t.id)) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(taskViewMutationFailureMessage(error, '移到收集箱失败，请重试')),
+        ),
+      );
+      return;
+    }
     if (!_isCurrentTask(t.id)) return;
     messenger.showSnackBar(const SnackBar(content: Text('已移至收集箱')));
   }

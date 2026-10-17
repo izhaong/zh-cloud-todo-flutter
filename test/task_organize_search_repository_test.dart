@@ -9,6 +9,7 @@ import 'package:zh_cloud_todo_flutter/core/sync/sync_change_queue.dart';
 import 'package:zh_cloud_todo_flutter/core/sync/sync_entities.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_batch_edit_repository.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_query_repository.dart';
+import 'package:zh_cloud_todo_flutter/features/task/task_view_mutation_feedback.dart';
 import 'package:zh_cloud_todo_flutter/state/repositories/task_repository.dart';
 
 void main() {
@@ -980,5 +981,75 @@ void main() {
           .map((change) => change.entityLocalId),
       containsAll(<String>['task-1', 'task-2']),
     );
+  });
+
+  // ── FL #603：批量「移至清单」的三条口径 ─────────────────────────────
+  // 这一条通道原来只校验「清单存在」：不清分组、不查可写、子任务也能被单独挪走。
+  group('FL #603 批量换清单', () {
+    test('拒绝子任务，且理由原样上报（不兜底成「本地写入失败」）', () async {
+      final queue = SyncChangeQueue(db);
+      final batch = TaskBatchEditRepository(db, queue);
+      await TaskRepository(db, queue).reparent('task-2', 'task-1');
+      final before = await db.select(db.todoSyncChanges).get();
+
+      final results = await batch.apply(
+        TaskBatchEditCommand(taskIds: const ['task-2'], listId: 'list-target'),
+      );
+
+      expect(results.single.status, TaskBatchEditStatus.failed);
+      expect(
+        results.single.reason,
+        '子任务请随主任务一起移动',
+        reason: '兜底成「本地写入失败」是一句没有下一步的句子，用户不知道该怎么办',
+      );
+      final row = await (db.select(
+        db.todoTasks,
+      )..where((r) => r.id.equals('task-2'))).getSingle();
+      expect(row.listId, isNot('list-target'), reason: '拒绝之后一行都不该动');
+      expect(
+        await db.select(db.todoSyncChanges).get(),
+        hasLength(before.length),
+      );
+    });
+
+    test('目标清单只读时被拒，报的是「只读」而不是「写入失败」', () async {
+      final queue = SyncChangeQueue(db);
+      final batch = TaskBatchEditRepository(db, queue);
+      await (db.update(db.todoLists)..where((r) => r.id.equals('list-target')))
+          .write(const TodoListsCompanion(writable: Value(false)));
+
+      final results = await batch.apply(
+        TaskBatchEditCommand(taskIds: const ['task-1'], listId: 'list-target'),
+      );
+
+      expect(results.single.status, TaskBatchEditStatus.failed);
+      expect(results.single.reason, taskViewReadOnlyMessage);
+      final row = await (db.select(
+        db.todoTasks,
+      )..where((r) => r.id.equals('task-1'))).getSingle();
+      expect(row.listId, isNot('list-target'));
+    });
+
+    test('换清单时清掉属于原清单的分组（原来会留下一行违规数据）', () async {
+      final queue = SyncChangeQueue(db);
+      final batch = TaskBatchEditRepository(db, queue);
+      await (db.update(db.todoTasks)..where((r) => r.id.equals('task-1')))
+          .write(const TodoTasksCompanion(sectionId: Value('sec-of-old-list')));
+
+      final results = await batch.apply(
+        TaskBatchEditCommand(taskIds: const ['task-1'], listId: 'list-target'),
+      );
+
+      expect(results.single.status, TaskBatchEditStatus.success);
+      final row = await (db.select(
+        db.todoTasks,
+      )..where((r) => r.id.equals('task-1'))).getSingle();
+      expect(row.listId, 'list-target');
+      expect(
+        row.sectionId,
+        null,
+        reason: '分组属于原清单；换清单后留着它就是「listId 在新清单、sectionId 还是旧的」',
+      );
+    });
   });
 }
