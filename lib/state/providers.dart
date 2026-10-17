@@ -843,6 +843,11 @@ final taskStatsProvider = StreamProvider<TaskStats>((ref) {
       visible,
       now: now,
       assigneeUserId: currentUserId,
+      sharedListIds: {
+        for (final list
+            in ref.watch(listsStreamProvider).valueOrNull ?? const <TodoList>[])
+          if (list.memberCount > 1) list.id,
+      },
     );
   });
 });
@@ -875,6 +880,13 @@ class TaskStats {
     List<TodoTask> tasks, {
     DateTime? now,
     int? assigneeUserId,
+
+    /// **共享清单**的 id 集合（`memberCount > 1`），FL #559。
+    ///
+    /// 「指派给我」的判据是嘀嗒 :21「来自**不同共享清单**」。徽章数必须与那一页**同一判据** ——
+    /// 否则会出现"侧栏说 3 条、点进去只有 1 条"，那是比两种都错更糟的一种。
+    /// `null` = 索引没就位 ⇒ 不加这道闸门（宁可多，不可少）。
+    Set<String>? sharedListIds,
   }) {
     var all = 0, inbox = 0, today = 0, tomorrow = 0, upcoming = 0;
     var assignToMe = 0;
@@ -892,7 +904,9 @@ class TaskStats {
       all++;
       if (t.listId == 'inbox') inbox++;
       // 没会话（assigneeUserId == null）时这一档恒 0：绝不把"未指派"当成"给我"。
-      if (assigneeUserId != null && t.assigneeUserId == assigneeUserId) {
+      if (assigneeUserId != null &&
+          t.assigneeUserId == assigneeUserId &&
+          (sharedListIds == null || sharedListIds.contains(t.listId))) {
         assignToMe++;
       }
       final dueAt = t.dueAt;

@@ -57,6 +57,21 @@ void main() {
       reason: '未指派时不该有徽章',
     );
 
+    // FL #559：徽章与「指派给我」那一页**同一判据**（共享清单 + 指派给我）。
+    // 把 fixture 的清单标成共享，并把这两条挪进**真实清单** —— `inbox` 是合成清单、
+    // 库里没有它的行，"共享"只能由清单行上的 `memberCount` 表达。
+    await fixture.database
+        .update(fixture.database.todoLists)
+        .write(const TodoListsCompanion(memberCount: Value(2)));
+    await (fixture.database.update(fixture.database.todoTasks)..where(
+          (t) => t.id.isIn([
+            TodoVisualFixture.pinnedTaskId,
+            TodoVisualFixture.todayTaskId,
+          ]),
+        ))
+        .write(
+          TodoTasksCompanion(listId: Value(TodoVisualFixture.personalListId)),
+        );
     await assign(fixture.database, [
       TodoVisualFixture.pinnedTaskId,
       TodoVisualFixture.todayTaskId,

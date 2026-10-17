@@ -48,6 +48,12 @@ void main() {
 
   testWidgets('全是别人的任务 ⇒ 面板空；把一条改派给我 ⇒ 立刻不空', (tester) async {
     final fixture = await pumpShell(tester);
+    // FL #559：这一档现在还要「所在清单是**共享的**」（嘀嗒 :21）。
+    // 把 fixture 的清单标成共享，否则这里测的就变成"个人清单里的自指派" ——
+    // 那是**另一条**判据（本文件下面那条专门测它），会把这条用例的意思换掉。
+    await fixture.database
+        .update(fixture.database.todoLists)
+        .write(const TodoListsCompanion(memberCount: Value(2)));
     await assignAll(fixture.database, 8);
     await tester.pumpAndSettle();
 
@@ -58,6 +64,14 @@ void main() {
       reason: 'assignee 全是 8 ⇒ 「指派给我」不该列出任何任务',
     );
 
+    // 把这条任务挪进一个**真实清单**：`inbox` 是合成清单、库里没有它的行，
+    // 而"共享"只能由清单行上的 `memberCount` 表达 ⇒ 收集箱里的任务永远不满足这一档
+    // （也符合原意：收集箱是个人空间，不是"来自不同共享清单"）。
+    await (fixture.database.update(
+      fixture.database.todoTasks,
+    )..where((t) => t.id.equals(TodoVisualFixture.pinnedTaskId))).write(
+      TodoTasksCompanion(listId: Value(TodoVisualFixture.personalListId)),
+    );
     await assignOne(fixture.database, TodoVisualFixture.pinnedTaskId, 7);
     await tester.pumpAndSettle();
 
@@ -101,6 +115,55 @@ void main() {
     );
 
     expect(filtered.map((row) => row.id).toList(), ['mine']);
+  });
+
+  // FL #559：嘀嗒《02-用清单管理任务》:21「收集**来自不同共享清单**中分配给你的任务」。
+  // 只按负责人取数，会把"我在**自己个人清单**里把自己选成执行人"也收进来 ——
+  // 那不是别人分给我的活。
+  test('「指派给我」还要叠一层「清单是共享的」：个人清单里的自指派不出现', () {
+    final tasks = [_task('mine', 7)];
+
+    expect(
+      applyTaskFilter(
+        tasks,
+        TaskFilter(),
+        null,
+        DateTime(2026, 7, 30),
+        lockedAssigneeUserId: 7,
+        sharedListIds: const <String>{}, // 没有共享清单
+      ),
+      isEmpty,
+      reason: '判据不能只看 assigneeUserId —— 那是"指派给我"这几个字的一半',
+    );
+  });
+
+  test('共享清单里的指派出现；共享索引没就位（null）时放行', () {
+    final tasks = [_task('mine', 7)];
+
+    expect(
+      applyTaskFilter(
+        tasks,
+        TaskFilter(),
+        null,
+        DateTime(2026, 7, 30),
+        lockedAssigneeUserId: 7,
+        sharedListIds: const <String>{'inbox'},
+      ).map((row) => row.id).toList(),
+      ['mine'],
+    );
+
+    // null = 共享清单索引还没就位 ⇒ **不加这道闸门**。
+    // 取舍：多显示几条是"看得见的错"，少显示是"看不见的错"（用户不知道任务被吞了）。
+    expect(
+      applyTaskFilter(
+        tasks,
+        TaskFilter(),
+        null,
+        DateTime(2026, 7, 30),
+        lockedAssigneeUserId: 7,
+      ).map((row) => row.id).toList(),
+      ['mine'],
+    );
   });
 
   test('不传这一档时求值行为不变（其它智能清单不受影响）', () {
