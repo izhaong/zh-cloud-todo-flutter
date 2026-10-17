@@ -308,4 +308,83 @@ void main() {
       reason: '清单还没落地时写入规范键，只会攒下一条本地读不到的死行',
     );
   });
+
+  test('FL #422：pull 按键合并 —— 另一侧设过的键不被整行顶掉，且并集回推', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final now = DateTime.utc(2026, 7, 30, 9);
+    // 本机这一行已经有 `showTags=false`（包装形状，与 pull 侧写回的形状一致）。
+    await db
+        .into(db.todoViewPreferences)
+        .insert(
+          TodoViewPreferencesCompanion.insert(
+            id: 'pref-local',
+            serverId: const Value(601),
+            sourceType: 'SIDEBAR_VISIBILITY',
+            sourceKey: 'defaults',
+            valueJson: '{"valueJson":"{\\"showTags\\":false}"}',
+            updatedAt: now,
+            createdAt: now,
+          ),
+        );
+    // 另一台设备只设了 `showFilters`：整行覆盖会把上面的 `showTags` 顶回默认。
+    final dio = Dio()
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                data: {
+                  'code': 0,
+                  'data': {
+                    'changes': [
+                      {
+                        'entityType': 'view_preference',
+                        'entityId': 601,
+                        'operation': 'upsert',
+                        'revision': 2,
+                        'payload': {
+                          'sourceType': 'SIDEBAR_VISIBILITY',
+                          'sourceKey': 'defaults',
+                          'viewType': 'LIST',
+                          'valueJson': '{"showFilters":false}',
+                        },
+                      },
+                    ],
+                    'tombstones': const [],
+                    'nextCursor': '1',
+                    'hasMore': false,
+                  },
+                },
+              ),
+            );
+          },
+        ),
+      );
+    final api = ApiClient(dio: dio);
+    final coordinator = SyncCoordinator(
+      db: db,
+      api: SyncApi(api, clientId: 'test', deviceId: 'device-422'),
+      todoApi: api,
+    );
+
+    await coordinator.pull();
+
+    final row = await (db.select(db.todoViewPreferences)).getSingle();
+    final map = preferenceKeyMap(row.valueJson);
+    expect(
+      map?['showTags'],
+      false,
+      reason: '另一侧只设了 showFilters，整行覆盖会把本机明确设过的 showTags 顶回默认',
+    );
+    expect(map?['showFilters'], false, reason: '来料的键当然要生效');
+    // 回推：只在本地合并的话，A 的本机看起来对了、B 上仍然是缺的。
+    final outbox = await db.select(db.todoSyncChanges).get();
+    expect(
+      outbox.where((c) => c.entity == 'view_preference'),
+      isNotEmpty,
+      reason: '并集要推回服务端，否则对端永远学不到（只本地合并 = 假修好）',
+    );
+  });
 }
