@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../core/settings/smart_date_recognition_setting.dart';
 import '../../core/settings/clipboard_add_task_setting.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -115,6 +116,7 @@ class SettingsRoute extends ConsumerWidget {
                 // 而本端设置页的分区是 账号 / 任务 / …（没有「高级选项」这一档）。
                 // 放「任务」里是**位置差异**，不是术语差异 —— 名字逐字用它的。
                 const _ClipboardAddTaskSwitch(),
+                const _SmartDateRecognitionSwitch(),
                 _Tile(
                   key: const Key('todo-settings-swipe-actions'),
                   icon: Icons.swipe_outlined,
@@ -1037,6 +1039,50 @@ class _ClipboardAddTaskSwitchState extends State<_ClipboardAddTaskSwitch> {
       secondary: const Icon(Icons.content_paste_outlined),
       title: const Text('剪贴板添加任务'),
       subtitle: const Text('打开应用时，如果剪贴板里有时间信息或多行文本，问你要不要建成任务'),
+      value: enabled,
+      onChanged: (next) async {
+        await _setting.write(next);
+        if (mounted) setState(() => _enabled = next);
+      },
+    );
+  }
+}
+
+/// 「智能识别日期」总开关（FL #344）。判据源 `:85`
+/// 「「设置」-「更多设置」-「智能识别」-「智能识别日期」，即可关闭智能识别功能。」
+/// —— 原文说的是"**关闭**"，所以默认**开**。
+class _SmartDateRecognitionSwitch extends StatefulWidget {
+  const _SmartDateRecognitionSwitch();
+
+  @override
+  State<_SmartDateRecognitionSwitch> createState() =>
+      _SmartDateRecognitionSwitchState();
+}
+
+class _SmartDateRecognitionSwitchState
+    extends State<_SmartDateRecognitionSwitch> {
+  final _setting = SmartDateRecognitionSetting();
+  bool? _enabled;
+
+  @override
+  void initState() {
+    super.initState();
+    _setting.read().then((value) {
+      if (mounted) setState(() => _enabled = value);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = _enabled;
+    if (enabled == null) {
+      return const SizedBox.shrink();
+    }
+    return SwitchListTile(
+      key: const Key('todo-settings-smart-date-recognition'),
+      secondary: const Icon(Icons.event_available_outlined),
+      title: const Text('智能识别日期'),
+      subtitle: const Text('输入标题时把「明天下午3点」这类说法认成截止时间'),
       value: enabled,
       onChanged: (next) async {
         await _setting.write(next);

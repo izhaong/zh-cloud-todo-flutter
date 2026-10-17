@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:zh_cloud_todo_flutter/core/time/task_time_mode.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/features/task/task_quick_add_sheet.dart';
@@ -49,6 +50,70 @@ void main() {
       ),
     );
   }
+
+  // FL #344 · `:81`「当你不需要识别时间时，只需要按键盘上「删除」，**或者点击「已识别的时间」**，
+  // 就能取消识别。」—— 这条判据打的是后半句（原文给的两种方式之一）。
+  testWidgets('FL #344：点「已识别截止时间」那一行 ⇒ 取消识别，建出来的任务没有截止时间', (tester) async {
+    final fixture = await TodoVisualFixture.create();
+    addTearDown(fixture.dispose);
+    await openSheet(tester, fixture);
+
+    await tester.enterText(find.byType(TextField), '明天9点交报告');
+    await tester.pump();
+    expect(
+      sheetMessage('已识别截止时间'),
+      findsOneWidget,
+      reason: '前提：这一行得先出现，否则"点了没反应"证明不了任何事',
+    );
+
+    await tester.tap(find.byKey(const Key('todo-quick-add-recognized-date')));
+    await tester.pump();
+    expect(
+      sheetMessage('已识别截止时间'),
+      findsNothing,
+      reason: '原文说这一行**本身就是取消入口**，点了它就该没了',
+    );
+
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    final tasks = await tasksNamed(fixture.database, '明天9点交报告');
+    expect(tasks, hasLength(1));
+    expect(
+      tasks.single.dueAt,
+      isNull,
+      reason: '取消了识别却仍写上截止时间 ⇒ 那个"取消"只是把提示藏了，没真取消',
+    );
+  });
+
+  // FL #344 · `:85`「「设置」-「更多设置」-「智能识别」-「智能识别日期」，即可关闭智能识别功能。」
+  testWidgets('FL #344：总开关关掉 ⇒ 一律不识别', (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'todo_smart_date_recognition_v1': false,
+    });
+    // ⚠️ `SharedPreferences` 是**全局单例**：不还原的话，这条之后的用例全都读成"关"，
+    // 于是它们一律不识别 ⇒ 一片红，而红的原因与它们自己毫无关系。
+    addTearDown(() => SharedPreferences.setMockInitialValues({}));
+    final fixture = await TodoVisualFixture.create();
+    addTearDown(fixture.dispose);
+    await openSheet(tester, fixture);
+    await tester.pump();
+
+    await tester.enterText(find.byType(TextField), '明天9点交报告');
+    await tester.pump();
+    expect(
+      sheetMessage('已识别截止时间'),
+      findsNothing,
+      reason: '总开关是"关闭智能识别功能"（原文），关了就一行提示都不该有',
+    );
+
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    final tasks = await tasksNamed(fixture.database, '明天9点交报告');
+    expect(tasks, hasLength(1));
+    expect(tasks.single.dueAt, isNull);
+  });
 
   testWidgets('识别到时间就同时建提醒：提醒时刻等于识别到的那个时间', (tester) async {
     final fixture = await TodoVisualFixture.create();
