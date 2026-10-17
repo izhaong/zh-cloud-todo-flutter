@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../core/settings/clipboard_add_task_setting.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_theme.dart';
@@ -110,6 +111,10 @@ class SettingsRoute extends ConsumerWidget {
                     ),
                   ),
                 ),
+                // FL #343：嘀嗒把它放在「设置」-「**高级选项**」-「剪贴板添加任务」，
+                // 而本端设置页的分区是 账号 / 任务 / …（没有「高级选项」这一档）。
+                // 放「任务」里是**位置差异**，不是术语差异 —— 名字逐字用它的。
+                const _ClipboardAddTaskSwitch(),
                 _Tile(
                   key: const Key('todo-settings-swipe-actions'),
                   icon: Icons.swipe_outlined,
@@ -996,6 +1001,47 @@ class _Tile extends StatelessWidget {
             : Icon(trailing, color: colors.mutedForeground),
         onTap: onTap,
       ),
+    );
+  }
+}
+
+/// 「剪贴板添加任务」开关（FL #343）。默认关 —— 读剪贴板是用户要**显式开启**的行为。
+class _ClipboardAddTaskSwitch extends StatefulWidget {
+  const _ClipboardAddTaskSwitch();
+
+  @override
+  State<_ClipboardAddTaskSwitch> createState() =>
+      _ClipboardAddTaskSwitchState();
+}
+
+class _ClipboardAddTaskSwitchState extends State<_ClipboardAddTaskSwitch> {
+  final _setting = ClipboardAddTaskSetting();
+  bool? _enabled;
+
+  @override
+  void initState() {
+    super.initState();
+    _setting.read().then((value) {
+      if (mounted) setState(() => _enabled = value);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = _enabled;
+    if (enabled == null) {
+      return const SizedBox.shrink();
+    }
+    return SwitchListTile(
+      key: const Key('todo-settings-clipboard-add-task'),
+      secondary: const Icon(Icons.content_paste_outlined),
+      title: const Text('剪贴板添加任务'),
+      subtitle: const Text('打开应用时，如果剪贴板里有时间信息或多行文本，问你要不要建成任务'),
+      value: enabled,
+      onChanged: (next) async {
+        await _setting.write(next);
+        if (mounted) setState(() => _enabled = next);
+      },
     );
   }
 }
