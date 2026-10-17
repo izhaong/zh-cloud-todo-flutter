@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../core/settings/smart_date_recognition_setting.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/app_database.dart';
@@ -44,6 +45,15 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
   int? _priorityOverride;
   DateTime? _nlpResolvedDueAt;
 
+  /// 「智能识别日期」总开关（FL #344，`:85`）。默认开；关掉后**不再解析标题里的时间**。
+  bool _smartDateEnabled = SmartDateRecognitionSetting.defaultEnabled;
+
+  /// 用户**明确取消**过这一条的识别（FL #344，`:81`「点击「已识别的时间」，就能取消识别」）。
+  ///
+  /// 它要一直压着识别，直到这条任务建完（标题清空时复位）——
+  /// 否则用户一取消、再敲一个字又回来了，那句"取消"就等于没做。
+  bool _nlpCancelled = false;
+
   /// 「任务已建、提醒没建成」时记住任务 id：再点一次「保存」只补提醒，不建第二遍任务。
   String? _savedTaskId;
   bool _applyingTemplate = false;
@@ -54,6 +64,12 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
   @override
   void initState() {
     super.initState();
+    // 读总开关；读到之前按默认（开）——识别是既有行为，不能因为"还没读到"就停一屏。
+    SmartDateRecognitionSetting().read().then((enabled) {
+      if (mounted && enabled != _smartDateEnabled) {
+        setState(() => _smartDateEnabled = enabled);
+      }
+    });
     _titleCtrl.addListener(_maybeResolveDate);
   }
 
@@ -69,6 +85,13 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
   void _maybeResolveDate() {
     if (_titleError != null && _titleCtrl.text.trim().isNotEmpty) {
       setState(() => _titleError = null);
+    }
+    // 两道闸门：总开关关掉（`:85`）或用户取消过这一条（`:81`）⇒ **不识别**。
+    if (!_smartDateEnabled || _nlpCancelled) {
+      if (_nlpResolvedDueAt != null) {
+        setState(() => _nlpResolvedDueAt = null);
+      }
+      return;
     }
     final resolved = NlpDateParser().parse(_titleCtrl.text);
     if (resolved?.date != _nlpResolvedDueAt) {
@@ -177,6 +200,8 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
       _titleCtrl.clear();
       // `_nlpResolvedDueAt` 是从标题里识别出来的，标题清空后它不能再留着。
       _nlpResolvedDueAt = null;
+      // 取消标记同理：这一条已经建完，下一条该重新按用户的意愿识别。
+      _nlpCancelled = false;
       _titleError = null;
       // 优先级是人在这张表上手选的，连续建同级子任务时不该被抹回默认值。
       _feedback = savedTitle == null ? null : '已添加子任务「$savedTitle」，可以继续输入下一个';
@@ -297,12 +322,21 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
             ),
             const SizedBox(height: 16),
             if (_nlpResolvedDueAt != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  '已识别截止时间：${_nlpResolvedDueAt!.toLocal()}',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.primary,
+              // `:81`「点击「已识别的时间」，就能取消识别」⇒ 这一行不是只读展示，
+              // 它**本身就是取消入口**（原文给的两种方式之一；另一种是按删除键）。
+              InkWell(
+                key: const Key('todo-quick-add-recognized-date'),
+                onTap: () => setState(() {
+                  _nlpCancelled = true;
+                  _nlpResolvedDueAt = null;
+                }),
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    '已识别截止时间：${_nlpResolvedDueAt!.toLocal()} ✕',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                   ),
                 ),
               ),
