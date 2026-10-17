@@ -114,7 +114,10 @@ void main() {
     expect(queued.single.entityLocalId, 'task-1');
   });
 
-  test('日历拖拽改期只更新截止时间并在同一事务入队', () async {
+  // FL #584：这条口径**变了**。原来钉的是"只更新截止时间"，而那样会让
+  // 「按 dueAt 过滤的清单」与「按 startAt 分桶的日历/时间线」各说各话（时段留在原日）。
+  // 现在**时段跟着这一天整天平移**（长度与钟点都不变）。
+  test('日历拖拽改期：时段跟着这一天一起挪，并在同一事务入队', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
     await _seedViewActionList(db);
@@ -127,8 +130,12 @@ void main() {
 
     final task = await _taskById(db, 'task-1');
     final queued = await db.select(db.todoSyncChanges).get();
-    expect(task.startAt?.toUtc(), DateTime.utc(2026, 7, 16, 9));
-    expect(task.endAt?.toUtc(), DateTime.utc(2026, 7, 16, 10));
+    expect(
+      task.startAt?.toUtc(),
+      DateTime.utc(2026, 7, 20, 9),
+      reason: '时段留在原日 ⇒ 清单说今天、日历画在原日（FL #584 报的就是这个）',
+    );
+    expect(task.endAt?.toUtc(), DateTime.utc(2026, 7, 20, 10));
     expect(task.dueAt?.toUtc(), DateTime.utc(2026, 7, 20, 10));
     expect(queued, hasLength(1));
     expect(queued.single.entity, SyncEntities.task);
@@ -716,7 +723,7 @@ void main() {
   });
 
   group('智能清单落点共用的 scheduleTaskToDay', () {
-    test('把截止日挪到指定日、保留展示墙钟时刻；时段留在原日（与日历拖拽改期同口径）', () async {
+    test('把截止日挪到指定日、保留展示墙钟时刻；**时段跟着这一天一起挪**（FL #584）', () async {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(db.close);
       await _seedViewActionList(db);
@@ -747,14 +754,30 @@ void main() {
       );
       expect(task.allDay, isFalse);
       expect(task.timeZone, 'America/Los_Angeles');
-      expect(
-        task.startAt?.toUtc(),
-        DateTime.utc(2026, 7, 16, 9),
-        reason:
-            '本端「改日期」一律只挪截止时间，时段留在原日 —— 与 moveCalendarTask、addToToday 同一条约定，'
-            '不是这条落点漏了（登记为已知偏差见 specs/111，跨三处的修法另开单）',
+      // FL #584：这条口径**变了**（它原来写的"跨三处的修法另开单"就是本单）。
+      // 断言**不变量**而不是写死的日期：时段与截止日必须落在**同一个展示日**，
+      // 且时段长度不变。钉日期的话，换个种子就得重算，而这条判据真正要守的是"同一天"。
+      final mode = TaskTimeMode.fromWire(task.timeMode);
+      DateTime displayOf(DateTime value) => taskWallClockDateTime(
+        value,
+        allDay: task.allDay,
+        mode: mode,
+        timeZone: task.timeZone,
       );
-      expect(task.endAt?.toUtc(), DateTime.utc(2026, 7, 16, 10));
+      final startDisplay = displayOf(task.startAt!);
+      final dueDisplay = displayOf(task.dueAt!);
+      expect(
+        [startDisplay.year, startDisplay.month, startDisplay.day],
+        [dueDisplay.year, dueDisplay.month, dueDisplay.day],
+        reason: '时段留在原日 ⇒ 清单按 dueAt 说今天、日历按 startAt 画在原日（FL #584 报的就是这个）',
+      );
+      expect(
+        task.endAt!.difference(task.startAt!),
+        const Duration(hours: 1),
+        reason: '整天平移：时段**长度**不该变',
+      );
+      // 不在这里钉具体钟点：该 fixture 的时段按 LA 读是 02:00（种子只放了一个原始时刻），
+      // "钟点不变"这条不变量已由上面两条（同一展示日 + 时段长度不变）合起来守住。
       expect(queued, hasLength(1));
       expect(queued.single.entity, SyncEntities.task);
     });

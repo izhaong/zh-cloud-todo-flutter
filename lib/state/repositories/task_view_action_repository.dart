@@ -497,11 +497,31 @@ class TaskViewActionRepository {
   }) async {
     await _db.transaction(() async {
       await _requireWritableTask(taskId);
+      // FL #584：与 `scheduleTaskToDay` 同一口径 —— 时段跟着这一天一起挪。
+      final task0 = await (_db.select(
+        _db.todoTasks,
+      )..where((row) => row.id.equals(taskId))).getSingle();
+      final toDay = DateTime(dueAt.year, dueAt.month, dueAt.day);
+      final rangeDisplay = task0.startAt == null
+          ? null
+          : taskWallClockDateTime(
+              task0.startAt!,
+              allDay: task0.allDay,
+              mode: TaskTimeMode.fromWire(task0.timeMode),
+              timeZone: task0.timeZone,
+            );
+      final shifted = rangeDisplay == null
+          ? null
+          : _shiftedRange(task0, rangeDisplay, toDay);
       await (_db.update(
         _db.todoTasks,
       )..where((row) => row.id.equals(taskId))).write(
         TodoTasksCompanion(
           dueAt: Value(dueAt),
+          startAt: shifted == null
+              ? const Value.absent()
+              : Value(shifted.startAt),
+          endAt: shifted == null ? const Value.absent() : Value(shifted.endAt),
           updatedAt: Value(DateTime.now()),
         ),
       );
@@ -531,6 +551,72 @@ class TaskViewActionRepository {
   /// 「今天」与侧栏智能清单落点（嘀嗒《…07-任务与日历同时显示.md》`:63`「为任务自动添加
   /// 该智能清单关联的时间条件」）走的是同一条写入路径，所以这里只认一个目标日，
   /// 「哪一天」由调用方（`SmartListTimeCondition`）决定。
+
+  /// 把 [fromDay] → [toDay] 的**整天差**，按墙钟加到 [value] 上。
+  ///
+  /// 用"年月日重新构造"而不是 `add(Duration(days: n))`：跨夏令时那天
+  /// `Duration` 会把钟点挪掉一小时，而用户要的是**同一个钟点、换一天**（FL #584）。
+  DateTime _shiftWallClockByDays(DateTime value, int days) {
+    // ⚠️ 必须保住**这个 DateTime 自己的 UTC 属性**：库里 `startAt/endAt` 存的是 UTC，
+    // 用 `DateTime(...)` 重建会把它变成**本地**的同一钟点 ⇒ 瞬间被平移一个时区偏移。
+    // （第一版就是这么写的，判据当场抓到：时段落在 2027-02-28 而截止日在 2026-10-20。）
+    final shifted = DateTime.utc(
+      value.year,
+      value.month,
+      value.day + days,
+      value.hour,
+      value.minute,
+      value.second,
+      value.millisecond,
+      value.microsecond,
+    );
+    return value.isUtc
+        ? shifted
+        : DateTime(
+            value.year,
+            value.month,
+            value.day + days,
+            value.hour,
+            value.minute,
+            value.second,
+            value.millisecond,
+            value.microsecond,
+          );
+  }
+
+  /// 两个展示日之间差几天（按**日历日**算，不用时刻相减）。
+  int _calendarDayDelta(DateTime from, DateTime to) {
+    final a = DateTime.utc(from.year, from.month, from.day);
+    final b = DateTime.utc(to.year, to.month, to.day);
+    return b.difference(a).inDays;
+  }
+
+  /// 「挪到某一天」时，**有时段的任务要把起止一起挪过去**（FL #584）。
+  ///
+  /// 只挪 `dueAt` 会让两处各说各话：按 `dueAt` 过滤的清单（今天/明天/最近七天）
+  /// 说它在今天，按 `startAt` 分桶的时间线/日历把它画在**原日**。
+  ///
+  /// 半天平移（用截至日展示墙钟的日历日差）：**时段长度与钟点都不变**。
+  /// 任务没有时段（`startAt == null`）时返回 `null` —— 那种任务本来就只有一个日子。
+  ({DateTime startAt, DateTime endAt})? _shiftedRange(
+    TodoTask task,
+    DateTime rangeDisplayDay,
+    DateTime toDisplayDay,
+  ) {
+    final startAt = task.startAt;
+    final endAt = task.endAt;
+    if (startAt == null || endAt == null) return null;
+    // 参照物是**时段自己的展示日**，不是截止日：
+    // 「时段与截止日本来就不在同一天」的记录（测试种子里就有）用截止日的差值会把它挪到第三个日子上去。
+    // 这条判据第一版就是这么写的，判据当场抓到（时段落到 2027-02-28，而截止日在 2026-10-20）。
+    final delta = _calendarDayDelta(rangeDisplayDay, toDisplayDay);
+    if (delta == 0) return null;
+    return (
+      startAt: _shiftWallClockByDays(startAt, delta),
+      endAt: _shiftWallClockByDays(endAt, delta),
+    );
+  }
+
   Future<void> scheduleTaskToDay(
     String taskId, {
     required DateTime targetDay,
@@ -562,12 +648,28 @@ class TaskViewActionRepository {
               mode: TaskTimeMode.fromWire(task.timeMode),
               timeZone: task.timeZone,
             );
+      // FL #584：有时段的任务，起止**一起挪到同一天**（否则清单与日历各说各话）。
+      final rangeDisplay = task.startAt == null
+          ? null
+          : taskWallClockDateTime(
+              task.startAt!,
+              allDay: task.allDay,
+              mode: TaskTimeMode.fromWire(task.timeMode),
+              timeZone: task.timeZone,
+            );
+      final shifted = rangeDisplay == null
+          ? null
+          : _shiftedRange(task, rangeDisplay, day);
       await (_db.update(
         _db.todoTasks,
       )..where((row) => row.id.equals(taskId))).write(
         TodoTasksCompanion(
           dueAt: Value(dueAt),
           allDay: Value(task.dueAt == null ? true : task.allDay),
+          startAt: shifted == null
+              ? const Value.absent()
+              : Value(shifted.startAt),
+          endAt: shifted == null ? const Value.absent() : Value(shifted.endAt),
           updatedAt: Value(DateTime.now()),
         ),
       );
