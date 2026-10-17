@@ -7,6 +7,7 @@ import '../../core/db/app_database.dart';
 import '../../core/time/task_time_formatter.dart';
 import '../../core/time/task_time_mode.dart';
 import '../../state/providers.dart';
+import '../task/task_view_mutation_feedback.dart';
 import 'smart_list_time_condition.dart';
 
 /// 嘀嗒《02-功能指南/02-日历/07-任务与日历同时显示.md》:57「拖动到清单或标签上」
@@ -73,7 +74,16 @@ class _SidebarDropZoneState extends State<SidebarDropZone> {
 
 /// 落点结果：只有 [SidebarDropOutcome.failed] 需要告诉用户，
 /// 另两支是「本来就不该动」，弹提示反而是打扰。
-enum SidebarDropOutcome { applied, skipped, failed }
+enum SidebarDropOutcome {
+  applied,
+  skipped,
+  failed,
+
+  /// 目标清单是只读的（FL #603）：与 `failed` 分开，是因为**要说的那句话不一样** ——
+  /// 「移到 X 失败」会把一个可解释的拒绝说成一次故障，用户会以为重试就好。
+  /// 判据用 `isTaskViewReadOnlyError`（与任务视图其它入口同一处定义）。
+  readOnly,
+}
 
 /// 侧栏落点的写库编排。同一任务的两次落点串行：后一刀必须等前一刀落完，
 /// 否则「先移到 A、再移到 B」会被 Drift 的并发顺序反过来。
@@ -169,7 +179,11 @@ class SidebarTaskDropController {
             outcome = result;
           },
           onError: (Object error, StackTrace stackTrace) {
-            outcome = SidebarDropOutcome.failed;
+            // 只读是「这次拖的目标不允许写」，不是「写失败了」——分开报，别把
+            // 一个可解释的拒绝说成故障（FL #603 的验收之一）。
+            outcome = isTaskViewReadOnlyError(error)
+                ? SidebarDropOutcome.readOnly
+                : SidebarDropOutcome.failed;
           },
         );
     _chain[taskId] = current;
@@ -210,8 +224,12 @@ final sidebarTaskDropControllerProvider = Provider<SidebarTaskDropController>((
     moveTask: (taskId, listId) async {
       final repository = ref.read(taskRepositoryProvider);
       if (repository == null) throw StateError('任务仓储未就绪');
-      // sectionId 属于原清单，换清单后已无意义，必须一起清掉。
-      await repository.update(taskId, listId: listId, clearSectionId: true);
+      // FL #603：并轨到 `moveToList`。原来这条是
+      // `update(taskId, listId: listId, clearSectionId: true)` —— 只清分组，
+      // **子树不跟着走**：清单页已经把子级铺成行（specs/116），于是父行上的展开箭头
+      // 点开是空的，看起来像子任务被删了。
+      // `moveToList` 一次把四件事都做掉：子树跟着走、清分组、目标必须可写、子任务不许单独换清单。
+      await repository.moveToList(taskId, listId);
     },
     attachTag: (taskId, tagId) async {
       final repository = ref.read(tagRepositoryProvider);

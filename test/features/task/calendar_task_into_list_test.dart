@@ -144,6 +144,23 @@ class _ScriptedRepository extends TaskRepository {
   Completer<void>? gate;
   bool failNext = false;
 
+  /// FL #603 之后落点并轨到 `moveToList`（原来走 `update(listId:)`）。
+  /// 这道接缝仍要能「卡住写入」「让下一次写失败」，所以把同样的三个钩子挂在它上面。
+  @override
+  Future<List<TodoTask>> moveToList(String taskId, String targetListId) async {
+    writtenTargets.add(targetListId);
+    final pending = gate;
+    if (pending != null) {
+      gate = null;
+      await pending.future;
+    }
+    if (failNext) {
+      failNext = false;
+      throw Exception('落库失败');
+    }
+    return super.moveToList(taskId, targetListId);
+  }
+
   @override
   Future<TodoTask> update(
     String taskId, {
@@ -231,6 +248,45 @@ void main() {
     expect(row.sectionId, isNull, reason: '分组属于原清单，跨清单后不能留');
     expect((await db.select(db.todoSyncChanges).get()), isNotEmpty);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('FL #603：拖父任务换清单时整棵子树一起走（原来只有父行挪过去）', (tester) async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final queue = SyncChangeQueue(db);
+    final task = await _seedTask(db, queue);
+    final repository = TaskRepository(db, queue);
+    // 造一条子任务挂在被拖的父任务下：并轨到 `moveToList` 之前，
+    // 这条子行会留在原清单（`update(listId:)` 只动被点的那一行）。
+    final child = await repository.create(
+      listId: '1',
+      title: '子任务',
+      parentTaskId: task.id,
+    );
+    final controller = TaskListMoveController(
+      repositoryOf: () => repository,
+      currentListIdOf: () => '2',
+      onFailure: (_) {},
+    );
+
+    await tester.pumpWidget(
+      _harness(
+        task: task,
+        viewListId: '2',
+        onAccept: (dropped) => controller.handleDrop(dropped),
+      ),
+    );
+    await _dragOntoTarget(tester);
+    // `handleDrop` 是 fire-and-forget 那一路（返回值只表示「发起过写」）；
+    // 等一次落库的微任务链走完再读库。
+    await tester.pumpAndSettle();
+
+    expect((await _reload(db, task.id)).listId, '2');
+    expect(
+      (await _reload(db, child.id)).listId,
+      '2',
+      reason: '子树必须跟着走；只挪父行会让子级留在原清单',
+    );
   });
 
   testWidgets('任务本来就在当前清单里：落点不接受，也不写库', (tester) async {
