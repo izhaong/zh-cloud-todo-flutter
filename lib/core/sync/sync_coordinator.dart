@@ -11,6 +11,7 @@ import '../api/sync_api.dart';
 import '../db/app_database.dart';
 import 'repeat_frequency_wire.dart';
 import 'sync_entities.dart';
+import 'sync_change_queue.dart';
 import 'list_view_preference_scope.dart';
 import 'sync_retry_policy.dart';
 
@@ -30,6 +31,28 @@ import 'sync_retry_policy.dart';
 ///
 /// **触发时机**：应用启动、切前台、本地 mutation、网络恢复（由
 /// [SyncCoordinator.bindConnectivity] 注册；测试可不绑定）。
+/// 取出偏好行里的**内层键值 map**（FL #422）。
+///
+/// 行里存的是**包装形状**（`{"valueJson":"{\"showTags\":false}"}`，pull 侧写的就是它），
+/// 而单机写侧写的是**裸形状**（`{"showTags":false}`）。两种都要吃得下 ——
+/// 这与仓储 `_jsonMap` 是同一口径，只是这里是读半边。
+/// 返回 null 表示"读不懂"：坏 JSON、或形状不对 ⇒ 调用方**不要**据此合并（宁可不动）。
+Map<String, Object?>? preferenceKeyMap(Object? raw) {
+  if (raw is! String) return null;
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map) return null;
+    final nested = decoded['valueJson'];
+    if (nested is String) {
+      final inner = jsonDecode(nested);
+      return inner is Map ? inner.cast<String, Object?>() : null;
+    }
+    return decoded.cast<String, Object?>();
+  } on FormatException {
+    return null;
+  }
+}
+
 class SyncCoordinator {
   SyncCoordinator({
     required this.db,
@@ -1472,7 +1495,11 @@ class SyncCoordinator {
         // 会以各自的 change feed 返回，本地无需建立第二份状态。
         break;
       case SyncEntities.viewPreference:
-        await _upsertLocalViewPreference(entityId, payload);
+        await _upsertLocalViewPreference(
+          entityId,
+          payload,
+          mergeLocalKeys: true,
+        );
       case SyncEntities.boardPreference:
         await _upsertLocalBoardPreference(entityId, payload);
       case SyncEntities.filter:
@@ -2085,10 +2112,53 @@ class SyncCoordinator {
     }
   }
 
+  /// 清单作用域偏好的**按键合并**（FL #422）。
+  ///
+  /// 病灶：pull 侧写回是**整行覆盖**（`valueJson: jsonEncode(localPayload)`）⇒
+  /// 两台设备各设一个键时（A 改 `showTags`、B 改 `showFilters`），后推者的整行胜出，
+  /// **先推那一侧的键在 pull 回来时被顶回默认**，用户明确设过的偏好静默消失。
+  ///
+  /// 修法：只对 `SIDEBAR_VISIBILITY` 做键级并集（`{...本地, ...来料}`）——
+  /// 来料的键覆盖本地同键，本地独有的键**保留**。
+  ///
+  /// **只对这一个 sourceType 生效**：同一张表上还有 `TASK_CAPTURE`（它的 payload
+  /// 本身带 `defaultListServerId` 的本地化改写，不是纯键值 map）、看板偏好（列级 fallback）、
+  /// 以及 swipe / sort / grouping 等。一次 PR 给每个 sourceType 都定合并策略，验证面会炸。
+  ///
+  /// **明确放弃的一条**：跨端「重置回默认」不会传播（本地删键后，服务端那份仍带着它，
+  /// 合并会把它当"本地独有的键"保留）。这是本口径**写进规格的边界**，不是漏掉 ——
+  /// 要支持它得引入墓碑与版本序，那是另一个设计。
+  String _mergedValueJson({
+    required Map<String, dynamic> localPayload,
+    required String? existingValueJson,
+    required bool mergeLocalKeys,
+  }) {
+    if (!mergeLocalKeys) return jsonEncode(localPayload);
+    if (localPayload['sourceType']?.toString() != 'SIDEBAR_VISIBILITY') {
+      return jsonEncode(localPayload);
+    }
+    final incoming = preferenceKeyMap(localPayload['valueJson']);
+    final local = preferenceKeyMap(existingValueJson);
+    if (incoming == null || local == null) return jsonEncode(localPayload);
+    final merged = <String, Object?>{...local, ...incoming};
+    final mergedInner = jsonEncode(merged);
+    // 只有**真的多了本地独有的键**才需要改动；否则原样返回，避免无谓的写与回推。
+    if (mergedInner == localPayload['valueJson']) {
+      return jsonEncode(localPayload);
+    }
+    return jsonEncode({...localPayload, 'valueJson': mergedInner});
+  }
+
+  /// [mergeLocalKeys] 只在 **pull 常态**那条路上为 true（FL #422）。
+  ///
+  /// 冲突回写那条路必须保持「**服务端优先**」：它不会回推，一旦在它上面做键级合并，
+  /// 本地行就会与服务端分叉、而双方 revision 又被写成一样 ⇒ 形成**永不自愈**的假一致，
+  /// 判据还会假绿（只驱动 pull 就能通过）。所以默认 false，只有 pull 那条显式传 true。
   Future<void> _upsertLocalViewPreference(
     int serverId,
-    Map<String, dynamic> payload,
-  ) async {
+    Map<String, dynamic> payload, {
+    bool mergeLocalKeys = false,
+  }) async {
     final payloadSourceType =
         payload['sourceType']?.toString() ?? payload['source_type']?.toString();
     var payloadSourceKey =
@@ -2153,6 +2223,12 @@ class SyncCoordinator {
                   row.sourceKey.equals(sourceKey),
             ))
             .getSingleOrNull();
+    final incomingValueJson = localPayload['valueJson'];
+    final mergedValueJson = _mergedValueJson(
+      localPayload: localPayload,
+      existingValueJson: existing?.valueJson,
+      mergeLocalKeys: mergeLocalKeys,
+    );
     await db
         .into(db.todoViewPreferences)
         .insertOnConflictUpdate(
@@ -2161,11 +2237,39 @@ class SyncCoordinator {
             serverId: Value(serverId),
             sourceType: sourceType,
             sourceKey: sourceKey,
-            valueJson: jsonEncode(localPayload),
+            valueJson: mergedValueJson,
             updatedAt: now,
             createdAt: existing?.createdAt ?? now,
           ),
         );
+    // FL #422：合并**真的加了本地独有的键** ⇒ 把并集推回服务端。
+    // 只在本机合并的话，A 的本机看起来对了、B 上仍然是缺的 —— 那不叫修好。
+    // 判据是「并集 != 来料」：相等时**不回推**，否则 pull → 合并 → 回推 → 再 pull
+    // 会自激（每一轮 pull 都推一条一模一样的东西）。
+    if (!mergeLocalKeys) {
+      return;
+    }
+    // 注意：这里要读的是**外层**的 `valueJson`（要推给服务端的那串），
+    // 所以不能借 `preferenceKeyMap` —— 它是"拆壳读内层"的，会把这层壳吃掉。
+    final outer = jsonDecode(mergedValueJson);
+    final pushedValueJson = outer is Map ? outer['valueJson'] : null;
+    if (pushedValueJson is! String ||
+        incomingValueJson is! String ||
+        pushedValueJson == incomingValueJson) {
+      return;
+    }
+    await SyncChangeQueue(db).enqueue(
+      entity: SyncEntities.viewPreference,
+      op: SyncOps.upsert,
+      localId: existing?.id ?? _uuid.v4(),
+      serverId: serverId,
+      payload: {
+        'sourceType': sourceType,
+        'sourceKey': sourceKey,
+        'viewType': 'LIST',
+        'valueJson': pushedValueJson,
+      },
+    );
   }
 
   Future<void> _upsertLocalBoardPreference(
