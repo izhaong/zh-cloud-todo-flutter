@@ -105,35 +105,51 @@ DateTime taskDateTimeFromWallClock(
   );
 }
 
-/// Moves an instant to [day], preserving the wall clock in the zone that
-/// storage uses for the task's mode.
+/// Moves an instant to [day] —— **落点日必须是"展示侧看到的那个日历日"**（FL #587）。
 ///
-/// 「固定时区」的钟点取锚点区（北京 11:00 挪到今天仍是北京 11:00），不是设备时区里
-/// 看到的那个换算值；「固定时间」与浮动沿用各自原本的方向，与 develop 行为一致。
+/// # 为什么原来取锚点区是错的
+///
+/// 旧口径：「固定时区」的钟点取**锚点区**（北京 11:00 挪到今天仍是北京 11:00）。
+/// 但「固定时区」承诺的是**瞬间钉住、钟点随时区漂** —— 判据源
+/// 《07-固定时间与固定时区.md》`:47`「时间会**随着所在时区的不同而改变**」、
+/// `:49` 示例 1「北京上午 11 点的任务，到莫斯科显示为**上午 6 点**」。
+///
+/// 于是锚点区与设备区跨午夜时（锚点 LA 18:30 → 设备次日 01:30），用户把任务拖到日历
+/// 「10-13」那一格，展示出来却落在 **10-14**，任务不出现在刚拖上去的那一天（#587 的症状）。
+///
+/// # 口径（三条都是不变量）
+///
+/// 1. **基准取展示侧**（`taskDisplayDateTime`），不是写死"设备当地" ——
+///    因为 mode 2 的展示与存储**同在锚点区**，写死设备当地会把 mode 2 一起破；
+/// 2. 目标瞬间 = 「[day] 这一天 + 展示侧那个钟点」，按**展示侧**构造；
+/// 3. 钟点不因挪日而变（`display` 的时分秒原样带过去）。
 DateTime taskDateTimeForDisplayDay(
   DateTime instant,
   DateTime day, {
   required TaskTimeMode mode,
   required String? timeZone,
 }) {
-  final location = _storageLocation(mode, timeZone);
-  final base = location == null
-      ? instant.toLocal()
-      : timezone.TZDateTime.from(instant.toUtc(), location);
-  return taskDateTimeFromWallClock(
-    DateTime(
-      day.year,
-      day.month,
-      day.day,
-      base.hour,
-      base.minute,
-      base.second,
-      base.millisecond,
-      base.microsecond,
-    ),
-    mode: mode,
-    timeZone: timeZone,
+  // 基准必须是**展示侧**、而不是"设备当地"：mode 2 的展示侧就是锚点区，
+  // 写死设备当地会让"固定时间"的钟点钉死失效（opencode 交叉验证指出的头号陷阱）。
+  final display = taskDisplayDateTime(instant, mode: mode, timeZone: timeZone);
+  final wallClock = DateTime(
+    day.year,
+    day.month,
+    day.day,
+    display.hour,
+    display.minute,
+    display.second,
+    display.millisecond,
+    display.microsecond,
   );
+  // 展示侧是设备当地 ⇒ 直接按当地解释成瞬间。
+  // （不能过 `taskDateTimeFromWallClock`：它按**存储方向**解释墙钟，mode 1 是锚点区，
+  //  两边时区不同就偏一天 —— 这是本单第二版踩到的。）
+  if (_displayLocation(mode, timeZone) == null) {
+    return wallClock;
+  }
+  // 展示侧 == 锚点区（mode 2）：按锚点区解释，与改动前**逐字节相同**。
+  return taskDateTimeFromWallClock(wallClock, mode: mode, timeZone: timeZone);
 }
 
 /// 看：只有「固定时间」要把钟点钉在锚点区；「固定时区」与未选都跟设备时区走。
