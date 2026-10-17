@@ -66,6 +66,14 @@ class TodoLists extends Table {
   TextColumn get accessRole =>
       text().withDefault(const Constant('owner'))(); // owner/editor/viewer
   BoolColumn get writable => boolean().withDefault(const Constant(true))();
+
+  /// **在用成员数**（`invited` + `active`），由服务端在 `list` 载荷里带下来（FL #559）。
+  ///
+  /// 客户端本地**没有成员表**，所以「这个清单**是不是共享的**」只能靠这个数判（`> 1`）。
+  /// **不能**用 `accessRole`：我自己建的、拉了协作者的清单，`accessRole` 仍是 `owner`
+  /// ⇒ 判不出"这是共享清单"，而那正是嘀嗒《02-用清单管理任务》:21
+  /// 「来自**不同共享清单**中分配给你的任务」点名的场景。
+  IntColumn get memberCount => integer().withDefault(const Constant(1))();
   DateTimeColumn get updatedAt => dateTime()();
   DateTimeColumn get createdAt => dateTime()();
 
@@ -479,7 +487,7 @@ class AppDatabase extends _$AppDatabase {
   }) : super(_open(_userDatabaseName(tenantId, userId, testNamespace)));
 
   @override
-  int get schemaVersion => 30;
+  int get schemaVersion => 31;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -682,6 +690,11 @@ class AppDatabase extends _$AppDatabase {
         }
         if (!await _columnExists(m, 'todo_lists', 'writable')) {
           await m.addColumn(todoLists, todoLists.writable);
+        }
+      }
+      if (from < 31) {
+        if (!await _columnExists(m, 'todo_lists', 'member_count')) {
+          await m.addColumn(todoLists, todoLists.memberCount);
         }
       }
       if (from < 20) {

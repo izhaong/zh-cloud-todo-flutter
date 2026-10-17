@@ -170,6 +170,18 @@ class $TodoListsTable extends TodoLists
     ),
     defaultValue: const Constant(true),
   );
+  static const VerificationMeta _memberCountMeta = const VerificationMeta(
+    'memberCount',
+  );
+  @override
+  late final GeneratedColumn<int> memberCount = GeneratedColumn<int>(
+    'member_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
   static const VerificationMeta _updatedAtMeta = const VerificationMeta(
     'updatedAt',
   );
@@ -208,6 +220,7 @@ class $TodoListsTable extends TodoLists
     showInSmartList,
     accessRole,
     writable,
+    memberCount,
     updatedAt,
     createdAt,
   ];
@@ -320,6 +333,15 @@ class $TodoListsTable extends TodoLists
         writable.isAcceptableOrUnknown(data['writable']!, _writableMeta),
       );
     }
+    if (data.containsKey('member_count')) {
+      context.handle(
+        _memberCountMeta,
+        memberCount.isAcceptableOrUnknown(
+          data['member_count']!,
+          _memberCountMeta,
+        ),
+      );
+    }
     if (data.containsKey('updated_at')) {
       context.handle(
         _updatedAtMeta,
@@ -401,6 +423,10 @@ class $TodoListsTable extends TodoLists
         DriftSqlType.bool,
         data['${effectivePrefix}writable'],
       )!,
+      memberCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}member_count'],
+      )!,
       updatedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}updated_at'],
@@ -455,6 +481,14 @@ class TodoList extends DataClass implements Insertable<TodoList> {
   final bool showInSmartList;
   final String accessRole;
   final bool writable;
+
+  /// **在用成员数**（`invited` + `active`），由服务端在 `list` 载荷里带下来（FL #559）。
+  ///
+  /// 客户端本地**没有成员表**，所以「这个清单**是不是共享的**」只能靠这个数判（`> 1`）。
+  /// **不能**用 `accessRole`：我自己建的、拉了协作者的清单，`accessRole` 仍是 `owner`
+  /// ⇒ 判不出"这是共享清单"，而那正是嘀嗒《02-用清单管理任务》:21
+  /// 「来自**不同共享清单**中分配给你的任务」点名的场景。
+  final int memberCount;
   final DateTime updatedAt;
   final DateTime createdAt;
   const TodoList({
@@ -472,6 +506,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
     required this.showInSmartList,
     required this.accessRole,
     required this.writable,
+    required this.memberCount,
     required this.updatedAt,
     required this.createdAt,
   });
@@ -504,6 +539,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
     map['show_in_smart_list'] = Variable<bool>(showInSmartList);
     map['access_role'] = Variable<String>(accessRole);
     map['writable'] = Variable<bool>(writable);
+    map['member_count'] = Variable<int>(memberCount);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
@@ -535,6 +571,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
       showInSmartList: Value(showInSmartList),
       accessRole: Value(accessRole),
       writable: Value(writable),
+      memberCount: Value(memberCount),
       updatedAt: Value(updatedAt),
       createdAt: Value(createdAt),
     );
@@ -560,6 +597,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
       showInSmartList: serializer.fromJson<bool>(json['showInSmartList']),
       accessRole: serializer.fromJson<String>(json['accessRole']),
       writable: serializer.fromJson<bool>(json['writable']),
+      memberCount: serializer.fromJson<int>(json['memberCount']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
@@ -582,6 +620,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
       'showInSmartList': serializer.toJson<bool>(showInSmartList),
       'accessRole': serializer.toJson<String>(accessRole),
       'writable': serializer.toJson<bool>(writable),
+      'memberCount': serializer.toJson<int>(memberCount),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
@@ -602,6 +641,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
     bool? showInSmartList,
     String? accessRole,
     bool? writable,
+    int? memberCount,
     DateTime? updatedAt,
     DateTime? createdAt,
   }) => TodoList(
@@ -623,6 +663,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
     showInSmartList: showInSmartList ?? this.showInSmartList,
     accessRole: accessRole ?? this.accessRole,
     writable: writable ?? this.writable,
+    memberCount: memberCount ?? this.memberCount,
     updatedAt: updatedAt ?? this.updatedAt,
     createdAt: createdAt ?? this.createdAt,
   );
@@ -652,6 +693,9 @@ class TodoList extends DataClass implements Insertable<TodoList> {
           ? data.accessRole.value
           : this.accessRole,
       writable: data.writable.present ? data.writable.value : this.writable,
+      memberCount: data.memberCount.present
+          ? data.memberCount.value
+          : this.memberCount,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
@@ -674,6 +718,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
           ..write('showInSmartList: $showInSmartList, ')
           ..write('accessRole: $accessRole, ')
           ..write('writable: $writable, ')
+          ..write('memberCount: $memberCount, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -696,6 +741,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
     showInSmartList,
     accessRole,
     writable,
+    memberCount,
     updatedAt,
     createdAt,
   );
@@ -717,6 +763,7 @@ class TodoList extends DataClass implements Insertable<TodoList> {
           other.showInSmartList == this.showInSmartList &&
           other.accessRole == this.accessRole &&
           other.writable == this.writable &&
+          other.memberCount == this.memberCount &&
           other.updatedAt == this.updatedAt &&
           other.createdAt == this.createdAt);
 }
@@ -736,6 +783,7 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
   final Value<bool> showInSmartList;
   final Value<String> accessRole;
   final Value<bool> writable;
+  final Value<int> memberCount;
   final Value<DateTime> updatedAt;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
@@ -754,6 +802,7 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
     this.showInSmartList = const Value.absent(),
     this.accessRole = const Value.absent(),
     this.writable = const Value.absent(),
+    this.memberCount = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -773,6 +822,7 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
     this.showInSmartList = const Value.absent(),
     this.accessRole = const Value.absent(),
     this.writable = const Value.absent(),
+    this.memberCount = const Value.absent(),
     required DateTime updatedAt,
     required DateTime createdAt,
     this.rowid = const Value.absent(),
@@ -795,6 +845,7 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
     Expression<bool>? showInSmartList,
     Expression<String>? accessRole,
     Expression<bool>? writable,
+    Expression<int>? memberCount,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
@@ -814,6 +865,7 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
       if (showInSmartList != null) 'show_in_smart_list': showInSmartList,
       if (accessRole != null) 'access_role': accessRole,
       if (writable != null) 'writable': writable,
+      if (memberCount != null) 'member_count': memberCount,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
@@ -835,6 +887,7 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
     Value<bool>? showInSmartList,
     Value<String>? accessRole,
     Value<bool>? writable,
+    Value<int>? memberCount,
     Value<DateTime>? updatedAt,
     Value<DateTime>? createdAt,
     Value<int>? rowid,
@@ -854,6 +907,7 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
       showInSmartList: showInSmartList ?? this.showInSmartList,
       accessRole: accessRole ?? this.accessRole,
       writable: writable ?? this.writable,
+      memberCount: memberCount ?? this.memberCount,
       updatedAt: updatedAt ?? this.updatedAt,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
@@ -905,6 +959,9 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
     if (writable.present) {
       map['writable'] = Variable<bool>(writable.value);
     }
+    if (memberCount.present) {
+      map['member_count'] = Variable<int>(memberCount.value);
+    }
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
@@ -934,6 +991,7 @@ class TodoListsCompanion extends UpdateCompanion<TodoList> {
           ..write('showInSmartList: $showInSmartList, ')
           ..write('accessRole: $accessRole, ')
           ..write('writable: $writable, ')
+          ..write('memberCount: $memberCount, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
@@ -12151,6 +12209,7 @@ typedef $$TodoListsTableCreateCompanionBuilder =
       Value<bool> showInSmartList,
       Value<String> accessRole,
       Value<bool> writable,
+      Value<int> memberCount,
       required DateTime updatedAt,
       required DateTime createdAt,
       Value<int> rowid,
@@ -12171,6 +12230,7 @@ typedef $$TodoListsTableUpdateCompanionBuilder =
       Value<bool> showInSmartList,
       Value<String> accessRole,
       Value<bool> writable,
+      Value<int> memberCount,
       Value<DateTime> updatedAt,
       Value<DateTime> createdAt,
       Value<int> rowid,
@@ -12252,6 +12312,11 @@ class $$TodoListsTableFilterComposer
 
   ColumnFilters<bool> get writable => $composableBuilder(
     column: $table.writable,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get memberCount => $composableBuilder(
+    column: $table.memberCount,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -12345,6 +12410,11 @@ class $$TodoListsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get memberCount => $composableBuilder(
+    column: $table.memberCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
@@ -12417,6 +12487,11 @@ class $$TodoListsTableAnnotationComposer
   GeneratedColumn<bool> get writable =>
       $composableBuilder(column: $table.writable, builder: (column) => column);
 
+  GeneratedColumn<int> get memberCount => $composableBuilder(
+    column: $table.memberCount,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 
@@ -12466,6 +12541,7 @@ class $$TodoListsTableTableManager
                 Value<bool> showInSmartList = const Value.absent(),
                 Value<String> accessRole = const Value.absent(),
                 Value<bool> writable = const Value.absent(),
+                Value<int> memberCount = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -12484,6 +12560,7 @@ class $$TodoListsTableTableManager
                 showInSmartList: showInSmartList,
                 accessRole: accessRole,
                 writable: writable,
+                memberCount: memberCount,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
                 rowid: rowid,
@@ -12504,6 +12581,7 @@ class $$TodoListsTableTableManager
                 Value<bool> showInSmartList = const Value.absent(),
                 Value<String> accessRole = const Value.absent(),
                 Value<bool> writable = const Value.absent(),
+                Value<int> memberCount = const Value.absent(),
                 required DateTime updatedAt,
                 required DateTime createdAt,
                 Value<int> rowid = const Value.absent(),
@@ -12522,6 +12600,7 @@ class $$TodoListsTableTableManager
                 showInSmartList: showInSmartList,
                 accessRole: accessRole,
                 writable: writable,
+                memberCount: memberCount,
                 updatedAt: updatedAt,
                 createdAt: createdAt,
                 rowid: rowid,

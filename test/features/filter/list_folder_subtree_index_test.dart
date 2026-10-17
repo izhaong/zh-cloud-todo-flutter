@@ -21,6 +21,7 @@ void main() {
     sortOrder: 0,
     isPinned: false,
     accessRole: 'owner',
+    memberCount: 1,
     writable: true,
     backgroundType: 'theme',
     showInSmartList: true,
