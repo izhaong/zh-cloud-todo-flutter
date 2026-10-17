@@ -306,6 +306,13 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       for (final list in allLists)
         if (!list.showInSmartList) list.id,
     };
+    // FL #559：「指派给我」要叠一层「所在清单是共享的」。判据是 `memberCount > 1`
+    // —— **我自己建的、拉了协作者的清单** `accessRole` 仍是 `owner`，用 accessRole 判会
+    // 把这一类整个漏掉（那正是嘀嗒 :21 点名的场景）。
+    final sharedListIds = {
+      for (final list in allLists)
+        if (list.memberCount > 1) list.id,
+    };
     TodoList? selectedList;
     for (final list in allLists) {
       if (list.id == listId) {
@@ -368,6 +375,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
           listFolderIds: listFolderIds,
           lockedAssigneeUserId: widget.lockedAssigneeUserId,
           excludedListIds: excludedListIds.isEmpty ? null : excludedListIds,
+          sharedListIds: sharedListIds,
         );
         final listOrderedItems = _visibleTasksInListOrder(
           items,
@@ -2960,6 +2968,13 @@ List<TodoTask> applyTaskFilter(
   Map<String, Set<String>>? listFolderIds,
   int? lockedAssigneeUserId,
   Set<String>? excludedListIds,
+
+  /// **共享清单**的本地 id 集合（`memberCount > 1`），FL #559。
+  ///
+  /// `null` = 索引没就位 ⇒ **不加这道闸门**（宁可多显示，不可少显示：
+  /// 少显示是"看不见的错"，用户不会知道自己的任务被吞了）。
+  /// 与 `listFolderIds` 同一约定。
+  Set<String>? sharedListIds,
 }) {
   if (filter.isEmpty &&
       selectedListId == null &&
@@ -2995,6 +3010,15 @@ List<TodoTask> applyTaskFilter(
     // 页面身份（specs/104）：与清单作用域同级，用户叠加的滤镜与「全部」档都清不掉它。
     if (lockedAssigneeUserId != null &&
         task.assigneeUserId != lockedAssigneeUserId) {
+      return false;
+    }
+    // 「指派给我」还要叠一层**共享**（FL #559，嘀嗒《02-用清单管理任务》:21
+    // 「收集**来自不同共享清单**中分配给你的任务」）。
+    // 判据只能用 `memberCount > 1`：**我自己建的、拉了协作者的清单** `accessRole` 仍是
+    // `owner` ⇒ 拿 accessRole 判会把这一类整个漏掉，而那正是原文点名的场景。
+    if (lockedAssigneeUserId != null &&
+        sharedListIds != null &&
+        !sharedListIds.contains(task.listId)) {
       return false;
     }
     // 「在智能清单中显示/隐藏」（嘀嗒《02-用清单管理任务》:73，specs/105）：
