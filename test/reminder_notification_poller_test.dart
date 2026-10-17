@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:drift/drift.dart' show Value;
+import 'package:zh_cloud_todo_flutter/core/notification/todo_notification_id.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -91,7 +92,7 @@ void main() {
       expect(await restartedPoller.poll(), 0);
       expect(notifications.shown, [
         (
-          id: 301,
+          id: reminderOsNotificationId(301),
           title: '本地任务标题',
           body: '到期提醒',
           payload:
@@ -131,7 +132,7 @@ void main() {
       expect(await poller.poll(), 0);
       expect(await poller.poll(), 0);
       expect(notifications.scheduled, hasLength(1));
-      expect(notifications.scheduled.single.id, 401);
+      expect(notifications.scheduled.single.id, reminderOsNotificationId(401));
 
       repository.items = [
         ReminderInboxItem(

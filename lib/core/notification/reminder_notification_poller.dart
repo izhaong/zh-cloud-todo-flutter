@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
+import 'todo_notification_id.dart';
 
 import '../../state/repositories/reminder_inbox_repository.dart';
 import '../db/app_database.dart';
@@ -180,7 +181,9 @@ class ReminderNotificationPoller {
           '${trigger.millisecondsSinceEpoch}:${item.taskId}';
       final deliveryAttempt = isFuture
           ? _notifications.schedule(
-              id: item.id,
+              // FL #358：OS 通知 id 走**类型命名空间** —— 否则提及那类通知一旦并入同一条流，
+              // 它的 id 会和提醒的 id 在系统通知中心里**相撞**（后到顶掉先到）。
+              id: reminderOsNotificationId(item.id),
               title: title,
               body: '到期提醒',
               fireAt: trigger,
@@ -188,7 +191,7 @@ class ReminderNotificationPoller {
               tag: notificationTag,
             )
           : _notifications.show(
-              id: item.id,
+              id: reminderOsNotificationId(item.id),
               title: title,
               body: '到期提醒',
               payload: payload,

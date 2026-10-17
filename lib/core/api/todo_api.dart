@@ -1251,6 +1251,87 @@ class TodoRestApi {
 
 /// 提醒动作（`/reminder-action/**`）直达 REST：收件箱 / 完成 / 忽略 / 延后；不走
 /// sync 协议，由页面与通知 service 直接调用。
+/// 站内通知（FL #358）。**与提醒收件箱是两个端点**，故意不合并：
+///
+/// 提醒那套（`ReminderActionApi.inbox`）由 `ReminderNotificationPoller` 消费，
+/// 那条链路会按 `timeMode` 重解释触发时刻、把未来项**交给 OS 持久调度**、文案写死「到期提醒」。
+/// 提及**不该**走那条路（它不是"到点提醒你"，而是"有人叫你了"）⇒ 单独一个端点、单独一个模型。
+class TodoNotificationApi {
+  TodoNotificationApi(this._client);
+
+  final ApiClient _client;
+
+  static const _base = '/todo/notification';
+
+  /// 未读通知（新的在前）。
+  Future<List<TodoNotificationItem>> unread() async {
+    final response = await _client.get<dynamic>('$_base/unread');
+    final body = response.data;
+    final payload = body is Map && body.containsKey('data')
+        ? body['data']
+        : body;
+    return TodoNotificationItem.normalize(payload);
+  }
+
+  /// 标记已读。**不是自己的通知**服务端当作不存在（不报错）。
+  Future<void> markRead(int id) async {
+    await _client.put<dynamic>('$_base/read', queryParameters: {'id': id});
+  }
+}
+
+/// 一条站内通知。
+class TodoNotificationItem {
+  const TodoNotificationItem({
+    required this.id,
+    required this.type,
+    this.taskId,
+    this.actorUserId,
+    this.refId,
+    this.content,
+    this.readAt,
+  });
+
+  final int id;
+
+  /// `REMINDER` / `MENTION`。
+  ///
+  /// **消费方必须按它分流**：`MENTION` 只展示，**不许**交给 `LocalNotificationService`
+  /// 去调度 —— 那套调度是提醒专用的。
+  final String type;
+
+  final int? taskId;
+  final int? actorUserId;
+  final int? refId;
+  final String? content;
+  final DateTime? readAt;
+
+  bool get isMention => type == 'MENTION';
+
+  static List<TodoNotificationItem> normalize(Object? data) {
+    final list = data is Map ? data['list'] : data;
+    if (list is! List) return const [];
+    return list
+        .whereType<Map>()
+        .map((raw) {
+          final id = (raw['id'] as num?)?.toInt();
+          if (id == null) return null;
+          return TodoNotificationItem(
+            id: id,
+            type: (raw['type'] ?? '').toString(),
+            taskId: (raw['taskId'] as num?)?.toInt(),
+            actorUserId: (raw['actorUserId'] as num?)?.toInt(),
+            refId: (raw['refId'] as num?)?.toInt(),
+            content: raw['content']?.toString(),
+            readAt: raw['readAt'] is String
+                ? DateTime.tryParse(raw['readAt'] as String)
+                : null,
+          );
+        })
+        .whereType<TodoNotificationItem>()
+        .toList(growable: false);
+  }
+}
+
 class ReminderActionApi {
   ReminderActionApi(this._client);
 
