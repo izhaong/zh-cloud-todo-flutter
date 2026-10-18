@@ -2133,6 +2133,10 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                             ('LEGAL_WORKDAY', '法定工作日'),
                             ('WEEKEND', '每周末'),
                             ('LEGAL_HOLIDAY', '法定节假日'),
+                            // FL #326：艾宾浩斯记忆法（嘀嗒《10-设置重复任务》:105
+                            // 「重复周期按照 1，2，4，7，15，15，15…… 循环」）。序列档：
+                            // 阶梯内生于档位，weekdays/monthDay 不适用（服务端带了就拒）。
+                            ('EBBINGHAUS', '艾宾浩斯'),
                             ('CUSTOM', '自定义'),
                           ]
                           .map(
@@ -2153,6 +2157,13 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                                     repeatMode != 'ON_SELECTED_DATES' &&
                                     weekdays.isEmpty) {
                                   weekdays.add(DateTime.now().weekday);
+                                }
+                                // FL #326：艾宾浩斯是序列档（阶梯内生于档位）——
+                                // weekdays 与它正交，服务端带了就拒。
+                                // 客户端在选中时就清空，保证上行不带
+                                // （monthDay 只在 MONTHLY 出现，本对话框不采集，无需处理）。
+                                if (frequency == 'EBBINGHAUS') {
+                                  weekdays.clear();
                                 }
                               }),
                             ),
@@ -2468,6 +2479,7 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       'LEGAL_WORKDAY': '法定工作日',
       'WEEKEND': '每周末',
       'LEGAL_HOLIDAY': '法定节假日',
+      'EBBINGHAUS': '艾宾浩斯',
       'CUSTOM': '自定义',
     };
     final label = labels[rule.freq] ?? rule.freq;

@@ -17,12 +17,24 @@ void main() {
     'LEGAL_WORKDAY',
     'WEEKEND',
     'LEGAL_HOLIDAY',
+    'EBBINGHAUS',
     'CUSTOM',
   ];
 
   test('两档出库是小写连字符，与服务端 TodoRepeatFrequencyEnum 同名', () {
     expect(repeatFrequencyToWire('LEGAL_WORKDAY'), 'legal-workday');
     expect(repeatFrequencyToWire('LEGAL_HOLIDAY'), 'legal-holiday');
+  });
+
+  // FL #326：艾宾浩斯（单档位、无连字符）—— 仍必须过这层并双向对齐，
+  // 防止有人绕过 wire 直接拼字符串（服务端 TodoRepeatFrequencyEnum 是 'ebbinghaus'）。
+  test('EBBINGHAUS 双向对齐服务端枚举（service !416 的 wire 契约）', () {
+    expect(repeatFrequencyToWire('EBBINGHAUS'), 'ebbinghaus');
+    expect(repeatFrequencyFromWire('ebbinghaus'), 'EBBINGHAUS');
+    // 未知值兜底：老客户端收到新档位不炸，回落 DAILY
+    expect(repeatFrequencyFromWire(null), 'DAILY');
+    expect(repeatFrequencyFromWire(''), 'DAILY');
+    expect(repeatFrequencyFromWire('future-mode'), 'FUTURE_MODE');
   });
 
   test('老档位形状不变（本轮没有顺手改掉已同步过的值）', () {
