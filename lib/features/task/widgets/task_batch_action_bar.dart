@@ -17,6 +17,11 @@ enum TaskBatchAction {
 
   /// 批量指派执行人（FL #357，嘀嗒《02-团队如何协作》:17）。
   assign,
+
+  /// 合并任务（FL #357 客户端接线；嘀嗒《01-列表视图》:84/:93
+  /// 「甚至进行优先级、分享和合并任务的操作」）。语义 B（opencode A/B 拍定）：
+  /// N 条收成 1 条 —— 源软删、子任务重挂、标签并集、提醒/重复丢弃记 warnings。
+  merge,
   clearDueAt,
   clearTags,
   priorityNone,
@@ -37,6 +42,7 @@ extension TaskBatchActionX on TaskBatchAction {
     TaskBatchAction.setTags => '设置标签…',
     // 术语照抄嘀嗒 :17「选择「分配给」进行指派」
     TaskBatchAction.assign => '分配给…',
+    TaskBatchAction.merge => '合并到…',
     TaskBatchAction.setDueAt => '设置截止日期…',
     TaskBatchAction.clearDueAt => '清空截止日期',
     TaskBatchAction.clearTags => '清空所选标签',
@@ -201,6 +207,7 @@ class TaskBatchActionBar extends StatelessWidget {
                           if (ultraCompact) TaskBatchAction.complete,
                           TaskBatchAction.moveToInbox,
                           TaskBatchAction.linkToParent,
+                          TaskBatchAction.merge,
                           TaskBatchAction.share,
                           TaskBatchAction.setTags,
                           TaskBatchAction.assign,
