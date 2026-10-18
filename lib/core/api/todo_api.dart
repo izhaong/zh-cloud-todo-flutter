@@ -307,6 +307,77 @@ class TodoTaskBatchApi {
   }
 }
 
+/// `POST /task/merge` 的合并契约（FL #357 客户端接线；service !414）。
+///
+/// **语义 B**（A/B 已拍，opencode 交叉验证）：源任务软删（tombstone）、其子任务
+/// 重挂到目标、标签并集、提醒/重复丢弃记 warnings、跨清单整批拒 ——
+/// **「合并」= N 条收成 1 条**；「source 降为子任务」是 linkToParent 已有的语义，
+/// 两个入口做同一件事只会让用户困惑差别。
+class TodoTaskMergeApi {
+  TodoTaskMergeApi(this._client);
+
+  final ApiClient _client;
+
+  Future<TodoTaskMergeResult> merge({
+    required int targetTaskId,
+    required List<int> sourceTaskIds,
+    String? clientMutationId,
+    String? deviceId,
+  }) async {
+    final deduped = sourceTaskIds.toSet().toList(growable: false);
+    if (deduped.isEmpty) {
+      throw ArgumentError.value(sourceTaskIds, 'sourceTaskIds', '被合并任务不能为空');
+    }
+    final resp = await _client.post<Map<String, dynamic>>(
+      '/task/merge',
+      data: {
+        'targetTaskId': targetTaskId,
+        'sourceTaskIds': deduped,
+        'clientMutationId': ?clientMutationId,
+        'deviceId': ?deviceId,
+      },
+    );
+    final Map<String, dynamic>? body = resp.data;
+    if (body == null) {
+      throw StateError('合并响应为空');
+    }
+    final payload = body.containsKey('data') ? body['data'] : body;
+    if (payload is! Map) {
+      throw StateError('合并响应格式不正确');
+    }
+    return TodoTaskMergeResult.fromJson(Map<String, dynamic>.from(payload));
+  }
+}
+
+/// 合并结果：被软删的任务编号 + 降级说明（warnings 不静默 —— 服务端契约）。
+class TodoTaskMergeResult {
+  const TodoTaskMergeResult({
+    required this.targetTaskId,
+    required this.deletedTaskIds,
+    required this.warnings,
+  });
+
+  final int targetTaskId;
+  final List<int> deletedTaskIds;
+  final List<String> warnings;
+
+  static TodoTaskMergeResult fromJson(Map<String, dynamic> json) =>
+      TodoTaskMergeResult(
+        targetTaskId: (json['targetTaskId'] as num?)?.toInt() ?? 0,
+        deletedTaskIds:
+            (json['deletedTaskIds'] as List?)
+                ?.whereType<num>()
+                .map((e) => e.toInt())
+                .toList(growable: false) ??
+            const [],
+        warnings:
+            (json['warnings'] as List?)?.whereType<String>().toList(
+              growable: false,
+            ) ??
+            const [],
+      );
+}
+
 /// 服务端任务排序项。
 class TodoTaskReorderItem {
   const TodoTaskReorderItem({required this.id, required this.sortOrder});
@@ -1223,6 +1294,7 @@ class TodoRestApi {
       taskAssign = TaskAssignApi(client),
       comment = TaskCommentApi(client),
       notification = TodoNotificationApi(client),
+      taskMerge = TodoTaskMergeApi(client),
       note = NoteApi(client),
       calSubscription = CalendarSubscriptionApi(client),
       taskImport = TodoTaskImportApi(client),
@@ -1244,6 +1316,7 @@ class TodoRestApi {
   final TaskAssignApi taskAssign;
   final TaskCommentApi comment;
   final TodoNotificationApi notification;
+  final TodoTaskMergeApi taskMerge;
   final NoteApi note;
   final CalendarSubscriptionApi calSubscription;
   final CalendarInfoApi calendarInfo;

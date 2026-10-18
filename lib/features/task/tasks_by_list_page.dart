@@ -1346,6 +1346,16 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       await _applyBatchParentLink(parentTaskId: parentTaskId);
       return;
     }
+    // FL #357 客户端接线（service !414，语义 B）：合并 = N 条收成 1 条。
+    // 与 linkToParent 的"先选目标"同套，但目标选择器标题与确认文案不同 ——
+    // opencode：把合并的**后果说清楚**（源软删/子任务重挂/提醒丢弃），
+    // 避免用户预期成"都还在"的那种语义。
+    if (action == TaskBatchAction.merge) {
+      final targetTaskId = await _selectBatchMergeTarget();
+      if (targetTaskId == null || !mounted) return;
+      await _applyBatchMerge(targetTaskId: targetTaskId);
+      return;
+    }
     if (action == TaskBatchAction.share) {
       await _shareBatchSelection(visibleTasks);
       return;
@@ -1403,6 +1413,7 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
       ),
       TaskBatchAction.moveToList => throw StateError('指定清单需要先选择目标'),
       TaskBatchAction.linkToParent => throw StateError('主任务需要先选择目标'),
+      TaskBatchAction.merge => throw StateError('合并需要先选择目标'),
       TaskBatchAction.share => throw StateError('分享动作已提前处理'),
       TaskBatchAction.setTags => throw StateError('标签需要先选择目标'),
       TaskBatchAction.assign => throw StateError('指派需要先选择目标'),
@@ -1591,6 +1602,153 @@ class _TasksByListPageState extends ConsumerState<TasksByListPage> {
         ),
       ),
     );
+  }
+
+  /// FL #357：合并目标选择器（与 linkToParent 的选择器同构，但标题/文案不同）。
+  Future<String?> _selectBatchMergeTarget() async {
+    final taskRepository = ref.read(taskRepositoryProvider);
+    final queryRepository = ref.read(taskQueryRepositoryProvider);
+    if (taskRepository == null || queryRepository == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('任务暂不可用，请稍后重试')));
+      return null;
+    }
+    final selectedIds = _batchSelectedTaskIds.toSet();
+    if (selectedIds.isEmpty) return null;
+    final selectedTasks = await Future.wait(
+      selectedIds.map(taskRepository.getById),
+    );
+    final firstSelected = selectedTasks.whereType<TodoTask>().firstOrNull;
+    if (!mounted) return null;
+    if (firstSelected == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('所选任务已不存在')));
+      return null;
+    }
+    // 服务端契约：跨清单整批拒 —— 候选只在**同一清单**里取。
+    final candidates = (await queryRepository.filter(
+      TaskQueryFilter(listId: firstSelected.listId),
+    )).where((task) => !selectedIds.contains(task.id)).toList(growable: false);
+    if (!mounted) return null;
+    if (candidates.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('暂无可合并到的目标任务')));
+      return null;
+    }
+    return showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.sizeOf(sheetContext).height * 0.6,
+          child: Column(
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '合并到该任务',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    key: const Key('todo-batch-merge-consequences'),
+                    '所选任务将删除，其子任务与标签并入目标任务；提醒与重复规则不保留。',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(
+                        sheetContext,
+                      ).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: ListView(
+                  children: [
+                    for (final task in candidates)
+                      ListTile(
+                        key: Key('todo-batch-merge-target-${task.id}'),
+                        leading: const Icon(Icons.call_merge_outlined),
+                        title: Text(task.title),
+                        onTap: () => Navigator.of(sheetContext).pop(task.id),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// FL #357：执行合并（语义 B —— 一次 REST 调用，事务由服务端保证；
+  /// 未同步任务（serverId null）**拒绝并说明**，不许静默跳过 ——
+  /// 参照单条指派 `task_detail_pane.dart:1249` 的既有纪律）。
+  Future<void> _applyBatchMerge({required String targetTaskId}) async {
+    final api = ref.read(todoApiProvider);
+    final taskRepository = ref.read(taskRepositoryProvider);
+    if (taskRepository == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('任务暂不可用，请稍后重试')));
+      return;
+    }
+    final selectedIds = _batchSelectedTaskIds.toList(growable: false);
+    final sourceServerIds = <int>[];
+    for (final id in selectedIds) {
+      final task = await taskRepository.getById(id);
+      if (task == null) continue;
+      if (task.serverId == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('所选任务尚未同步，无法合并；请先完成同步')));
+        return;
+      }
+      sourceServerIds.add(task.serverId!);
+    }
+    final targetTask = await taskRepository.getById(targetTaskId);
+    if (!mounted) return;
+    if (targetTask?.serverId == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('目标任务尚未同步，无法合并')));
+      return;
+    }
+    setState(() => _batchApplying = true);
+    try {
+      final result = await api.taskMerge.merge(
+        targetTaskId: targetTask!.serverId!,
+        sourceTaskIds: sourceServerIds,
+        clientMutationId: DateTime.now().microsecondsSinceEpoch.toString(),
+      );
+      if (!mounted) return;
+      // warnings 不静默（服务端契约）：逐条告知。
+      final message = result.warnings.isEmpty
+          ? '已合并 ${result.deletedTaskIds.length} 个任务'
+          : '已合并 ${result.deletedTaskIds.length} 个任务；${result.warnings.join('；')}';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('合并失败：${describeError(error)}')));
+    } finally {
+      if (mounted) setState(() => _batchApplying = false);
+    }
   }
 
   Future<String?> _selectBatchParentTask() async {
