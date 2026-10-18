@@ -2065,6 +2065,9 @@ class SyncCoordinator {
         payload['weekdays']?.toString() ?? payload['byDay']?.toString(),
       ),
       monthDay: Value((payload['monthDay'] as num?)?.toInt()),
+      // FL #325：入站同步带上农历两字段 —— 缺了服务端建好的规则在第二台设备上编辑不了
+      lunarMonth: Value((payload['lunarMonth'] as num?)?.toInt()),
+      lunarDay: Value((payload['lunarDay'] as num?)?.toInt()),
       startAt: Value(_parseDate(payload['startAt'])),
       until: Value(_parseDate(payload['untilAt'] ?? payload['until'])),
       countLimit: Value((payload['countLimit'] as num?)?.toInt()),

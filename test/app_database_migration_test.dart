@@ -61,7 +61,7 @@ void main() {
         .customSelect("PRAGMA table_info('todo_tasks')")
         .get();
 
-    expect(version.data['user_version'], 31);
+    expect(version.data['user_version'], 32);
     expect(task.title, '迁移前任务');
     expect(sectionTable.data['name'], 'todo_task_sections');
     expect(taskColumns.map((row) => row.data['name']), contains('section_id'));
@@ -133,7 +133,7 @@ void main() {
         .customSelect('SELECT id, time_mode FROM todo_tasks ORDER BY id')
         .get();
 
-    expect(version.data['user_version'], 31);
+    expect(version.data['user_version'], 32);
     expect(
       rows.map((row) => '${row.data['id']}=${row.data['time_mode']}'),
       containsAll(<String>['task-fixed=2', 'task-plain=0']),
@@ -199,7 +199,7 @@ void main() {
           .getSingle();
       final filter = await upgraded.select(upgraded.todoFilters).getSingle();
 
-      expect(version.data['user_version'], 31);
+      expect(version.data['user_version'], 32);
       expect(filter.conditionJson, contains('"local-list"'));
       expect(filter.conditionJson, contains('"local-tag"'));
       expect(filter.conditionJson, isNot(contains('[101]')));
@@ -256,7 +256,7 @@ void main() {
           .getSingle();
       final list = await upgraded.listByLocalId('list-before-local-reference');
 
-      expect(version.data['user_version'], 31);
+      expect(version.data['user_version'], 32);
       expect(list?.folderId, 88);
       expect(list?.folderLocalId, 'folder-before-local-reference');
     },
@@ -304,7 +304,7 @@ void main() {
           )
           .getSingle();
 
-      expect(version.data['user_version'], 31);
+      expect(version.data['user_version'], 32);
       expect(access.data['id'], 'list-before-access-role');
       expect(access.data['access_role'], 'owner');
       expect(access.data['writable'], 1);
@@ -347,7 +347,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 31);
+      expect(version.data['user_version'], 32);
       final task = await upgraded.select(upgraded.todoTasks).getSingle();
       expect(task.title, '迁移前任务');
       expect(task.assigneeUserId, isNull);
@@ -375,7 +375,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 31);
+      expect(version.data['user_version'], 32);
 
       final taskColumns = await upgraded
           .customSelect('PRAGMA table_info(todo_tasks)')
@@ -511,7 +511,7 @@ void main() {
           .getSingle();
       final rule = await upgraded.select(upgraded.todoRepeatRules).getSingle();
 
-      expect(version.data['user_version'], 31);
+      expect(version.data['user_version'], 32);
       expect(rule.id, 'repeat-rule-before-b2-b3-merge');
       expect(rule.byDay, '1,3,5');
       expect(rule.selectedDatesJson, isNull);
@@ -556,7 +556,7 @@ void main() {
         .getSingle();
     final rule = await upgraded.select(upgraded.todoRepeatRules).getSingle();
 
-    expect(version.data['user_version'], 31);
+    expect(version.data['user_version'], 32);
     expect(rule.freq, 'CUSTOM');
     expect(rule.byDay, '1,3,5');
     expect(rule.repeatMode, 'ON_DUE');
@@ -644,7 +644,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data['user_version'], 31);
+      expect(version.data['user_version'], 32);
       await upgraded.close();
 
       final reopened = AppDatabase.forTesting(NativeDatabase(databaseFile));
@@ -736,7 +736,7 @@ void main() {
           )
           .getSingle();
 
-      expect(version.data['user_version'], 31);
+      expect(version.data['user_version'], 32);
       expect(task.title, '迁移前看板任务');
       expect(boardTable.data['name'], 'todo_board_preferences');
     },
@@ -817,7 +817,7 @@ void main() {
         .customSelect('SELECT id, time_mode FROM todo_reminders ORDER BY id')
         .get();
 
-    expect(version.data['user_version'], 31);
+    expect(version.data['user_version'], 32);
     expect(
       rows.map((row) => '${row.data['id']}=${row.data['time_mode']}'),
       containsAll(<String>['reminder-fixed=2', 'reminder-plain=0']),
@@ -869,7 +869,7 @@ void main() {
         .customSelect('SELECT id, name, sort_order, is_pinned FROM todo_lists')
         .get();
 
-    expect(version.data['user_version'], 31);
+    expect(version.data['user_version'], 32);
     expect(rows, hasLength(1), reason: '加列不能丢存量清单');
     expect(rows.single.data['id'], 'list-pin-migration');
     expect(rows.single.data['sort_order'], 3, reason: '原有 sortOrder 不能被迁移改写');
@@ -925,7 +925,7 @@ void main() {
         .customSelect('SELECT id, name, color, is_pinned FROM todo_tags')
         .get();
 
-    expect(version.data['user_version'], 31);
+    expect(version.data['user_version'], 32);
     expect(rows, hasLength(1), reason: '加列不能丢存量标签');
     expect(rows.single.data['id'], 'tag-pin-migration');
     expect(rows.single.data['color'], '#E53935', reason: '原有颜色不能被迁移改写');
@@ -995,7 +995,7 @@ void main() {
           )
           .getSingle();
 
-      expect(version.data['user_version'], 31);
+      expect(version.data['user_version'], 32);
       expect(task.title, '迁移前可靠性任务');
       expect(change.status, 'queued');
       expect(change.nextAttemptAt, isNull);
@@ -1058,7 +1058,7 @@ void main() {
         .customSelect("PRAGMA table_info('todo_tags')")
         .get();
 
-    expect(version.data['user_version'], 31);
+    expect(version.data['user_version'], 32);
     expect(columns.map((row) => row.data['name']), contains('sort_order'));
 
     // watchAll/getAll 的排序键（isPinned DESC, sortOrder DESC, createdAt ASC）。
@@ -1118,7 +1118,7 @@ void main() {
         .get();
     final names = columns.map((row) => row.data['name']).toList();
 
-    expect(version.data['user_version'], 31);
+    expect(version.data['user_version'], 32);
     expect(
       names,
       containsAll(['created_at', 'reschedule_count', 'unfinished_days']),
@@ -1171,7 +1171,7 @@ void main() {
         .get();
     final names = columns.map((row) => row.data['name']).toList();
 
-    expect(version.data['user_version'], 31);
+    expect(version.data['user_version'], 32);
     expect(names, contains('color'));
 
     final rows = await upgraded.select(upgraded.todoLists).get();
@@ -1219,7 +1219,7 @@ void main() {
         .get();
     final names = columns.map((row) => row.data['name']).toList();
 
-    expect(version.data['user_version'], 31);
+    expect(version.data['user_version'], 32);
     expect(
       names,
       containsAll([

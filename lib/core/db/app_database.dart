@@ -286,6 +286,9 @@ class TodoRepeatRules extends Table {
   IntColumn get interval => integer().withDefault(const Constant(1))();
   TextColumn get byDay => text().nullable()(); // 逗号分隔，如 MO,WE,FR
   IntColumn get monthDay => integer().nullable()();
+  // FL #325：农历重复两档（lunar_yearly 档 lunarMonth 必填；lunar_monthly 档为 NULL）
+  IntColumn get lunarMonth => integer().nullable()();
+  IntColumn get lunarDay => integer().nullable()();
   DateTimeColumn get startAt => dateTime().nullable()();
   DateTimeColumn get until => dateTime().nullable()();
   IntColumn get countLimit => integer().nullable()();
@@ -487,7 +490,7 @@ class AppDatabase extends _$AppDatabase {
   }) : super(_open(_userDatabaseName(tenantId, userId, testNamespace)));
 
   @override
-  int get schemaVersion => 31;
+  int get schemaVersion => 32;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -695,6 +698,15 @@ class AppDatabase extends _$AppDatabase {
       if (from < 31) {
         if (!await _columnExists(m, 'todo_lists', 'member_count')) {
           await m.addColumn(todoLists, todoLists.memberCount);
+        }
+      }
+      // FL #325：农历重复两档 —— 两个可空列，无回填（NULL 即"非农历档"）。
+      if (from < 32) {
+        if (!await _columnExists(m, 'todo_repeat_rules', 'lunar_month')) {
+          await m.addColumn(todoRepeatRules, todoRepeatRules.lunarMonth);
+        }
+        if (!await _columnExists(m, 'todo_repeat_rules', 'lunar_day')) {
+          await m.addColumn(todoRepeatRules, todoRepeatRules.lunarDay);
         }
       }
       if (from < 20) {

@@ -18,6 +18,8 @@ void main() {
     'WEEKEND',
     'LEGAL_HOLIDAY',
     'EBBINGHAUS',
+    'LUNAR_YEARLY',
+    'LUNAR_MONTHLY',
     'CUSTOM',
   ];
 
@@ -31,6 +33,11 @@ void main() {
   test('EBBINGHAUS 双向对齐服务端枚举（service !416 的 wire 契约）', () {
     expect(repeatFrequencyToWire('EBBINGHAUS'), 'ebbinghaus');
     expect(repeatFrequencyFromWire('ebbinghaus'), 'EBBINGHAUS');
+    // FL #325：农历两档（service !417）—— 本地 LUNAR_YEARLY ⇄ wire lunar-yearly
+    expect(repeatFrequencyToWire('LUNAR_YEARLY'), 'lunar-yearly');
+    expect(repeatFrequencyFromWire('lunar-yearly'), 'LUNAR_YEARLY');
+    expect(repeatFrequencyToWire('LUNAR_MONTHLY'), 'lunar-monthly');
+    expect(repeatFrequencyFromWire('lunar-monthly'), 'LUNAR_MONTHLY');
     // 未知值兜底：老客户端收到新档位不炸，回落 DAILY
     expect(repeatFrequencyFromWire(null), 'DAILY');
     expect(repeatFrequencyFromWire(''), 'DAILY');

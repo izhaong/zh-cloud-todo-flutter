@@ -26,6 +26,8 @@ class RepeatRuleRepository {
     int intervalValue = 1,
     Iterable<int>? weekdays,
     int? monthDay,
+    int? lunarMonth,
+    int? lunarDay,
     required DateTime startAt,
     DateTime? untilAt,
     int? countLimit,
@@ -42,6 +44,8 @@ class RepeatRuleRepository {
       intervalValue: intervalValue,
       weekdays: weekdays,
       monthDay: monthDay,
+      lunarMonth: lunarMonth,
+      lunarDay: lunarDay,
       startAt: startAt,
       untilAt: untilAt,
       countLimit: countLimit,
@@ -67,6 +71,15 @@ class RepeatRuleRepository {
         interval: Value(intervalValue),
         byDay: Value(_weekdayText(normalizedWeekdays)),
         monthDay: Value(effectiveMonthDay),
+        lunarMonth: Value(
+          normalizedFrequency == 'LUNAR_YEARLY' ? lunarMonth : null,
+        ),
+        lunarDay: Value(
+          (normalizedFrequency == 'LUNAR_YEARLY' ||
+                  normalizedFrequency == 'LUNAR_MONTHLY')
+              ? lunarDay
+              : null,
+        ),
         startAt: Value(startAt),
         until: Value(untilAt),
         countLimit: Value(countLimit),
@@ -231,6 +244,8 @@ class RepeatRuleRepository {
     required int intervalValue,
     required Iterable<int>? weekdays,
     required int? monthDay,
+    required int? lunarMonth,
+    required int? lunarDay,
     required DateTime startAt,
     required DateTime? untilAt,
     required int? countLimit,
@@ -249,10 +264,46 @@ class RepeatRuleRepository {
       // FL #326：艾宾浩斯记忆法（service !416；阶梯 offset 内生于档位，
       // weekdays/monthDay 不适用 —— 保存路径本就只为 CUSTOM 派生星期集）。
       'EBBINGHAUS',
+      // FL #325：农历两档（service !417；锚点农历由服务端反解 startAt，
+      // 客户端不上行农历月日 —— lunarMonth/lunarDay 只是本地存储/展示的镜像）。
+      'LUNAR_YEARLY',
+      'LUNAR_MONTHLY',
       'CUSTOM',
     };
     if (!frequencies.contains(frequency)) {
       throw ArgumentError.value(frequency, 'frequency', '不支持的重复频率');
+    }
+    // FL #325：农历两档守卫（与服务端 !417 同一套口径）——
+    // ① 正交就拒；② 按档校验（每年档必须有月 1-12；每月档带月就拒）；
+    // ③ 反向互斥：非农历档带 lunar 字段 ⇒ 拒（防"改档后残留"）。
+    final isLunar = frequency == 'LUNAR_YEARLY' || frequency == 'LUNAR_MONTHLY';
+    if (isLunar) {
+      if (weekdays != null && weekdays.isNotEmpty) {
+        throw ArgumentError.value(weekdays, 'weekdays', '农历重复不支持星期集');
+      }
+      if (monthDay != null) {
+        throw ArgumentError.value(monthDay, 'monthDay', '农历重复不支持每月几号');
+      }
+      if (lunarDay == null || lunarDay < 1 || lunarDay > 30) {
+        throw ArgumentError.value(lunarDay, 'lunarDay', '农历日必须在 1-30');
+      }
+      if (frequency == 'LUNAR_YEARLY') {
+        if (lunarMonth == null || lunarMonth < 1 || lunarMonth > 12) {
+          throw ArgumentError.value(
+            lunarMonth,
+            'lunarMonth',
+            '农历每年必须有农历月 1-12',
+          );
+        }
+      } else if (lunarMonth != null) {
+        throw ArgumentError.value(lunarMonth, 'lunarMonth', '农历每月不支持指定月份');
+      }
+    } else if (lunarMonth != null || lunarDay != null) {
+      throw ArgumentError.value(
+        frequency,
+        'frequency',
+        '非农历重复不支持农历月日（改档后请清空 lunarMonth/lunarDay）',
+      );
     }
     if (intervalValue < 1) {
       throw ArgumentError.value(intervalValue, 'intervalValue', '间隔必须为正整数');
@@ -345,6 +396,9 @@ class RepeatRuleRepository {
     'intervalValue': row.interval,
     'weekdays': row.byDay,
     'monthDay': row.monthDay,
+    // FL #325：同步出去规则才完整（客户端拿不到就编辑不了）
+    'lunarMonth': row.lunarMonth,
+    'lunarDay': row.lunarDay,
     'startAt': row.startAt?.toIso8601String(),
     'untilAt': row.until?.toIso8601String(),
     'countLimit': row.countLimit,
