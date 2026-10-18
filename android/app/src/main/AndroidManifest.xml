@@ -3,6 +3,9 @@
          于是 debug 产物能联网、release 产物一个包都发不出去（release 合并清单里
          android.permission.INTERNET 计数为 0）。 -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- FL #342 语音添加（长按「+」）：平台原生 STT 需要麦克风。
+         嘀嗒《01-添加任务》:114「按住『+』可能会触发系统权限请求」。 -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>

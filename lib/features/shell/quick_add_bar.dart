@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/voice/voice_input_gateway.dart';
+
 import '../../core/theme/app_theme.dart';
 import '../tag/hash_tag_input.dart';
 import '../task/task_subtask_drop.dart';
@@ -332,56 +334,214 @@ class QuickAddBar extends StatefulWidget {
 }
 
 /// Mobile keeps one low-noise add entry and expands it only when requested.
-class MobileQuickAddButton extends StatelessWidget {
+class MobileQuickAddButton extends StatefulWidget {
   const MobileQuickAddButton({
     super.key,
     required this.onSubmit,
     this.tagOptions = const [],
     this.ensureTagIds,
+    this.voiceGateway,
   });
 
   final QuickAddSubmitCallback onSubmit;
   final List<QuickAddTagOption> tagOptions;
   final QuickAddTagIdsEnsurer? ensureTagIds;
 
+  /// FL #342：语音网关。null = 调用方未提供（测试注入 Fake；生产由装配处给）。
+  final VoiceInputGateway? voiceGateway;
+
+  @override
+  State<MobileQuickAddButton> createState() => _MobileQuickAddButtonState();
+}
+
+class _MobileQuickAddButtonState extends State<MobileQuickAddButton> {
+  /// FL #342（嘀嗒《01-添加任务》:104「长按「+」按钮启动语音输入」）。
+  ///
+  /// **手势竞技场**（opencode）：`LongPress`（500ms 按住不动）与 `Draggable`
+  /// （移动即开始）**天然互斥** —— 外层 GestureDetector 的长按不与拖出子任务打架。
+  /// v1 只做长按模式；录音模式（:116-119 左右滑切换）与 `:114` 平台不对称放第二步。
+  VoiceInputStatus? _voiceStatus;
+  String _voiceFinalText = '';
+  bool _voiceSessionActive = false;
+  Timer? _voiceHoldTimer;
+
+  Future<void> _startVoiceSession() async {
+    // 先激活会话（overlay 出现）再判终态 —— 装配缺失也要"看得见"，
+    // 否则 setState 写进 _voiceStatus 却没有 overlay 宿主，文案永远不显示。
+    setState(() {
+      _voiceSessionActive = true;
+      _voiceStatus = null;
+      _voiceFinalText = '';
+    });
+    final gateway = widget.voiceGateway;
+    if (gateway == null) {
+      // 装配缺失 ⇒ 不假装支持 —— 终态化，不静默。
+      setState(() => _voiceStatus = VoiceInputStatus.deviceNotSupported);
+      return;
+    }
+    final status = await gateway.initialize();
+    if (status != VoiceInputStatus.available) {
+      // 裁决②：权限拒绝**禁止静默失败** —— 文案要上屏。
+      setState(() => _voiceStatus = status);
+      return;
+    }
+    setState(() => _voiceStatus = VoiceInputStatus.listening);
+    await gateway.start(_VoiceListener(this));
+  }
+
+  Future<void> _endVoiceSession() async {
+    await widget.voiceGateway?.stop();
+    final text = _voiceFinalText.trim();
+    if (mounted) {
+      setState(() => _voiceSessionActive = false);
+    }
+    if (text.isNotEmpty) {
+      widget.onSubmit(QuickAddRequest(input: text));
+    }
+  }
+
+  /// 松手/取消：长按计时还没到就取消；到过（语音会话已开）则结束会话。
+  void _holdEnded() {
+    final timer = _voiceHoldTimer;
+    if (timer != null && timer.isActive) {
+      timer.cancel(); // 不到 500ms：这是一次点击/短按，不进语音
+      return;
+    }
+    if (_voiceSessionActive) {
+      _endVoiceSession();
+    }
+  }
+
+  void _onVoiceStatus(VoiceInputStatus status) {
+    if (mounted) setState(() => _voiceStatus = status);
+  }
+
+  void _onVoiceResult(String text, {required bool isFinal}) {
+    // v1 两端只消费 isFinal（见 VoiceInputGateway 头注释）。
+    if (isFinal) _voiceFinalText = text;
+  }
+
+  @override
+  void dispose() {
+    _voiceHoldTimer?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      identifier: 'todo_mobile_quick_add',
-      button: true,
-      // 嘀嗒《02-功能指南/01-任务/09-如何管理海量任务/06-多级任务.md》mobile `:24`
-      // 「通过拖动「+」到任务下方偏右一点的位置来在这个任务下快速创建「子任务」」
-      // ⇒ 「+」本身要是一条拖出源。拖与点两条通道并存：`Draggable` 认的是拖动，
-      // 不产生位移的点击仍归 `FloatingActionButton`（既有的点它开表用例不许弄红）。
-      child: Draggable<QuickAddSubtaskIntent>(
-        key: const Key('todo-mobile-add-drag-source'),
-        data: const QuickAddSubtaskIntent(),
-        feedback: Material(
-          color: Colors.transparent,
-          child: Icon(
-            Icons.add,
-            size: 22,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-        ),
-        child: FloatingActionButton.small(
-          key: const Key('todo-mobile-add'),
-          heroTag: 'todo-mobile-add',
-          tooltip: '添加任务',
-          onPressed: () => showModalBottomSheet<void>(
-            context: context,
-            isScrollControlled: true,
-            useSafeArea: true,
-            builder: (_) => _MobileQuickAddSheet(
-              onSubmit: onSubmit,
-              tagOptions: tagOptions,
-              ensureTagIds: ensureTagIds,
+    final colors = Theme.of(context).colorScheme;
+    // FL #342：长按=语音用 **Listener + 手动计时**（原始指针事件不进手势竞技场）——
+    // GestureDetector 的长按会被 Draggable 的 ImmediateMultiDrag 当场认领
+    // （pointer-down 即赢、竞技场关闭），长按超时永远不触发（判据 overlay=0 钉死，
+    // opencode 的"天然互斥"论被实测推翻）。
+    return Listener(
+      onPointerDown: (_) => _voiceHoldTimer = Timer(
+        const Duration(milliseconds: 500),
+        _startVoiceSession,
+      ),
+      onPointerUp: (_) => _holdEnded(),
+      onPointerCancel: (_) => _holdEnded(),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Semantics(
+            identifier: 'todo_mobile_quick_add',
+            button: true,
+            // 嘀嗒《06-多级任务》mobile :24「拖动「+」到任务下方…创建子任务」
+            // ⇒ 「+」本身要是一条拖出源。拖与点两条通道并存（FL #342：再加长按
+            // 语音三条通道 —— 长按=按住不动、拖=移动即开始，天然互斥）。
+            child: Draggable<QuickAddSubtaskIntent>(
+              key: const Key('todo-mobile-add-drag-source'),
+              data: const QuickAddSubtaskIntent(),
+              feedback: Material(
+                color: Colors.transparent,
+                child: Icon(Icons.add, size: 22, color: colors.primary),
+              ),
+              // FL #342：长按=语音、拖=子任务 —— 两个识别器挂同一节点，
+              // 手势竞技场按"不动 vs 移动"分派（外层包 GestureDetector 会被
+              // Draggable 的延迟识别吃掉 —— 判据当场抓到 overlay=0）。
+              child: GestureDetector(
+                onLongPressStart: (_) => _startVoiceSession(),
+                onLongPressEnd: (_) => _endVoiceSession(),
+                child: FloatingActionButton.small(
+                  key: const Key('todo-mobile-add'),
+                  heroTag: 'todo-mobile-add',
+                  tooltip: '添加任务（长按语音输入）',
+                  onPressed: () => showModalBottomSheet<void>(
+                    context: context,
+                    isScrollControlled: true,
+                    useSafeArea: true,
+                    builder: (_) => _MobileQuickAddSheet(
+                      onSubmit: widget.onSubmit,
+                      tagOptions: widget.tagOptions,
+                      ensureTagIds: widget.ensureTagIds,
+                    ),
+                  ),
+                  child: const Icon(Icons.add),
+                ),
+              ),
             ),
           ),
-          child: const Icon(Icons.add),
-        ),
+          if (_voiceSessionActive)
+            Positioned(
+              key: const Key('todo-voice-session-overlay'),
+              right: 0,
+              bottom: 56,
+              child: Material(
+                elevation: 4,
+                borderRadius: BorderRadius.circular(12),
+                color: colors.surfaceContainerHighest,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  child: _voiceOverlayContent(colors),
+                ),
+              ),
+            ),
+        ],
       ),
     );
+  }
+
+  Widget _voiceOverlayContent(ColorScheme colors) {
+    switch (_voiceStatus) {
+      case VoiceInputStatus.permissionDenied:
+        // 裁决②原文文案，禁止静默失败。
+        return Text(
+          key: const Key('todo-voice-permission-denied'),
+          '需要麦克风权限才能语音添加',
+          style: TextStyle(color: colors.error),
+        );
+      case VoiceInputStatus.deviceNotSupported:
+        return const Text(key: Key('todo-voice-unsupported'), '当前设备不支持语音输入');
+      case VoiceInputStatus.listening:
+        // v1 不写「实时转写」—— 只承诺「正在聆听」（见网关头注释）。
+        return const Text(key: Key('todo-voice-listening'), '说出你要做的事…');
+      case VoiceInputStatus.error:
+        return const Text(key: Key('todo-voice-error'), '语音识别出错，请重试');
+      case VoiceInputStatus.available:
+      case null:
+        return const Text('正在准备语音输入…');
+    }
+  }
+}
+
+/// 网关回调 → State 的桥（不把 State 直接暴露给网关）。
+class _VoiceListener implements VoiceInputListener {
+  _VoiceListener(this._state);
+
+  final _MobileQuickAddButtonState _state;
+
+  @override
+  void onResult(String text, {required bool isFinal}) {
+    _state._onVoiceResult(text, isFinal: isFinal);
+  }
+
+  @override
+  void onStatus(VoiceInputStatus status) {
+    _state._onVoiceStatus(status);
   }
 }
 
