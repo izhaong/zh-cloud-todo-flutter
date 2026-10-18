@@ -246,6 +246,9 @@ class RepeatRuleRepository {
       'LEGAL_WORKDAY',
       'WEEKEND',
       'LEGAL_HOLIDAY',
+      // FL #326：艾宾浩斯记忆法（service !416；阶梯 offset 内生于档位，
+      // weekdays/monthDay 不适用 —— 保存路径本就只为 CUSTOM 派生星期集）。
+      'EBBINGHAUS',
       'CUSTOM',
     };
     if (!frequencies.contains(frequency)) {
