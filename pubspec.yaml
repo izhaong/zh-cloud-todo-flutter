@@ -82,6 +82,7 @@ dependencies:
 
   # 月视图网格是自绘的（见下方「为什么不引 table_calendar」），不引第三方日历。
   timezone: ^0.10.1
+  speech_to_text: ^7.5.0
 
 dev_dependencies:
   flutter_test:
