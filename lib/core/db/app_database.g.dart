@@ -7382,6 +7382,28 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _lunarMonthMeta = const VerificationMeta(
+    'lunarMonth',
+  );
+  @override
+  late final GeneratedColumn<int> lunarMonth = GeneratedColumn<int>(
+    'lunar_month',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lunarDayMeta = const VerificationMeta(
+    'lunarDay',
+  );
+  @override
+  late final GeneratedColumn<int> lunarDay = GeneratedColumn<int>(
+    'lunar_day',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _startAtMeta = const VerificationMeta(
     'startAt',
   );
@@ -7494,6 +7516,8 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
     interval,
     byDay,
     monthDay,
+    lunarMonth,
+    lunarDay,
     startAt,
     until,
     countLimit,
@@ -7559,6 +7583,18 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
       context.handle(
         _monthDayMeta,
         monthDay.isAcceptableOrUnknown(data['month_day']!, _monthDayMeta),
+      );
+    }
+    if (data.containsKey('lunar_month')) {
+      context.handle(
+        _lunarMonthMeta,
+        lunarMonth.isAcceptableOrUnknown(data['lunar_month']!, _lunarMonthMeta),
+      );
+    }
+    if (data.containsKey('lunar_day')) {
+      context.handle(
+        _lunarDayMeta,
+        lunarDay.isAcceptableOrUnknown(data['lunar_day']!, _lunarDayMeta),
       );
     }
     if (data.containsKey('start_at')) {
@@ -7659,6 +7695,14 @@ class $TodoRepeatRulesTable extends TodoRepeatRules
         DriftSqlType.int,
         data['${effectivePrefix}month_day'],
       ),
+      lunarMonth: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}lunar_month'],
+      ),
+      lunarDay: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}lunar_day'],
+      ),
       startAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}start_at'],
@@ -7712,6 +7756,8 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
   final int interval;
   final String? byDay;
   final int? monthDay;
+  final int? lunarMonth;
+  final int? lunarDay;
   final DateTime? startAt;
   final DateTime? until;
   final int? countLimit;
@@ -7729,6 +7775,8 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
     required this.interval,
     this.byDay,
     this.monthDay,
+    this.lunarMonth,
+    this.lunarDay,
     this.startAt,
     this.until,
     this.countLimit,
@@ -7754,6 +7802,12 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
     }
     if (!nullToAbsent || monthDay != null) {
       map['month_day'] = Variable<int>(monthDay);
+    }
+    if (!nullToAbsent || lunarMonth != null) {
+      map['lunar_month'] = Variable<int>(lunarMonth);
+    }
+    if (!nullToAbsent || lunarDay != null) {
+      map['lunar_day'] = Variable<int>(lunarDay);
     }
     if (!nullToAbsent || startAt != null) {
       map['start_at'] = Variable<DateTime>(startAt);
@@ -7792,6 +7846,12 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
       monthDay: monthDay == null && nullToAbsent
           ? const Value.absent()
           : Value(monthDay),
+      lunarMonth: lunarMonth == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lunarMonth),
+      lunarDay: lunarDay == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lunarDay),
       startAt: startAt == null && nullToAbsent
           ? const Value.absent()
           : Value(startAt),
@@ -7827,6 +7887,8 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
       interval: serializer.fromJson<int>(json['interval']),
       byDay: serializer.fromJson<String?>(json['byDay']),
       monthDay: serializer.fromJson<int?>(json['monthDay']),
+      lunarMonth: serializer.fromJson<int?>(json['lunarMonth']),
+      lunarDay: serializer.fromJson<int?>(json['lunarDay']),
       startAt: serializer.fromJson<DateTime?>(json['startAt']),
       until: serializer.fromJson<DateTime?>(json['until']),
       countLimit: serializer.fromJson<int?>(json['countLimit']),
@@ -7851,6 +7913,8 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
       'interval': serializer.toJson<int>(interval),
       'byDay': serializer.toJson<String?>(byDay),
       'monthDay': serializer.toJson<int?>(monthDay),
+      'lunarMonth': serializer.toJson<int?>(lunarMonth),
+      'lunarDay': serializer.toJson<int?>(lunarDay),
       'startAt': serializer.toJson<DateTime?>(startAt),
       'until': serializer.toJson<DateTime?>(until),
       'countLimit': serializer.toJson<int?>(countLimit),
@@ -7871,6 +7935,8 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
     int? interval,
     Value<String?> byDay = const Value.absent(),
     Value<int?> monthDay = const Value.absent(),
+    Value<int?> lunarMonth = const Value.absent(),
+    Value<int?> lunarDay = const Value.absent(),
     Value<DateTime?> startAt = const Value.absent(),
     Value<DateTime?> until = const Value.absent(),
     Value<int?> countLimit = const Value.absent(),
@@ -7888,6 +7954,8 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
     interval: interval ?? this.interval,
     byDay: byDay.present ? byDay.value : this.byDay,
     monthDay: monthDay.present ? monthDay.value : this.monthDay,
+    lunarMonth: lunarMonth.present ? lunarMonth.value : this.lunarMonth,
+    lunarDay: lunarDay.present ? lunarDay.value : this.lunarDay,
     startAt: startAt.present ? startAt.value : this.startAt,
     until: until.present ? until.value : this.until,
     countLimit: countLimit.present ? countLimit.value : this.countLimit,
@@ -7909,6 +7977,10 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
       interval: data.interval.present ? data.interval.value : this.interval,
       byDay: data.byDay.present ? data.byDay.value : this.byDay,
       monthDay: data.monthDay.present ? data.monthDay.value : this.monthDay,
+      lunarMonth: data.lunarMonth.present
+          ? data.lunarMonth.value
+          : this.lunarMonth,
+      lunarDay: data.lunarDay.present ? data.lunarDay.value : this.lunarDay,
       startAt: data.startAt.present ? data.startAt.value : this.startAt,
       until: data.until.present ? data.until.value : this.until,
       countLimit: data.countLimit.present
@@ -7937,6 +8009,8 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
           ..write('interval: $interval, ')
           ..write('byDay: $byDay, ')
           ..write('monthDay: $monthDay, ')
+          ..write('lunarMonth: $lunarMonth, ')
+          ..write('lunarDay: $lunarDay, ')
           ..write('startAt: $startAt, ')
           ..write('until: $until, ')
           ..write('countLimit: $countLimit, ')
@@ -7959,6 +8033,8 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
     interval,
     byDay,
     monthDay,
+    lunarMonth,
+    lunarDay,
     startAt,
     until,
     countLimit,
@@ -7980,6 +8056,8 @@ class TodoRepeatRule extends DataClass implements Insertable<TodoRepeatRule> {
           other.interval == this.interval &&
           other.byDay == this.byDay &&
           other.monthDay == this.monthDay &&
+          other.lunarMonth == this.lunarMonth &&
+          other.lunarDay == this.lunarDay &&
           other.startAt == this.startAt &&
           other.until == this.until &&
           other.countLimit == this.countLimit &&
@@ -7999,6 +8077,8 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
   final Value<int> interval;
   final Value<String?> byDay;
   final Value<int?> monthDay;
+  final Value<int?> lunarMonth;
+  final Value<int?> lunarDay;
   final Value<DateTime?> startAt;
   final Value<DateTime?> until;
   final Value<int?> countLimit;
@@ -8017,6 +8097,8 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
     this.interval = const Value.absent(),
     this.byDay = const Value.absent(),
     this.monthDay = const Value.absent(),
+    this.lunarMonth = const Value.absent(),
+    this.lunarDay = const Value.absent(),
     this.startAt = const Value.absent(),
     this.until = const Value.absent(),
     this.countLimit = const Value.absent(),
@@ -8036,6 +8118,8 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
     this.interval = const Value.absent(),
     this.byDay = const Value.absent(),
     this.monthDay = const Value.absent(),
+    this.lunarMonth = const Value.absent(),
+    this.lunarDay = const Value.absent(),
     this.startAt = const Value.absent(),
     this.until = const Value.absent(),
     this.countLimit = const Value.absent(),
@@ -8059,6 +8143,8 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
     Expression<int>? interval,
     Expression<String>? byDay,
     Expression<int>? monthDay,
+    Expression<int>? lunarMonth,
+    Expression<int>? lunarDay,
     Expression<DateTime>? startAt,
     Expression<DateTime>? until,
     Expression<int>? countLimit,
@@ -8078,6 +8164,8 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
       if (interval != null) 'interval': interval,
       if (byDay != null) 'by_day': byDay,
       if (monthDay != null) 'month_day': monthDay,
+      if (lunarMonth != null) 'lunar_month': lunarMonth,
+      if (lunarDay != null) 'lunar_day': lunarDay,
       if (startAt != null) 'start_at': startAt,
       if (until != null) 'until': until,
       if (countLimit != null) 'count_limit': countLimit,
@@ -8099,6 +8187,8 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
     Value<int>? interval,
     Value<String?>? byDay,
     Value<int?>? monthDay,
+    Value<int?>? lunarMonth,
+    Value<int?>? lunarDay,
     Value<DateTime?>? startAt,
     Value<DateTime?>? until,
     Value<int?>? countLimit,
@@ -8118,6 +8208,8 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
       interval: interval ?? this.interval,
       byDay: byDay ?? this.byDay,
       monthDay: monthDay ?? this.monthDay,
+      lunarMonth: lunarMonth ?? this.lunarMonth,
+      lunarDay: lunarDay ?? this.lunarDay,
       startAt: startAt ?? this.startAt,
       until: until ?? this.until,
       countLimit: countLimit ?? this.countLimit,
@@ -8154,6 +8246,12 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
     }
     if (monthDay.present) {
       map['month_day'] = Variable<int>(monthDay.value);
+    }
+    if (lunarMonth.present) {
+      map['lunar_month'] = Variable<int>(lunarMonth.value);
+    }
+    if (lunarDay.present) {
+      map['lunar_day'] = Variable<int>(lunarDay.value);
     }
     if (startAt.present) {
       map['start_at'] = Variable<DateTime>(startAt.value);
@@ -8198,6 +8296,8 @@ class TodoRepeatRulesCompanion extends UpdateCompanion<TodoRepeatRule> {
           ..write('interval: $interval, ')
           ..write('byDay: $byDay, ')
           ..write('monthDay: $monthDay, ')
+          ..write('lunarMonth: $lunarMonth, ')
+          ..write('lunarDay: $lunarDay, ')
           ..write('startAt: $startAt, ')
           ..write('until: $until, ')
           ..write('countLimit: $countLimit, ')
@@ -15692,6 +15792,8 @@ typedef $$TodoRepeatRulesTableCreateCompanionBuilder =
       Value<int> interval,
       Value<String?> byDay,
       Value<int?> monthDay,
+      Value<int?> lunarMonth,
+      Value<int?> lunarDay,
       Value<DateTime?> startAt,
       Value<DateTime?> until,
       Value<int?> countLimit,
@@ -15712,6 +15814,8 @@ typedef $$TodoRepeatRulesTableUpdateCompanionBuilder =
       Value<int> interval,
       Value<String?> byDay,
       Value<int?> monthDay,
+      Value<int?> lunarMonth,
+      Value<int?> lunarDay,
       Value<DateTime?> startAt,
       Value<DateTime?> until,
       Value<int?> countLimit,
@@ -15765,6 +15869,16 @@ class $$TodoRepeatRulesTableFilterComposer
 
   ColumnFilters<int> get monthDay => $composableBuilder(
     column: $table.monthDay,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lunarMonth => $composableBuilder(
+    column: $table.lunarMonth,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lunarDay => $composableBuilder(
+    column: $table.lunarDay,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -15858,6 +15972,16 @@ class $$TodoRepeatRulesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get lunarMonth => $composableBuilder(
+    column: $table.lunarMonth,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lunarDay => $composableBuilder(
+    column: $table.lunarDay,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get startAt => $composableBuilder(
     column: $table.startAt,
     builder: (column) => ColumnOrderings(column),
@@ -15933,6 +16057,14 @@ class $$TodoRepeatRulesTableAnnotationComposer
 
   GeneratedColumn<int> get monthDay =>
       $composableBuilder(column: $table.monthDay, builder: (column) => column);
+
+  GeneratedColumn<int> get lunarMonth => $composableBuilder(
+    column: $table.lunarMonth,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get lunarDay =>
+      $composableBuilder(column: $table.lunarDay, builder: (column) => column);
 
   GeneratedColumn<DateTime> get startAt =>
       $composableBuilder(column: $table.startAt, builder: (column) => column);
@@ -16012,6 +16144,8 @@ class $$TodoRepeatRulesTableTableManager
                 Value<int> interval = const Value.absent(),
                 Value<String?> byDay = const Value.absent(),
                 Value<int?> monthDay = const Value.absent(),
+                Value<int?> lunarMonth = const Value.absent(),
+                Value<int?> lunarDay = const Value.absent(),
                 Value<DateTime?> startAt = const Value.absent(),
                 Value<DateTime?> until = const Value.absent(),
                 Value<int?> countLimit = const Value.absent(),
@@ -16030,6 +16164,8 @@ class $$TodoRepeatRulesTableTableManager
                 interval: interval,
                 byDay: byDay,
                 monthDay: monthDay,
+                lunarMonth: lunarMonth,
+                lunarDay: lunarDay,
                 startAt: startAt,
                 until: until,
                 countLimit: countLimit,
@@ -16050,6 +16186,8 @@ class $$TodoRepeatRulesTableTableManager
                 Value<int> interval = const Value.absent(),
                 Value<String?> byDay = const Value.absent(),
                 Value<int?> monthDay = const Value.absent(),
+                Value<int?> lunarMonth = const Value.absent(),
+                Value<int?> lunarDay = const Value.absent(),
                 Value<DateTime?> startAt = const Value.absent(),
                 Value<DateTime?> until = const Value.absent(),
                 Value<int?> countLimit = const Value.absent(),
@@ -16068,6 +16206,8 @@ class $$TodoRepeatRulesTableTableManager
                 interval: interval,
                 byDay: byDay,
                 monthDay: monthDay,
+                lunarMonth: lunarMonth,
+                lunarDay: lunarDay,
                 startAt: startAt,
                 until: until,
                 countLimit: countLimit,

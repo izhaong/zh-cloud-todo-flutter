@@ -78,6 +78,8 @@ class _RepeatRuleDraft {
     required this.selectedDates,
     required this.untilAt,
     required this.countLimit,
+    this.lunarMonth,
+    this.lunarDay,
   });
 
   final String frequency;
@@ -87,6 +89,11 @@ class _RepeatRuleDraft {
   final Set<DateTime> selectedDates;
   final DateTime? untilAt;
   final int? countLimit;
+
+  /// FL #325：农历两档的**用户意图**（"我要每年八月十五"）—— 服务端以它为准
+  /// 并规范化 startAt；反解只是兜底（老客户端/导入，见 service !417 spec）。
+  final int? lunarMonth;
+  final int? lunarDay;
 }
 
 class _ReminderDraft {
@@ -1990,6 +1997,8 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                 draft.repeatMode != 'ON_SELECTED_DATES'
             ? draft.weekdays
             : null,
+        lunarMonth: draft.lunarMonth,
+        lunarDay: draft.lunarDay,
         startAt: existing?.startAt ?? _startAt ?? _dueAt ?? DateTime.now(),
         untilAt: draft.untilAt,
         countLimit: draft.countLimit,
@@ -2099,6 +2108,14 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     var countText = '${existing?.countLimit ?? 1}';
     final repeatStart =
         existing?.startAt ?? _startAt ?? _dueAt ?? DateTime.now();
+    // FL #325：农历两档的**意图**（intent）—— 用户直接选"八月十五"，
+    // 不是从 startAt 反解（农历→公历在服务端，客户端无农历表；
+    // opencode 交叉验证修正：上行的是意图不是结果，startAt 由服务端规范化回填）。
+    // v1 不提供闰月选择（字段没有 isLeapMonth，给选择就会"静默塌陷"）。
+    int? lunarMonth;
+    int? lunarDay;
+    final lunarMonthCtrl = TextEditingController();
+    final lunarDayCtrl = TextEditingController();
     final weekdays = _weekdaysFromText(existing?.byDay);
     final selectedDates = _selectedDatesFromJson(existing?.selectedDatesJson);
     if (frequency == 'CUSTOM' &&
@@ -2137,6 +2154,10 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                             // 「重复周期按照 1，2，4，7，15，15，15…… 循环」）。序列档：
                             // 阶梯内生于档位，weekdays/monthDay 不适用（服务端带了就拒）。
                             ('EBBINGHAUS', '艾宾浩斯'),
+                            // FL #325：农历两档（嘀嗒《10-设置重复任务》:91
+                            // 「农历每年（春节、中秋、家人农历生日）/ 农历每月（初一、十五祈福）」）。
+                            ('LUNAR_YEARLY', '农历每年'),
+                            ('LUNAR_MONTHLY', '农历每月'),
                             ('CUSTOM', '自定义'),
                           ]
                           .map(
@@ -2164,6 +2185,26 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                                 // （monthDay 只在 MONTHLY 出现，本对话框不采集，无需处理）。
                                 if (frequency == 'EBBINGHAUS') {
                                   weekdays.clear();
+                                }
+                                // FL #325：农历两档 —— 正交字段就地清空；
+                                // 农历月日是**用户意图**，由下面的选择行填（非反解）。
+                                if (frequency == 'LUNAR_YEARLY' ||
+                                    frequency == 'LUNAR_MONTHLY') {
+                                  weekdays.clear();
+                                  _showLunarPicker(
+                                    dialogContext,
+                                    onPicked: (m, d) => setDialogState(() {
+                                      lunarMonth = m;
+                                      lunarDay = d;
+                                      lunarMonthCtrl.text = m == null
+                                          ? ''
+                                          : '农历$m月';
+                                      lunarDayCtrl.text = _lunarDayText(d);
+                                    }),
+                                    yearly: frequency == 'LUNAR_YEARLY',
+                                    month: lunarMonth,
+                                    day: lunarDay,
+                                  );
                                 }
                               }),
                             ),
@@ -2423,6 +2464,8 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
                     weekdays: weekdays,
                     repeatMode: repeatMode,
                     selectedDates: selectedDates,
+                    lunarMonth: lunarMonth,
+                    lunarDay: lunarDay,
                     untilAt:
                         repeatMode != 'ON_SELECTED_DATES' && endMode == 'until'
                         ? untilAt
@@ -2469,6 +2512,95 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
     return '${value.year}-$month-$day';
   }
 
+  /// FL #325：农历月日选择器 —— 用户直接表达**意图**（"我要每年八月十五"）。
+  /// v1 不提供闰月（字段无 isLeapMonth；给了选择反而"静默塌陷"）。
+  Future<void> _showLunarPicker(
+    BuildContext context, {
+    required void Function(int? month, int day) onPicked,
+    required bool yearly,
+    int? month,
+    int? day,
+  }) async {
+    var pickedMonth = month;
+    var pickedDay = day ?? 15;
+    const monthNames = [
+      '正',
+      '二',
+      '三',
+      '四',
+      '五',
+      '六',
+      '七',
+      '八',
+      '九',
+      '十',
+      '冬',
+      '腊',
+    ];
+    await showDialog<void>(
+      context: context,
+      builder: (pickerContext) => AlertDialog(
+        title: Text(yearly ? '选择农历月日（每年）' : '选择农历日（每月）'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (yearly)
+              DropdownButtonFormField<int>(
+                key: const Key('lunar-month-picker'),
+                initialValue: pickedMonth,
+                decoration: const InputDecoration(labelText: '农历月'),
+                items: [
+                  for (var m = 1; m <= 12; m++)
+                    DropdownMenuItem(
+                      value: m,
+                      child: Text('农历${monthNames[m - 1]}月'),
+                    ),
+                ],
+                onChanged: (v) => pickedMonth = v,
+              ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<int>(
+              key: const Key('lunar-day-picker'),
+              initialValue: pickedDay,
+              decoration: const InputDecoration(labelText: '农历日'),
+              items: [
+                for (var d = 1; d <= 30; d++)
+                  DropdownMenuItem(value: d, child: Text(_lunarDayText(d))),
+              ],
+              onChanged: (v) => pickedDay = v ?? 15,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            key: const Key('lunar-picker-cancel'),
+            onPressed: () => Navigator.pop(pickerContext),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            key: const Key('lunar-picker-confirm'),
+            onPressed: () {
+              Navigator.pop(pickerContext);
+              onPicked(yearly ? pickedMonth : null, pickedDay);
+            },
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// FL #325：农历日的中文读法（初一/十五/廿三/三十）。
+  String _lunarDayText(int? day) {
+    if (day == null) return '';
+    const ones = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+    if (day <= 10) return '初${ones[day - 1]}';
+    if (day < 20) return '十${ones[day - 11]}';
+    if (day == 20) return '二十';
+    if (day < 30) return '廿${ones[day - 21]}';
+    return '三十';
+  }
+
   String _repeatRuleLabel(TodoRepeatRule rule) {
     const labels = {
       'DAILY': '每天',
@@ -2480,9 +2612,31 @@ class _TaskDetailPaneState extends ConsumerState<TaskDetailPane> {
       'WEEKEND': '每周末',
       'LEGAL_HOLIDAY': '法定节假日',
       'EBBINGHAUS': '艾宾浩斯',
+      'LUNAR_YEARLY': '农历每年',
+      'LUNAR_MONTHLY': '农历每月',
       'CUSTOM': '自定义',
     };
-    final label = labels[rule.freq] ?? rule.freq;
+    var label = labels[rule.freq] ?? rule.freq;
+    // FL #325：农历两档读回时带上农历月日（用户设置的"八月十五"要看得见）
+    if (rule.freq == 'LUNAR_YEARLY' && rule.lunarMonth != null) {
+      final m = const [
+        '正',
+        '二',
+        '三',
+        '四',
+        '五',
+        '六',
+        '七',
+        '八',
+        '九',
+        '十',
+        '冬',
+        '腊',
+      ][rule.lunarMonth! - 1];
+      label = '农历每年 $m月${_lunarDayText(rule.lunarDay)}';
+    } else if (rule.freq == 'LUNAR_MONTHLY') {
+      label = '农历每月 ${_lunarDayText(rule.lunarDay)}';
+    }
     if (rule.repeatMode == 'ON_SELECTED_DATES') {
       final count = _selectedDatesFromJson(rule.selectedDatesJson).length;
       return rule.enabled ? '自选 $count 个日期' : '已停止：自选 $count 个日期';
