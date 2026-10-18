@@ -343,10 +343,9 @@ void main() {
         parentTaskId: parent.id,
       );
 
-      // 优先级那格是 DropdownButtonFormField（它的 key 是 ValueKey(当前值)，会随值漂），
-      // 所以按类型点整格：点标签文字会报 "hit test ... did not find the widget"
-      // 那种 warnIfMissed 警告 —— 警告不阻断断言，一次"蹭对了"的点击随时能在下一轮变成没点到。
-      await tester.tap(find.byType(DropdownButtonFormField<int>));
+      // FL #344 面①：优先级进了底部功能栏（原 Dropdown 已拆）。
+      // 走新的 chip → 弹层路径：chip 按 key 定位（不再按类型 —— 那格不存在了）。
+      await tester.tap(find.byKey(const Key('todo-quick-add-bar-priority')));
       await tester.pumpAndSettle();
       expect(
         find.text('高'),

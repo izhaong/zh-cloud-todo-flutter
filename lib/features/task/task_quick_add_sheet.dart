@@ -1,10 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../core/settings/quick_add_action_bar_setting.dart';
 import '../../core/settings/smart_date_recognition_setting.dart';
+import 'tasks_by_list_page.dart' show kInboxListId;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/app_database.dart';
+import '../../core/sync/sync_entities.dart';
 import '../../state/nlp_date.dart';
 import '../../state/providers.dart';
 import '../../state/repositories/task_capture_defaults_repository.dart';
@@ -42,6 +45,17 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
   /// 只有**建子任务**这张表是连续的：`:15`/`:56` 两句都长在「创建子任务」那一节里，
   /// 收集箱/清单的快速添加原文没提"如此往复"，所以 `parentTaskId == null` 时提交仍然照旧关表。
   bool get _consecutive => widget.parentTaskId != null;
+
+  // ── FL #344 面①：底部功能栏（产品裁决：日期→优先级→标签→清单，可调序）──
+  // 手选覆盖（用户最后的动作最大）：手选过就压着 NLP 识别，识别行只在没手选时出现。
+  DateTime? _manualDueAt;
+  List<String>? _manualTagIds;
+  String? _manualListId;
+  // sectionId 降级为 state：切清单时必须清空（分区属于原清单，保留会撞
+  // create 的 _requireSectionInList 直接抛 StateError —— opencode 点名）。
+  late String _listId;
+  String? _sectionId;
+  List<String> _barOrder = List.of(QuickAddActionBarSetting.defaultOrder);
   int? _priorityOverride;
   DateTime? _nlpResolvedDueAt;
 
@@ -64,10 +78,19 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
   @override
   void initState() {
     super.initState();
+    _listId = widget.listId;
+    _sectionId = widget.sectionId;
     // 读总开关；读到之前按默认（开）——识别是既有行为，不能因为"还没读到"就停一屏。
     SmartDateRecognitionSetting().read().then((enabled) {
       if (mounted && enabled != _smartDateEnabled) {
         setState(() => _smartDateEnabled = enabled);
+      }
+    });
+    // FL #344 面①：底栏序渲染**从配置读**（读不到=默认序）。v1 不给编辑入口，
+    // 但路径必须走配置 —— 硬编码会把"推迟"变成"返工"（opencode）。
+    QuickAddActionBarSetting().read().then((order) {
+      if (mounted && order != _barOrder) {
+        setState(() => _barOrder = order);
       }
     });
     _titleCtrl.addListener(_maybeResolveDate);
@@ -123,7 +146,9 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
     // 判据源《05-智能识别》:5「…自动识别并为您创建日期**和提醒**」。
     // `_nlpResolvedDueAt` 只由识别路径赋值（模板那条 `_addFromTemplate` 不碰它），
     // 所以"识别命中"与"有 dueAt"在这文件里是同一件事，不需要再引第二个标志位。
-    final dueAt = _nlpResolvedDueAt;
+    // FL #344 面①：手选日期压着 NLP 识别（用户最后的动作最大）——
+    // 手选过就不再看识别结果，识别行也只在没手选时出现。
+    final dueAt = _manualDueAt ?? _nlpResolvedDueAt;
     String? savedTitle;
     TaskCaptureDefaults? defaults;
     if (_savedTaskId == null) {
@@ -135,15 +160,44 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
       try {
         defaults = await ref.read(taskCaptureDefaultsRepositoryProvider)?.get();
         final task = await repo.create(
-          listId: widget.listId,
+          listId: _listId,
           parentTaskId: widget.parentTaskId,
-          sectionId: widget.sectionId,
+          sectionId: _sectionId,
           title: text,
           priority: _priorityOverride ?? defaults?.defaultPriority ?? 0,
           dueAt: dueAt,
         );
         _savedTaskId = task.id;
         savedTitle = text;
+        // FL #344 面①：标签是**二次写入**（opencode：v1 不给 create 加 tagIds）。
+        // 失败语义照 _saveOnce 先例 —— 任务已建、标签没绑上 ⇒ 明说，不回滚任务。
+        if (_manualTagIds != null && _manualTagIds!.isNotEmpty) {
+          final db = ref.read(appDatabaseProvider);
+          final queue = ref.read(syncChangeQueueProvider);
+          if (db == null || queue == null) {
+            _report('任务已建，但标签没设置成功');
+            return;
+          }
+          try {
+            for (final tagId in _manualTagIds!) {
+              await db
+                  .into(db.todoTaskTags)
+                  .insert(
+                    TodoTaskTagsCompanion.insert(taskId: task.id, tagId: tagId),
+                  );
+            }
+            await queue.enqueue(
+              entity: SyncEntities.taskTag,
+              op: SyncOps.upsert,
+              localId: task.id,
+              serverId: task.serverId,
+              payload: {'taskId': task.id, 'tagIds': _manualTagIds},
+            );
+          } catch (_) {
+            _report('任务已建，但标签没设置成功');
+            // 标签失败不阻断保存 —— dueAt/提醒链继续走
+          }
+        }
       } on StateError catch (error) {
         _report(error.message.toString());
         return;
@@ -239,9 +293,9 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
             final seed = templates.taskSeed(template);
             final repo = ref.read(taskRepositoryProvider)!;
             await repo.create(
-              listId: widget.listId,
+              listId: _listId,
               parentTaskId: widget.parentTaskId,
-              sectionId: widget.sectionId,
+              sectionId: _sectionId,
               title: seed.title,
               description: seed.description,
               priority: seed.priority,
@@ -265,6 +319,165 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
         },
       ),
     );
+  }
+
+  /// FL #344 面①：日期弹层（tap=打开；长按=清除 —— 与桌面底栏逐字对齐）。
+  Future<void> _openDateSheet() async {
+    final picked = await showModalBottomSheet<DateTime>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            for (final entry in const [('今天', 0), ('明天', 1), ('下周一', 7)])
+              ListTile(
+                title: Text(entry.$1),
+                onTap: () =>
+                    Navigator.pop(sheetContext, _dateFromOffset(entry.$2)),
+              ),
+            ListTile(
+              leading: const Icon(Icons.calendar_month_outlined),
+              title: const Text('选择日期…'),
+              onTap: () async {
+                final base = _manualDueAt ?? DateTime.now();
+                final d = await showDatePicker(
+                  context: sheetContext,
+                  initialDate: base,
+                  firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                  lastDate: DateTime.now().add(const Duration(days: 365 * 3)),
+                );
+                if (sheetContext.mounted) Navigator.pop(sheetContext, d);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+    if (picked != null) {
+      setState(() => _manualDueAt = picked);
+    }
+  }
+
+  DateTime _dateFromOffset(int days) =>
+      DateTime.now().add(Duration(days: days));
+
+  /// 优先级弹层。chip 显示**生效档**（求值结果）—— 用户看到的 == 将要保存的，
+  /// 没有"未选"这个可见状态（opencode：v1 不做三态）。
+  Future<void> _openPrioritySheet() async {
+    final picked = await showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            for (final p in const [3, 2, 1, 0])
+              ListTile(
+                title: Text(priorityLabel(p)),
+                trailing: CircleAvatar(
+                  backgroundColor: priorityColor(p),
+                  radius: 8,
+                ),
+                onTap: () => Navigator.pop(sheetContext, p),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked != null) {
+      setState(() => _priorityOverride = picked);
+    }
+  }
+
+  /// 标签弹层。
+  Future<void> _openTagSheet() async {
+    final tags = ref.watch(tagsStreamProvider).valueOrNull ?? const [];
+    if (tags.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请先在标签页创建标签')));
+      return;
+    }
+    final selected = await showModalBottomSheet<Set<String>>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: StatefulBuilder(
+          builder: (listContext, setSheetState) => ListView(
+            shrinkWrap: true,
+            children: [
+              for (final tag in tags)
+                CheckboxListTile(
+                  key: Key('todo-quick-add-tag-${tag.id}'),
+                  value: _manualTagIds?.contains(tag.id) ?? false,
+                  title: Text(tag.name),
+                  onChanged: (v) => setSheetState(() {
+                    final next = {...?_manualTagIds};
+                    if (v ?? false) {
+                      next.add(tag.id);
+                    } else {
+                      next.remove(tag.id);
+                    }
+                    // 直接改字段：StatefulBuilder 让弹层内即时回显
+                    _manualTagIds = next.isEmpty ? null : next.toList();
+                  }),
+                ),
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: FilledButton(
+                  key: const Key('todo-quick-add-tag-done'),
+                  onPressed: () =>
+                      Navigator.pop(sheetContext, _manualTagIds?.toSet()),
+                  child: const Text('完成'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (selected != null) {
+      setState(() {});
+    }
+  }
+
+  /// 清单弹层。**切清单必须联动清空 sectionId**（分区属于原清单，
+  /// 保留会撞 create 的 _requireSectionInList 直接抛 StateError）。
+  Future<void> _openListSheet() async {
+    // 弹层打开前等 stream 首值：`valueOrNull` 在首次订阅的微任务未完成前是
+    // null，直接开弹层会渲染成只有「收集箱」（树里 0 个清单项 —— FL #344 判据抓到的）。
+    final lists = await ref.read(listsStreamProvider.future);
+    if (!mounted) return;
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.inbox_outlined),
+              title: const Text('收集箱'),
+              onTap: () => Navigator.pop(sheetContext, kInboxListId),
+            ),
+            for (final list in lists)
+              ListTile(
+                leading: const Icon(Icons.list_outlined),
+                title: Text(list.name),
+                onTap: () => Navigator.pop(sheetContext, list.id),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked != null && picked != _listId) {
+      setState(() {
+        _manualListId = picked;
+        _listId = picked;
+        _sectionId = null; // FL #344：分区属于原清单 —— 切清单必须清空
+      });
+    }
   }
 
   @override
@@ -305,23 +518,23 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
               ),
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<int>(
-              key: ValueKey(priority),
-              initialValue: priority,
-              decoration: const InputDecoration(
-                labelText: '优先级',
-                border: OutlineInputBorder(),
-              ),
-              items: const [
-                DropdownMenuItem(value: 0, child: Text('无')),
-                DropdownMenuItem(value: 1, child: Text('低')),
-                DropdownMenuItem(value: 2, child: Text('中')),
-                DropdownMenuItem(value: 3, child: Text('高')),
-              ],
-              onChanged: (v) => setState(() => _priorityOverride = v ?? 0),
+            _QuickAddActionBar(
+              order: _barOrder,
+              effectivePriority: priority,
+              hasManualDate: _manualDueAt != null,
+              hasManualTags: _manualTagIds?.isNotEmpty ?? false,
+              hasManualList: _manualListId != null,
+              manualListId: _manualListId ?? _listId,
+              onTapDate: _openDateSheet,
+              onLongPressDate: () => setState(() => _manualDueAt = null),
+              onTapPriority: _openPrioritySheet,
+              onTapTag: _openTagSheet,
+              onTapList: _openListSheet,
             ),
             const SizedBox(height: 16),
-            if (_nlpResolvedDueAt != null)
+            // FL #344 面①：手选日期压着 NLP —— 识别行只在**没手选**时出现
+            // （手选过仍显示会让"两个来源"同时挂着，用户不知道谁生效）。
+            if (_manualDueAt == null && _nlpResolvedDueAt != null)
               // `:81`「点击「已识别的时间」，就能取消识别」⇒ 这一行不是只读展示，
               // 它**本身就是取消入口**（原文给的两种方式之一；另一种是按删除键）。
               InkWell(
@@ -482,6 +695,136 @@ class _QuickAddTemplatePicker extends StatelessWidget {
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+/// FL #344 面①：快速添加底部功能栏（产品裁决：日期→优先级→标签→清单，可调序）。
+///
+/// 渲染**从配置读**（`QuickAddActionBarSetting`，读不到=默认序）——
+/// 顺序表由 state 传入，本类只按序摆放。chip 语义：
+/// - tap = 打开弹层；**长按日期 = 清除**（与桌面底栏逐字对齐，opencode）；
+/// - 优先级 chip 显示**生效档**（用户看到的 == 将要保存的，无"未选"态）；
+/// - 有手选值时高亮（用户最后的动作最大 —— 手选压着 NLP 识别）。
+class _QuickAddActionBar extends StatelessWidget {
+  const _QuickAddActionBar({
+    required this.order,
+    required this.effectivePriority,
+    required this.hasManualDate,
+    required this.hasManualTags,
+    required this.hasManualList,
+    required this.manualListId,
+    required this.onTapDate,
+    required this.onLongPressDate,
+    required this.onTapPriority,
+    required this.onTapTag,
+    required this.onTapList,
+  });
+
+  final List<String> order;
+  final int effectivePriority;
+  final bool hasManualDate;
+  final bool hasManualTags;
+  final bool hasManualList;
+  final String manualListId;
+  final VoidCallback onTapDate;
+  final VoidCallback onLongPressDate;
+  final VoidCallback onTapPriority;
+  final VoidCallback onTapTag;
+  final VoidCallback onTapList;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget chipFor(String id) {
+      switch (id) {
+        case 'date':
+          return _BarChip(
+            key: const Key('todo-quick-add-bar-date'),
+            icon: Icons.event_outlined,
+            label: hasManualDate ? '已选日期' : '日期',
+            highlighted: hasManualDate,
+            onTap: onTapDate,
+            onLongPress: onLongPressDate,
+          );
+        case 'priority':
+          return _BarChip(
+            key: const Key('todo-quick-add-bar-priority'),
+            icon: Icons.flag_outlined,
+            label: priorityLabel(effectivePriority),
+            highlighted: effectivePriority > 0,
+            onTap: onTapPriority,
+          );
+        case 'tag':
+          return _BarChip(
+            key: const Key('todo-quick-add-bar-tag'),
+            icon: Icons.sell_outlined,
+            label: hasManualTags ? '已选标签' : '标签',
+            highlighted: hasManualTags,
+            onTap: onTapTag,
+          );
+        case 'list':
+          return _BarChip(
+            key: const Key('todo-quick-add-bar-list'),
+            icon: Icons.list_alt_outlined,
+            label: '清单',
+            highlighted: hasManualList,
+            onTap: onTapList,
+          );
+        default:
+          return const SizedBox.shrink();
+      }
+    }
+
+    return SizedBox(
+      height: 44,
+      child: Row(
+        children: [
+          for (final id in order) ...[Expanded(child: chipFor(id))],
+        ],
+      ),
+    );
+  }
+}
+
+/// 底栏单个功能位（图标 + 短文案；高亮 = 有手选值）。
+class _BarChip extends StatelessWidget {
+  const _BarChip({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.highlighted,
+    required this.onTap,
+    this.onLongPress,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool highlighted;
+  final VoidCallback onTap;
+  final VoidCallback? onLongPress;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = highlighted
+        ? Theme.of(context).colorScheme.primary
+        : Theme.of(context).colorScheme.onSurfaceVariant;
+    return InkWell(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      borderRadius: BorderRadius.circular(8),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 20, color: color),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(color: color),
+          ),
+        ],
       ),
     );
   }
