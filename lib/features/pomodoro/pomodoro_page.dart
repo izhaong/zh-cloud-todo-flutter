@@ -2012,6 +2012,9 @@ class _FocusHourlyChart extends StatelessWidget {
               .where((item) => item.minutes == maxMinutes)
               .map((item) => item.hour)
               .toList(growable: false);
+    // 全是 0 分钟时 `minutes / maxMinutes` 是 0/0 = NaN，柱高会把整页布局打崩。
+    double barHeight(int minutes) =>
+        maxMinutes == 0 ? 8 : 8 + 60 * minutes / maxMinutes;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2045,7 +2048,7 @@ class _FocusHourlyChart extends StatelessWidget {
                               borderRadius: BorderRadius.circular(3),
                             ),
                             child: SizedBox(
-                              height: 8 + 60 * item.minutes / maxMinutes,
+                              height: barHeight(item.minutes),
                             ),
                           ),
                         ),
