@@ -1660,6 +1660,32 @@ void main() {
     expect(find.bySemanticsLabel('最佳专注时间按小时分布，最高 55 分钟'), findsOneWidget);
   });
 
+  testWidgets('最佳专注时间：小时分布全是 0 分钟时柱高不为 NaN', (tester) async {
+    final api = _FakePomodoroApi()
+      ..statsByPeriod['week'] = const PomodoroStatsDto(
+        totalSessions: 0,
+        totalMinutes: 0,
+        bestHour: '',
+        sessionTrend: [PomodoroDailyStatsDto(date: '2026-08-02', count: 0)],
+        minutesTrend: [PomodoroDailyStatsDto(date: '2026-08-02', count: 0)],
+        hourlyTrend: [
+          PomodoroHourlyStatsDto(hour: 8, minutes: 0),
+          PomodoroHourlyStatsDto(hour: 9, minutes: 0),
+        ],
+      );
+    await _pumpPage(tester, api: api);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('pomodoro-stats-hourly-title')),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    expect(find.text('当前周期还没有可比较的专注时段'), findsOneWidget);
+    expect(find.byKey(const Key('pomodoro-stats-hourly-bar-8')), findsOneWidget);
+    expect(find.byKey(const Key('pomodoro-stats-hourly-bar-9')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   // FL #577：三位数的日柱标签在 34px 宽里换行成两行，柱状图整条 RenderFlex 溢出。
   // 单日专注 110 分钟是正常量级（4 个 25 分钟番茄 = 100 分钟），不是挑出来的假数据。
   testWidgets('专注趋势日柱标签三位数（110 分钟）不溢出', (tester) async {

@@ -1263,7 +1263,7 @@ class _EfficiencyDock extends StatelessWidget {
               child: _EfficiencyButton(
                 label: '习惯',
                 tooltip: '习惯打卡',
-                icon: Icons.autorenew,
+                icon: Icons.repeat_rounded,
                 colors: colors,
                 onTap: onOpenHabit,
               ),
@@ -1347,13 +1347,18 @@ class _EfficiencyButtonState extends State<_EfficiencyButton> {
                   color: widget.colors.mutedForeground,
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  widget.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.badge.copyWith(
-                    fontSize: 10,
-                    color: widget.colors.mutedForeground,
+                SizedBox(
+                  height: 14,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      widget.label,
+                      maxLines: 1,
+                      style: AppTextStyles.badge.copyWith(
+                        fontSize: 10,
+                        color: widget.colors.mutedForeground,
+                      ),
+                    ),
                   ),
                 ),
               ],
