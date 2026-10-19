@@ -1151,29 +1151,44 @@ class _CountdownBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final days = countdown.daysRemaining.abs().toString();
-    return switch (countdown.style) {
-      // 翻页：带中缝的日历牌，显示天数。
-      2 => Container(
+    // 行高由标题撑开。只给宽度时，翻页牌和圆环会被拉成一条，天数也挤出圆外。
+    Widget dayMark({required Color color, required BoxDecoration decoration}) {
+      return SizedBox(
         key: ValueKey('countdown-badge-${countdown.id}'),
         width: 44,
-        alignment: Alignment.center,
+        height: 44,
+        child: DecoratedBox(
+          decoration: decoration,
+          child: Center(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Text(days, style: TextStyle(color: color)),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return switch (countdown.style) {
+      // 翻页：带中缝的日历牌，显示天数。
+      2 => dayMark(
+        color: scheme.onSecondaryContainer,
         decoration: BoxDecoration(
           color: scheme.secondaryContainer,
           borderRadius: BorderRadius.circular(8),
           border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
         ),
-        child: Text(days, style: TextStyle(color: scheme.onSecondaryContainer)),
       ),
-      // 圆环：描边圆环内嵌天数。
-      3 => Container(
-        key: ValueKey('countdown-badge-${countdown.id}'),
-        width: 44,
-        alignment: Alignment.center,
+      // 圆环：描边圆环内嵌天数。必须是正方形，否则 circle 画成椭圆。
+      3 => dayMark(
+        color: scheme.primary,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           border: Border.all(color: scheme.primary, width: 3),
         ),
-        child: Text(days, style: TextStyle(color: scheme.primary)),
       ),
       _ => CircleAvatar(
         key: ValueKey('countdown-badge-${countdown.id}'),
