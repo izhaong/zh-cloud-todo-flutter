@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../core/settings/smart_date_recognition_setting.dart';
+import '../../core/settings/quick_add_input_style_setting.dart';
 import '../../core/settings/clipboard_add_task_setting.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -117,6 +118,7 @@ class SettingsRoute extends ConsumerWidget {
                 // 放「任务」里是**位置差异**，不是术语差异 —— 名字逐字用它的。
                 const _ClipboardAddTaskSwitch(),
                 const _SmartDateRecognitionSwitch(),
+                const _QuickAddInputStyleTile(),
                 _Tile(
                   key: const Key('todo-settings-swipe-actions'),
                   icon: Icons.swipe_outlined,
@@ -1051,6 +1053,63 @@ class _ClipboardAddTaskSwitchState extends State<_ClipboardAddTaskSwitch> {
 /// 「智能识别日期」总开关（FL #344）。判据源 `:85`
 /// 「「设置」-「更多设置」-「智能识别」-「智能识别日期」，即可关闭智能识别功能。」
 /// —— 原文说的是"**关闭**"，所以默认**开**。
+/// FL #344 面④：输入框样式（`:54`「点击『输入框设置』切换输入框样式」）。
+///
+/// 原文入口是**输入框右侧下拉 → 输入框设置**；本端设置页 v1 先落这枚 Tile
+/// （「任务」分区，紧邻「智能识别日期」），下拉入口随桌面壳成熟度另刀。
+class _QuickAddInputStyleTile extends StatefulWidget {
+  const _QuickAddInputStyleTile();
+
+  @override
+  State<_QuickAddInputStyleTile> createState() =>
+      _QuickAddInputStyleTileState();
+}
+
+class _QuickAddInputStyleTileState extends State<_QuickAddInputStyleTile> {
+  String _style = QuickAddInputStyleSetting.defaultStyle;
+
+  @override
+  void initState() {
+    super.initState();
+    QuickAddInputStyleSetting().read().then(
+      (style) => setState(() => _style = style),
+    );
+  }
+
+  Future<void> _change(String? style) async {
+    if (style == null || style == _style) return;
+    setState(() => _style = style);
+    await QuickAddInputStyleSetting().write(style);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = brandColors(context);
+    return ListTile(
+      key: const Key('todo-settings-input-style'),
+      title: const Text('输入框样式'),
+      subtitle: Text(
+        switch (_style) {
+          'collapsed' => '收起单行：快速添加，不显示快捷工具',
+          'expanded' => '展开：输入框带快捷工具行',
+          _ => '内联：清单页输入，回车即建',
+        },
+        style: AppTextStyles.fieldLabel.copyWith(color: colors.mutedForeground),
+      ),
+      trailing: PopupMenuButton<String>(
+        key: const Key('todo-settings-input-style-menu'),
+        initialValue: _style,
+        onSelected: _change,
+        itemBuilder: (_) => const [
+          PopupMenuItem(value: 'inline', child: Text('内联（默认）')),
+          PopupMenuItem(value: 'collapsed', child: Text('收起单行')),
+          PopupMenuItem(value: 'expanded', child: Text('展开')),
+        ],
+      ),
+    );
+  }
+}
+
 class _SmartDateRecognitionSwitch extends StatefulWidget {
   const _SmartDateRecognitionSwitch();
 

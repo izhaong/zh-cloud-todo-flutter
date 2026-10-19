@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:zh_cloud_todo_flutter/core/theme/app_theme.dart';
 import 'package:zh_cloud_todo_flutter/core/widgets/app_widgets.dart';
@@ -38,6 +39,62 @@ void main() {
 
     expect(submitted, '写周报');
     expect(find.text('写周报'), findsNothing);
+  });
+
+  // ── FL #344 面④：输入框样式三档（`:54`「切换输入框样式」）──
+
+  testWidgets('collapsed：工具行收起、单行输入仍在且回车仍能建任务', (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'todo_quick_add_input_style_v1': 'collapsed',
+    });
+    String? submitted;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData.light().copyWith(
+          extensions: const [AppThemeExtension(AppColors.light)],
+        ),
+        home: Scaffold(
+          body: QuickAddBar(onSubmit: (request) => submitted = request.input),
+        ),
+      ),
+    );
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    // 工具行收起（单行的意义）：三个快捷工具一个都不剩
+    expect(find.byTooltip('日期'), findsNothing, reason: 'collapsed ⇒ 工具行不显示');
+    expect(find.byTooltip('优先级'), findsNothing);
+    expect(find.byTooltip('标签'), findsNothing);
+    // 输入框仍在
+    expect(find.byType(TextField), findsOneWidget);
+
+    // 回车仍能建任务（收起的是工具，不是能力）
+    await tester.enterText(find.byType(TextField), '收起样式下建任务');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(submitted, '收起样式下建任务');
+  });
+
+  testWidgets('inline（默认）：工具行照常显示 —— 切样式不改既有体验', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData.light().copyWith(
+          extensions: const [AppThemeExtension(AppColors.light)],
+        ),
+        home: Scaffold(body: QuickAddBar(onSubmit: (_) {})),
+      ),
+    );
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    expect(find.byTooltip('日期'), findsOneWidget, reason: 'inline = 现状');
+    expect(find.byTooltip('优先级'), findsOneWidget);
+    expect(find.byTooltip('标签'), findsOneWidget);
   });
 
   testWidgets('mobile QuickAdd exposes fixed-device semantic identifiers', (

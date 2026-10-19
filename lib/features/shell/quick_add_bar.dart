@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/settings/quick_add_input_style_setting.dart';
+
 import '../../core/voice/voice_input_gateway.dart';
 
 import '../../core/theme/app_theme.dart';
@@ -744,6 +746,9 @@ class _QuickAddBarState extends State<QuickAddBar> {
   final _ctrl = TextEditingController();
   bool _submitting = false;
   int _visibleLines = 1;
+
+  /// FL #344 面④：输入框样式（collapsed ⇒ 工具行不显示，只剩一行输入）。
+  String _inputStyle = QuickAddInputStyleSetting.defaultStyle;
   DateTime? _dueAtOverride;
   int? _priorityOverride;
   bool _useNlpDate = true;
@@ -752,11 +757,19 @@ class _QuickAddBarState extends State<QuickAddBar> {
 
   int get _tagCount => _tagIds.length + _pendingTagNames.length;
 
+  /// 面④：collapsed ⇒ 工具行收起（输入框仍在、回车仍建 —— 单行的意义）。
+  bool get _showTools => _inputStyle != 'collapsed';
+
   @override
   void initState() {
     super.initState();
     _ctrl.addListener(_syncVisibleLines);
     _ctrl.addListener(_syncHashTags);
+    QuickAddInputStyleSetting().read().then((style) {
+      if (mounted && style != _inputStyle) {
+        setState(() => _inputStyle = style);
+      }
+    });
   }
 
   @override
@@ -929,37 +942,39 @@ class _QuickAddBarState extends State<QuickAddBar> {
                   ),
                 ),
               ),
-              _ToolIcon(
-                icon: Icons.calendar_today_outlined,
-                tooltip: '日期',
-                colors: colors,
-                onTap: _pickDueDate,
-                onLongPress: () => setState(() {
-                  _dueAtOverride = null;
-                  _useNlpDate = false;
-                }),
-              ),
-              _ToolIcon(
-                icon: Icons.flag_outlined,
-                tooltip: '优先级',
-                colors: colors,
-                onTap: _pickPriority,
-              ),
-              if (_tagCount > 0)
-                // 桌面原来只有 tooltip 里的「标签」，而 tooltip 进不了读屏
-                // （实测见 task_quick_add_sheet.dart:203）⇒ 计数必须是看得见的文字。
-                Text(
-                  '标签 $_tagCount',
-                  style: AppTextStyles.fieldLabel.copyWith(
-                    color: colors.mutedForeground,
-                  ),
+              if (_showTools) ...[
+                _ToolIcon(
+                  icon: Icons.calendar_today_outlined,
+                  tooltip: '日期',
+                  colors: colors,
+                  onTap: _pickDueDate,
+                  onLongPress: () => setState(() {
+                    _dueAtOverride = null;
+                    _useNlpDate = false;
+                  }),
                 ),
-              _ToolIcon(
-                icon: Icons.label_outline,
-                tooltip: '标签',
-                colors: colors,
-                onTap: _pickTags,
-              ),
+                _ToolIcon(
+                  icon: Icons.flag_outlined,
+                  tooltip: '优先级',
+                  colors: colors,
+                  onTap: _pickPriority,
+                ),
+                if (_tagCount > 0)
+                  // 桌面原来只有 tooltip 里的「标签」，而 tooltip 进不了读屏
+                  // （实测见 task_quick_add_sheet.dart:203）⇒ 计数必须是看得见的文字。
+                  Text(
+                    '标签 $_tagCount',
+                    style: AppTextStyles.fieldLabel.copyWith(
+                      color: colors.mutedForeground,
+                    ),
+                  ),
+                _ToolIcon(
+                  icon: Icons.label_outline,
+                  tooltip: '标签',
+                  colors: colors,
+                  onTap: _pickTags,
+                ),
+              ],
             ],
           ),
         ),
