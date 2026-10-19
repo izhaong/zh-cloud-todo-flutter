@@ -367,6 +367,12 @@ class _MobileQuickAddButtonState extends State<MobileQuickAddButton> {
   bool _voiceSessionActive = false;
   Timer? _voiceHoldTimer;
 
+  /// FL #342 第二步：录音模式（`:116-119`「长按并**向左/向右拖动**切换…松手
+  /// 继续输入…点击**停止**按钮结束」）。语音会话的持续形态：不按住也能继续。
+  bool _recordingMode = false;
+  Offset? _holdOrigin;
+  Timer? _recordingLimitTimer;
+
   Future<void> _startVoiceSession() async {
     // 先激活会话（overlay 出现）再判终态 —— 装配缺失也要"看得见"，
     // 否则 setState 写进 _voiceStatus 却没有 overlay 宿主，文案永远不显示。
@@ -375,6 +381,7 @@ class _MobileQuickAddButtonState extends State<MobileQuickAddButton> {
       _voiceStatus = null;
       _voiceFinalText = '';
     });
+    _showVoiceOverlay();
     final gateway = widget.voiceGateway;
     if (gateway == null) {
       // 装配缺失 ⇒ 不假装支持 —— 终态化，不静默。
@@ -392,6 +399,12 @@ class _MobileQuickAddButtonState extends State<MobileQuickAddButton> {
   }
 
   Future<void> _endVoiceSession() async {
+    _recordingLimitTimer?.cancel();
+    _recordingLimitTimer = null;
+    _hideVoiceOverlay();
+    if (mounted) {
+      setState(() => _recordingMode = false);
+    }
     await widget.voiceGateway?.stop();
     final text = _voiceFinalText.trim();
     if (mounted) {
@@ -402,8 +415,30 @@ class _MobileQuickAddButtonState extends State<MobileQuickAddButton> {
     }
   }
 
+  /// 长按期间水平拖动超过阈值（48px）⇒ 切录音模式（`:116`「向左/向右拖动」）。
+  /// 垂直拖不算 —— Draggable 的子任务拖出是**垂直**方向语义，两条手势轴分开。
+  void _holdMoved(Offset position) {
+    // 语音会话已开（500ms 已到）也允许切 —— 长按听写途中横拖 = 用户要持续形态。
+    if (_recordingMode || _holdOrigin == null) {
+      return;
+    }
+    final dx = (position.dx - _holdOrigin!.dx).abs();
+    if (dx >= 48) {
+      _voiceHoldTimer?.cancel();
+      setState(() => _recordingMode = true);
+      _showVoiceOverlay(); // 切录音态的浮层形态（带停止按钮）
+      // `:118`「到达上限将自动保存」—— 30 分钟（`:123`）。
+      _recordingLimitTimer?.cancel();
+      _recordingLimitTimer = Timer(const Duration(minutes: 30), () {
+        if (mounted && _recordingMode) _endVoiceSession();
+      });
+    }
+  }
+
   /// 松手/取消：长按计时还没到就取消；到过（语音会话已开）则结束会话。
+  /// **录音模式下松手不结束**（`:117`「松手继续输入，不用一直按住」）。
   void _holdEnded() {
+    if (_recordingMode) return; // 录音模式：等「停止」按钮（:118）
     final timer = _voiceHoldTimer;
     if (timer != null && timer.isActive) {
       timer.cancel(); // 不到 500ms：这是一次点击/短按，不进语音
@@ -415,7 +450,10 @@ class _MobileQuickAddButtonState extends State<MobileQuickAddButton> {
   }
 
   void _onVoiceStatus(VoiceInputStatus status) {
-    if (mounted) setState(() => _voiceStatus = status);
+    if (mounted) {
+      setState(() => _voiceStatus = status);
+      if (_voiceSessionActive) _showVoiceOverlay(); // 刷状态文案
+    }
   }
 
   void _onVoiceResult(String text, {required bool isFinal}) {
@@ -426,6 +464,8 @@ class _MobileQuickAddButtonState extends State<MobileQuickAddButton> {
   @override
   void dispose() {
     _voiceHoldTimer?.cancel();
+    _recordingLimitTimer?.cancel();
+    _hideVoiceOverlay();
     super.dispose();
   }
 
@@ -437,10 +477,14 @@ class _MobileQuickAddButtonState extends State<MobileQuickAddButton> {
     // （pointer-down 即赢、竞技场关闭），长按超时永远不触发（判据 overlay=0 钉死，
     // opencode 的"天然互斥"论被实测推翻）。
     return Listener(
-      onPointerDown: (_) => _voiceHoldTimer = Timer(
-        const Duration(milliseconds: 500),
-        _startVoiceSession,
-      ),
+      onPointerDown: (event) {
+        _holdOrigin = event.position;
+        _voiceHoldTimer = Timer(
+          const Duration(milliseconds: 500),
+          _startVoiceSession,
+        );
+      },
+      onPointerMove: (event) => _holdMoved(event.position),
       onPointerUp: (_) => _holdEnded(),
       onPointerCancel: (_) => _holdEnded(),
       child: Stack(
@@ -484,30 +528,67 @@ class _MobileQuickAddButtonState extends State<MobileQuickAddButton> {
               ),
             ),
           ),
-          if (_voiceSessionActive)
-            Positioned(
-              key: const Key('todo-voice-session-overlay'),
-              right: 0,
-              bottom: 56,
-              child: Material(
-                elevation: 4,
-                borderRadius: BorderRadius.circular(12),
-                color: colors.surfaceContainerHighest,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
-                  ),
-                  child: _voiceOverlayContent(colors),
-                ),
-              ),
-            ),
         ],
       ),
     );
   }
 
-  Widget _voiceOverlayContent(ColorScheme colors) {
+  /// 语音/录音浮层。不用 Stack+Positioned 挂在 FAB 树里 —— FAB 是
+  /// Scaffold.floatingActionButton 槽位提供的 widget，浮层画在 FAB 盒子
+  /// 外时**hit-test 进不去**（判据抓到 stop 按钮 tap 全空）。改走
+  /// Flutter 的全屏 Overlay：浮层钉在右下角（FAB 上方 56px），点击直达。
+  OverlayEntry? _voiceOverlay;
+
+  void _showVoiceOverlay() {
+    _hideVoiceOverlay();
+    final overlay = OverlayEntry(
+      builder: (overlayContext) {
+        final colors = Theme.of(overlayContext).colorScheme;
+        return Positioned(
+          key: const Key('todo-voice-session-overlay'),
+          right: 16,
+          bottom: 72,
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(12),
+            color: colors.surfaceContainerHighest,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: _voiceOverlayContent(overlayContext, colors),
+            ),
+          ),
+        );
+      },
+    );
+    Overlay.of(context, rootOverlay: true).insert(overlay);
+    _voiceOverlay = overlay;
+  }
+
+  void _hideVoiceOverlay() {
+    _voiceOverlay?.remove();
+    _voiceOverlay = null;
+  }
+
+  Widget _voiceOverlayContent(BuildContext context, ColorScheme colors) {
+    // FL #342 第二步：录音模式（`:117-118`「松手继续输入…点击停止按钮结束，
+    // 保存文字内容」）—— 录音态优先于听写态渲染，且带**停止按钮**。
+    if (_recordingMode) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.fiber_manual_record, color: Colors.red, size: 16),
+          const SizedBox(width: 8),
+          const Text('录音中…松手继续说话', key: Key('todo-voice-recording')),
+          const SizedBox(width: 8),
+          IconButton(
+            key: const Key('todo-voice-stop'),
+            icon: const Icon(Icons.stop_circle_outlined),
+            tooltip: '停止并保存文字',
+            onPressed: _endVoiceSession,
+          ),
+        ],
+      );
+    }
     switch (_voiceStatus) {
       case VoiceInputStatus.permissionDenied:
         // 裁决②原文文案，禁止静默失败。

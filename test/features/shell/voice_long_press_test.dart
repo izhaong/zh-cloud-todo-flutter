@@ -168,4 +168,60 @@ void main() {
       reason: '点击（不产生位移）仍归 FloatingActionButton —— 拖/点/长按三条通道并存',
     );
   });
+
+  // ── FL #342 第二步：录音模式（`:116-119`「长按并左右拖动切换…松手继续…
+  // 点击停止结束，保存文字内容」；`:123` 30 分钟上限自动保存）──
+
+  testWidgets('长按后左右拖 ⇒ 录音模式：松手不结束，点停止才保存文字', (tester) async {
+    final submitted = <QuickAddRequest>[];
+    final fake = _FakeGateway(VoiceInputStatus.available);
+    await tester.pumpWidget(
+      _host(MobileQuickAddButton(onSubmit: submitted.add, voiceGateway: fake)),
+    );
+
+    // 按住（500ms 长按起表）后向右拖 60px（阈值 48）⇒ 切录音模式
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const Key('todo-mobile-add'))),
+    );
+    // 按住越过 500ms（长按起表）—— 8x50 只有 400ms。
+    await tester.pump(const Duration(milliseconds: 600));
+    await gesture.moveBy(const Offset(60, 0));
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    expect(
+      find.byKey(const Key('todo-voice-recording')),
+      findsOneWidget,
+      reason: ':116「长按并向左/向右拖动，切换到录音模式」',
+    );
+
+    // 松手不结束（:117「松手继续输入，不用一直按住」）
+    await gesture.up();
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(
+      find.byKey(const Key('todo-voice-recording')),
+      findsOneWidget,
+      reason: ':117 录音模式松手**不结束** —— 一直按住才是听写模式',
+    );
+    expect(submitted, isEmpty, reason: '还没点停止，不该建任务');
+
+    // 点停止（:118「点击停止按钮即可结束录音，保存文字内容」）
+    final stop = find.byKey(const Key('todo-voice-stop'));
+    await tester.ensureVisible(stop);
+    await tester.tap(stop);
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(fake.stopCalls, 1, reason: '停止必须调 stop');
+    expect(submitted, hasLength(1));
+    expect(submitted.single.input, '买牛奶', reason: '保存的是文字内容');
+    expect(
+      find.byKey(const Key('todo-voice-recording')),
+      findsNothing,
+      reason: '结束后录音态消失',
+    );
+  });
 }
