@@ -322,6 +322,133 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
   }
 
   /// FL #344 面①：日期弹层（tap=打开；长按=清除 —— 与桌面底栏逐字对齐）。
+  /// FL #344 第二步：功能栏顺序编辑器（`:24`「点击「...」-「设置」，
+  /// 快速设置你的常用功能」）。v1 用**上移/下移**（不引拖拽依赖）：
+  /// 四个固定项的排序，上移/下移操作可见、可撤销（reset），比拖拽便宜一个量级。
+  Future<void> _openBarOrderEditor() async {
+    final setting = QuickAddActionBarSetting();
+    var working = List.of(_barOrder);
+    final saved = await showModalBottomSheet<List<String>>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheet) => SafeArea(
+          child: SizedBox(
+            height: MediaQuery.sizeOf(sheetContext).height * 0.5,
+            child: Column(
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '设置常用功能',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: ListView(
+                    children: [
+                      for (var i = 0; i < working.length; i++)
+                        ListTile(
+                          key: Key('todo-bar-order-row-${working[i]}'),
+                          leading: const Icon(Icons.drag_handle),
+                          title: Text(_barOrderLabelOf(working[i])),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                key: Key('todo-bar-order-up-${working[i]}'),
+                                icon: const Icon(Icons.arrow_upward),
+                                onPressed: i == 0
+                                    ? null
+                                    : () => setSheet(() {
+                                        final row = working.removeAt(i);
+                                        working.insert(i - 1, row);
+                                      }),
+                              ),
+                              IconButton(
+                                key: Key('todo-bar-order-down-${working[i]}'),
+                                icon: const Icon(Icons.arrow_downward),
+                                onPressed: i == working.length - 1
+                                    ? null
+                                    : () => setSheet(() {
+                                        final row = working.removeAt(i);
+                                        working.insert(i + 1, row);
+                                      }),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: Row(
+                    children: [
+                      TextButton(
+                        key: const Key('todo-bar-order-reset'),
+                        onPressed: () {
+                          setSheet(
+                            () => working = List.of(
+                              QuickAddActionBarSetting.defaultOrder,
+                            ),
+                          );
+                        },
+                        child: const Text('恢复默认'),
+                      ),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () => Navigator.of(sheetContext).pop(),
+                        child: const Text('取消'),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        key: const Key('todo-bar-order-save'),
+                        onPressed: () =>
+                            Navigator.of(sheetContext).pop(working),
+                        child: const Text('保存'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (!mounted || saved == null) return;
+    try {
+      await setting.write(saved);
+      if (mounted) {
+        setState(() => _barOrder = List.of(saved));
+      }
+    } on ArgumentError catch (error) {
+      // write 侧恰等校验 —— 理论上 UI 路径凑不出坏序（四项全在、只换位置），
+      // 但留这条防线：坏序不许落库。
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message?.toString() ?? '顺序无效，未保存')),
+        );
+      }
+    }
+  }
+
+  String _barOrderLabelOf(String id) => switch (id) {
+    'date' => '日期',
+    'priority' => '优先级',
+    'tag' => '标签',
+    'list' => '清单',
+    _ => id,
+  };
+
   Future<void> _openDateSheet() async {
     final picked = await showModalBottomSheet<DateTime>(
       context: context,
@@ -530,6 +657,7 @@ class _TaskQuickAddSheetState extends ConsumerState<TaskQuickAddSheet> {
               onTapPriority: _openPrioritySheet,
               onTapTag: _openTagSheet,
               onTapList: _openListSheet,
+              onTapEditOrder: _openBarOrderEditor,
             ),
             const SizedBox(height: 16),
             // FL #344 面①：手选日期压着 NLP —— 识别行只在**没手选**时出现
@@ -720,6 +848,7 @@ class _QuickAddActionBar extends StatelessWidget {
     required this.onTapPriority,
     required this.onTapTag,
     required this.onTapList,
+    required this.onTapEditOrder,
   });
 
   final List<String> order;
@@ -733,6 +862,9 @@ class _QuickAddActionBar extends StatelessWidget {
   final VoidCallback onTapPriority;
   final VoidCallback onTapTag;
   final VoidCallback onTapList;
+
+  /// FL #344 第二步：` :24`「点击「...」-「设置」，快速设置你的常用功能」。
+  final VoidCallback onTapEditOrder;
 
   @override
   Widget build(BuildContext context) {
@@ -781,6 +913,14 @@ class _QuickAddActionBar extends StatelessWidget {
       child: Row(
         children: [
           for (final id in order) ...[Expanded(child: chipFor(id))],
+          // 「...」编辑入口（:24 原文）。 Expanded 均分之外的固定宽小按钮。
+          _BarChip(
+            key: const Key('todo-quick-add-bar-edit-order'),
+            icon: Icons.more_horiz,
+            label: '…',
+            highlighted: false,
+            onTap: onTapEditOrder,
+          ),
         ],
       ),
     );
