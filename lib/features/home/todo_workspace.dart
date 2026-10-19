@@ -10,6 +10,7 @@ import '../../core/shortcuts/todo_shortcut_registry.dart';
 import '../shell/section.dart';
 import '../shell/sidebar.dart';
 import '../task/task_search_page.dart';
+import '../task/task_quick_add_sheet.dart';
 import 'command_palette.dart';
 import 'keyboard_shortcuts_dialog.dart';
 
@@ -128,6 +129,8 @@ class TodoWorkspace extends StatelessWidget {
           forKind: (kind) => switch (kind) {
             TodoShortcutKind.openCommandPalette => _OpenCommandPaletteIntent(),
             TodoShortcutKind.showShortcuts => _ShowKeyboardShortcutsIntent(),
+            // FL #345 A 批：应用内全局添加（Ctrl/Cmd+Alt+A）
+            TodoShortcutKind.addTask => _GlobalAddTaskIntent(),
           },
           overrides: shortcutOverrides,
         ),
@@ -171,6 +174,14 @@ class TodoWorkspace extends StatelessWidget {
                   return null;
                 },
               ),
+          _GlobalAddTaskIntent: CallbackAction<_GlobalAddTaskIntent>(
+            onInvoke: (_) {
+              // FL #345：应用内全局添加 —— 走深链（小组件「+」也走这一条：
+              // 一处实现两处入口，行为不可能分叉）。
+              unawaited(_openGlobalAddTask(context));
+              return null;
+            },
+          ),
         },
         child: Focus(
           autofocus: true,
@@ -444,6 +455,19 @@ class TodoWorkspace extends StatelessWidget {
 
   /// 快捷键界面：`?`、指令菜单里那条命令、设置页那三项入口都走这里，
   /// 所以"生效键位"与"落库通道"只能在这一处传，别在三处各写一遍（会写散）。
+  /// FL #345 A 批：全局添加 —— 与小组件「+」共用同一条深链语义
+  /// （`zhcloudtodo://task/add?title=`，home_shell 的深链消费端同族）。
+  /// v1 在桌面工作区按下 Ctrl/Cmd+Alt+A ⇒ 打开快速添加表（预填标题为空）。
+  Future<void> _openGlobalAddTask(BuildContext context) async {
+    // 登录与否的判据交给表自己（保存失败有反馈）—— StatelessWidget 不引 ref。
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => const TaskQuickAddSheet(listId: 'inbox'),
+    );
+  }
+
   Future<void> _showKeyboardShortcuts(BuildContext context) {
     return showKeyboardShortcutsDialog(
       context,
@@ -550,6 +574,9 @@ class TodoRail extends StatelessWidget {
 class _ShowKeyboardShortcutsIntent extends Intent {}
 
 class _OpenCommandPaletteIntent extends Intent {}
+
+/// FL #345 A 批：应用内全局添加任务（Ctrl/Cmd+Alt+A，《08-桌面快捷键》:178-180）。
+class _GlobalAddTaskIntent extends Intent {}
 
 class _RailButton extends StatefulWidget {
   const _RailButton({

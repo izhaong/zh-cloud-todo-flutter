@@ -111,8 +111,9 @@ void main() {
 
       expect(
         find.byIcon(Icons.edit),
-        findsNWidgets(2),
-        reason: '正对照：两个动作都可改 ⇒ 各一枚「修改」',
+        findsNWidgets(3),
+        // FL #345 A 批：注册表 3 个动作（addTask 全局添加）⇒ 3 枚「修改」
+        reason: '正对照：注册表 3 个动作都可改 ⇒ 各一枚「修改」',
       );
       await tester.tap(
         find.byKey(const Key('keyboard-shortcuts-edit-openCommandPalette')),

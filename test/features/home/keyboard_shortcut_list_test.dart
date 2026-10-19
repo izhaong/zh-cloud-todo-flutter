@@ -72,7 +72,9 @@ void main() {
     expect(find.text('键盘快捷键'), findsOneWidget);
 
     final rows = todoShortcutRows;
-    expect(rows.length, 2, reason: '注册表有几个动作就渲染几行，不由界面另数');
+    // FL #345 A 批：注册表从 2 个动作加到 3 个（addTask 全局添加）。
+    // 计数仍逐字钉死 —— 新增动作必须连带改这里（强制过目，不许悄悄多一行）。
+    expect(rows.length, 3, reason: '注册表有几个动作就渲染几行，不由界面另数');
     for (final row in rows) {
       expect(
         find.descendant(
@@ -134,6 +136,8 @@ void main() {
                 forKind: (kind) => switch (kind) {
                   TodoShortcutKind.openCommandPalette => _LocalIntentA(),
                   TodoShortcutKind.showShortcuts => _LocalIntentB(),
+                  // FL #345 A 批新增档（Ctrl/Cmd+Alt+A 全局添加）
+                  TodoShortcutKind.addTask => _LocalIntentA(),
                 },
               ),
             ),
