@@ -233,4 +233,96 @@ void main() {
 
     await settleTimers(tester);
   });
+
+  // ── FL #344 第二步：顺序编辑器（`:24`「点击「...」-「设置」」）──
+
+  // ⚠️ 不用 pumpAndSettle：sheet 的 SharedPreferences/NLP listener 让"静止"
+  // 等不到（specs/164 教训 —— 本文件曾有 10 分钟超时前科）。
+  Future<void> openEditorFromBar(WidgetTester tester) async {
+    await tester.tap(find.byKey(const Key('todo-quick-add-bar-edit-order')));
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+  }
+
+  Future<void> closeEditorAndSettle(WidgetTester tester) async {
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+  }
+
+  testWidgets('「...」打开顺序编辑器：上移保存 ⇒ 底栏顺序真的变了（`:24`）', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final fixture = await TodoVisualFixture.create();
+    addTearDown(fixture.dispose);
+    await pumpSheet(tester, fixture);
+
+    // 默认序：日期 → 优先级 → 标签 → 清单（屏幕坐标单调递增）
+    final before = tester
+        .getTopLeft(find.byKey(const Key('todo-quick-add-bar-date')))
+        .dx;
+    final before2 = tester
+        .getTopLeft(find.byKey(const Key('todo-quick-add-bar-tag')))
+        .dx;
+    expect(before2, greaterThan(before));
+
+    await openEditorFromBar(tester);
+    expect(
+      find.byKey(const Key('todo-bar-order-row-tag')),
+      findsOneWidget,
+      reason: '编辑器要列出全部四个功能位',
+    );
+
+    // 把「标签」上移一位（date → tag → priority → list）
+    await tester.tap(find.byKey(const Key('todo-bar-order-up-tag')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('todo-bar-order-save')));
+    await closeEditorAndSettle(tester);
+
+    // 底栏顺序真的变了：tag 在 date 前面
+    // 底栏顺序真的变了：一次「上移」= 上移一位（date,tag,priority,list）
+    // ⇒ tag 落第二位：在 date 之后、priority 之前。
+    // 探针已证写侧（E saved=date,tag,priority,list），这条咬渲染。
+    final afterTag = tester
+        .getTopLeft(find.byKey(const Key('todo-quick-add-bar-tag')))
+        .dx;
+    final afterPriority = tester
+        .getTopLeft(find.byKey(const Key('todo-quick-add-bar-priority')))
+        .dx;
+    expect(
+      afterTag,
+      lessThan(afterPriority),
+      reason: '保存后底栏必须按新序渲染（渲染从配置读 —— specs/164 的 v1 路径）',
+    );
+
+    await settleTimers(tester);
+  });
+
+  testWidgets('编辑器「恢复默认」⇒ 回默认序且落库', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final fixture = await TodoVisualFixture.create();
+    addTearDown(fixture.dispose);
+    // 先写一个非默认序
+    await QuickAddActionBarSetting().write(['tag', 'date', 'list', 'priority']);
+    await pumpSheet(tester, fixture);
+
+    await openEditorFromBar(tester);
+    await tester.tap(find.byKey(const Key('todo-bar-order-reset')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('todo-bar-order-save')));
+    await closeEditorAndSettle(tester);
+
+    final saved = await QuickAddActionBarSetting().read();
+    expect(saved, QuickAddActionBarSetting.defaultOrder);
+    // 底栏回默认：date 在 tag 前
+    final dateX = tester
+        .getTopLeft(find.byKey(const Key('todo-quick-add-bar-date')))
+        .dx;
+    final tagX = tester
+        .getTopLeft(find.byKey(const Key('todo-quick-add-bar-tag')))
+        .dx;
+    expect(dateX, lessThan(tagX));
+
+    await settleTimers(tester);
+  });
 }
