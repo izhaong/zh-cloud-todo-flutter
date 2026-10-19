@@ -249,7 +249,14 @@ void main() {
     await tapSidebarRow(tester, 'todo-sidebar-row-settings');
 
     // 设置页的稳定分组与入口（与 settings_week_start_test 同口径）。
+    // FL #344 面④ 在「任务」分区加了一行「输入框样式」⇒ 「日期与时间」的
+    // 「星期开始于」在窄视口要滚动才可见 —— 旅程测试按用户实际动作滚过去。
     final hasWeekStart = find.byKey(const Key('todo-settings-week-start'));
+    await tester.scrollUntilVisible(
+      hasWeekStart,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(hasWeekStart, findsWidgets, reason: '设置页要有「星期开始于」');
     expect(tester.takeException(), isNull);
   });
