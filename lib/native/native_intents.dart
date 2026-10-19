@@ -204,6 +204,27 @@ class NativeIntents {
     }
   }
 
+  /// FL #345 A′：鸿蒙「智感握姿」能力探测（嘀嗒《01-添加任务》:28-33 ——
+  /// 「在支持『智感握姿』的设备上…设定不同持握姿式的添加位置」，
+  /// 需 HarmonyOS 6.0.0.115+ 且设备支持）。
+  ///
+  /// 裁决口径：**能力探测失败则明说不支持，不造假**。本端 Flutter 侧拿不到
+  /// 厂商握姿 SDK 的通道 ⇒ 探测结果恒为 false —— 但**不许**因此删掉探测：
+  /// 桌面/移动小组件与快捷键都已落，握姿这一面保持"探测→如实报告"的形状，
+  /// 平台通道补上时只改这里一处。
+  static Future<bool> supportsGripPosture() async {
+    try {
+      final supported = await _channel.invokeMethod<bool>(
+        'supportsGripPosture',
+      );
+      return supported == true;
+    } on PlatformException {
+      return false; // 探测失败 = 不支持（明说，不猜）
+    } on MissingPluginException {
+      return false; // 通道未实现（当前所有平台）—— 如实报告不支持
+    }
+  }
+
   static const _widgetTasksKey = 'tasks';
   static const _androidWidgetProvider =
       'com.zh04.zh_cloud_todo_flutter.TodayTasksWidgetProvider';

@@ -100,9 +100,12 @@ void main() {
 
     test('覆盖只顶掉它那一个动作，另一个动作仍是默认两条', () {
       final rows = todoShortcutRowsFor(const {'openCommandPalette': ctrlAltJ});
+      // FL #345 A 批：注册表加到 3 个动作（addTask 全局添加在前）。
       expect(
         encodeRows(rows),
-        'openCommandPalette:打开指令菜单:Ctrl+Alt+J || showShortcuts:显示键盘快捷键:?',
+        'addTask:添加任务:Ctrl+Alt+A / ⌘⌥A || '
+        'openCommandPalette:打开指令菜单:Ctrl+Alt+J || '
+        'showShortcuts:显示键盘快捷键:?',
       );
     });
 
@@ -120,8 +123,10 @@ void main() {
       expect(specs, isNot(contains(metaK)));
       expect(
         map.length,
-        3,
-        reason: '1 条覆盖 + showShortcuts 的 slash+shift 与字符 ? 两条',
+        5,
+        reason:
+            '1 条覆盖 + showShortcuts 两条（slash+shift 与字符 ?）'
+            ' + addTask 两条（FL #345 A 批新增）',
       );
     });
 

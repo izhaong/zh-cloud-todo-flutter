@@ -7,7 +7,7 @@ import 'todo_shortcut_combo.dart';
 /// 这份注册表是**默认值**的唯一事实源：工作区的 `Shortcuts` 映射与对话框里的列表都由它生成，
 /// 这样界面永远不会列出一个其实没绑定的键位。`:26`「在设置里查看快捷键界面，可以修改」
 /// 的"改键"由覆盖表兑现：生效行见 [todoShortcutRowsFor]，生效映射见 [todoShortcutActivators]。
-enum TodoShortcutKind { openCommandPalette, showShortcuts }
+enum TodoShortcutKind { openCommandPalette, showShortcuts, addTask }
 
 @immutable
 class TodoShortcutBinding {
@@ -28,6 +28,26 @@ class TodoShortcutBinding {
 }
 
 const List<TodoShortcutBinding> todoShortcutBindings = [
+  // FL #345 A 批：全局添加任务（嘀嗒《08-桌面快捷键》:178-180「全局添加
+  // Ctrl / Cmd + Alt + A，一键调出任务添加条」）。v1 兑现为**应用内全局**
+  // （工作区任意位置生效）；OS 级全局热键（其它应用在前景时也能调出）需要
+  // 平台通道，随桌面壳成熟度另刀。
+  TodoShortcutBinding(
+    kind: TodoShortcutKind.addTask,
+    label: '添加任务',
+    display: 'Ctrl+Alt+A',
+    activator: SingleActivator(
+      LogicalKeyboardKey.keyA,
+      control: true,
+      alt: true,
+    ),
+  ),
+  TodoShortcutBinding(
+    kind: TodoShortcutKind.addTask,
+    label: '添加任务',
+    display: '⌘⌥A',
+    activator: SingleActivator(LogicalKeyboardKey.keyA, meta: true, alt: true),
+  ),
   TodoShortcutBinding(
     kind: TodoShortcutKind.openCommandPalette,
     // 嘀嗒《03-特色功能/08-桌面快捷键.md》:9「使用 ⌘+K 或者 Ctrl+K 打开「指令菜单」，

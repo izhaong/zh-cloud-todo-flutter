@@ -57,8 +57,9 @@ void main() {
     );
     expect(
       find.byIcon(Icons.edit),
-      findsNWidgets(2),
-      reason: '两个动作都可改 ⇒ 两枚「修改」，与设置页那个入口同一形态',
+      findsNWidgets(3),
+      // FL #345 A 批：注册表 3 个动作（addTask 全局添加）⇒ 3 枚「修改」
+      reason: '注册表 3 个动作都可改 ⇒ 3 枚「修改」，与设置页那个入口同一形态',
     );
 
     await tester.tap(
