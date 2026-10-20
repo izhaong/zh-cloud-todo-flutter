@@ -53,3 +53,6 @@ android/build/
 # Sparkle / WinSparkle 私钥。公钥 dsa_pub.pem 与 SUPublicEDKey 可以入库。
 dsa_priv.pem
 sparkle_ed25519.pem
+
+# golden 失败反馈图（flutter test 自动生成，调试用）
+test/visual/failures/
