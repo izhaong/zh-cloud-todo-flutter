@@ -52,7 +52,14 @@ jobs:
           if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then
             DEFAULT_DEPLOY="true"
           fi
-          DEPLOY="${{ github.event.inputs.deploy || $DEFAULT_DEPLOY }}"
+          # 手动触发带 deploy 输入时以输入为准；否则用上面算的默认值
+          # （纯 shell，别把 shell 变量写进 ${{ }} 表达式 —— 那里不认识 $VAR）。
+          INPUT_DEPLOY="${{ github.event.inputs.deploy }}"
+          if [[ -n "$INPUT_DEPLOY" ]]; then
+            DEPLOY="$INPUT_DEPLOY"
+          else
+            DEPLOY="$DEFAULT_DEPLOY"
+          fi
           if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then
             BUILD_ENV=prod
             API_BASE='https://todo.zh04.com'
