@@ -139,6 +139,9 @@ jobs:
             echo "::group::flutter build linux 完整失败输出"
             cat /tmp/linux-build.txt
             echo "::endgroup::"
+            # 存 artifact（job log 403 时唯一公开通道）—— 上面 cat 只进 job log
+            mkdir -p .gha-dist/logs
+            cp /tmp/linux-build.txt .gha-dist/logs/
             exit 1
           fi
 
