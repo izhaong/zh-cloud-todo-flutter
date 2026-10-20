@@ -139,6 +139,9 @@ jobs:
             echo "::group::flutter build linux 完整失败输出"
             cat /tmp/linux-build.txt
             echo "::endgroup::"
+            # 存 artifact（job log 403 时唯一公开通道）—— 上面 cat 只进 job log
+            mkdir -p .gha-dist/logs
+            cp /tmp/linux-build.txt .gha-dist/logs/
             exit 1
           fi
 
@@ -171,10 +174,19 @@ jobs:
           ls -la "$OUT_DIR"
 
       - uses: christopherHX/gitea-upload-artifact@81f940d004763f986ba3582c007fd842dd5cb0d7
+        if: success()
         with:
           name: desktop-linux
           if-no-files-found: error
           path: .gha-dist/desktop/*x86_64.deb
+
+      - name: 失败日志上翻为 artifact（job log 403 时唯一公开通道）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build-log
+          path: .gha-dist/logs/
+          if-no-files-found: ignore
 
   desktop-macos:
     name: macOS

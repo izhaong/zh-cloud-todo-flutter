@@ -13,6 +13,12 @@ set(APPLICATION_ID "com.zh04.zh_cloud_todo_flutter")
 # versions of CMake.
 cmake_policy(SET CMP0063 NEW)
 
+# flutter_secure_storage_linux 打包的 nlohmann/json 旧版头（json.hpp）用了
+# 旧式字面量运算符写法（`operator"" _json`），clang 17+ 按
+# -Wdeprecated-literal-operator 升级为 error（GitHub ubuntu-latest 的
+# 新工具链 2026-10 起把它当错误）。插件侧未跟进 —— 编译器侧压掉该 error。
+add_compile_options(-Wno-error=deprecated-literal-operator)
+
 # Load bundled libraries from the lib/ directory relative to the binary.
 set(CMAKE_INSTALL_RPATH "$ORIGIN/lib")
 

@@ -46,19 +46,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # push 到 develop/main 时只构建不部署（SSH 目标机不可达时曾把整条
-          # workflow 拖红 10-14 起）；部署仅在 tag（发版）或手动触发显式选 true。
-          DEFAULT_DEPLOY="false"
+          # push 到 develop/main 只构建不部署（SSH 目标机不可达时曾整条红）；
+          # 部署仅 tag（发版）或手动触发显式选择。
+          # 写法回到老版（10-14 正常解析）的单一表达式 + 字面量兜底：
+          # —— push 时 inputs 不存在 → 表达式走 fallback；tag → true。
+          IS_TAG="false"
           if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then
-            DEFAULT_DEPLOY="true"
+            IS_TAG="true"
           fi
-          # 手动触发带 deploy 输入时以输入为准；否则用上面算的默认值
-          # （纯 shell，别把 shell 变量写进 ${{ }} 表达式 —— 那里不认识 $VAR）。
-          INPUT_DEPLOY="${{ github.event.inputs.deploy }}"
-          if [[ -n "$INPUT_DEPLOY" ]]; then
-            DEPLOY="$INPUT_DEPLOY"
+          DEPLOY_INPUT="${{ github.event.inputs.deploy || '' }}"
+          if [[ -n "$DEPLOY_INPUT" ]]; then
+            DEPLOY="$DEPLOY_INPUT"
           else
-            DEPLOY="$DEFAULT_DEPLOY"
+            DEPLOY="$IS_TAG"
           fi
           if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then
             BUILD_ENV=prod
