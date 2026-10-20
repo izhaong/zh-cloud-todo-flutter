@@ -324,36 +324,43 @@ void main() {
     expect(find.textContaining('还有 -5'), findsNothing);
   });
 
-  testWidgets('三种样式的徽标结构互不相同', (tester) async {
+  // v1.0.9 将徽标统一为 44x44 + FittedBox（防布局崩溃，#708 1.1）：
+  // 三档的**可区分性**落在装饰形状上（圆 / 矩形圆角牌 / 描边圆环），
+  // 不再是几何互斥 —— 判据改咬装饰（FollowUp: issue #708）。
+  testWidgets('三种样式的徽标装饰互不相同（几何统一 44x44 防崩溃）', (tester) async {
     await _pumpPage(tester, [
       _countdown(id: 21, title: '默认项', style: 1),
       _countdown(id: 22, title: '翻页项', style: 2),
       _countdown(id: 23, title: '圆环项', style: 3),
     ]);
 
+    // 默认档仍是 CircleAvatar（语义「正/倒」）
     expect(
       tester.widget(find.byKey(const ValueKey('countdown-badge-21'))),
       isA<CircleAvatar>(),
     );
 
-    final flip =
-        tester
-                .widget<Container>(
-                  find.byKey(const ValueKey('countdown-badge-22')),
-                )
-                .decoration!
-            as BoxDecoration;
-    expect(flip.shape, BoxShape.rectangle);
-    expect(flip.borderRadius, isNotNull);
+    BoxDecoration decorationOf(int id) {
+      final badge = find.byKey(ValueKey('countdown-badge-$id'));
+      final decorated = find.descendant(
+        of: badge,
+        matching: find.byType(DecoratedBox),
+      );
+      return (tester.widget<DecoratedBox>(decorated).decoration
+              as BoxDecoration?) ??
+          (fail('徽标 $id 缺装饰'));
+    }
 
-    final ring =
-        tester
-                .widget<Container>(
-                  find.byKey(const ValueKey('countdown-badge-23')),
-                )
-                .decoration!
-            as BoxDecoration;
-    expect(ring.shape, BoxShape.circle);
+    // 翻页档：矩形圆角日历牌（带底边缝）
+    final flip = decorationOf(22);
+    expect(flip.shape, BoxShape.rectangle, reason: '翻页档必须是矩形牌');
+    expect(flip.borderRadius, isNotNull, reason: '日历牌带圆角');
+    // 圆环档：正圆描边
+    final ring = decorationOf(23);
+    expect(ring.shape, BoxShape.circle, reason: '圆环档必须是正圆');
+    // 互斥：两档装饰确为不同形态
+    expect(flip.shape, isNot(ring.shape));
+    expect(flip.borderRadius, isNot(ring.borderRadius));
   });
 
   testWidgets('320px 与 1.3 倍字体下编辑和删除入口具备读屏语义且无溢出', (tester) async {

@@ -38,9 +38,17 @@ class AppCard extends StatelessWidget {
         ),
         boxShadow: AppShadows.card(context),
       ),
+      // #708 修红：AppCard 是带底色的 DecoratedBox —— 卡内的
+      // ListTile/SwitchListTile 会画 ink 到最近的可绘制 Material 祖先
+      // （Scaffold 在 DecoratedBox 外）⇒ 触发「ink 不可见」debug 断言
+      // （SDK 加严）。给卡内容垫一层透明 canvas：ink 有画布、视觉不变。
       child: Padding(
         padding: padding ?? const EdgeInsets.all(AppSpacing.lg),
-        child: child,
+        child: Material(
+          type: MaterialType.canvas,
+          color: Colors.transparent,
+          child: child,
+        ),
       ),
     );
     if (onTap == null) return card;

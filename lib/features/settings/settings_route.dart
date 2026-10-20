@@ -984,8 +984,13 @@ class _Tile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fg = destructive ? colors.destructive : colors.foreground;
+    // AppCard 是带底色的 DecoratedBox，ListTile 的 ink/底色会画在最近的
+    // 「会画 Material」的祖先上 —— MaterialType.transparency 不参与作画，
+    // debug 断言（ListTile background invisible）会咬（#708 修红）。
+    // canvas+transparent 既给 ink 一块画布，又不改变视觉。
     return Material(
-      type: MaterialType.transparency,
+      type: MaterialType.canvas,
+      color: Colors.transparent,
       child: ListTile(
         leading: Icon(icon, color: fg),
         title: Text(title, style: TextStyle(color: fg)),
