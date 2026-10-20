@@ -46,7 +46,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          DEPLOY="${{ github.event.inputs.deploy || 'true' }}"
+          # push 到 develop/main 时只构建不部署（SSH 目标机不可达时曾把整条
+          # workflow 拖红 10-14 起）；部署仅在 tag（发版）或手动触发显式选 true。
+          DEFAULT_DEPLOY="false"
+          if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then
+            DEFAULT_DEPLOY="true"
+          fi
+          DEPLOY="${{ github.event.inputs.deploy || $DEFAULT_DEPLOY }}"
           if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then
             BUILD_ENV=prod
             API_BASE='https://todo.zh04.com'

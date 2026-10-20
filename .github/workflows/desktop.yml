@@ -132,9 +132,15 @@ jobs:
           VERSION_NAME="${VERSION_LINE%%+*}"
 
           flutter pub get
-          flutter build linux --release \
+          if ! flutter build linux --release \
             --dart-define=TODO_API_BASE_URL="${TODO_API_BASE_URL}" \
-            --dart-define=TODO_TENANT_ID="${TODO_TENANT_ID}"
+            --dart-define=TODO_TENANT_ID="${TODO_TENANT_ID}" \
+            > /tmp/linux-build.txt 2>&1; then
+            echo "::group::flutter build linux 完整失败输出"
+            cat /tmp/linux-build.txt
+            echo "::endgroup::"
+            exit 1
+          fi
 
           bundle="build/linux/x64/release/bundle"
           test -d "$bundle"
