@@ -36,4 +36,19 @@ jobs:
         run: flutter analyze
 
       - name: Flutter test
-        run: flutter test --exclude-tags 'golden || performance' --concurrency=1
+        run: |
+          # 失败时把红名单与关键段落打到日志再退出（CI 日志拉不到的场景，
+          # 让失败自己说话 —— #708 CI 排障）。管道形态配合 pipefail。
+          set +e
+          flutter test --exclude-tags 'golden || performance' --concurrency=1 \
+            > /tmp/test-out.txt 2>&1
+          rc=$?
+          if [ "$rc" -ne 0 ]; then
+            echo "::group::flutter test 完整失败输出"
+            grep -E "Failing tests|Some tests failed|\[[Ee]\]" -A 200 /tmp/test-out.txt | head -300
+            echo "::endgroup::"
+            echo "--- 失败用例清单 ---"
+            grep -E "^\s+\S+\.dart:" /tmp/test-out.txt | head -60
+            cat /tmp/test-out.txt | tail -40
+          fi
+          exit $rc
