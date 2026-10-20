@@ -17,7 +17,11 @@ void main() {
       ],
     });
     expect(asset?.version, '1.0.6');
-    expect(asset?.downloadUrl, 'https://example.com/app.apk');
+    // OTA 下载统一走 gh-proxy 前缀（国内直连 github 不稳，见 github_apk_release.dart）
+    expect(
+      asset?.downloadUrl,
+      'https://gh-proxy.com/https://example.com/app.apk',
+    );
   });
 
   test('1.0.6 比 1.0.5 新，相同版本不更新', () {
