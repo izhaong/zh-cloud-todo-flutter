@@ -178,11 +178,11 @@ jobs:
           path: .gha-dist/desktop/*x86_64.deb
 
       - name: 失败日志上翻为 artifact（job log 403 时唯一公开通道）
-        if: failure()
-        uses: christopherHX/gitea-upload-artifact@81f940d004763f986ba3582c007fd842dd5cb0d7
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: linux-build-failure-log
-          path: .gha-dist/logs/linux-build.txt
+          name: linux-build-log
+          path: .gha-dist/logs/
           if-no-files-found: ignore
 
   desktop-macos:
