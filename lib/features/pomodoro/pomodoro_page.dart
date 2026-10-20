@@ -2047,9 +2047,7 @@ class _FocusHourlyChart extends StatelessWidget {
                                     ),
                               borderRadius: BorderRadius.circular(3),
                             ),
-                            child: SizedBox(
-                              height: barHeight(item.minutes),
-                            ),
+                            child: SizedBox(height: barHeight(item.minutes)),
                           ),
                         ),
                       ),

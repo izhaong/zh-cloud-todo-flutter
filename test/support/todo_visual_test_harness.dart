@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:zh_cloud_todo_flutter/core/db/app_database.dart';
 import 'package:zh_cloud_todo_flutter/core/theme/app_theme.dart';
@@ -34,6 +35,10 @@ Future<TodoVisualFixture> pumpTodoVisualScenario(
   Brightness brightness = Brightness.light,
 }) async {
   await tester.runAsync(_ensureVisualFontsLoaded);
+  // #708：workspace_companion 等读 SharedPreferences 的组件在无插件通道的
+  // 测试环境会抛 MissingPluginException（golden 曾整条 tablet-list 直接炸）。
+  // harness 是视觉/契约测试的公共入口 —— 在这里统一 mock，一次修全场景。
+  SharedPreferences.setMockInitialValues({});
   final fixture = await TodoVisualFixture.create(
     set: fixtureSet,
     overridesBuilder: overridesBuilder,

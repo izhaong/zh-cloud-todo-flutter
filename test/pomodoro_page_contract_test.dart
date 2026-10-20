@@ -1681,8 +1681,14 @@ void main() {
     );
 
     expect(find.text('当前周期还没有可比较的专注时段'), findsOneWidget);
-    expect(find.byKey(const Key('pomodoro-stats-hourly-bar-8')), findsOneWidget);
-    expect(find.byKey(const Key('pomodoro-stats-hourly-bar-9')), findsOneWidget);
+    expect(
+      find.byKey(const Key('pomodoro-stats-hourly-bar-8')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('pomodoro-stats-hourly-bar-9')),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
