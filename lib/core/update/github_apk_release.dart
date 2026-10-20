@@ -42,7 +42,13 @@ GithubApkAsset? apkAssetFromReleaseJson(Object? json) {
     final name = '${asset['name'] ?? ''}';
     final url = asset['browser_download_url'];
     if (name.endsWith('-android.apk') && url is String && url.isNotEmpty) {
-      return GithubApkAsset(version: version, downloadUrl: url);
+      // 同 appcast：国内直连 github.com 不稳，OTA 下载统一走 gh-proxy 前缀
+      // （downloadUrl 只用于 OtaUpdate 下载，不进 UI 展示）。
+      const proxy = 'https://gh-proxy.com/';
+      return GithubApkAsset(
+        version: version,
+        downloadUrl: url.startsWith(proxy) ? url : '$proxy$url',
+      );
     }
   }
   return null;

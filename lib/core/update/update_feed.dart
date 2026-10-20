@@ -2,7 +2,7 @@
 const String kDesktopUpdateFeedUrl = String.fromEnvironment(
   'TODO_UPDATE_FEED_URL',
   defaultValue:
-      'https://github.com/izhaong/zh-cloud-todo-flutter/releases/latest/download/appcast.xml',
+      'https://gh-proxy.com/https://github.com/izhaong/zh-cloud-todo-flutter/releases/latest/download/appcast.xml',
 );
 
 /// Linux 没有 Sparkle 实现时打开的发布页。

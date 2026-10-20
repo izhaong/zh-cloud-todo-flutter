@@ -90,9 +90,13 @@ def build_appcast(
     installers: list[tuple[Path, str, str | None]],
 ) -> str:
     enclosures: list[str] = []
+    # 国内网络到 github.com 的下载链路不稳定（实测 5 次断点重试仅 2.2MB/30MB，
+    # Sparkle 报 "An error occurred while downloading the update"）——
+    # gh-proxy.com 实测全量 30MB 60s 拉满。安装包下载统一走代理前缀。
+    download_proxy = "https://gh-proxy.com/"
     for path, operating_system, signature in installers:
         url = (
-            f"https://github.com/{repository}/releases/download/"
+            f"{download_proxy}https://github.com/{repository}/releases/download/"
             f"{tag}/{path.name}"
         )
         attributes = [
