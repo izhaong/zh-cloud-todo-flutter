@@ -191,8 +191,17 @@ class _CountdownTileState extends State<_CountdownTile> {
                         if (value == 'archive') widget.onArchive();
                         if (value == 'restore') widget.onRestore();
                         if (value == 'pin') widget.onPin();
+                        if (value == 'style') widget.onEdit();
                       },
                       itemBuilder: (_) => [
+                        // 嘀嗒《02-打造专属纪念页.md》:22「将鼠标悬停在某个
+                        // 倒数纪念日卡片上，点击右上角的「...」-「样式」按钮」
+                        // —— #708：把样式入口补进卡片「…」菜单（桌面路径照原文）。
+                        PopupMenuItem<String>(
+                          key: Key('countdown-menu-style-${item.id}'),
+                          value: 'style',
+                          child: const Text('样式'),
+                        ),
                         if (item.archived)
                           PopupMenuItem<String>(
                             key: Key('countdown-menu-restore-${item.id}'),

@@ -377,4 +377,29 @@ void main() {
     expect(tester.takeException(), isNull);
     semantics.dispose();
   });
+
+  // ── #708：样式入口照嘀嗒路径（卡片「…」→「样式」）──
+
+  testWidgets('卡片「…」菜单含「样式」，点它进编辑器并保存新样式', (tester) async {
+    final api = await _pumpPage(tester, [_countdown()]);
+
+    await tester.tap(find.byKey(const Key('countdown-tile-more-7')));
+    await tester.pumpAndSettle();
+    // 嘀嗒《02-打造专属纪念页.md》:22「点击右上角的「...」-「样式」按钮」
+    expect(
+      find.byKey(const Key('countdown-menu-style-7')),
+      findsOneWidget,
+      reason: '卡片「…」菜单缺「样式」项 = 桌面路径与原文不一致',
+    );
+
+    await tester.tap(find.byKey(const Key('countdown-menu-style-7')));
+    await tester.pumpAndSettle();
+    expect(find.text('编辑倒数日'), findsOneWidget, reason: '「样式」应进样式设置（本端=编辑器样式段）');
+    await tester.tap(find.byKey(const Key('countdown-style-2')));
+    await tester.tap(find.byKey(const Key('countdown-editor-save')));
+    await tester.pumpAndSettle();
+
+    final update = api.updates.single;
+    expect(update.style, 2, reason: '样式入口的保存链必须与编辑入口同一条');
+  });
 }
